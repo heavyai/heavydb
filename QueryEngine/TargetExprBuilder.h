@@ -76,15 +76,12 @@ struct TargetExprCodegen {
 };
 
 struct TargetExprCodegenBuilder {
-  TargetExprCodegenBuilder(const QueryMemoryDescriptor& query_mem_desc,
-                           const RelAlgExecutionUnit& ra_exe_unit,
-                           const bool is_group_by)
-      : query_mem_desc(query_mem_desc)
-      , ra_exe_unit(ra_exe_unit)
-      , is_group_by(is_group_by) {}
+  TargetExprCodegenBuilder(const RelAlgExecutionUnit& ra_exe_unit, const bool is_group_by)
+      : ra_exe_unit(ra_exe_unit), is_group_by(is_group_by) {}
 
   void operator()(const Analyzer::Expr* target_expr,
                   const Executor* executor,
+                  QueryMemoryDescriptor& query_mem_desc,
                   const CompilationOptions& co);
 
   void codegen(GroupByAndAggregate* group_by_and_agg,
@@ -135,12 +132,12 @@ struct TargetExprCodegenBuilder {
   llvm::Value* codegenSlotEmptyKey(llvm::Value* agg_col_ptr,
                                    std::vector<llvm::Value*>& target_lvs,
                                    Executor* executor,
+                                   const QueryMemoryDescriptor& query_mem_desc,
                                    const int64_t init_val) const;
 
   size_t target_index_counter{0};
   size_t slot_index_counter{0};
 
-  const QueryMemoryDescriptor& query_mem_desc;
   const RelAlgExecutionUnit& ra_exe_unit;
 
   std::vector<TargetExprCodegen> target_exprs_to_codegen;
