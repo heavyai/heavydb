@@ -71,7 +71,7 @@ class GroupByAndAggregate {
   // is required -- slow path group by queries for now
   bool codegen(llvm::Value* filter_result,
                llvm::BasicBlock* sc_false,
-               const QueryMemoryDescriptor& query_mem_desc,
+               QueryMemoryDescriptor& query_mem_desc,
                const CompilationOptions& co,
                const GpuSharedMemoryContext& gpu_smem_context);
 
@@ -148,7 +148,7 @@ class GroupByAndAggregate {
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        llvm::Value* varlen_output_buffer,
                        const std::vector<llvm::Value*>& agg_out_vec,
-                       const QueryMemoryDescriptor& query_mem_desc,
+                       QueryMemoryDescriptor& query_mem_desc,
                        const CompilationOptions& co,
                        const GpuSharedMemoryContext& gpu_smem_context,
                        DiamondCodegen& diamond_codegen);
