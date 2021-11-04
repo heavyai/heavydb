@@ -864,24 +864,20 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       // Disabling the intermediate count optimization in distributed, as the previous
       // execution descriptor will likely not hold the aggregated result.
       if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
-        auto prev_exec_desc = seq.getDescriptor(step_idx - 1);
-        CHECK(prev_exec_desc);
-        RelAlgNode const* prev_body = prev_exec_desc->getBody();
-        // This optimization needs to be restricted in its application for UNION, which
-        // can have 2 input nodes in which neither should restrict the count of the other.
-        // However some non-UNION queries are measurably slower with this restriction, so
-        // it is only applied when g_enable_union is true.
-        bool const parent_check =
-            !g_enable_union || project->getInput(0)->getId() == prev_body->getId();
-        // If the previous node produced a reliable count, skip the pre-flight count
-        if (parent_check && (dynamic_cast<const RelCompound*>(prev_body) ||
-                             dynamic_cast<const RelLogicalValues*>(prev_body))) {
-          const auto& prev_exe_result = prev_exec_desc->getResult();
-          const auto prev_result = prev_exe_result.getRows();
-          if (prev_result) {
-            prev_count = prev_result->rowCount();
-            VLOG(3) << "Setting output row count for projection node to previous node ("
-                    << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
+        // If the previous node produced a reliable count, skip the pre-flight count.
+        RelAlgNode const* const prev_body = project->getInput(0);
+        if (shared::dynamic_castable_to_any<RelCompound, RelLogicalValues>(prev_body)) {
+          if (RaExecutionDesc const* const prev_exec_desc =
+                  prev_body->hasContextData()
+                      ? prev_body->getContextData()
+                      : seq.getDescriptorByBodyId(prev_body->getId(), step_idx - 1)) {
+            const auto& prev_exe_result = prev_exec_desc->getResult();
+            const auto prev_result = prev_exe_result.getRows();
+            if (prev_result) {
+              prev_count = prev_result->rowCount();
+              VLOG(3) << "Setting output row count for projection node to previous node ("
+                      << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
+            }
           }
         }
       }
