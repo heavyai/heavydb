@@ -68,21 +68,57 @@ class FixedLengthArrayNoneEncoder : public Encoder {
                                             const int start_idx,
                                             const size_t numAppendElems,
                                             const bool replicating = false) {
-    size_t data_size = array_size * numAppendElems;
-    buffer_->reserve(data_size);
+    // Todo: The reserve call was changed to take into account the existing data size,
+    // but in other encoders (like ArrayNoneEncoder) we only reserve the append size,
+    // which will be a no-op likely after the first append on a chunk. This probably
+    // won't matter for disk writes as we just have static (default 2MB) page sizes, but
+    // could be an issue for temporary in-memory tables, as buffers for multi-column
+    // imports will likely need to be repeatedly migrated to grow them if they are
+    // "landlocked" amidst other buffers. We should follow-up with work to call reserve
+    // properly, accounting for both the new append size and existing size, for that
+    // reason and just for overall semantic correctness.
 
-    for (size_t i = start_idx; i < start_idx + numAppendElems; i++) {
-      size_t len = (*srcData)[replicating ? 0 : i].length;
-      // Length of the appended array should be equal to the fixed length,
-      // all others should have been discarded, assert if something slips through
+    const size_t existing_data_size = num_elems_ * array_size;
+    const size_t append_data_size = array_size * numAppendElems;
+    buffer_->reserve(existing_data_size + append_data_size);
+    std::vector<int8_t> append_buffer(append_data_size);
+    int8_t* append_ptr = append_buffer.data();
+
+    // There was some worry about the change implemented to write the append data to an
+    // intermediate buffer, but testing on import and ctas of 20M points, we never append
+    // more than 1.6MB and 1MB of data at a time, respectively, so at least for fixed
+    // length types this should not be an issue (varlen types, which can be massive even
+    // for a single field/row, are a different story however)
+
+    if (replicating) {
+      const size_t len = (*srcData)[0].length;
       CHECK_EQ(len, array_size);
-      // NULL arrays have been filled with subtype's NULL sentinels,
-      // should be appended as regular data, same size
-      buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);
-
-      // keep Chunk statistics with array elements
-      update_elem_stats((*srcData)[replicating ? 0 : i]);
+      const int8_t* replicated_ptr = (*srcData)[0].pointer;
+      for (size_t i = 0; i < numAppendElems; ++i) {
+        std::memcpy(append_ptr + i * array_size, replicated_ptr, array_size);
+      }
+    } else {
+      for (size_t i = 0; i < numAppendElems; ++i) {
+        // Length of the appended array should be equal to the fixed length,
+        // all others should have been discarded, assert if something slips through
+        const size_t source_idx = start_idx + i;
+        const size_t len = (*srcData)[source_idx].length;
+        CHECK_EQ(len, array_size);
+        // NULL arrays have been filled with subtype's NULL sentinels,
+        // should be appended as regular data, same size
+        std::memcpy(
+            append_ptr + i * array_size, (*srcData)[source_idx].pointer, array_size);
+      }
     }
+
+    buffer_->append(append_ptr, append_data_size);
+
+    if (replicating) {
+      updateStats(srcData, 0, 1);
+    } else {
+      updateStats(srcData, start_idx, numAppendElems);
+    }
+
     // make sure buffer_ is flushed even if no new data is appended to it
     // (e.g. empty strings) because the metadata needs to be flushed.
     if (!buffer_->isDirty()) {
@@ -240,6 +276,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
  private:
   std::mutex EncoderMutex_;
+  std::mutex print_mutex_;
   size_t array_size;
 
   bool is_null(int8_t* array) { return is_null(buffer_->getSqlType(), array); }
