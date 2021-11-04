@@ -5,6 +5,7 @@ endif()
 set(datamgr_source_files
     AbstractBuffer.cpp
     Allocators/CudaAllocator.cpp
+    Allocators/L0Allocator.cpp
     Allocators/ThrustAllocator.cpp
     Chunk/Chunk.cpp
     DataMgr.cpp
@@ -34,6 +35,8 @@ set(datamgr_source_files
     ForeignStorage/CsvFileBufferParser.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
+    BufferMgr/GpuL0BufferMgr/GpuL0BufferMgr.cpp
+    BufferMgr/GpuL0BufferMgr/GpuL0Buffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
     BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.cpp
@@ -97,7 +100,7 @@ endif()
 
 add_library(DataMgr ${datamgr_source_files})
 
-target_link_libraries(DataMgr CudaMgr "$<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}>" Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS} "$<$<BOOL:${ENABLE_MEMKIND}>:${memkind_LIBRARIES}>")
+target_link_libraries(DataMgr CudaMgr L0Mgr "$<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}>" Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS} "$<$<BOOL:${ENABLE_MEMKIND}>:${memkind_LIBRARIES}>")
 
 option(ENABLE_CRASH_CORRUPTION_TEST "Enable crash using SIGUSR2 during page deletion to faster and affirmative test/repro db corruption" OFF)
 if(ENABLE_CRASH_CORRUPTION_TEST)
