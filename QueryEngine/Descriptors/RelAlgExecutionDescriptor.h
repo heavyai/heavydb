@@ -178,6 +178,9 @@ class RaExecutionSequence {
     return descs_[idx].get();
   }
 
+  RaExecutionDesc* getDescriptorByBodyId(unsigned const body_id,
+                                         size_t const start_idx) const;
+
   size_t size() const { return descs_.size(); }
   bool empty() const { return descs_.empty(); }
 

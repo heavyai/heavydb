@@ -15,11 +15,12 @@
  */
 
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/GroupByAndAggregate.h"
+#include "QueryEngine/RelAlgDagBuilder.h"
 
 #include <boost/graph/topological_sort.hpp>
 
-#include "QueryEngine/GroupByAndAggregate.h"
-#include "QueryEngine/RelAlgDagBuilder.h"
+#include <algorithm>
 
 ExecutionResult::ExecutionResult()
     : filter_push_down_enabled_(false)
@@ -334,6 +335,26 @@ bool RaExecutionSequence::executionFinished() const {
     }
   }
   return false;
+}
+
+namespace {
+struct MatchBody {
+  unsigned const body_id_;
+  bool operator()(std::unique_ptr<RaExecutionDesc> const& desc) const {
+    return desc->getBody()->getId() == body_id_;
+  }
+};
+}  // namespace
+
+// Search for RaExecutionDesc* by body, starting at start_idx and decrementing to 0.
+RaExecutionDesc* RaExecutionSequence::getDescriptorByBodyId(
+    unsigned const body_id,
+    size_t const start_idx) const {
+  CHECK_LT(start_idx, descs_.size());
+  auto const from_end = descs_.size() - (start_idx + 1);
+  MatchBody const match_body{body_id};
+  auto const itr = std::find_if(descs_.rbegin() + from_end, descs_.rend(), match_body);
+  return itr == descs_.rend() ? nullptr : itr->get();
 }
 
 size_t RaExecutionSequence::totalDescriptorsCount() const {

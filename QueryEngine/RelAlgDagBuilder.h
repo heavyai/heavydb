@@ -720,6 +720,8 @@ class RexAgg : public Rex {
   const std::vector<size_t> operands_;
 };
 
+class RaExecutionDesc;
+
 class RelAlgNode {
  public:
   RelAlgNode(RelAlgInputs inputs = {})
@@ -735,7 +737,7 @@ class RelAlgNode {
     targets_metainfo_ = {};
   }
 
-  void setContextData(const void* context_data) const {
+  void setContextData(const RaExecutionDesc* context_data) const {
     CHECK(!context_data_);
     context_data_ = context_data;
   }
@@ -752,10 +754,7 @@ class RelAlgNode {
 
   bool hasContextData() const { return !(context_data_ == nullptr); }
 
-  const void* getContextData() const {
-    CHECK(context_data_);
-    return context_data_;
-  }
+  const RaExecutionDesc* getContextData() const { return context_data_; }
 
   const size_t inputCount() const { return inputs_.size(); }
 
@@ -824,7 +823,7 @@ class RelAlgNode {
   mutable std::optional<size_t> hash_;
 
  private:
-  mutable const void* context_data_;
+  mutable const RaExecutionDesc* context_data_;
   bool is_nop_;
   mutable std::vector<TargetMetaInfo> targets_metainfo_;
   static thread_local unsigned crt_id_;

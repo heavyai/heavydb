@@ -3357,6 +3357,16 @@ TEST(Select, DistinctProjection) {
   }
 }
 
+TEST(Select, ProjectionCountOptimization) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("select count(*) from"
+      " (select cast(x * 1 as int) as x1 from test) s,"
+      " (select cast(x * 2 as int) as x2 from test WHERE x = 8) t;",
+      dt);
+  }
+}
+
 TEST(Select, Case) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

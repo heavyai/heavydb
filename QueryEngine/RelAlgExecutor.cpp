@@ -975,24 +975,20 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     // Disabling the intermediate count optimization in distributed, as the previous
     // execution descriptor will likely not hold the aggregated result.
     if (g_skip_intermediate_count && step_idx > 0) {
-      auto prev_exec_desc = seq.getDescriptor(step_idx - 1);
-      CHECK(prev_exec_desc);
-      RelAlgNode const* prev_body = prev_exec_desc->getBody();
-      // This optimization needs to be restricted in its application for UNION, which
-      // can have 2 input nodes in which neither should restrict the count of the other.
-      // However some non-UNION queries are measurably slower with this restriction, so
-      // it is only applied when g_enable_union is true.
-      bool const parent_check =
-          !g_enable_union || project->getInput(0)->getId() == prev_body->getId();
-      // If the previous node produced a reliable count, skip the pre-flight count
-      if (parent_check && (dynamic_cast<const RelCompound*>(prev_body) ||
-                           dynamic_cast<const RelLogicalValues*>(prev_body))) {
-        const auto& prev_exe_result = prev_exec_desc->getResult();
-        const auto prev_result = prev_exe_result.getRows();
-        if (prev_result) {
-          prev_count = prev_result->rowCount();
-          VLOG(3) << "Setting output row count for projection node to previous node ("
-                  << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
+      // If the previous node produced a reliable count, skip the pre-flight count.
+      RelAlgNode const* const prev_body = project->getInput(0);
+      if (shared::dynamic_castable_to_any<RelCompound, RelLogicalValues>(prev_body)) {
+        if (RaExecutionDesc const* const prev_exec_desc =
+                prev_body->hasContextData()
+                    ? prev_body->getContextData()
+                    : seq.getDescriptorByBodyId(prev_body->getId(), step_idx - 1)) {
+          const auto& prev_exe_result = prev_exec_desc->getResult();
+          const auto prev_result = prev_exe_result.getRows();
+          if (prev_result) {
+            prev_count = prev_result->rowCount();
+            VLOG(3) << "Setting output row count for projection node to previous node ("
+                    << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
+          }
         }
       }
     }
@@ -1261,9 +1257,10 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(
     const auto input_node_idx =
         input_permutation.empty() ? input_idx : input_permutation[input_idx];
     const auto input_ra = data_sink_node->getInput(input_node_idx);
-    // Having a non-zero mapped value (input_idx) results in the query being interpretted
-    // as a JOIN within CodeGenerator::codegenColVar() due to rte_idx being set to the
-    // mapped value (input_idx) which originates here. This would be incorrect for UNION.
+    // Having a non-zero mapped value (input_idx) results in the query being
+    // interpretted as a JOIN within CodeGenerator::codegenColVar() due to rte_idx
+    // being set to the mapped value (input_idx) which originates here. This would be
+    // incorrect for UNION.
     size_t const idx = dynamic_cast<const RelLogicalUnion*>(ra_node) ? 0 : input_idx;
     const auto it_ok = input_to_nest_level.emplace(input_ra, idx);
     CHECK(it_ok.second);
@@ -1787,10 +1784,9 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                          {}};
 
   try {
-    result = {
-        executor_->executeTableFunction(
-            table_func_work_unit.exe_unit, table_infos, co, eo, data_provider_),
-        body->getOutputMetainfo()};
+    result = {executor_->executeTableFunction(
+                  table_func_work_unit.exe_unit, table_infos, co, eo, data_provider_),
+              body->getOutputMetainfo()};
   } catch (const QueryExecutionError& e) {
     handlePersistentError(e.getErrorCode());
     CHECK(e.getErrorCode() == Executor::ERR_OUT_OF_GPU_MEM);
@@ -1802,8 +1798,8 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
 
 namespace {
 
-// Creates a new expression which has the range table index set to 1. This is needed to
-// reuse the hash join construction helpers to generate a hash table for the window
+// Creates a new expression which has the range table index set to 1. This is needed
+// to reuse the hash join construction helpers to generate a hash table for the window
 // function partition: create an equals expression with left and right sides identical
 // except for the range table index.
 std::shared_ptr<Analyzer::Expr> transform_to_inner(const Analyzer::Expr* expr) {
@@ -2102,8 +2098,8 @@ int64_t insert_one_dict_str(T* col_data,
 ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
   // Note: We currently obtain an executor for this method, but we do not need it.
   // Therefore, we skip the executor state setup in the regular execution path. In the
-  // future, we will likely want to use the executor to evaluate expressions in the insert
-  // statement.
+  // future, we will likely want to use the executor to evaluate expressions in the
+  // insert statement.
 
   const auto& targets = query.get_targetlist();
   const int table_id = query.get_result_table_id();
@@ -2146,8 +2142,9 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
       const auto it_ok = col_buffers.emplace(
           col_id,
           std::unique_ptr<uint8_t[]>(
-              new uint8_t[cd->columnType.get_logical_size()]()));  // changed to zero-init
-                                                                   // the buffer
+              new uint8_t[cd->columnType.get_logical_size()]()));  // changed to
+                                                                   // zero-init the
+                                                                   // buffer
       CHECK(it_ok.second);
     }
     col_descriptors.push_back(cd);
@@ -2583,10 +2580,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
 namespace {
 
 /**
- *  Upper bound estimation for the number of groups. Not strictly correct and not tight,
- * but if the tables involved are really small we shouldn't waste time doing the NDV
- * estimation. We don't account for cross-joins and / or group by unnested array, which
- * is the reason this estimation isn't entirely reliable.
+ *  Upper bound estimation for the number of groups. Not strictly correct and not
+ * tight, but if the tables involved are really small we shouldn't waste time doing
+ * the NDV estimation. We don't account for cross-joins and / or group by unnested
+ * array, which is the reason this estimation isn't entirely reliable.
  */
 size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos) {
   CHECK(!table_infos.empty());
@@ -2602,9 +2599,9 @@ size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos)
 
 /**
  * Determines whether a query needs to compute the size of its output buffer. Returns
- * true for projection queries with no LIMIT or a LIMIT that exceeds the high scan limit
- * threshold (meaning it would be cheaper to compute the number of rows passing or use
- * the bump allocator than allocate the current scan limit per GPU)
+ * true for projection queries with no LIMIT or a LIMIT that exceeds the high scan
+ * limit threshold (meaning it would be cheaper to compute the number of rows passing
+ * or use the bump allocator than allocate the current scan limit per GPU)
  */
 bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -2990,22 +2987,23 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     const bool was_multifrag_kernel_launch,
     const int64_t queue_time_ms) {
   // Disable the bump allocator
-  // Note that this will have basically the same affect as using the bump allocator for
-  // the kernel per fragment path. Need to unify the max_groups_buffer_entry_guess = 0
-  // path and the bump allocator path for kernel per fragment execution.
+  // Note that this will have basically the same affect as using the bump allocator
+  // for the kernel per fragment path. Need to unify the max_groups_buffer_entry_guess
+  // = 0 path and the bump allocator path for kernel per fragment execution.
   auto ra_exe_unit_in = work_unit.exe_unit;
   ra_exe_unit_in.use_bump_allocator = false;
 
-  auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                            co.device_type,
-                                                            QueryMemoryDescriptor(),
-                                                            nullptr,
-                                                            executor_->getDataMgr(),
-                                                            executor_->getBufferProvider(),
-                                                            executor_->getDatabaseId(),
-                                                            executor_->blockSize(),
-                                                            executor_->gridSize()),
-                                {}};
+  auto result =
+      ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                  co.device_type,
+                                                  QueryMemoryDescriptor(),
+                                                  nullptr,
+                                                  executor_->getDataMgr(),
+                                                  executor_->getBufferProvider(),
+                                                  executor_->getDatabaseId(),
+                                                  executor_->blockSize(),
+                                                  executor_->gridSize()),
+                      {}};
 
   const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
@@ -3062,8 +3060,8 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   // Only reset the group buffer entry guess if we ran out of slots, which
   // suggests a
   // highly pathological input which prevented a good estimation of distinct tuple
-  // count. For projection queries, this will force a per-fragment scan limit, which is
-  // compatible with the CPU path
+  // count. For projection queries, this will force a per-fragment scan limit, which
+  // is compatible with the CPU path
   VLOG(1) << "Resetting max groups buffer entry guess.";
   max_groups_buffer_entry_guess = 0;
 
@@ -3092,8 +3090,8 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
         // by a huge cardinality array. Maybe we should throw an exception instead?
         // Such a heavy query is entirely capable of exhausting all the host memory.
         CHECK(max_groups_buffer_entry_guess);
-        // Only allow two iterations of increasingly large entry guesses up to a maximum
-        // of 512MB per column per kernel
+        // Only allow two iterations of increasingly large entry guesses up to a
+        // maximum of 512MB per column per kernel
         if (g_enable_watchdog || iteration_ctr > 1) {
           throw std::runtime_error("Query ran out of output slots in the result");
         }
@@ -3544,8 +3542,9 @@ std::shared_ptr<Analyzer::Expr> reverse_logical_distribution(
   const auto& first_term = expr_terms.front();
   const auto first_term_factors = qual_to_conjunctive_form(first_term);
   std::vector<std::shared_ptr<Analyzer::Expr>> common_factors;
-  // First, collect the conjunctive components common to all the disjunctive components.
-  // Don't do it for simple qualifiers, we only care about expensive or join qualifiers.
+  // First, collect the conjunctive components common to all the disjunctive
+  // components. Don't do it for simple qualifiers, we only care about expensive or
+  // join qualifiers.
   for (const auto& first_term_factor : first_term_factors.quals) {
     bool is_common =
         expr_terms.size() > 1;  // Only report common factors for disjunction.
