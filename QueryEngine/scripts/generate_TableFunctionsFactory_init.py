@@ -1837,7 +1837,11 @@ namespace table_functions {
 std::once_flag init_flag;
 
 // volatile+noinline prevents compiler optimization
-__attribute__((noinline))
+#ifdef _WIN32
+__declspec(noinline)
+#else
+ __attribute__((noinline))
+#endif
 volatile bool avoid_opt_address(void *address) {
   return address != nullptr;
 }

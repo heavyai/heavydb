@@ -14,36 +14,34 @@
  * limitations under the License.
  */
 
-#include "Geospatial/Utm.h"
-
 #include <cmath>
+#include "Geospatial/Utm.h"
+#include "Shared/math_consts.h"
 
 extern "C" ALWAYS_INLINE double transform_4326_900913_x(const double x, double) {
   constexpr double a = 6378137;  // WGS84 Equatorial radius (m)
-  constexpr double rad_div_deg = M_PI / 180;
-  constexpr double c = a * rad_div_deg;
+  constexpr double c = a * math_consts::rad_div_deg;
   return c * x;
 }
 
 // Required: -90 < y < 90 otherwise log() may be calculated for a negative number.
 extern "C" ALWAYS_INLINE double transform_4326_900913_y(double, const double y) {
   constexpr double a = 6378137;  // WGS84 Equatorial radius (m)
-  constexpr double rad_div_two_deg = M_PI / (2 * 180);
-  constexpr double pi_div_four = M_PI / 4;
+  constexpr double rad_div_two_deg = math_consts::m_pi / (2 * 180);
+  constexpr double pi_div_four = math_consts::m_pi / 4;
   return a * log(tan(rad_div_two_deg * y + pi_div_four));
 }
 
 extern "C" ALWAYS_INLINE double transform_900913_4326_x(const double x, double) {
   constexpr double a = 6378137;  // WGS84 Equatorial radius (m)
-  constexpr double deg_div_rad = 180 / M_PI;
-  constexpr double c = deg_div_rad / a;
+  constexpr double c = math_consts::deg_div_rad / a;
   return c * x;
 }
 
 extern "C" ALWAYS_INLINE double transform_900913_4326_y(double, const double y) {
   constexpr double a = 6378137;  // WGS84 Equatorial radius (m)
   constexpr double a_inv = 1 / a;
-  constexpr double two_deg_div_rad = 2 * 180 / M_PI;
+  constexpr double two_deg_div_rad = 2 * 180 / math_consts::m_pi;
   return two_deg_div_rad * atan(exp(a_inv * y)) - 90;
 }
 

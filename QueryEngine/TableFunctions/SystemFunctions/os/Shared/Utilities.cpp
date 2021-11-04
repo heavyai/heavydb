@@ -170,7 +170,7 @@ void DataBufferCache::putDataForKey(const std::string& key,
                                     const size_t num_elements) {
   auto timer = DEBUG_TIMER(__func__);
   const size_t num_bytes(num_elements * sizeof(T));
-  auto cache_data = std::make_shared<CacheData>(num_bytes);
+  auto cache_data = std::make_shared<CacheDataTf>(num_bytes);
   copyData(cache_data->data_buffer, reinterpret_cast<int8_t*>(data_buffer), num_bytes);
   std::unique_lock<std::shared_mutex> write_lock(cache_mutex_);
   const auto& cached_data_itr = data_cache_.find(key);

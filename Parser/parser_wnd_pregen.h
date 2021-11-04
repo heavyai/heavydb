@@ -1,6 +1,7 @@
 #ifndef YY_Parser_h_included
 #define YY_Parser_h_included
 
+#line 1 "/usr/local/mapd-deps/20210608/lib/bison.h"
 /* before anything */
 #ifdef c_plusplus
 #ifndef __cplusplus
@@ -15,6 +16,7 @@
 #endif
 #include <stdio.h>
 
+/* #line 14 "/usr/local/mapd-deps/20210608/lib/bison.h" */
 #define YY_Parser_CLASS SQLParser
 #define YY_Parser_LVAL yylval
 #define YY_Parser_CONSTRUCTOR_INIT  : lexer(yylval)
@@ -113,6 +115,7 @@ class SQLLexer : public yyFlexLexer {
   std::vector<std::unique_ptr<TrackedListPtr<Node>>> parsed_node_list_tokens_{};
 };
 
+#line 14 "/usr/local/mapd-deps/20210608/lib/bison.h"
 /* %{ and %header{ and %union, during decl */
 #ifndef YY_Parser_COMPATIBILITY
 #ifndef YY_USE_CLASS
@@ -163,16 +166,28 @@ class SQLLexer : public yyFlexLexer {
 
 #ifndef YY_Parser_PURE
 
+/* #line 63 "/usr/local/mapd-deps/20210608/lib/bison.h" */
+
+#line 63 "/usr/local/mapd-deps/20210608/lib/bison.h"
 /* YY_Parser_PURE */
 #endif
 
+/* #line 65 "/usr/local/mapd-deps/20210608/lib/bison.h" */
+
+#line 65 "/usr/local/mapd-deps/20210608/lib/bison.h"
 /* prefix */
 #ifndef YY_Parser_DEBUG
 
+/* #line 67 "/usr/local/mapd-deps/20210608/lib/bison.h" */
+
+#line 67 "/usr/local/mapd-deps/20210608/lib/bison.h"
 /* YY_Parser_DEBUG */
 #endif
 #ifndef YY_Parser_LSP_NEEDED
 
+/* #line 70 "/usr/local/mapd-deps/20210608/lib/bison.h" */
+
+#line 70 "/usr/local/mapd-deps/20210608/lib/bison.h"
 /* YY_Parser_LSP_NEEDED*/
 #endif
 /* DEFAULT LTYPE*/
@@ -243,6 +258,7 @@ typedef struct yyltype {
 extern YY_Parser_STYPE YY_Parser_LVAL;
 #endif
 
+/* #line 143 "/usr/local/mapd-deps/20210608/lib/bison.h" */
 #define NAME 258
 #define DASHEDNAME 259
 #define EMAIL 260
@@ -363,37 +379,39 @@ extern YY_Parser_STYPE YY_Parser_LVAL;
 #define TO 375
 #define TRUNCATE 376
 #define UNION 377
-#define PUBLIC 378
-#define REAL 379
-#define REFERENCES 380
-#define RENAME 381
-#define RESTORE 382
-#define REVOKE 383
-#define ROLE 384
-#define ROLLBACK 385
-#define SCHEMA 386
-#define SELECT 387
-#define SET 388
-#define SHARD 389
-#define SHARED 390
-#define SHOW 391
-#define UNIQUE 392
-#define UPDATE 393
-#define USER 394
-#define VALIDATE 395
-#define VALUES 396
-#define VIEW 397
-#define WHEN 398
-#define WHENEVER 399
-#define WHERE 400
-#define WITH 401
-#define WORK 402
-#define EDIT 403
-#define ACCESS 404
-#define DASHBOARD 405
-#define SQL 406
-#define EDITOR 407
+#define USAGE 378
+#define PUBLIC 379
+#define REAL 380
+#define REFERENCES 381
+#define RENAME 382
+#define RESTORE 383
+#define REVOKE 384
+#define ROLE 385
+#define ROLLBACK 386
+#define SCHEMA 387
+#define SELECT 388
+#define SET 389
+#define SHARD 390
+#define SHARED 391
+#define SHOW 392
+#define UNIQUE 393
+#define UPDATE 394
+#define USER 395
+#define VALIDATE 396
+#define VALUES 397
+#define VIEW 398
+#define WHEN 399
+#define WHENEVER 400
+#define WHERE 401
+#define WITH 402
+#define WORK 403
+#define EDIT 404
+#define ACCESS 405
+#define DASHBOARD 406
+#define SQL 407
+#define EDITOR 408
 
+#line 143 "/usr/local/mapd-deps/20210608/lib/bison.h"
 /* #defines token */
 /* after #define tokens, before const tokens S5*/
 #else
@@ -433,6 +451,7 @@ class YY_Parser_CLASS YY_Parser_INHERIT {
 #if YY_Parser_USE_CONST_TOKEN != 0
   /* static const int token ... */
 
+  /* #line 182 "/usr/local/mapd-deps/20210608/lib/bison.h" */
   static const int NAME;
   static const int DASHEDNAME;
   static const int EMAIL;
@@ -553,6 +572,7 @@ class YY_Parser_CLASS YY_Parser_INHERIT {
   static const int TO;
   static const int TRUNCATE;
   static const int UNION;
+  static const int USAGE;
   static const int PUBLIC;
   static const int REAL;
   static const int REFERENCES;
@@ -584,11 +604,13 @@ class YY_Parser_CLASS YY_Parser_INHERIT {
   static const int SQL;
   static const int EDITOR;
 
+#line 182 "/usr/local/mapd-deps/20210608/lib/bison.h"
   /* decl const */
 #else
   enum YY_Parser_ENUM_TOKEN {
     YY_Parser_NULL_TOKEN = 0
 
+    /* #line 185 "/usr/local/mapd-deps/20210608/lib/bison.h" */
     ,
     NAME = 258,
     DASHEDNAME = 259,
@@ -710,37 +732,39 @@ class YY_Parser_CLASS YY_Parser_INHERIT {
     TO = 375,
     TRUNCATE = 376,
     UNION = 377,
-    PUBLIC = 378,
-    REAL = 379,
-    REFERENCES = 380,
-    RENAME = 381,
-    RESTORE = 382,
-    REVOKE = 383,
-    ROLE = 384,
-    ROLLBACK = 385,
-    SCHEMA = 386,
-    SELECT = 387,
-    SET = 388,
-    SHARD = 389,
-    SHARED = 390,
-    SHOW = 391,
-    UNIQUE = 392,
-    UPDATE = 393,
-    USER = 394,
-    VALIDATE = 395,
-    VALUES = 396,
-    VIEW = 397,
-    WHEN = 398,
-    WHENEVER = 399,
-    WHERE = 400,
-    WITH = 401,
-    WORK = 402,
-    EDIT = 403,
-    ACCESS = 404,
-    DASHBOARD = 405,
-    SQL = 406,
-    EDITOR = 407
+    USAGE = 378,
+    PUBLIC = 379,
+    REAL = 380,
+    REFERENCES = 381,
+    RENAME = 382,
+    RESTORE = 383,
+    REVOKE = 384,
+    ROLE = 385,
+    ROLLBACK = 386,
+    SCHEMA = 387,
+    SELECT = 388,
+    SET = 389,
+    SHARD = 390,
+    SHARED = 391,
+    SHOW = 392,
+    UNIQUE = 393,
+    UPDATE = 394,
+    USER = 395,
+    VALIDATE = 396,
+    VALUES = 397,
+    VIEW = 398,
+    WHEN = 399,
+    WHENEVER = 400,
+    WHERE = 401,
+    WITH = 402,
+    WORK = 403,
+    EDIT = 404,
+    ACCESS = 405,
+    DASHBOARD = 406,
+    SQL = 407,
+    EDITOR = 408
 
+#line 185 "/usr/local/mapd-deps/20210608/lib/bison.h"
     /* enum token */
   }; /* end of enum declaration */
 #endif
@@ -794,4 +818,5 @@ class YY_Parser_CLASS YY_Parser_INHERIT {
 #endif
 /* END */
 
+/* #line 236 "/usr/local/mapd-deps/20210608/lib/bison.h" */
 #endif

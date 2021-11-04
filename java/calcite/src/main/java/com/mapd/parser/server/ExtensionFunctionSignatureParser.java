@@ -37,6 +37,11 @@ import java.util.regex.Pattern;
 class ExtensionFunctionSignatureParser {
   final static Logger MAPDLOGGER =
           LoggerFactory.getLogger(ExtensionFunctionSignatureParser.class);
+  // Windows DE supports slightly different types sizes.
+  private static String OS = System.getProperty("os.name").toLowerCase();
+  static private boolean isWindows() {
+    return (OS.indexOf("win") >= 0);
+  }
 
   static Map<String, ExtensionFunction> parse(final String file_path) throws IOException {
     File file = new File(file_path);
@@ -175,11 +180,15 @@ class ExtensionFunctionSignatureParser {
       return ExtensionFunction.ExtArgumentType.Int16;
     }
     if (type_name.equals("int32_t") || type_name.equals("int")
-            || type_name.equals("int32")) {
+            || type_name.equals("int32") || (isWindows() && type_name.equals("long"))) {
       return ExtensionFunction.ExtArgumentType.Int32;
     }
     if (type_name.equals("int64_t") || type_name.equals("size_t")
-            || type_name.equals("int64") || type_name.equals("long")) {
+            || type_name.equals("int64")) {
+      return ExtensionFunction.ExtArgumentType.Int64;
+    }
+    if ((!isWindows() && type_name.equals("long"))
+            || (isWindows() && type_name.equals("long long"))) {
       return ExtensionFunction.ExtArgumentType.Int64;
     }
     if (type_name.equals("float") || type_name.equals("float32")) {

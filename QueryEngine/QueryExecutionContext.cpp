@@ -521,8 +521,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                    query_buffers_->getCountDistinctBitmapBytes());
   }
 
-  const auto varlen_output_gpu_buf =
-      reinterpret_cast<CUdeviceptr>(query_buffers_->getVarlenOutputPtr());
+  const auto varlen_output_gpu_buf = query_buffers_->getVarlenOutputPtr();
   if (varlen_output_gpu_buf) {
     CHECK(query_mem_desc_.varlenOutputBufferElemSize());
     const size_t varlen_output_buf_bytes =

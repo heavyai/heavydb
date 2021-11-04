@@ -24,10 +24,10 @@
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
 #include "Shared/Utilities.h"
+#include "Shared/math_consts.h"
 
 const size_t max_inputs_per_thread = 1000000L;
 const size_t max_temp_output_entries = 200000000L;
-constexpr double radians_to_degrees{180.0 / M_PI};
 
 // Allow input types to GeoRaster that are different than class types/output Z type
 // So we can move everything to the type of T and Z (which can each be either float
@@ -370,11 +370,12 @@ inline std::pair<Z, Z> GeoRaster<T, Z>::calculate_slope_and_aspect_of_cell(
   const Z slope = sqrt(dz_dx * dz_dx + dz_dy * dz_dy);
   std::pair<Z, Z> slope_and_aspect;
   slope_and_aspect.first =
-      compute_slope_in_degrees ? atan(slope) * radians_to_degrees : slope;
+      compute_slope_in_degrees ? atan(slope) * math_consts::radians_to_degrees : slope;
   if (slope < 0.0001) {
     slope_and_aspect.second = null_sentinel_;
   } else {
-    const Z aspect_degrees = radians_to_degrees * atan2(dz_dx, dz_dy);  // -180.0 to 180.0
+    const Z aspect_degrees =
+        math_consts::radians_to_degrees * atan2(dz_dx, dz_dy);  // -180.0 to 180.0
     slope_and_aspect.second = aspect_degrees + 180.0;
     // aspect_degrees < 0.0 ? 180.0 + aspect_degrees : aspect_degrees;
   }

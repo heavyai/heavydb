@@ -21,16 +21,11 @@
  */
 
 #include "Shared/funcannotations.h"
+#include "Shared/math_consts.h"
 #include "Shared/misc.h"
 
 #include <cmath>
 #include <limits>
-
-#ifdef _WIN32
-// M_PI is defined a file then isn't include in the OS release
-// TODO look at moving 'constants.h' to be OS avaliable.
-constexpr double M_PI{3.14159265358979323846};
-#endif
 
 namespace {
 // Naming conventions break from style guide to match equation variables.
@@ -38,8 +33,6 @@ constexpr double f = 1 / 298.257223563;  // WGS84 Earth flattening
 constexpr double a = 6378137;            // WGS84 Equatorial radius (m)
 constexpr double k0 = 0.9996;            // Point scale on central UTM meridians
 constexpr double E0 = 500e3;             // UTM False easting (m)
-constexpr double deg_div_rad = 180 / M_PI;
-constexpr double rad_div_deg = M_PI / 180;
 
 // Formulas are from https://arxiv.org/pdf/1002.1417v3.pdf
 // except delta coefficients are from Kawase 2011.
@@ -139,9 +132,9 @@ class Transform4326ToUTM {
       : srid_(srid) {
     unsigned const zone = srid_ % 100u;
     double const x0 = zone * 6.0 - 183;
-    double const dlambda = (x - x0) * rad_div_deg;
+    double const dlambda = (x - x0) * math_consts::rad_div_deg;
     small_dlambda_ = -1.0 / 12 <= dlambda && dlambda <= 1.0 / 12;
-    double const phi = y * rad_div_deg;
+    double const phi = y * math_consts::rad_div_deg;
     double const c = 2 * sqrt(n) / (1 + n);  // Boost will have a constexpr sqrt
 
     // https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system#Simplified_formulae
@@ -256,7 +249,7 @@ class TransformUTMTo4326 {
     unsigned const zone = srid_ % 100u;
     double const lambda0 = zone * 6.0 - 183;
     double const sinh_eta = small_eta_ ? shared::fastSinh(eta_) : sinh(eta_);
-    return lambda0 + atan(sinh_eta / cos(xi_)) * deg_div_rad;
+    return lambda0 + atan(sinh_eta / cos(xi_)) * math_consts::deg_div_rad;
   }
 
   // phi (latitude, degrees)
@@ -269,7 +262,7 @@ class TransformUTMTo4326 {
     for (unsigned j = N; j; --j) {
       sum += deltas[j] * sin(2 * j * chi);
     }
-    return (chi + sum) * deg_div_rad;
+    return (chi + sum) * math_consts::deg_div_rad;
 #else
     // Heavier calculation from Transverse Mercator with an accuracy of a few nanometers
     // by Karney 3 Feb 2011.  This does not make use of the constexpr delta Fourier

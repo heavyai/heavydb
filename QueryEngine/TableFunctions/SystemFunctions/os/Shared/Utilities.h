@@ -49,15 +49,15 @@ inline std::pair<int64_t, int64_t> bin_to_x_y_bin_indexes(const int64_t bin,
   return std::make_pair(bin % num_x_bins, bin / num_x_bins);
 }
 
-struct CacheData {
+struct CacheDataTf {
   int8_t* data_buffer;
   size_t num_bytes;
 
-  CacheData(const size_t num_bytes) : num_bytes(num_bytes) {
+  CacheDataTf(const size_t num_bytes) : num_bytes(num_bytes) {
     data_buffer = new int8_t[num_bytes];
   }
 
-  ~CacheData() { delete[] data_buffer; }
+  ~CacheDataTf() { delete[] data_buffer; }
 };
 
 class DataBufferCache {
@@ -86,7 +86,7 @@ class DataBufferCache {
 
   void copyData(int8_t* dest, const int8_t* source, const size_t num_bytes) const;
 
-  std::unordered_map<std::string, std::shared_ptr<CacheData>> data_cache_;
+  std::unordered_map<std::string, std::shared_ptr<CacheDataTf>> data_cache_;
   mutable std::shared_mutex cache_mutex_;
 };
 
