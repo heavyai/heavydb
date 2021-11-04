@@ -23,8 +23,10 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#include "BufferMgr/GpuL0BufferMgr/GpuL0BufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
+#include "DataMgr/Allocators/L0Allocator.h"
 #include "FileMgr/GlobalFileMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
@@ -188,7 +190,16 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
     return;
   }
 #endif
-
+// TODO(Petr): generalize
+#ifdef HAVE_L0
+  bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
+                                                              total_cpu_size,
+                                                              l0Mgr_.get(),
+                                                              minCpuSlabSize,
+                                                              maxCpuSlabSize,
+                                                              page_size,
+                                                              bufferMgrs_[0][0]));
+#else
   bufferMgrs_[1].push_back(new Buffer_Namespace::CpuBufferMgr(0,
                                                               total_cpu_size,
                                                               cudaMgr_.get(),
@@ -196,6 +207,7 @@ void DataMgr::allocateCpuBufferMgr(int32_t device_id,
                                                               maxCpuSlabSize,
                                                               page_size,
                                                               bufferMgrs_[0][0]));
+#endif
 }
 
 // This function exists for testing purposes so that we can test a reset of the cache.
@@ -293,11 +305,32 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                                                                       bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
-  } else {
+  } else if (l0Mgr_ /*fixme*/) {
+    bufferMgrs_.resize(3);
     allocateCpuBufferMgr(
         0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
     levelSizes_.push_back(1);
+
+    int numGpus = l0Mgr_->getDeviceCount();
+
+    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+      size_t gpuMaxMemSize = 1024 * 4 * 1024;  // 4MB for now
+      size_t minGpuSlabSize = gpuMaxMemSize;
+      size_t maxGpuSlabSize = gpuMaxMemSize;
+      bufferMgrs_[2].push_back(new Buffer_Namespace::GpuL0BufferMgr(gpuNum,
+                                                                    gpuMaxMemSize,
+                                                                    l0Mgr_.get(),
+                                                                    minGpuSlabSize,
+                                                                    maxGpuSlabSize,
+                                                                    4096UL,
+                                                                    bufferMgrs_[1][0]));
+    }
+    levelSizes_.push_back(numGpus);
+  } else {
+    allocateCpuBufferMgr(
+        0, total_cpu_size, minCpuSlabSize, maxCpuSlabSize, page_size, cpu_tier_sizes);
   }
+  levelSizes_.push_back(1);
 }
 
 void DataMgr::convertDB(const std::string basePath) {
@@ -526,6 +559,8 @@ AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
 std::unique_ptr<DeviceAllocator> DataMgr::createGpuAllocator(int device_id) {
 #ifdef HAVE_CUDA
   return std::make_unique<CudaAllocator>(this, device_id);
+#elif HAVE_L0
+  return std::make_unique<L0Allocator>(this, device_id);
 #else
   UNREACHABLE();
 #endif

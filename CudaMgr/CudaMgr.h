@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include "DataMgr/GpuMgr.h"
 #include "Logger/Logger.h"
 #include "Shared/DeviceGroup.h"
 
@@ -77,7 +78,7 @@ struct DeviceProperties {
   int numCore;
 };
 
-class CudaMgr {
+class CudaMgr : public GpuMgr {
  public:
   CudaMgr(const int num_gpus, const int start_gpu = 0);
   ~CudaMgr();
@@ -90,16 +91,16 @@ class CudaMgr {
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num) override;
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num) override;
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
-                          const int src_device_num);
+                          const int src_device_num) override;
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
   int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
