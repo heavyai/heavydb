@@ -89,5 +89,10 @@
         foo_int_require(ColumnInt32 | name=col, Int32 | name=x | require="x > 0" | require="x < 5") -> Int32
   UDTF: foo_str_require(TextEncodingNone s | require="s == \"str\"") -> int32_t !
         foo_str_require(TextEncodingNone | name=s | require="s == \"str\"") -> Int32
+
+
+  UDTF: foo(TableFunctionManager, TextEncodingNone agg_type | require="agg_type == \"MAX\"",
+            Cursor<Column<K> x, Column<T> y>) -> Column<int>, K=[int], T=[float] !
+        foo(TableFunctionManager, TextEncodingNone | name=agg_type | require="agg_type == \"MAX\"", Cursor<ColumnInt32 | name=x, ColumnFloat | name=y> | fields=[x,y]) -> ColumnInt32
  */
 // clang-format on

@@ -144,8 +144,8 @@ class Declaration:
     def get_cpp_type(self):
         return self.type.get_cpp_type()
 
-    def format_cpp_type(self, idx):
-        return self.type.format_cpp_type(idx)
+    def format_cpp_type(self, idx, arg_name=None, is_input=True):
+        return self.type.format_cpp_type(idx, arg_name=arg_name, is_input=is_input)
 
     def __getattr__(self, name):
         if name.startswith('is_'):
@@ -1591,7 +1591,7 @@ def build_template_function_call(caller, callee, input_types, output_types, uses
     return template
 
 
-def build_require_check_function(fn_name, input_types, input_annotations, uses_manager):
+def build_require_check_function(fn_name, input_types, output_types, input_annotations, uses_manager):
 
     def format_error_msg(err_msg, uses_manager):
         if uses_manager:
@@ -1600,6 +1600,7 @@ def build_require_check_function(fn_name, input_types, input_annotations, uses_m
             return "    return table_function_error(%s);\n" % (err_msg,)
 
     input_cpp_args = []
+    output_cpp_args = []
     arg_names = []
 
     for idx, (typ, ann) in enumerate(zip(input_types, input_annotations)):
@@ -1607,15 +1608,21 @@ def build_require_check_function(fn_name, input_types, input_annotations, uses_m
         cpp_arg, _ = typ.format_cpp_type(idx, arg_name=arg_names[idx])
         input_cpp_args.append(cpp_arg)
 
+    for idx, typ in enumerate(output_types):
+        cpp_arg, arg_name = typ.format_cpp_type(idx, is_input=False)
+        arg_names.append(arg_name)
+        output_cpp_args.append(cpp_arg)
+
     if uses_manager:
         input_cpp_args = ["TableFunctionManager& mgr"] + input_cpp_args
         arg_names = ["mgr"] + arg_names
         input_annotations = [[]] + input_annotations
 
+    args = ', '.join(input_cpp_args + output_cpp_args)
     fn = "EXTENSION_NOINLINE int32_t\n"
-    fn += "%s(%s) {\n" % (fn_name.lower() + "__require_check", ', '.join(input_cpp_args))
+    fn += "%s(%s) {\n" % (fn_name.lower() + "__require_check", args)
 
-    for idx, arg_name in enumerate(arg_names):
+    for idx, _ in enumerate(input_annotations):
         ann = input_annotations[idx]
         for key, value in ann:
             if key == 'require':
@@ -1751,7 +1758,8 @@ def parse_annotations(input_files):
             # implementation of an UDTF.
 
             if contains_require_check(sig):
-                check_fn = build_require_check_function(sig.name, input_types_, input_annotations, uses_manager)
+                fn_name = '%s_%s' % (sig.name, str(counter)) if is_template_function(sig) else sig.name
+                check_fn = build_require_check_function(fn_name, input_types_, sig.outputs, input_annotations, uses_manager)
                 cond_fns.append(check_fn)
 
             if is_template_function(sig):

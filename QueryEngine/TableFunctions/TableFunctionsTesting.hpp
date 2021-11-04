@@ -1197,6 +1197,9 @@ EXTENSION_NOINLINE int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
   UDTF: ct_require(Column<int32_t>, int | name=i | require="i > 0") -> Column<int32_t>
   UDTF: ct_require_mgr(TableFunctionManager, Column<int32_t>, int i | require="i > 1" | require="i < 5") -> Column<int32_t>
   UDTF: ct_require_str(Column<int32_t>, TextEncodingNone s | require="s == \"hello\"") -> Column<int32_t>
+  UDTF: ct_require_templating__template(Column<T>, int i | require="i > 0") -> Column<K>, T=[int, double], K=[int]
+  UDTF: ct_require_and(Column<int>, int i | require="i > 0 && i < 5") -> Column<int>
+  UDTF: ct_require_or_str(Column<int>, TextEncodingNone i | require="i == \"MAX\" || i == \"MIN\"") -> Column<int>
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t ct_require(const Column<int32_t>& input1,
@@ -1221,6 +1224,35 @@ EXTENSION_NOINLINE int32_t ct_require_mgr(TableFunctionManager& mgr,
                                           Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 4;
+  return 1;
+}
+
+template <typename T, typename K>
+TEMPLATE_NOINLINE int32_t ct_require_templating__template(const Column<T>& input1,
+                                                          const int32_t i,
+                                                          Column<K>& out) {
+  set_output_row_size(1);
+  if constexpr (std::is_same<T, int32_t>::value) {
+    out[0] = 5;
+  } else if constexpr (std::is_same<T, double>::value) {
+    out[0] = 6.0;
+  }
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ct_require_and(const Column<int32_t>& input1,
+                                          const int32_t i,
+                                          Column<int32_t>& out) {
+  set_output_row_size(1);
+  out[0] = 7;
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ct_require_or_str(const Column<int32_t>& input1,
+                                             const TextEncodingNone i,
+                                             Column<int32_t>& out) {
+  set_output_row_size(1);
+  out[0] = 8;
   return 1;
 }
 
