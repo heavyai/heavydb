@@ -329,8 +329,7 @@ class TableFunctionsFactory {
                   const std::vector<ExtArgumentType>& output_args,
                   const std::vector<ExtArgumentType>& sql_args,
                   const std::vector<std::map<std::string, std::string>>& annotations,
-                  bool is_runtime = false,
-                  bool uses_manager = false);
+                  bool is_runtime = false);
 
   static std::vector<TableFunction> get_table_funcs(const std::string& name,
                                                     const bool is_gpu);

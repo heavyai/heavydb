@@ -1744,6 +1744,8 @@ def parse_annotations(input_files):
             ns_input_types = tuple([t.apply_namespace(ns='ExtArgumentType') for t in input_types_])
             ns_sql_types = tuple([t.apply_namespace(ns='ExtArgumentType') for t in sql_types_])
 
+            sig.function_annotations.append(('uses_manager', str(uses_manager).lower()))
+
             input_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(tostring, ns_input_types)))
             output_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(tostring, ns_output_types)))
             sql_types = 'std::vector<ExtArgumentType>{%s}' % (', '.join(map(tostring, ns_sql_types)))
@@ -1773,13 +1775,13 @@ def parse_annotations(input_files):
                 if is_gpu_function(sig):
                     gpu_template_functions.append(t)
                     gpu_function_address_expressions.append(address_expression)
-                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false, /*uses_manager:*/%s);'
-                       % (name, sizer, input_types, output_types, sql_types, annotations, str(uses_manager).lower()))
+                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
+                       % (name, sizer, input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
 
             else:
-                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false, /*uses_manager:*/%s);'
-                       % (sig.name, sizer, input_types, output_types, sql_types, annotations, str(uses_manager).lower()))
+                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
+                       % (sig.name, sizer, input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
                 address_expression = ('avoid_opt_address(reinterpret_cast<void*>(%s))' % sig.name)
 
