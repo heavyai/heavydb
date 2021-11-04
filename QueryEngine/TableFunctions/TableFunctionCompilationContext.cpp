@@ -214,38 +214,31 @@ llvm::Value* alloc_column_list(std::string col_list_name,
 
 }  // namespace
 
-TableFunctionCompilationContext::TableFunctionCompilationContext()
-    : cgen_state_(std::make_unique<CgenState>(/*num_query_infos=*/0,
-                                              /*contains_left_deep_outer_join=*/false)) {}
-
-void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& exe_unit,
-                                              const CompilationOptions& co,
-                                              Executor* executor,
-                                              bool emit_only_require_check) {
+std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
+    const TableFunctionExecutionUnit& exe_unit,
+    const CompilationOptions& co,
+    bool emit_only_require_check) {
   auto timer = DEBUG_TIMER(__func__);
 
-  // Avoid compile functions that set the sizer at runtime if the device is GPU
-  // This should be fixed in the python script as well to minimize the number of
-  // QueryMustRunOnCpu exceptions
-  if (co.device_type == ExecutorDeviceType::GPU &&
-      exe_unit.table_func.hasTableFunctionSpecifiedParameter()) {
-    throw QueryMustRunOnCpu();
-  }
-
-  auto cgen_state = cgen_state_.get();
+  auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
   cgen_state->module_ = module.get();
+
   entry_point_func_ = generate_entry_point(cgen_state);
-  module_ = std::move(module);
+
   generateEntryPoint(exe_unit,
                      /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU,
                      emit_only_require_check);
+
   if (co.device_type == ExecutorDeviceType::GPU) {
     CHECK(!emit_only_require_check);
     generateGpuKernel();
   }
-  finalize(exe_unit, co, executor, emit_only_require_check);
+  auto result = finalize(co, emit_only_require_check);
+  module.release();
+  cgen_state->module_ = nullptr;
+  return result;
 }
 
 bool TableFunctionCompilationContext::passColumnsByValue(
@@ -269,15 +262,16 @@ void TableFunctionCompilationContext::generateTableFunctionCall(
     llvm::BasicBlock* bb_exit,
     llvm::Value* output_row_count_ptr,
     bool emit_only_require_check) {
+  auto cgen_state = executor_->getCgenStatePtr();
   // Emit llvm IR code to call the table function
-  llvm::LLVMContext& ctx = cgen_state_->context_;
-  llvm::IRBuilder<>* ir_builder = &cgen_state_->ir_builder_;
+  llvm::LLVMContext& ctx = cgen_state->context_;
+  llvm::IRBuilder<>* ir_builder = &cgen_state->ir_builder_;
 
   std::string func_name =
       (emit_only_require_check ? exe_unit.table_func.getRequireCheckFnName()
                                : exe_unit.table_func.getName(false, true));
   llvm::Value* table_func_return =
-      cgen_state_->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
+      cgen_state->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
 
   table_func_return->setName(emit_only_require_check ? "require_check_func_ret"
                                                      : "table_func_ret");
@@ -315,7 +309,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   const auto input_row_counts_arg = &*(++arg_it);
   const auto output_buffers_arg = &*(++arg_it);
   const auto output_row_count_ptr = &*(++arg_it);
-  auto cgen_state = cgen_state_.get();
+  auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
   auto& ctx = cgen_state->context_;
 
@@ -367,7 +361,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
       auto varchar_size =
           cgen_state->ir_builder_.CreateBitCast(col_heads[i], get_int_ptr_type(64, ctx));
       auto varchar_ptr =
-          cgen_state->ir_builder_.CreateGEP(col_heads[i], cgen_state_->llInt(8));
+          cgen_state->ir_builder_.CreateGEP(col_heads[i], cgen_state->llInt(8));
       auto [varchar_struct, varchar_struct_ptr] =
           alloc_column(std::string("varchar_literal.") + std::to_string(func_arg_index),
                        i,
@@ -375,9 +369,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
                        varchar_ptr,
                        varchar_size,
                        ctx,
-                       cgen_state_->ir_builder_);
+                       cgen_state->ir_builder_);
       func_args.push_back((pass_column_by_value
-                               ? cgen_state_->ir_builder_.CreateLoad(varchar_struct)
+                               ? cgen_state->ir_builder_.CreateLoad(varchar_struct)
                                : varchar_struct_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column()) {
@@ -388,9 +382,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
                        col_heads[i],
                        row_count_heads[i],
                        ctx,
-                       cgen_state_->ir_builder_);
+                       cgen_state->ir_builder_);
       func_args.push_back(
-          (pass_column_by_value ? cgen_state_->ir_builder_.CreateLoad(col) : col_ptr));
+          (pass_column_by_value ? cgen_state->ir_builder_.CreateLoad(col) : col_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column_list()) {
       if (col_index == -1) {
@@ -401,7 +395,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
             ti.get_dimension(),
             row_count_heads[i],
             ctx,
-            cgen_state_->ir_builder_);
+            cgen_state->ir_builder_);
         func_args.push_back(col_list);
       }
       col_index++;
@@ -419,7 +413,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   std::vector<llvm::Value*> output_col_args;
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
     auto output_load = cgen_state->ir_builder_.CreateLoad(
-        cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(i)));
+        cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state->llInt(i)));
     const auto& expr = exe_unit.target_exprs[i];
     const auto& ti = expr->get_type_info();
     CHECK(!ti.is_column());       // UDTF output column type is its data type
@@ -433,7 +427,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
                                            // Column ptr member
         output_row_count_ptr,
         ctx,
-        cgen_state_->ir_builder_);
+        cgen_state->ir_builder_);
     if (!is_gpu) {
       cgen_state->emitExternalCall(
           "TableFunctionManager_register_output_column",
@@ -449,12 +443,12 @@ void TableFunctionCompilationContext::generateEntryPoint(
     cgen_state->emitExternalCall(
         "TableFunctionManager_set_output_row_size",
         llvm::Type::getVoidTy(ctx),
-        {mgr_ptr, cgen_state_->ir_builder_.CreateLoad(output_row_count_ptr)});
+        {mgr_ptr, cgen_state->ir_builder_.CreateLoad(output_row_count_ptr)});
   }
 
   for (auto& col : output_col_args) {
     func_args.push_back(
-        (pass_column_by_value ? cgen_state_->ir_builder_.CreateLoad(col) : col));
+        (pass_column_by_value ? cgen_state->ir_builder_.CreateLoad(col) : col));
   }
 
   generateTableFunctionCall(
@@ -476,7 +470,7 @@ void TableFunctionCompilationContext::generateGpuKernel() {
                 [&arg_types](const auto& arg) { arg_types.push_back(arg.getType()); });
   CHECK_EQ(arg_types.size(), entry_point_func_->arg_size());
 
-  auto cgen_state = cgen_state_.get();
+  auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
   auto& ctx = cgen_state->context_;
 
@@ -507,55 +501,57 @@ void TableFunctionCompilationContext::generateGpuKernel() {
   b.CreateRetVoid();
 }
 
-void TableFunctionCompilationContext::finalize(const TableFunctionExecutionUnit& exe_unit,
-                                               const CompilationOptions& co,
-                                               Executor* executor,
-                                               bool emit_only_require_check) {
+std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
+    const CompilationOptions& co,
+    bool emit_only_require_check) {
   /*
     TODO 1: eliminate need for OverrideFromSrc
     TODO 2: detect and link only the udf's that are needed
   */
-
+  auto cgen_state = executor_->getCgenStatePtr();
   if (co.device_type == ExecutorDeviceType::GPU && rt_udf_gpu_module != nullptr) {
     CodeGenerator::link_udf_module(rt_udf_gpu_module,
-                                   *module_,
-                                   cgen_state_.get(),
+                                   *(cgen_state->module_),
+                                   cgen_state,
                                    llvm::Linker::Flags::OverrideFromSrc);
   }
   if (co.device_type == ExecutorDeviceType::CPU && rt_udf_cpu_module != nullptr) {
     CodeGenerator::link_udf_module(rt_udf_cpu_module,
-                                   *module_,
-                                   cgen_state_.get(),
+                                   *(cgen_state->module_),
+                                   cgen_state,
                                    llvm::Linker::Flags::OverrideFromSrc);
   }
 
-  module_.release();
   // Add code to cache?
 
   LOG(IR) << (emit_only_require_check ? "Require Check Function Entry Point IR\n"
                                       : "Table Function Entry Point IR\n")
           << serialize_llvm_object(entry_point_func_);
+  std::shared_ptr<CompilationContext> code;
   if (co.device_type == ExecutorDeviceType::GPU) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
 
-    CHECK(executor);
-    executor->initializeNVPTXBackend();
+    CHECK(executor_);
+    executor_->initializeNVPTXBackend();
 
-    CodeGenerator::GPUTarget gpu_target{executor->nvptx_target_machine_.get(),
-                                        executor->cudaMgr(),
-                                        executor->blockSize(),
-                                        cgen_state_.get(),
+    CodeGenerator::GPUTarget gpu_target{executor_->nvptx_target_machine_.get(),
+                                        executor_->cudaMgr(),
+                                        executor_->blockSize(),
+                                        cgen_state,
                                         false};
-    gpu_code_ = CodeGenerator::generateNativeGPUCode(entry_point_func_,
-                                                     kernel_func_,
-                                                     {entry_point_func_, kernel_func_},
-                                                     co,
-                                                     gpu_target);
+    code = CodeGenerator::generateNativeGPUCode(entry_point_func_,
+                                                kernel_func_,
+                                                {entry_point_func_, kernel_func_},
+                                                co,
+                                                gpu_target);
   } else {
     auto ee =
         CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co);
-    func_ptr = reinterpret_cast<FuncPtr>(ee->getPointerToFunction(entry_point_func_));
-    own_execution_engine_ = std::move(ee);
+    auto cpu_code = std::make_shared<CpuCompilationContext>(std::move(ee));
+    cpu_code->setFunctionPointer(entry_point_func_);
+    code = cpu_code;
   }
   LOG(IR) << "End of IR";
+
+  return code;
 }

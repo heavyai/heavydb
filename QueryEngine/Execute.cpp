@@ -1713,41 +1713,57 @@ ResultSetPtr Executor::executeTableFunction(
         this->gridSize());
   }
 
-  nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
+  // Avoid compile functions that set the sizer at runtime if the device is GPU
+  // This should be fixed in the python script as well to minimize the number of
+  // QueryMustRunOnCpu exceptions
+  if (co.device_type == ExecutorDeviceType::GPU &&
+      exe_unit.table_func.hasTableFunctionSpecifiedParameter()) {
+    throw QueryMustRunOnCpu();
+  }
 
   ColumnCacheMap column_cache;  // Note: if we add retries to the table function
                                 // framework, we may want to move this up a level
 
   ColumnFetcher column_fetcher(this, column_cache);
-
-  TableFunctionCompilationContext compilation_context;
   TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
 
+  if (exe_unit.table_func.containsRequireFnCheck()) {
+    std::shared_ptr<CompilationContext> compilation_context;
+    {
+      auto clock_begin = timer_start();
+      std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
+      compilation_queue_time_ms_ += timer_stop(clock_begin);
+      nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
+      TableFunctionCompilationContext tf_compilation_context(this);
+      compilation_context =
+          tf_compilation_context.compile(exe_unit,
+                                         CompilationOptions::makeCpuOnly(co),
+                                         true /* emit_only_require_check*/);
+    }
+    exe_context.execute(exe_unit,
+                        table_infos,
+                        compilation_context,
+                        column_fetcher,
+                        ExecutorDeviceType::CPU,
+                        this,
+                        true /* is_pre_launch_udtf */);
+  }
+
+  std::shared_ptr<CompilationContext> compilation_context;
   {
     auto clock_begin = timer_start();
     std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
     compilation_queue_time_ms_ += timer_stop(clock_begin);
 
-    if (exe_unit.table_func.containsRequireFnCheck()) {
-      compilation_context.compile(exe_unit,
-                                  CompilationOptions::makeCpuOnly(co),
-                                  this,
-                                  true /* emit_only_require_check*/);
-      exe_context.execute(exe_unit,
-                          table_infos,
-                          &compilation_context,
-                          column_fetcher,
-                          ExecutorDeviceType::CPU,
-                          this,
-                          true /* is_pre_launch_udtf */);
-    }
-
-    compilation_context.compile(exe_unit, co, this, false /* emit_only_require_check */);
+    nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
+    TableFunctionCompilationContext tf_compilation_context(this);
+    compilation_context =
+        tf_compilation_context.compile(exe_unit, co, false /* emit_only_require_check */);
   }
 
   return exe_context.execute(exe_unit,
                              table_infos,
-                             &compilation_context,
+                             compilation_context,
                              column_fetcher,
                              co.device_type,
                              this,

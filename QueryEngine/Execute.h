@@ -1038,6 +1038,8 @@ class Executor {
                                      JoinColumnSide target_side,
                                      bool extract_only_col_id);
 
+  CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
+
  private:
   std::shared_ptr<CompilationContext> getCodeFromCache(const CodeCacheKey&,
                                                        const CodeCache&);
