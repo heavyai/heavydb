@@ -76,6 +76,11 @@
 #endif
 #endif
 
+#ifdef ENABLE_TOSTRING_PTHREAD
+#include <pthread.h>
+#include <mutex>
+#endif
+
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define PRINT(EXPR)                                                                   \
   std::cout << std::hex                                                               \
@@ -224,6 +229,15 @@ std::string toString(const T& v) {
     v.Print(rso, nullptr, true);
     return rso.str();
 #endif
+#ifdef ENABLE_TOSTRING_PTHREAD
+  } else if constexpr (std::is_same_v<T, pthread_mutex_t>) {  // NOLINT
+    std::string r;
+    r += "lock=" + std::to_string(v.__data.__lock);
+    r += ", &owner=" + std::to_string(v.__data.__owner);
+    r += ", &nusers=" + std::to_string(v.__data.__nusers);
+    r += ", &count=" + std::to_string(v.__data.__count);
+    return "{" + r + "}";
+#endif
   } else if constexpr (std::is_same_v<T, bool>) {  // NOLINT
     return v ? "True" : "False";
   } else if constexpr (std::is_arithmetic_v<T>) {  // NOLINT
@@ -279,6 +293,19 @@ std::string toString(const T& v) {
     return typeName(&v);
   }
 }
+
+#ifdef ENABLE_TOSTRING_PTHREAD
+template <typename T>
+std::string toString(T& v) {
+  if constexpr (std::is_same_v<T, std::mutex>) {  // NOLINT
+    auto p = v.native_handle();
+    return "mutex" + toString(*p);
+  } else {
+    const T* w = &v;
+    return toString(*w);
+  }
+}
+#endif
 
 template <typename T1, typename T2>
 std::string toString(const std::pair<T1, T2>& v) {

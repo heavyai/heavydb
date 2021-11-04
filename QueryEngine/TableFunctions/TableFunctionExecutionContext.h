@@ -36,32 +36,37 @@ class TableFunctionExecutionContext {
 
   ResultSetPtr execute(const TableFunctionExecutionUnit& exe_unit,
                        const std::vector<InputTableInfo>& table_infos,
-                       const TableFunctionCompilationContext* compilation_context,
+                       const std::shared_ptr<CompilationContext>& compilation_context,
                        const ColumnFetcher& column_fetcher,
                        const ExecutorDeviceType device_type,
                        Executor* executor,
                        bool is_pre_launch_udtf);
 
  private:
-  void launchPreCodeOnCpu(const TableFunctionExecutionUnit& exe_unit,
-                          const TableFunctionCompilationContext* compilation_context,
-                          std::vector<const int8_t*>& col_buf_ptrs,
-                          std::vector<int64_t>& col_sizes,
-                          const size_t elem_count,
-                          Executor* executor);
-  ResultSetPtr launchCpuCode(const TableFunctionExecutionUnit& exe_unit,
-                             const TableFunctionCompilationContext* compilation_context,
-                             std::vector<const int8_t*>& col_buf_ptrs,
-                             std::vector<int64_t>& col_sizes,
-                             const size_t elem_count,
-                             Executor* executor);
-  ResultSetPtr launchGpuCode(const TableFunctionExecutionUnit& exe_unit,
-                             const TableFunctionCompilationContext* compilation_context,
-                             std::vector<const int8_t*>& col_buf_ptrs,
-                             std::vector<int64_t>& col_sizes,
-                             const size_t elem_count,
-                             const int device_id,
-                             Executor* executor);
+  void launchPreCodeOnCpu(
+      const TableFunctionExecutionUnit& exe_unit,
+      const std::shared_ptr<CpuCompilationContext>& compilation_context,
+      std::vector<const int8_t*>& col_buf_ptrs,
+      std::vector<int64_t>& col_sizes,
+      const size_t elem_count,
+      Executor* executor);
+
+  ResultSetPtr launchCpuCode(
+      const TableFunctionExecutionUnit& exe_unit,
+      const std::shared_ptr<CpuCompilationContext>& compilation_context,
+      std::vector<const int8_t*>& col_buf_ptrs,
+      std::vector<int64_t>& col_sizes,
+      const size_t elem_count,
+      Executor* executor);
+
+  ResultSetPtr launchGpuCode(
+      const TableFunctionExecutionUnit& exe_unit,
+      const std::shared_ptr<GpuCompilationContext>& compilation_context,
+      std::vector<const int8_t*>& col_buf_ptrs,
+      std::vector<int64_t>& col_sizes,
+      const size_t elem_count,
+      const int device_id,
+      Executor* executor);
 
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 };
