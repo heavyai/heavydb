@@ -311,12 +311,29 @@ TEST_F(TableFunctions, BasicProjection) {
           " FROM tf_test), 2));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
-      std::vector<int64_t> expected_result_set{3};
-      for (size_t i = 0; i < 1; i++) {
-        auto row = rows->getNextRow(true, false);
-        auto v = TestHelpers::v<int64_t>(row[0]);
-        ASSERT_EQ(v, expected_result_set[i]);
-      }
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 3);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_templating(cursor(SELECT x"
+          " FROM tf_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 5);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_templating(cursor(SELECT d"
+          " FROM tf_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 6.0);
     }
     {
       if (dt == ExecutorDeviceType::GPU) {
@@ -325,12 +342,9 @@ TEST_F(TableFunctions, BasicProjection) {
             " FROM tf_test), 2));",
             dt);
         ASSERT_EQ(rows->rowCount(), size_t(1));
-        std::vector<int64_t> expected_result_set{12345};
-        for (size_t i = 0; i < 1; i++) {
-          auto row = rows->getNextRow(true, false);
-          auto v = TestHelpers::v<int64_t>(row[0]);
-          ASSERT_EQ(v, expected_result_set[i]);
-        }
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, 12345);
       }
     }
 
@@ -758,7 +772,8 @@ TEST_F(TableFunctions, CursorlessInputs) {
 
     {
       const auto rows = run_multiple_agg(
-          "SELECT answer1, answer2 FROM TABLE(ct_scalar_2_args_constant_sizing(100, 5));",
+          "SELECT answer1, answer2 FROM TABLE(ct_scalar_2_args_constant_sizing(100, "
+          "5));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
 
@@ -769,8 +784,8 @@ TEST_F(TableFunctions, CursorlessInputs) {
       }
     }
 
-    // Tests for user-defined constant parameter sizing, which were separately broken from
-    // the above
+    // Tests for user-defined constant parameter sizing, which were separately broken
+    // from the above
     {
       const auto rows = run_multiple_agg(
           "SELECT output FROM TABLE(ct_no_cursor_user_constant_sizer(8, 10));", dt);
@@ -892,6 +907,33 @@ TEST_F(TableFunctions, ThrowingTests) {
                    TableFunctionError);
     }
     {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_require_templating(cursor(SELECT x"
+                           " FROM tf_test), -2));",
+                           dt),
+          TableFunctionError);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_require_templating(cursor(SELECT d"
+                           " FROM tf_test), -2));",
+                           dt),
+          TableFunctionError);
+    }
+    {
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require_and(cursor(SELECT x"
+                                    " FROM tf_test), -2));",
+                                    dt),
+                   TableFunctionError);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_require_or_str(cursor(SELECT x"
+                           " FROM tf_test), 'string'));",
+                           dt),
+          TableFunctionError);
+    }
+    {
       if (dt == ExecutorDeviceType::GPU) {
         EXPECT_THROW(
             run_multiple_agg("SELECT * FROM TABLE(ct_require_device_cuda(cursor(SELECT x"
@@ -926,10 +968,10 @@ TEST_F(TableFunctions, ThrowingTests) {
     // Ensure TableFunctionMgr and error throwing works properly for templated CPU TFs
     {
       EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT * FROM TABLE(ct_throw_if_gt_100(CURSOR(SELECT CAST(f AS FLOAT) AS "
-              "f FROM (VALUES (0.0), (1.0), (2.0), (110.0)) AS t(f))));",
-              dt),
+          run_multiple_agg("SELECT * FROM TABLE(ct_throw_if_gt_100(CURSOR(SELECT "
+                           "CAST(f AS FLOAT) AS "
+                           "f FROM (VALUES (0.0), (1.0), (2.0), (110.0)) AS t(f))));",
+                           dt),
           UserTableFunctionError);
     }
     {
