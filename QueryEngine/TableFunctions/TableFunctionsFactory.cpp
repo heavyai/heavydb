@@ -168,11 +168,11 @@ bool TableFunction::containsRequireFnCheck() const {
 
 const std::map<std::string, std::string>& TableFunction::getAnnotation(
     const size_t idx) const {
-  if (annotations_.size() == 0) {
+  CHECK_LE(idx, sql_args_.size() + output_args_.size());
+  if (annotations_.empty() || idx >= annotations_.size()) {
     static const std::map<std::string, std::string> empty = {};
     return empty;
   }
-  CHECK_LT(idx, annotations_.size());
   return annotations_[idx];
 }
 
@@ -189,7 +189,7 @@ const std::map<std::string, std::string>& TableFunction::getOutputAnnotation(
 }
 
 const std::map<std::string, std::string>& TableFunction::getFunctionAnnotation() const {
-  return getAnnotation(annotations_.size() - 1);
+  return getAnnotation(sql_args_.size() + output_args_.size());
 }
 
 std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
@@ -291,8 +291,16 @@ void TableFunctionsFactory::add(
     const std::vector<ExtArgumentType>& output_args,
     const std::vector<ExtArgumentType>& sql_args,
     const std::vector<std::map<std::string, std::string>>& annotations,
-    bool is_runtime,
-    bool uses_manager) {
+    bool is_runtime) {
+  static const std::map<std::string, std::string> empty = {};
+
+  auto func_annotations =
+      (annotations.size() == sql_args.size() + output_args.size() + 1 ? annotations.back()
+                                                                      : empty);
+  auto mgr_annotation = func_annotations.find("uses_manager");
+  bool uses_manager = mgr_annotation != func_annotations.end() &&
+                      boost::algorithm::to_lower_copy(mgr_annotation->second) == "true";
+
   auto tf = TableFunction(name,
                           sizer,
                           input_args,
