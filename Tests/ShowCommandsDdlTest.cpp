@@ -2939,7 +2939,7 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
   // clang-format on
 }
 
-TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
+TEST_F(SystemTablesTest, DISABLED_MemorySummarySystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
@@ -2982,7 +2982,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   // clang-format on
 }
 
-TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
+TEST_F(SystemTablesTest, DISABLED_MemoryDetailsSystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
