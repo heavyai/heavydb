@@ -1,0 +1,9 @@
+Class foreign_storage::RefreshTimeCalculator
+============================================
+
+.. doxygenclass:: foreign_storage::RefreshTimeCalculator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

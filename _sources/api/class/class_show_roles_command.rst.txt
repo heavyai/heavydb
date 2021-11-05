@@ -1,0 +1,9 @@
+Class ShowRolesCommand
+======================
+
+.. doxygenclass:: ShowRolesCommand
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

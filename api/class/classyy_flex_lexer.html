@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 409a3fa
+                5.9.0dev 7cd7420
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_disk_cache_usage_command.html">Class ShowDiskCacheUsageCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_foreign_servers_command.html">Class ShowForeignServersCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_show_roles_command.html">Class ShowRolesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_table_details_command.html">Class ShowTableDetailsCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_tables_command.html">Class ShowTablesCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_user_details_command.html">Class ShowUserDetailsCommand</a></li>
@@ -1029,6 +1030,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers_1_1_builder.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers::Builder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_queries.html">Class com::mapd::parser::extension::ddl::SqlShowQueries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_roles.html">Class com::mapd::parser::extension::ddl::SqlShowRoles</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_table_details.html">Class com::mapd::parser::extension::ddl::SqlShowTableDetails</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_tables.html">Class com::mapd::parser::extension::ddl::SqlShowTables</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_user_details.html">Class com::mapd::parser::extension::ddl::SqlShowUserDetails</a></li>
@@ -1182,6 +1184,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_timestamp_encoder.html">Class foreign_storage::ParquetTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_unsigned_fixed_length_encoder.html">Class foreign_storage::ParquetUnsignedFixedLengthEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_variable_length_array_encoder.html">Class foreign_storage::ParquetVariableLengthArrayEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_refresh_time_calculator.html">Class foreign_storage::RefreshTimeCalculator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_file_buffer_parser.html">Class foreign_storage::RegexFileBufferParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_regex_parser_data_wrapper.html">Class foreign_storage::RegexParserDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_row_group_interval_tracker.html">Class foreign_storage::RowGroupIntervalTracker</a></li>
@@ -1953,6 +1956,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_overlaps_join_hash_table_8cpp_03_1_1_tuning_state.html">Struct anonymous_namespace{OverlapsJoinHashTable.cpp}::TuningState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_is_equiv_bin_op.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::IsEquivBinOp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_op_info.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_execution_descriptor_8cpp_03_1_1_match_body.html">Struct anonymous_namespace{RelAlgExecutionDescriptor.cpp}::MatchBody</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
@@ -2173,48 +2177,108 @@
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexerD0Ev">
-<span id="_CPPv3N11yyFlexLexerD0Ev"></span><span id="_CPPv2N11yyFlexLexerD0Ev"></span><span id="yyFlexLexer::~yyFlexLexer"></span><span class="target" id="classyy_flex_lexer_1ae31fc2d6904495466412c9e6ded87446"></span><em class="property">virtual</em> <code class="sig-name descname">~yyFlexLexer</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexerD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11yyFlexLexerD0Ev"></span><span id="_CPPv2N11yyFlexLexerD0Ev"></span><span id="yyFlexLexer::~yyFlexLexer"></span><span class="target" id="classyy_flex_lexer_1a7962c3ff1926bba84f4bdd831e99f85d"></span><code class="sig-name descname">~yyFlexLexer</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexerD0Ev" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer19yy_switch_to_bufferEP15yy_buffer_state">
 <span id="_CPPv3N11yyFlexLexer19yy_switch_to_bufferEP15yy_buffer_state"></span><span id="_CPPv2N11yyFlexLexer19yy_switch_to_bufferEP15yy_buffer_state"></span><span id="yyFlexLexer::yy_switch_to_buffer__yy_buffer_stateP"></span><span class="target" id="classyy_flex_lexer_1a9729a391719554beba60425608a6ab5e"></span>void <code class="sig-name descname">yy_switch_to_buffer</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/structyy__buffer__state.html#_CPPv415yy_buffer_state" title="yy_buffer_state">yy_buffer_state</a> *<em>new_buffer</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer19yy_switch_to_bufferEP15yy_buffer_state" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Switch to a different input buffer. <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">new_buffer</span></code>: The new input buffer. </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi">
-<span id="_CPPv3N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi"></span><span id="_CPPv2N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi"></span><span id="yyFlexLexer::yy_create_buffer__isP.i"></span><span class="target" id="classyy_flex_lexer_1a128d94d6f029b3a860d1d3c9a29e9d94"></span><a class="reference internal" href="../struct/structyy__buffer__state.html#_CPPv415yy_buffer_state" title="yy_buffer_state">yy_buffer_state</a> *<code class="sig-name descname">yy_create_buffer</code><span class="sig-paren">(</span>std::istream *<em>s</em>, int <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<span id="_CPPv3N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi"></span><span id="_CPPv2N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi"></span><span id="yyFlexLexer::yy_create_buffer__isP.i"></span><span class="target" id="classyy_flex_lexer_1af4085d80c9603f0dfee19eb38be9dfdf"></span>YY_BUFFER_STATE <code class="sig-name descname">yy_create_buffer</code><span class="sig-paren">(</span>std::istream *<em>s</em>, int <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer16yy_create_bufferEPNSt7istreamEi" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Delegate creation of buffers to the new version that takes an istream reference. <dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>the allocated buffer state. </p>
+</dd>
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">file</span></code>: A readable stream. </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">size</span></code>: The character buffer size in bytes. When in doubt, use <code class="docutils literal notranslate"><span class="pre">YY_BUF_SIZE</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer16yy_create_bufferERNSt7istreamEi">
-<span id="_CPPv3N11yyFlexLexer16yy_create_bufferERNSt7istreamEi"></span><span id="_CPPv2N11yyFlexLexer16yy_create_bufferERNSt7istreamEi"></span><span id="yyFlexLexer::yy_create_buffer__isR.i"></span><span class="target" id="classyy_flex_lexer_1a4b9bf76de4c66624b4d07693227d5404"></span><a class="reference internal" href="../struct/structyy__buffer__state.html#_CPPv415yy_buffer_state" title="yy_buffer_state">yy_buffer_state</a> *<code class="sig-name descname">yy_create_buffer</code><span class="sig-paren">(</span>std::istream &amp;<em>s</em>, int <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer16yy_create_bufferERNSt7istreamEi" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<span id="_CPPv3N11yyFlexLexer16yy_create_bufferERNSt7istreamEi"></span><span id="_CPPv2N11yyFlexLexer16yy_create_bufferERNSt7istreamEi"></span><span id="yyFlexLexer::yy_create_buffer__isR.i"></span><span class="target" id="classyy_flex_lexer_1a9ec40abf967798abd278f28db5ad98ad"></span>YY_BUFFER_STATE <code class="sig-name descname">yy_create_buffer</code><span class="sig-paren">(</span>std::istream &amp;<em>s</em>, int <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer16yy_create_bufferERNSt7istreamEi" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Allocate and initialize an input buffer state. <dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>the allocated buffer state. </p>
+</dd>
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">file</span></code>: A readable stream. </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">size</span></code>: The character buffer size in bytes. When in doubt, use <code class="docutils literal notranslate"><span class="pre">YY_BUF_SIZE</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer16yy_delete_bufferEP15yy_buffer_state">
 <span id="_CPPv3N11yyFlexLexer16yy_delete_bufferEP15yy_buffer_state"></span><span id="_CPPv2N11yyFlexLexer16yy_delete_bufferEP15yy_buffer_state"></span><span id="yyFlexLexer::yy_delete_buffer__yy_buffer_stateP"></span><span class="target" id="classyy_flex_lexer_1ad7968841f4457cbd4bef3cd364791483"></span>void <code class="sig-name descname">yy_delete_buffer</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/structyy__buffer__state.html#_CPPv415yy_buffer_state" title="yy_buffer_state">yy_buffer_state</a> *<em>b</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer16yy_delete_bufferEP15yy_buffer_state" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Destroy the buffer. <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">b</span></code>: a buffer created with <a class="reference internal" href="#classyy_flex_lexer_1af4085d80c9603f0dfee19eb38be9dfdf"><span class="std std-ref">yy_create_buffer()</span></a> </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer9yyrestartEPNSt7istreamE">
 <span id="_CPPv3N11yyFlexLexer9yyrestartEPNSt7istreamE"></span><span id="_CPPv2N11yyFlexLexer9yyrestartEPNSt7istreamE"></span><span id="yyFlexLexer::yyrestart__isP"></span><span class="target" id="classyy_flex_lexer_1a51a0066b79017f28f109bf0726ada41b"></span>void <code class="sig-name descname">yyrestart</code><span class="sig-paren">(</span>std::istream *<em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer9yyrestartEPNSt7istreamE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Delegate to the new version that takes an istream reference. <dl class="simple">
+<dt><strong>Note</strong></dt><dd><p>This function does not reset the start condition to <code class="docutils literal notranslate"><span class="pre">INITIAL</span></code> . </p>
+</dd>
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">input_file</span></code>: A readable stream.</p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer9yyrestartERNSt7istreamE">
 <span id="_CPPv3N11yyFlexLexer9yyrestartERNSt7istreamE"></span><span id="_CPPv2N11yyFlexLexer9yyrestartERNSt7istreamE"></span><span id="yyFlexLexer::yyrestart__isR"></span><span class="target" id="classyy_flex_lexer_1a2bd735307f8cb3e90a1521fae81475fb"></span>void <code class="sig-name descname">yyrestart</code><span class="sig-paren">(</span>std::istream &amp;<em>s</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer9yyrestartERNSt7istreamE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Immediately switch to a different input stream. <dl class="simple">
+<dt><strong>Note</strong></dt><dd><p>This function does not reset the start condition to <code class="docutils literal notranslate"><span class="pre">INITIAL</span></code> . </p>
+</dd>
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">input_file</span></code>: A readable stream.</p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer19yypush_buffer_stateEP15yy_buffer_state">
 <span id="_CPPv3N11yyFlexLexer19yypush_buffer_stateEP15yy_buffer_state"></span><span id="_CPPv2N11yyFlexLexer19yypush_buffer_stateEP15yy_buffer_state"></span><span id="yyFlexLexer::yypush_buffer_state__yy_buffer_stateP"></span><span class="target" id="classyy_flex_lexer_1adab3265d2ed16ad85925861530cabd7d"></span>void <code class="sig-name descname">yypush_buffer_state</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/structyy__buffer__state.html#_CPPv415yy_buffer_state" title="yy_buffer_state">yy_buffer_state</a> *<em>new_buffer</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer19yypush_buffer_stateEP15yy_buffer_state" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Pushes the new state onto the stack. The new state becomes the current state. This function will allocate the stack if necessary. <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">new_buffer</span></code>: The new state. </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer18yypop_buffer_stateEv">
 <span id="_CPPv3N11yyFlexLexer18yypop_buffer_stateEv"></span><span id="_CPPv2N11yyFlexLexer18yypop_buffer_stateEv"></span><span id="yyFlexLexer::yypop_buffer_state"></span><span class="target" id="classyy_flex_lexer_1a40740ddffd5cbf7b8f09ab0a7ee4fb3f"></span>void <code class="sig-name descname">yypop_buffer_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer18yypop_buffer_stateEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Removes and deletes the top of the stack, if present. The next element becomes the new top. </p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer5yylexEv">
@@ -2223,12 +2287,12 @@
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE">
-<span id="_CPPv3N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE"></span><span id="_CPPv2N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE"></span><span id="yyFlexLexer::switch_streams__isR.osR"></span><span class="target" id="classyy_flex_lexer_1af645915f5c2e018e85aed77240588383"></span><em class="property">virtual</em> void <code class="sig-name descname">switch_streams</code><span class="sig-paren">(</span>std::istream &amp;<em>new_in</em>, std::ostream &amp;<em>new_out</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE"></span><span id="_CPPv2N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE"></span><span id="yyFlexLexer::switch_streams__isR.osR"></span><span class="target" id="classyy_flex_lexer_1a34ceebad0d4e16f27cc55bad5cbdd585"></span>void <code class="sig-name descname">switch_streams</code><span class="sig-paren">(</span>std::istream &amp;<em>new_in</em>, std::ostream &amp;<em>new_out</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer14switch_streamsERNSt7istreamERNSt7ostreamE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE">
-<span id="_CPPv3N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE"></span><span id="_CPPv2N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE"></span><span id="yyFlexLexer::switch_streams__isP.osP"></span><span class="target" id="classyy_flex_lexer_1ad58e97b3ab0ce75d3743228296e5953f"></span><em class="property">virtual</em> void <code class="sig-name descname">switch_streams</code><span class="sig-paren">(</span>std::istream *<em>new_in</em> = 0, std::ostream *<em>new_out</em> = 0<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE"></span><span id="_CPPv2N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE"></span><span id="yyFlexLexer::switch_streams__isP.osP"></span><span class="target" id="classyy_flex_lexer_1a03c9ff24740cd7277a065a1ceb057813"></span>void <code class="sig-name descname">switch_streams</code><span class="sig-paren">(</span>std::istream *<em>new_in</em> = 0, std::ostream *<em>new_out</em> = 0<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer14switch_streamsEPNSt7istreamEPNSt7ostreamE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2241,17 +2305,17 @@
 <p class="breathe-sectiondef-title rubric">Protected Functions</p>
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer10LexerInputEPci">
-<span id="_CPPv3N11yyFlexLexer10LexerInputEPci"></span><span id="_CPPv2N11yyFlexLexer10LexerInputEPci"></span><span id="yyFlexLexer::LexerInput__cP.i"></span><span class="target" id="classyy_flex_lexer_1af9c0885f114ce4f3749e6ad2f388d32c"></span><em class="property">virtual</em> int <code class="sig-name descname">LexerInput</code><span class="sig-paren">(</span>char *<em>buf</em>, int <em>max_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer10LexerInputEPci" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11yyFlexLexer10LexerInputEPci"></span><span id="_CPPv2N11yyFlexLexer10LexerInputEPci"></span><span id="yyFlexLexer::LexerInput__cP.i"></span><span class="target" id="classyy_flex_lexer_1a285bb6cb3d9132ec16e2cbd3fb766ae9"></span>int <code class="sig-name descname">LexerInput</code><span class="sig-paren">(</span>char *<em>buf</em>, int <em>max_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer10LexerInputEPci" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer11LexerOutputEPKci">
-<span id="_CPPv3N11yyFlexLexer11LexerOutputEPKci"></span><span id="_CPPv2N11yyFlexLexer11LexerOutputEPKci"></span><span id="yyFlexLexer::LexerOutput__cCP.i"></span><span class="target" id="classyy_flex_lexer_1ae395429e59be89963e517411ec09c6ca"></span><em class="property">virtual</em> void <code class="sig-name descname">LexerOutput</code><span class="sig-paren">(</span><em class="property">const</em> char *<em>buf</em>, int <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer11LexerOutputEPKci" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11yyFlexLexer11LexerOutputEPKci"></span><span id="_CPPv2N11yyFlexLexer11LexerOutputEPKci"></span><span id="yyFlexLexer::LexerOutput__cCP.i"></span><span class="target" id="classyy_flex_lexer_1ae037fa792625995f3f7b4dc65769d8f8"></span>void <code class="sig-name descname">LexerOutput</code><span class="sig-paren">(</span><em class="property">const</em> char *<em>buf</em>, int <em>size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer11LexerOutputEPKci" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer10LexerErrorEPKc">
-<span id="_CPPv3N11yyFlexLexer10LexerErrorEPKc"></span><span id="_CPPv2N11yyFlexLexer10LexerErrorEPKc"></span><span id="yyFlexLexer::LexerError__cCP"></span><span class="target" id="classyy_flex_lexer_1aace65d0bcf43507968bb9212a9dceb59"></span><em class="property">virtual</em> void <code class="sig-name descname">LexerError</code><span class="sig-paren">(</span><em class="property">const</em> char *<em>msg</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer10LexerErrorEPKc" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N11yyFlexLexer10LexerErrorEPKc"></span><span id="_CPPv2N11yyFlexLexer10LexerErrorEPKc"></span><span id="yyFlexLexer::LexerError__cCP"></span><span class="target" id="classyy_flex_lexer_1a8e3e041273a08400c0da07781f6682cf"></span>void <code class="sig-name descname">LexerError</code><span class="sig-paren">(</span><em class="property">const</em> char *<em>msg</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer10LexerErrorEPKc" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2277,7 +2341,14 @@
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer15yy_flush_bufferEP15yy_buffer_state">
 <span id="_CPPv3N11yyFlexLexer15yy_flush_bufferEP15yy_buffer_state"></span><span id="_CPPv2N11yyFlexLexer15yy_flush_bufferEP15yy_buffer_state"></span><span id="yyFlexLexer::yy_flush_buffer__yy_buffer_stateP"></span><span class="target" id="classyy_flex_lexer_1a5a2587f0065f3be318d3a47f7e206a46"></span>void <code class="sig-name descname">yy_flush_buffer</code><span class="sig-paren">(</span><a class="reference internal" href="../struct/structyy__buffer__state.html#_CPPv415yy_buffer_state" title="yy_buffer_state">yy_buffer_state</a> *<em>b</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11yyFlexLexer15yy_flush_bufferEP15yy_buffer_state" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Discard all buffered characters. On the next scan, YY_INPUT will be called. <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">b</span></code>: the buffer state to be flushed, usually <code class="docutils literal notranslate"><span class="pre">YY_CURRENT_BUFFER</span></code>. </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N11yyFlexLexer13yy_push_stateEi">

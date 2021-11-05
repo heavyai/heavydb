@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlShowRoles
+=====================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlShowRoles
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
