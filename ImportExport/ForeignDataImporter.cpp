@@ -96,24 +96,73 @@ ImportStatus ForeignDataImporter::import(
   if (auto parquet_import =
           dynamic_cast<foreign_storage::ParquetImporter*>(data_wrapper.get())) {
     Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector_);
-    ImportStatus import_status;  // manually update
-    while (true) {
-      auto batch_result = parquet_import->getNextImportBatch();
-      auto batch = batch_result->getInsertData();
-      if (!batch) {
-        break;
-      }
-      insert_data_loader.insertData(*session_info, *batch);
 
-      auto batch_import_status = batch_result->getImportStatus();
-      import_status.rows_completed += batch_import_status.rows_completed;
-      import_status.rows_rejected += batch_import_status.rows_rejected;
-      if (import_status.rows_rejected > copy_params_.max_reject) {
-        import_status.load_failed = true;
-        import_status.load_msg =
-            "Load was cancelled due to max reject rows being reached";
-        break;
+    // determine the number of threads to use at each level
+
+    int max_threads = 0;
+    if (copy_params_.threads == 0) {
+      max_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
+                             g_max_import_threads);
+    } else {
+      max_threads = static_cast<size_t>(copy_params_.threads);
+    }
+    CHECK_GT(max_threads, 0);
+
+    int num_importer_threads =
+        std::min<int>(max_threads, parquet_import->getMaxNumUsefulThreads());
+    parquet_import->setNumThreads(num_importer_threads);
+    int num_outer_thread = 1;
+    for (int thread_count = 1; thread_count <= max_threads; ++thread_count) {
+      if (thread_count * num_importer_threads <= max_threads) {
+        num_outer_thread = thread_count;
       }
+    }
+
+    std::shared_mutex import_status_mutex;
+    ImportStatus import_status;  // manually update
+
+    auto import_failed = [&import_status_mutex, &import_status] {
+      std::shared_lock import_status_lock(import_status_mutex);
+      return import_status.load_failed;
+    };
+
+    std::vector<std::future<void>> futures;
+
+    for (int ithread = 0; ithread < num_outer_thread; ++ithread) {
+      futures.emplace_back(std::async(std::launch::async, [&] {
+        while (true) {
+          auto batch_result = parquet_import->getNextImportBatch();
+          if (import_failed()) {
+            break;
+          }
+          auto batch = batch_result->getInsertData();
+          if (!batch || import_failed()) {
+            break;
+          }
+          insert_data_loader.insertData(*session_info, *batch);
+
+          auto batch_import_status = batch_result->getImportStatus();
+          {
+            std::unique_lock import_status_lock(import_status_mutex);
+            import_status.rows_completed += batch_import_status.rows_completed;
+            import_status.rows_rejected += batch_import_status.rows_rejected;
+            if (import_status.rows_rejected > copy_params_.max_reject) {
+              import_status.load_failed = true;
+              import_status.load_msg =
+                  "Load was cancelled due to max reject rows being reached";
+              break;
+            }
+          }
+        }
+      }));
+    }
+
+    for (auto& future : futures) {
+      future.wait();
+    }
+
+    for (auto& future : futures) {
+      future.get();
     }
 
     if (import_status.load_failed) {

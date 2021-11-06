@@ -47,16 +47,18 @@ struct InsertDataLoader {
                   InsertData& insert_data);
 
  private:
-  void moveToNextLeaf() {
-    current_leaf_index_++;
-    if (current_leaf_index_ >= leaf_count_) {
-      current_leaf_index_ = 0;
-    }
-  }
+  /**
+   * Move to the next available leaf index internally. Done under a lock
+   * to prevent contention.
+   *
+   * @return the current leaf index (prior to moving to the next index)
+   */
+  size_t moveToNextLeaf();
 
   size_t leaf_count_;
   size_t current_leaf_index_;
   DistributedConnector& connector_;
+  std::shared_mutex current_leaf_index_mutex_;
 };
 
 }  // namespace Fragmenter_Namespace

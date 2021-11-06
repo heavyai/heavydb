@@ -307,6 +307,16 @@ InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
   return shardData;
 }
 
+size_t InsertDataLoader::moveToNextLeaf() {
+  std::unique_lock current_leaf_index_lock(current_leaf_index_mutex_);
+  size_t starting_leaf_index = current_leaf_index_;
+  current_leaf_index_++;
+  if (current_leaf_index_ >= leaf_count_) {
+    current_leaf_index_ = 0;
+  }
+  return starting_leaf_index;
+}
+
 void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_info,
                                   InsertData& insert_data) {
   const auto& cat = session_info.getCatalog();
@@ -314,7 +324,7 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
 
   CHECK(td);
   if (td->nShards == 0) {
-    connector_.insertDataToLeaf(session_info, current_leaf_index_, insert_data);
+    connector_.insertDataToLeaf(session_info, moveToNextLeaf(), insert_data);
   } else {
     // we have a sharded target table, start spreading to physical tables
     auto rowIndicesOfShards =
@@ -349,7 +359,5 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
       child.get();
     }
   }
-
-  moveToNextLeaf();
 }
 }  // namespace Fragmenter_Namespace

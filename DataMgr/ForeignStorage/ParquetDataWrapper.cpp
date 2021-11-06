@@ -485,6 +485,10 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
   }
 
   for (auto& future : futures) {
+    future.wait();
+  }
+
+  for (auto& future : futures) {
     future.get();
   }
 }
