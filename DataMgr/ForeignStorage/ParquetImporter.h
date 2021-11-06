@@ -86,9 +86,20 @@ class ParquetImporter : public AbstractFileStorageDataWrapper {
   std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>
   getStringDictionaries() const;
 
+  /**
+   * Get the maximum number of threads that can do useful computation.
+   */
+  int getMaxNumUsefulThreads() const;
+
+  /**
+   * Set the number of threads to use internally when reading batches.
+   */
+  void setNumThreads(const int num_threads);
+
  private:
   const int db_id_;
   const ForeignTable* foreign_table_;
+  int num_threads_;
 
   std::set<std::string> getAllFilePaths();
 
@@ -99,5 +110,8 @@ class ParquetImporter : public AbstractFileStorageDataWrapper {
   std::unique_ptr<FileReaderMap> file_reader_cache_;
   std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>
       string_dictionaries_per_column_;
+
+  std::shared_mutex row_group_interval_tracker_mutex_;
+  std::shared_mutex string_dictionaries_per_column_mutex_;
 };
 }  // namespace foreign_storage

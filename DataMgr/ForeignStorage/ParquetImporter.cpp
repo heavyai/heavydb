@@ -64,7 +64,9 @@ class RowGroupIntervalTracker : public AbstractRowGroupIntervalTracker {
       current_file_iter_ = file_paths_.begin();
       is_initialized_ = true;
     } else {
-      CHECK(!filesAreExhausted());
+      if (filesAreExhausted()) {  // can be possible if many concurrent requests
+        return;
+      }
       current_file_iter_++;  // advance iterator
     }
     current_row_group_index_ = 0;
@@ -210,13 +212,23 @@ import_export::ImportStatus ParquetImportBatchResult::getImportStatus() const {
   return import_status_;
 }
 
-ParquetImporter::ParquetImporter() : db_id_(-1), foreign_table_(nullptr) {}
+int ParquetImporter::getMaxNumUsefulThreads() const {
+  return schema_->numLogicalColumns();
+}
+
+void ParquetImporter::setNumThreads(const int num_threads) {
+  num_threads_ = num_threads;
+}
+
+ParquetImporter::ParquetImporter()
+    : db_id_(-1), foreign_table_(nullptr), num_threads_(1) {}
 
 ParquetImporter::ParquetImporter(const int db_id,
                                  const ForeignTable* foreign_table,
                                  const UserMapping* user_mapping)
     : db_id_(db_id)
     , foreign_table_(foreign_table)
+    , num_threads_(1)
     , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
     , file_reader_cache_(std::make_unique<FileReaderMap>()) {
   auto& server_options = foreign_table->foreign_server->options;
@@ -281,28 +293,40 @@ ParquetImporter::getStringDictionaries() const {
 }
 
 std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImportBatch() {
-  if (!row_group_interval_tracker_) {
-    row_group_interval_tracker_ = std::make_unique<RowGroupIntervalTracker>(
-        getAllFilePaths(), file_reader_cache_.get(), file_system_);
+  {
+    std::unique_lock row_group_interval_tracker_lock(row_group_interval_tracker_mutex_);
+    if (!row_group_interval_tracker_) {
+      row_group_interval_tracker_ = std::make_unique<RowGroupIntervalTracker>(
+          getAllFilePaths(), file_reader_cache_.get(), file_system_);
+    }
   }
 
   auto import_batch_result =
       std::make_unique<ParquetImportBatchResult>(foreign_table_, db_id_, schema_.get());
   auto [chunks, string_dictionaries] = import_batch_result->getChunksAndDictionaries();
-  if (!string_dictionaries_per_column_.size()) {
-    for (const auto& [column_id, dict] : string_dictionaries) {
-      string_dictionaries_per_column_.emplace_back(chunks[column_id].getColumnDesc(),
-                                                   dict);
+
+  {
+    std::unique_lock string_dictionaries_per_column_lock(
+        string_dictionaries_per_column_mutex_);
+    if (!string_dictionaries_per_column_.size()) {
+      for (const auto& [column_id, dict] : string_dictionaries) {
+        string_dictionaries_per_column_.emplace_back(chunks[column_id].getColumnDesc(),
+                                                     dict);
+      }
     }
   }
 
   LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
 
-  auto next_row_group = row_group_interval_tracker_->getNextRowGroupInterval();
+  std::optional<RowGroupInterval> next_row_group;
+  {
+    std::unique_lock row_group_interval_tracker_lock(row_group_interval_tracker_mutex_);
+    next_row_group = row_group_interval_tracker_->getNextRowGroupInterval();
+  }
   size_t num_rows_completed, num_rows_rejected;
   if (next_row_group.has_value()) {
     std::tie(num_rows_completed, num_rows_rejected) = chunk_loader.loadRowGroups(
-        *next_row_group, chunks, *schema_, string_dictionaries);
+        *next_row_group, chunks, *schema_, string_dictionaries, num_threads_);
   } else {
     return import_batch_result;  // terminate without populating data, read the last row
                                  // group

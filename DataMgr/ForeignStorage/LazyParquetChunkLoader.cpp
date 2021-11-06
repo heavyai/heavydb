@@ -1490,7 +1490,8 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_import(
     const std::map<int, Chunk_NS::Chunk> chunks,
     const ForeignTableSchema& schema,
     const ReaderPtr& reader,
-    const std::map<int, StringDictionary*> column_dictionaries) {
+    const std::map<int, StringDictionary*> column_dictionaries,
+    const int64_t num_rows) {
   std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
   auto file_metadata = reader->parquet_reader()->metadata();
   for (auto& [column_id, chunk] : chunks) {
@@ -1512,6 +1513,13 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_import(
     }
     encoder_map[column_id] = create_parquet_encoder_for_import(
         chunks_for_import, column_descriptor, parquet_column_descriptor, dictionary);
+
+    // reserve space in buffer when num-elements known ahead of time for types
+    // of known size (for example dictionary encoded strings)
+    auto encoder = shared::get_from_map(encoder_map, column_id);
+    if (auto inplace_encoder = dynamic_cast<ParquetInPlaceEncoder*>(encoder.get())) {
+      inplace_encoder->reserve(num_rows);
+    }
   }
   return encoder_map;
 }
@@ -1761,8 +1769,8 @@ class ParquetRowGroupReader {
     }
   }
 
-  void eraseInvalidRowGroupData() {
-    import_encoder->eraseInvalidIndicesInBuffer(invalid_indices_);
+  void eraseInvalidRowGroupData(const InvalidRowGroupIndices& invalid_indices) {
+    import_encoder->eraseInvalidIndicesInBuffer(invalid_indices);
   }
 
  private:
@@ -1781,11 +1789,15 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
     const RowGroupInterval& row_group_interval,
     const std::map<int, Chunk_NS::Chunk>& chunks,
     const ForeignTableSchema& schema,
-    const std::map<int, StringDictionary*>& column_dictionaries) {
+    const std::map<int, StringDictionary*>& column_dictionaries,
+    const int num_threads) {
   auto timer = DEBUG_TIMER(__func__);
 
   const auto& file_path = row_group_interval.file_path;
-  auto file_reader = file_reader_cache_->insert(file_path, file_system_);
+
+  // do not use caching with file-readers, open a new one for every request
+  auto file_reader_owner = open_parquet_table(file_path, file_system_);
+  auto file_reader = file_reader_owner.get();
   auto file_metadata = file_reader->parquet_reader()->metadata();
 
   validate_number_of_columns(file_metadata, file_path, schema);
@@ -1806,16 +1818,30 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
     }
   }
 
-  auto encoder_map =
-      populate_encoder_map_for_import(chunks, schema, file_reader, column_dictionaries);
-
   CHECK(row_group_interval.start_index == row_group_interval.end_index);
   auto row_group_index = row_group_interval.start_index;
   std::map<int, ParquetRowGroupReader> row_group_reader_map;
 
   parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
   auto group_reader = parquet_reader->RowGroup(row_group_index);
-  InvalidRowGroupIndices invalid_indices;
+
+  std::vector<InvalidRowGroupIndices> invalid_indices_per_thread(num_threads);
+
+  auto encoder_map =
+      populate_encoder_map_for_import(chunks,
+                                      schema,
+                                      file_reader,
+                                      column_dictionaries,
+                                      group_reader->metadata()->num_rows());
+
+  std::vector<std::set<int>> partitions(num_threads);
+  std::map<int, int> column_id_to_thread;
+  for (auto& [column_id, encoder] : encoder_map) {
+    auto thread_id = column_id % num_threads;
+    column_id_to_thread[column_id] = thread_id;
+    partitions[thread_id].insert(column_id);
+  }
+
   for (auto& [column_id, encoder] : encoder_map) {
     const auto& column_descriptor = schema.getColumnDescriptor(column_id);
     const auto parquet_column_index = schema.getParquetColumnIndex(column_id);
@@ -1833,23 +1859,49 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
     std::shared_ptr<parquet::ColumnReader> col_reader =
         group_reader->Column(parquet_column_index);
 
-    row_group_reader_map.insert({column_id,
-                                 ParquetRowGroupReader(col_reader,
-                                                       column_descriptor,
-                                                       parquet_column_descriptor,
-                                                       encoder_map[column_id].get(),
-                                                       invalid_indices,
-                                                       row_group_index,
-                                                       parquet_column_index,
-                                                       parquet_reader)});
+    row_group_reader_map.insert(
+        {column_id,
+         ParquetRowGroupReader(col_reader,
+                               column_descriptor,
+                               parquet_column_descriptor,
+                               shared::get_from_map(encoder_map, column_id).get(),
+                               invalid_indices_per_thread[shared::get_from_map(
+                                   column_id_to_thread, column_id)],
+                               row_group_index,
+                               parquet_column_index,
+                               parquet_reader)});
+  }
+
+  std::vector<std::future<void>> futures;
+  for (int ithread = 0; ithread < num_threads; ++ithread) {
+    auto column_ids_for_thread = partitions[ithread];
+    futures.emplace_back(
+        std::async(std::launch::async, [&row_group_reader_map, column_ids_for_thread] {
+          for (const auto column_id : column_ids_for_thread) {
+            shared::get_from_map(row_group_reader_map, column_id)
+                .readAndValidateRowGroup();  // reads and validate entire row group per
+                                             // column
+          }
+        }));
+  }
+
+  for (auto& future : futures) {
+    future.wait();
+  }
+
+  for (auto& future : futures) {
+    future.get();
+  }
+
+  // merge/reduce invalid indices
+  InvalidRowGroupIndices invalid_indices;
+  for (auto& thread_invalid_indices : invalid_indices_per_thread) {
+    invalid_indices.merge(thread_invalid_indices);
   }
 
   for (auto& [_, reader] : row_group_reader_map) {
-    reader.readAndValidateRowGroup();  // reads and validates entire row group per column
-  }
-
-  for (auto& [_, reader] : row_group_reader_map) {
-    reader.eraseInvalidRowGroupData();  // removes invalid encoded data in buffers
+    reader.eraseInvalidRowGroupData(
+        invalid_indices);  // removes invalid encoded data in buffers
   }
 
   // update the element count for each encoder

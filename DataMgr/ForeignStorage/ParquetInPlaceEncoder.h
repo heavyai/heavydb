@@ -37,6 +37,8 @@ class ParquetInPlaceEncoder : public ParquetScalarEncoder {
       , omnisci_data_type_byte_size_(omnisci_data_type_byte_size)
       , parquet_data_type_byte_size_(parquet_data_type_byte_size) {}
 
+  virtual void reserve(const size_t num_elements) = 0;
+
   /**
    * Appends Parquet data to the buffer using an in-place algorithm.  Any
    * necessary transformation or validation of the data and decoding of nulls
@@ -129,6 +131,10 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
                 const int64_t j,
                 const SQLTypeInfo& column_type) const override {
     // no-op by default
+  }
+
+  void reserve(const size_t num_elements) override {
+    buffer_->reserve(num_elements * sizeof(V));
   }
 
   void validateAndAppendData(const int16_t* def_levels,
