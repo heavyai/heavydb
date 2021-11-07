@@ -337,9 +337,7 @@ size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetc
       const auto cd =
           catalog_->getMetadataForColumn(fetched_col_pair.first, fetched_col_pair.second);
       const auto& ti = cd->columnType;
-      const auto sz = ti.get_type() == kTEXT && ti.get_compression() == kENCODING_DICT
-                          ? 4
-                          : ti.get_size();
+      const auto sz = ti.get_size();
       if (sz < 0) {
         // for varlen types, only account for the pointer/size for each row, for now
         num_bytes += 16;
