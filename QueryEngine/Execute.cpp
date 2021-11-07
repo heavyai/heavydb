@@ -339,7 +339,11 @@ size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetc
       const auto sz = ti.get_size();
       if (sz < 0) {
         // for varlen types, only account for the pointer/size for each row, for now
-        num_bytes += 16;
+        if (!ti.is_logical_geo_type()) {
+          // Don't count size for logical geo types, as they are
+          // backed by physical columns
+          num_bytes += 16;
+        }
       } else {
         num_bytes += sz;
       }

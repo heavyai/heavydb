@@ -337,6 +337,15 @@ class SQLTypeInfo {
   HOST DEVICE inline EncodingType get_compression() const { return compression; }
   HOST DEVICE inline int get_comp_param() const { return comp_param; }
   HOST DEVICE inline int get_size() const { return size; }
+
+  inline int is_logical_geo_type() const {
+    if (type == kPOINT || type == kLINESTRING || type == kPOLYGON ||
+        type == kMULTIPOLYGON) {
+      return true;
+    }
+    return false;
+  }
+
   inline int get_logical_size() const {
     if (compression == kENCODING_FIXED || compression == kENCODING_DATE_IN_DAYS) {
       SQLTypeInfo ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
@@ -347,6 +356,7 @@ class SQLTypeInfo {
     }
     return get_size();
   }
+
   inline int get_physical_cols() const {
     switch (type) {
       case kPOINT:
