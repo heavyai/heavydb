@@ -317,9 +317,7 @@ size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetc
       num_bytes += 8;
     } else {
       const auto& ti = fetched_col.getType();
-      const auto sz = ti.get_type() == kTEXT && ti.get_compression() == kENCODING_DICT
-                          ? 4
-                          : ti.get_size();
+      const auto sz = ti.get_size();
       if (sz < 0) {
         // for varlen types, only account for the pointer/size for each row, for now
         num_bytes += 16;
