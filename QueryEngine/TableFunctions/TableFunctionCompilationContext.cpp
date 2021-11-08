@@ -542,6 +542,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     code = CodeGenerator::generateNativeGPUCode(entry_point_func_,
                                                 kernel_func_,
                                                 {entry_point_func_, kernel_func_},
+                                                /*is_gpu_smem_used=*/false,
                                                 co,
                                                 gpu_target);
   } else {

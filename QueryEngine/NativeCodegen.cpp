@@ -315,6 +315,7 @@ void optimize_ir(llvm::Function* query_func,
                  llvm::Module* module,
                  llvm::legacy::PassManager& pass_manager,
                  const std::unordered_set<llvm::Function*>& live_funcs,
+                 const bool is_gpu_smem_used,
                  const CompilationOptions& co) {
   // the always inliner legacy pass must always run first
   pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
@@ -327,7 +328,13 @@ void optimize_ir(llvm::Function* query_func,
   pass_manager.add(
       llvm::createEarlyCSEPass(/*enable_mem_ssa=*/true));  // Catch trivial redundancies
 
-  pass_manager.add(llvm::createJumpThreadingPass());  // Thread jumps.
+  if (!is_gpu_smem_used) {
+    // thread jumps can change the execution order around SMEM sections guarded by
+    // `__syncthreads()`, which results in race conditions. For now, disable jump
+    // threading for shared memory queries. In the future, consider handling shared memory
+    // aggregations with a separate kernel launch
+    pass_manager.add(llvm::createJumpThreadingPass());  // Thread jumps.
+  }
   pass_manager.add(llvm::createCFGSimplificationPass());
 
   // remove load/stores in PHIs if instructions can be accessed directly post thread jumps
@@ -444,7 +451,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   // run optimizations
 #ifndef WITH_JIT_DEBUG
   llvm::legacy::PassManager pass_manager;
-  optimize_ir(func, module, pass_manager, live_funcs, co);
+  optimize_ir(func, module, pass_manager, live_funcs, /*is_gpu_smem_used=*/false, co);
 #endif  // WITH_JIT_DEBUG
 
   auto init_err = llvm::InitializeNativeTarget();
@@ -1025,6 +1032,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
+    const bool is_gpu_smem_used,
     const CompilationOptions& co,
     const GPUTarget& gpu_target) {
 #ifdef HAVE_CUDA
@@ -1080,7 +1088,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   }
 
   // run optimizations
-  optimize_ir(func, module, module_pass_manager, live_funcs, co);
+  optimize_ir(func, module, module_pass_manager, live_funcs, is_gpu_smem_used, co);
   legalize_nvvm_ir(func);
 
   std::stringstream ss;
@@ -1232,6 +1240,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     std::unordered_set<llvm::Function*>& live_funcs,
     const bool no_inline,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+    const bool is_gpu_smem_used,
     const CompilationOptions& co) {
 #ifdef HAVE_CUDA
   auto module = multifrag_query_func->getParent();
@@ -1298,7 +1307,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
 
   try {
     compilation_context = CodeGenerator::generateNativeGPUCode(
-        query_func, multifrag_query_func, live_funcs, co, gpu_target);
+        query_func, multifrag_query_func, live_funcs, is_gpu_smem_used, co, gpu_target);
     addCodeToCache(key, compilation_context, module, gpu_code_cache_);
   } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
     if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
@@ -1309,7 +1318,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                    << "% of GPU code cache and re-trying.";
       gpu_code_cache_.evictFractionEntries(g_fraction_code_cache_to_evict);
       compilation_context = CodeGenerator::generateNativeGPUCode(
-          query_func, multifrag_query_func, live_funcs, co, gpu_target);
+          query_func, multifrag_query_func, live_funcs, is_gpu_smem_used, co, gpu_target);
       addCodeToCache(key, compilation_context, module, gpu_code_cache_);
     } else {
       throw;
@@ -2893,7 +2902,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       // Note that we don't run the NVVM reflect pass here. Use LOG(IR) to get the
       // optimized IR after NVVM reflect
       llvm::legacy::PassManager pass_manager;
-      optimize_ir(query_func, cgen_state_->module_, pass_manager, live_funcs, co);
+      optimize_ir(query_func,
+                  cgen_state_->module_,
+                  pass_manager,
+                  live_funcs,
+                  gpu_smem_context.isSharedMemoryUsed(),
+                  co);
 #endif  // WITH_JIT_DEBUG
     }
     llvm_ir =
@@ -2936,6 +2950,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                       live_funcs,
                                       is_group_by || ra_exe_unit.estimator,
                                       cuda_mgr,
+                                      gpu_smem_context.isSharedMemoryUsed(),
                                       co),
           cgen_state_->getLiterals(),
           output_columnar,

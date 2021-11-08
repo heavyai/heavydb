@@ -96,6 +96,7 @@ class CodeGenerator {
       llvm::Function* func,
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
+      const bool is_gpu_smem_used,
       const CompilationOptions& co,
       const GPUTarget& gpu_target);
 
