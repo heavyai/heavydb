@@ -184,7 +184,12 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_target.block_size = block_size;
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
-  gpu_compilation_context_ = CodeGenerator::generateNativeGPUCode(
-      func, wrapper_func, {func, wrapper_func}, co, gpu_target);
+  gpu_compilation_context_ =
+      CodeGenerator::generateNativeGPUCode(func,
+                                           wrapper_func,
+                                           {func, wrapper_func},
+                                           /*is_gpu_smem_used=*/false,
+                                           co,
+                                           gpu_target);
   return gpu_compilation_context_->getNativeFunctionPointers();
 }

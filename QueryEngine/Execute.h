@@ -875,6 +875,7 @@ class Executor {
       std::unordered_set<llvm::Function*>&,
       const bool no_inline,
       const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+      const bool is_gpu_smem_used,
       const CompilationOptions&);
   std::string generatePTX(const std::string&) const;
   void initializeNVPTXBackend() const;
