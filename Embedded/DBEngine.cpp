@@ -28,6 +28,7 @@
 #include "ThriftHandler/CommandLineOptions.h"
 #include "ThriftHandler/DBHandler.h"
 
+extern bool g_enable_thrift_logs;
 extern bool g_enable_union;
 extern bool g_serialize_temp_tables;
 
@@ -121,6 +122,10 @@ class DBEngineImpl : public DBEngine {
 
     if (prog_config_opts_.parse_command_line(argc, argv, false)) {
       throw std::runtime_error("DBE paramerameters parsing failed");
+    }
+
+    if (!g_enable_thrift_logs) {
+      apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
     }
 
     auto base_path = prog_config_opts_.base_path;
