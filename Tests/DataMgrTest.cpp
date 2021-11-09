@@ -54,6 +54,7 @@ class DataMgrTest : public testing::Test {
     data_mgr_ = std::make_unique<Data_Namespace::DataMgr>(data_mgr_path_,
                                                           system_params_,
                                                           std::move(cuda_mgr),
+                                                          nullptr,
                                                           use_gpus_,
                                                           reserved_gpu_mem_,
                                                           num_reader_threads_,
