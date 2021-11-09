@@ -437,6 +437,44 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
   return "";
 }
 
+int64_t extract_int_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
+  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (type) {
+    case kBOOLEAN:
+      return datum.tinyintval;
+    case kTINYINT:
+      return datum.tinyintval;
+    case kSMALLINT:
+      return datum.smallintval;
+    case kCHAR:
+    case kVARCHAR:
+    case kTEXT:
+      CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    case kINT:
+      return datum.intval;
+    case kBIGINT:
+      return datum.bigintval;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return datum.bigintval;
+    default:
+      abort();
+  }
+}
+
+double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
+  const auto type = ti.get_type();
+  switch (type) {
+    case kFLOAT:
+      return datum.floatval;
+    case kDOUBLE:
+      return datum.doubleval;
+    default:
+      abort();
+  }
+}
+
 SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
   switch (ti.get_size()) {
     case 1:

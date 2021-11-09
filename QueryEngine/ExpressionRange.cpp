@@ -484,27 +484,21 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
           has_nulls = true;                                                          \
         }                                                                            \
         if (col_ti.is_fp()) {                                                        \
-          return extract_##stat_name##_stat_double(lhs_meta_it->second->chunkStats,  \
-                                                   col_ti) <                         \
-                 extract_##stat_name##_stat_double(rhs_meta_it->second->chunkStats,  \
-                                                   col_ti);                          \
+          return extract_##stat_name##_stat_fp_type(lhs_meta_it->second->chunkStats, \
+                                                    col_ti) <                        \
+                 extract_##stat_name##_stat_fp_type(rhs_meta_it->second->chunkStats, \
+                                                    col_ti);                         \
         }                                                                            \
-        return extract_##stat_name##_stat(lhs_meta_it->second->chunkStats, col_ti) < \
-               extract_##stat_name##_stat(rhs_meta_it->second->chunkStats, col_ti);  \
+        return extract_##stat_name##_stat_int_type(lhs_meta_it->second->chunkStats,  \
+                                                   col_ti) <                         \
+               extract_##stat_name##_stat_int_type(rhs_meta_it->second->chunkStats,  \
+                                                   col_ti);                          \
       });                                                                            \
   if (stat_name##_frag_index == nonempty_fragment_indices.end()) {                   \
     return ExpressionRange::makeInvalidRange();                                      \
   }
 
 namespace {
-
-double extract_min_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
-  return col_ti.get_type() == kDOUBLE ? stats.min.doubleval : stats.min.floatval;
-}
-
-double extract_max_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
-  return col_ti.get_type() == kDOUBLE ? stats.max.doubleval : stats.max.floatval;
-}
 
 int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) {
   const int64_t day_seconds{24 * 3600};
@@ -620,14 +614,14 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
         }
       }
       if (col_ti.is_fp()) {
-        const auto min_val = extract_min_stat_double(min_it->second->chunkStats, col_ti);
-        const auto max_val = extract_max_stat_double(max_it->second->chunkStats, col_ti);
+        const auto min_val = extract_min_stat_fp_type(min_it->second->chunkStats, col_ti);
+        const auto max_val = extract_max_stat_fp_type(max_it->second->chunkStats, col_ti);
         return col_ti.get_type() == kFLOAT
                    ? ExpressionRange::makeFloatRange(min_val, max_val, has_nulls)
                    : ExpressionRange::makeDoubleRange(min_val, max_val, has_nulls);
       }
-      const auto min_val = extract_min_stat(min_it->second->chunkStats, col_ti);
-      const auto max_val = extract_max_stat(max_it->second->chunkStats, col_ti);
+      const auto min_val = extract_min_stat_int_type(min_it->second->chunkStats, col_ti);
+      const auto max_val = extract_max_stat_int_type(max_it->second->chunkStats, col_ti);
       if (max_val < min_val) {
         // The column doesn't contain any non-null values, synthesize an empty range.
         CHECK_GT(min_val, 0);

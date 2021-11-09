@@ -221,40 +221,6 @@ class GroupByAndAggregate {
   friend struct TargetExprCodegenBuilder;
 };
 
-inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
-  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-  switch (type) {
-    case kBOOLEAN:
-      return datum.tinyintval;
-    case kTINYINT:
-      return datum.tinyintval;
-    case kSMALLINT:
-      return datum.smallintval;
-    case kCHAR:
-    case kVARCHAR:
-    case kTEXT:
-      CHECK_EQ(kENCODING_DICT, ti.get_compression());
-    case kINT:
-      return datum.intval;
-    case kBIGINT:
-      return datum.bigintval;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return datum.bigintval;
-    default:
-      abort();
-  }
-}
-
-inline int64_t extract_min_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
-  return extract_from_datum(stats.min, ti);
-}
-
-inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
-  return extract_from_datum(stats.max, ti);
-}
-
 inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
                                                   const RelAlgExecutionUnit& ra_exe_unit,
                                                   const ExecutorDeviceType device_type) {

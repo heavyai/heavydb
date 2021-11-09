@@ -160,6 +160,8 @@ class WatchdogException : public std::runtime_error {
   WatchdogException(const std::string& cause) : std::runtime_error(cause) {}
 };
 
+enum FragmentSkipStatus { SKIPPABLE, NOT_SKIPPABLE, INVALID };
+
 class Executor;
 
 inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
@@ -897,6 +899,12 @@ class Executor {
                         SQLTypeInfo const& from_ti,
                         SQLTypeInfo const& to_ti);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
+
+  FragmentSkipStatus canSkipFragmentForFpQual(
+      const Analyzer::BinOper* comp_expr,
+      const Analyzer::ColumnVar* lhs_col,
+      const Fragmenter_Namespace::FragmentInfo& fragment,
+      const Analyzer::Constant* rhs_const) const;
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,

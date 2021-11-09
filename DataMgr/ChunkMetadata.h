@@ -224,6 +224,22 @@ struct ChunkMetadata {
   }
 };
 
+inline int64_t extract_min_stat_int_type(const ChunkStats& stats, const SQLTypeInfo& ti) {
+  return extract_int_type_from_datum(stats.min, ti);
+}
+
+inline int64_t extract_max_stat_int_type(const ChunkStats& stats, const SQLTypeInfo& ti) {
+  return extract_int_type_from_datum(stats.max, ti);
+}
+
+inline double extract_min_stat_fp_type(const ChunkStats& stats, const SQLTypeInfo& ti) {
+  return extract_fp_type_from_datum(stats.min, ti);
+}
+
+inline double extract_max_stat_fp_type(const ChunkStats& stats, const SQLTypeInfo& ti) {
+  return extract_fp_type_from_datum(stats.max, ti);
+}
+
 using ChunkMetadataMap = std::map<int, std::shared_ptr<ChunkMetadata>>;
 using ChunkMetadataVector =
     std::vector<std::pair<ChunkKey, std::shared_ptr<ChunkMetadata>>>;
