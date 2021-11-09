@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 7cd7420
+                5.9.0dev f094fec
               </div>
             
           
@@ -957,6 +957,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_view.html">Class com::mapd::calcite::parser::MapDView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1parser_1_1_project_project_remove_rule.html">Class com::mapd::calcite::parser::ProjectProjectRemoveRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1planner_1_1tester.html">Class com::mapd::calcite::planner::tester</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1calcite_1_1rel_1_1rules_1_1_filter_table_function_multi_input_transpose_rule.html">Class com::mapd::calcite::rel::rules::FilterTableFunctionMultiInputTransposeRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1common_1_1_sock_transport_properties.html">Class com::mapd::common::SockTransportProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1dashboard_1_1_dashboard_test.html">Class com::mapd::dashboard::DashboardTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classcom_1_1mapd_1_1logrunner_1_1_log_runner.html">Class com::mapd::logrunner::LogRunner</a></li>
@@ -1801,6 +1802,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hit_test_types.html">Struct HitTestTypes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_host_array_datum.html">Struct HostArrayDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_inject_timer.html">Struct InjectTimer</a></li>
@@ -2179,8 +2181,14 @@
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
 <dt id="_CPPv4N20Fragmenter_Namespace16InsertDataLoader14moveToNextLeafEv">
-<span id="_CPPv3N20Fragmenter_Namespace16InsertDataLoader14moveToNextLeafEv"></span><span id="_CPPv2N20Fragmenter_Namespace16InsertDataLoader14moveToNextLeafEv"></span><span id="Fragmenter_Namespace::InsertDataLoader::moveToNextLeaf"></span><span class="target" id="struct_fragmenter___namespace_1_1_insert_data_loader_1a2314b82c6896769387f9744f46151d26"></span>void <code class="sig-name descname">moveToNextLeaf</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace16InsertDataLoader14moveToNextLeafEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<span id="_CPPv3N20Fragmenter_Namespace16InsertDataLoader14moveToNextLeafEv"></span><span id="_CPPv2N20Fragmenter_Namespace16InsertDataLoader14moveToNextLeafEv"></span><span id="Fragmenter_Namespace::InsertDataLoader::moveToNextLeaf"></span><span class="target" id="struct_fragmenter___namespace_1_1_insert_data_loader_1ab0069617ddcb11a3320878da0712d86c"></span>size_t <code class="sig-name descname">moveToNextLeaf</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace16InsertDataLoader14moveToNextLeafEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Move to the next available leaf index internally. Done under a lock to prevent contention.</p>
+<p><dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>the current leaf index (prior to moving to the next index) </p>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
@@ -2198,6 +2206,11 @@
 <dl class="member">
 <dt id="_CPPv4N20Fragmenter_Namespace16InsertDataLoader10connector_E">
 <span id="_CPPv3N20Fragmenter_Namespace16InsertDataLoader10connector_E"></span><span id="_CPPv2N20Fragmenter_Namespace16InsertDataLoader10connector_E"></span><span id="Fragmenter_Namespace::InsertDataLoader::connector___DistributedConnectorR"></span><span class="target" id="struct_fragmenter___namespace_1_1_insert_data_loader_1a82a94380f011b4d48337f7e3fefa0f88"></span><a class="reference internal" href="#_CPPv4N20Fragmenter_Namespace16InsertDataLoader20DistributedConnectorE" title="Fragmenter_Namespace::InsertDataLoader::DistributedConnector">DistributedConnector</a> &amp;<code class="sig-name descname">connector_</code><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace16InsertDataLoader10connector_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N20Fragmenter_Namespace16InsertDataLoader25current_leaf_index_mutex_E">
+<span id="_CPPv3N20Fragmenter_Namespace16InsertDataLoader25current_leaf_index_mutex_E"></span><span id="_CPPv2N20Fragmenter_Namespace16InsertDataLoader25current_leaf_index_mutex_E"></span><span id="Fragmenter_Namespace::InsertDataLoader::current_leaf_index_mutex___std::shared_mutex"></span><span class="target" id="struct_fragmenter___namespace_1_1_insert_data_loader_1a82161e96bb3f1c7fe37e9f7ef89c5d7f"></span>std::shared_mutex <code class="sig-name descname">current_leaf_index_mutex_</code><a class="headerlink" href="#_CPPv4N20Fragmenter_Namespace16InsertDataLoader25current_leaf_index_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

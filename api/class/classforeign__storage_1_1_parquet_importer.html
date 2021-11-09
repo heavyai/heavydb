@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 7cd7420
+                5.9.0dev f094fec
               </div>
             
           
@@ -957,6 +957,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_view.html">Class com::mapd::calcite::parser::MapDView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_project_project_remove_rule.html">Class com::mapd::calcite::parser::ProjectProjectRemoveRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1planner_1_1tester.html">Class com::mapd::calcite::planner::tester</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1rel_1_1rules_1_1_filter_table_function_multi_input_transpose_rule.html">Class com::mapd::calcite::rel::rules::FilterTableFunctionMultiInputTransposeRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1common_1_1_sock_transport_properties.html">Class com::mapd::common::SockTransportProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1dashboard_1_1_dashboard_test.html">Class com::mapd::dashboard::DashboardTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1logrunner_1_1_log_runner.html">Class com::mapd::logrunner::LogRunner</a></li>
@@ -1801,6 +1802,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_host_array_datum.html">Struct HostArrayDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_inject_timer.html">Struct InjectTimer</a></li>
@@ -2259,6 +2261,18 @@
 </p>
 </dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4NK15foreign_storage15ParquetImporter22getMaxNumUsefulThreadsEv">
+<span id="_CPPv3NK15foreign_storage15ParquetImporter22getMaxNumUsefulThreadsEv"></span><span id="_CPPv2NK15foreign_storage15ParquetImporter22getMaxNumUsefulThreadsEv"></span><span id="foreign_storage::ParquetImporter::getMaxNumUsefulThreadsC"></span><span class="target" id="classforeign__storage_1_1_parquet_importer_1ab0e91bf4fc81d8fca18d15d408b5a797"></span>int <code class="sig-name descname">getMaxNumUsefulThreads</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK15foreign_storage15ParquetImporter22getMaxNumUsefulThreadsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Get the maximum number of threads that can do useful computation. </p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N15foreign_storage15ParquetImporter13setNumThreadsEKi">
+<span id="_CPPv3N15foreign_storage15ParquetImporter13setNumThreadsEKi"></span><span id="_CPPv2N15foreign_storage15ParquetImporter13setNumThreadsEKi"></span><span id="foreign_storage::ParquetImporter::setNumThreads__iC"></span><span class="target" id="classforeign__storage_1_1_parquet_importer_1a8370eefb1d210fb7eb679cebc8a3fcd1"></span>void <code class="sig-name descname">setNumThreads</code><span class="sig-paren">(</span><em class="property">const</em> int <em>num_threads</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage15ParquetImporter13setNumThreadsEKi" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Set the number of threads to use internally when reading batches. </p>
+</dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
@@ -2278,6 +2292,11 @@
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage15ParquetImporter14foreign_table_E">
 <span id="_CPPv3N15foreign_storage15ParquetImporter14foreign_table_E"></span><span id="_CPPv2N15foreign_storage15ParquetImporter14foreign_table_E"></span><span id="foreign_storage::ParquetImporter::foreign_table___ForeignTableCP"></span><span class="target" id="classforeign__storage_1_1_parquet_importer_1a94230fc244cdbd45ac676cfcf8746968"></span><em class="property">const</em> <a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE" title="foreign_storage::ForeignTable">ForeignTable</a> *<code class="sig-name descname">foreign_table_</code><a class="headerlink" href="#_CPPv4N15foreign_storage15ParquetImporter14foreign_table_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage15ParquetImporter12num_threads_E">
+<span id="_CPPv3N15foreign_storage15ParquetImporter12num_threads_E"></span><span id="_CPPv2N15foreign_storage15ParquetImporter12num_threads_E"></span><span id="foreign_storage::ParquetImporter::num_threads___i"></span><span class="target" id="classforeign__storage_1_1_parquet_importer_1ae5bc81bd544ad6a48b27d5a94ce5318f"></span>int <code class="sig-name descname">num_threads_</code><a class="headerlink" href="#_CPPv4N15foreign_storage15ParquetImporter12num_threads_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2303,6 +2322,16 @@
 <dl class="member">
 <dt id="_CPPv4N15foreign_storage15ParquetImporter31string_dictionaries_per_column_E">
 <span id="_CPPv3N15foreign_storage15ParquetImporter31string_dictionaries_per_column_E"></span><span id="_CPPv2N15foreign_storage15ParquetImporter31string_dictionaries_per_column_E"></span><span id="foreign_storage::ParquetImporter::string_dictionaries_per_column___std::vector:std::pair:ColumnDescriptorCP.StringDictionaryP::"></span><span class="target" id="classforeign__storage_1_1_parquet_importer_1a8587e77c3000c3e19ce321dde1dc799a"></span>std::vector&lt;std::pair&lt;<em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *, <a class="reference internal" href="class_string_dictionary.html#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *&gt;&gt; <code class="sig-name descname">string_dictionaries_per_column_</code><a class="headerlink" href="#_CPPv4N15foreign_storage15ParquetImporter31string_dictionaries_per_column_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage15ParquetImporter33row_group_interval_tracker_mutex_E">
+<span id="_CPPv3N15foreign_storage15ParquetImporter33row_group_interval_tracker_mutex_E"></span><span id="_CPPv2N15foreign_storage15ParquetImporter33row_group_interval_tracker_mutex_E"></span><span id="foreign_storage::ParquetImporter::row_group_interval_tracker_mutex___std::shared_mutex"></span><span class="target" id="classforeign__storage_1_1_parquet_importer_1a846b591db2d9bfb99a985279835701a8"></span>std::shared_mutex <code class="sig-name descname">row_group_interval_tracker_mutex_</code><a class="headerlink" href="#_CPPv4N15foreign_storage15ParquetImporter33row_group_interval_tracker_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage15ParquetImporter37string_dictionaries_per_column_mutex_E">
+<span id="_CPPv3N15foreign_storage15ParquetImporter37string_dictionaries_per_column_mutex_E"></span><span id="_CPPv2N15foreign_storage15ParquetImporter37string_dictionaries_per_column_mutex_E"></span><span id="foreign_storage::ParquetImporter::string_dictionaries_per_column_mutex___std::shared_mutex"></span><span class="target" id="classforeign__storage_1_1_parquet_importer_1af924dfc8ebc87d662978211e5112ba6f"></span>std::shared_mutex <code class="sig-name descname">string_dictionaries_per_column_mutex_</code><a class="headerlink" href="#_CPPv4N15foreign_storage15ParquetImporter37string_dictionaries_per_column_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 7cd7420
+                5.9.0dev f094fec
               </div>
             
           
@@ -957,6 +957,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_view.html">Class com::mapd::calcite::parser::MapDView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_project_project_remove_rule.html">Class com::mapd::calcite::parser::ProjectProjectRemoveRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1planner_1_1tester.html">Class com::mapd::calcite::planner::tester</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1rel_1_1rules_1_1_filter_table_function_multi_input_transpose_rule.html">Class com::mapd::calcite::rel::rules::FilterTableFunctionMultiInputTransposeRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1common_1_1_sock_transport_properties.html">Class com::mapd::common::SockTransportProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1dashboard_1_1_dashboard_test.html">Class com::mapd::dashboard::DashboardTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1logrunner_1_1_log_runner.html">Class com::mapd::logrunner::LogRunner</a></li>
@@ -1801,6 +1802,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_host_array_datum.html">Struct HostArrayDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_inject_timer.html">Struct InjectTimer</a></li>
@@ -2259,7 +2261,12 @@
 
 <dl class="function">
 <dt id="_CPPv4N14RelAlgExecutor19getParsedQueryHintsEv">
-<span id="_CPPv3N14RelAlgExecutor19getParsedQueryHintsEv"></span><span id="_CPPv2N14RelAlgExecutor19getParsedQueryHintsEv"></span><span id="RelAlgExecutor::getParsedQueryHints"></span><span class="target" id="class_rel_alg_executor_1a13f7e8629cf8cf1c43e43aa4574ddd3a"></span>std::optional&lt;std::unordered_map&lt;size_t, <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a>&gt;&gt; <code class="sig-name descname">getParsedQueryHints</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14RelAlgExecutor19getParsedQueryHintsEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N14RelAlgExecutor19getParsedQueryHintsEv"></span><span id="_CPPv2N14RelAlgExecutor19getParsedQueryHintsEv"></span><span id="RelAlgExecutor::getParsedQueryHints"></span><span class="target" id="class_rel_alg_executor_1aa7919de99db10b79dc3439c62b9aeee3"></span>std::optional&lt;std::unordered_map&lt;size_t, std::unordered_map&lt;unsigned, <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a>&gt;&gt;&gt; <code class="sig-name descname">getParsedQueryHints</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14RelAlgExecutor19getParsedQueryHintsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N14RelAlgExecutor18getGlobalQueryHintEv">
+<span id="_CPPv3N14RelAlgExecutor18getGlobalQueryHintEv"></span><span id="_CPPv2N14RelAlgExecutor18getGlobalQueryHintEv"></span><span id="RelAlgExecutor::getGlobalQueryHint"></span><span class="target" id="class_rel_alg_executor_1a25c02e17dea1db678658e7e10b77363f"></span>std::optional&lt;<a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a>&gt; <code class="sig-name descname">getGlobalQueryHint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N14RelAlgExecutor18getGlobalQueryHintEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

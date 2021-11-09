@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev 7cd7420
+                5.9.0dev f094fec
               </div>
             
           
@@ -957,6 +957,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_map_d_view.html">Class com::mapd::calcite::parser::MapDView</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1parser_1_1_project_project_remove_rule.html">Class com::mapd::calcite::parser::ProjectProjectRemoveRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1planner_1_1tester.html">Class com::mapd::calcite::planner::tester</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1calcite_1_1rel_1_1rules_1_1_filter_table_function_multi_input_transpose_rule.html">Class com::mapd::calcite::rel::rules::FilterTableFunctionMultiInputTransposeRule</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1common_1_1_sock_transport_properties.html">Class com::mapd::common::SockTransportProperties</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1dashboard_1_1_dashboard_test.html">Class com::mapd::dashboard::DashboardTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1logrunner_1_1_log_runner.html">Class com::mapd::logrunner::LogRunner</a></li>
@@ -1801,6 +1802,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_host_array_datum.html">Struct HostArrayDatum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_inject_timer.html">Struct InjectTimer</a></li>
@@ -2271,16 +2273,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE">
-<span id="_CPPv3N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHint__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1ac1b91d0af56ac284aeb40911764980fd"></span><a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> <code class="sig-name descname">getParsedQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE">
-<span id="_CPPv3N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHints__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1ac1f635afa28f5837f969a28c103d911b"></span>std::optional&lt;std::unordered_map&lt;size_t, <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a>&gt;&gt; <code class="sig-name descname">getParsedQueryHints</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N11QueryRunner11QueryRunner9runImportEPN6Parser13CopyTableStmtE">
 <span id="_CPPv3N11QueryRunner11QueryRunner9runImportEPN6Parser13CopyTableStmtE"></span><span id="_CPPv2N11QueryRunner11QueryRunner9runImportEPN6Parser13CopyTableStmtE"></span><span id="QueryRunner::QueryRunner::runImport__Parser::CopyTableStmtP"></span><span class="target" id="class_query_runner_1_1_query_runner_1a4dc00af282f1dc15407817dbbabfbdf4"></span>void <code class="sig-name descname">runImport</code><span class="sig-paren">(</span>Parser::<a class="reference internal" href="class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmtE" title="Parser::CopyTableStmt">CopyTableStmt</a> *<em>import_stmt</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner9runImportEPN6Parser13CopyTableStmtE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2288,6 +2280,21 @@
 <dl class="function">
 <dt id="_CPPv4NK11QueryRunner11QueryRunner9getLoaderEPK15TableDescriptor">
 <span id="_CPPv3NK11QueryRunner11QueryRunner9getLoaderEPK15TableDescriptor"></span><span id="_CPPv2NK11QueryRunner11QueryRunner9getLoaderEPK15TableDescriptor"></span><span id="QueryRunner::QueryRunner::getLoader__TableDescriptorCPC"></span><span class="target" id="class_query_runner_1_1_query_runner_1ab061d8a39dc5e52696b96824e805bbd7"></span>std::unique_ptr&lt;import_export::<a class="reference internal" href="classimport__export_1_1_loader.html#_CPPv4N13import_export6LoaderE" title="import_export::Loader">Loader</a>&gt; <code class="sig-name descname">getLoader</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>td</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK11QueryRunner11QueryRunner9getLoaderEPK15TableDescriptor" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE">
+<span id="_CPPv3N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHint__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1ac1b91d0af56ac284aeb40911764980fd"></span><a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> <code class="sig-name descname">getParsedQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner18getParsedQueryHintERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE">
+<span id="_CPPv3N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedQueryHints__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1a1fd53e24e47d73a7022b9090350bd0f2"></span>std::optional&lt;std::unordered_map&lt;size_t, std::unordered_map&lt;unsigned, <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a>&gt;&gt;&gt; <code class="sig-name descname">getParsedQueryHints</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner19getParsedQueryHintsERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N11QueryRunner11QueryRunner25getParsedGlobalQueryHintsERKNSt6stringE">
+<span id="_CPPv3N11QueryRunner11QueryRunner25getParsedGlobalQueryHintsERKNSt6stringE"></span><span id="_CPPv2N11QueryRunner11QueryRunner25getParsedGlobalQueryHintsERKNSt6stringE"></span><span id="QueryRunner::QueryRunner::getParsedGlobalQueryHints__ssCR"></span><span class="target" id="class_query_runner_1_1_query_runner_1adee6187b14c58e76b6768bd5d8ed91b3"></span>std::optional&lt;<a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a>&gt; <code class="sig-name descname">getParsedGlobalQueryHints</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>query_str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner25getParsedGlobalQueryHintsERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

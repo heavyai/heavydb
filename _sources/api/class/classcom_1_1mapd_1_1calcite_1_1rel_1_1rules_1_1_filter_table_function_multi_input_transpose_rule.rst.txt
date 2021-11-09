@@ -1,0 +1,9 @@
+Class com::mapd::calcite::rel::rules::FilterTableFunctionMultiInputTransposeRule
+================================================================================
+
+.. doxygenclass:: com::mapd::calcite::rel::rules::FilterTableFunctionMultiInputTransposeRule
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

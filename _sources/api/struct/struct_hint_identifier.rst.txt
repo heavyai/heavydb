@@ -1,0 +1,9 @@
+Struct HintIdentifier
+=====================
+
+.. doxygenstruct:: HintIdentifier
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
