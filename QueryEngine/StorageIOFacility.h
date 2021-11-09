@@ -96,8 +96,8 @@ bool should_recompute_metadata(
     }
     return is_chunk_min_max_updated(update_stats.value(), min, max);
   } else {
-    auto min = extract_min_stat(chunk_metadata->chunkStats, cd->columnType);
-    auto max = extract_max_stat(chunk_metadata->chunkStats, cd->columnType);
+    auto min = extract_min_stat_int_type(chunk_metadata->chunkStats, cd->columnType);
+    auto max = extract_max_stat_int_type(chunk_metadata->chunkStats, cd->columnType);
     return is_chunk_min_max_updated(update_stats.value(), min, max);
   }
 }

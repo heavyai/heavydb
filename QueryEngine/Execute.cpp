@@ -3697,15 +3697,75 @@ bool Executor::isFragmentFullyDeleted(
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(deleted_col_id);
   if (chunk_meta_it != fragment.getChunkMetadataMap().end()) {
     const int64_t chunk_min =
-        extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
+        extract_min_stat_int_type(chunk_meta_it->second->chunkStats, chunk_type);
     const int64_t chunk_max =
-        extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
+        extract_max_stat_int_type(chunk_meta_it->second->chunkStats, chunk_type);
     if (chunk_min == 1 && chunk_max == 1) {  // Delete chunk if metadata says full bytemap
       // is true (signifying all rows deleted)
       return true;
     }
   }
   return false;
+}
+
+FragmentSkipStatus Executor::canSkipFragmentForFpQual(
+    const Analyzer::BinOper* comp_expr,
+    const Analyzer::ColumnVar* lhs_col,
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const Analyzer::Constant* rhs_const) const {
+  const int col_id = lhs_col->get_column_id();
+  auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
+  if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
+    return FragmentSkipStatus::NOT_SKIPPABLE;
+  }
+  double chunk_min{0.};
+  double chunk_max{0.};
+  const auto& chunk_type = lhs_col->get_type_info();
+  chunk_min = extract_min_stat_fp_type(chunk_meta_it->second->chunkStats, chunk_type);
+  chunk_max = extract_max_stat_fp_type(chunk_meta_it->second->chunkStats, chunk_type);
+  if (chunk_min > chunk_max) {
+    return FragmentSkipStatus::INVALID;
+  }
+
+  const auto datum_fp = rhs_const->get_constval();
+  const auto rhs_type = rhs_const->get_type_info().get_type();
+  CHECK(rhs_type == kFLOAT || rhs_type == kDOUBLE);
+
+  // Do we need to codegen the constant like the integer path does?
+  const auto rhs_val = rhs_type == kFLOAT ? datum_fp.floatval : datum_fp.doubleval;
+
+  // Todo: dedup the following comparison code with the integer/timestamp path, it is
+  // slightly tricky due to do cleanly as we do not have rowid on this path
+  switch (comp_expr->get_optype()) {
+    case kGE:
+      if (chunk_max < rhs_val) {
+        return FragmentSkipStatus::SKIPPABLE;
+      }
+      break;
+    case kGT:
+      if (chunk_max <= rhs_val) {
+        return FragmentSkipStatus::SKIPPABLE;
+      }
+      break;
+    case kLE:
+      if (chunk_min > rhs_val) {
+        return FragmentSkipStatus::SKIPPABLE;
+      }
+      break;
+    case kLT:
+      if (chunk_min >= rhs_val) {
+        return FragmentSkipStatus::SKIPPABLE;
+      }
+      break;
+    case kEQ:
+      if (chunk_min > rhs_val || chunk_max < rhs_val) {
+        return FragmentSkipStatus::SKIPPABLE;
+      }
+      break;
+    default:
+      break;
+  }
+  return FragmentSkipStatus::NOT_SKIPPABLE;
 }
 
 std::pair<bool, int64_t> Executor::skipFragment(
@@ -3752,9 +3812,29 @@ std::pair<bool, int64_t> Executor::skipFragment(
       // is this possible?
       return {false, -1};
     }
-    if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
+    if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time() &&
+        !lhs->get_type_info().is_fp()) {
       continue;
     }
+
+    if (lhs->get_type_info().is_fp()) {
+      const auto fragment_skip_status =
+          canSkipFragmentForFpQual(comp_expr.get(), lhs_col, fragment, rhs_const);
+      switch (fragment_skip_status) {
+        case FragmentSkipStatus::SKIPPABLE:
+          return {true, -1};
+        case FragmentSkipStatus::INVALID:
+          return {false, -1};
+        case FragmentSkipStatus::NOT_SKIPPABLE:
+          continue;
+        default:
+          UNREACHABLE();
+      }
+    }
+
+    // Everything below is logic for integer and integer-backed timestamps
+    // TODO: Factor out into separate function per canSkipFragmentForFpQual above
+
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
     int64_t chunk_min{0};
@@ -3773,8 +3853,10 @@ std::pair<bool, int64_t> Executor::skipFragment(
       }
     } else {
       const auto& chunk_type = lhs_col->get_type_info();
-      chunk_min = extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
-      chunk_max = extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
+      chunk_min =
+          extract_min_stat_int_type(chunk_meta_it->second->chunkStats, chunk_type);
+      chunk_max =
+          extract_max_stat_int_type(chunk_meta_it->second->chunkStats, chunk_type);
     }
     if (chunk_min > chunk_max) {
       // invalid metadata range, do not skip fragment

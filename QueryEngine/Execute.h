@@ -159,6 +159,8 @@ class WatchdogException : public std::runtime_error {
   WatchdogException(const std::string& cause) : std::runtime_error(cause) {}
 };
 
+enum FragmentSkipStatus { SKIPPABLE, NOT_SKIPPABLE, INVALID };
+
 class Executor;
 
 inline llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
@@ -929,6 +931,12 @@ class Executor {
 
   bool isFragmentFullyDeleted(const int table_id,
                               const Fragmenter_Namespace::FragmentInfo& fragment);
+
+  FragmentSkipStatus canSkipFragmentForFpQual(
+      const Analyzer::BinOper* comp_expr,
+      const Analyzer::ColumnVar* lhs_col,
+      const Fragmenter_Namespace::FragmentInfo& fragment,
+      const Analyzer::Constant* rhs_const) const;
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,
