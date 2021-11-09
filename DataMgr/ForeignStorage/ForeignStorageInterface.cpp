@@ -15,6 +15,7 @@
  */
 
 #include "ForeignStorageInterface.h"
+#include "Catalog/Catalog.h"
 #include "Shared/StringTransform.h"
 
 ForeignStorageBuffer::ForeignStorageBuffer(

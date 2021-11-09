@@ -25,12 +25,11 @@
 #include <list>
 #include <memory>
 
-#include "Catalog/ColumnDescriptor.h"
+#include "Catalog/CatalogFwd.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/ChunkMetadata.h"
 #include "DataMgr/DataMgr.h"
 #include "Shared/sqltypes.h"
-#include "Shared/toString.h"
 #include "Utils/ChunkIter.h"
 
 using Data_Namespace::AbstractBuffer;
@@ -57,11 +56,7 @@ class Chunk {
 
   static void translateColumnDescriptorsToChunkVec(
       const std::list<const ColumnDescriptor*>& colDescs,
-      std::vector<Chunk>& chunkVec) {
-    for (auto cd : colDescs) {
-      chunkVec.emplace_back(cd);
-    }
-  }
+      std::vector<Chunk>& chunkVec);
 
   ChunkIter begin_iterator(const std::shared_ptr<ChunkMetadata>&,
                            int start_idx = 0,
@@ -116,11 +111,7 @@ class Chunk {
 
   void decompress(int8_t* compressed, VarlenDatum* result, Datum* datum) const;
 
-  std::string toString() const {
-    return ::typeName(this) + "(buffer=" + ::toString(buffer_) +
-           ", index_buf=" + ::toString(index_buf_) +
-           ", column_desc=" + ::toString(column_desc_) + ")";
-  }
+  std::string toString() const;
 
  private:
   AbstractBuffer* buffer_;

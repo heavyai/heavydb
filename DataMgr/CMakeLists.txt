@@ -26,6 +26,7 @@ set(datamgr_source_files
     ForeignStorage/ForeignStorageBuffer.cpp
     ForeignStorage/ForeignStorageMgr.cpp
     ForeignStorage/ForeignStorageCache.cpp
+    ForeignStorage/ForeignTableSchema.cpp
     ForeignStorage/FsiChunkUtils.cpp
     ForeignStorage/FsiJsonUtils.cpp
     ForeignStorage/FileReader.cpp

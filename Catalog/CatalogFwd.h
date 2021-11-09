@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,13 @@
 
 #pragma once
 
-#include <string>
+struct ColumnDescriptor;
+struct TableDescriptor;
 
-#include "Catalog/CatalogFwd.h"
+namespace Catalog_Namespace {
+class Catalog;
+}
 
 namespace foreign_storage {
-void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
-                           const std::string& table_name,
-                           const bool evict_cached_entries);
-}  // namespace foreign_storage
+struct ForeignTable;
+}

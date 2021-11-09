@@ -23,7 +23,7 @@
 #include <parquet/statistics.h>
 #include <parquet/types.h>
 
-#include "Catalog/ColumnDescriptor.h"
+#include "Catalog/CatalogFwd.h"
 #include "DataMgr/ChunkMetadata.h"
 #include "Shared/mapd_shared_mutex.h"
 

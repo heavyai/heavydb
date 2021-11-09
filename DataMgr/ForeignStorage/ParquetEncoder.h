@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "Catalog/ColumnDescriptor.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "ForeignStorageBuffer.h"
 #include "ParquetShared.h"

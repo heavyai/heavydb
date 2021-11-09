@@ -24,6 +24,7 @@
 #include <rapidjson/document.h>
 #include <boost/filesystem.hpp>
 
+#include "Catalog/ColumnDescriptor.h"
 #include "DataMgr/ForeignStorage/FileReader.h"
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"

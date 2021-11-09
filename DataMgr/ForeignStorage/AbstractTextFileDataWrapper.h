@@ -20,7 +20,7 @@
 #include <set>
 
 #include "AbstractFileStorageDataWrapper.h"
-#include "Catalog/ColumnDescriptor.h"
+#include "Catalog/CatalogFwd.h"
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/ForeignStorage/FileReader.h"

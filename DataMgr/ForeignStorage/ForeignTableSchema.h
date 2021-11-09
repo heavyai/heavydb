@@ -16,95 +16,59 @@
 
 #pragma once
 
-#include "Catalog/Catalog.h"
+#include <cstdint>
+#include <list>
+#include <memory>
+#include <vector>
+#include "Catalog/CatalogFwd.h"
 
 namespace foreign_storage {
 class ForeignTableSchema {
  public:
-  ForeignTableSchema(const int32_t db_id, const ForeignTable* foreign_table) {
-    catalog_ = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
-    CHECK(catalog_);
-    foreign_table_ = foreign_table;
-    logical_and_physical_columns_ = catalog_->getAllColumnMetadataForTable(
-        foreign_table->tableId, false, false, true);
-    logical_columns_ = catalog_->getAllColumnMetadataForTable(
-        foreign_table->tableId, false, false, false);
-
-    for (const auto column : logical_columns_) {
-      logical_column_ids_.emplace_back(column->columnId);
-    }
-  }
+  ForeignTableSchema(const int32_t db_id, const ForeignTable* foreign_table);
 
   /**
    * Gets a pointer to the column descriptor object for the given column id.
    */
-  const ColumnDescriptor* getColumnDescriptor(const int column_id) const {
-    auto column = catalog_->getMetadataForColumn(foreign_table_->tableId, column_id);
-    CHECK(column);
-    return column;
-  }
+  const ColumnDescriptor* getColumnDescriptor(const int column_id) const;
 
   /**
    * Gets the logical column that is associated with the given column id.
    * Given column id can be for a physical column or logical column (in
    * this case, the column descriptor for the same column is returned)
    */
-  const ColumnDescriptor* getLogicalColumn(const int column_id) const {
-    auto logical_column_id = *getLogicalColumnIdIterator(column_id);
-    CHECK_LE(logical_column_id, column_id);
-    return getColumnDescriptor(logical_column_id);
-  }
+  const ColumnDescriptor* getLogicalColumn(const int column_id) const;
 
   /**
    * Gets the Parquet column index that corresponds to the given
    * column id.
    */
-  int getParquetColumnIndex(const int column_id) const {
-    auto column_index =
-        std::distance(logical_column_ids_.begin(), getLogicalColumnIdIterator(column_id));
-    CHECK_GE(column_index, 0);
-    return column_index;
-  }
+  int getParquetColumnIndex(const int column_id) const;
 
   /**
    * Gets all the logical and physical columns for the foreign table.
    */
-  const std::list<const ColumnDescriptor*>& getLogicalAndPhysicalColumns() const {
-    return logical_and_physical_columns_;
-  }
+  const std::list<const ColumnDescriptor*>& getLogicalAndPhysicalColumns() const;
 
   /**
    * Gets the total number of logical and physical columns for the foreign table.
    */
-  int numLogicalAndPhysicalColumns() const {
-    return logical_and_physical_columns_.size();
-  }
+  int numLogicalAndPhysicalColumns() const;
 
   /**
    * Gets all the logical columns for the foreign table.
    */
-  const std::list<const ColumnDescriptor*>& getLogicalColumns() const {
-    return logical_columns_;
-  }
+  const std::list<const ColumnDescriptor*>& getLogicalColumns() const;
 
   /**
    * Gets the total number of logical columns for the foreign table.
    */
-  int numLogicalColumns() const { return logical_columns_.size(); }
+  int numLogicalColumns() const;
 
-  /**
-   * Gets a pointer to the foreign table object.
-   */
-  const ForeignTable* getForeignTable() const { return foreign_table_; }
+  const ForeignTable* getForeignTable() const;
 
  private:
-  std::vector<int>::const_iterator getLogicalColumnIdIterator(const int column_id) const {
-    auto it = std::upper_bound(
-        logical_column_ids_.begin(), logical_column_ids_.end(), column_id);
-    CHECK(it != logical_column_ids_.begin());
-    it--;
-    return it;
-  }
+  std::vector<int>::const_iterator getLogicalColumnIdIterator(const int column_id) const;
 
   std::list<const ColumnDescriptor*> logical_and_physical_columns_;
   std::list<const ColumnDescriptor*> logical_columns_;

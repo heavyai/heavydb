@@ -21,6 +21,7 @@
 #include <arrow/filesystem/localfs.h>
 #include <boost/filesystem.hpp>
 
+#include "Catalog/Catalog.h"
 #include "ForeignStorageException.h"
 #include "FsiChunkUtils.h"
 #include "FsiJsonUtils.h"

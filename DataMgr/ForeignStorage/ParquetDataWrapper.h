@@ -21,8 +21,6 @@
 #include <vector>
 
 #include "AbstractFileStorageDataWrapper.h"
-#include "Catalog/Catalog.h"
-#include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ForeignDataWrapper.h"
 #include "ForeignTableSchema.h"

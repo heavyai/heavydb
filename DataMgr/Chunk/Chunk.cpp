@@ -20,9 +20,11 @@
  */
 
 #include "DataMgr/Chunk/Chunk.h"
+#include "Catalog/ColumnDescriptor.h"
 #include "DataMgr/ArrayNoneEncoder.h"
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "DataMgr/StringNoneEncoder.h"
+#include "Shared/toString.h"
 
 namespace Chunk_NS {
 std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
@@ -276,5 +278,19 @@ ChunkIter Chunk::begin_iterator(const std::shared_ptr<ChunkMetadata>& chunk_meta
   }
   it.num_elems = chunk_metadata->numElements;
   return it;
+}
+
+void Chunk::translateColumnDescriptorsToChunkVec(
+    const std::list<const ColumnDescriptor*>& colDescs,
+    std::vector<Chunk>& chunkVec) {
+  for (auto cd : colDescs) {
+    chunkVec.emplace_back(cd);
+  }
+}
+
+std::string Chunk::toString() const {
+  return ::typeName(this) + "(buffer=" + ::toString(buffer_) +
+         ", index_buf=" + ::toString(index_buf_) +
+         ", column_desc=" + ::toString(column_desc_) + ")";
 }
 }  // namespace Chunk_NS

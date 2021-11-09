@@ -23,6 +23,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
+#include "Catalog/ColumnDescriptor.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"

@@ -20,6 +20,9 @@
 #include <arrow/filesystem/localfs.h>
 #include <boost/filesystem.hpp>
 
+#include "Catalog/Catalog.h"
+#include "Catalog/ForeignTable.h"
+#include "DataMgr/Chunk/Chunk.h"
 #include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
 #include "LazyParquetChunkLoader.h"

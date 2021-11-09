@@ -19,6 +19,7 @@
 #include <parquet/column_scanner.h>
 #include <parquet/exception.h>
 #include <parquet/platform.h>
+#include "Catalog/ColumnDescriptor.h"
 
 namespace foreign_storage {
 

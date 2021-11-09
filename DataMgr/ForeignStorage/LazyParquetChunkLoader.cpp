@@ -42,6 +42,7 @@
 #include "ParquetTimestampEncoder.h"
 #include "ParquetVariableLengthArrayEncoder.h"
 #include "Shared/misc.h"
+#include "StringDictionary/StringDictionary.h"
 
 namespace foreign_storage {
 

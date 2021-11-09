@@ -15,7 +15,7 @@
  */
 
 #include "ForeignTableRefresh.h"
-
+#include "Catalog/Catalog.h"
 #include "LockMgr/LockMgr.h"
 
 namespace foreign_storage {

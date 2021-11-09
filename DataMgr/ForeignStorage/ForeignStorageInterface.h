@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include "../AbstractBufferMgr.h"
-#include "Catalog/Catalog.h"
+#include "Catalog/CatalogFwd.h"
+#include "DataMgr/AbstractBufferMgr.h"
+#include "LockMgr/LockMgr.h"
 
 #include <atomic>
 #include <unordered_map>

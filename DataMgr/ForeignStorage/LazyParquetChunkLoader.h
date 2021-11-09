@@ -24,6 +24,7 @@
 #include "Interval.h"
 #include "ParquetEncoder.h"
 #include "ParquetShared.h"
+#include "StringDictionary/StringDictionary.h"
 
 extern size_t g_max_import_threads;
 

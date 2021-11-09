@@ -17,6 +17,7 @@
 #include "ForeignStorageMgr.h"
 
 #include "AbstractFileStorageDataWrapper.h"
+#include "Catalog/Catalog.h"
 #include "ForeignDataWrapperFactory.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
