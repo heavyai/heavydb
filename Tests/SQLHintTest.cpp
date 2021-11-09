@@ -22,6 +22,7 @@
 #include "Catalog/DBObject.h"
 #include "DBHandlerTestHelpers.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/QueryHint.h"
 #include "QueryRunner/QueryRunner.h"
 
 namespace po = boost::program_options;
@@ -67,6 +68,17 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
   return QR::get()->runSQL(query_str, device_type, true, true);
 }
 
+std::pair<std::shared_ptr<HashTable>, std::optional<RegisteredQueryHint>>
+getCachedHashTable(std::set<QueryPlanHash>& already_visited,
+                   CacheItemType cache_item_type) {
+  auto cached_ht = QR::get()->getCachedHashtableWithoutCacheKey(
+      already_visited, cache_item_type, 0 /* CPU_DEVICE_IDENTIFIER*/);
+  auto cache_key = std::get<0>(cached_ht);
+  already_visited.insert(cache_key);
+  return std::make_pair(std::get<1>(cached_ht),
+                        std::get<2>(cached_ht)->registered_query_hint);
+}
+
 void createTable() {
   QR::get()->runDDLStatement(
       "CREATE TABLE SQL_HINT_DUMMY(key int, ts1 timestamp(0) encoding fixed(32), ts2 "
@@ -76,6 +88,37 @@ void createTable() {
   QR::get()->runDDLStatement(
       "CREATE TABLE geospatial_inner_join_test(id INT, p POINT, l LINESTRING, poly "
       "POLYGON);");
+}
+
+void populateTable() {
+  std::vector<std::string> geospatial_test_data{
+      "0,'POINT (0 0)','LINESTRING (0 0,0 0)','POLYGON ((0 0,1 0,0 1,0 0))'",
+      "1,'POINT (1 1)','LINESTRING (1 0,2 2,3 3)','POLYGON ((0 0,2 0,0 2,0 0))'",
+      "2,'POINT (2 2)','LINESTRING (2 0,4 4)','POLYGON ((0 0,3 0,0 3,0 0))'",
+      "3,'POINT (3 3)','LINESTRING (3 0,6 6,7 7)','POLYGON ((0 0,4 0,0 4,0 0))'",
+      "4,'POINT (4 4)','LINESTRING (4 0,8 8)','POLYGON ((0 0,5 0,0 5,0 0))'",
+      "5,'POINT (5 5)','LINESTRING (5 0,10 10,11 11)','POLYGON ((0 0,6 0,0 6,0 0))'",
+      "6,'POINT (6 6)','LINESTRING (6 0,12 12)','POLYGON ((0 0,7 0,0 7,0 0))'",
+      "7,'POINT (7 7)','LINESTRING (7 0,14 14,15 15)','POLYGON ((0 0,8 0,0 8,0 0))'",
+      "8,'POINT (8 8)','LINESTRING (8 0,16 16)','POLYGON ((0 0,9 0,0 9,0 0))'",
+      "9,'POINT (9 9)','LINESTRING (9 0,18 18,19 19)','POLYGON ((0 0,10 0,0 10,0 0))'"};
+
+  for (const auto& data : geospatial_test_data) {
+    const auto data_str = "INSERT INTO geospatial_test VALUES(" + data + ");";
+    run_query(data_str, ExecutorDeviceType::CPU);
+  }
+
+  std::vector<std::string> geospatial_inner_test_data{
+      "0,'POINT (0 0)','LINESTRING (0 0,0 0)','POLYGON ((0 0,1 0,0 1,0 0))'",
+      "2,'POINT (2 2)','LINESTRING (2 0,4 4)','POLYGON ((0 0,3 0,0 3,0 0))'",
+      "4,'POINT (4 4)','LINESTRING (4 0,8 8)','POLYGON ((0 0,5 0,0 5,0 0))'",
+      "6,'POINT (6 6)','LINESTRING (6 0,12 12)','POLYGON ((0 0,7 0,0 7,0 0))'",
+      "8,'POINT (8 8)','LINESTRING (8 0,16 16)','POLYGON ((0 0,9 0,0 9,0 0))'"};
+
+  for (const auto& data : geospatial_inner_test_data) {
+    const auto data_str = "INSERT INTO geospatial_inner_join_test VALUES(" + data + ");";
+    run_query(data_str, ExecutorDeviceType::CPU);
+  }
 }
 
 void dropTable() {
@@ -96,7 +139,7 @@ TEST(kCpuMode, ForceToCPUMode) {
   }
 }
 
-TEST(QueryHint, CheckQueryHintForOverlapsJoin) {
+TEST(QueryHint, QueryHintForOverlapsJoin) {
   const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
   g_enable_overlaps_hashjoin = true;
   ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup] {
@@ -223,7 +266,7 @@ TEST(QueryHint, CheckQueryHintForOverlapsJoin) {
   }
 }
 
-TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
+TEST(QueryHint, QueryLayoutHintWithEnablingColumnarOutput) {
   const auto enable_columnar_output = g_enable_columnar_output;
   g_enable_columnar_output = true;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
@@ -282,7 +325,7 @@ TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
   }
 }
 
-TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
+TEST(QueryHint, QueryLayoutHintWithoutEnablingColumnarOutput) {
   const auto enable_columnar_output = g_enable_columnar_output;
   g_enable_columnar_output = false;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
@@ -357,20 +400,21 @@ TEST(QueryHint, UDF) {
     auto query_hints = QR::get()->getParsedQueryHints(q1);
     EXPECT_TRUE(query_hints);
     EXPECT_EQ(query_hints->size(), static_cast<size_t>(1));
-    EXPECT_TRUE(
-        query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
+    EXPECT_TRUE(query_hints->begin()->second.begin()->second.isHintRegistered(
+        QueryHint::kColumnarOutput));
   }
   {
     auto query_hints = QR::get()->getParsedQueryHints(q2);
     EXPECT_TRUE(query_hints);
     EXPECT_EQ(query_hints->size(), static_cast<size_t>(1));
-    EXPECT_TRUE(
-        query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
-    EXPECT_TRUE(query_hints->begin()->second.isHintRegistered(QueryHint::kCpuMode));
+    EXPECT_TRUE(query_hints->begin()->second.begin()->second.isHintRegistered(
+        QueryHint::kColumnarOutput));
+    EXPECT_TRUE(query_hints->begin()->second.begin()->second.isHintRegistered(
+        QueryHint::kCpuMode));
   }
 }
 
-TEST(QueryHint, checkPerQueryBlockHint) {
+TEST(QueryHint, PerQueryBlockHint) {
   const auto enable_columnar_output = g_enable_columnar_output;
   g_enable_columnar_output = false;
   ScopeGuard reset_columnar_output = [&enable_columnar_output] {
@@ -387,20 +431,24 @@ TEST(QueryHint, checkPerQueryBlockHint) {
   // func in QR but for test, it is enough to check the functionality in brute-force
   // manner
   auto check_registered_hint =
-      [](std::unordered_map<size_t, RegisteredQueryHint>& hints) {
+      [](std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+             hints) {
         bool find_columnar_hint = false;
         bool find_cpu_mode_hint = false;
         CHECK(hints.size() == static_cast<size_t>(2));
-        for (auto& hint : hints) {
-          if (hint.second.isHintRegistered(QueryHint::kColumnarOutput)) {
-            find_columnar_hint = true;
-            EXPECT_FALSE(hint.second.isHintRegistered(QueryHint::kCpuMode));
-            continue;
-          }
-          if (hint.second.isHintRegistered(QueryHint::kCpuMode)) {
-            find_cpu_mode_hint = true;
-            EXPECT_FALSE(hint.second.isHintRegistered(QueryHint::kColumnarOutput));
-            continue;
+        for (auto& kv : hints) {
+          for (auto& kv2 : kv.second) {
+            auto hint = kv2.second;
+            if (hint.isHintRegistered(QueryHint::kColumnarOutput)) {
+              find_columnar_hint = true;
+              EXPECT_FALSE(hint.isHintRegistered(QueryHint::kCpuMode));
+              continue;
+            }
+            if (hint.isHintRegistered(QueryHint::kCpuMode)) {
+              find_cpu_mode_hint = true;
+              EXPECT_FALSE(hint.isHintRegistered(QueryHint::kColumnarOutput));
+              continue;
+            }
           }
         }
         EXPECT_TRUE(find_columnar_hint);
@@ -432,8 +480,11 @@ TEST(QueryHint, WindowFunction) {
     auto query_hints = QR::get()->getParsedQueryHints(q1);
     EXPECT_TRUE(query_hints);
     for (auto& kv : *query_hints) {
-      auto query_hint = kv.second;
-      EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
+      auto& query_hint_map = kv.second;
+      for (auto& kv2 : query_hint_map) {
+        auto query_hint = kv2.second;
+        EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
+      }
     }
   }
   const auto q2 =
@@ -444,9 +495,263 @@ TEST(QueryHint, WindowFunction) {
     auto query_hints = QR::get()->getParsedQueryHints(q2);
     EXPECT_TRUE(query_hints);
     for (auto& kv : *query_hints) {
-      auto query_hint = kv.second;
-      EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
+      auto& query_hint_map = kv.second;
+      for (auto& kv2 : query_hint_map) {
+        auto query_hint = kv2.second;
+        EXPECT_TRUE(query_hint.isHintRegistered(QueryHint::kColumnarOutput));
+      }
     }
+  }
+}
+
+TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
+  const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
+  const auto data_recycler_flag_backup = g_enable_data_recycler;
+  const auto hashtable_cache_flag_backup = g_use_hashtable_cache;
+  g_enable_overlaps_hashjoin = true;
+  g_enable_data_recycler = true;
+  g_use_hashtable_cache = true;
+  ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup,
+                                      &data_recycler_flag_backup,
+                                      &hashtable_cache_flag_backup] {
+    g_enable_overlaps_hashjoin = overlaps_join_status_backup;
+    g_enable_data_recycler = data_recycler_flag_backup;
+    g_use_hashtable_cache = hashtable_cache_flag_backup;
+  };
+
+  // testing global query hint for overlaps join is tricky since we apply all registered
+  // hint during hashtable building time, so it's hard to get the result at that time
+  // instead by exploiting cached hashtable we can check whether hints are registered &
+  // applied correctly in indirect manner
+
+  // q1 and q2: global query hint registered to the main query block
+  const auto q1 =
+      "SELECT /*+ g_overlaps_no_cache */ t1.ID FROM (SELECT a.id FROM geospatial_test a "
+      "INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1;";
+  {
+    auto res = run_query(q1, ExecutorDeviceType::CPU);
+    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(0));
+  }
+
+  if (QR::get()->gpusPresent()) {
+    const auto q2 =
+        "SELECT /*+ g_overlaps_allow_gpu_build */ t1.ID FROM (SELECT a.id FROM "
+        "geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
+        "ST_Contains(b.poly, a.p)) T1;";
+    auto res = run_query(q2, ExecutorDeviceType::GPU);
+    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(0));
+  }
+
+  // q3 and q4: two (e.g., multiple) subqueries and we disallow to put hashtable to cache
+  // for one of them so we should have just a single overlaps join hashtable with
+  // registered global hint
+  std::set<QueryPlanHash> visited_hashtable_key;
+  const auto q3 =
+      "SELECT /*+ g_overlaps_max_size(7777) */ t1.ID, t2.ID FROM \n"
+      "(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
+      "ST_Contains(b.poly, a.p)) T1, \n"
+      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2 \n"
+      "WHERE t1.ID = t2.ID;";
+  {
+    auto res = run_query(q3, ExecutorDeviceType::CPU);
+    auto cached_ht_info =
+        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+    auto query_hint = cached_ht_info.second;
+    EXPECT_TRUE(query_hint.has_value());
+    EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
+    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    QR::get()->clearCpuMemory();
+    visited_hashtable_key.clear();
+  }
+
+  if (QR::get()->gpusPresent()) {
+    const auto q4 =
+        "SELECT /*+ g_overlaps_bucket_threshold(0.718) */ t1.ID, t2.ID FROM \n"
+        "(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
+        "ST_Contains(b.poly, a.p)) T1,\n"
+        "(SELECT /*+ overlaps_allow_gpu_build */ a.id FROM geospatial_test a INNER JOIN "
+        "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
+        "WHERE t1.ID = t2.ID;";
+    auto res = run_query(q4, ExecutorDeviceType::GPU);
+    auto cached_ht_info =
+        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+    auto query_hint = cached_ht_info.second;
+    EXPECT_TRUE(query_hint.has_value());
+    EXPECT_TRUE(approx_eq(query_hint->overlaps_bucket_threshold, 0.718));
+    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    QR::get()->clearCpuMemory();
+    visited_hashtable_key.clear();
+  }
+
+  // q5, q6 and q7: a subquery block which is allowed to interact with hashtable cache
+  // should have the info related to both global and local query hint(s)
+  const auto q5 =
+      "SELECT /*+ g_overlaps_keys_per_bin(0.1) */ t1.ID, t2.ID FROM \n"
+      "(SELECT /*+ overlaps_max_size(7777) */ a.id FROM geospatial_test a INNER JOIN "
+      "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1,\n"
+      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
+      "WHERE t1.ID = t2.ID;";
+  {
+    auto res = run_query(q5, ExecutorDeviceType::CPU);
+    auto cached_ht_info =
+        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+    auto query_hint = cached_ht_info.second;
+    EXPECT_TRUE(query_hint.has_value());
+    EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
+    EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
+    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    QR::get()->clearCpuMemory();
+    visited_hashtable_key.clear();
+  }
+
+  const auto q6 =
+      "SELECT /*+ g_overlaps_keys_per_bin(0.1) */ t1.ID, t2.ID FROM \n"
+      "(SELECT /*+ g_overlaps_bucket_threshold(0.718) */ a.id FROM geospatial_test a "
+      "INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1,\n"
+      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
+      "WHERE t1.ID = t2.ID;";
+  {
+    auto res = run_query(q6, ExecutorDeviceType::CPU);
+    auto cached_ht_info =
+        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+    auto query_hint = cached_ht_info.second;
+    EXPECT_TRUE(query_hint.has_value());
+    EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
+    EXPECT_TRUE(approx_eq(query_hint->overlaps_bucket_threshold, 0.718));
+    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    QR::get()->clearCpuMemory();
+    visited_hashtable_key.clear();
+  }
+
+  const auto q7 =
+      "SELECT /*+ g_overlaps_max_size(7777) */ t1.ID, t2.ID FROM \n"
+      "(SELECT /*+ overlaps_keys_per_bin(0.1) */ a.id FROM geospatial_test a INNER JOIN "
+      "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1,\n"
+      "(SELECT /*+ overlaps_no_cache */ a.id FROM geospatial_test a INNER JOIN "
+      "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T2\n"
+      "WHERE t1.ID = t2.ID;";
+  {
+    auto res = run_query(q7, ExecutorDeviceType::CPU);
+    auto cached_ht_info =
+        getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+    auto query_hint = cached_ht_info.second;
+    EXPECT_TRUE(query_hint.has_value());
+    EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
+    EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
+    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    QR::get()->clearCpuMemory();
+    visited_hashtable_key.clear();
+  }
+}
+
+TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
+  const auto enable_columnar_output = g_enable_columnar_output;
+  g_enable_columnar_output = false;
+  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
+    g_enable_columnar_output = enable_columnar_output;
+  };
+
+  // check whether we can see the enabled global hint in the outer query block
+  const auto q1 =
+      "SELECT T2.k FROM SQL_HINT_DUMMY T1, (SELECT /*+ g_cpu_mode */ key as k FROM "
+      "SQL_HINT_DUMMY WHERE key = 1) T2 WHERE T1.key = T2.k;";
+  {
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q1);
+    CHECK(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kCpuMode));
+  }
+
+  // check whether inner query has enabled cpu hint
+  const auto q2 =
+      "SELECT /*+ g_cpu_mode */ T2.k FROM SQL_HINT_DUMMY T1, (SELECT key as k FROM "
+      "SQL_HINT_DUMMY WHERE key = 1) T2 WHERE T1.key = T2.k;";
+  {
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q2);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kCpuMode));
+  }
+
+  // check whether we can see not only cpu mode hint but also global columnar output hint
+  const auto q3 =
+      "SELECT /*+ cpu_mode */ out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ "
+      "g_columnar_output */ key FROM SQL_HINT_DUMMY)));";
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q3);
+    EXPECT_TRUE(query_hints);
+    bool found_local_hint = false;
+    for (auto& kv : *query_hints) {
+      for (auto& kv2 : kv.second) {
+        auto& hint = kv2.second;
+        if (hint.isAnyQueryHintDelivered()) {
+          if (hint.isHintRegistered(QueryHint::kCpuMode)) {
+            found_local_hint = true;
+          }
+        }
+      }
+    }
+    EXPECT_TRUE(found_local_hint);
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q3);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kColumnarOutput));
+  }
+
+  const auto q4 =
+      "SELECT /*+ columnar_output */ out0 FROM "
+      "TABLE(get_max_with_row_offset(cursor(SELECT /*+ g_rowwise_output */ key FROM "
+      "SQL_HINT_DUMMY)));";
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q4);
+    EXPECT_TRUE(query_hints);
+    bool found_local_hint = false;
+    for (auto& kv : *query_hints) {
+      for (auto& kv2 : kv.second) {
+        auto& hint = kv2.second;
+        if (hint.isAnyQueryHintDelivered()) {
+          if (hint.isHintRegistered(QueryHint::kColumnarOutput)) {
+            found_local_hint = true;
+          }
+        }
+      }
+    }
+    EXPECT_TRUE(found_local_hint);
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q4);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_FALSE(global_query_hints->isHintRegistered(QueryHint::kRowwiseOutput));
+  }
+
+  // we disable columnar output so rowwise global hint is ignored too
+  // thus we expect to see the enabled global columnar output hint
+  const auto q5 =
+      "SELECT /*+ g_rowwise_output */ out0 FROM "
+      "TABLE(get_max_with_row_offset(cursor(SELECT /*+ g_columnar_output */ key FROM "
+      "SQL_HINT_DUMMY)));";
+  {
+    auto query_hints = QR::get()->getParsedQueryHints(q5);
+    EXPECT_TRUE(query_hints);
+    bool columnar_enabled_local = false;
+    bool rowwise_enabled_local = false;
+    for (auto& kv : *query_hints) {
+      for (auto& kv2 : kv.second) {
+        auto& hint = kv2.second;
+        if (hint.isAnyQueryHintDelivered()) {
+          if (hint.isHintRegistered(QueryHint::kColumnarOutput)) {
+            columnar_enabled_local = true;
+          }
+          if (hint.isHintRegistered(QueryHint::kRowwiseOutput)) {
+            rowwise_enabled_local = true;
+          }
+        }
+      }
+    }
+    EXPECT_TRUE(columnar_enabled_local);
+    EXPECT_FALSE(rowwise_enabled_local);
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q5);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kColumnarOutput));
+    EXPECT_FALSE(global_query_hints->isHintRegistered(QueryHint::kRowwiseOutput));
   }
 }
 
@@ -461,6 +766,7 @@ int main(int argc, char** argv) {
 
   try {
     createTable();
+    populateTable();
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

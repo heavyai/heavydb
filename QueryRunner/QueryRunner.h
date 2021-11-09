@@ -210,13 +210,16 @@ class QueryRunner {
   virtual std::vector<std::shared_ptr<ResultSet>> runMultipleStatements(
       const std::string&,
       const ExecutorDeviceType);
-  virtual RegisteredQueryHint getParsedQueryHint(const std::string&);
-  virtual std::optional<std::unordered_map<size_t, RegisteredQueryHint>>
-  getParsedQueryHints(const std::string& query_str);
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
   virtual std::unique_ptr<import_export::Loader> getLoader(
       const TableDescriptor* td) const;
 
+  RegisteredQueryHint getParsedQueryHint(const std::string&);
+  std::optional<
+      std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>>
+  getParsedQueryHints(const std::string& query_str);
+  std::optional<RegisteredQueryHint> getParsedGlobalQueryHints(
+      const std::string& query_str);
   const int32_t* getCachedPerfectHashTable(QueryPlan plan_dag);
   const int8_t* getCachedBaselineHashTable(QueryPlan plan_dag);
   size_t getEntryCntCachedBaselineHashTable(QueryPlan plan_dag);

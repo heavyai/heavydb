@@ -1241,6 +1241,7 @@ void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   // query hint is delivered by the above three nodes
   // when a query block has top-sort node, a hint is registered to
   // one of the node which locates at the nearest from the sort node
+  RegisteredQueryHint global_query_hint;
   for (auto node : nodes) {
     Hints* hint_delivered = nullptr;
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
@@ -1262,9 +1263,10 @@ void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       }
     }
     if (hint_delivered && !hint_delivered->empty()) {
-      dag_builder->registerQueryHints(node, hint_delivered);
+      dag_builder->registerQueryHints(node, hint_delivered, global_query_hint);
     }
   }
+  dag_builder->setGlobalQueryHints(global_query_hint);
 }
 
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -1330,7 +1332,8 @@ class RexInputReplacementVisitor : public RexDeepCopyVisitor {
 void create_compound(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     const std::vector<size_t>& pattern,
-    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) noexcept {
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+        query_hints) noexcept {
   CHECK_GE(pattern.size(), size_t(2));
   CHECK_LE(pattern.size(), size_t(4));
 
@@ -1346,15 +1349,21 @@ void create_compound(
 
   std::shared_ptr<ModifyManipulationTarget> manipulation_target;
   size_t node_hash{0};
+  unsigned node_id{0};
   bool hint_registered{false};
   RegisteredQueryHint registered_query_hint = RegisteredQueryHint::defaults();
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
-    auto registered_query_hint_it = query_hints.find(ra_node->toHash());
-    if (registered_query_hint_it != query_hints.end()) {
-      hint_registered = true;
-      node_hash = registered_query_hint_it->first;
-      registered_query_hint = registered_query_hint_it->second;
+    auto registered_query_hint_map_it = query_hints.find(ra_node->toHash());
+    if (registered_query_hint_map_it != query_hints.end()) {
+      auto& registered_query_hint_map = registered_query_hint_map_it->second;
+      auto registered_query_hint_it = registered_query_hint_map.find(ra_node->getId());
+      if (registered_query_hint_it != registered_query_hint_map.end()) {
+        hint_registered = true;
+        node_hash = registered_query_hint_map_it->first;
+        node_id = registered_query_hint_it->first;
+        registered_query_hint = registered_query_hint_it->second;
+      }
     }
     const auto ra_filter = std::dynamic_pointer_cast<RelFilter>(ra_node);
     if (ra_filter) {
@@ -1452,8 +1461,18 @@ void create_compound(
   if (hint_registered) {
     // pass the registered hint from the origin node to newly created compound node
     // where it is coalesced
-    query_hints.erase(node_hash);
-    query_hints.emplace(compound_node->toHash(), registered_query_hint);
+    auto registered_query_hint_map_it = query_hints.find(node_hash);
+    CHECK(registered_query_hint_map_it != query_hints.end());
+    auto registered_query_hint_map = registered_query_hint_map_it->second;
+    if (registered_query_hint_map.size() > 1) {
+      registered_query_hint_map.erase(node_id);
+    } else {
+      CHECK_EQ(registered_query_hint_map.size(), static_cast<size_t>(1));
+      query_hints.erase(node_hash);
+    }
+    std::unordered_map<unsigned, RegisteredQueryHint> hint_map;
+    hint_map.emplace(compound_node->getId(), registered_query_hint);
+    query_hints.emplace(compound_node->toHash(), hint_map);
   }
   for (size_t i = 0; i < pattern.size() - 1; ++i) {
     nodes[pattern[i]].reset();
@@ -1644,9 +1663,11 @@ bool is_window_function_operator(const RexScalar* rex) {
 
 }  // namespace
 
-void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                    const std::vector<const RelAlgNode*>& left_deep_joins,
-                    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
+void coalesce_nodes(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    const std::vector<const RelAlgNode*>& left_deep_joins,
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+        query_hints) {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
@@ -1928,7 +1949,8 @@ class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
 void propagate_hints_to_new_project(
     std::shared_ptr<RelProject> prev_node,
     std::shared_ptr<RelProject> new_node,
-    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+        query_hints) {
   auto delivered_hints = prev_node->getDeliveredHints();
   bool needs_propagate_hints = !delivered_hints->empty();
   if (needs_propagate_hints) {
@@ -1938,6 +1960,10 @@ void propagate_hints_to_new_project(
     auto prev_it = query_hints.find(prev_node->toHash());
     // query hint for the prev projection node should be registered
     CHECK(prev_it != query_hints.end());
+    auto prev_hint_it = prev_it->second.find(prev_node->getId());
+    CHECK(prev_hint_it != prev_it->second.end());
+    std::unordered_map<unsigned, RegisteredQueryHint> hint_map;
+    hint_map.emplace(new_node->getId(), prev_hint_it->second);
     query_hints.emplace(new_node->toHash(), prev_it->second);
   }
 }
@@ -1959,7 +1985,8 @@ void propagate_hints_to_new_project(
  */
 void separate_window_function_expressions(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+        query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
 
   WindowFunctionDetectionVisitor visitor;
@@ -2097,7 +2124,8 @@ class RexInputCollector : public RexVisitor<RexInputSet> {
 void add_window_function_pre_project(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     const bool always_add_project_if_first_project_is_window_expr,
-    std::unordered_map<size_t, RegisteredQueryHint>& query_hints) {
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+        query_hints) {
   std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
   size_t project_node_counter{0};
   for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
@@ -2579,11 +2607,22 @@ class RelAlgDispatcher {
     int l = hint_string.length();
     hint_string = hint_string.erase(0, 1).substr(0, l - 2);
     size_t pos = 0;
+    auto global_hint_checker = [&](const std::string& input_hint_name) -> HintIdentifier {
+      bool global_hint = false;
+      std::string hint_name = input_hint_name;
+      auto global_hint_identifier = hint_name.substr(0, 2);
+      if (global_hint_identifier.compare("g_") == 0) {
+        global_hint = true;
+        hint_name = hint_name.substr(2, hint_string.length());
+      }
+      return {global_hint, hint_name};
+    };
+    auto parsed_hint =
+        global_hint_checker(hint_string.substr(0, hint_string.find(white_space_delim)));
+    auto hint_type = RegisteredQueryHint::translateQueryHint(parsed_hint.hint_name);
     if ((pos = hint_string.find("options:")) != std::string::npos) {
       // need to parse hint options
       std::vector<std::string> tokens;
-      std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
-      auto hint_type = RegisteredQueryHint::translateQueryHint(hint_name);
       bool kv_list_op = false;
       std::string raw_options = hint_string.substr(pos + 8, hint_string.length() - 2);
       if (raw_options.find('{') != std::string::npos) {
@@ -2604,7 +2643,7 @@ class RelAlgDispatcher {
         // handle the last kv pair
         auto kv_pair = getKVOptionPair(raw_options, pos);
         kv_options.emplace(kv_pair.first, kv_pair.second);
-        return {hint_type, true, false, true, kv_options};
+        return {hint_type, parsed_hint.global_hint, false, true, kv_options};
       } else {
         std::vector<std::string> list_options;
         while ((pos = raw_options.find(op_delim)) != std::string::npos) {
@@ -2613,13 +2652,11 @@ class RelAlgDispatcher {
         }
         // handle the last option
         list_options.emplace_back(raw_options.substr(0, pos));
-        return {hint_type, true, false, false, list_options};
+        return {hint_type, parsed_hint.global_hint, false, false, list_options};
       }
     } else {
       // marker hint: no extra option for this hint
-      std::string hint_name = hint_string.substr(0, hint_string.find(white_space_delim));
-      auto hint_type = RegisteredQueryHint::translateQueryHint(hint_name);
-      return {hint_type, true, true, false};
+      return {hint_type, parsed_hint.global_hint, true, false};
     }
   }
 

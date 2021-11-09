@@ -3,6 +3,8 @@ package com.mapd.parser.hint;
 import org.apache.calcite.rel.hint.HintPredicates;
 import org.apache.calcite.rel.hint.HintStrategyTable;
 
+import java.util.ArrayList;
+
 public class OmniSciHintStrategyTable {
   public static final HintStrategyTable HINT_STRATEGY_TABLE = createHintStrategies();
 
@@ -11,14 +13,22 @@ public class OmniSciHintStrategyTable {
   }
 
   static HintStrategyTable createHintStrategies(HintStrategyTable.Builder builder) {
-    return builder.hintStrategy("cpu_mode", HintPredicates.SET_VAR)
-            .hintStrategy("columnar_output", HintPredicates.SET_VAR)
-            .hintStrategy("rowwise_output", HintPredicates.SET_VAR)
-            .hintStrategy("overlaps_bucket_threshold", HintPredicates.SET_VAR)
-            .hintStrategy("overlaps_max_size", HintPredicates.SET_VAR)
-            .hintStrategy("overlaps_allow_gpu_build", HintPredicates.SET_VAR)
-            .hintStrategy("overlaps_no_cache", HintPredicates.SET_VAR)
-            .hintStrategy("overlaps_keys_per_bin", HintPredicates.SET_VAR)
-            .build();
+    ArrayList<String> supportedHints = new ArrayList<String>();
+    supportedHints.add("cpu_mode");
+    supportedHints.add("columnar_output");
+    supportedHints.add("rowwise_output");
+    supportedHints.add("overlaps_bucket_threshold");
+    supportedHints.add("overlaps_max_size");
+    supportedHints.add("overlaps_allow_gpu_build");
+    supportedHints.add("overlaps_no_cache");
+    supportedHints.add("overlaps_keys_per_bin");
+
+    for (String hint_name : supportedHints) {
+      // add local / global hints, e.., cpu_mode / g_cpu_mode
+      builder = builder.hintStrategy(hint_name, HintPredicates.SET_VAR);
+      String globalHintName = "g_".concat(hint_name);
+      builder = builder.hintStrategy(globalHintName, HintPredicates.SET_VAR);
+    }
+    return builder.build();
   }
 }

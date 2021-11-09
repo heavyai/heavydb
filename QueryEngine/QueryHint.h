@@ -17,6 +17,7 @@
 #ifndef OMNISCI_QUERYHINT_H
 #define OMNISCI_QUERYHINT_H
 
+#include <algorithm>
 #include <optional>
 
 #include <boost/algorithm/string.hpp>
@@ -49,38 +50,46 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"overlaps_no_cache", QueryHint::kOverlapsNoCache},
     {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin}};
 
+struct HintIdentifier {
+  bool global_hint;
+  std::string hint_name;
+
+  HintIdentifier(bool global_hint, const std::string& hint_name)
+      : global_hint(global_hint), hint_name(hint_name){};
+};
+
 class ExplainedQueryHint {
   // this class represents parsed query hint's specification
   // our query AST analyzer translates query hint string to understandable form which we
   // called "ExplainedQueryHint"
  public:
   ExplainedQueryHint(QueryHint hint,
-                     bool query_hint,
+                     bool global_hint,
                      bool is_marker,
                      bool has_kv_type_options)
       : hint_(hint)
-      , query_hint_(query_hint)
+      , global_hint_(global_hint)
       , is_marker_(is_marker)
       , has_kv_type_options_(has_kv_type_options) {}
 
   ExplainedQueryHint(QueryHint hint,
-                     bool query_hint,
+                     bool global_hint,
                      bool is_marker,
                      bool has_kv_type_options,
                      std::vector<std::string>& list_options)
       : hint_(hint)
-      , query_hint_(query_hint)
+      , global_hint_(global_hint)
       , is_marker_(is_marker)
       , has_kv_type_options_(has_kv_type_options)
       , list_options_(std::move(list_options)) {}
 
   ExplainedQueryHint(QueryHint hint,
-                     bool query_hint,
+                     bool global_hint,
                      bool is_marker,
                      bool has_kv_type_options,
                      std::unordered_map<std::string, std::string>& kv_options)
       : hint_(hint)
-      , query_hint_(query_hint)
+      , global_hint_(global_hint)
       , is_marker_(is_marker)
       , has_kv_type_options_(has_kv_type_options)
       , kv_options_(std::move(kv_options)) {}
@@ -107,7 +116,7 @@ class ExplainedQueryHint {
 
   const QueryHint getHint() const { return hint_; }
 
-  bool isQueryHint() const { return query_hint_; }
+  bool isGlobalHint() const { return global_hint_; }
 
   bool hasOptions() const { return is_marker_; }
 
@@ -117,7 +126,7 @@ class ExplainedQueryHint {
   QueryHint hint_;
   // Set true if this hint affects globally
   // Otherwise it just affects the node which this hint is included (aka table hint)
-  bool query_hint_;
+  bool global_hint_;
   // set true if this has no extra options (neither list_options nor kv_options)
   bool is_marker_;
   // Set true if it is not a marker and has key-value type options
@@ -136,38 +145,64 @@ struct RegisteredQueryHint {
   // registered and its detailed info such as the hint's parameter values given by user
   RegisteredQueryHint()
       : cpu_mode(false)
-      , columnar_output(g_enable_columnar_output)
-      , rowwise_output(!g_enable_columnar_output)
+      , columnar_output(false)
+      , rowwise_output(false)
       , overlaps_bucket_threshold(std::numeric_limits<double>::max())
       , overlaps_max_size(g_overlaps_max_table_size_bytes)
-      , overlaps_allow_gpu_build(true)
+      , overlaps_allow_gpu_build(false)
       , overlaps_no_cache(false)
       , overlaps_keys_per_bin(g_overlaps_target_entries_per_bin)
       , registered_hint(QueryHint::kHintCount, false) {}
 
-  RegisteredQueryHint& operator=(const RegisteredQueryHint& other) {
-    cpu_mode = other.cpu_mode;
-    columnar_output = other.columnar_output;
-    rowwise_output = other.rowwise_output;
-    overlaps_bucket_threshold = other.overlaps_bucket_threshold;
-    overlaps_max_size = other.overlaps_max_size;
-    overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
-    overlaps_no_cache = other.overlaps_no_cache;
-    overlaps_keys_per_bin = other.overlaps_keys_per_bin;
-    registered_hint = other.registered_hint;
-    return *this;
-  }
+  RegisteredQueryHint operator||(const RegisteredQueryHint& global_hints) const {
+    CHECK_EQ(registered_hint.size(), global_hints.registered_hint.size());
+    // apply registered global hint to the local hint if necessary
+    // we prioritize global hint when both side of hints are enabled simultaneously
+    RegisteredQueryHint updated_query_hints(*this);
 
-  RegisteredQueryHint(const RegisteredQueryHint& other) {
-    cpu_mode = other.cpu_mode;
-    columnar_output = other.columnar_output;
-    rowwise_output = other.rowwise_output;
-    overlaps_bucket_threshold = other.overlaps_bucket_threshold;
-    overlaps_max_size = other.overlaps_max_size;
-    overlaps_allow_gpu_build = other.overlaps_allow_gpu_build;
-    overlaps_no_cache = other.overlaps_no_cache;
-    overlaps_keys_per_bin = other.overlaps_keys_per_bin;
-    registered_hint = other.registered_hint;
+    int num_hints = static_cast<int>(QueryHint::kHintCount);
+    for (int i = 0; i < num_hints; ++i) {
+      if (global_hints.registered_hint.at(i)) {
+        updated_query_hints.registered_hint.at(i) = global_hints.registered_hint[i];
+        switch (i) {
+          case static_cast<int>(QueryHint::kCpuMode): {
+            updated_query_hints.cpu_mode = true;
+            break;
+          }
+          case static_cast<int>(QueryHint::kColumnarOutput): {
+            updated_query_hints.columnar_output = true;
+            break;
+          }
+          case static_cast<int>(QueryHint::kRowwiseOutput): {
+            updated_query_hints.rowwise_output = true;
+            break;
+          }
+          case static_cast<int>(QueryHint::kOverlapsBucketThreshold): {
+            updated_query_hints.overlaps_bucket_threshold =
+                global_hints.overlaps_bucket_threshold;
+            break;
+          }
+          case static_cast<int>(QueryHint::kOverlapsMaxSize): {
+            updated_query_hints.overlaps_max_size = global_hints.overlaps_max_size;
+            break;
+          }
+          case static_cast<int>(QueryHint::kOverlapsAllowGpuBuild): {
+            updated_query_hints.overlaps_allow_gpu_build = true;
+            break;
+          }
+          case static_cast<int>(QueryHint::kOverlapsNoCache): {
+            updated_query_hints.overlaps_no_cache = true;
+            break;
+          }
+          case static_cast<int>(QueryHint::kOverlapsKeysPerBin): {
+            updated_query_hints.overlaps_keys_per_bin =
+                global_hints.overlaps_keys_per_bin;
+            break;
+          }
+        }
+      }
+    }
+    return updated_query_hints;
   }
 
   // general query execution
@@ -189,35 +224,23 @@ struct RegisteredQueryHint {
  public:
   static QueryHint translateQueryHint(const std::string& hint_name) {
     const auto lowered_hint_name = boost::algorithm::to_lower_copy(hint_name);
-    auto it = SupportedQueryHints.find(hint_name);
-    if (it != SupportedQueryHints.end()) {
-      return it->second;
-    }
-    return QueryHint::kInvalidHint;
+    auto it = SupportedQueryHints.find(lowered_hint_name);
+    return it == SupportedQueryHints.end() ? QueryHint::kInvalidHint : it->second;
   }
 
   bool isAnyQueryHintDelivered() const {
-    for (auto flag : registered_hint) {
-      if (flag) {
-        return true;
-      }
-    }
-    return false;
+    const auto identity = [](const bool b) { return b; };
+    return std::any_of(registered_hint.begin(), registered_hint.end(), identity);
   }
 
   void registerHint(const QueryHint hint) {
     const auto hint_class = static_cast<int>(hint);
-    if (hint_class >= 0 && hint_class < QueryHint::kHintCount) {
-      registered_hint[hint_class] = true;
-    }
+    registered_hint.at(hint_class) = true;
   }
 
-  const bool isHintRegistered(const QueryHint hint) const {
+  bool isHintRegistered(const QueryHint hint) const {
     const auto hint_class = static_cast<int>(hint);
-    if (hint_class >= 0 && hint_class < QueryHint::kHintCount) {
-      return registered_hint[hint_class];
-    }
-    return false;
+    return registered_hint.at(hint_class);
   }
 };
 

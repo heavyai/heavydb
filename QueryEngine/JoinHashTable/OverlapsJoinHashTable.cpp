@@ -588,11 +588,30 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
             << query_hint.overlaps_keys_per_bin;
     overlaps_target_entries_per_bin = query_hint.overlaps_keys_per_bin;
   }
+  auto data_mgr = executor_->getDataMgr();
+  // we prioritize CPU when building an overlaps join hashtable, but if we have GPU and
+  // user-given hint is given we selectively allow GPU to build it but even if we have GPU
+  // but user foces to set CPU as execution device type we should not allow to use GPU for
+  // building it
+  auto allow_gpu_hashtable_build =
+      query_hint_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
+      query_hint_.overlaps_allow_gpu_build;
+  if (allow_gpu_hashtable_build) {
+    if (data_mgr->gpusPresent() &&
+        memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
+      VLOG(1) << "A user forces to build GPU hash table for this overlaps join operator";
+    } else {
+      allow_gpu_hashtable_build = false;
+      VLOG(1) << "A user forces to build GPU hash table for this overlaps join operator "
+                 "but we "
+                 "skip it since either GPU is not presented or CPU execution mode is set";
+    }
+  }
 
   std::vector<ColumnsForDevice> columns_per_device;
-  auto data_mgr = executor_->getDataMgr();
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
-  if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
+  if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL ||
+      allow_gpu_hashtable_build) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
     }
@@ -615,7 +634,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
     const auto columns_for_device =
         fetchColumnsForDevice(fragments,
                               device_id,
-                              memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
+                              memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL ||
+                                      allow_gpu_hashtable_build
                                   ? dev_buff_owners[device_id].get()
                                   : nullptr);
     columns_per_device.push_back(columns_for_device);
@@ -1747,15 +1767,13 @@ std::set<DecodedJoinHashBufferEntry> OverlapsJoinHashTable::toSet(
 
 Data_Namespace::MemoryLevel OverlapsJoinHashTable::getEffectiveMemoryLevel(
     const std::vector<InnerOuter>& inner_outer_pairs) const {
-  // always build on CPU
   if (query_hint_.isHintRegistered(QueryHint::kOverlapsAllowGpuBuild) &&
-      query_hint_.overlaps_allow_gpu_build) {
-    if (this->executor_->getDataMgr()->gpusPresent() &&
-        memory_level_ == Data_Namespace::MemoryLevel::CPU_LEVEL) {
-      VLOG(1) << "A user forces to build GPU hash table for this overlaps join operator";
-      return Data_Namespace::MemoryLevel::GPU_LEVEL;
-    }
+      query_hint_.overlaps_allow_gpu_build &&
+      this->executor_->getDataMgr()->gpusPresent() &&
+      memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
+    return Data_Namespace::MemoryLevel::GPU_LEVEL;
   }
+  // otherwise, try to build on CPU
   return Data_Namespace::MemoryLevel::CPU_LEVEL;
 }
 
@@ -1812,6 +1830,7 @@ void OverlapsJoinHashTable::putHashTableOnCpuToCache(
   CHECK(hashtable_ptr && !hashtable_ptr->getGpuBuffer());
   HashtableCacheMetaInfo meta_info;
   meta_info.overlaps_meta_info = getOverlapsHashTableMetaInfo();
+  meta_info.registered_query_hint = query_hint_;
   hash_table_cache_->putItemToCache(
       key,
       hashtable_ptr,

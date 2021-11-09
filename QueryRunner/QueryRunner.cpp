@@ -345,7 +345,8 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   return query_hints ? *query_hints : RegisteredQueryHint::defaults();
 }
 
-std::optional<std::unordered_map<size_t, RegisteredQueryHint>>
+std::optional<
+    std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>>
 QueryRunner::getParsedQueryHints(const std::string& query_str) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
@@ -363,8 +364,28 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
                                       true)
                             .plan_result;
   auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
-  auto query_hints = ra_executor.getParsedQueryHints();
-  return query_hints ? query_hints : std::nullopt;
+  return ra_executor.getParsedQueryHints();
+}
+
+std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
+    const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  const auto& cat = session_info_->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      {},
+                                      true,
+                                      false,
+                                      false,
+                                      true)
+                            .plan_result;
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  return ra_executor.getGlobalQueryHint();
 }
 
 // used to validate calcite ddl statements

@@ -2169,9 +2169,11 @@ class RelAlgDagBuilder : public boost::noncopyable {
     return subqueries_;
   }
 
-  void registerQueryHints(std::shared_ptr<RelAlgNode> node, Hints* hints_delivered) {
-    bool detect_columnar_output_hint = false;
-    bool detect_rowwise_output_hint = false;
+  void registerQueryHints(std::shared_ptr<RelAlgNode> node,
+                          Hints* hints_delivered,
+                          RegisteredQueryHint& global_query_hint) {
+    std::optional<bool> has_global_columnar_output_hint = std::nullopt;
+    std::optional<bool> has_global_rowwise_output_hint = std::nullopt;
     RegisteredQueryHint query_hint;
     for (auto it = hints_delivered->begin(); it != hints_delivered->end(); it++) {
       auto target = it->second;
@@ -2180,14 +2182,18 @@ class RelAlgDagBuilder : public boost::noncopyable {
         case QueryHint::kCpuMode: {
           query_hint.registerHint(QueryHint::kCpuMode);
           query_hint.cpu_mode = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kCpuMode);
+            global_query_hint.cpu_mode = true;
+          }
           break;
         }
         case QueryHint::kColumnarOutput: {
-          detect_columnar_output_hint = true;
+          has_global_columnar_output_hint = target.isGlobalHint();
           break;
         }
         case QueryHint::kRowwiseOutput: {
-          detect_rowwise_output_hint = true;
+          has_global_rowwise_output_hint = target.isGlobalHint();
           break;
         }
         case QueryHint::kOverlapsBucketThreshold: {
@@ -2196,6 +2202,10 @@ class RelAlgDagBuilder : public boost::noncopyable {
           if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
             query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
             query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
+              global_query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
+            }
           } else {
             VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
                     << overlaps_bucket_threshold
@@ -2211,6 +2221,10 @@ class RelAlgDagBuilder : public boost::noncopyable {
           if (overlaps_max_size >= 0) {
             query_hint.registerHint(QueryHint::kOverlapsMaxSize);
             query_hint.overlaps_max_size = (size_t)overlaps_max_size;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kOverlapsMaxSize);
+              global_query_hint.overlaps_max_size = (size_t)overlaps_max_size;
+            }
           } else {
             VLOG(1) << "Skip the query hint \"overlaps_max_size\" (" << overlaps_max_size
                     << ") : the hint value should be larger than or equal to zero";
@@ -2220,11 +2234,19 @@ class RelAlgDagBuilder : public boost::noncopyable {
         case QueryHint::kOverlapsAllowGpuBuild: {
           query_hint.registerHint(QueryHint::kOverlapsAllowGpuBuild);
           query_hint.overlaps_allow_gpu_build = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kOverlapsAllowGpuBuild);
+            global_query_hint.overlaps_allow_gpu_build = true;
+          }
           break;
         }
         case QueryHint::kOverlapsNoCache: {
           query_hint.registerHint(QueryHint::kOverlapsNoCache);
           query_hint.overlaps_no_cache = true;
+          if (target.isGlobalHint()) {
+            global_query_hint.registerHint(QueryHint::kOverlapsNoCache);
+            global_query_hint.overlaps_no_cache = true;
+          }
           VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
           break;
         }
@@ -2235,6 +2257,10 @@ class RelAlgDagBuilder : public boost::noncopyable {
               overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
             query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
             query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
+              global_query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
+            }
           } else {
             VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
                     << overlaps_keys_per_bin
@@ -2258,37 +2284,83 @@ class RelAlgDagBuilder : public boost::noncopyable {
     // case 1.b --> use rowwise output
     // case 2.a --> use columnar output
     // case 2.b --> use rowwise output
-    if (detect_columnar_output_hint && detect_rowwise_output_hint) {
+    if (has_global_columnar_output_hint.has_value() &&
+        has_global_rowwise_output_hint.has_value()) {
       VLOG(1)
           << "Two hints 1) columnar output and 2) rowwise output are enabled together, "
           << "so skip them and use the runtime configuration "
              "\"g_enable_columnar_output\"";
-    } else if (detect_columnar_output_hint && !detect_rowwise_output_hint) {
+    } else if (has_global_columnar_output_hint.has_value() &&
+               !has_global_rowwise_output_hint.has_value()) {
       if (g_enable_columnar_output) {
         VLOG(1) << "We already enable columnar output by default "
                    "(g_enable_columnar_output = true), so skip this columnar output hint";
       } else {
         query_hint.registerHint(QueryHint::kColumnarOutput);
         query_hint.columnar_output = true;
+        if (*has_global_columnar_output_hint) {
+          global_query_hint.registerHint(QueryHint::kColumnarOutput);
+          global_query_hint.columnar_output = true;
+        }
       }
-    } else if (!detect_columnar_output_hint && detect_rowwise_output_hint) {
+    } else if (!has_global_columnar_output_hint.has_value() &&
+               has_global_rowwise_output_hint.has_value()) {
       if (!g_enable_columnar_output) {
         VLOG(1) << "We already use the default rowwise output (g_enable_columnar_output "
                    "= false), so skip this rowwise output hint";
       } else {
         query_hint.registerHint(QueryHint::kRowwiseOutput);
         query_hint.rowwise_output = true;
+        if (*has_global_rowwise_output_hint) {
+          global_query_hint.registerHint(QueryHint::kRowwiseOutput);
+          global_query_hint.rowwise_output = true;
+        }
       }
     }
-    query_hint_.emplace(node->toHash(), query_hint);
+    auto node_key = node->toHash();
+    auto it = query_hint_.find(node_key);
+    if (it == query_hint_.end()) {
+      std::unordered_map<unsigned, RegisteredQueryHint> hint_map;
+      hint_map.emplace(node->getId(), query_hint);
+      query_hint_.emplace(node_key, hint_map);
+    } else {
+      it->second.emplace(node->getId(), query_hint);
+    }
   }
 
   std::optional<RegisteredQueryHint> getQueryHint(const RelAlgNode* node) const {
-    auto it = query_hint_.find(node->toHash());
-    return it != query_hint_.end() ? std::make_optional(it->second) : std::nullopt;
+    auto node_it = query_hint_.find(node->toHash());
+    if (node_it != query_hint_.end()) {
+      auto const& registered_query_hint_map = node_it->second;
+      auto hint_it = registered_query_hint_map.find(node->getId());
+      if (hint_it != registered_query_hint_map.end()) {
+        auto const& registered_query_hint = hint_it->second;
+        if (global_hints_.isAnyQueryHintDelivered()) {
+          // apply global hint to the registered query hint for this query block
+          return std::make_optional(registered_query_hint || global_hints_);
+        } else {
+          return std::make_optional(registered_query_hint);
+        }
+      }
+    }
+    if (global_hints_.isAnyQueryHintDelivered()) {
+      // if no hint is registered from this query block
+      // we return global hint instead
+      return std::make_optional(global_hints_);
+    }
+    return std::nullopt;
   }
 
-  std::unordered_map<size_t, RegisteredQueryHint>& getQueryHints() { return query_hint_; }
+  std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>&
+  getQueryHints() {
+    return query_hint_;
+  }
+
+  const RegisteredQueryHint& getGlobalHints() const { return global_hints_; }
+
+  void setGlobalQueryHints(const RegisteredQueryHint& global_hints) {
+    global_hints_ = global_hints;
+  }
 
   /**
    * Gets all registered subqueries. Only the root DAG can contain subqueries.
@@ -2302,7 +2374,12 @@ class RelAlgDagBuilder : public boost::noncopyable {
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   const RenderInfo* render_info_;
-  std::unordered_map<size_t, RegisteredQueryHint> query_hint_;
+  // node hash --> {node id --> registered hint}
+  // we additionally consider node id to recognize corresponding hint correctly
+  // i.e., to recognize the correct hint when two subqueries are identical
+  std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>
+      query_hint_;
+  RegisteredQueryHint global_hints_;
 };
 
 using RANodeOutput = std::vector<RexInput>;

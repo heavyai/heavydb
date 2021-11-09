@@ -18,6 +18,7 @@
 
 #include "DataRecycler.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
+#include "QueryEngine/QueryHint.h"
 
 struct QueryPlanMetaInfo {
   QueryPlan query_plan_dag;
@@ -33,6 +34,7 @@ struct OverlapsHashTableMetaInfo {
 struct HashtableCacheMetaInfo {
   std::optional<QueryPlanMetaInfo> query_plan_meta_info;
   std::optional<OverlapsHashTableMetaInfo> overlaps_meta_info;
+  std::optional<RegisteredQueryHint> registered_query_hint;
 };
 
 class HashtableRecycler
