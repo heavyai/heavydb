@@ -306,6 +306,10 @@ class Duration;
 
 class DebugTimer {
   Duration* duration_;
+  DebugTimer(DebugTimer const&) = delete;
+  DebugTimer(DebugTimer&&) = delete;
+  DebugTimer& operator=(DebugTimer const&) = delete;
+  DebugTimer& operator=(DebugTimer&&) = delete;
 
  public:
   DebugTimer(Severity, char const* file, int line, char const* name);
