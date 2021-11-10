@@ -577,7 +577,7 @@ using DurationTreeMap = std::unordered_map<ThreadId, std::unique_ptr<DurationTre
 std::mutex g_duration_tree_map_mutex;
 DurationTreeMap g_duration_tree_map;
 std::atomic<ThreadId> g_next_thread_id{0};
-thread_local ThreadId const g_thread_id = g_next_thread_id++;
+thread_local ThreadId g_thread_id = g_next_thread_id++;
 
 template <typename... Ts>
 Duration* newDuration(Severity severity, Ts&&... args) {
@@ -776,15 +776,25 @@ std::string DebugTimer::stopAndGetJson() {
 void debug_timer_new_thread(ThreadId parent_thread_id) {
   std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
   auto parent_itr = g_duration_tree_map.find(parent_thread_id);
-  CHECK(parent_itr != g_duration_tree_map.end());
+  CHECK(parent_itr != g_duration_tree_map.end()) << parent_thread_id;
   auto const current_depth = parent_itr->second->currentDepth();
   auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
   if (!duration_tree_ptr) {
     duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, current_depth + 1);
     parent_itr->second->pushDurationTree(*duration_tree_ptr);
+  } else if (parent_thread_id == g_thread_id) {
+    // DEBUG_TIMER_NEW_THREAD() was called but this is actually the same thread as the
+    // parent, so nothing will be done. TBB does this.
   } else {
-    // If this is executed, then this was not really a new thread.
-    // Since some libraries recycle threads, we won't trigger an error here.
+    // This appears to be a recycled thread, so g_thread_id is updated manually.
+    // It is assumed the prior thread that was using this g_thread_id has completed,
+    // but we need to use a different value since the old value still exists as a
+    // key in g_duration_tree_map.
+    g_thread_id = g_next_thread_id++;
+    auto const insert = g_duration_tree_map.insert(
+        {g_thread_id, std::make_unique<DurationTree>(g_thread_id, current_depth + 1)});
+    CHECK(insert.second) << parent_thread_id << " -> " << g_thread_id;
+    parent_itr->second->pushDurationTree(*insert.first->second);
   }
 }
 
