@@ -21,7 +21,7 @@ namespace l0 {
 
 const std::vector<std::shared_ptr<L0Device>>& L0Driver::devices() const {
   CHECK(false);
-  return {};
+  return devices_;
 }
 
 std::shared_ptr<L0CommandQueue> L0Device::command_queue() const {
