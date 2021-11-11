@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
@@ -112,6 +113,21 @@ struct TextEncodingNone {
 
   DEVICE ALWAYS_INLINE char& operator[](const unsigned int index) {
     return index < size_ ? ptr_[index] : ptr_[size_ - 1];
+  }
+  DEVICE ALWAYS_INLINE bool operator==(const char* rhs) const {
+#ifdef __CUDACC__
+    for (int i = 0; i < size_; i++) {
+      if (rhs[i] == '\0' || ptr_[i] != rhs[i]) {
+        return false;
+      }
+    }
+    return rhs[size_] == '\0';
+#else
+    return strcmp(ptr_, rhs) == 0;
+#endif
+  }
+  DEVICE ALWAYS_INLINE bool operator!=(const char* rhs) const {
+    return !(this->operator==(rhs));
   }
   DEVICE ALWAYS_INLINE operator char*() const { return ptr_; }
   DEVICE ALWAYS_INLINE int64_t size() const { return size_; }

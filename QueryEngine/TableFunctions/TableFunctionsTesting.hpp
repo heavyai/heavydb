@@ -1423,6 +1423,7 @@ ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
   UDTF: ct_require_templating__template(Column<T>, int i | require="i > 0") -> Column<K>, T=[int, double], K=[int]
   UDTF: ct_require_and(Column<int>, int i | require="i > 0 && i < 5") -> Column<int>
   UDTF: ct_require_or_str(Column<int>, TextEncodingNone i | require="i == \"MAX\" || i == \"MIN\"") -> Column<int>
+  UDTF: ct_require_str_diff(Column<int>, TextEncodingNone i | require="i != \"MAX\"") -> Column<int>
 */
 // clang-format on
 EXTENSION_NOINLINE int32_t ct_require(const Column<int32_t>& input1,
@@ -1472,10 +1473,18 @@ EXTENSION_NOINLINE int32_t ct_require_and(const Column<int32_t>& input1,
 }
 
 EXTENSION_NOINLINE int32_t ct_require_or_str(const Column<int32_t>& input1,
-                                             const TextEncodingNone i,
+                                             const TextEncodingNone& i,
                                              Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 8;
+  return 1;
+}
+
+EXTENSION_NOINLINE int32_t ct_require_str_diff(const Column<int32_t>& input1,
+                                               const TextEncodingNone& i,
+                                               Column<int32_t>& out) {
+  set_output_row_size(1);
+  out[0] = 9;
   return 1;
 }
 

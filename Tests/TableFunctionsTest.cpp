@@ -331,6 +331,16 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     {
       const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_str(cursor(SELECT x"
+          " FROM tf_test), 'hello'));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 3);
+    }
+    {
+      const auto rows = run_multiple_agg(
           "SELECT * FROM TABLE(ct_require_templating(cursor(SELECT x"
           " FROM tf_test), 2));",
           dt);
@@ -348,6 +358,40 @@ TEST_F(TableFunctions, BasicProjection) {
       auto row = rows->getNextRow(true, false);
       auto v = TestHelpers::v<int64_t>(row[0]);
       ASSERT_EQ(v, 6.0);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_and(cursor(SELECT x"
+          " FROM tf_test), 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 7);
+    }
+    {
+      std::vector<std::string> strs = {"MIN", "MAX"};
+      for (const std::string& str : strs) {
+        const auto rows = run_multiple_agg(
+            "SELECT * FROM TABLE(ct_require_or_str(cursor(SELECT x"
+            " FROM tf_test), '" +
+                str + "'));",
+            dt);
+        ASSERT_EQ(rows->rowCount(), size_t(1));
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, 8);
+      }
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_require_str_diff(cursor(SELECT x"
+          " FROM tf_test), 'MIN'));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto row = rows->getNextRow(true, false);
+      auto v = TestHelpers::v<int64_t>(row[0]);
+      ASSERT_EQ(v, 9);
     }
     {
       if (dt == ExecutorDeviceType::GPU) {
@@ -944,6 +988,20 @@ TEST_F(TableFunctions, ThrowingTests) {
       EXPECT_THROW(
           run_multiple_agg("SELECT * FROM TABLE(ct_require_or_str(cursor(SELECT x"
                            " FROM tf_test), 'string'));",
+                           dt),
+          TableFunctionError);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_require_or_str(cursor(SELECT x"
+                           " FROM tf_test), 'MI'));",
+                           dt),
+          TableFunctionError);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_require_str_diff(cursor(SELECT x"
+                           " FROM tf_test), 'MAX'));",
                            dt),
           TableFunctionError);
     }
