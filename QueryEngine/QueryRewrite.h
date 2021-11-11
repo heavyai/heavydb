@@ -14,9 +14,16 @@
  * limitations under the License.
  */
 
-#include "../Analyzer/Analyzer.h"
-#include "../Fragmenter/Fragmenter.h"
-#include "../QueryEngine/Execute.h"
+#pragma once
+
+#include <list>
+#include <memory>
+#include <set>
+#include <utility>
+#include <vector>
+#include "Analyzer/Analyzer.h"
+#include "Fragmenter/Fragmenter.h"
+#include "QueryEngine/Execute.h"
 
 class QueryRewriter {
  public:
