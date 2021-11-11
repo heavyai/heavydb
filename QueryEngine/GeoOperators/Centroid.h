@@ -78,10 +78,8 @@ class Centroid : public Codegen {
           array_sz_args.push_back(
               cgen_state->llInt(static_cast<int32_t>(inline_int_null_value<int32_t>())));
         }
-        operand_lvs.push_back(builder.CreateSExt(
-            cgen_state->emitExternalCall(
-                size_fn_name, get_int_type(32, cgen_state->context_), array_sz_args),
-            llvm::Type::getInt64Ty(cgen_state->context_)));
+        operand_lvs.push_back(cgen_state->emitExternalCall(
+            size_fn_name, get_int_type(32, cgen_state->context_), array_sz_args));
       }
     } else {
       for (size_t i = 0; i < arg_lvs.size(); i++) {

@@ -2525,6 +2525,18 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
         v<int64_t>(run_simple_agg(
             R"(SELECT count(*) FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Intersects(ST_SetSRID(ST_Point(a.id, a.id), 4326), b.gp4326);)",
             dt)));
+    // contains w/ centroid
+    ASSERT_EQ(
+        static_cast<int64_t>(35),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test a, geospatial_inner_join_test b WHERE ST_Contains(a.mpoly, ST_Centroid(b.mpoly));)",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(36),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test a, geospatial_inner_join_test b WHERE ST_Contains(a.gpoly4326, ST_Centroid(b.gp4326));)",
+            dt)));
   }
 }
 
