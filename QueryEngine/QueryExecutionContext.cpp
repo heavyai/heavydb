@@ -252,7 +252,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         executor_->deviceCycles(g_dynamic_watchdog_time_limit));
   }
 
-  if (allow_runtime_interrupt && !render_allocator && !executor_->interrupted_.load()) {
+  if (allow_runtime_interrupt && !render_allocator) {
     kernel->initializeRuntimeInterrupter();
   }
 
