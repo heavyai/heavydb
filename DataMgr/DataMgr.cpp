@@ -658,10 +658,11 @@ Buffer_Namespace::CpuBufferMgr* DataMgr::getCpuBufferMgr() const {
       bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
 }
 
-Buffer_Namespace::GpuCudaBufferMgr* DataMgr::getGpuBufferMgr() const {
+Buffer_Namespace::GpuCudaBufferMgr* DataMgr::getGpuBufferMgr(int32_t device_id) const {
   if (bufferMgrs_.size() > MemoryLevel::GPU_LEVEL) {
+    CHECK_GT(bufferMgrs_[MemoryLevel::GPU_LEVEL].size(), static_cast<size_t>(device_id));
     return dynamic_cast<Buffer_Namespace::GpuCudaBufferMgr*>(
-        bufferMgrs_[MemoryLevel::GPU_LEVEL][0]);
+        bufferMgrs_[MemoryLevel::GPU_LEVEL][device_id]);
   } else {
     return nullptr;
   }

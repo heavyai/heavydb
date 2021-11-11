@@ -250,7 +250,7 @@ class DataMgr {
   Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() const;
 
   // Used for testing.
-  Buffer_Namespace::GpuCudaBufferMgr* getGpuBufferMgr() const;
+  Buffer_Namespace::GpuCudaBufferMgr* getGpuBufferMgr(int32_t device_id) const;
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,

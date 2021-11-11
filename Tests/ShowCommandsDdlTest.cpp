@@ -2586,20 +2586,22 @@ class SystemTablesTest : public DBHandlerTestFixture {
     return getTotalSlabPages(getCpuBufferMgr()->getSlabSegments());
   }
 
-  Buffer_Namespace::GpuCudaBufferMgr* getGpuBufferMgr() {
-    auto gpu_buffer_mgr = getCatalog().getDataMgr().getGpuBufferMgr();
+  Buffer_Namespace::GpuCudaBufferMgr* getGpuBufferMgr(int32_t device_id) {
+    auto gpu_buffer_mgr = getCatalog().getDataMgr().getGpuBufferMgr(device_id);
     CHECK(gpu_buffer_mgr);
     return gpu_buffer_mgr;
   }
 
-  int64_t getGpuPageSize() { return getGpuBufferMgr()->getPageSize(); }
-
-  int64_t getMaxGpuPageCount() {
-    return getGpuBufferMgr()->getMaxBufferSize() / getGpuPageSize();
+  int64_t getGpuPageSize(int32_t device_id) {
+    return getGpuBufferMgr(device_id)->getPageSize();
   }
 
-  int64_t getAllocatedGpuPageCount() {
-    return getTotalSlabPages(getGpuBufferMgr()->getSlabSegments());
+  int64_t getMaxGpuPageCount(int32_t device_id) {
+    return getGpuBufferMgr(device_id)->getMaxBufferSize() / getGpuPageSize(device_id);
+  }
+
+  int64_t getAllocatedGpuPageCount(int32_t device_id) {
+    return getTotalSlabPages(getGpuBufferMgr(device_id)->getSlabSegments());
   }
 
   int64_t getTotalSlabPages(
@@ -2613,7 +2615,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     return pages_count;
   }
 
-  std::string getGpuDeviceId(const std::string& table_name) {
+  int32_t getGpuDeviceId(const std::string& table_name) {
     auto td = getCatalog().getMetadataForTable(table_name, true);
     CHECK(td);
     CHECK(td->fragmenter);
@@ -2622,7 +2624,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     const auto& fragment = table_info.fragments[0];
     auto device_level = static_cast<size_t>(MemoryLevel::GPU_LEVEL);
     CHECK_GT(fragment.deviceIds.size(), device_level);
-    return std::to_string(fragment.deviceIds[device_level]);
+    return fragment.deviceIds[device_level];
   }
 
   std::map<std::string, int32_t> dashboard_id_by_name_;
@@ -2939,7 +2941,7 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
   // clang-format on
 }
 
-TEST_F(SystemTablesTest, DISABLED_MemorySummarySystemTableGpu) {
+TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
@@ -2953,9 +2955,10 @@ TEST_F(SystemTablesTest, DISABLED_MemorySummarySystemTableGpu) {
   // clang-format off
   sqlAndCompareResult(
       "SELECT * FROM memory_summary WHERE device_type = 'GPU' AND "
-      "device_id = " + device_id + ";",
-      {{"Server", i(0), "GPU", getMaxGpuPageCount(), getGpuPageSize(),
-        getAllocatedGpuPageCount(), i(1), getAllocatedGpuPageCount() - 1}});
+      "device_id = " + std::to_string(device_id) + ";",
+      {{"Server", i(device_id), "GPU", getMaxGpuPageCount(device_id),
+        getGpuPageSize(device_id), getAllocatedGpuPageCount(device_id),
+        i(1), getAllocatedGpuPageCount(device_id) - 1}});
   // clang-format on
 }
 
@@ -2982,7 +2985,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   // clang-format on
 }
 
-TEST_F(SystemTablesTest, DISABLED_MemoryDetailsSystemTableGpu) {
+TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
@@ -2998,11 +3001,12 @@ TEST_F(SystemTablesTest, DISABLED_MemoryDetailsSystemTableGpu) {
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'GPU' AND "
-                      "device_id = " + device_id + ";",
+                      "device_id = " + std::to_string(device_id) + ";",
                       {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
-                        i(0), "GPU", "USED", i(1), getGpuPageSize(), i(0), i(0), i(0)},
+                        i(device_id), "GPU", "USED", i(1), getGpuPageSize(device_id), i(0), i(0), i(0)},
                        {"Server", Null, Null, Null, Null,
-                        i(0), "GPU", "FREE", getAllocatedGpuPageCount() - 1, getGpuPageSize(), i(0), i(1), i(14)}});
+                        i(device_id), "GPU", "FREE", getAllocatedGpuPageCount(device_id) - 1,
+                        getGpuPageSize(device_id), i(0), i(1), i(14)}});
   // clang-format on
 }
 
