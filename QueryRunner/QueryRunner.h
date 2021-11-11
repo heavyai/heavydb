@@ -164,8 +164,8 @@ class QueryRunner {
   virtual void clearCpuMemory() const;
   std::vector<MemoryInfo> getMemoryInfo(
       const Data_Namespace::MemoryLevel memory_level) const;
-  BufferPoolStats getBufferPoolStats(
-      const Data_Namespace::MemoryLevel memory_level) const;
+  BufferPoolStats getBufferPoolStats(const Data_Namespace::MemoryLevel memory_level,
+                                     const bool current_db_only) const;
 
   virtual std::unique_ptr<Parser::DDLStmt> createDDLStatement(const std::string&);
   virtual void runDDLStatement(const std::string&);
@@ -276,6 +276,7 @@ class QueryRunner {
 
   ExecutorExplainType explain_type_ = ExecutorExplainType::Default;
 
+  Catalog_Namespace::DBMetadata db_metadata_;
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;

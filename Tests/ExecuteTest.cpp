@@ -7361,6 +7361,645 @@ TEST(Select, LogicalValues) {
   }
 }
 
+void run_skip_fragments_query(const std::string& query,
+                              const bool compare_with_sqlite,
+                              const size_t num_cols,
+                              const size_t num_frags) {
+  // Clear CPU memory and hash table caches
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  QR::get()->clearCpuMemory();
+  {
+    if (compare_with_sqlite) {
+      c(query, query, dt);
+    } else {
+      run_multiple_agg(query, dt);
+    }
+  }
+  const auto buffer_pool_stats =
+      QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL, true);
+  ASSERT_GE(buffer_pool_stats.num_buffers, num_frags * num_cols);
+  ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(num_frags > 0 ? 1 : 0));
+  ASSERT_EQ(buffer_pool_stats.num_columns,
+            static_cast<size_t>(num_frags > 0 ? num_cols : 0));
+  ASSERT_EQ(buffer_pool_stats.num_fragments, num_frags);
+  ASSERT_EQ(buffer_pool_stats.num_chunks, num_frags * num_cols);
+}
+
+TEST(Select, SkipFragments) {
+  // Do not run with temp tables as temp tables are pinned and so do not get cleared
+  // with clearCpuMemory(), which in turn means we can't properly measure what
+  // chunks the query is pulling into memory
+  SKIP_WITH_TEMP_TABLES();
+  // Do not run with sharded as we cannot measure the number of logical tables
+  // with getBufferPoolStats
+  SKIP_IF_SHARDED();
+  // Do not run on distributed as getBufferPoolStats not implemented on distributed
+  SKIP_ALL_ON_AGGREGATOR();
+  // Running on GPU with new inter-mixed executon means memory is not all in one buffer
+  // pool
+
+  const size_t num_cols{19};
+  const size_t num_fragments{4};
+
+  run_skip_fragments_query("SELECT * FROM skip_fragments_test ORDER BY ts_0_notnull ASC;",
+                           false,
+                           num_cols,
+                           num_fragments);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE rowid BETWEEN 3 AND 4 ORDER BY "
+      "ts_0_notnull ASC;",
+      false,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE rowid >= 3 ORDER BY ts_0_notnull ASC;",
+      false,
+      num_cols,
+      3);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE rowid = 3 ORDER BY ts_0_notnull ASC;",
+      false,
+      num_cols,
+      1);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE frag_id = 0 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE frag_id >= 3 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_notnull = 1 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_notnull BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_notnull BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_notnull BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null = 1 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null BETWEEN -2 AND 0 AND i8_null IS "
+      "NOT NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null BETWEEN -2 AND 0 OR i8_null IS "
+      "NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      num_fragments);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_notnull = 1 ORDER BY ts_0_notnull "
+      "ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_notnull BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_notnull BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_notnull BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_null = 1 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_null BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_null BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_null BETWEEN -2 AND 0 AND i16_null IS "
+      "NOT NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_null BETWEEN -2 AND 0 OR i16_null IS "
+      "NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      num_fragments);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i16_null BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_notnull = 1 ORDER BY ts_0_notnull "
+      "ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_notnull BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_notnull BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_notnull BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null = 1 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 AND i32_null IS "
+      "NOT NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 OR i32_null IS "
+      "NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      4);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_notnull = 1 ORDER BY ts_0_notnull "
+      "ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_notnull BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_notnull BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_notnull BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_null = 1 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_null BETWEEN -2 AND -2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_null BETWEEN -2 AND 0 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_null BETWEEN -2 AND 0 AND i64_null IS "
+      "NOT NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  // Given i64_null has no nulls, we could apply a further optimization to skip the
+  // fragments not in range, and at that point would need to change the test
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_null BETWEEN -2 AND 0 OR i64_null IS "
+      "NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      num_fragments);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i64_null BETWEEN -4 AND -3 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_notnull < -1.2 ORDER BY ts_0_notnull "
+      "ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_notnull BETWEEN -2.2 AND -1.2 ORDER "
+      "BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_notnull BETWEEN 0.8 AND 5 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_null < -1.2 ORDER BY ts_0_notnull "
+      "ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_null BETWEEN -2.2 AND -1.2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_null BETWEEN -2.2 AND -1.2 AND "
+      "fp32_null IS NOT NULL",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_null BETWEEN -2.2 AND -1.2 OR "
+      "fp32_null IS NULL",
+      true,
+      num_cols,
+      num_fragments);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp32_null BETWEEN 0.8 AND 5 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_notnull < -1.2 ORDER BY ts_0_notnull "
+      "ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_notnull BETWEEN -2.2 AND -1.2 ORDER "
+      "BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_null BETWEEN -2.2 AND -1.2 AND "
+      "fp64_null IS NOT NULL",
+      true,
+      num_cols,
+      1);
+  // Given fp64_null has no nulls, we could apply a further optimization to skip the
+  // fragments not in range, and at that point would need to change the test
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_null BETWEEN -2.2 AND -1.2 OR "
+      "fp64_null IS NULL",
+      true,
+      num_cols,
+      num_fragments);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_notnull BETWEEN 0.8 AND 5 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_null < -1.2 ORDER BY ts_0_notnull "
+      "ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_null BETWEEN -2.2 AND -1.2 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_null BETWEEN 0.8 AND 5 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE fp64_null BETWEEN 0.8 AND 5 ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_notnull BETWEEN '2021-01-03 "
+      "07:00:00' AND '2021-01-04 18:30:00' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_notnull BETWEEN '2021-01-03 "
+      "07:00:00' AND '2021-01-05 18:30:00' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_notnull >= '2021-01-03 07:00:00' "
+      "ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE CAST(ts_0_notnull AS TIMESTAMP(3)) "
+      "BETWEEN TIMESTAMP(3) '2021-01-03 07:00:00.123' AND TIMESTAMP(3) '2021-01-04 "
+      "18:30:00.456' ORDER BY ts_0_notnull ASC;",
+      false,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_notnull = '2021-01-03 08:32:42' "
+      "ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_null BETWEEN '2021-01-03 07:00:00' "
+      "AND '2021-01-04 18:30:00' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_null BETWEEN '2021-01-03 07:00:00' "
+      "AND '2021-01-04 18:30:00' AND ts_0_null IS NOT NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_null BETWEEN '2021-01-03 07:00:00' "
+      "AND '2021-01-04 18:30:00' OR ts_0_null IS NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      num_fragments);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_null >= '2021-01-03 07:00:00' AND "
+      "ts_0_null IS NOT NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE CAST(ts_0_null AS TIMESTAMP(3)) BETWEEN "
+      "TIMESTAMP(3) '2021-01-03 07:00:00.123' AND TIMESTAMP(3) '2021-01-04 18:30:00.456' "
+      "ORDER BY ts_0_notnull ASC;",
+      false,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_0_null = '2021-01-03 08:32:42' ORDER "
+      "BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_notnull BETWEEN '2021-01-03 "
+      "07:00:00.123' AND '2021-01-04 18:30:00.456' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_notnull BETWEEN '2021-01-03 "
+      "07:00:00.123' AND '2021-01-05 18:30:00.456' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_notnull >= '2021-01-03 07:00:00.123' "
+      "ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_notnull = '2021-01-03 08:32:42.123' "
+      "ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_null BETWEEN '2021-01-03 "
+      "07:00:00.123' AND '2021-01-04 18:30:00.456' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_null BETWEEN '2021-01-03 "
+      "07:00:00.123' AND '2021-01-05 18:30:00.456' AND ts_3_null IS NOT NULL ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_null BETWEEN '2021-01-03 "
+      "07:00:00.123' AND '2021-01-05 18:30:00.456' OR ts_3_null IS NULL ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      num_fragments);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_null >= '2021-01-03 07:00:00.123' "
+      "AND ts_3_null IS NOT NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+  // Given ts_3_null has no nulls, we could apply a further optimization to skip the only
+  // fragment that matches the date range and and would need to change the test at that
+  // point to 0 fragments pulled into memory
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_null >= '2021-01-07 07:00:00.123' OR "
+      "ts_3_null IS NULL ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      4);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE ts_3_null = '2021-01-03 08:32:42.123' "
+      "ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE dt_notnull BETWEEN '2021-01-03' AND "
+      "'2021-01-04' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE dt_notnull BETWEEN '2021-01-03' AND "
+      "'2021-01-05' ORDER BY dt_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE dt_notnull >= '2021-01-03' ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      3);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE CAST(dt_notnull AS TIMESTAMP(0)) BETWEEN "
+      "'2021-01-03 00:00:00' AND '2021-01-04 00:00:00' ORDER BY ts_0_notnull ASC;",
+      false,
+      num_cols,
+      1);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE dt_notnull = '2021-01-03' ORDER BY "
+      "ts_0_notnull ASC;",
+      true,
+      num_cols,
+      1);
+
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null BETWEEN -2 AND 0 AND i16_null <= "
+      "3 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i8_null BETWEEN -2 AND 0 AND i16_null >= "
+      "3 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 AND fp32_null "
+      "<= 2.8 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 AND fp32_null "
+      ">= 2.8 ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 AND ts_0_null < "
+      "'2021-01-05 18:32:21' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      2);
+  run_skip_fragments_query(
+      "SELECT i32_null, ts_0_notnull, i32_null + 1 AS i32_null_plus_1 FROM "
+      "skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 AND ts_0_null < '2021-01-05 "
+      "18:32:21' ORDER BY ts_0_notnull ASC;",
+      true,
+      3,
+      2);
+  run_skip_fragments_query(
+      "SELECT * FROM skip_fragments_test WHERE i32_null BETWEEN -2 AND 0 AND ts_0_null > "
+      "'2021-01-05 18:32:21' ORDER BY ts_0_notnull ASC;",
+      true,
+      num_cols,
+      0);
+}
+
 TEST(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -8049,6 +8688,124 @@ void import_logical_size_test() {
   for (auto insert_query : insert_queries) {
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
+  }
+}
+
+void import_skip_fragments_test() {
+  const std::string table_name("skip_fragments_test");
+  const std::string drop_old_skip_fragments_test{"DROP TABLE IF EXISTS " + table_name +
+                                                 ";"};
+  run_ddl_statement(drop_old_skip_fragments_test);
+  g_sqlite_comparator.query(drop_old_skip_fragments_test);
+  std::string create_table_str("CREATE TABLE " + table_name + "(");
+  create_table_str += "frag_id INT NOT NULL, ";
+  create_table_str += "i8_notnull TINYINT NOT NULL, i8_null TINYINT, ";
+  create_table_str += "i16_notnull SMALLINT NOT NULL, i16_null SMALLINT, ";
+  create_table_str += "i32_notnull INT NOT NULL, i32_null INT, ";
+  create_table_str += "i64_notnull BIGINT NOT NULL, i64_null BIGINT, ";
+  create_table_str += "ts_0_notnull TIMESTAMP(0) NOT NULL, ts_0_null TIMESTAMP(0), ";
+  create_table_str += "ts_3_notnull TIMESTAMP(3) NOT NULL, ts_3_null TIMESTAMP(3), ";
+  create_table_str += "dt_notnull DATE NOT NULL, dt_null DATE NULL, ";
+  create_table_str += "fp32_notnull FLOAT NOT NULL, fp32_null FLOAT, ";
+  create_table_str += "fp64_notnull DOUBLE NOT NULL, fp64_null DOUBLE)";
+  run_ddl_statement(create_table_str + " WITH (fragment_size = 3);");
+  g_sqlite_comparator.query(create_table_str + ";");
+
+  int64_t int_start = -2;
+  double fp_start = -2.2;
+  const std::vector<string> ts0_vals1 = {"'2021-01-01 08:32:42'",
+                                         "'2021-01-03 08:32:42'",
+                                         "'2021-01-05 08:32:42'",
+                                         "'2021-01-07 08:32:42'"};
+  const std::vector<string> ts0_vals2 = {"'2021-01-02 14:32:21'",
+                                         "'2021-01-04 14:32:21'",
+                                         "'2021-01-06 14:32:21'",
+                                         "'2021-01-08 14:32:21'"};
+  const std::vector<string> ts3_vals1 = {"'2021-01-01 08:32:42.123'",
+                                         "'2021-01-03 08:32:42.123'",
+                                         "'2021-01-05 08:32:42.123'",
+                                         "'2021-01-07 08:32:42.123'"};
+  const std::vector<string> ts3_vals2 = {"'2021-01-02 14:32:21.456'",
+                                         "'2021-01-04 14:32:21.456'",
+                                         "'2021-01-06 14:32:21.456'",
+                                         "'2021-01-08 14:32:21.456'"};
+  const std::vector<string> dt_vals1 = {
+      "'2021-01-01'", "'2021-01-03'", "'2021-01-05'", "'2021-01-07'"};
+  const std::vector<string> dt_vals2 = {
+      "'2021-01-02'", "'2021-01-04'", "'2021-01-06'", "'2021-01-08'"};
+
+  const int64_t num_frags{4};
+
+  TestHelpers::ValuesGenerator gen(table_name);
+
+  for (int64_t frag_id = 0; frag_id < num_frags; ++frag_id) {
+    const auto insert_query_1 = gen(frag_id,
+                                    int_start + 2 * frag_id,
+                                    int_start + 2 * frag_id,
+                                    int_start + 2 * frag_id,
+                                    int_start + 2 * frag_id,
+                                    int_start + 2 * frag_id,
+                                    int_start + 2 * frag_id,
+                                    int_start + 2 * frag_id,
+                                    int_start + 2 * frag_id,
+                                    ts0_vals1[frag_id],
+                                    ts0_vals1[frag_id],
+                                    ts3_vals1[frag_id],
+                                    ts3_vals1[frag_id],
+                                    dt_vals1[frag_id],
+                                    dt_vals1[frag_id],
+                                    fp_start + 2 * frag_id,
+                                    fp_start + 2 * frag_id,
+                                    fp_start + 2 * frag_id,
+                                    fp_start + 2 * frag_id);
+
+    const auto insert_query_2 = gen(frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    int_start + 1 + 2 * frag_id,
+                                    ts0_vals2[frag_id],
+                                    ts0_vals2[frag_id],
+                                    ts3_vals2[frag_id],
+                                    ts3_vals2[frag_id],
+                                    dt_vals2[frag_id],
+                                    dt_vals2[frag_id],
+                                    fp_start + 1 + 2 * frag_id,
+                                    fp_start + 1 + 2 * frag_id,
+                                    fp_start + 1 + 2 * frag_id,
+                                    fp_start + 1 + 2 * frag_id);
+
+    const auto insert_query_3 =
+        gen(frag_id,
+            int_start + 2 * frag_id,
+            "null",
+            int_start + 2 * frag_id,
+            "null",
+            int_start + 2 * frag_id,
+            "null",
+            int_start + 2 * frag_id,
+            int_start + 2 * frag_id,
+            ts0_vals1[frag_id],  // let 64-bit variants be fully non-null
+            "null",
+            ts3_vals1[frag_id],
+            "null",
+            dt_vals1[frag_id],
+            "null",
+            fp_start + 2 * frag_id,
+            "null",
+            fp_start + 2 * frag_id,
+            fp_start + 2 * frag_id);  // let 64-bit variants be fully non-null
+
+    run_multiple_agg(insert_query_1, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query_1);
+    run_multiple_agg(insert_query_2, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query_2);
+    run_multiple_agg(insert_query_3, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query_3);
   }
 }
 
@@ -19997,7 +20754,7 @@ TEST(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL, true);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(2));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(2));
@@ -20018,7 +20775,7 @@ TEST(Select, FilterNodeCoalesce) {
     }
 
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL, true);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -20040,7 +20797,7 @@ TEST(Select, FilterNodeCoalesce) {
     }
 
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL, true);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -20061,7 +20818,7 @@ TEST(Select, FilterNodeCoalesce) {
     }
 
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL, true);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -20079,7 +20836,7 @@ TEST(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL, true);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -22490,6 +23247,11 @@ int create_and_populate_tables(const bool use_temporary_tables,
     LOG(ERROR) << "Failed to (re-)create table 'logical_size_test'";
   }
   try {
+    import_skip_fragments_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'skip_fragments_test'";
+  }
+  try {
     import_empty_table_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'empty_table_test'";
@@ -22764,6 +23526,9 @@ void drop_tables() {
   const std::string drop_logical_size_test{"DROP TABLE logical_size_test;"};
   g_sqlite_comparator.query(drop_logical_size_test);
   run_ddl_statement(drop_logical_size_test);
+  const std::string drop_skip_fragment_test{"DROP TABLE IF EXISTS skip_fragment_test;"};
+  g_sqlite_comparator.query(drop_skip_fragment_test);
+  run_ddl_statement(drop_skip_fragment_test);
   const std::string drop_empty_test_table{"DROP TABLE empty_test_table;"};
   g_sqlite_comparator.query(drop_empty_test_table);
   run_ddl_statement(drop_empty_test_table);

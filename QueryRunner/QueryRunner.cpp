@@ -175,7 +175,6 @@ QueryRunner::QueryRunner(const char* db_path,
     disk_cache_config = *cache_config;
   }
   Catalog_Namespace::UserMetadata user;
-  Catalog_Namespace::DBMetadata db;
 
   setup_signal_handler();
   logger::set_once_fatal_func(&calcite_shutdown_handler);
@@ -232,13 +231,13 @@ QueryRunner::QueryRunner(const char* db_path,
   CHECK(bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str()) == 0);
 
   if (create_db) {
-    if (!sys_cat.getMetadataForDB(db_name, db)) {
+    if (!sys_cat.getMetadataForDB(db_name, db_metadata_)) {
       sys_cat.createDatabase(db_name, user.userId);
     }
   }
-  CHECK(sys_cat.getMetadataForDB(db_name, db));
-  CHECK(user.isSuper || (user.userId == db.dbOwner));
-  auto cat = sys_cat.getCatalog(db, create_db);
+  CHECK(sys_cat.getMetadataForDB(db_name, db_metadata_));
+  CHECK(user.isSuper || (user.userId == db_metadata_.dbOwner));
+  auto cat = sys_cat.getCatalog(db_metadata_, create_db);
   CHECK(cat);
   session_info_ = std::make_unique<Catalog_Namespace::SessionInfo>(
       cat, user, ExecutorDeviceType::GPU, "");
@@ -284,7 +283,8 @@ std::vector<MemoryInfo> QueryRunner::getMemoryInfo(
 }
 
 BufferPoolStats QueryRunner::getBufferPoolStats(
-    const Data_Namespace::MemoryLevel memory_level) const {
+    const Data_Namespace::MemoryLevel memory_level,
+    const bool current_db_only) const {
   // Only works single-node for now
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   const std::vector<MemoryInfo> memory_infos =
@@ -307,6 +307,11 @@ BufferPoolStats QueryRunner::getBufferPoolStats(
       if (memory_datum.memStatus == Buffer_Namespace::MemStatus::FREE ||
           chunk_key.size() < 4) {
         continue;
+      }
+      if (current_db_only) {
+        if (chunk_key[0] != db_metadata_.dbId) {
+          continue;
+        }
       }
       total_num_bytes += (memory_datum.numPages * pool_memory_info.pageSize);
       table_keys.insert({chunk_key[0], chunk_key[1]});
