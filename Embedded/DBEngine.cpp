@@ -206,7 +206,8 @@ class DBEngineImpl : public DBEngine {
     for (const auto target : targets) {
       col_names.push_back(target.get_resname());
     }
-    return std::make_shared<CursorImpl>(result.getRows(), col_names);
+    return std::make_shared<CursorImpl>(result.empty() ? nullptr : result.getRows(),
+                                        col_names);
   }
 
   void executeDDL(const std::string& query) {

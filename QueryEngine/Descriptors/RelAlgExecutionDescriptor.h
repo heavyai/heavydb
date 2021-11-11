@@ -51,6 +51,7 @@ class ExecutionResult {
   ExecutionResult& operator=(const ExecutionResult& that);
 
   const ResultSetPtr& getRows() const {
+    CHECK_EQ(results_.getFragCount(), 1);
     return results_[0];
   }
 
