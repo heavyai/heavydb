@@ -75,6 +75,8 @@ else:
     from collections import Iterable
 
 # fmt: off
+separator = '$=>$'
+
 Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations', 'function_annotations'])
 
 ExtArgumentTypes = ''' Int8, Int16, Int32, Int64, Float, Double, Void, PInt8, PInt16,
@@ -335,8 +337,8 @@ def find_comma(line):
 
 def line_is_incomplete(line):
     # TODO: try to parse the line to be certain about completeness.
-    # `!' is used to separate the UDTF signature and the expected result
-    return line.endswith(',') or line.endswith('->') or line.endswith('!')
+    # `$=>$' is used to separate the UDTF signature and the expected result
+    return line.endswith(',') or line.endswith('->') or line.endswith(separator)
 
 
 def is_identifier_cursor(identifier):
@@ -1528,9 +1530,9 @@ def find_signatures(input_file):
             continue
 
         expected_result = None
-        if '!' in line:
-            line, expected_result = line.split('!', 1)
-            expected_result = expected_result.strip().split('!')
+        if separator in line:
+            line, expected_result = line.split(separator, 1)
+            expected_result = expected_result.strip().split(separator)
             expected_result = list(map(lambda s: s.strip(), expected_result))
 
         ast = Parser(line).parse()
