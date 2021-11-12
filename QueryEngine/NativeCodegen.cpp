@@ -431,13 +431,11 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     eb.setOptLevel(llvm::CodeGenOpt::None);
   }
 
-  // Force the module data layout to match the layout for the selected target
-  auto target_machine = eb.selectTarget();
-  CHECK(target_machine);
-  module->setDataLayout(target_machine->createDataLayout());
-
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
+  // Force the module data layout to match the layout for the selected target
+  module->setDataLayout(execution_engine->getDataLayout());
+
   LOG(ASM) << assemblyForCPU(execution_engine, module);
 
   execution_engine->finalizeObject();
