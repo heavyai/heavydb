@@ -1964,7 +1964,7 @@ void propagate_hints_to_new_project(
     CHECK(prev_hint_it != prev_it->second.end());
     std::unordered_map<unsigned, RegisteredQueryHint> hint_map;
     hint_map.emplace(new_node->getId(), prev_hint_it->second);
-    query_hints.emplace(new_node->toHash(), prev_it->second);
+    query_hints.emplace(new_node->toHash(), hint_map);
   }
 }
 

@@ -88,6 +88,9 @@ void createTable() {
   QR::get()->runDDLStatement(
       "CREATE TABLE geospatial_inner_join_test(id INT, p POINT, l LINESTRING, poly "
       "POLYGON);");
+  QR::get()->runDDLStatement(
+      "CREATE TABLE complex_windowing(str text encoding dict(32), ts timestamp(0), lat "
+      "float, lon float);");
 }
 
 void populateTable() {
@@ -119,12 +122,30 @@ void populateTable() {
     const auto data_str = "INSERT INTO geospatial_inner_join_test VALUES(" + data + ");";
     run_query(data_str, ExecutorDeviceType::CPU);
   }
+
+  std::vector<std::string> complex_windowing_test_data{
+      "\'N712SW\',\'2008-01-03 22:11:00\',38.94453,-77.45581",
+      "\'N772SW\',\'2008-01-03 10:02:00\',38.94453,-77.45581",
+      "\'N428WN\',\'2008-01-03 08:04:00\',39.71733,-86.29439",
+      "\'N612SW\',\'2008-01-03 10:54:00\',39.71733,-86.29439",
+      "\'N689SW\',\'2008-01-03 06:52:00\',39.71733,-86.29439",
+      "\'N648SW\',\'2008-01-03 16:39:00\',39.71733,-86.29439",
+      "\'N690SW\',\'2008-01-03 09:16:00\',39.71733,-86.29439",
+      "\'N334SW\',\'2008-01-03 18:45:00\',39.71733,-86.29439",
+      "\'N286WN\',\'2008-01-03 16:40:00\',39.71733,-86.29439",
+      "\'N778SW\',\'2008-01-03 09:40:00\',39.71733,-86.29439",
+  };
+  for (const auto& data : complex_windowing_test_data) {
+    const auto data_str = "INSERT INTO complex_windowing VALUES(" + data + ");";
+    run_query(data_str, ExecutorDeviceType::CPU);
+  }
 }
 
 void dropTable() {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS SQL_HINT_DUMMY;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_test;");
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_inner_join_test;");
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS complex_windowing;");
 }
 
 TEST(kCpuMode, ForceToCPUMode) {
@@ -502,6 +523,30 @@ TEST(QueryHint, WindowFunction) {
       }
     }
   }
+  const auto q3 =
+      "select /*+ columnar_output */ *, 1 * v1 / (v2 + 0.01) as v3 from (select /*+ "
+      "cpu_mode */ str, ts, lat, lon, distance_in_meters( lag(lon) over ( partition by "
+      "str order by ts ), lag(lat) over ( partition by str order by ts ), lon, lat ) as "
+      "v1, timestampdiff( second, lag(ts) over ( partition by str order by ts ), ts ) as "
+      "v2 from complex_windowing) order by v3;";
+  EXPECT_EQ(QR::get()->runSQL(q3, ExecutorDeviceType::CPU)->colCount(),
+            static_cast<size_t>(7));
+  const auto q4 =
+      "select /*+ g_cpu_mode */ *, 1 * v1 / (v2 + 0.01) as v3 from (select str, ts, lat, "
+      "lon, distance_in_meters( lag(lon) over ( partition by str order by ts ), lag(lat) "
+      "over ( partition by str order by ts ), lon, lat ) as v1, timestampdiff( second, "
+      "lag(ts) over ( partition by str order by ts ), ts ) as v2 from complex_windowing) "
+      "order by v3;";
+  EXPECT_EQ(QR::get()->runSQL(q4, ExecutorDeviceType::CPU)->colCount(),
+            static_cast<size_t>(7));
+  const auto q5 =
+      "select /*+ cpu_mode */ *, 1 * v1 / (v2 + 0.01) as v3 from (select str, ts, lat, "
+      "lon, distance_in_meters( lag(lon) over ( partition by str order by ts ), lag(lat) "
+      "over ( partition by str order by ts ), lon, lat ) as v1, timestampdiff( second, "
+      "lag(ts) over ( partition by str order by ts ), ts ) as v2 from complex_windowing) "
+      "order by v3;";
+  EXPECT_EQ(QR::get()->runSQL(q5, ExecutorDeviceType::CPU)->colCount(),
+            static_cast<size_t>(7));
 }
 
 TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
@@ -765,6 +810,7 @@ int main(int argc, char** argv) {
   int err{0};
 
   try {
+    dropTable();
     createTable();
     populateTable();
     err = RUN_ALL_TESTS();
