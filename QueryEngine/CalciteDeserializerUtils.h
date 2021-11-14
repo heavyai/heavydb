@@ -114,7 +114,8 @@ inline SQLAgg to_agg_kind(const std::string& agg_name) {
       agg_name == "APPROX_QUANTILE") {
     return kAPPROX_QUANTILE;
   }
-  if (agg_name == std::string("SAMPLE") || agg_name == std::string("LAST_SAMPLE")) {
+  if (agg_name == std::string("ANY_VALUE") || agg_name == std::string("SAMPLE") ||
+      agg_name == std::string("LAST_SAMPLE")) {
     return kSAMPLE;
   }
   if (agg_name == std::string("SINGLE_VALUE")) {
