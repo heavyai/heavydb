@@ -15907,6 +15907,13 @@ TEST(Select, Sample) {
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT SAMPLE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;",
                   dt))));
+    // Our "SAMPLE" operator is generally termed "ANY_VALUE", and the latter
+    // is natively supported by Calcite. Test this as an alias for "SAMPLE".
+    ASSERT_EQ(
+        "else",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ANY_VALUE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;",
+            dt))));
     THROW_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(real_str), COUNT(*) FROM test WHERE x > 8;", dt);
