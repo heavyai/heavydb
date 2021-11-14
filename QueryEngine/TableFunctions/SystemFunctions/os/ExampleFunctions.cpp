@@ -172,7 +172,7 @@ TEMPLATE_NOINLINE
 template <typename T>
 TEMPLATE_NOINLINE
 #ifdef _WIN32
-#pragma comment(linker "/INCLUDE:mandelbrot_cuda_templale__gpu_")
+#pragma comment(linker "/INCLUDE:mandelbrot_cuda_template__gpu_")
 #else
     __attribute__((__used__))
 #endif

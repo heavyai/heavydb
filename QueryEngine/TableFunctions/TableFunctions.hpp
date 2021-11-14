@@ -208,24 +208,19 @@ EXTENSION_NOINLINE int32_t row_addsub(const int copy_multiplier,
 
 // clang-format off
 /*
-  UDTF: get_max_with_row_offset(Cursor<int>, Constant<1>) -> Column<int>, Column<int>
+  UDTF: get_max_with_row_offset__cpu_(Cursor<int>, Constant<1>) -> Column<int>, Column<int>
 */
 // clang-format on
-EXTENSION_NOINLINE int32_t get_max_with_row_offset(const Column<int>& input_col,
-                                                   Column<int>& output_max_col,
-                                                   Column<int>& output_max_row_col) {
+EXTENSION_NOINLINE int32_t
+get_max_with_row_offset__cpu_(const Column<int>& input_col,
+                              Column<int>& output_max_col,
+                              Column<int>& output_max_row_col) {
   if ((output_max_col.size() != 1) || output_max_row_col.size() != 1) {
     return -1;
   }
-#ifdef __CUDACC__
-  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
-  int32_t stop = static_cast<int32_t>(input_col.size());
-  int32_t step = blockDim.x * gridDim.x;
-#else
   auto start = 0;
   auto stop = input_col.size();
   auto step = 1;
-#endif
 
   int curr_max = -2147483648;
   int curr_max_row = -1;

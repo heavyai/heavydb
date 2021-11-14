@@ -558,12 +558,10 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
                               reinterpret_cast<int8_t*>(&output_row_count),
                               sizeof(output_row_count));
 
-  // const unsigned block_size_x = executor->blockSize();
-  const unsigned block_size_x = 1;
+  const unsigned block_size_x = executor->blockSize();
   const unsigned block_size_y = 1;
   const unsigned block_size_z = 1;
-  // const unsigned grid_size_x = executor->gridSize();
-  const unsigned grid_size_x = 1;
+  const unsigned grid_size_x = executor->gridSize();
   const unsigned grid_size_y = 1;
   const unsigned grid_size_z = 1;
 

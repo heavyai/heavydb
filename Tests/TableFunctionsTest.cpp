@@ -464,6 +464,31 @@ TEST_F(TableFunctions, BasicProjection) {
   }
 }
 
+TEST_F(TableFunctions, GpuThreads) {
+  for (auto dt : {ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto cuda_block_size = QR::get()->getExecutor()->blockSize();
+      const auto cuda_grid_size = QR::get()->getExecutor()->gridSize();
+      const size_t total_threads = cuda_block_size * cuda_grid_size;
+      const std::string query = "SELECT * FROM TABLE(ct_cuda_enumerate_threads(" +
+                                std::to_string(total_threads) +
+                                ")) ORDER by global_thread_id ASC;";
+      const auto rows = run_multiple_agg(query, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(total_threads));
+      ASSERT_EQ(rows->colCount(), size_t(3));
+      for (size_t t = 0; t < total_threads; ++t) {
+        auto crt_row = rows->getNextRow(true, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
+                  static_cast<int64_t>(t % cuda_block_size));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                  static_cast<int64_t>(t / cuda_block_size));
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[2]), static_cast<int64_t>(t));
+      }
+    }
+  }
+}
+
 TEST_F(TableFunctions, GroupByIn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -1257,7 +1282,6 @@ TEST_F(TableFunctions, FilterTransposeRuleOneCursor) {
 
   const std::string grid_values =
       gen_grid_values(8, 8, false /* add_w_val */, false /* merge_with_w_null */);
-  std::cout << grid_values << std::endl;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     // Single cursor arguments
@@ -1359,10 +1383,6 @@ TEST_F(TableFunctions, FilterTransposeRuleMultipleCursors) {
                                      stat_type_agg + "', CURSOR(" + values1_sql +
                                      "), CURSOR(" + values2_sql + "))) WHERE " +
                                      tf_filter + ";";
-        // std::cout << "Query plan" << std::endl;
-        // const std::string tf_explain = "EXPLAIN PLAN " << tf_query << std::endl;
-        // const auto tf_explain = run_multiple_agg(tf_query, dt);
-        // std::cout << tf_explain << std::endl;
 
         std::string values_rollup_query =
             "SELECT COUNT(*) AS row_count, " + stat_type_agg + "(id) AS id, " +

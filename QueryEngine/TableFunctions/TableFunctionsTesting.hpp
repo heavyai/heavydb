@@ -668,9 +668,9 @@ TEMPLATE_NOINLINE int32_t ct_binding_column2__cpu_template(const Column<T>& inpu
 // clang-format off
 /*
   UDTF: ct_named_output__cpu_template(Column<T> input) -> Column<T> total, T=[int32_t, double]
-  UDTF: ct_named_const_output__template(Column<T> input, Constant<2>) -> Column<T> total, T=[int32_t, double]
-  UDTF: ct_named_user_const_output__template(Column<T> input, ConstantParameter c) -> Column<T> total, T=[int32_t, double]
-  UDTF: ct_named_rowmul_output__template(Column<T> input, RowMultiplier m) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_const_output__cpu_template(Column<T> input, Constant<2>) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_user_const_output__cpu_template(Column<T> input, ConstantParameter c) -> Column<T> total, T=[int32_t, double]
+  UDTF: ct_named_rowmul_output__cpu_template(Column<T> input, RowMultiplier m) -> Column<T> total, T=[int32_t, double]
 */
 // clang-format on
 
@@ -687,8 +687,8 @@ TEMPLATE_NOINLINE int32_t ct_named_output__cpu_template(const Column<T>& input,
 }
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_named_const_output__template(const Column<T>& input,
-                                                          Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_named_const_output__cpu_template(const Column<T>& input,
+                                                              Column<T>& out) {
   T acc1 = 0, acc2 = 0;
   for (int64_t i = 0; i < input.size(); i++) {
     if (i % 2 == 0) {
@@ -703,9 +703,9 @@ TEMPLATE_NOINLINE int32_t ct_named_const_output__template(const Column<T>& input
 }
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_named_user_const_output__template(const Column<T>& input,
-                                                               int32_t c,
-                                                               Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_named_user_const_output__cpu_template(const Column<T>& input,
+                                                                   int32_t c,
+                                                                   Column<T>& out) {
   for (int64_t i = 0; i < c; i++) {
     out[i] = 0;
   }
@@ -716,9 +716,9 @@ TEMPLATE_NOINLINE int32_t ct_named_user_const_output__template(const Column<T>& 
 }
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_named_rowmul_output__template(const Column<T>& input,
-                                                           int32_t m,
-                                                           Column<T>& out) {
+TEMPLATE_NOINLINE int32_t ct_named_rowmul_output__cpu_template(const Column<T>& input,
+                                                               int32_t m,
+                                                               Column<T>& out) {
   for (int64_t j = 0; j < m; j++) {
     for (int64_t i = 0; i < input.size(); i++) {
       out[j * input.size() + i] += input[i];
@@ -764,7 +764,7 @@ EXTENSION_NOINLINE int32_t ct_no_arg_constant_sizing__cpu_(Column<int32_t>& answ
 
 // clang-format off
 /*
-  UDTF: ct_scalar_1_arg_runtime_sizing__cpu_template(T) -> Column<T> answer, T=[float, double, int32_t, int64_t]
+  UDTF: ct_scalar_1_arg_runtime_sizing__cpu_template(T num) -> Column<T> answer, T=[float, double, int32_t, int64_t]
 */
 // clang-format on
 
@@ -1501,6 +1501,26 @@ EXTENSION_NOINLINE int32_t ct_require_device_cuda__gpu_(const Column<int32_t>& i
                                                         Column<int32_t>& out) {
   out[0] = (i > 0 ? 12345 : 54321);
   return 1;
+}
+
+// clang-format off
+/*
+  UDTF: ct_cuda_enumerate_threads__gpu_(ConstantParameter output_size) -> Column<int32_t> local_thread_id, Column<int32_t> block_id, Column<int32_t> global_thread_id
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t
+ct_cuda_enumerate_threads__gpu_(const int32_t output_size,
+                                Column<int32_t>& out_local_thread_id,
+                                Column<int32_t>& out_block_id,
+                                Column<int32_t>& out_global_thread_id) {
+  int32_t local_thread_id = threadIdx.x;
+  int32_t block_id = blockIdx.x;
+  int32_t global_thread_id = threadIdx.x + blockDim.x * blockIdx.x;
+  out_local_thread_id[global_thread_id] = local_thread_id;
+  out_block_id[global_thread_id] = block_id;
+  out_global_thread_id[global_thread_id] = global_thread_id;
+  return output_size;
 }
 
 #endif  //__CUDACC__
