@@ -2282,12 +2282,11 @@ class RelAlgDispatcher {
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(cat_, scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
+    auto scan_node = std::make_shared<RelScan>(cat_.getCurrentDB().dbId, td, field_names);
     if (scan_ra.HasMember("hints")) {
-      auto scan_node = std::make_shared<RelScan>(td, field_names);
       getRelAlgHints(scan_ra, scan_node);
-      return scan_node;
     }
-    return std::make_shared<RelScan>(td, field_names);
+    return scan_node;
   }
 
   std::shared_ptr<RelProject> dispatchProject(const rapidjson::Value& proj_ra,

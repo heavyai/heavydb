@@ -155,6 +155,13 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void checkpoint(const int db_id, const int tb_id) override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
 
+  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                 const CompilationOptions& co,
+                                 const ExecutionOptions& eo,
+                                 ExecutionPhase phase) override {
+    UNREACHABLE();
+  }
+
   // Buffer API
   AbstractBuffer* alloc(const size_t num_bytes = 0) override;
   void free(AbstractBuffer* buffer) override;

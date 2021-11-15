@@ -189,6 +189,12 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   void closeFileMgr(const int32_t db_id,
                     const int32_t tb_id);  // A locked public wrapper for deleteFileMgr,
                                            // for now for unit testing
+
+  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                 const CompilationOptions& co,
+                                 const ExecutionOptions& eo,
+                                 ExecutionPhase phase) override {}
+
  protected:
   std::shared_ptr<ForeignStorageInterface> fsi_;
 

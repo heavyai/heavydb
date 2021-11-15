@@ -359,6 +359,13 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // Used to describe the manager in logging and error messages.
   virtual std::string describeSelf() const;
 
+  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                 const CompilationOptions& co,
+                                 const ExecutionOptions& eo,
+                                 ExecutionPhase phase) override {
+    UNREACHABLE();
+  }
+
   static constexpr size_t DEFAULT_NUM_PAGES_PER_DATA_FILE{256};
   static constexpr size_t DEFAULT_NUM_PAGES_PER_METADATA_FILE{4096};
 

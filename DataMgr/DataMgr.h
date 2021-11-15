@@ -29,6 +29,7 @@
 #include "BufferMgr/BufferMgr.h"
 #include "MemoryLevel.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
+#include "Shared/InputRef.h"
 
 #include <iomanip>
 #include <iostream>
@@ -208,6 +209,11 @@ class DataMgr {
   void removeTableRelatedDS(const int db_id, const int tb_id);
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
+
+  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                 const CompilationOptions& co,
+                                 const ExecutionOptions& eo,
+                                 ExecutionPhase phase) const;
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;

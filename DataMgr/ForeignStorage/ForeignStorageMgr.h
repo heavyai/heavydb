@@ -97,6 +97,11 @@ class ForeignStorageMgr : public AbstractBufferMgr {
 
   virtual void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
 
+  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                 const CompilationOptions& co,
+                                 const ExecutionOptions& eo,
+                                 ExecutionPhase phase) override;
+
   using ParallelismHint = std::pair<int, int>;
   void setParallelismHints(
       const std::map<ChunkKey, std::set<ParallelismHint>>& hints_per_table);
@@ -119,6 +124,11 @@ class ForeignStorageMgr : public AbstractBufferMgr {
       const ForeignDataWrapper::ParallelismLevel parallelism_level);
 
   static void checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key);
+
+  void clear_system_table_cache(const ColumnByIdxRefSet& input_cols,
+                                const CompilationOptions& co);
+  void set_parallelism_hints(const ColumnByIdxRefSet& input_cols);
+  void prepare_string_dictionaries(const ColumnByIdxRefSet& input_cols);
 
   std::shared_mutex data_wrapper_mutex_;
   std::map<ChunkKey, std::shared_ptr<ForeignDataWrapper>> data_wrapper_map_;

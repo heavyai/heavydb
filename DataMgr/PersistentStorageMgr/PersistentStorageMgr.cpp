@@ -155,6 +155,23 @@ void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table
   getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
 }
 
+void PersistentStorageMgr::prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                                     const CompilationOptions& co,
+                                                     const ExecutionOptions& eo,
+                                                     ExecutionPhase phase) {
+  ColumnByIdxRefSet gfs_input_cols;
+  ColumnByIdxRefSet foreign_input_cols;
+  for (auto& col : input_cols) {
+    if (isForeignStorage({col.db_id, col.table_id})) {
+      foreign_input_cols.insert(col);
+    } else {
+      gfs_input_cols.insert(col);
+    }
+  }
+  getGlobalFileMgr()->prepareTablesForExecution(gfs_input_cols, co, eo, phase);
+  getForeignStorageMgr()->prepareTablesForExecution(foreign_input_cols, co, eo, phase);
+}
+
 bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   CHECK(has_table_prefix(chunk_key));
   auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
@@ -171,8 +188,8 @@ bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   }
 
   auto table = catalog->getMetadataForTableImpl(table_id, false);
-  CHECK(table);
-  return table->storageType == StorageType::FOREIGN_TABLE;
+  // TODO: unknown tables get get there through prepareTablesForExecution. Check why.
+  return table && table->storageType == StorageType::FOREIGN_TABLE;
 }
 
 AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(

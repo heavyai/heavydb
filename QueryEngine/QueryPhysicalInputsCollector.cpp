@@ -20,55 +20,112 @@
 #include "RelAlgVisitor.h"
 #include "RexVisitor.h"
 
+#include "Shared/InputRef.h"
+
 namespace {
 
 using PhysicalInputSet = std::unordered_set<PhysicalInput>;
 
-class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<PhysicalInputSet> {
+template <typename RexVisitor, typename ResultType>
+class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<ResultType> {
  public:
-  PhysicalInputSet visitCompound(const RelCompound* compound) const override;
-  PhysicalInputSet visitFilter(const RelFilter* filter) const override;
-  PhysicalInputSet visitJoin(const RelJoin* join) const override;
-  PhysicalInputSet visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin*) const override;
-  PhysicalInputSet visitProject(const RelProject* project) const override;
-  PhysicalInputSet visitSort(const RelSort* sort) const override;
+  RelAlgPhysicalInputsVisitor() {}
 
- protected:
-  PhysicalInputSet aggregateResult(const PhysicalInputSet& aggregate,
-                                   const PhysicalInputSet& next_result) const override;
-};
-
-class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
- public:
-  PhysicalInputSet visitInput(const RexInput* input) const override {
-    const auto source_ra = input->getSourceNode();
-    const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
-    if (!scan_ra) {
-      const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
-      if (join_ra) {
-        const auto node_inputs = get_node_output(join_ra);
-        CHECK_LT(input->getIndex(), node_inputs.size());
-        return visitInput(&node_inputs[input->getIndex()]);
-      }
-      return PhysicalInputSet{};
+  ResultType visitCompound(const RelCompound* compound) const override {
+    ResultType result;
+    for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
+      const auto rex = compound->getScalarSource(i);
+      CHECK(rex);
+      RexVisitor visitor;
+      const auto rex_phys_inputs = visitor.visit(rex);
+      result.insert(rex_phys_inputs.begin(), rex_phys_inputs.end());
     }
-    const auto scan_td = scan_ra->getTableDescriptor();
-    CHECK(scan_td);
-    const int col_id = input->getIndex() + 1;
-    const int table_id = scan_td->tableId;
-    CHECK_GT(table_id, 0);
-    return {{col_id, table_id}};
+    const auto filter = compound->getFilterExpr();
+    if (filter) {
+      RexVisitor visitor;
+      const auto filter_phys_inputs = visitor.visit(filter);
+      result.insert(filter_phys_inputs.begin(), filter_phys_inputs.end());
+    }
+    return result;
   }
 
-  PhysicalInputSet visitSubQuery(const RexSubQuery* subquery) const override {
+  ResultType visitFilter(const RelFilter* filter) const override {
+    const auto condition = filter->getCondition();
+    CHECK(condition);
+    RexVisitor visitor;
+    return visitor.visit(condition);
+  }
+
+  ResultType visitJoin(const RelJoin* join) const override {
+    const auto condition = join->getCondition();
+    if (!condition) {
+      return ResultType{};
+    }
+    RexVisitor visitor;
+    return visitor.visit(condition);
+  }
+
+  ResultType visitLeftDeepInnerJoin(
+      const RelLeftDeepInnerJoin* left_deep_inner_join) const override {
+    ResultType result;
+    const auto condition = left_deep_inner_join->getInnerCondition();
+    RexVisitor visitor;
+    if (condition) {
+      result = visitor.visit(condition);
+    }
+    CHECK_GE(left_deep_inner_join->inputCount(), size_t(2));
+    for (size_t nesting_level = 1;
+         nesting_level <= left_deep_inner_join->inputCount() - 1;
+         ++nesting_level) {
+      const auto outer_condition = left_deep_inner_join->getOuterCondition(nesting_level);
+      if (outer_condition) {
+        const auto outer_result = visitor.visit(outer_condition);
+        result.insert(outer_result.begin(), outer_result.end());
+      }
+    }
+    return result;
+  }
+
+  ResultType visitProject(const RelProject* project) const override {
+    ResultType result;
+    for (size_t i = 0; i < project->size(); ++i) {
+      const auto rex = project->getProjectAt(i);
+      CHECK(rex);
+      RexVisitor visitor;
+      const auto rex_phys_inputs = visitor.visit(rex);
+      result.insert(rex_phys_inputs.begin(), rex_phys_inputs.end());
+    }
+    return result;
+  }
+
+  ResultType visitSort(const RelSort* sort) const override {
+    CHECK_EQ(sort->inputCount(), size_t(1));
+    return this->visit(sort->getInput(0));
+  }
+
+ protected:
+  ResultType aggregateResult(const ResultType& aggregate,
+                             const ResultType& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+template <typename Derived, typename ResultType>
+class RexInputVisitorBase : public RexVisitor<ResultType> {
+ public:
+  RexInputVisitorBase() {}
+
+  ResultType visitSubQuery(const RexSubQuery* subquery) const override {
     const auto ra = subquery->getRelAlg();
     CHECK(ra);
-    RelAlgPhysicalInputsVisitor visitor;
+    RelAlgPhysicalInputsVisitor<Derived, ResultType> visitor;
     return visitor.visit(ra);
   }
 
-  PhysicalInputSet visitOperator(const RexOperator* oper) const override {
-    PhysicalInputSet result;
+  ResultType visitOperator(const RexOperator* oper) const override {
+    ResultType result;
     if (auto window_oper = dynamic_cast<const RexWindowFunctionOperator*>(oper)) {
       for (const auto& partition_key : window_oper->getPartitionKeys()) {
         if (auto input = dynamic_cast<const RexInput*>(partition_key.get())) {
@@ -82,110 +139,87 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
             const auto parent_node = filter_node->getInput(0);
             const auto node_inputs = get_node_output(parent_node);
             CHECK_LT(input->getIndex(), node_inputs.size());
-            result = aggregateResult(result, visitInput(&node_inputs[input->getIndex()]));
+            result = aggregateResult(result,
+                                     this->visitInput(&node_inputs[input->getIndex()]));
           }
-          result = aggregateResult(result, visit(input));
+          result = aggregateResult(result, this->visit(input));
         }
       }
     }
     for (size_t i = 0; i < oper->size(); i++) {
-      result = aggregateResult(result, visit(oper->getOperand(i)));
+      result = aggregateResult(result, this->visit(oper->getOperand(i)));
     }
     return result;
   }
 
  protected:
-  PhysicalInputSet aggregateResult(const PhysicalInputSet& aggregate,
-                                   const PhysicalInputSet& next_result) const override {
+  ResultType aggregateResult(const ResultType& aggregate,
+                             const ResultType& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;
   }
 };
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitCompound(
-    const RelCompound* compound) const {
-  PhysicalInputSet result;
-  for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
-    const auto rex = compound->getScalarSource(i);
-    CHECK(rex);
-    RexPhysicalInputsVisitor visitor;
-    const auto rex_phys_inputs = visitor.visit(rex);
-    result.insert(rex_phys_inputs.begin(), rex_phys_inputs.end());
-  }
-  const auto filter = compound->getFilterExpr();
-  if (filter) {
-    RexPhysicalInputsVisitor visitor;
-    const auto filter_phys_inputs = visitor.visit(filter);
-    result.insert(filter_phys_inputs.begin(), filter_phys_inputs.end());
-  }
-  return result;
-}
+class RexPhysicalInputsVisitor
+    : public RexInputVisitorBase<RexPhysicalInputsVisitor, PhysicalInputSet> {
+ public:
+  RexPhysicalInputsVisitor() {}
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitFilter(const RelFilter* filter) const {
-  const auto condition = filter->getCondition();
-  CHECK(condition);
-  RexPhysicalInputsVisitor visitor;
-  return visitor.visit(condition);
-}
-
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitJoin(const RelJoin* join) const {
-  const auto condition = join->getCondition();
-  if (!condition) {
-    return PhysicalInputSet{};
-  }
-  RexPhysicalInputsVisitor visitor;
-  return visitor.visit(condition);
-}
-
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitLeftDeepInnerJoin(
-    const RelLeftDeepInnerJoin* left_deep_inner_join) const {
-  PhysicalInputSet result;
-  const auto condition = left_deep_inner_join->getInnerCondition();
-  RexPhysicalInputsVisitor visitor;
-  if (condition) {
-    result = visitor.visit(condition);
-  }
-  CHECK_GE(left_deep_inner_join->inputCount(), size_t(2));
-  for (size_t nesting_level = 1; nesting_level <= left_deep_inner_join->inputCount() - 1;
-       ++nesting_level) {
-    const auto outer_condition = left_deep_inner_join->getOuterCondition(nesting_level);
-    if (outer_condition) {
-      const auto outer_result = visitor.visit(outer_condition);
-      result.insert(outer_result.begin(), outer_result.end());
+  PhysicalInputSet visitInput(const RexInput* input) const override {
+    const auto source_ra = input->getSourceNode();
+    const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
+    if (!scan_ra) {
+      const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
+      if (join_ra) {
+        const auto node_inputs = get_node_output(join_ra);
+        CHECK_LT(input->getIndex(), node_inputs.size());
+        return visitInput(&node_inputs[input->getIndex()]);
+      }
+      return PhysicalInputSet{};
     }
+
+    const auto scan_td = scan_ra->getTableDescriptor();
+    CHECK(scan_td);
+    const int col_id = input->getIndex() + 1;
+    const int table_id = scan_td->tableId;
+    CHECK_GT(table_id, 0);
+    return {{col_id, table_id}};
   }
-  return result;
-}
+};
 
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitProject(
-    const RelProject* project) const {
-  PhysicalInputSet result;
-  for (size_t i = 0; i < project->size(); ++i) {
-    const auto rex = project->getProjectAt(i);
-    CHECK(rex);
-    RexPhysicalInputsVisitor visitor;
-    const auto rex_phys_inputs = visitor.visit(rex);
-    result.insert(rex_phys_inputs.begin(), rex_phys_inputs.end());
+class RexIdxInputsVisitor
+    : public RexInputVisitorBase<RexIdxInputsVisitor, ColumnByIdxRefSet> {
+ public:
+  RexIdxInputsVisitor() {}
+
+  ColumnByIdxRefSet visitInput(const RexInput* input) const override {
+    const auto source_ra = input->getSourceNode();
+    const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
+    if (!scan_ra) {
+      const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
+      if (join_ra) {
+        const auto node_inputs = get_node_output(join_ra);
+        CHECK_LT(input->getIndex(), node_inputs.size());
+        return visitInput(&node_inputs[input->getIndex()]);
+      }
+      return ColumnByIdxRefSet{};
+    }
+
+    const auto scan_td = scan_ra->getTableDescriptor();
+    CHECK(scan_td);
+    const int db_id = scan_ra->getDatabaseId();
+    const int col_id = input->getIndex();
+    const int table_id = scan_td->tableId;
+    CHECK_GT(table_id, 0);
+    return {{db_id, table_id, col_id}};
   }
-  return result;
-}
-
-PhysicalInputSet RelAlgPhysicalInputsVisitor::visitSort(const RelSort* sort) const {
-  CHECK_EQ(sort->inputCount(), size_t(1));
-  return visit(sort->getInput(0));
-}
-
-PhysicalInputSet RelAlgPhysicalInputsVisitor::aggregateResult(
-    const PhysicalInputSet& aggregate,
-    const PhysicalInputSet& next_result) const {
-  auto result = aggregate;
-  result.insert(next_result.begin(), next_result.end());
-  return result;
-}
+};
 
 class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set<int>> {
  public:
+  RelAlgPhysicalTableInputsVisitor() {}
+
   std::unordered_set<int> visitScan(const RelScan* scan) const override {
     return {scan->getTableDescriptor()->tableId};
   }
@@ -203,8 +237,14 @@ class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set
 }  // namespace
 
 std::unordered_set<PhysicalInput> get_physical_inputs(const RelAlgNode* ra) {
-  RelAlgPhysicalInputsVisitor phys_inputs_visitor;
+  RelAlgPhysicalInputsVisitor<RexPhysicalInputsVisitor, PhysicalInputSet>
+      phys_inputs_visitor;
   return phys_inputs_visitor.visit(ra);
+}
+
+ColumnByIdxRefSet get_idx_ref_inputs(const RelAlgNode* ra) {
+  RelAlgPhysicalInputsVisitor<RexIdxInputsVisitor, ColumnByIdxRefSet> idx_inputs_visitor;
+  return idx_inputs_visitor.visit(ra);
 }
 
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {

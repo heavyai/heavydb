@@ -24,6 +24,9 @@
 #include <boost/preprocessor.hpp>
 #include "../Shared/types.h"
 #include "AbstractBuffer.h"
+#include "Shared/InputRef.h"
+// TODO: move this header to some other place.
+#include "QueryEngine/CompilationOptions.h"
 
 #define X_DEFINE_ENUM_WITH_STRING_CONVERSIONS_TOSTRING_CASE(r, data, elem) \
   case elem:                                                               \
@@ -94,6 +97,11 @@ class AbstractBufferMgr {
   virtual void checkpoint() = 0;
   virtual void checkpoint(const int db_id, const int tb_id) = 0;
   virtual void removeTableRelatedDS(const int db_id, const int table_id) = 0;
+
+  virtual void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                         const CompilationOptions& co,
+                                         const ExecutionOptions& eo,
+                                         ExecutionPhase phase) = 0;
 
   // Buffer API
   virtual AbstractBuffer* alloc(const size_t numBytes = 0) = 0;

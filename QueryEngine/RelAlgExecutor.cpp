@@ -78,110 +78,6 @@ std::unordered_set<PhysicalInput> get_physical_inputs(
   return phys_inputs2;
 }
 
-void set_parallelism_hints(const RelAlgNode& ra_node,
-                           const Catalog_Namespace::Catalog& catalog) {
-  std::map<ChunkKey, std::set<foreign_storage::ForeignStorageMgr::ParallelismHint>>
-      parallelism_hints_per_table;
-  for (const auto& physical_input : get_physical_inputs(&ra_node)) {
-    int table_id = physical_input.table_id;
-    auto table = catalog.getMetadataForTable(table_id, false);
-    if (table && table->storageType == StorageType::FOREIGN_TABLE &&
-        !table->is_system_table) {
-      int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
-      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
-      auto foreign_table = catalog.getForeignTable(table_id);
-      for (const auto& fragment :
-           foreign_table->fragmenter->getFragmentsForQuery().fragments) {
-        Chunk_NS::Chunk chunk{col_desc};
-        ChunkKey chunk_key = {
-            catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
-        // do not include chunk hints that are in CPU memory
-        if (!chunk.isChunkOnDevice(
-                &catalog.getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
-          parallelism_hints_per_table[{catalog.getDatabaseId(), table_id}].insert(
-              foreign_storage::ForeignStorageMgr::ParallelismHint{col_id,
-                                                                  fragment.fragmentId});
-        }
-      }
-    }
-  }
-  if (!parallelism_hints_per_table.empty()) {
-    auto foreign_storage_mgr =
-        catalog.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr();
-    CHECK(foreign_storage_mgr);
-    foreign_storage_mgr->setParallelismHints(parallelism_hints_per_table);
-  }
-}
-
-void prepare_string_dictionaries(const RelAlgNode& ra_node,
-                                 const Catalog_Namespace::Catalog& catalog) {
-  for (const auto& physical_input : get_physical_inputs(&ra_node)) {
-    int table_id = physical_input.table_id;
-    auto table = catalog.getMetadataForTable(table_id, false);
-    if (table && table->storageType == StorageType::FOREIGN_TABLE) {
-      int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
-      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
-      auto foreign_table = catalog.getForeignTable(table_id);
-      if (col_desc->columnType.is_dict_encoded_type()) {
-        CHECK(foreign_table->fragmenter != nullptr);
-        for (const auto& fragment :
-             foreign_table->fragmenter->getFragmentsForQuery().fragments) {
-          ChunkKey chunk_key = {
-              catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
-          const ChunkMetadataMap& metadata_map = fragment.getChunkMetadataMap();
-          CHECK(metadata_map.find(col_id) != metadata_map.end());
-          if (foreign_storage::is_metadata_placeholder(*(metadata_map.at(col_id)))) {
-            // When this goes out of scope it will stay in CPU cache but become
-            // evictable
-            std::shared_ptr<Chunk_NS::Chunk> chunk =
-                Chunk_NS::Chunk::getChunk(col_desc,
-                                          &(catalog.getDataMgr()),
-                                          chunk_key,
-                                          Data_Namespace::CPU_LEVEL,
-                                          0,
-                                          0,
-                                          0);
-          }
-        }
-      }
-    }
-  }
-}
-
-void prepare_foreign_table_for_execution(const RelAlgNode& ra_node,
-                                         const Catalog_Namespace::Catalog& catalog) {
-  // Iterate through ra_node inputs for types that need to be loaded pre-execution
-  // If they do not have valid metadata, load them into CPU memory to generate
-  // the metadata and leave them ready to be used by the query
-  set_parallelism_hints(ra_node, catalog);
-  prepare_string_dictionaries(ra_node, catalog);
-}
-
-void prepare_for_system_table_execution(const RelAlgNode& ra_node,
-                                        const Catalog_Namespace::Catalog& catalog,
-                                        const CompilationOptions& co) {
-  if (g_enable_system_tables) {
-    std::set<int32_t> system_table_ids;
-    for (const auto& physical_input : get_physical_inputs(&ra_node)) {
-      int table_id = physical_input.table_id;
-      auto table = catalog.getMetadataForTable(table_id, false);
-      if (table && table->is_system_table) {
-        system_table_ids.emplace(table_id);
-      }
-    }
-    // Execute on CPU for queries involving system tables
-    if (!system_table_ids.empty() && co.device_type != ExecutorDeviceType::CPU) {
-      throw QueryMustRunOnCpu();
-    }
-    // Clear any previously cached data, since system tables depend on point in time data
-    // snapshots.
-    for (const auto table_id : system_table_ids) {
-      catalog.getDataMgr().deleteChunksWithPrefix(
-          ChunkKey{catalog.getDatabaseId(), table_id}, Data_Namespace::CPU_LEVEL);
-    }
-  }
-}
-
 bool is_extracted_dag_valid(ExtractedPlanDag& dag) {
   return !dag.contain_not_supported_rel_node &&
          dag.extracted_dag.compare(EMPTY_QUERY_PLAN) != 0;
@@ -401,10 +297,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     }
   }
 
-  prepare_for_system_table_execution(ra, cat_, co);
-
-  // Notify foreign tables to load prior to caching
-  prepare_foreign_table_for_execution(ra, cat_);
+  const auto idx_ref_inputs = get_idx_ref_inputs(&ra);
+  executor_->getDataMgr()->prepareTablesForExecution(
+      idx_ref_inputs, co, eo, ExecutionPhase::PrepareQuery);
 
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
@@ -830,8 +725,11 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     return std::make_pair(co_hint_applied, eo_hint_applied);
   };
 
-  // Notify foreign tables to load prior to execution
-  prepare_foreign_table_for_execution(*body, cat_);
+  // Load required data prior execution.
+  const auto idx_ref_inputs = get_idx_ref_inputs(body);
+  executor_->getDataMgr()->prepareTablesForExecution(
+      idx_ref_inputs, co, eo, ExecutionPhase::ExecuteStep);
+
   auto hint_applied = handle_hint();
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {

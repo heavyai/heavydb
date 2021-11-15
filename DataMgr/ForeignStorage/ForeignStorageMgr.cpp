@@ -20,6 +20,8 @@
 #include "ForeignDataWrapperFactory.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
+#include "MetadataPlaceholder.h"
+#include "QueryEngine/Execute.h"  // For QueryMustRunOnCpu
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
@@ -228,6 +230,113 @@ void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
       !catalog->getForeignTableUnlocked(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode()) {
     clearDataWrapper(table_key);
   }
+}
+
+void ForeignStorageMgr::clear_system_table_cache(const ColumnByIdxRefSet& input_cols,
+                                                 const CompilationOptions& co) {
+  std::unordered_map<int32_t, std::unordered_set<int32_t>> table_ids_by_db_id;
+  for (const auto& col : input_cols) {
+    table_ids_by_db_id[col.db_id].insert(col.table_id);
+  }
+
+  // Go through all input tables and clear caches for system ones.
+  for (auto& pr : table_ids_by_db_id) {
+    auto db_id = pr.first;
+    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+    for (auto table_id : pr.second) {
+      auto table = catalog->getMetadataForTable(table_id, false);
+      CHECK(table);
+      if (table->is_system_table) {
+        // Queries involving system tables must be executed on CPU.
+        if (co.device_type != ExecutorDeviceType::CPU) {
+          throw QueryMustRunOnCpu();
+        }
+
+        catalog->getDataMgr().deleteChunksWithPrefix(ChunkKey{db_id, table_id},
+                                                     Data_Namespace::CPU_LEVEL);
+      }
+    }
+  }
+}
+
+void ForeignStorageMgr::set_parallelism_hints(const ColumnByIdxRefSet& input_cols) {
+  std::map<ChunkKey, std::set<ParallelismHint>> parallelism_hints_per_table;
+  for (const auto& col : input_cols) {
+    int db_id = col.db_id;
+    int table_id = col.table_id;
+    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+
+    auto table = catalog->getMetadataForTable(table_id, false);
+    CHECK(table && table->storageType == StorageType::FOREIGN_TABLE);
+    if (!table->is_system_table) {
+      int col_id = catalog->getColumnIdBySpi(table_id, col.column_idx + 1);
+      const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
+      auto foreign_table = catalog->getForeignTable(table_id);
+      for (const auto& fragment :
+           foreign_table->fragmenter->getFragmentsForQuery().fragments) {
+        Chunk_NS::Chunk chunk{col_desc};
+        ChunkKey chunk_key = {
+            catalog->getDatabaseId(), table_id, col_id, fragment.fragmentId};
+        // do not include chunk hints that are in CPU memory
+        if (!chunk.isChunkOnDevice(
+                &catalog->getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
+          parallelism_hints_per_table[{catalog->getDatabaseId(), table_id}].insert(
+              ParallelismHint{col_id, fragment.fragmentId});
+        }
+      }
+    }
+  }
+  if (!parallelism_hints_per_table.empty()) {
+    setParallelismHints(parallelism_hints_per_table);
+  }
+}
+
+void ForeignStorageMgr::prepare_string_dictionaries(const ColumnByIdxRefSet& input_cols) {
+  for (const auto& col : input_cols) {
+    int db_id = col.db_id;
+    int table_id = col.table_id;
+    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+
+    auto table = catalog->getMetadataForTable(table_id, false);
+    CHECK(table && table->storageType == StorageType::FOREIGN_TABLE);
+
+    int col_id = catalog->getColumnIdBySpi(table_id, col.column_idx + 1);
+    const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
+    auto foreign_table = catalog->getForeignTable(table_id);
+    if (col_desc->columnType.is_dict_encoded_type()) {
+      CHECK(foreign_table->fragmenter != nullptr);
+      for (const auto& fragment :
+           foreign_table->fragmenter->getFragmentsForQuery().fragments) {
+        ChunkKey chunk_key = {
+            catalog->getDatabaseId(), table_id, col_id, fragment.fragmentId};
+        const ChunkMetadataMap& metadata_map = fragment.getChunkMetadataMap();
+        CHECK(metadata_map.find(col_id) != metadata_map.end());
+        if (foreign_storage::is_metadata_placeholder(*(metadata_map.at(col_id)))) {
+          // When this goes out of scope it will stay in CPU cache but become
+          // evictable
+          std::shared_ptr<Chunk_NS::Chunk> chunk =
+              Chunk_NS::Chunk::getChunk(col_desc,
+                                        &(catalog->getDataMgr()),
+                                        chunk_key,
+                                        Data_Namespace::CPU_LEVEL,
+                                        0,
+                                        0,
+                                        0);
+        }
+      }
+    }
+  }
+}
+
+void ForeignStorageMgr::prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                                  const CompilationOptions& co,
+                                                  const ExecutionOptions& eo,
+                                                  ExecutionPhase phase) {
+  if (phase == ExecutionPhase::PrepareQuery) {
+    clear_system_table_cache(input_cols, co);
+  }
+  set_parallelism_hints(input_cols);
+  prepare_string_dictionaries(input_cols);
 }
 
 void ForeignStorageMgr::clearDataWrapper(const ChunkKey& table_key) {

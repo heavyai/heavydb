@@ -831,8 +831,11 @@ class RelAlgNode {
 
 class RelScan : public RelAlgNode {
  public:
-  RelScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
-      : td_(td)
+  RelScan(int32_t db_id,
+          const TableDescriptor* td,
+          const std::vector<std::string>& field_names)
+      : db_id_(db_id)
+      , td_(td)
       , field_names_(field_names)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {}
@@ -848,6 +851,8 @@ class RelScan : public RelAlgNode {
   const std::vector<std::string>& getFieldNames() const { return field_names_; }
 
   const std::string getFieldName(const size_t i) const { return field_names_[i]; }
+
+  int32_t getDatabaseId() const { return db_id_; }
 
   std::string toString() const override {
     return cat(
@@ -895,6 +900,7 @@ class RelScan : public RelAlgNode {
   Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
+  const int32_t db_id_;
   const TableDescriptor* td_;
   const std::vector<std::string> field_names_;
   bool hint_applied_;

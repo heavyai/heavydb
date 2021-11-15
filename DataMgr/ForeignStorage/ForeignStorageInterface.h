@@ -208,6 +208,13 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     UNREACHABLE();
   }
 
+  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                 const CompilationOptions& co,
+                                 const ExecutionOptions& eo,
+                                 ExecutionPhase phase) override {
+    UNREACHABLE();
+  }
+
  private:
   PersistentForeignStorageInterface* persistent_foreign_storage_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;

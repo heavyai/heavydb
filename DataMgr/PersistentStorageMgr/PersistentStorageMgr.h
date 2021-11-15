@@ -59,6 +59,11 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
 
+  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+                                 const CompilationOptions& co,
+                                 const ExecutionOptions& eo,
+                                 ExecutionPhase phase) override;
+
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
   foreign_storage::ForeignStorageCache* getDiskCache() const;
