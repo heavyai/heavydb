@@ -28,7 +28,9 @@ add_executable(PersistentStorageTest PersistentStorageTest.cpp)
 add_executable(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest.cpp)
 add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
 add_executable(CachingFileMgrTest CachingFileMgrTest.cpp)
+if(NOT MSVC)
 add_executable(JSONTest JSONTest.cpp)
+endif()
 add_executable(DataRecyclerTest DataRecyclerTest.cpp)
 add_executable(DataMgrTest DataMgrTest.cpp)
 
@@ -47,7 +49,9 @@ add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp
 add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
+if(NOT MSVC)
 add_executable(ImportExportTest ImportExportTest.cpp)
+endif()
 add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
 add_executable(AlterTableDdlTest AlterTableDdlTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
@@ -61,14 +65,22 @@ add_executable(ParallelExecutorsTest ParallelExecutorsTest.cpp)
 add_executable(MigrationMgrTest MigrationMgrTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
+if(NOT MSVC)
 add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
 add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
+endif()
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
+if(NOT MSVC)
 add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
+endif()
 add_executable(OverlapsJoinTest OverlapsJoinTest.cpp)
+if(NOT MSVC)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
+endif()
 add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
+if(NOT MSVC)
 add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
+endif()
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(ThreadingTest Shared/ThreadingTest.cpp)
 add_executable(ThreadingTestSTD Shared/ThreadingTest.cpp)
@@ -81,7 +93,9 @@ add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cp
 add_executable(CommandLineTest CommandLineTest.cpp)
 add_executable(SQLHintTest SQLHintTest.cpp)
 add_executable(LoadTableTest LoadTableTest.cpp)
+if(NOT MSVC)
 add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
+endif()
 
 if(ENABLE_SYSTEM_TFS)
   add_executable(SystemTableFunctionsTest SystemTableFunctionsTest.cpp)
@@ -147,7 +161,9 @@ target_link_libraries(SpecialCharsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdateMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
+if(NOT MSVC)
 target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
+endif()
 
 if(ENABLE_SYSTEM_TFS)
   target_link_libraries(SystemTableFunctionsTest ${EXECUTE_TEST_LIBS})
@@ -159,9 +175,13 @@ if(ENABLE_SYSTEM_TFS)
 endif()
 
 if(ENABLE_KRB5)
+  if(NOT MSVC)
 	target_link_libraries(OmniSQLCommandTest krb5_gss Shared)
+  endif()
 endif()
+if(NOT MSVC)
 target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
+endif()
 
 if(ENABLE_FOLLY) 
   target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
@@ -169,11 +189,15 @@ else()
   target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 endif()
 
+if(NOT MSVC)
 target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${CMAKE_DL_LIBS})
+endif()
 target_link_libraries(OverlapsJoinTest ${EXECUTE_TEST_LIBS})
 
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
+if(NOT MSVC)
 target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
+endif()
 target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(ThreadingTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES} ${CMAKE_DL_LIBS})
 target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS})
@@ -186,8 +210,10 @@ target_link_libraries(UtilTest OSDependent)
 target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport Geospatial Parser DataMgr Logger)
 target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
 #Requires thrift_handler for DBHandler test fixture
+if(NOT MSVC)
 target_link_libraries(ImportExportTest gtest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CtasUpdateTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+endif()
 target_link_libraries(DBObjectPrivilegesTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ForeignServerDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -199,7 +225,9 @@ target_link_libraries(DashboardAndCustomExpressionTest ${THRIFT_HANDLER_TEST_LIB
 target_link_libraries(FileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
+if(NOT MSVC)
 target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES})
+endif()
 target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(ShardedTableEpochConsistencyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -207,7 +235,9 @@ target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CachingFileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+if(NOT MSVC)
 target_link_libraries(JSONTest gtest Logger Shared)
+endif()
 target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
 
 
@@ -235,7 +265,9 @@ endif()
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
 add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
+if(NOT MSVC)
 add_test(ImportExportTest ImportExportTest ${TEST_ARGS})
+endif()
 add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
 add_test(AlterTableDdlTest AlterTableDdlTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
@@ -266,12 +298,18 @@ add_test(MigrationMgrTest MigrationMgrTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
+if(NOT MSVC)
 add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
 add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
+endif()
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
+if(NOT MSVC)
 add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
+endif()
 add_test(OverlapsJoinTest OverlapsJoinTest ${TEST_ARGS})
+if(NOT MSVC)
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
+endif()
 add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
@@ -299,7 +337,9 @@ add_test(DiskCacheQueryTest DiskCacheQueryTest ${TEST_ARGS})
 add_test(CachingFileMgrTest CachingFileMgrTest ${TEST_ARGS})
 add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
+if(NOT MSVC)
 add_test(JSONTest JSONTest ${TEST_ARGS})
+endif()
 add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 
 if(ENABLE_SYSTEM_TFS)
@@ -330,9 +370,11 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 find_package(fmt REQUIRED)
-add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
-add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
+if(NOT MSVC)
+  add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
+  target_link_libraries(ArrowIpcIntegrationTest gtest fmt::fmt ThriftClient mapd_thrift Logger Shared ${CUDA_LIBRARIES} ${Arrow_LIBRARIES})
+  add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
+endif()
 
 #parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)
@@ -355,8 +397,11 @@ set(TEST_PROGRAMS
   ColumnarResultsTest
   FromTableReorderingTest
   ResultSetBaselineRadixSortTest
-  StorageTest
-  ImportExportTest
+  StorageTest)
+if(NOT MSVC)
+  list(APPEND TEST_PROGRAMS ImportExportTest)
+endif()
+list(APPEND TEST_PROGRAMS
   ArrowCsvForeignStorageTest
   AlterTableDdlTest
   UpdelStorageTest
@@ -369,13 +414,21 @@ set(TEST_PROGRAMS
   ParallelExecutorsTest
   MigrationMgrTest
   TopKTest
-  TokenCompletionHintsTest
-  OmniSQLCommandTest
-  OmniSQLUtilitiesTest
-  DBObjectPrivilegesTest
-  GeoTypesTest
-  OverlapsJoinTest
-  CtasUpdateTest
+  TokenCompletionHintsTest)
+if(NOT MSVC)
+  list(APPEND TEST_PROGRAMS OmniSQLCommandTest OmniSQLUtilitiesTest)
+endif()
+list(APPEND TEST_PROGRAMS
+  DBObjectPrivilegesTest)
+if(NOT MSVC)
+  list(APPEND TEST_PROGRAMS GeoTypesTest)
+endif()
+list(APPEND TEST_PROGRAMS
+  OverlapsJoinTest)
+if(NOT MSVC)
+  list(APPEND TEST_PROGRAMS CtasUpdateTest)
+endif()
+list(APPEND TEST_PROGRAMS
   CorrelatedSubqueryTest
   DateTimeUtilsTest
   ThreadingTest
@@ -405,10 +458,22 @@ set(TEST_PROGRAMS
   DataRecyclerTest
   DiskCacheQueryTest
   CachingFileMgrTest
-  LoadTableTest
-  JSONTest
-  DataMgrTest
-)
+  LoadTableTest)
+if(NOT MSVC)
+  list(APPEND TEST_PROGRAMS JSONTest)
+endif()
+list(APPEND TEST_PROGRAMS
+  DataMgrTest)
+
+if(NOT MSVC)
+  list(APPEND TEST_PROGRAMS
+          JSONTest
+          ImportExportTest
+          GeoTypesTest
+          OmniSQLCommandTest
+          CtasUpdateTest
+          OmniSQLUtilitiesTest)
+endif()
 
 if (ENABLE_SYSTEM_TFS)
   list(APPEND TEST_PROGRAMS SystemTableFunctionsTest)

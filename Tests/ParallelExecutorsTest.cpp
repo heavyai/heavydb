@@ -122,15 +122,10 @@ class BaseTestFixture : public DBHandlerTestFixture {
       sql(gen(100, 10, 2, 1, 1.0001, 1.1, "'true'", "'hello'", "{100, 200}"));
     }
     for (size_t i = 0; i < 5; i++) {
-      sql(gen(500,
-              50,
-              "NULL",
-              5,
-              5.0001,
-              5.1,
-              "'false'",
-              "'world'",
-              i % 2 == 0 ? "{NULL, 200}" : "{100, NULL}"));
+      // Note - Windows template processing can't proccess an embedded
+      // ternary operator.
+      std::string row_alternate = (i % 2 == 0) ? "{NULL, 200}" : "{100, NULL}";
+      sql(gen(500, 50, "NULL", 5, 5.0001, 5.1, "'false'", "'world'", row_alternate));
     }
     for (size_t i = 0; i < 5; i++) {
       sql(gen(100 * i,

@@ -839,7 +839,7 @@ TEST_F(DataCompactionTest, RecoveryFromCopyPageStatus) {
   auto status_file_path =
       getFileMgr()->getFilePath(File_Namespace::FileMgr::COPY_PAGES_STATUS);
   deleteFileMgr();
-  std::ofstream status_file{status_file_path, std::ios::out | std::ios::binary};
+  std::ofstream status_file{status_file_path.string(), std::ios::out | std::ios::binary};
   status_file.close();
 
   getFileMgr();
@@ -883,7 +883,7 @@ TEST_F(DataCompactionTest, RecoveryFromUpdatePageVisibiltyStatus) {
   // page file, and deletion of the last data page file
   auto status_file_path =
       getFileMgr()->getFilePath(File_Namespace::FileMgr::COPY_PAGES_STATUS);
-  std::ofstream status_file{status_file_path, std::ios::out | std::ios::binary};
+  std::ofstream status_file{status_file_path.string(), std::ios::out | std::ios::binary};
   status_file.close();
 
   auto file_mgr = getFileMgr();
@@ -954,7 +954,7 @@ TEST_F(DataCompactionTest, RecoveryFromDeleteEmptyFileStatus) {
   auto status_file_path =
       getFileMgr()->getFilePath(File_Namespace::FileMgr::DELETE_EMPTY_FILES_STATUS);
   deleteFileMgr();
-  std::ofstream status_file{status_file_path, std::ios::out | std::ios::binary};
+  std::ofstream status_file{status_file_path.string(), std::ios::out | std::ios::binary};
   status_file.close();
 
   getFileMgr();

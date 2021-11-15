@@ -27,6 +27,7 @@
 #include <vector>
 
 #include <math.h>
+#include "../Shared/math_consts.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "QueryRunner/QueryRunner.h"
@@ -257,7 +258,7 @@ TEST_F(SystemTFs, GeoRasterize) {
             ASSERT_EQ(TestHelpers::v<double>(crt_row[4]), null_value);
           } else {
             const double expected_slope =
-                (x_bin == 1 || x_bin == 3) ? atan(0.5) * 180.0 / M_PI : 0;
+                (x_bin == 1 || x_bin == 3) ? atan(0.5) * 180.0 / math_consts::m_pi : 0;
             ASSERT_NEAR(TestHelpers::v<double>(crt_row[3]), expected_slope, SLOPE_EPS);
             if (x_bin == 2) {
               // No aspect at crest

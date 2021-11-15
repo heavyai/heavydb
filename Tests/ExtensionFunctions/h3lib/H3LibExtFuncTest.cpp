@@ -332,7 +332,7 @@ class H3TestFixture : public testing::TestWithParam<std::string> {
         boost::filesystem::create_directory(tmp_dir);
       }
 
-      std::ofstream tmp_file(tmp_filepath_);
+      std::ofstream tmp_file(tmp_filepath_.string());
       UrlReader::read_url_line_by_line(
           std::string(H3GlobalEnvironment::inputfile_base_url) + filename,
           [&](const std::string& line) { tmp_file << line << "\n"; });

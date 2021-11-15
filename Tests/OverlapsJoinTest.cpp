@@ -84,9 +84,10 @@ void executeAllScenarios(TEST_BODY fn) {
 
     for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
       SKIP_NO_GPU();
+      // .device_type = dt, .hash_join_enabled = overlaps_state,
       ExecutionContext execution_context{
-          .device_type = dt,
-          .hash_join_enabled = overlaps_state,
+          dt,
+          overlaps_state,
       };
       QR::get()->clearGpuMemory();
       QR::get()->clearCpuMemory();
@@ -1741,12 +1742,24 @@ class RangeJoinTest : public ::testing::Test {
   }
 
   std::vector<BoundsWithValues> testBounds() {
+    /* Designated intializers require C++20 with the Windows compiler.
+     * The windows code here would work with the other compilers, but
+     * leaving the designated initializer code provides useful documentation */
+#ifdef _WIN32
+    return {
+        BoundsWithValues{1, 1},
+        BoundsWithValues{6.33, 3},
+        BoundsWithValues{60, 8},
+        BoundsWithValues{1000, 16},
+    };
+#else
     return {
         BoundsWithValues{.upper_bound = 1, .expected_value = 1},
         BoundsWithValues{.upper_bound = 6.33, .expected_value = 3},
         BoundsWithValues{.upper_bound = 60, .expected_value = 8},
         BoundsWithValues{.upper_bound = 1000, .expected_value = 16},
     };
+#endif
   };
 };
 
@@ -1916,10 +1929,8 @@ TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
 TEST_F(RangeJoinTest, IsEnabledByDefault) {
   QR::get()->clearGpuMemory();
   QR::get()->clearCpuMemory();
-  ExecutionContext ctx{
-      .device_type = ExecutorDeviceType::CPU,
-      .hash_join_enabled = true,
-  };
+  // .device_type = ExecutorDeviceType::CPU,  .hash_join_enabled = true,
+  ExecutionContext ctx{ExecutorDeviceType::CPU, true};
   size_t expected_hash_tables{0};
 
   ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
@@ -1952,10 +1963,8 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
   QR::get()->clearCpuMemory();
   g_enable_distance_rangejoin = false;
 
-  ExecutionContext ctx{
-      .device_type = ExecutorDeviceType::CPU,
-      .hash_join_enabled = false,
-  };
+  // .device_type = ExecutorDeviceType::CPU,  .hash_join_enabled = true,
+  ExecutionContext ctx{ExecutorDeviceType::CPU, false};
 
   const size_t expected_hash_tables{0};
 
@@ -1987,10 +1996,8 @@ TEST_F(RangeJoinTest, BadOrdering) {
   QR::get()->clearCpuMemory();
   g_enable_distance_rangejoin = true;
 
-  ExecutionContext ctx{
-      .device_type = ExecutorDeviceType::CPU,
-      .hash_join_enabled = true,
-  };
+  // .device_type = ExecutorDeviceType::CPU,  .hash_join_enabled = true,
+  ExecutionContext ctx{ExecutorDeviceType::CPU, true};
 
   const auto tableA = "t1_comp32";
   const auto tableB = "t2_comp32_small";

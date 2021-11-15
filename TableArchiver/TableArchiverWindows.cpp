@@ -15,6 +15,7 @@
  */
 
 #include "TableArchiver/TableArchiver.h"
+__declspec(dllexport) bool g_test_rollback_dump_restore{false};
 
 void TableArchiver::dumpTable(const TableDescriptor* td,
                               const std::string& archive_path,

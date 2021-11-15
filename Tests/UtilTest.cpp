@@ -89,7 +89,7 @@ TEST(Shared, IntervalsBounds) {
                                    static_cast<Unsigned>(interval.end - interval.begin));
       threads.push_back(std::async(
           std::launch::async,
-          [&array](Interval<Integer> interval) {
+          [&array, &offset](Interval<Integer> interval) {
             for (Integer i = interval.begin; i < interval.end; ++i) {
               ++array.at(offset + i);
             }
