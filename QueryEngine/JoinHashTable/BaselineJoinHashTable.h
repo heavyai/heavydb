@@ -198,7 +198,7 @@ class BaselineJoinHashTable : public HashJoin {
       CacheItemType item_type,
       DeviceIdentifier device_identifier) const;
 
-  bool isBitwiseEq() const;
+  bool isBitwiseEq() const override;
 
   struct AlternativeCacheKeyForBaselineHashJoin {
     std::vector<InnerOuter> inner_outer_pairs;

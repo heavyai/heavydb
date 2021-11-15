@@ -771,8 +771,11 @@ void WindowFunctionContext::fillPartitionStart() {
                                                  false,
                                                  ExecutorDeviceType::CPU,
                                                  1};
-  partition_start_ = static_cast<int8_t*>(
-      checked_calloc(partition_start_bitmap.bitmapPaddedSizeBytes(), 1));
+  auto bitmap_sz = partition_start_bitmap.bitmapPaddedSizeBytes();
+  if (partitions_) {
+    bitmap_sz += partitions_->isBitwiseEq() ? 1 : 0;
+  }
+  partition_start_ = static_cast<int8_t*>(checked_calloc(bitmap_sz, 1));
   int64_t partition_count = partitionCount();
   std::vector<size_t> partition_offsets(partition_count);
   std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
@@ -790,8 +793,11 @@ void WindowFunctionContext::fillPartitionEnd() {
                                                  false,
                                                  ExecutorDeviceType::CPU,
                                                  1};
-  partition_end_ = static_cast<int8_t*>(
-      checked_calloc(partition_start_bitmap.bitmapPaddedSizeBytes(), 1));
+  auto bitmap_sz = partition_start_bitmap.bitmapPaddedSizeBytes();
+  if (partitions_) {
+    bitmap_sz += partitions_->isBitwiseEq() ? 1 : 0;
+  }
+  partition_end_ = static_cast<int8_t*>(checked_calloc(bitmap_sz, 1));
   int64_t partition_count = partitionCount();
   std::vector<size_t> partition_offsets(partition_count);
   std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());

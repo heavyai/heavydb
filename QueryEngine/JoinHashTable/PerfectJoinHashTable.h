@@ -205,7 +205,7 @@ class PerfectJoinHashTable : public HashJoin {
                                             const int shard_count,
                                             const CompilationOptions& co);
 
-  bool isBitwiseEq() const;
+  bool isBitwiseEq() const override;
 
   size_t getComponentBufferSize() const noexcept override;
 

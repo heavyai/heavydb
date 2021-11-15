@@ -1840,3 +1840,7 @@ void OverlapsJoinHashTable::putHashTableOnCpuToCache(
       hashtable_building_time,
       meta_info);
 }
+
+bool OverlapsJoinHashTable::isBitwiseEq() const {
+  return condition_->get_optype() == kBW_EQ;
+}
