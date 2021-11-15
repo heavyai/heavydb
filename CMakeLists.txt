@@ -579,7 +579,9 @@ include_directories(${LibArchive_INCLUDE_DIRS})
 
 find_package(CURL REQUIRED QUIET)
 if(CURL_FOUND)
-  set(CURL_LIBRARIES ${LibAwsS3_SUPPORT_LIBRARIES})
+  if(ENABLE_AWS_S3)
+    set(CURL_LIBRARIES ${LibAwsS3_SUPPORT_LIBRARIES})
+  endif()
 endif()
 
 # bcrypt
