@@ -1009,6 +1009,7 @@ class Executor {
                           const std::string& submitted_time_str,
                           const size_t executor_id,
                           const QuerySessionStatus::QueryStatus query_session_status);
+  size_t getNumCurentSessionsEnrolled() const;
   // get a set of executor ids that a given session has fired regardless of
   // each executor's status: pending or running
   const std::vector<size_t> getExecutorIdsRunningQuery(

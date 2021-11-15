@@ -1473,7 +1473,7 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
       if (pw.isCalciteExplain()) {
         throw std::runtime_error("explain is not unsupported by current thrift API");
       }
-      if (g_enable_runtime_query_interrupt) {
+      if (g_enable_runtime_query_interrupt && !pw.isSelectExplain()) {
         auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
         executor->enrollQuerySession(session_ptr->get_session_id(),
                                      query_str,
@@ -6334,7 +6334,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         });
     CHECK(dispatch_queue_);
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-    if (g_enable_runtime_query_interrupt && !query_session.empty()) {
+    if (g_enable_runtime_query_interrupt && !query_session.empty() &&
+        !pw.isSelectExplain()) {
       executor->enrollQuerySession(query_session,
                                    query_str,
                                    submitted_time_str,
