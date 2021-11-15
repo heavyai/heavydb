@@ -4110,6 +4110,11 @@ void Executor::enrollQuerySession(
   }
 }
 
+size_t Executor::getNumCurentSessionsEnrolled() const {
+  mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor_session_mutex_);
+  return queries_session_map_.size();
+}
+
 bool Executor::addToQuerySessionList(const QuerySessionId& query_session,
                                      const std::string& query_str,
                                      const std::string& submitted_time_str,

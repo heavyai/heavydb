@@ -21027,6 +21027,19 @@ TEST(Select, UpdatePinnedBuffers) {
   }
 }
 
+TEST(Select, Explain_Query_Session) {
+  // currently, QueryRunner only supports "EXPLAIN" query to get the IR of the given
+  // SELECT query but since we check "ALL" EXPLAIN-type queries before registering the
+  // session in the queue, (see ParserWrapper::isSelectExplain()) we can expect that we do
+  // not enroll query session for the rest of EXPLAIN-type queries
+  SKIP_ALL_ON_AGGREGATOR();
+  auto eo = QR::get()->defaultExecutionOptionsForRunSQL(false, true);
+  auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+  QR::get()->runSQL("SELECT COUNT(*) FROM test", co, eo);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  EXPECT_EQ(executor->getNumCurentSessionsEnrolled(), static_cast<size_t>(0));
+}
+
 namespace {
 int create_sharded_join_table(const std::string& table_name,
                               size_t fragment_size,
