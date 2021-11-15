@@ -109,7 +109,7 @@ TEST_F(DBEngineSQLTest, UpdateText) {
 }
 
 TEST_F(DBEngineSQLTest, FilterAndSimpleAggregation) {
-  const ssize_t num_rows{10};
+  const size_t num_rows{10};
 
   EXPECT_NO_THROW(
       SetUp("(x int not null, w tinyint, y int, z smallint, t bigint, "
@@ -121,7 +121,7 @@ TEST_F(DBEngineSQLTest, FilterAndSimpleAggregation) {
             "u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
             "smallint_nulls smallint, bn boolean not null)"));
 
-  for (ssize_t i = 0; i < num_rows; ++i) {
+  for (size_t i = 0; i < num_rows; ++i) {
     EXPECT_NO_THROW(
         run_dml("INSERT INTO dbe_test VALUES(7, -8, 42, 101, 1001, 't', 1.1, 1.1, null, "
                 "2.2, null, "

@@ -24,6 +24,7 @@ target_link_libraries(ImportExport RenderGroupAnalyzer mapd_thrift Logger Shared
 
 add_library(RowToColumn RowToColumnLoader.cpp RowToColumnLoader.h DelimitedParserUtils.cpp DelimitedParserUtils.h)
 target_link_libraries(RowToColumn ThriftClient)
+add_dependencies(RowToColumn mapd_thrift)
 
 add_executable(StreamImporter StreamImporter.cpp)
 target_link_libraries(StreamImporter RowToColumn mapd_thrift Logger Shared ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${PROFILER_LIBS})

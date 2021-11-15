@@ -395,14 +395,14 @@ TEST_F(FilePathWhitelistTest, RestoreTableBlacklist) {
 
 namespace {
 enum class FileLocationType {
-  RELATIVE,
-  ABSOLUTE,
+  RELATIVE_FT,
+  ABSOLUTE_FT,
 #ifdef HAVE_AWS_S3
   S3,
 #endif  // HAVE_AWS_S3
   HTTP,
   HTTPS,
-  First = RELATIVE,
+  First = RELATIVE_FT,
   Last = HTTPS
 };
 }  // namespace
@@ -414,9 +414,9 @@ class DBHandlerFilePathTest
   static std::string testParamsToString(const std::tuple<int, std::string>& params) {
     auto [file_location_type, suffix] = getTestParams(params);
     std::string param_str;
-    if (file_location_type == FileLocationType::RELATIVE) {
+    if (file_location_type == FileLocationType::RELATIVE_FT) {
       param_str = "RelativePath";
-    } else if (file_location_type == FileLocationType::ABSOLUTE) {
+    } else if (file_location_type == FileLocationType::ABSOLUTE_FT) {
       param_str = "AbsolutePath";
 #ifdef HAVE_AWS_S3
     } else if (file_location_type == FileLocationType::S3) {
@@ -483,9 +483,9 @@ class DBHandlerFilePathTest
         boost::filesystem::copy_file("../../Tests/FilePathWhitelist/" + file_name,
                                      full_file_path);
       }
-      if (file_location_type == FileLocationType::ABSOLUTE) {
+      if (file_location_type == FileLocationType::ABSOLUTE_FT) {
         path = full_file_path.string();
-      } else if (file_location_type == FileLocationType::RELATIVE) {
+      } else if (file_location_type == FileLocationType::RELATIVE_FT) {
         path = file_name;
       } else {
         UNREACHABLE();

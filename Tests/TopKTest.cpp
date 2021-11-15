@@ -21,6 +21,7 @@
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "../Shared/DateTimeParser.h"
 #include "../SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -31,6 +32,10 @@
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
+#endif
+
+#ifdef _WIN32
+#define timegm _mkgmtime
 #endif
 
 using namespace std;
@@ -211,36 +216,35 @@ class SQLiteComparator {
           case kTIMESTAMP:
           case kDATE: {
             const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
+            const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
             CHECK(omnisci_as_int_p);
             const auto omnisci_val = *omnisci_as_int_p;
             time_t nsec = 0;
             const int dimen = omnisci_ti.get_dimension();
+
             if (ref_is_null) {
               CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
             } else {
-              struct tm tm_struct {
-                0
-              };
-              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              auto end_str =
-                  strptime(ref_val.c_str(),
-                           omnisci_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d",
-                           &tm_struct);
-              // handle fractional seconds
-              if (end_str != nullptr && *end_str != '.') {
-                if (end_str) {
-                  ASSERT_EQ(0, *end_str) << errmsg;
-                }
-                ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()))
-                    << errmsg;
+              auto temp_ref_value = dateTimeParseOptional<kTIMESTAMP>(ref_val, dimen);
+              if (!temp_ref_value) {
+                temp_ref_value = dateTimeParseOptional<kDATE>(ref_val, dimen);
               }
+              CHECK(temp_ref_value) << ref_val;
+              nsec = temp_ref_value.value();
               if (timestamp_approx) {
                 // approximate result give 10 second lee way
-                ASSERT_NEAR(*omnisci_as_int_p,
-                            dimen > 0 ? nsec : timegm(&tm_struct),
-                            dimen > 0 ? 10 * pow(10, dimen) : 10)
+                ASSERT_NEAR(*omnisci_as_int_p, nsec, dimen > 0 ? 10 * pow(10, dimen) : 10)
                     << errmsg;
               } else {
+                struct tm tm_struct {
+                  0
+                };
+#ifdef _WIN32
+                auto ret_code = gmtime_s(&tm_struct, &nsec);
+                CHECK(ret_code == 0) << "Error code returned " << ret_code;
+#else
+                gmtime_r(&nsec, &tm_struct);
+#endif
                 if (is_arrow && omnisci_type == kDATE) {
                   ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
                       << errmsg;

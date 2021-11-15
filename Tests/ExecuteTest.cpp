@@ -26,6 +26,7 @@
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/DateConverters.h"
+#include "../Shared/DateTimeParser.h"
 #include "../Shared/Globals.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/scope.h"
@@ -44,6 +45,10 @@
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
+#endif
+
+#ifdef _WIN32
+#define timegm _mkgmtime
 #endif
 
 using namespace std;
@@ -291,45 +296,27 @@ class SQLiteComparator {
             if (ref_is_null) {
               CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
             } else {
-              struct tm tm_struct {
-                0
-              };
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              auto end_str =
-                  strptime(ref_val.c_str(),
-                           omnisci_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d",
-                           &tm_struct);
-              // handle fractional seconds
-              if (end_str != nullptr && *end_str != '.') {
-                if (end_str) {
-                  ASSERT_EQ(0, *end_str) << errmsg;
-                }
-                ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()))
-                    << errmsg;
+              auto temp_val = dateTimeParseOptional<kTIMESTAMP>(ref_val, dimen);
+              if (!temp_val) {
+                temp_val = dateTimeParseOptional<kDATE>(ref_val, dimen);
               }
-              if (dimen > 0 && omnisci_type == kTIMESTAMP) {
-                int fs = 0;
-                if (*end_str == '.') {
-                  end_str++;
-                  unsigned int frac_num;
-                  int ntotal;
-                  sscanf(end_str, "%d%n", &frac_num, &ntotal);
-                  fs = parse_fractional_seconds(frac_num, ntotal, omnisci_ti);
-                  nsec = timegm(&tm_struct) * pow(10, dimen);
-                  nsec += fs;
-                } else if (*end_str == '\0') {
-                  nsec = timegm(&tm_struct) * pow(10, dimen);
-                } else {
-                  CHECK(false) << errmsg;
-                }
-              }
+              CHECK(temp_val) << ref_val;
+              nsec = temp_val.value();
               if (timestamp_approx) {
                 // approximate result give 10 second lee way
-                ASSERT_NEAR(*omnisci_as_int_p,
-                            dimen > 0 ? nsec : timegm(&tm_struct),
-                            dimen > 0 ? 10 * pow(10, dimen) : 10)
+                ASSERT_NEAR(*omnisci_as_int_p, nsec, dimen > 0 ? 10 * pow(10, dimen) : 10)
                     << errmsg;
               } else {
+                struct tm tm_struct {
+                  0
+                };
+#ifdef _WIN32
+                auto ret_code = gmtime_s(&tm_struct, &nsec);
+                CHECK(ret_code == 0) << "Error code returned " << ret_code;
+#else
+                gmtime_r(&nsec, &tm_struct);
+#endif
                 if (is_arrow && omnisci_type == kDATE) {
                   if (device_type == ExecutorDeviceType::CPU) {
                     ASSERT_EQ(
@@ -17017,8 +17004,8 @@ TEST(Select, FilterNodeCoalesce) {
           "FIRST, t ASC NULLS FIRST;";
       c(query, query, dt);
     }
-    const auto buffer_pool_stats =
-        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats(
+        QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(2));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(2));
@@ -17038,8 +17025,8 @@ TEST(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
 
-    const auto buffer_pool_stats =
-        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats(
+        QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -17060,8 +17047,8 @@ TEST(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
 
-    const auto buffer_pool_stats =
-        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats(
+        QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -17081,8 +17068,8 @@ TEST(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
 
-    const auto buffer_pool_stats =
-        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats(
+        QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -17099,8 +17086,8 @@ TEST(Select, FilterNodeCoalesce) {
           "FROM test_x ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, d ASC NULLS FIRST;";
       c(query, query, dt);
     }
-    const auto buffer_pool_stats =
-        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats(
+        QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));

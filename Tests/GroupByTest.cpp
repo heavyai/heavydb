@@ -359,19 +359,26 @@ class LowCardinalityThresholdTest : public ::testing::Test {
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;");
     run_ddl_statement("CREATE TABLE low_cardinality (fl text,ar text, dep text);");
+    // note - some boost::filesystem::path methods returns wchar strings on windows
+    // and char strings on linux.
 
     // write some data to a file
-    boost::filesystem::path temp_path =
+    boost::filesystem::path filename =
         boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-    const std::string filename_with_ext = temp_path.native() + ".csv";
-    std::fstream f(filename_with_ext, f.binary | f.out | f.trunc);
+
+    filename.replace_extension(boost::filesystem::path{".csv"});
+
+    // Note on win path::native() returns wchar, which is fine with fstream
+    std::fstream f(filename.native(), std::ios::binary | std::ios::out | std::ios::trunc);
+
     CHECK(f.is_open());
     for (size_t i = 0; i < g_big_group_threshold; i++) {
       f << i << ", " << i + 1 << ", " << i + 2 << std::endl;
     }
     f.close();
 
-    run_ddl_statement("COPY low_cardinality FROM '" + filename_with_ext +
+    // Note the path::string() method  returns the appropriate type on win and linux
+    run_ddl_statement("COPY low_cardinality FROM '" + filename.string() +
                       "' WITH (header='false');");
   }
 
@@ -397,20 +404,25 @@ class BigCardinalityThresholdTest : public ::testing::Test {
 
     run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
     run_ddl_statement("CREATE TABLE big_cardinality (fl text,ar text, dep text);");
+    // note - some boost::filesystem::path methods returns wchar strings on windows
+    // and char strings on linux.
 
     // write some data to a file
-    boost::filesystem::path temp_path =
+    boost::filesystem::path filename =
         boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-    const std::string filename_with_ext = temp_path.native() + ".csv";
-    std::fstream f(filename_with_ext, f.binary | f.out | f.trunc);
-    CHECK(f.is_open());
+
+    filename.replace_extension(boost::filesystem::path{".csv"});
+
+    std::fstream f(filename.native(), std::ios::binary | std::ios::out | std::ios::trunc);
+    CHECK(f.is_open()) << filename.string();
+
     // add enough groups to trigger the watchdog exception if we use a poor estimate
     for (size_t i = 0; i < g_watchdog_baseline_max_groups; i++) {
       f << i << ", " << i + 1 << ", " << i + 2 << std::endl;
     }
     f.close();
 
-    run_ddl_statement("COPY big_cardinality FROM '" + filename_with_ext +
+    run_ddl_statement("COPY big_cardinality FROM '" + filename.string() +
                       "' WITH (header='false');");
   }
 
