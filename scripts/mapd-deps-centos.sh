@@ -194,7 +194,7 @@ download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disabl
 
 # thrift
 VERS=0.15.0
-# http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
+# http://dlcdn.apache.org/thrift/$VERS/thrift-$VERS.tar.gz
 download ${HTTP_DEPS}/thrift-$VERS.tar.gz
 extract thrift-$VERS.tar.gz
 pushd thrift-$VERS

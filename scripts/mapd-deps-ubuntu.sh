@@ -142,7 +142,7 @@ install_geos
 install_awscpp -j $(nproc)
 
 VERS=0.15.0
-wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
+wget --continue http://dlcdn.apache.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
