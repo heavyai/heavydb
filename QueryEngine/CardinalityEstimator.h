@@ -117,13 +117,6 @@ class LargeNDVEstimator : public NDVEstimator {
 
 }  // namespace Analyzer
 
-RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit,
-                                              const int64_t range);
-
-RelAlgExecutionUnit create_count_all_execution_unit(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    std::shared_ptr<Analyzer::Expr> replacement_target);
-
 ResultSetPtr reduce_estimator_results(
     const RelAlgExecutionUnit& ra_exe_unit,
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device);

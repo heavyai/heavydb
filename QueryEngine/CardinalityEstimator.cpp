@@ -56,7 +56,7 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                         const bool is_agg,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo) {
-  const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit, range);
+  const auto estimator_exe_unit = work_unit.exe_unit.createNdvExecutionUnit(range);
   size_t one{1};
   ColumnCacheMap column_cache;
   try {
@@ -89,51 +89,51 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
   return 0;
 }
 
-RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit,
-                                              const int64_t range) {
+RelAlgExecutionUnit RelAlgExecutionUnit::createNdvExecutionUnit(
+    const int64_t range) const {
   const bool use_large_estimator =
-      range > g_large_ndv_threshold || ra_exe_unit.groupby_exprs.size() > 1;
-  return {ra_exe_unit.input_descs,
-          ra_exe_unit.input_col_descs,
-          ra_exe_unit.simple_quals,
-          ra_exe_unit.quals,
-          ra_exe_unit.join_quals,
+      range > g_large_ndv_threshold || groupby_exprs.size() > 1;
+  return {input_descs,
+          input_col_descs,
+          simple_quals,
+          quals,
+          join_quals,
           {},
           {},
-          use_large_estimator
-              ? makeExpr<Analyzer::LargeNDVEstimator>(ra_exe_unit.groupby_exprs)
-              : makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
+          use_large_estimator ? makeExpr<Analyzer::LargeNDVEstimator>(groupby_exprs)
+                              : makeExpr<Analyzer::NDVEstimator>(groupby_exprs),
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
           0,
-          ra_exe_unit.query_hint,
-          ra_exe_unit.query_plan_dag,
-          ra_exe_unit.hash_table_build_plan_dag,
-          ra_exe_unit.table_id_to_node_map,
+          query_hint,
+          query_plan_dag,
+          hash_table_build_plan_dag,
+          table_id_to_node_map,
           false,
-          ra_exe_unit.union_all,
-          ra_exe_unit.query_state};
+          union_all,
+          query_state,
+          {}};
 }
 
-RelAlgExecutionUnit create_count_all_execution_unit(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    std::shared_ptr<Analyzer::Expr> replacement_target) {
-  return {ra_exe_unit.input_descs,
-          ra_exe_unit.input_col_descs,
-          ra_exe_unit.simple_quals,
-          strip_join_covered_filter_quals(ra_exe_unit.quals, ra_exe_unit.join_quals),
-          ra_exe_unit.join_quals,
+RelAlgExecutionUnit RelAlgExecutionUnit::createCountAllExecutionUnit(
+    Analyzer::Expr* replacement_target) const {
+  return {input_descs,
+          input_col_descs,
+          simple_quals,
+          strip_join_covered_filter_quals(quals, join_quals),
+          join_quals,
           {},
-          {replacement_target.get()},
+          {replacement_target},
           nullptr,
           SortInfo{{}, SortAlgorithm::Default, 0, 0},
           0,
-          ra_exe_unit.query_hint,
-          ra_exe_unit.query_plan_dag,
-          ra_exe_unit.hash_table_build_plan_dag,
-          ra_exe_unit.table_id_to_node_map,
+          query_hint,
+          query_plan_dag,
+          hash_table_build_plan_dag,
+          table_id_to_node_map,
           false,
-          ra_exe_unit.union_all,
-          ra_exe_unit.query_state};
+          union_all,
+          query_state,
+          {replacement_target}};
 }
 
 ResultSetPtr reduce_estimator_results(

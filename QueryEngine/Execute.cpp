@@ -885,27 +885,39 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
 namespace {
 
 ResultSetPtr get_merged_result(
-    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
+    std::vector<TargetInfo> const& targets) {
   auto& first = results_per_device.front().first;
   CHECK(first);
+  auto const first_target_idx = result_set::first_dict_encoded_idx(targets);
+  if (first_target_idx) {
+    first->translateDictEncodedString(targets, *first_target_idx);
+  }
   for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
     const auto& next = results_per_device[dev_idx].first;
     CHECK(next);
+    if (first_target_idx) {
+      next->translateDictEncodedString(targets, *first_target_idx);
+    }
     first->append(*next);
   }
   return std::move(first);
 }
+
+struct GetTargetInfo {
+  TargetInfo operator()(Analyzer::Expr const* const target_expr) const {
+    return get_target_info(target_expr, g_bigint_count);
+  }
+};
 
 }  // namespace
 
 ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
                                     const RelAlgExecutionUnit& ra_exe_unit) {
   auto& results_per_device = shared_context.getFragmentResults();
+  auto const targets = shared::transform<std::vector<TargetInfo>>(
+      ra_exe_unit.target_exprs, GetTargetInfo{});
   if (results_per_device.empty()) {
-    std::vector<TargetInfo> targets;
-    for (const auto target_expr : ra_exe_unit.target_exprs) {
-      targets.push_back(get_target_info(target_expr, g_bigint_count));
-    }
     return std::make_shared<ResultSet>(targets,
                                        ExecutorDeviceType::CPU,
                                        QueryMemoryDescriptor(),
@@ -923,7 +935,7 @@ ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
               return lhs.second.front() < rhs.second.front();
             });
 
-  return get_merged_result(results_per_device);
+  return get_merged_result(results_per_device, targets);
 }
 
 ResultSetPtr Executor::reduceMultiDeviceResults(
@@ -937,10 +949,8 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
   }
 
   if (results_per_device.empty()) {
-    std::vector<TargetInfo> targets;
-    for (const auto target_expr : ra_exe_unit.target_exprs) {
-      targets.push_back(get_target_info(target_expr, g_bigint_count));
-    }
+    auto const targets = shared::transform<std::vector<TargetInfo>>(
+        ra_exe_unit.target_exprs, GetTargetInfo{});
     return std::make_shared<ResultSet>(targets,
                                        ExecutorDeviceType::CPU,
                                        QueryMemoryDescriptor(),
@@ -1807,21 +1817,24 @@ void Executor::addTransientStringLiterals(
     visit_expr(group_expr.get());
   }
 
-  for (const auto target_expr : ra_exe_unit.target_exprs) {
+  const auto visit_target_expr = [&](const Analyzer::Expr* target_expr) {
     const auto& target_type = target_expr->get_type_info();
-    if (target_type.is_string() && target_type.get_compression() != kENCODING_DICT) {
-      continue;
-    }
-    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-    if (agg_expr) {
-      if (agg_expr->get_aggtype() == kSINGLE_VALUE ||
-          agg_expr->get_aggtype() == kSAMPLE) {
-        visit_expr(agg_expr->get_arg());
+    if (!target_type.is_string() || target_type.get_compression() == kENCODING_DICT) {
+      const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+      if (agg_expr) {
+        if (agg_expr->get_aggtype() == kSINGLE_VALUE ||
+            agg_expr->get_aggtype() == kSAMPLE) {
+          visit_expr(agg_expr->get_arg());
+        }
+      } else {
+        visit_expr(target_expr);
       }
-    } else {
-      visit_expr(target_expr);
     }
-  }
+  };
+  const auto& target_exprs = ra_exe_unit.target_exprs;
+  std::for_each(target_exprs.begin(), target_exprs.end(), visit_target_expr);
+  const auto& target_exprs_union = ra_exe_unit.target_exprs_union;
+  std::for_each(target_exprs_union.begin(), target_exprs_union.end(), visit_target_expr);
 }
 
 ExecutorDeviceType Executor::getDeviceTypeForTargets(

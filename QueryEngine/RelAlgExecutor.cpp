@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1266,11 +1266,6 @@ get_input_desc_impl(const RA* ra_node,
     const int table_id = table_id_from_ra(input_ra);
     input_descs.emplace_back(table_id, input_idx);
   }
-  std::sort(input_descs.begin(),
-            input_descs.end(),
-            [](const InputDescriptor& lhs, const InputDescriptor& rhs) {
-              return lhs.getNestLevel() < rhs.getNestLevel();
-            });
   std::unordered_set<std::shared_ptr<const InputColDescriptor>> input_col_descs_unique;
   collect_used_input_desc(input_descs,
                           cat,
@@ -2163,15 +2158,6 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
   if (boost::algorithm::any_of(logical_union->getOutputMetainfo(), isGeometry)) {
     throw std::runtime_error("UNION does not support subqueries with geo-columns.");
   }
-  // Only Projections and Aggregates from a UNION are supported for now.
-  query_dag_->eachNode([logical_union](RelAlgNode const* node) {
-    if (node->hasInput(logical_union) &&
-        !shared::dynamic_castable_to_any<RelProject, RelLogicalUnion, RelAggregate>(
-            node)) {
-      throw std::runtime_error("UNION ALL not yet supported in this context.");
-    }
-  });
-
   auto work_unit =
       createUnionWorkUnit(logical_union, {{}, SortAlgorithm::Default, 0, 0}, eo);
   return executeWorkUnit(work_unit,
@@ -3196,7 +3182,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                   false,
                                   nullptr);
   const auto count_all_exe_unit =
-      create_count_all_execution_unit(work_unit.exe_unit, count);
+      work_unit.exe_unit.createCountAllExecutionUnit(count.get());
   size_t one{1};
   ResultSetPtr count_all_result;
   try {
@@ -3985,6 +3971,14 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
   return inputs;
 }
 
+std::vector<Analyzer::Expr*> get_raw_pointers(
+    std::vector<std::shared_ptr<Analyzer::Expr>> const& input) {
+  std::vector<Analyzer::Expr*> output(input.size());
+  auto const raw_ptr = [](auto& shared_ptr) { return shared_ptr.get(); };
+  std::transform(input.cbegin(), input.cend(), output.begin(), raw_ptr);
+  return output;
+}
+
 }  // namespace
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
@@ -4104,7 +4098,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
       translate_scalar_sources(project, translator, eo.executor_type);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
-  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+  const auto target_exprs = get_raw_pointers(target_exprs_owned);
   auto query_hint = RegisteredQueryHint::defaults();
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(project);
@@ -4203,20 +4197,24 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
   RelAlgTranslator translator(
       cat_, query_state_, executor_, input_to_nest_level, {}, now_, eo.just_explain);
 
-  auto const input_exprs_owned = target_exprs_for_union(logical_union->getInput(0));
-  CHECK(!input_exprs_owned.empty())
-      << "No metainfo found for input node " << logical_union->getInput(0)->toString();
-  VLOG(3) << "input_exprs_owned.size()=" << input_exprs_owned.size();
-  for (auto& input_expr : input_exprs_owned) {
-    VLOG(3) << "  " << input_expr->toString();
+  // For UNION queries, we need to keep the target_exprs from both subqueries since they
+  // may differ on StringDictionaries.
+  std::vector<Analyzer::Expr*> target_exprs_pair[2];
+  for (unsigned i = 0; i < 2; ++i) {
+    auto input_exprs_owned = target_exprs_for_union(logical_union->getInput(i));
+    CHECK(!input_exprs_owned.empty()) << "No metainfo found for input node(" << i << ") "
+                                      << logical_union->getInput(i)->toString();
+    VLOG(3) << "i(" << i << ") input_exprs_owned.size()=" << input_exprs_owned.size();
+    for (auto& input_expr : input_exprs_owned) {
+      VLOG(3) << "  " << input_expr->toString();
+    }
+    target_exprs_pair[i] = get_raw_pointers(input_exprs_owned);
+    shared::append_move(target_exprs_owned_, std::move(input_exprs_owned));
   }
-  target_exprs_owned_.insert(
-      target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
-  const auto target_exprs = get_exprs_not_owned(input_exprs_owned);
 
   VLOG(3) << "input_descs=" << shared::printContainer(input_descs)
           << " input_col_descs=" << shared::printContainer(input_col_descs)
-          << " target_exprs.size()=" << target_exprs.size()
+          << " target_exprs.size()=" << target_exprs_pair[0].size()
           << " max_num_tuples=" << max_num_tuples;
 
   const RelAlgExecutionUnit exe_unit = {input_descs,
@@ -4225,7 +4223,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
                                         {},  // rewrite_quals(quals_cf.quals),
                                         {},
                                         {nullptr},
-                                        target_exprs,
+                                        target_exprs_pair[0],
                                         nullptr,
                                         sort_info,
                                         max_num_tuples,
@@ -4235,7 +4233,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
                                         {},
                                         false,
                                         logical_union->isAll(),
-                                        query_state_};
+                                        query_state_,
+                                        target_exprs_pair[1]};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
 
@@ -4290,7 +4289,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       rel_table_func, translator, ::ExecutorType::TableFunctions);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
-  auto input_exprs = get_exprs_not_owned(input_exprs_owned);
+  auto input_exprs = get_raw_pointers(input_exprs_owned);
 
   const auto table_function_impl_and_type_infos = [=]() {
     if (is_gpu) {
@@ -4460,7 +4459,7 @@ get_inputs_meta(const RelFilter* filter,
         scalar_sources_owned.push_back(translator.translateScalarRex(input_it->get()));
       }
       const auto source_metadata =
-          get_targets_meta(scan_source, get_exprs_not_owned(scalar_sources_owned));
+          get_targets_meta(scan_source, get_raw_pointers(scalar_sources_owned));
       in_metainfo.insert(
           in_metainfo.end(), source_metadata.begin(), source_metadata.end());
       exprs_owned.insert(
@@ -4508,7 +4507,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   const auto qual = fold_expr(filter_expr.get());
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
-  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+  const auto target_exprs = get_raw_pointers(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
   const auto rewritten_qual = rewrite_expr(qual.get());
   auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(filter,

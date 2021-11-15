@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <atomic>
 #include <bitset>
+#include <functional>
 #include <future>
 #include <numeric>
 
@@ -283,6 +284,107 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
   CHECK_LT(col_idx, targets_.size());
   return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false)
                                             : targets_[col_idx].sql_type;
+}
+
+StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) {
+  constexpr bool with_generation = true;
+  return catalog_ ? row_set_mem_owner_->getOrAddStringDictProxy(
+                        dict_id, with_generation, catalog_)
+                  : row_set_mem_owner_->getStringDictProxy(dict_id);
+}
+
+// Update any dictionary-encoded targets within storage_ with the corresponding
+// dictionary in the given targets parameter, if their comp_param (dictionary) differs.
+// This may modify both the storage_ values and storage_ targets.
+// Does not iterate through appended_storage_.
+// Iterate over targets starting at index target_idx.
+void ResultSet::translateDictEncodedString(std::vector<TargetInfo> const& targets,
+                                           size_t const start_idx) {
+  using StringId = int32_t;
+  if (!storage_) {
+    return;
+  }
+  CHECK_EQ(targets.size(), storage_->targets_.size());
+  RowIterationState state;
+  for (size_t target_idx = start_idx; target_idx < targets.size(); ++target_idx) {
+    auto const& type0 = targets[target_idx].sql_type;
+    if (type0.is_dict_encoded_string()) {
+      auto& type1 = const_cast<SQLTypeInfo&>(storage_->targets_[target_idx].sql_type);
+      CHECK(type1.is_dict_encoded_string());
+      if (type0.get_comp_param() != type1.get_comp_param()) {
+        auto* const sdp0 = getStringDictionaryProxy(type0.get_comp_param());
+        CHECK(sdp0);
+        auto const* const sdp1 = getStringDictionaryProxy(type1.get_comp_param());
+        CHECK(sdp1);
+        state.cur_target_idx_ = target_idx;
+        eachCellInColumn(state, [sdp0, sdp1](int8_t const* const cell_ptr) {
+          StringId* const string_id_ptr =
+              const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
+          if (*string_id_ptr != NULL_INT) {
+            std::string const str = sdp1->getString(*string_id_ptr);
+            *string_id_ptr = sdp0->getOrAddTransient(str);
+          }
+        });
+        type1.set_comp_param(type0.get_comp_param());
+      }
+    }
+  }
+}
+
+// For each cell in column target_idx, callback func with pointer to datum.
+// This currently assumes the column type is a dictionary-encoded string, but this logic
+// can be generalized to other types.
+void ResultSet::eachCellInColumn(RowIterationState& state,
+                                 std::function<void(int8_t const*)> func) {
+  size_t const target_idx = state.cur_target_idx_;
+  QueryMemoryDescriptor& storage_qmd = storage_->query_mem_desc_;
+  CHECK_LT(target_idx, lazy_fetch_info_.size());
+  auto& col_lazy_fetch = lazy_fetch_info_[target_idx];
+  CHECK(col_lazy_fetch.is_lazily_fetched);
+  int const target_size = storage_->targets_[target_idx].sql_type.get_size();
+  CHECK_LT(0, target_size) << storage_->targets_[target_idx].toString();
+  size_t const nrows = storage_->binSearchRowCount();
+  if (storage_qmd.didOutputColumnar()) {
+    // Logic based on ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage()
+    if (state.buf_ptr_ == nullptr) {
+      state.buf_ptr_ = get_cols_ptr(storage_->buff_, storage_qmd);
+      state.compact_sz1_ = storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               ? storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               : query_mem_desc_.getEffectiveKeyWidth();
+    }
+    for (size_t j = state.prev_target_idx_; j < state.cur_target_idx_; ++j) {
+      size_t const next_target_idx = j + 1;  // Set state to reflect next target_idx j+1
+      state.buf_ptr_ = advance_to_next_columnar_target_buff(
+          state.buf_ptr_, storage_qmd, state.agg_idx_);
+      auto const& next_agg_info = storage_->targets_[next_target_idx];
+      state.agg_idx_ =
+          advance_slot(state.agg_idx_, next_agg_info, separate_varlen_storage_valid_);
+      state.compact_sz1_ = storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               ? storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               : query_mem_desc_.getEffectiveKeyWidth();
+    }
+    for (size_t i = 0; i < nrows; ++i) {
+      int8_t const* const pos_ptr = state.buf_ptr_ + i * state.compact_sz1_;
+      int64_t pos = read_int_from_buff(pos_ptr, target_size);
+      CHECK_GE(pos, 0);
+      auto& frag_col_buffers = getColumnFrag(0, target_idx, pos);
+      CHECK_LT(size_t(col_lazy_fetch.local_col_id), frag_col_buffers.size());
+      int8_t const* const col_frag = frag_col_buffers[col_lazy_fetch.local_col_id];
+      func(col_frag + pos * target_size);
+    }
+  } else {
+    size_t const key_bytes_with_padding =
+        align_to_int64(get_key_bytes_rowwise(storage_qmd));
+    for (size_t i = 0; i < nrows; ++i) {
+      int8_t const* const keys_ptr = row_ptr_rowwise(storage_->buff_, storage_qmd, i);
+      int8_t const* const rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
+      int64_t pos = *reinterpret_cast<int64_t const*>(rowwise_target_ptr);
+      auto& frag_col_buffers = getColumnFrag(0, target_idx, pos);
+      CHECK_LT(size_t(col_lazy_fetch.local_col_id), frag_col_buffers.size());
+      int8_t const* const col_frag = frag_col_buffers[col_lazy_fetch.local_col_id];
+      func(col_frag + pos * target_size);
+    }
+  }
 }
 
 namespace {
@@ -799,15 +901,19 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
 
   for (const auto& order_entry : order_entries_) {
     CHECK_GE(order_entry.tle_no, 1);
-    const auto& agg_info = result_set_->targets_[order_entry.tle_no - 1];
-    const auto entry_ti = get_compact_type(agg_info);
-    bool float_argument_input = takes_float_argument(agg_info);
+    // lhs_entry_ti and rhs_entry_ti can differ on comp_param w/ UNION of string dicts.
+    const auto& lhs_agg_info = lhs_storage->targets_[order_entry.tle_no - 1];
+    const auto& rhs_agg_info = rhs_storage->targets_[order_entry.tle_no - 1];
+    const auto lhs_entry_ti = get_compact_type(lhs_agg_info);
+    const auto rhs_entry_ti = get_compact_type(rhs_agg_info);
+    // When lhs vs rhs doesn't matter, the lhs is used. For example:
+    bool float_argument_input = takes_float_argument(lhs_agg_info);
     // Need to determine if the float value has been stored as float
     // or if it has been compacted to a different (often larger 8 bytes)
     // in distributed case the floats are actually 4 bytes
     // TODO the above takes_float_argument() is widely used wonder if this problem
     // exists elsewhere
-    if (entry_ti.get_type() == kFLOAT) {
+    if (lhs_entry_ti.get_type() == kFLOAT) {
       const auto is_col_lazy =
           !result_set_->lazy_fetch_info_.empty() &&
           result_set_->lazy_fetch_info_[order_entry.tle_no - 1].is_lazily_fetched;
@@ -818,7 +924,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       }
     }
 
-    if (UNLIKELY(is_distinct_target(agg_info))) {
+    if (UNLIKELY(is_distinct_target(lhs_agg_info))) {
       CHECK_LT(materialized_count_distinct_buffer_idx,
                count_distinct_materialized_buffers_.size());
 
@@ -831,7 +937,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
         continue;
       }
       return (lhs_sz < rhs_sz) != order_entry.is_desc;
-    } else if (UNLIKELY(agg_info.agg_kind == kAPPROX_QUANTILE)) {
+    } else if (UNLIKELY(lhs_agg_info.agg_kind == kAPPROX_QUANTILE)) {
       CHECK_LT(materialized_approx_quantile_buffer_idx,
                approx_quantile_materialized_buffers_.size());
       const auto& approx_quantile_materialized_buffer =
@@ -841,7 +947,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       ++materialized_approx_quantile_buffer_idx;
       if (lhs_value == rhs_value) {
         continue;
-      } else if (!entry_ti.get_notnull()) {
+      } else if (!lhs_entry_ti.get_notnull()) {
         if (lhs_value == NULL_DOUBLE) {
           return order_entry.nulls_first;
         } else if (rhs_value == NULL_DOUBLE) {
@@ -860,29 +966,31 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
                                                      order_entry.tle_no - 1,
                                                      rhs_storage_lookup_result);
 
-    if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
-                 isNull(entry_ti, rhs_v, float_argument_input))) {
+    if (UNLIKELY(isNull(lhs_entry_ti, lhs_v, float_argument_input) &&
+                 isNull(rhs_entry_ti, rhs_v, float_argument_input))) {
       continue;
     }
-    if (UNLIKELY(isNull(entry_ti, lhs_v, float_argument_input) &&
-                 !isNull(entry_ti, rhs_v, float_argument_input))) {
+    if (UNLIKELY(isNull(lhs_entry_ti, lhs_v, float_argument_input) &&
+                 !isNull(rhs_entry_ti, rhs_v, float_argument_input))) {
       return order_entry.nulls_first;
     }
-    if (UNLIKELY(isNull(entry_ti, rhs_v, float_argument_input) &&
-                 !isNull(entry_ti, lhs_v, float_argument_input))) {
+    if (UNLIKELY(isNull(rhs_entry_ti, rhs_v, float_argument_input) &&
+                 !isNull(lhs_entry_ti, lhs_v, float_argument_input))) {
       return !order_entry.nulls_first;
     }
 
     if (LIKELY(lhs_v.isInt())) {
       CHECK(rhs_v.isInt());
-      if (UNLIKELY(entry_ti.is_string() &&
-                   entry_ti.get_compression() == kENCODING_DICT)) {
-        CHECK_EQ(4, entry_ti.get_logical_size());
+      if (UNLIKELY(lhs_entry_ti.is_string() &&
+                   lhs_entry_ti.get_compression() == kENCODING_DICT)) {
+        CHECK_EQ(4, lhs_entry_ti.get_logical_size());
         CHECK(executor_);
-        const auto string_dict_proxy = executor_->getStringDictionaryProxy(
-            entry_ti.get_comp_param(), result_set_->row_set_mem_owner_, false);
-        auto lhs_str = string_dict_proxy->getString(lhs_v.i1);
-        auto rhs_str = string_dict_proxy->getString(rhs_v.i1);
+        const auto lhs_string_dict_proxy = executor_->getStringDictionaryProxy(
+            lhs_entry_ti.get_comp_param(), result_set_->row_set_mem_owner_, false);
+        const auto rhs_string_dict_proxy = executor_->getStringDictionaryProxy(
+            rhs_entry_ti.get_comp_param(), result_set_->row_set_mem_owner_, false);
+        const auto lhs_str = lhs_string_dict_proxy->getString(lhs_v.i1);
+        const auto rhs_str = rhs_string_dict_proxy->getString(rhs_v.i1);
         if (lhs_str == rhs_str) {
           continue;
         }
@@ -892,7 +1000,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       if (lhs_v.i1 == rhs_v.i1) {
         continue;
       }
-      if (entry_ti.is_fp()) {
+      if (lhs_entry_ti.is_fp()) {
         if (float_argument_input) {
           const auto lhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&lhs_v.i1));
           const auto rhs_dval = *reinterpret_cast<const float*>(may_alias_ptr(&rhs_v.i1));
@@ -910,9 +1018,9 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
       if (lhs_v.isPair()) {
         CHECK(rhs_v.isPair());
         const auto lhs =
-            pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti, float_argument_input);
+            pair_to_double({lhs_v.i1, lhs_v.i2}, lhs_entry_ti, float_argument_input);
         const auto rhs =
-            pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti, float_argument_input);
+            pair_to_double({rhs_v.i1, rhs_v.i2}, rhs_entry_ti, float_argument_input);
         if (lhs == rhs) {
           continue;
         }
@@ -1134,6 +1242,21 @@ std::vector<size_t> ResultSet::getSlotIndicesForTargetIndices() const {
 
 bool result_set::can_use_parallel_algorithms(const ResultSet& rows) {
   return !rows.isTruncated();
+}
+
+namespace {
+struct IsDictEncodedStr {
+  bool operator()(TargetInfo const& target_info) const {
+    return target_info.sql_type.is_dict_encoded_string();
+  }
+};
+}  // namespace
+
+std::optional<size_t> result_set::first_dict_encoded_idx(
+    std::vector<TargetInfo> const& targets) {
+  auto const itr = std::find_if(targets.begin(), targets.end(), IsDictEncodedStr{});
+  return itr == targets.end() ? std::nullopt
+                              : std::make_optional<size_t>(itr - targets.begin());
 }
 
 bool result_set::use_parallel_algorithms(const ResultSet& rows) {

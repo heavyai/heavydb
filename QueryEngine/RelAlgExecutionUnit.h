@@ -134,6 +134,11 @@ struct RelAlgExecutionUnit {
   // empty if not a UNION, true if UNION ALL, false if regular UNION
   const std::optional<bool> union_all;
   std::shared_ptr<const query_state::QueryState> query_state;
+  std::vector<Analyzer::Expr*> target_exprs_union;  // targets in second subquery of UNION
+
+  RelAlgExecutionUnit createNdvExecutionUnit(const int64_t range) const;
+  RelAlgExecutionUnit createCountAllExecutionUnit(
+      Analyzer::Expr* replacement_target) const;
 };
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit);

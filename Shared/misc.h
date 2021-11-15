@@ -69,9 +69,9 @@ const V& get_from_map(const std::map<K, V>& map, const K& key) {
 }
 
 // source is destructively appended to the back of destination.
-// source.empty() is true after call. Return number of elements appended.
+// Return number of elements appended.
 template <typename T>
-size_t appendMove(std::vector<T>& destination, std::vector<T>& source) {
+size_t append_move(std::vector<T>& destination, std::vector<T>&& source) {
   if (source.empty()) {
     return 0;
   } else if (destination.empty()) {
@@ -81,7 +81,6 @@ size_t appendMove(std::vector<T>& destination, std::vector<T>& source) {
     size_t const source_size = source.size();
     destination.reserve(destination.size() + source_size);
     std::move(std::begin(source), std::end(source), std::back_inserter(destination));
-    source.clear();
     return source_size;
   }
 }
@@ -283,6 +282,16 @@ inline TO reinterpret_bits(FROM const from) {
 template <typename... STR>
 constexpr std::array<std::string_view, sizeof...(STR)> string_view_array(STR&&... str) {
   return {std::forward<STR>(str)...};
+}
+
+template <typename OUTPUT, typename INPUT, typename FUNC>
+OUTPUT transform(INPUT const& input, FUNC const& func) {
+  OUTPUT output;
+  output.reserve(input.size());
+  for (auto const& x : input) {
+    output.push_back(func(x));
+  }
+  return output;
 }
 
 }  // namespace shared

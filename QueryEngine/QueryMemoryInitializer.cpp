@@ -150,6 +150,15 @@ inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
   return col_frag_offsets;
 }
 
+// Return the RelAlg input index of outer_table_id based on ra_exe_unit.input_descs.
+// Used by UNION queries to get the target_exprs corresponding to the current subquery.
+int get_input_idx(RelAlgExecutionUnit const& ra_exe_unit, int const outer_table_id) {
+  auto match_table_id = [=](auto& desc) { return outer_table_id == desc.getTableId(); };
+  auto& input_descs = ra_exe_unit.input_descs;
+  auto itr = std::find_if(input_descs.begin(), input_descs.end(), match_table_id);
+  return itr == input_descs.end() ? 0 : itr->getNestLevel();
+}
+
 }  // namespace
 
 // Row-based execution constructor
@@ -161,6 +170,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const ExecutorDispatchMode dispatch_mode,
     const bool output_columnar,
     const bool sort_on_gpu,
+    const int outer_table_id,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
@@ -290,13 +300,17 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
     }
-    const auto column_frag_offsets =
-        get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
+    const bool use_target_exprs_union =
+        ra_exe_unit.union_all && get_input_idx(ra_exe_unit, outer_table_id);
+    const auto& target_exprs = use_target_exprs_union ? ra_exe_unit.target_exprs_union
+                                                      : ra_exe_unit.target_exprs;
+    const auto column_frag_offsets = get_col_frag_offsets(target_exprs, frag_offsets);
     const auto column_frag_sizes =
-        get_consistent_frags_sizes(ra_exe_unit.target_exprs, consistent_frag_sizes);
+        get_consistent_frags_sizes(target_exprs, consistent_frag_sizes);
+
     result_sets_.emplace_back(
-        new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc),
-                      executor->getColLazyFetchInfo(ra_exe_unit.target_exprs),
+        new ResultSet(target_exprs_to_infos(target_exprs, query_mem_desc),
+                      executor->getColLazyFetchInfo(target_exprs),
                       col_buffers,
                       column_frag_offsets,
                       column_frag_sizes,

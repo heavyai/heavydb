@@ -35,6 +35,7 @@
 #include <atomic>
 #include <functional>
 #include <list>
+#include <optional>
 
 /*
  * Stores the underlying buffer and the meta-data for a result set. The buffer
@@ -442,6 +443,18 @@ class ResultSet {
 
   static double calculateQuantile(quantile::TDigest* const t_digest);
 
+  void translateDictEncodedString(std::vector<TargetInfo> const&, size_t const start_idx);
+
+  struct RowIterationState {
+    size_t prev_target_idx_{0};
+    size_t cur_target_idx_;
+    size_t agg_idx_{0};
+    int8_t const* buf_ptr_{nullptr};
+    int8_t compact_sz1_;
+  };
+
+  void eachCellInColumn(RowIterationState&, std::function<void(int8_t const*)>);
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
@@ -735,6 +748,8 @@ class ResultSet {
   int64_t getDistinctBufferRefFromBufferRowwise(int8_t* rowwise_target_ptr,
                                                 const TargetInfo& target_info) const;
 
+  StringDictionaryProxy* getStringDictionaryProxy(int const dict_id);
+
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
   const int device_id_;
@@ -832,6 +847,8 @@ class RowSortException : public std::runtime_error {
 namespace result_set {
 
 bool can_use_parallel_algorithms(const ResultSet& rows);
+
+std::optional<size_t> first_dict_encoded_idx(std::vector<TargetInfo> const&);
 
 bool use_parallel_algorithms(const ResultSet& rows);
 

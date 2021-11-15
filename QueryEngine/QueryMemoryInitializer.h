@@ -42,6 +42,7 @@ class QueryMemoryInitializer {
                          const ExecutorDispatchMode dispatch_mode,
                          const bool output_columnar,
                          const bool sort_on_gpu,
+                         const int outer_table_id,
                          const int64_t num_rows,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,

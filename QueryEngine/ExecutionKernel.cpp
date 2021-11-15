@@ -348,12 +348,18 @@ void ExecutionKernel::runImpl(Executor* executor,
 
   if (eo.executor_type == ExecutorType::Native) {
     try {
+      // std::unique_ptr<QueryExecutionContext> query_exe_context_owned
+      // has std::unique_ptr<QueryMemoryInitializer> query_buffers_
+      // has std::vector<std::unique_ptr<ResultSet>> result_sets_
+      // has std::unique_ptr<ResultSetStorage> storage_
+      // which are initialized and possibly allocated here.
       query_exe_context_owned =
           query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
                                                   executor,
                                                   chosen_device_type,
                                                   kernel_dispatch_mode,
                                                   chosen_device_id,
+                                                  outer_table_id,
                                                   total_num_input_rows,
                                                   fetch_result->col_buffers,
                                                   fetch_result->frag_offsets,
@@ -467,6 +473,9 @@ void KernelSubtask::runImpl(Executor* executor) {
       kernel_.render_info_ && kernel_.render_info_->isPotentialInSituRender();
   const CompilationResult& compilation_result =
       kernel_.query_comp_desc.getCompilationResult();
+  const int outer_table_id = kernel_.ra_exe_unit_.union_all
+                                 ? kernel_.frag_list[0].table_id
+                                 : kernel_.ra_exe_unit_.input_descs[0].getTableId();
 
   if (!query_exe_context_owned) {
     try {
@@ -484,6 +493,7 @@ void KernelSubtask::runImpl(Executor* executor) {
           kernel_.chosen_device_type,
           kernel_.kernel_dispatch_mode,
           kernel_.chosen_device_id,
+          outer_table_id,
           total_num_input_rows_,
           col_buffers,
           frag_offsets,
@@ -498,9 +508,6 @@ void KernelSubtask::runImpl(Executor* executor) {
     }
   }
 
-  const int outer_table_id = kernel_.ra_exe_unit_.union_all
-                                 ? kernel_.frag_list[0].table_id
-                                 : kernel_.ra_exe_unit_.input_descs[0].getTableId();
   const auto& outer_tab_frag_ids = kernel_.frag_list[0].fragment_ids;
   auto catalog = executor->getCatalog();
   CHECK(catalog);

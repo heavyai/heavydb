@@ -131,6 +131,7 @@ class QueryMemoryDescriptor {
       const ExecutorDeviceType device_type,
       const ExecutorDispatchMode dispatch_mode,
       const int device_id,
+      const int outer_table_id,
       const int64_t num_rows,
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<std::vector<uint64_t>>& frag_offsets,

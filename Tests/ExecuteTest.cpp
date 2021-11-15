@@ -8130,37 +8130,71 @@ void import_union_all_tests() {
   g_sqlite_comparator.query(sql);
   EXPECT_NO_THROW(run_ddl_statement(sql));
 
-  sql = "CREATE TABLE union_all_a (a0 SMALLINT, a1 INT, a2 BIGINT, a3 FLOAT);";
+  sql = "DROP TABLE IF EXISTS union_all_c;";
   g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "CREATE TABLE union_all_a (a0 SMALLINT, a1 INT, a2 BIGINT, a3 FLOAT, a4 TEXT);";
+  g_sqlite_comparator.query(sql);
+  sql.insert(sql.size() - 2, " ENCODING DICT");  // a4 TEXT ENCODING DICT
   sql.insert(sql.size() - 1, " WITH (fragment_size = 2)");
   EXPECT_NO_THROW(run_ddl_statement(sql));
 
-  sql = "CREATE TABLE union_all_b (b0 SMALLINT, b1 INT, b2 BIGINT, b3 FLOAT);";
+  sql = "CREATE TABLE union_all_b (b0 SMALLINT, b1 INT, b2 BIGINT, b3 FLOAT, b4 TEXT);";
   g_sqlite_comparator.query(sql);
+  sql.insert(sql.size() - 2, " ENCODING DICT");  // b4 TEXT ENCODING DICT
   sql.insert(sql.size() - 1, " WITH (fragment_size = 3)");
   EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  sql = "CREATE TABLE union_all_c (c0 SMALLINT, c1 INT, c2 BIGINT, c3 FLOAT, c4 TEXT);";
+  g_sqlite_comparator.query(sql);
+  sql.insert(sql.size() - 2, " ENCODING DICT");  // c4 TEXT ENCODING DICT
+  sql.insert(sql.size() - 1, " WITH (fragment_size = 3)");
+  EXPECT_NO_THROW(run_ddl_statement(sql));
+
+  // One row is common to all 3 tables.
+  sql = "INSERT INTO union_all_a VALUES (10,20,30,40,'50');";
+  g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_multiple_agg(sql, dt));
+
+  sql = "INSERT INTO union_all_b VALUES (10,20,30,40,'50');";
+  g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_multiple_agg(sql, dt));
+
+  sql = "INSERT INTO union_all_c VALUES (10,20,30,40,'50');";
+  g_sqlite_comparator.query(sql);
+  EXPECT_NO_THROW(run_multiple_agg(sql, dt));
+
   for (int i = 0; i < 10; i++) {
-    sql = cat("INSERT INTO union_all_a VALUES (",
-              110 + i,
-              ',',
-              120 + i,
-              ',',
-              130 + i,
-              ',',
-              140 + i,
+    // clang-format off
+    sql = cat("INSERT INTO union_all_a VALUES "
+              "(", 110 + i,
+              ",", 120 + i,
+              ",", 130 + i,
+              ",", 140 + i,
+              ",'", 150 + i, "'",
               ");");
     g_sqlite_comparator.query(sql);
     EXPECT_NO_THROW(run_multiple_agg(sql, dt));
 
-    sql = cat("INSERT INTO union_all_b VALUES (",
-              210 + i,
-              ',',
-              220 + i,
-              ',',
-              230 + i,
-              ',',
-              240 + i,
+    sql = cat("INSERT INTO union_all_b VALUES "
+              "(", 210 + i,
+              ",", 220 + i,
+              ",", 230 + i,
+              ",", 240 + i,
+              ",'", 250 + i, "'",
               ");");
+    g_sqlite_comparator.query(sql);
+    EXPECT_NO_THROW(run_multiple_agg(sql, dt));
+
+    sql = cat("INSERT INTO union_all_c VALUES "
+              "(", 310 + i,
+              ",", 320 + i,
+              ",", 330 + i,
+              ",", 340 + i,
+              ",'", 350 + i, "'",
+              ");");
+    // clang-format on
     g_sqlite_comparator.query(sql);
     EXPECT_NO_THROW(run_multiple_agg(sql, dt));
   }
@@ -20258,65 +20292,74 @@ TEST(Select, UnionAll) {
   std::swap(g_enable_union, enable_union);
   for (auto dt : {ExecutorDeviceType::CPU /*, ExecutorDeviceType::GPU*/}) {
     SKIP_NO_GPU();
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT COUNT(*) FROM ("
+      " SELECT a4 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b4 FROM union_all_b"
+      " UNION ALL"
+      " SELECT c4 FROM union_all_c"
+      ");",
+      dt);
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " WHERE a0 BETWEEN 111 AND 115"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 BETWEEN 211 AND 217"
       " ORDER BY a1;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " ORDER BY a0;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " WHERE a0 < 116"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " ORDER BY a0;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 216"
       " ORDER BY a0;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " WHERE a0 < 116"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 216"
       " ORDER BY a0;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " WHERE a0 < 115"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 216"
       " ORDER BY a0;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " WHERE a0 < 116"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 215"
       " ORDER BY a0;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " WHERE a0 < 100"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 216"
       " ORDER BY a0;",
       dt);
-    c("SELECT a0, a1, a2, a3 FROM union_all_a"
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " WHERE a0 < 116"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 200"
       " ORDER BY a0;",
       dt);
+    // a4,b4 excluded from GROUP BY since "Aggregate on TEXT is not supported yet."
     c("SELECT a0, a1, a2, a3 FROM union_all_a"
       " WHERE a0 < 116"
       " UNION ALL"
@@ -20407,38 +20450,83 @@ TEST(Select, UnionAll) {
       " HAVING b1 % 3 = 1"
       " ORDER BY a0;",
       dt);
-    // sqlite sorts NULLs differently, and doesn't recognize NULLS FIRST/LAST.
     c("SELECT str FROM test"
       " UNION ALL"
-      " SELECT COALESCE(shared_dict,'NULL') FROM test"
-      " ORDER BY str;",
+      " SELECT shared_dict FROM test"
+      " ORDER BY str NULLS FIRST;",
       dt);
     c("SELECT DISTINCT * FROM ("
-      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
-      ") ORDER BY a0, a1, a2, a3;",
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      ") ORDER BY a0, a1, a2, a3, a4;",
       dt);
     c("SELECT * FROM ("
-      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
-      ") GROUP BY a0, a1, a2, a3"
-      " ORDER BY a0, a1, a2, a3;",
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      ") GROUP BY a0, a1, a2, a3, a4"
+      " ORDER BY a0, a1, a2, a3, a4;",
       dt);
     c("SELECT * FROM ("
-      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
-      ") GROUP BY a0, a1, a2, a3"
-      " ORDER BY a0, a1, a2, a3;",
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      ") GROUP BY a0, a1, a2, a3, a4"
+      " ORDER BY a0, a1, a2, a3, a4;",
       dt);
     c("SELECT * FROM ("
-      " SELECT a0, a1, a2, a3 FROM union_all_a"
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
       " UNION ALL"
-      " SELECT b0, b1, b2, b3 FROM union_all_b"
-      ") GROUP BY a0, a1, a2, a3"
-      " ORDER BY a0, a1, a2, a3 LIMIT 4;",
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      ") GROUP BY a0, a1, a2, a3, a4"
+      " ORDER BY a0, a1, a2, a3, a4 LIMIT 4;",
+      dt);
+    c("SELECT str FROM test "
+      " UNION ALL"
+      " SELECT fixed_str FROM test"
+      " ORDER BY str NULLS LAST;",
+      dt);
+    c("SELECT COUNT(*) FROM ("
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      ");",
+      dt);
+    // Empty result tests
+    c("SELECT COUNT(*) FROM ("
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
+      " WHERE a0 < 0"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      " WHERE b0 < 0"
+      ");",
+      dt);
+    c("SELECT COUNT(*) FROM ("
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
+      " WHERE a0 < 0"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      ");",
+      dt);
+    c("SELECT COUNT(*) FROM ("
+      " SELECT a0, a1, a2, a3, a4 FROM union_all_a"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      " WHERE b0 < 0"
+      ");",
+      dt);
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
+      " WHERE a0 < 0"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      " WHERE b0 = 210;",
+      dt);
+    c("SELECT a0, a1, a2, a3, a4 FROM union_all_a"
+      " WHERE a0 = 110"
+      " UNION ALL"
+      " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
+      " WHERE b0 < 0;",
       dt);
     // The goal is that these should work.
     // Exception: Subqueries of a UNION must have exact same data types.
@@ -20449,19 +20537,6 @@ TEST(Select, UnionAll) {
     // Exception: Columnar conversion not supported for variable length types
     EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test UNION ALL "
                                   "SELECT real_str FROM test ORDER BY real_str;",
-                                  dt),
-                 std::runtime_error);
-    // Exception: Subqueries of a UNION must have exact same data types.
-    EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
-                                  "SELECT fixed_str FROM test ORDER BY str;",
-                                  dt),
-                 std::runtime_error);
-    // Exception: UNION ALL not yet supported in this context.
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM ("
-                                  " SELECT a0, a1, a2, a3 FROM union_all_a"
-                                  " UNION ALL"
-                                  " SELECT b0, b1, b2, b3 FROM union_all_b"
-                                  ");",
                                   dt),
                  std::runtime_error);
   }
