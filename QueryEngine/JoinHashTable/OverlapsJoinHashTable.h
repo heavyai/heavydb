@@ -272,6 +272,8 @@ class OverlapsJoinHashTable : public HashJoin {
 
   std::string getHashJoinType() const final { return "Overlaps"; }
 
+  bool isBitwiseEq() const override;
+
   std::shared_ptr<HashTable> initHashTableOnCpuFromCache(
       QueryPlanHash key,
       CacheItemType item_type,

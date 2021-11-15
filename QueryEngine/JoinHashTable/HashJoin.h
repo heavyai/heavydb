@@ -159,6 +159,8 @@ class HashJoin {
 
   virtual std::string getHashJoinType() const = 0;
 
+  virtual bool isBitwiseEq() const = 0;
+
   JoinColumn fetchJoinColumn(
       const Analyzer::ColumnVar* hash_col,
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragment_info,

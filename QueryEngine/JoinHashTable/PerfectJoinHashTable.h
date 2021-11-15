@@ -211,7 +211,7 @@ class PerfectJoinHashTable : public HashJoin {
                                             const Analyzer::Expr* key_col,
                                             const CompilationOptions& co);
 
-  bool isBitwiseEq() const;
+  bool isBitwiseEq() const override;
 
   size_t getComponentBufferSize() const noexcept override;
 
