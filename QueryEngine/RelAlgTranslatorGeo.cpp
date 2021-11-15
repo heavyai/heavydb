@@ -817,7 +817,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
     // GeoExpression
     return geoargs.front();
   }
-  CHECK(!use_geo_projections);
+  if (use_geo_projections) {
+    throw std::runtime_error("Geospatial projection for function " +
+                             rex_function->toString() +
+                             " not yet supported in this context");
+  }
   return makeExpr<Analyzer::GeoUOper>(
       Geospatial::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
 }

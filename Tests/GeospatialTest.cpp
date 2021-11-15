@@ -2077,6 +2077,13 @@ TEST(GeoSpatial, Projections) {
     ASSERT_EQ("POINT (2 2)",
               boost::get<std::string>(
                   v<NullableString>(run_simple_agg("SELECT ST_Point(2,2);", dt, false))));
+
+    // unsupported transform projections
+    EXPECT_ANY_THROW(run_multiple_agg(
+        R"(SELECT ST_Transform(mpoly, 900913) FROM geospatial_test;)", dt));
+
+    EXPECT_ANY_THROW(run_multiple_agg(
+        R"(SELECT ST_Transform(gpoly4326, 900913) FROM geospatial_test;)", dt));
   }
 }
 
