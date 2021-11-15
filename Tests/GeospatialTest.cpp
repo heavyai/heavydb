@@ -342,6 +342,12 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                   "SELECT ST_Distance(ST_Transform(gpoly4326, 900913), gp900913) from "
                   "geospatial_test WHERE id = 1;",
                   dt)));
+    EXPECT_NEAR(
+        (double)472720.79722545284,
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance(ST_Transform(ST_SetSRID(ST_POINT(ST_XMAX(gpoly4326), ST_YMAX(gpoly4326)), 4326), 900913), ST_Transform(gpoly4326, 900913)) FROM geospatial_test WHERE id = 5;)",
+            dt)),
+        (double)0.001);
 
     // SRID mismatch
     EXPECT_THROW(run_simple_agg("SELECT ST_Distance('POINT(0 0)', "
