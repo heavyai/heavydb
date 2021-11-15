@@ -323,11 +323,19 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         auto arg0_ti = arg0.front()->get_type_info();  // make a copy so we can override
         arg0_ti.set_output_srid(srid);
         if (arg0_ti.get_type() == kPOINT) {
+          // the output type is going to be fully transformed, so set the input srid to
+          // the output srid
+          const auto input_srid = arg0_ti.get_input_srid();
+          arg0_ti.set_input_srid(srid);
           // geo transforms projections leave the result decompressed in a register
           arg0_ti.set_compression(kENCODING_NONE);
           arg0_ti.set_comp_param(0);
+          // reset recursive arg_ti, as the output type of transform will be properly
+          // transformed to the desired SRID
+          arg_ti.set_output_srid(srid);
+          arg_ti.set_input_srid(srid);
           return {makeExpr<Analyzer::GeoTransformOperator>(
-              arg0_ti, rex_function->getName(), arg0, arg0_ti.get_input_srid(), srid)};
+              arg0_ti, rex_function->getName(), arg0, input_srid, srid)};
         } else {
           if (auto geo_constant =
                   std::dynamic_pointer_cast<Analyzer::GeoConstant>(arg0.front())) {
@@ -1150,7 +1158,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
                                              /*expand_geo_col=*/false,
                                              /*is_projection = */ false,
                                              /*use_geo_expressions=*/true);
-      if (arg0_ti.get_output_srid() > 0 &&
+      if (arg0_ti.get_input_srid() != arg0_ti.get_output_srid() &&
+          arg0_ti.get_output_srid() > 0 &&
           std::dynamic_pointer_cast<Analyzer::ColumnVar>(geoargs.front())) {
         // legacy transform
         CHECK(legacy_transform_srid == 0 ||
