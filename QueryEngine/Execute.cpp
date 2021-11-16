@@ -1023,9 +1023,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   const auto reduction_code =
       get_reduction_code(results_per_device, &compilation_queue_time);
 
-  if (query_mem_desc.getQueryDescriptionType() ==
-          QueryDescriptionType::NonGroupedAggregate &&
-      query_mem_desc.getCountDistinctDescriptorsSize()) {
+  if (query_mem_desc.useParallelReduce()) {
     std::vector<ResultSetStorage*> storages;
     for (auto& rs : results_per_device) {
       storages.push_back(const_cast<ResultSetStorage*>(rs.first->getStorage()));

@@ -271,6 +271,8 @@ class QueryMemoryDescriptor {
 
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
 
+  bool useParallelReduce() const;
+
   // TODO(adb): remove and store this info more naturally in another
   // member
   bool forceFourByteFloat() const { return force_4byte_float_; }

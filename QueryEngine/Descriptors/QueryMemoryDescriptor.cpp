@@ -1172,6 +1172,20 @@ bool QueryMemoryDescriptor::canOutputColumnar() const {
          countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
 }
 
+bool QueryMemoryDescriptor::useParallelReduce() const {
+  // To use parallel reduce we need to compile reduction kernels
+  // We don't want to compile them for fast recutctions
+  if (getQueryDescriptionType() == QueryDescriptionType::NonGroupedAggregate &&
+      getCountDistinctDescriptorsSize()) {
+    return true;
+  }
+
+  if (getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash) {
+    return true;
+  }
+  return false;
+}
+
 std::string QueryMemoryDescriptor::queryDescTypeToString() const {
   switch (query_desc_type_) {
     case QueryDescriptionType::GroupByPerfectHash:
