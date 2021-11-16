@@ -267,7 +267,10 @@ class SQLiteComparator {
                   << errmsg;
             } else {
               const auto ref_val = connector_.getData<double>(row_idx, col_idx);
-              ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
+              if (!std::isinf(omnisci_val) || !std::isinf(ref_val) ||
+                  ((omnisci_val < 0) ^ (ref_val < 0))) {
+                ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
+              }
             }
             break;
           }
@@ -280,7 +283,10 @@ class SQLiteComparator {
                   << errmsg;
             } else {
               const auto ref_val = connector_.getData<float>(row_idx, col_idx);
-              ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
+              if (!std::isinf(omnisci_val) || !std::isinf(ref_val) ||
+                  ((omnisci_val < 0) ^ (ref_val < 0))) {
+                ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
+              }
             }
             break;
           }
