@@ -17,6 +17,7 @@
 #include <ImportExport/QueryExporter.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 
 #include <ImportExport/QueryExporterCSV.h>
 

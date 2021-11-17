@@ -34,6 +34,7 @@
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 #include "SchemaMgr/ColumnInfo.h"
 
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <map>

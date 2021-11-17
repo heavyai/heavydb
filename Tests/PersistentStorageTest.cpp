@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <boost/filesystem.hpp>
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "DataMgrTestHelpers.h"
 #include "TestHelpers.h"

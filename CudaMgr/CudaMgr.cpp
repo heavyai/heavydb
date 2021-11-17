@@ -23,6 +23,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include <boost/filesystem.hpp>
 #include "Logger/Logger.h"
 
 namespace CudaMgr_Namespace {

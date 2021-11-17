@@ -19,6 +19,7 @@
 #include <arrow/ipc/api.h>
 #include <arrow/ipc/writer.h>
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
 
 #ifdef HAVE_AWS_S3
 #include "AwsHelpers.h"

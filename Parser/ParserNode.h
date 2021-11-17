@@ -31,6 +31,7 @@
 
 #include <rapidjson/document.h>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/process/search_path.hpp>
 
 #include "../Analyzer/Analyzer.h"

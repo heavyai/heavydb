@@ -31,6 +31,13 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "boost/log/common.hpp"
+
+namespace logger {
+using SeverityLogger = boost::log::sources::severity_logger_mt<Severity>;
+BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
+}  // namespace logger
+
 namespace query_state {
 
 Event::Event(char const* name, Events::iterator parent)

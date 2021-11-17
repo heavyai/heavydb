@@ -25,6 +25,9 @@ bool g_enable_debug_timer{false};
 #include <rapidjson/writer.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/config.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/log/common.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/sinks.hpp>
 #include <boost/log/sources/global_logger_storage.hpp>
@@ -33,6 +36,7 @@ bool g_enable_debug_timer{false};
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup.hpp>
 #include <boost/phoenix.hpp>
+#include <boost/program_options.hpp>
 #include <boost/smart_ptr/weak_ptr.hpp>
 #include <boost/variant.hpp>
 
@@ -45,6 +49,13 @@ bool g_enable_debug_timer{false};
 #include "Shared/nvtx_helpers.h"
 
 namespace logger {
+using ChannelLogger = boost::log::sources::channel_logger_mt<Channel>;
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_IR, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_PTX, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_ASM, ChannelLogger)
+
+using SeverityLogger = boost::log::sources::severity_logger_mt<Severity>;
+BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
 
 namespace attr = boost::log::attributes;
 namespace expr = boost::log::expressions;
@@ -73,7 +84,8 @@ std::string filename(char const* path) {
   return boost::filesystem::path(path).filename().string();
 }
 
-LogOptions::LogOptions(char const* argv0) {
+LogOptions::LogOptions(char const* argv0)
+    : log_dir_(std::make_unique<boost::filesystem::path>("mapd_log")) {
   // Log file base_name matches name of program.
   std::string const base_name =
       argv0 == nullptr ? std::string("omnisci_server") : filename(argv0);
@@ -82,8 +94,11 @@ LogOptions::LogOptions(char const* argv0) {
   set_options();
 }
 
+// Needed to allow forward declarations within std::unique_ptr.
+LogOptions::~LogOptions() {}
+
 boost::filesystem::path LogOptions::full_log_dir() const {
-  return log_dir_.has_root_directory() ? log_dir_ : base_path_ / log_dir_;
+  return log_dir_->has_root_directory() ? *log_dir_ : base_path_ / *log_dir_;
 }
 
 po::options_description const& LogOptions::get_options() const {
@@ -121,7 +136,7 @@ void LogOptions::set_options() {
   }
   options_->add_options()(
       "log-directory",
-      po::value<boost::filesystem::path>(&log_dir_)->default_value(log_dir_),
+      po::value<boost::filesystem::path>(&*log_dir_)->default_value(*log_dir_),
       "Logging directory. May be relative to data directory, or absolute.");
   options_->add_options()(
       "log-file-name",

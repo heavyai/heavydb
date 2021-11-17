@@ -21,6 +21,7 @@
 */
 
 #include "ForeignStorageCache.h"
+#include <boost/filesystem.hpp>
 #include "Shared/File.h"
 #include "Shared/measure.h"
 

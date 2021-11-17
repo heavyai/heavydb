@@ -1594,6 +1594,10 @@ size_t FileMgr::getNumChunks() {
   return chunkIndex_.size();
 }
 
+boost::filesystem::path FileMgr::getFilePath(const std::string& file_name) const {
+  return boost::filesystem::path(fileMgrBasePath_) / file_name;
+}
+
 size_t FileMgr::num_pages_per_data_file_{DEFAULT_NUM_PAGES_PER_DATA_FILE};
 size_t FileMgr::num_pages_per_metadata_file_{DEFAULT_NUM_PAGES_PER_METADATA_FILE};
 }  // namespace File_Namespace

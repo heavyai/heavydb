@@ -43,6 +43,12 @@
 
 using namespace Data_Namespace;
 
+namespace boost {
+namespace filesystem {
+class directory_iterator;
+}
+}  // namespace boost
+
 namespace File_Namespace {
 class GlobalFileMgr;  // forward declaration
 /**
@@ -329,9 +335,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   inline virtual bool hasFileMgrKey() const { return true; }
   const TablePair get_fileMgrKey() const { return fileMgrKey_; }
 
-  inline boost::filesystem::path getFilePath(const std::string& file_name) {
-    return boost::filesystem::path(fileMgrBasePath_) / file_name;
-  }
+  boost::filesystem::path getFilePath(const std::string& file_name) const;
 
   // Visible for use in unit tests.
   void writePageMappingsToStatusFile(const std::vector<PageMapping>& page_mappings);
