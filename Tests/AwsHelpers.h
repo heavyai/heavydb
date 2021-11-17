@@ -22,6 +22,7 @@
 #include <aws/sts/model/Credentials.h>
 #include <aws/sts/model/GetSessionTokenRequest.h>
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
 
 #include "Catalog/ForeignServer.h"
 

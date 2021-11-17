@@ -22,6 +22,7 @@
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
+#include <boost/filesystem.hpp>
 
 #include "Catalog/Catalog.h"
 

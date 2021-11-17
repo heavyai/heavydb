@@ -40,9 +40,7 @@
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 #include <boost/config.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/log/common.hpp>
-#include <boost/program_options.hpp>
+#include <boost/log/sources/record_ostream.hpp>
 
 #include <memory>
 #include <set>
@@ -51,6 +49,7 @@
 
 #include <array>
 #include <sstream>
+#include <string>
 #include <thread>
 
 #ifdef _WIN32
@@ -58,6 +57,16 @@
 #include "Shared/cleanup_global_namespace.h"
 #endif
 #endif
+
+namespace boost {
+// Forward declare boost types to avoid including expensive headers.
+namespace program_options {
+class options_description;
+}
+namespace filesystem {
+class path;
+}
+}  // namespace boost
 
 extern bool g_enable_debug_timer;
 
@@ -118,7 +127,7 @@ class LogOptions {
 
  public:
   // Initialize to default values
-  boost::filesystem::path log_dir_{"mapd_log"};
+  std::unique_ptr<boost::filesystem::path> log_dir_;
   // file_name_pattern and symlink are prepended with base_name.
   std::string file_name_pattern_{".{SEVERITY}.%Y%m%d-%H%M%S.log"};
   std::string symlink_{".{SEVERITY}"};
@@ -132,6 +141,7 @@ class LogOptions {
   size_t rotation_size_{10 << 20};
 
   LogOptions(char const* argv0);
+  ~LogOptions();  // Needed to allow forward declarations within std::unique_ptr.
   boost::filesystem::path full_log_dir() const;
   boost::program_options::options_description const& get_options() const;
   void parse_command_line(int, char const* const*);
@@ -153,14 +163,6 @@ struct LogShutdown {
 // Optional pointer to function to call on LOG(FATAL).
 using FatalFunc = void (*)() noexcept;
 void set_once_fatal_func(FatalFunc);
-
-using ChannelLogger = boost::log::sources::channel_logger_mt<Channel>;
-BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_IR, ChannelLogger)
-BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_PTX, ChannelLogger)
-BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_ASM, ChannelLogger)
-
-using SeverityLogger = boost::log::sources::severity_logger_mt<Severity>;
-BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
 
 // Lifetime of Logger is each call to LOG().
 class Logger {

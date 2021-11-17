@@ -21,6 +21,7 @@
 #include <gdal.h>
 #include <gdal_priv.h>
 
+#include <boost/filesystem.hpp>
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
 

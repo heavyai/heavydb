@@ -18,6 +18,7 @@
 
 #include <arrow/filesystem/s3fs.h>
 #include <arrow/status.h>
+#include <boost/filesystem.hpp>
 
 #ifdef ARROW_HAS_PRIVATE_AWS_SDK
 #include <aws/core/Aws.h>

@@ -125,7 +125,8 @@ void InternalStorageStatsDataWrapper::initializeObjectsForTable(
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
     if (catalog->name() != INFORMATION_SCHEMA_DB) {
-      for (const auto [table_id, shard_id] : catalog->getAllPersistedTableAndShardIds()) {
+      for (const auto& [table_id, shard_id] :
+           catalog->getAllPersistedTableAndShardIds()) {
         uint64_t total_dictionary_file_size{0};
         auto logical_table_id = catalog->getLogicalTableId(table_id);
         for (const auto& dict_path :

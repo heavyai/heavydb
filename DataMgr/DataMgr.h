@@ -31,6 +31,7 @@
 #include "OSDependent/omnisci_fs.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <map>

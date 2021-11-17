@@ -35,6 +35,8 @@
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_fs.h"
 
+#include <boost/filesystem.hpp>
+
 bool g_read_only{false};
 
 namespace File_Namespace {
