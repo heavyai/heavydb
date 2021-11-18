@@ -592,14 +592,12 @@ std::shared_ptr<Executor> QueryRunner::getExecutor() const {
 std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
     const std::string& query_str,
     const std::string& session_id,
-    const std::string& user_name,
     const ExecutorDeviceType device_type,
     const double running_query_check_freq,
     const unsigned pending_query_check_freq) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto current_user = session_info_->get_currentUser();
-  current_user.userName = user_name;
   auto session_info = std::make_shared<Catalog_Namespace::SessionInfo>(
       session_info_->get_catalog_ptr(), current_user, device_type, session_id);
   auto query_state = create_query_state(session_info, query_str);
