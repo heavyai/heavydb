@@ -129,21 +129,6 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 
 constexpr double EPS = 1.25e-5;
 
-// Moved from TimeGM::parse_fractional_seconds().
-int parse_fractional_seconds(unsigned sfrac, const int ntotal, const SQLTypeInfo& ti) {
-  int dimen = ti.get_dimension();
-  int nfrac = log10(sfrac) + 1;
-  if (ntotal - nfrac > dimen) {
-    return 0;
-  }
-  if (ntotal >= 0 && ntotal < dimen) {
-    sfrac *= pow(10, dimen - ntotal);
-  } else if (ntotal > dimen) {
-    sfrac /= pow(10, ntotal - dimen);
-  }
-  return sfrac;
-}
-
 class SQLiteComparator {
  public:
   SQLiteComparator() : connector_("sqliteTestDB", "") {}
