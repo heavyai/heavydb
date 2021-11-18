@@ -60,17 +60,12 @@ namespace {
 
 std::shared_ptr<ResultSet> run_query(const std::string& query_str,
                                      const ExecutorDeviceType device_type,
-                                     const std::string& session_id = "",
-                                     const std::string& session_name = "admin") {
+                                     const std::string& session_id = "") {
   if (session_id.length() != 32) {
     LOG(ERROR) << "Incorrect or missing session info.";
   }
-  return QR::get()->runSQLWithAllowingInterrupt(query_str,
-                                                session_id,
-                                                session_name,
-                                                device_type,
-                                                0.5,
-                                                PENDING_QUERY_INTERRUPT_CHECK_FREQ);
+  return QR::get()->runSQLWithAllowingInterrupt(
+      query_str, session_id, device_type, 0.5, PENDING_QUERY_INTERRUPT_CHECK_FREQ);
 }
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
@@ -360,7 +355,7 @@ TEST(Interrupt, Kill_RunningQuery) {
     auto query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_large, dt, query_session, "session1");
+        res = run_query(test_query_large, dt, query_session);
       } catch (...) {
         exception_ptr = std::current_exception();
       }
@@ -430,7 +425,7 @@ TEST(Interrupt, Check_Query_Runs_After_Interruption) {
     auto query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_large, dt, query_session, "session1");
+        res = run_query(test_query_large, dt, query_session);
       } catch (...) {
         exception_ptr1 = std::current_exception();
       }
@@ -466,7 +461,7 @@ TEST(Interrupt, Check_Query_Runs_After_Interruption) {
       auto query_thread2 = std::async(std::launch::async, [&] {
         std::shared_ptr<ResultSet> res = nullptr;
         try {
-          res = run_query(test_query_small, dt, query_session, "session1");
+          res = run_query(test_query_small, dt, query_session);
         } catch (...) {
           exception_ptr2 = std::current_exception();
         }
@@ -514,7 +509,7 @@ TEST(Interrupt, Kill_PendingQuery) {
     query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_medium, dt, session1, "session1");
+        res = run_query(test_query_medium, dt, session1);
       } catch (...) {
         exception_ptr1 = std::current_exception();
       }
@@ -546,7 +541,7 @@ TEST(Interrupt, Kill_PendingQuery) {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_medium, dt, session2, "session2");
+        res = run_query(test_query_medium, dt, session2);
       } catch (...) {
         exception_ptr2 = std::current_exception();
       }
@@ -625,7 +620,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
     query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_large, dt, session1, "session1");
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr1 = std::current_exception();
       }
@@ -658,7 +653,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_small, dt, session2, "session2");
+        res = run_query(test_query_small, dt, session2);
       } catch (...) {
         exception_ptr2 = std::current_exception();
       }
@@ -737,7 +732,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
     query_thread1 = std::async(std::launch::async, [&] {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
-        res = run_query(test_query_large, dt, session1, "session1");
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr1 = std::current_exception();
       }
@@ -773,7 +768,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_large, dt, session1, "session1");
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr2 = std::current_exception();
       }
@@ -783,7 +778,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_large, dt, session1, "session1");
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr3 = std::current_exception();
       }
@@ -793,7 +788,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       std::shared_ptr<ResultSet> res = nullptr;
       try {
         // run pending query as async call
-        res = run_query(test_query_large, dt, session1, "session1");
+        res = run_query(test_query_large, dt, session1);
       } catch (...) {
         exception_ptr4 = std::current_exception();
       }
@@ -915,7 +910,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
       query_thread5 = std::async(std::launch::async, [&] {
         std::shared_ptr<ResultSet> res = nullptr;
         try {
-          res = run_query(test_query_small, dt, session2, "session2");
+          res = run_query(test_query_small, dt, session2);
         } catch (...) {
           exception_ptr5 = std::current_exception();
         }
@@ -948,7 +943,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
 
   try {
     std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, "session1", ExecutorDeviceType::CPU);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
       // make sure our server recognizes a session for running query correctly
@@ -998,10 +993,8 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
     if (catchInterruption.load()) {
       std::cout << "Detect interrupt request while performing COPY stmt on csv table"
                 << std::endl;
-      std::shared_ptr<ResultSet> res = run_query("SELECT COUNT(1) FROM t_very_large_csv",
-                                                 ExecutorDeviceType::CPU,
-                                                 session1,
-                                                 "session1");
+      std::shared_ptr<ResultSet> res = run_query(
+          "SELECT COUNT(1) FROM t_very_large_csv", ExecutorDeviceType::CPU, session1);
       CHECK_EQ(1, (int64_t)res.get()->rowCount());
       auto crt_row = res.get()->getNextRow(false, false);
       auto ret_val = v<int64_t>(crt_row[0]);
@@ -1026,7 +1019,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
 
   try {
     std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, "session1", ExecutorDeviceType::CPU);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
     auto check_interrup_msg = [&catchInterruption](const std::string& msg,
                                                    bool is_pending_query) {
       auto check_interrupted_msg = msg.find("interrupted");
@@ -1082,11 +1075,8 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
     if (catchInterruption.load()) {
       std::cout << "Detect interrupt request while performing COPY stmt on parquet table"
                 << std::endl;
-      std::shared_ptr<ResultSet> res =
-          run_query("SELECT COUNT(1) FROM t_very_large_parquet",
-                    ExecutorDeviceType::CPU,
-                    session1,
-                    "session1");
+      std::shared_ptr<ResultSet> res = run_query(
+          "SELECT COUNT(1) FROM t_very_large_parquet", ExecutorDeviceType::CPU, session1);
       CHECK_EQ(1, (int64_t)res.get()->rowCount());
       auto crt_row = res.get()->getNextRow(false, false);
       auto ret_val = v<int64_t>(crt_row[0]);
@@ -1118,7 +1108,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
 
   try {
     std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, "session1", ExecutorDeviceType::CPU);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
       // make sure our server recognizes a session for running query correctly
@@ -1169,11 +1159,8 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
       std::cout << "Detect interrupt request while performing COPY stmt on the "
                    "sharded csv table"
                 << std::endl;
-      std::shared_ptr<ResultSet> res =
-          run_query("SELECT COUNT(1) FROM t_very_large_sharded",
-                    ExecutorDeviceType::CPU,
-                    session1,
-                    "session1");
+      std::shared_ptr<ResultSet> res = run_query(
+          "SELECT COUNT(1) FROM t_very_large_sharded", ExecutorDeviceType::CPU, session1);
       CHECK_EQ(1, (int64_t)res.get()->rowCount());
       auto crt_row = res.get()->getNextRow(false, false);
       auto ret_val = v<int64_t>(crt_row[0]);
@@ -1254,8 +1241,8 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
     if (catchInterruption.load()) {
       std::cout << "Detect interrupt request while performing COPY stmt on gdal table"
                 << std::endl;
-      std::shared_ptr<ResultSet> res = run_query(
-          "SELECT COUNT(1) FROM t_gdal", ExecutorDeviceType::CPU, session1, "session1");
+      std::shared_ptr<ResultSet> res =
+          run_query("SELECT COUNT(1) FROM t_gdal", ExecutorDeviceType::CPU, session1);
       CHECK_EQ(1, (int64_t)res.get()->rowCount());
       auto crt_row = res.get()->getNextRow(false, false);
       auto ret_val = v<int64_t>(crt_row[0]);
@@ -1286,7 +1273,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
 
   try {
     std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, "session1", ExecutorDeviceType::CPU);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
       std::string curRunningSession{""};
@@ -1335,8 +1322,8 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Geo) {
     if (catchInterruption.load()) {
       std::cout << "Detect interrupt request while performing COPY stmt on geo table"
                 << std::endl;
-      std::shared_ptr<ResultSet> res = run_query(
-          "SELECT COUNT(1) FROM t_geo", ExecutorDeviceType::CPU, session1, "session1");
+      std::shared_ptr<ResultSet> res =
+          run_query("SELECT COUNT(1) FROM t_geo", ExecutorDeviceType::CPU, session1);
       CHECK_EQ(1, (int64_t)res.get()->rowCount());
       auto crt_row = res.get()->getNextRow(false, false);
       auto ret_val = v<int64_t>(crt_row[0]);
@@ -1375,7 +1362,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
 
   try {
     std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, "session1", ExecutorDeviceType::CPU);
+    QR::get()->addSessionId(session1, ExecutorDeviceType::CPU);
 
     auto interrupt_thread = std::async(std::launch::async, [&] {
       while (assigned_executor_ids.empty()) {
