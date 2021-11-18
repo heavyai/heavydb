@@ -466,8 +466,7 @@ TEST(NullValuesTest, NullDifferentTypes) {
   run_ddl_statement(
       "CREATE DATAFRAME fsi_nulls (int4 INTEGER, int8 BIGINT, fp4 FLOAT, fp8 DOUBLE, ts "
       "TIMESTAMP, b8 BOOLEAN) from "
-      "'CSV:/localdisk/artemale/git/omniscidb/Tests/Import/datafiles/"
-      "null_values_numeric.csv';");
+      "'CSV:../../Tests/Import/datafiles/null_values_numeric.csv';");
   check_query<int64_t>("SELECT int4 FROM fsi_nulls WHERE fp8 IS NULL;", {12});
 
   check_query<int64_t>("SELECT int8 FROM fsi_nulls WHERE int4 IS NULL;", {65});
