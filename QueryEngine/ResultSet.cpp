@@ -286,7 +286,7 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
                                             : targets_[col_idx].sql_type;
 }
 
-StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) {
+StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) const {
   constexpr bool with_generation = true;
   return catalog_ ? row_set_mem_owner_->getOrAddStringDictProxy(
                         dict_id, with_generation, catalog_)
@@ -1139,10 +1139,10 @@ size_t ResultSet::getLimit() const {
   return keep_first_;
 }
 
-std::shared_ptr<const std::vector<std::string>> ResultSet::getStringDictionaryPayloadCopy(
+const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
     const int dict_id) const {
   const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
-      dict_id, /*with_generation=*/false, catalog_);
+      dict_id, /*with_generation=*/true, catalog_);
   CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
 }

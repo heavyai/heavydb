@@ -316,7 +316,9 @@ class ArrowIpcBasic : public ::testing::Test {
         "INSERT INTO test_data_scalars VALUES (1, 2, 3, 345.678, 0.1, 0.001);");
   }
 
-  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;"); }
+  void TearDown()
+      override { /*run_ddl_statement("DROP TABLE IF EXISTS arrow_ipc_test;");*/
+  }
 };
 
 TEST_F(ArrowIpcBasic, IpcWire) {
@@ -448,6 +450,46 @@ TEST_F(ArrowIpcBasic, IpcCpu) {
       execute_arrow_ipc("SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::CPU);
 
   check_cpu_dataframe(data_frame);
+
+  deallocate_df(data_frame, ExecutorDeviceType::CPU);
+}
+
+TEST_F(ArrowIpcBasic, IpcCpuDictionarySubquery) {
+  auto data_frame = execute_arrow_ipc(
+      R"(SELECT CASE WHEN x IS NOT NULL THEN t ELSE 'baz' END FROM arrow_ipc_test ORDER BY 1;)",
+      ExecutorDeviceType::CPU);
+
+  ASSERT_TRUE(data_frame.df_size > 0);
+
+  auto df =
+      ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+  ASSERT_EQ(df.schema->num_fields(), 1);
+
+  // string column
+  auto string_array = df.record_batch->column(0);
+  ASSERT_EQ(string_array->type()->id(), arrow::Type::type::DICTIONARY);
+  std::shared_ptr<arrow::Array> text_truth_array;
+  {
+    arrow::StringBuilder builder(arrow::default_memory_pool());
+    ARROW_THROW_NOT_OK(builder.AppendValues(
+        std::vector<std::string>{"baz", "foo", "hello", "world", ""}));
+    ARROW_THROW_NOT_OK(builder.Finish(&text_truth_array));
+  }
+  const auto& dict_array = static_cast<const arrow::DictionaryArray&>(*string_array);
+  const auto& indices = static_cast<const arrow::Int32Array&>(*dict_array.indices());
+  const auto& dictionary =
+      static_cast<const arrow::StringArray&>(*dict_array.dictionary());
+  const auto& truth_strings = static_cast<const arrow::StringArray&>(*text_truth_array);
+  std::vector<bool> null_strings{1, 1, 1, 1, 0};
+  for (int i = 0; i < string_array->length(); i++) {
+    if (!null_strings[i]) {
+      EXPECT_TRUE(indices.IsNull(i));
+    } else {
+      const auto index = indices.Value(i);
+      const auto str = dictionary.GetString(index);
+      EXPECT_EQ(str, truth_strings.GetString(i));
+    }
+  }
 
   deallocate_df(data_frame, ExecutorDeviceType::CPU);
 }

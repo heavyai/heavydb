@@ -433,8 +433,9 @@ class ResultSet {
     separate_varlen_storage_valid_ = val;
   }
 
-  std::shared_ptr<const std::vector<std::string>> getStringDictionaryPayloadCopy(
-      const int dict_id) const;
+  const std::vector<std::string> getStringDictionaryPayloadCopy(const int dict_id) const;
+
+  StringDictionaryProxy* getStringDictionaryProxy(int const dict_id) const;
 
   template <typename ENTRY_TYPE, QueryDescriptionType QUERY_TYPE, bool COLUMNAR_FORMAT>
   ENTRY_TYPE getEntryAt(const size_t row_idx,
@@ -747,8 +748,6 @@ class ResultSet {
 
   int64_t getDistinctBufferRefFromBufferRowwise(int8_t* rowwise_target_ptr,
                                                 const TargetInfo& target_info) const;
-
-  StringDictionaryProxy* getStringDictionaryProxy(int const dict_id);
 
   const std::vector<TargetInfo> targets_;
   const ExecutorDeviceType device_type_;
