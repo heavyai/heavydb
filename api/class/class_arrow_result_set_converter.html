@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev f094fec
+                5.9.0dev 4938431
               </div>
             
           
@@ -1878,6 +1878,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_iteration_state.html">Struct ResultSet::RowIterationState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_wise_target_accessor.html">Struct ResultSet::RowWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_storage_lookup_result.html">Struct ResultSet::StorageLookupResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_target_offsets.html">Struct ResultSet::TargetOffsets</a></li>
@@ -1947,6 +1948,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_aggregrated_storage_stats.html">Struct anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_execute_8cpp_03_1_1_get_target_info.html">Struct anonymous_namespace{Execute.cpp}::GetTargetInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1960,6 +1962,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_op_info.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_execution_descriptor_8cpp_03_1_1_match_body.html">Struct anonymous_namespace{RelAlgExecutionDescriptor.cpp}::MatchBody</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_8cpp_03_1_1_is_dict_encoded_str.html">Struct anonymous_namespace{ResultSet.cpp}::IsDictEncodedStr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -2271,6 +2274,19 @@
 <dt id="_CPPv4N23ArrowResultSetConverter13ColumnBuilderE">
 <span id="_CPPv3N23ArrowResultSetConverter13ColumnBuilderE"></span><span id="_CPPv2N23ArrowResultSetConverter13ColumnBuilderE"></span><span id="ArrowResultSetConverter::ColumnBuilder"></span><span class="target" id="struct_arrow_result_set_converter_1_1_column_builder"></span><em class="property">struct </em><code class="sig-name descname">ColumnBuilder</code><a class="headerlink" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilderE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="type">
+<dt id="_CPPv4N23ArrowResultSetConverter13ColumnBuilder14TransientStrIdE">
+<span id="_CPPv3N23ArrowResultSetConverter13ColumnBuilder14TransientStrIdE"></span><span id="_CPPv2N23ArrowResultSetConverter13ColumnBuilder14TransientStrIdE"></span><span class="target" id="struct_arrow_result_set_converter_1_1_column_builder_1a83147fab18b4fc3ae5edee30bc6f2175"></span><em class="property">using </em><code class="sig-name descname">TransientStrId</code> = int32_t<a class="headerlink" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilder14TransientStrIdE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N23ArrowResultSetConverter13ColumnBuilder10ArrowStrIdE">
+<span id="_CPPv3N23ArrowResultSetConverter13ColumnBuilder10ArrowStrIdE"></span><span id="_CPPv2N23ArrowResultSetConverter13ColumnBuilder10ArrowStrIdE"></span><span class="target" id="struct_arrow_result_set_converter_1_1_column_builder_1a127cdffc06c3c0c2c057b914755ca3b0"></span><em class="property">using </em><code class="sig-name descname">ArrowStrId</code> = int32_t<a class="headerlink" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilder10ArrowStrIdE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
 <dt id="_CPPv4N23ArrowResultSetConverter13ColumnBuilder5fieldE">
@@ -2290,6 +2306,11 @@
 <dl class="member">
 <dt id="_CPPv4N23ArrowResultSetConverter13ColumnBuilder13physical_typeE">
 <span id="_CPPv3N23ArrowResultSetConverter13ColumnBuilder13physical_typeE"></span><span id="_CPPv2N23ArrowResultSetConverter13ColumnBuilder13physical_typeE"></span><span id="ArrowResultSetConverter::ColumnBuilder::physical_type__SQLTypes"></span><span class="target" id="struct_arrow_result_set_converter_1_1_column_builder_1ac1e77a8921fc0e6ca88e56d77fe43fc3"></span>SQLTypes <code class="sig-name descname">physical_type</code><a class="headerlink" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilder13physical_typeE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N23ArrowResultSetConverter13ColumnBuilder26transient_string_remappingE">
+<span id="_CPPv3N23ArrowResultSetConverter13ColumnBuilder26transient_string_remappingE"></span><span id="_CPPv2N23ArrowResultSetConverter13ColumnBuilder26transient_string_remappingE"></span><span id="ArrowResultSetConverter::ColumnBuilder::transient_string_remapping__std::unordered_map:TransientStrId.ArrowStrId:"></span><span class="target" id="struct_arrow_result_set_converter_1_1_column_builder_1a0ccc7d8ed782b45d2791963e3383c78c"></span>std::unordered_map&lt;<a class="reference internal" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilder14TransientStrIdE" title="ArrowResultSetConverter::ColumnBuilder::TransientStrId">TransientStrId</a>, <a class="reference internal" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilder10ArrowStrIdE" title="ArrowResultSetConverter::ColumnBuilder::ArrowStrId">ArrowStrId</a>&gt; <code class="sig-name descname">transient_string_remapping</code><a class="headerlink" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilder26transient_string_remappingE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

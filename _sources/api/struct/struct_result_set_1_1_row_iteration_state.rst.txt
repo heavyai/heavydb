@@ -1,0 +1,9 @@
+Struct ResultSet::RowIterationState
+===================================
+
+.. doxygenstruct:: ResultSet::RowIterationState
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

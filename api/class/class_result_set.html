@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev f094fec
+                5.9.0dev 4938431
               </div>
             
           
@@ -1878,6 +1878,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_iteration_state.html">Struct ResultSet::RowIterationState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_wise_target_accessor.html">Struct ResultSet::RowWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_storage_lookup_result.html">Struct ResultSet::StorageLookupResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_target_offsets.html">Struct ResultSet::TargetOffsets</a></li>
@@ -1947,6 +1948,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_aggregrated_storage_stats.html">Struct anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_execute_8cpp_03_1_1_get_target_info.html">Struct anonymous_namespace{Execute.cpp}::GetTargetInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1960,6 +1962,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_op_info.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_execution_descriptor_8cpp_03_1_1_match_body.html">Struct anonymous_namespace{RelAlgExecutionDescriptor.cpp}::MatchBody</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_8cpp_03_1_1_is_dict_encoded_str.html">Struct anonymous_namespace{ResultSet.cpp}::IsDictEncodedStr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -2599,12 +2602,27 @@
 
 <dl class="function">
 <dt id="_CPPv4NK9ResultSet30getStringDictionaryPayloadCopyEKi">
-<span id="_CPPv3NK9ResultSet30getStringDictionaryPayloadCopyEKi"></span><span id="_CPPv2NK9ResultSet30getStringDictionaryPayloadCopyEKi"></span><span id="ResultSet::getStringDictionaryPayloadCopy__iCC"></span><span class="target" id="class_result_set_1a93ad52a3ef4650f50c37cd0f4a1920bc"></span>std::shared_ptr&lt;<em class="property">const</em> std::vector&lt;std::string&gt;&gt; <code class="sig-name descname">getStringDictionaryPayloadCopy</code><span class="sig-paren">(</span><em class="property">const</em> int <em>dict_id</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet30getStringDictionaryPayloadCopyEKi" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3NK9ResultSet30getStringDictionaryPayloadCopyEKi"></span><span id="_CPPv2NK9ResultSet30getStringDictionaryPayloadCopyEKi"></span><span id="ResultSet::getStringDictionaryPayloadCopy__iCC"></span><span class="target" id="class_result_set_1ae1df375e47ed153767147e924ff3ed36"></span><em class="property">const</em> std::vector&lt;std::string&gt; <code class="sig-name descname">getStringDictionaryPayloadCopy</code><span class="sig-paren">(</span><em class="property">const</em> int <em>dict_id</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet30getStringDictionaryPayloadCopyEKi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK9ResultSet24getStringDictionaryProxyEKi">
+<span id="_CPPv3NK9ResultSet24getStringDictionaryProxyEKi"></span><span id="_CPPv2NK9ResultSet24getStringDictionaryProxyEKi"></span><span id="ResultSet::getStringDictionaryProxy__iCC"></span><span class="target" id="class_result_set_1a291509ef2140f7ce6e52370169a597ee"></span><a class="reference internal" href="class_string_dictionary_proxy.html#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> *<code class="sig-name descname">getStringDictionaryProxy</code><span class="sig-paren">(</span>int <em class="property">const</em> <em>dict_id</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK9ResultSet24getStringDictionaryProxyEKi" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4I0_20QueryDescriptionType_bENK9ResultSet10getEntryAtE10ENTRY_TYPEK6size_tK6size_tK6size_t">
 <span id="_CPPv3I0_20QueryDescriptionType_bENK9ResultSet10getEntryAtEK6size_tK6size_tK6size_t"></span><span id="_CPPv2I0_20QueryDescriptionType_bENK9ResultSet10getEntryAtEK6size_tK6size_tK6size_t"></span><span class="target" id="class_result_set_1a70a734663c89b8a9eac092b4920e2207"></span>template&lt;typename <code class="sig-name descname">ENTRY_TYPE</code>, QueryDescriptionType <code class="sig-name descname">QUERY_TYPE</code>, bool <code class="sig-name descname">COLUMNAR_FORMAT</code>&gt;<br /><a class="reference internal" href="#_CPPv4I0_20QueryDescriptionType_bENK9ResultSet10getEntryAtE10ENTRY_TYPEK6size_tK6size_tK6size_t" title="ResultSet::getEntryAt::ENTRY_TYPE">ENTRY_TYPE</a> <code class="sig-name descname">getEntryAt</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>row_idx</em>, <em class="property">const</em> size_t <em>target_idx</em>, <em class="property">const</em> size_t <em>slot_idx</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0_20QueryDescriptionType_bENK9ResultSet10getEntryAtE10ENTRY_TYPEK6size_tK6size_tK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9ResultSet26translateDictEncodedStringERKNSt6vectorI10TargetInfoEEK6size_t">
+<span id="_CPPv3N9ResultSet26translateDictEncodedStringERKNSt6vectorI10TargetInfoEEK6size_t"></span><span id="_CPPv2N9ResultSet26translateDictEncodedStringERKNSt6vectorI10TargetInfoEEK6size_t"></span><span id="ResultSet::translateDictEncodedString__std::vector:TargetInfo:CR.sC"></span><span class="target" id="class_result_set_1ae389d29e2bb64469b64a757c5f3ea510"></span>void <code class="sig-name descname">translateDictEncodedString</code><span class="sig-paren">(</span>std::vector&lt;<a class="reference internal" href="../struct/struct_target_info.html#_CPPv410TargetInfo" title="TargetInfo">TargetInfo</a>&gt; <em class="property">const</em> &amp;<em>targets</em>, size_t <em class="property">const</em> <em>start_idx</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet26translateDictEncodedStringERKNSt6vectorI10TargetInfoEEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N9ResultSet16eachCellInColumnER17RowIterationStateNSt8functionIFvPK6int8_tEEE">
+<span id="_CPPv3N9ResultSet16eachCellInColumnER17RowIterationStateNSt8functionIFvPK6int8_tEEE"></span><span id="_CPPv2N9ResultSet16eachCellInColumnER17RowIterationStateNSt8functionIFvPK6int8_tEEE"></span><span class="target" id="class_result_set_1a383794ce95bbe1d25dae4e34127f1f77"></span>void <code class="sig-name descname">eachCellInColumn</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N9ResultSet17RowIterationStateE" title="ResultSet::RowIterationState">RowIterationState</a> &amp;<em>state</em>, std::function&lt;void<span class="sig-paren">(</span>int8_t <em class="property">const</em> *<span class="sig-paren">)</span>&gt; <em>func</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N9ResultSet16eachCellInColumnER17RowIterationStateNSt8functionIFvPK6int8_tEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -3241,6 +3259,39 @@
 <dl class="member">
 <dt id="_CPPv4N9ResultSet19ResultSetComparator37approx_quantile_materialized_buffers_E">
 <span id="_CPPv3N9ResultSet19ResultSetComparator37approx_quantile_materialized_buffers_E"></span><span id="_CPPv2N9ResultSet19ResultSetComparator37approx_quantile_materialized_buffers_E"></span><span id="ResultSet::ResultSetComparator::approx_quantile_materialized_buffers___ApproxQuantileBuffersC"></span><span class="target" id="struct_result_set_1_1_result_set_comparator_1a9b41536c56eeed5dfec8c83970faccd7"></span><em class="property">const</em> <a class="reference internal" href="#_CPPv4N9ResultSet21ApproxQuantileBuffersE" title="ResultSet::ApproxQuantileBuffers">ApproxQuantileBuffers</a> <code class="sig-name descname">approx_quantile_materialized_buffers_</code><a class="headerlink" href="#_CPPv4N9ResultSet19ResultSetComparator37approx_quantile_materialized_buffers_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="_CPPv4N9ResultSet17RowIterationStateE">
+<span id="_CPPv3N9ResultSet17RowIterationStateE"></span><span id="_CPPv2N9ResultSet17RowIterationStateE"></span><span id="ResultSet::RowIterationState"></span><span class="target" id="struct_result_set_1_1_row_iteration_state"></span><em class="property">struct </em><code class="sig-name descname">RowIterationState</code><a class="headerlink" href="#_CPPv4N9ResultSet17RowIterationStateE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Members</p>
+<dl class="member">
+<dt id="_CPPv4N9ResultSet17RowIterationState16prev_target_idx_E">
+<span id="_CPPv3N9ResultSet17RowIterationState16prev_target_idx_E"></span><span id="_CPPv2N9ResultSet17RowIterationState16prev_target_idx_E"></span><span id="ResultSet::RowIterationState::prev_target_idx___s"></span><span class="target" id="struct_result_set_1_1_row_iteration_state_1afd1148479200d2c3bfdbffe75c8e5f76"></span>size_t <code class="sig-name descname">prev_target_idx_</code> = {0}<a class="headerlink" href="#_CPPv4N9ResultSet17RowIterationState16prev_target_idx_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9ResultSet17RowIterationState15cur_target_idx_E">
+<span id="_CPPv3N9ResultSet17RowIterationState15cur_target_idx_E"></span><span id="_CPPv2N9ResultSet17RowIterationState15cur_target_idx_E"></span><span id="ResultSet::RowIterationState::cur_target_idx___s"></span><span class="target" id="struct_result_set_1_1_row_iteration_state_1afcbb80c59615d8d50dbea34c2cc97768"></span>size_t <code class="sig-name descname">cur_target_idx_</code><a class="headerlink" href="#_CPPv4N9ResultSet17RowIterationState15cur_target_idx_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9ResultSet17RowIterationState8agg_idx_E">
+<span id="_CPPv3N9ResultSet17RowIterationState8agg_idx_E"></span><span id="_CPPv2N9ResultSet17RowIterationState8agg_idx_E"></span><span id="ResultSet::RowIterationState::agg_idx___s"></span><span class="target" id="struct_result_set_1_1_row_iteration_state_1a123dca6e2055575d62f07695d29347df"></span>size_t <code class="sig-name descname">agg_idx_</code> = {0}<a class="headerlink" href="#_CPPv4N9ResultSet17RowIterationState8agg_idx_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9ResultSet17RowIterationState8buf_ptr_E">
+<span id="_CPPv3N9ResultSet17RowIterationState8buf_ptr_E"></span><span id="_CPPv2N9ResultSet17RowIterationState8buf_ptr_E"></span><span id="ResultSet::RowIterationState::buf_ptr___int8_tCP"></span><span class="target" id="struct_result_set_1_1_row_iteration_state_1a3b4941c82545771a0b047b384ed18229"></span>int8_t <em class="property">const</em> *<code class="sig-name descname">buf_ptr_</code> = {nullptr}<a class="headerlink" href="#_CPPv4N9ResultSet17RowIterationState8buf_ptr_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N9ResultSet17RowIterationState12compact_sz1_E">
+<span id="_CPPv3N9ResultSet17RowIterationState12compact_sz1_E"></span><span id="_CPPv2N9ResultSet17RowIterationState12compact_sz1_E"></span><span id="ResultSet::RowIterationState::compact_sz1___int8_t"></span><span class="target" id="struct_result_set_1_1_row_iteration_state_1a0a492b493f1ff7b4be83cf485fccf3c4"></span>int8_t <code class="sig-name descname">compact_sz1_</code><a class="headerlink" href="#_CPPv4N9ResultSet17RowIterationState12compact_sz1_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

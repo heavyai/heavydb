@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev f094fec
+                5.9.0dev 4938431
               </div>
             
           
@@ -1878,6 +1878,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_iteration_state.html">Struct ResultSet::RowIterationState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_wise_target_accessor.html">Struct ResultSet::RowWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_storage_lookup_result.html">Struct ResultSet::StorageLookupResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_target_offsets.html">Struct ResultSet::TargetOffsets</a></li>
@@ -1947,6 +1948,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_aggregrated_storage_stats.html">Struct anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_execute_8cpp_03_1_1_get_target_info.html">Struct anonymous_namespace{Execute.cpp}::GetTargetInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1960,6 +1962,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_op_info.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_execution_descriptor_8cpp_03_1_1_match_body.html">Struct anonymous_namespace{RelAlgExecutionDescriptor.cpp}::MatchBody</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_8cpp_03_1_1_is_dict_encoded_str.html">Struct anonymous_namespace{ResultSet.cpp}::IsDictEncodedStr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -2253,8 +2256,13 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
-<dt id="_CPPv4N21WindowFunctionContext16computePartitionEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE">
-<span id="_CPPv3N21WindowFunctionContext16computePartitionEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE"></span><span id="_CPPv2N21WindowFunctionContext16computePartitionEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE"></span><span class="target" id="class_window_function_context_1afb9cb5730d00d5b21e9f8fe1edaf3587"></span>void <code class="sig-name descname">computePartition</code><span class="sig-paren">(</span>int64_t *<em>output_for_partition_buff</em>, <em class="property">const</em> size_t <em>partition_size</em>, <em class="property">const</em> size_t <em>off</em>, <em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_window_function.html#_CPPv4N8Analyzer14WindowFunctionE" title="Analyzer::WindowFunction">WindowFunction</a> *<em>window_func</em>, <em class="property">const</em> std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> int64_t lhs, <em class="property">const</em> int64_t rhs<span class="sig-paren">)</span>&gt; &amp;<em>comparator</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21WindowFunctionContext16computePartitionEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21WindowFunctionContext16computePartitionEK6size_tP7int64_t">
+<span id="_CPPv3N21WindowFunctionContext16computePartitionEK6size_tP7int64_t"></span><span id="_CPPv2N21WindowFunctionContext16computePartitionEK6size_tP7int64_t"></span><span id="WindowFunctionContext::computePartition__sC.int64_tP"></span><span class="target" id="class_window_function_context_1af16867993aec2701fc6417b27338e3b9"></span>void <code class="sig-name descname">computePartition</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>partition_idx</em>, int64_t *<em>output_for_partition_buff</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21WindowFunctionContext16computePartitionEK6size_tP7int64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21WindowFunctionContext22computePartitionBufferEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE">
+<span id="_CPPv3N21WindowFunctionContext22computePartitionBufferEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE"></span><span id="_CPPv2N21WindowFunctionContext22computePartitionBufferEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE"></span><span class="target" id="class_window_function_context_1aec4e8b2d8ce3a13883d65d91db15f825"></span>void <code class="sig-name descname">computePartitionBuffer</code><span class="sig-paren">(</span>int64_t *<em>output_for_partition_buff</em>, <em class="property">const</em> size_t <em>partition_size</em>, <em class="property">const</em> size_t <em>off</em>, <em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_window_function.html#_CPPv4N8Analyzer14WindowFunctionE" title="Analyzer::WindowFunction">WindowFunction</a> *<em>window_func</em>, <em class="property">const</em> std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> int64_t lhs, <em class="property">const</em> int64_t rhs<span class="sig-paren">)</span>&gt; &amp;<em>comparator</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21WindowFunctionContext22computePartitionBufferEP7int64_tK6size_tK6size_tPKN8Analyzer14WindowFunctionERKNSt8functionIFbK7int64_tK7int64_tEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

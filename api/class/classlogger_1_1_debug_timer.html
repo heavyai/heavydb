@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev f094fec
+                5.9.0dev 4938431
               </div>
             
           
@@ -1878,6 +1878,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_iteration_state.html">Struct ResultSet::RowIterationState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_wise_target_accessor.html">Struct ResultSet::RowWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_storage_lookup_result.html">Struct ResultSet::StorageLookupResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_target_offsets.html">Struct ResultSet::TargetOffsets</a></li>
@@ -1947,6 +1948,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_aggregrated_storage_stats.html">Struct anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_execute_8cpp_03_1_1_get_target_info.html">Struct anonymous_namespace{Execute.cpp}::GetTargetInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1960,6 +1962,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_op_info.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_execution_descriptor_8cpp_03_1_1_match_body.html">Struct anonymous_namespace{RelAlgExecutionDescriptor.cpp}::MatchBody</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_8cpp_03_1_1_is_dict_encoded_str.html">Struct anonymous_namespace{ResultSet.cpp}::IsDictEncodedStr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -2184,6 +2187,29 @@
 <dl class="function">
 <dt id="_CPPv4N6logger10DebugTimer14stopAndGetJsonEv">
 <span id="_CPPv3N6logger10DebugTimer14stopAndGetJsonEv"></span><span id="_CPPv2N6logger10DebugTimer14stopAndGetJsonEv"></span><span id="logger::DebugTimer::stopAndGetJson"></span><span class="target" id="classlogger_1_1_debug_timer_1ac99cdb675ba89cc7ca381dcfcbebff5f"></span>std::string <code class="sig-name descname">stopAndGetJson</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6logger10DebugTimer14stopAndGetJsonEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt id="_CPPv4N6logger10DebugTimer10DebugTimerERK10DebugTimer">
+<span id="_CPPv3N6logger10DebugTimer10DebugTimerERK10DebugTimer"></span><span id="_CPPv2N6logger10DebugTimer10DebugTimerERK10DebugTimer"></span><span id="logger::DebugTimer::DebugTimer__DebugTimerCR"></span><span class="target" id="classlogger_1_1_debug_timer_1a8077c5e2d59f7bdea261efe25de9525e"></span><code class="sig-name descname">DebugTimer</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N6logger10DebugTimer10DebugTimerERK10DebugTimer" title="logger::DebugTimer::DebugTimer">DebugTimer</a> <em class="property">const</em>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6logger10DebugTimer10DebugTimerERK10DebugTimer" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N6logger10DebugTimer10DebugTimerERR10DebugTimer">
+<span id="_CPPv3N6logger10DebugTimer10DebugTimerERR10DebugTimer"></span><span id="_CPPv2N6logger10DebugTimer10DebugTimerERR10DebugTimer"></span><span id="logger::DebugTimer::DebugTimer__DebugTimerRR"></span><span class="target" id="classlogger_1_1_debug_timer_1a1633b7faf77f853955dab2a18177fd65"></span><code class="sig-name descname">DebugTimer</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N6logger10DebugTimer10DebugTimerERK10DebugTimer" title="logger::DebugTimer::DebugTimer">DebugTimer</a>&amp;&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6logger10DebugTimer10DebugTimerERR10DebugTimer" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N6logger10DebugTimeraSERK10DebugTimer">
+<span id="_CPPv3N6logger10DebugTimeraSERK10DebugTimer"></span><span id="_CPPv2N6logger10DebugTimeraSERK10DebugTimer"></span><span id="logger::DebugTimer::assign-operator__DebugTimerCR"></span><span class="target" id="classlogger_1_1_debug_timer_1a8c365ac76988e0ec090c60d1721681ed"></span><a class="reference internal" href="#_CPPv4N6logger10DebugTimerE" title="logger::DebugTimer">DebugTimer</a> &amp;<code class="sig-name descname">operator=</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N6logger10DebugTimerE" title="logger::DebugTimer">DebugTimer</a> <em class="property">const</em>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6logger10DebugTimeraSERK10DebugTimer" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N6logger10DebugTimeraSERR10DebugTimer">
+<span id="_CPPv3N6logger10DebugTimeraSERR10DebugTimer"></span><span id="_CPPv2N6logger10DebugTimeraSERR10DebugTimer"></span><span id="logger::DebugTimer::assign-operator__DebugTimerRR"></span><span class="target" id="classlogger_1_1_debug_timer_1a12cabe55661fb8e523634dc282a3c900"></span><a class="reference internal" href="#_CPPv4N6logger10DebugTimerE" title="logger::DebugTimer">DebugTimer</a> &amp;<code class="sig-name descname">operator=</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N6logger10DebugTimerE" title="logger::DebugTimer">DebugTimer</a>&amp;&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6logger10DebugTimeraSERR10DebugTimer" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

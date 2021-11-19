@@ -1,0 +1,9 @@
+Struct anonymous_namespace{Execute.cpp}::GetTargetInfo
+======================================================
+
+.. doxygenstruct:: anonymous_namespace{Execute.cpp}::GetTargetInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

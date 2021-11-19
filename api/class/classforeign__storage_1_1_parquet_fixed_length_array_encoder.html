@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.9.0dev f094fec
+                5.9.0dev 4938431
               </div>
             
           
@@ -1878,6 +1878,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_column_wise_target_accessor.html">Struct ResultSet::ColumnWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_query_execution_timings.html">Struct ResultSet::QueryExecutionTimings</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_result_set_comparator.html">Struct ResultSet::ResultSetComparator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_iteration_state.html">Struct ResultSet::RowIterationState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_row_wise_target_accessor.html">Struct ResultSet::RowWiseTargetAccessor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_storage_lookup_result.html">Struct ResultSet::StorageLookupResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_result_set_1_1_target_offsets.html">Struct ResultSet::TargetOffsets</a></li>
@@ -1947,6 +1948,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_d_b_handler_8cpp_03_1_1_projection_tokens_for_completion.html">Struct anonymous_namespace{DBHandler.cpp}::ProjectionTokensForCompletion</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_date_truncate_8cpp_03_1_1_era_time.html">Struct anonymous_namespace{DateTruncate.cpp}::EraTime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_ddl_command_executor_8cpp_03_1_1_aggregrated_storage_stats.html">Struct anonymous_namespace{DdlCommandExecutor.cpp}::AggregratedStorageStats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_execute_8cpp_03_1_1_get_target_info.html">Struct anonymous_namespace{Execute.cpp}::GetTargetInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1960,6 +1962,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_query_plan_dag_extractor_8cpp_03_1_1_op_info.html">Struct anonymous_namespace{QueryPlanDagExtractor.cpp}::OpInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_execution_descriptor_8cpp_03_1_1_match_body.html">Struct anonymous_namespace{RelAlgExecutionDescriptor.cpp}::MatchBody</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_error_info.html">Struct anonymous_namespace{RelAlgExecutor.cpp}::ErrorInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_8cpp_03_1_1_is_dict_encoded_str.html">Struct anonymous_namespace{ResultSet.cpp}::IsDictEncodedStr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_lazy_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_query_output_fetch_handler.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02_result_set_iteration_8cpp_03_1_1_geo_target_value_builder.html">Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder</a></li>
@@ -2210,11 +2213,6 @@
 <dl class="function">
 <dt id="_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder19throwWrongSizeArrayEK6size_tK6size_tRKNSt6stringE">
 <span id="_CPPv3N15foreign_storage30ParquetFixedLengthArrayEncoder19throwWrongSizeArrayEK6size_tK6size_tRKNSt6stringE"></span><span id="_CPPv2N15foreign_storage30ParquetFixedLengthArrayEncoder19throwWrongSizeArrayEK6size_tK6size_tRKNSt6stringE"></span><span id="foreign_storage::ParquetFixedLengthArrayEncoder::throwWrongSizeArray__sC.sC.ssCR"></span><span class="target" id="classforeign__storage_1_1_parquet_fixed_length_array_encoder_1a71c351617afd4d7e6f22e5030aebdc4f"></span>void <code class="sig-name descname">throwWrongSizeArray</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>size_of_last_array</em>, <em class="property">const</em> size_t <em>array_element_count</em>, <em class="property">const</em> std::string &amp;<em>omnisci_column_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder19throwWrongSizeArrayEK6size_tK6size_tRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder34throwNullInDictionaryEncodedColumnERKNSt6stringE">
-<span id="_CPPv3N15foreign_storage30ParquetFixedLengthArrayEncoder34throwNullInDictionaryEncodedColumnERKNSt6stringE"></span><span id="_CPPv2N15foreign_storage30ParquetFixedLengthArrayEncoder34throwNullInDictionaryEncodedColumnERKNSt6stringE"></span><span id="foreign_storage::ParquetFixedLengthArrayEncoder::throwNullInDictionaryEncodedColumn__ssCR"></span><span class="target" id="classforeign__storage_1_1_parquet_fixed_length_array_encoder_1a2f3db76e9e88352041bef6719a4cefce"></span>void <code class="sig-name descname">throwNullInDictionaryEncodedColumn</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>omnisci_column_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N15foreign_storage30ParquetFixedLengthArrayEncoder34throwNullInDictionaryEncodedColumnERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
