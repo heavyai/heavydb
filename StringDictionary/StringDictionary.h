@@ -78,7 +78,7 @@ class StringDictionary {
                                      const char escape,
                                      const size_t generation) const;
 
-  std::shared_ptr<const std::vector<std::string>> copyStrings() const;
+  std::vector<std::string> copyStrings() const;
 
   bool checkpoint() noexcept;
 

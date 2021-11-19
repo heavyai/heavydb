@@ -232,7 +232,7 @@ void StringDictionaryProxy::updateGeneration(const int64_t generation) noexcept 
   generation_ = generation;
 }
 
-StringDictionary* StringDictionaryProxy::getDictionary() noexcept {
+StringDictionary* StringDictionaryProxy::getDictionary() const noexcept {
   return string_dict_.get();
 }
 

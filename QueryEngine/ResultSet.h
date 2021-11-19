@@ -91,7 +91,7 @@ struct OrderEntry;
 }  // namespace Analyzer
 
 class Executor;
-
+class StringDictionaryProxy;
 class ResultSet;
 
 class ResultSetRowIterator {
@@ -497,8 +497,9 @@ class ResultSet {
     separate_varlen_storage_valid_ = val;
   }
 
-  std::shared_ptr<const std::vector<std::string>> getStringDictionaryPayloadCopy(
-      const int dict_id) const;
+  const std::vector<std::string> getStringDictionaryPayloadCopy(const int dict_id) const;
+
+  StringDictionaryProxy* getStringDictionaryProxy(int const dict_id) const;
 
   template <typename ENTRY_TYPE, QueryDescriptionType QUERY_TYPE, bool COLUMNAR_FORMAT>
   ENTRY_TYPE getEntryAt(const size_t row_idx,

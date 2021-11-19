@@ -38,7 +38,7 @@ class StringDictionaryProxy {
                         const int64_t generation);
 
   int32_t getOrAdd(const std::string& str) noexcept;
-  StringDictionary* getDictionary() noexcept;
+  StringDictionary* getDictionary() const noexcept;
   int64_t getGeneration() const noexcept;
   int32_t getOrAddTransient(const std::string& str);
   int32_t getIdOfString(const std::string& str) const;

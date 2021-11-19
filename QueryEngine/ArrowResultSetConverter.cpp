@@ -1409,7 +1409,21 @@ void ArrowResultSetConverter::initializeColumnBuilder(
     auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
 
     arrow::StringBuilder str_array_builder;
-    ARROW_THROW_NOT_OK(str_array_builder.AppendValues(*str_list));
+    ARROW_THROW_NOT_OK(str_array_builder.AppendValues(str_list));
+
+    // add transients
+    auto sdp = results_->getStringDictionaryProxy(dict_id);
+    CHECK(sdp);
+
+    const auto& transient_map = sdp->getTransientMapping();
+    int32_t crt_transient_id = static_cast<int32_t>(str_list.size());
+    for (auto transient_pair : transient_map) {
+      ARROW_THROW_NOT_OK(str_array_builder.Append(transient_pair.second));
+      CHECK(column_builder.transient_string_remapping
+                .insert(std::make_pair(transient_pair.first, crt_transient_id++))
+                .second);
+    }
+
     std::shared_ptr<arrow::StringArray> string_array;
     ARROW_THROW_NOT_OK(str_array_builder.Finish(&string_array));
 
@@ -1500,6 +1514,13 @@ void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
   CHECK(typed_builder);
 
   std::vector<int32_t> vals = boost::get<std::vector<int32_t>>(values);
+  // remap negative values
+  for (size_t i = 0; i < vals.size(); i++) {
+    auto& val = vals[i];
+    if (val < 0 && (*is_valid)[i]) {
+      vals[i] = column_builder.transient_string_remapping.at(val);
+    }
+  }
 
   if (column_builder.field->nullable()) {
     CHECK(is_valid.get());

@@ -951,7 +951,7 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
   return result;
 }
 
-std::shared_ptr<const std::vector<std::string>> StringDictionary::copyStrings() const {
+std::vector<std::string> StringDictionary::copyStrings() const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   if (client_) {
     // TODO(miyu): support remote string dictionary
@@ -960,7 +960,7 @@ std::shared_ptr<const std::vector<std::string>> StringDictionary::copyStrings() 
   }
 
   if (strings_cache_) {
-    return strings_cache_;
+    return *strings_cache_;
   }
 
   strings_cache_ = std::make_shared<std::vector<std::string>>();
@@ -1000,7 +1000,7 @@ std::shared_ptr<const std::vector<std::string>> StringDictionary::copyStrings() 
     strings_cache_->insert(
         strings_cache_->end(), worker_result.begin(), worker_result.end());
   }
-  return strings_cache_;
+  return *strings_cache_;
 }
 
 bool StringDictionary::fillRateIsHigh(const size_t num_strings) const noexcept {

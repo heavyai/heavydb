@@ -333,6 +333,12 @@ SQLTypeInfo ResultSet::getColType(const size_t col_idx) const {
                                             : targets_[col_idx].sql_type;
 }
 
+StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) const {
+  constexpr bool with_generation = true;
+  return row_set_mem_owner_->getOrAddStringDictProxy(
+      db_id_for_dict_, dict_id, with_generation);
+}
+
 namespace {
 
 size_t get_truncated_row_count(size_t total_row_count, size_t limit, size_t offset) {
@@ -1211,10 +1217,10 @@ size_t ResultSet::getLimit() const {
   return keep_first_;
 }
 
-std::shared_ptr<const std::vector<std::string>> ResultSet::getStringDictionaryPayloadCopy(
+const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
     const int dict_id) const {
   const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
-      db_id_for_dict_, dict_id, /*with_generation=*/false);
+      db_id_for_dict_, dict_id, /*with_generation=*/true);
   CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
 }
