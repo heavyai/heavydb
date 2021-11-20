@@ -852,27 +852,27 @@ namespace {
 struct HexDigitToDecimalTable {
   uint8_t table_[128];
   constexpr HexDigitToDecimalTable() : table_{} {
-    table_['1'] = 1;
-    table_['2'] = 2;
-    table_['3'] = 3;
-    table_['4'] = 4;
-    table_['5'] = 5;
-    table_['6'] = 6;
-    table_['7'] = 7;
-    table_['8'] = 8;
-    table_['9'] = 9;
-    table_['a'] = 10;
-    table_['A'] = 10;
-    table_['b'] = 11;
-    table_['B'] = 11;
-    table_['c'] = 12;
-    table_['C'] = 12;
-    table_['d'] = 13;
-    table_['D'] = 13;
-    table_['e'] = 14;
-    table_['E'] = 14;
-    table_['f'] = 15;
-    table_['F'] = 15;
+    table_[static_cast<int>('1')] = 1;
+    table_[static_cast<int>('2')] = 2;
+    table_[static_cast<int>('3')] = 3;
+    table_[static_cast<int>('4')] = 4;
+    table_[static_cast<int>('5')] = 5;
+    table_[static_cast<int>('6')] = 6;
+    table_[static_cast<int>('7')] = 7;
+    table_[static_cast<int>('8')] = 8;
+    table_[static_cast<int>('9')] = 9;
+    table_[static_cast<int>('a')] = 10;
+    table_[static_cast<int>('A')] = 10;
+    table_[static_cast<int>('b')] = 11;
+    table_[static_cast<int>('B')] = 11;
+    table_[static_cast<int>('c')] = 12;
+    table_[static_cast<int>('C')] = 12;
+    table_[static_cast<int>('d')] = 13;
+    table_[static_cast<int>('D')] = 13;
+    table_[static_cast<int>('e')] = 14;
+    table_[static_cast<int>('E')] = 14;
+    table_[static_cast<int>('f')] = 15;
+    table_[static_cast<int>('F')] = 15;
   }
   constexpr uint8_t operator[](const char& hex_digit) const {
     return (hex_digit < 0) ? 0 : table_[static_cast<int>(hex_digit)];
