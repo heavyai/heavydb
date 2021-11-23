@@ -357,15 +357,17 @@ DEVICE void SUFFIX(init_baseline_hash_join_buff)(int8_t* hash_buff,
                                                  const int32_t cpu_thread_idx,
                                                  const int32_t cpu_thread_count) {
 #ifdef __CUDACC__
-  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
-  int32_t step = blockDim.x * gridDim.x;
+  const int64_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  const int64_t end = entry_count;
+  const int64_t step = blockDim.x * gridDim.x;
 #else
-  int32_t start = cpu_thread_idx;
-  int32_t step = cpu_thread_count;
+  const int64_t start = cpu_thread_idx * entry_count / cpu_thread_count;
+  const int64_t end = (cpu_thread_idx + 1) * entry_count / cpu_thread_count;
+  const int32_t step = 1;
 #endif
   auto hash_entry_size = (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
   const T empty_key = SUFFIX(get_invalid_key)<T>();
-  for (int64_t h = start; h < entry_count; h += step) {
+  for (int64_t h = start; h < end; h += step) {
     int64_t off = h * hash_entry_size;
     auto row_ptr = reinterpret_cast<T*>(hash_buff + off);
     for (size_t i = 0; i < key_component_count; ++i) {
