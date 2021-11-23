@@ -162,7 +162,7 @@ void SingleTextFileReader::checkForMoreRows(size_t file_offset,
 }
 
 void SingleTextFileReader::skipHeader() {
-  if (copy_params_.has_header != import_export::ImportHeaderRow::NO_HEADER) {
+  if (copy_params_.has_header != import_export::ImportHeaderRow::kNoHeader) {
     header_offset_ = getFirstLine().length() + 1;
   }
 }
@@ -357,7 +357,7 @@ void CompressedFileReader::nextEntry() {
  * Skip file header
  */
 void CompressedFileReader::skipHeader() {
-  if (copy_params_.has_header != import_export::ImportHeaderRow::NO_HEADER) {
+  if (copy_params_.has_header != import_export::ImportHeaderRow::kNoHeader) {
     std::optional<std::string> str = std::nullopt;
     consumeFirstLine(str);
   }

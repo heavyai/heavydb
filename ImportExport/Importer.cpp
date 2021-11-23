@@ -75,6 +75,8 @@
 #include "Shared/thread_count.h"
 #include "Utils/ChunkAccessorTable.h"
 
+#include "ImportExport/RasterImporter.h"
+
 #include "gen-cpp/OmniSci.h"
 
 #ifdef _WIN32
@@ -82,11 +84,18 @@
 #include <io.h>
 #endif
 
+#define TIMER_STOP(t)                                                                  \
+  (float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>( \
+       t)) /                                                                           \
+   1.0E6f)
+
 size_t g_max_import_threads =
     32;  // Max number of default import threads to use (num hardware threads will be used
          // if lower, and can also be explicitly overriden in copy statement with threads
          // option)
 size_t g_archive_read_buf_size = 1 << 20;
+
+static constexpr int kMaxRasterScanlinesPerThread = 32;
 
 inline auto get_filesize(const std::string& file_path) {
   boost::filesystem::path boost_file_path{file_path};
@@ -96,6 +105,7 @@ inline auto get_filesize(const std::string& file_path) {
 }
 
 namespace {
+
 bool check_session_interrupted(const QuerySessionId& query_session, Executor* executor) {
   if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
     mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -104,33 +114,13 @@ bool check_session_interrupted(const QuerySessionId& query_session, Executor* ex
   return false;
 }
 
-struct OGRDataSourceDeleter {
-  void operator()(OGRDataSource* datasource) {
-    if (datasource) {
-      GDALClose(datasource);
-    }
+const size_t num_import_threads(const int copy_params_threads) {
+  if (copy_params_threads > 0) {
+    return static_cast<size_t>(copy_params_threads);
   }
-};
-using OGRDataSourceUqPtr = std::unique_ptr<OGRDataSource, OGRDataSourceDeleter>;
-
-struct OGRFeatureDeleter {
-  void operator()(OGRFeature* feature) {
-    if (feature) {
-      OGRFeature::DestroyFeature(feature);
-    }
-  }
-};
-using OGRFeatureUqPtr = std::unique_ptr<OGRFeature, OGRFeatureDeleter>;
-
-struct OGRSpatialReferenceDeleter {
-  void operator()(OGRSpatialReference* ref) {
-    if (ref) {
-      OGRSpatialReference::DestroySpatialReference(ref);
-    }
-  }
-};
-using OGRSpatialReferenceUqPtr =
-    std::unique_ptr<OGRSpatialReference, OGRSpatialReferenceDeleter>;
+  return std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
+                  g_max_import_threads);
+}
 
 }  // namespace
 
@@ -154,7 +144,7 @@ using FieldNameToIndexMapType = std::map<std::string, size_t>;
 using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
 using ColumnIdToRenderGroupAnalyzerMapType =
     std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
-using FeaturePtrVector = std::vector<OGRFeatureUqPtr>;
+using FeaturePtrVector = std::vector<Geospatial::GDAL::FeatureUqPtr>;
 
 #define DEBUG_TIMING false
 #define DEBUG_RENDER_GROUP_ANALYZER 0
@@ -2179,7 +2169,8 @@ static ImportStatus import_thread_delimited(
                 //  not WGS84, cannot insert lon/lat");
                 // }
                 SQLTypeInfo import_ti{col_ti};
-                if (copy_params.file_type == FileType::DELIMITED &&
+                if (copy_params.source_type ==
+                        import_export::SourceType::kDelimitedFile &&
                     import_ti.get_output_srid() == 4326) {
                   auto srid0 = copy_params.source_srid;
                   if (srid0 > 0) {
@@ -2195,7 +2186,8 @@ static ImportStatus import_thread_delimited(
               } else {
                 // import it
                 SQLTypeInfo import_ti{col_ti};
-                if (copy_params.file_type == FileType::DELIMITED &&
+                if (copy_params.source_type ==
+                        import_export::SourceType::kDelimitedFile &&
                     import_ti.get_output_srid() == 4326) {
                   auto srid0 = copy_params.source_srid;
                   if (srid0 > 0) {
@@ -2751,36 +2743,22 @@ static ImportStatus import_thread_shapefile(
     }
   }  // end features
 
-  float convert_ms =
-      float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
-          convert_timer)) /
-      1000.0f;
+  float convert_s = TIMER_STOP(convert_timer);
 
-  float load_ms = 0.0f;
+  float load_s = 0.0f;
   if (thread_import_status.rows_completed > 0) {
     auto load_timer = timer_start();
     importer->load(import_buffers, thread_import_status.rows_completed, session_info);
-    load_ms =
-        float(
-            timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
-                load_timer)) /
-        1000.0f;
+    load_s = TIMER_STOP(load_timer);
   }
 
   if (DEBUG_TIMING && thread_import_status.rows_completed > 0) {
-    LOG(INFO) << "DEBUG:      Process " << convert_ms << "ms";
-    LOG(INFO) << "DEBUG:      Load " << load_ms << "ms";
+    LOG(INFO) << "DEBUG:      Process " << convert_s << "s";
+    LOG(INFO) << "DEBUG:      Load " << load_s << "s";
+    LOG(INFO) << "DEBUG:      Total " << (convert_s + load_s) << "s";
   }
 
   thread_import_status.thread_id = thread_id;
-
-  if (DEBUG_TIMING) {
-    LOG(INFO) << "DEBUG:      Total "
-              << float(timer_stop<std::chrono::steady_clock::time_point,
-                                  std::chrono::microseconds>(convert_timer)) /
-                     1000.0f
-              << "ms";
-  }
 
   return thread_import_status;
 }
@@ -3439,18 +3417,18 @@ void Detector::find_best_sqltypes_and_headers() {
       find_best_encodings(raw_rows.begin() + 1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
   switch (copy_params.has_header) {
-    case import_export::ImportHeaderRow::AUTODETECT:
+    case import_export::ImportHeaderRow::kAutoDetect:
       has_headers = detect_headers(head_types, best_sqltypes);
       if (has_headers) {
-        copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
+        copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
       } else {
-        copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
+        copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
       }
       break;
-    case import_export::ImportHeaderRow::NO_HEADER:
+    case import_export::ImportHeaderRow::kNoHeader:
       has_headers = false;
       break;
-    case import_export::ImportHeaderRow::HAS_HEADER:
+    case import_export::ImportHeaderRow::kHasHeader:
       has_headers = true;
       break;
   }
@@ -3651,23 +3629,24 @@ ImportStatus DataStreamSink::archivePlumber(
     total_file_size += get_filesize(file_path);
   }
 
-#ifdef ENABLE_IMPORT_PARQUET
   // s3 parquet goes different route because the files do not use libarchive
   // but parquet api, and they need to landed like .7z files.
   //
-  // note: parquet must be explicitly specified by a WITH parameter "parquet='true'",
-  //       because for example spark sql users may specify a output url w/o file
-  //       extension like this:
+  // note: parquet must be explicitly specified by a WITH parameter
+  // "source_type='parquet_file'", because for example spark sql users may specify a
+  // output url w/o file extension like this:
   //                df.write
   //                  .mode("overwrite")
   //                  .parquet("s3://bucket/folder/parquet/mydata")
-  //       without the parameter, it means plain or compressed csv files.
+  // without the parameter, it means plain or compressed csv files.
   // note: .ORC and AVRO files should follow a similar path to Parquet?
-  if (copy_params.file_type == FileType::PARQUET) {
+  if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+#ifdef ENABLE_IMPORT_PARQUET
     import_parquet(file_paths, session_info);
-  } else
+#else
+    throw std::runtime_error("Parquet not supported!");
 #endif
-  {
+  } else {
     import_compressed(file_paths, session_info);
   }
 
@@ -3706,7 +3685,7 @@ void Detector::import_local_parquet(const std::string& file_path,
       open_parquet_table(file_path, infile, reader, table);
   // make up header line if not yet
   if (0 == raw_data.size()) {
-    copy_params.has_header = ImportHeaderRow::HAS_HEADER;
+    copy_params.has_header = ImportHeaderRow::kHasHeader;
     copy_params.line_delim = '\n';
     copy_params.delimiter = ',';
     // must quote values to skip any embedded delimiter
@@ -3838,9 +3817,7 @@ void Importer::import_local_parquet(const std::string& file_path,
                      std::to_string(column_list.size() - num_physical_cols) +
                      " columns in table.");
   // slice each group to import slower columns faster, eg. geo or string
-  max_threads = copy_params.threads
-                    ? copy_params.threads
-                    : std::min(static_cast<size_t>(cpu_threads()), g_max_import_threads);
+  max_threads = num_import_threads(copy_params.threads);
   VLOG(1) << "Parquet import # threads: " << max_threads;
   const int num_slices = std::max<decltype(max_threads)>(max_threads, num_columns);
   // init row estimate for this file
@@ -4225,7 +4202,7 @@ void DataStreamSink::import_compressed(
             // so we need to skip header lines here instead in importDelimited.
             const char* buf2 = (const char*)buf;
             int size2 = size;
-            if (copy_params.has_header != import_export::ImportHeaderRow::NO_HEADER &&
+            if (copy_params.has_header != import_export::ImportHeaderRow::kNoHeader &&
                 just_saw_archive_header && (first_text_header_skipped || !is_detecting)) {
               while (size2-- > 0) {
                 if (*buf2++ == copy_params.line_delim) {
@@ -4365,12 +4342,7 @@ ImportStatus Importer::importDelimited(
     file_size = ftell(p_file);
   }
 
-  if (copy_params.threads == 0) {
-    max_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
-                           g_max_import_threads);
-  } else {
-    max_threads = static_cast<size_t>(copy_params.threads);
-  }
+  max_threads = num_import_threads(copy_params.threads);
   VLOG(1) << "Delimited import # threads: " << max_threads;
 
   // deal with small files
@@ -4585,111 +4557,27 @@ void Loader::setTableEpochs(
 }
 
 /* static */
-void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
-  // for now we only support S3
-  // @TODO generalize CopyParams to have a dictionary of GDAL tokens
-  // only set if non-empty to allow GDAL defaults to persist
-  // explicitly clear if empty to revert to default and not reuse a previous session's
-  // keys
-  if (copy_params.s3_region.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_REGION to '" << copy_params.s3_region << "'";
-#endif
-    CPLSetConfigOption("AWS_REGION", copy_params.s3_region.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_REGION";
-#endif
-    CPLSetConfigOption("AWS_REGION", nullptr);
-  }
-  if (copy_params.s3_endpoint.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_S3_ENDPOINT to '" << copy_params.s3_endpoint << "'";
-#endif
-    CPLSetConfigOption("AWS_S3_ENDPOINT", copy_params.s3_endpoint.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_S3_ENDPOINT";
-#endif
-    CPLSetConfigOption("AWS_S3_ENDPOINT", nullptr);
-  }
-  if (copy_params.s3_access_key.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_ACCESS_KEY_ID to '" << copy_params.s3_access_key
-              << "'";
-#endif
-    CPLSetConfigOption("AWS_ACCESS_KEY_ID", copy_params.s3_access_key.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_ACCESS_KEY_ID";
-#endif
-    CPLSetConfigOption("AWS_ACCESS_KEY_ID", nullptr);
-  }
-  if (copy_params.s3_secret_key.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_SECRET_ACCESS_KEY to '" << copy_params.s3_secret_key
-              << "'";
-#endif
-    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", copy_params.s3_secret_key.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_SECRET_ACCESS_KEY";
-#endif
-    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", nullptr);
-  }
-
-#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
-  // if we haven't set keys, we need to disable signed access
-  if (copy_params.s3_access_key.size() || copy_params.s3_secret_key.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_NO_SIGN_REQUEST";
-#endif
-    CPLSetConfigOption("AWS_NO_SIGN_REQUEST", nullptr);
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_NO_SIGN_REQUEST to 'YES'";
-#endif
-    CPLSetConfigOption("AWS_NO_SIGN_REQUEST", "YES");
-  }
-#endif
-}
-
-/* static */
-OGRDataSource* Importer::openGDALDataset(const std::string& file_name,
-                                         const CopyParams& copy_params) {
-  // lazy init GDAL
+Geospatial::GDAL::DataSourceUqPtr Importer::openGDALDataSource(
+    const std::string& file_name,
+    const CopyParams& copy_params) {
   Geospatial::GDAL::init();
-
-  // set authorization tokens
-  setGDALAuthorizationTokens(copy_params);
-
-  // open the file
-  OGRDataSource* poDS;
-#if GDAL_VERSION_MAJOR == 1
-  poDS = (OGRDataSource*)OGRSFDriverRegistrar::Open(file_name.c_str(), false);
-#else
-  poDS = (OGRDataSource*)GDALOpenEx(
-      file_name.c_str(), GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
-  if (poDS == nullptr) {
-    poDS = (OGRDataSource*)GDALOpenEx(
-        file_name.c_str(), GDAL_OF_READONLY | GDAL_OF_VECTOR, nullptr, nullptr, nullptr);
-    if (poDS) {
-      LOG(INFO) << "openGDALDataset had to open as read-only";
-    }
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
+                                           copy_params.s3_endpoint,
+                                           copy_params.s3_access_key,
+                                           copy_params.s3_secret_key,
+                                           copy_params.s3_session_token);
+  if (copy_params.source_type != import_export::SourceType::kGeoFile) {
+    throw std::runtime_error("Unexpected CopyParams.source_type (" +
+                             std::to_string(static_cast<int>(copy_params.source_type)) +
+                             ")");
   }
-#endif
-  if (poDS == nullptr) {
-    LOG(ERROR) << "openGDALDataset Error: " << CPLGetLastErrorMsg();
-  }
-  // NOTE(adb): If extending this function, refactor to ensure any errors will not
-  // result in a memory leak if GDAL successfully opened the input dataset.
-  return poDS;
+  return Geospatial::GDAL::openDataSource(file_name, import_export::SourceType::kGeoFile);
 }
 
 namespace {
 
 OGRLayer& getLayerWithSpecifiedName(const std::string& geo_layer_name,
-                                    const OGRDataSourceUqPtr& poDS,
+                                    const Geospatial::GDAL::DataSourceUqPtr& poDS,
                                     const std::string& file_name) {
   // get layer with specified name, or default to first layer
   OGRLayer* poLayer = nullptr;
@@ -4717,9 +4605,9 @@ void Importer::readMetadataSampleGDAL(
     std::map<std::string, std::vector<std::string>>& metadata,
     int rowLimit,
     const CopyParams& copy_params) {
-  OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
+  Geospatial::GDAL::DataSourceUqPtr poDS(openGDALDataSource(file_name, copy_params));
   if (poDS == nullptr) {
-    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+    throw std::runtime_error("openGDALDataSource Error: Unable to open geo file " +
                              file_name);
   }
 
@@ -4743,7 +4631,7 @@ void Importer::readMetadataSampleGDAL(
   layer.ResetReading();
   size_t iFeature = 0;
   while (iFeature < numFeatures) {
-    OGRFeatureUqPtr poFeature(layer.GetNextFeature());
+    Geospatial::GDAL::FeatureUqPtr poFeature(layer.GetNextFeature());
     if (!poFeature) {
       break;
     }
@@ -4789,6 +4677,8 @@ void Importer::readMetadataSampleGDAL(
     iFeature++;
   }
 }
+
+namespace {
 
 std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
   switch (ogr_type) {
@@ -4844,17 +4734,132 @@ SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
   throw std::runtime_error("Unknown OGR geom type: " + std::to_string(ogr_type));
 }
 
+RasterImporter::PointType convert_raster_point_type(
+    const import_export::RasterPointType raster_point_type) {
+  switch (raster_point_type) {
+    case import_export::RasterPointType::kNone:
+      return RasterImporter::PointType::kNone;
+    case import_export::RasterPointType::kAuto:
+      return RasterImporter::PointType::kAuto;
+    case import_export::RasterPointType::kSmallInt:
+      return RasterImporter::PointType::kSmallInt;
+    case import_export::RasterPointType::kInt:
+      return RasterImporter::PointType::kInt;
+    case import_export::RasterPointType::kFloat:
+      return RasterImporter::PointType::kFloat;
+    case import_export::RasterPointType::kDouble:
+      return RasterImporter::PointType::kDouble;
+    case import_export::RasterPointType::kPoint:
+      return RasterImporter::PointType::kPoint;
+  }
+  UNREACHABLE();
+  return RasterImporter::PointType::kNone;
+}
+
+RasterImporter::PointTransform convert_raster_point_transform(
+    const import_export::RasterPointTransform raster_point_transform) {
+  switch (raster_point_transform) {
+    case import_export::RasterPointTransform::kNone:
+      return RasterImporter::PointTransform::kNone;
+    case import_export::RasterPointTransform::kAuto:
+      return RasterImporter::PointTransform::kAuto;
+    case import_export::RasterPointTransform::kFile:
+      return RasterImporter::PointTransform::kFile;
+    case import_export::RasterPointTransform::kWorld:
+      return RasterImporter::PointTransform::kWorld;
+  }
+  UNREACHABLE();
+  return RasterImporter::PointTransform::kNone;
+}
+
+}  // namespace
+
 /* static */
 const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(
+    const std::string& file_name,
+    const bool is_raster,
+    const std::string& geo_column_name,
+    const CopyParams& copy_params) {
+  if (is_raster) {
+    return gdalToColumnDescriptorsRaster(file_name, geo_column_name, copy_params);
+  }
+  return gdalToColumnDescriptorsGeo(file_name, geo_column_name, copy_params);
+}
+
+/* static */
+const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
+    const std::string& file_name,
+    const std::string& geo_column_name,
+    const CopyParams& copy_params) {
+  // lazy init GDAL
+  Geospatial::GDAL::init();
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
+                                           copy_params.s3_endpoint,
+                                           copy_params.s3_access_key,
+                                           copy_params.s3_secret_key,
+                                           copy_params.s3_session_token);
+
+  // create a raster importer and do the detect
+  RasterImporter raster_importer;
+  raster_importer.detect(
+      file_name,
+      copy_params.raster_import_bands,
+      convert_raster_point_type(copy_params.raster_point_type),
+      convert_raster_point_transform(copy_params.raster_point_transform));
+
+  // prepare to capture column descriptors
+  std::list<ColumnDescriptor> cds;
+
+  // get the point column info
+  auto const point_names_and_sql_types = raster_importer.getPointNamesAndSQLTypes();
+
+  // create the columns for the point in the specified type
+  for (auto const& [col_name, sql_type] : point_names_and_sql_types) {
+    ColumnDescriptor cd;
+    cd.columnName = cd.sourceName = col_name;
+    cd.columnType.set_type(sql_type);
+    // hardwire other POINT attributes for now
+    if (sql_type == kPOINT) {
+      cd.columnType.set_subtype(kGEOMETRY);
+      cd.columnType.set_input_srid(4326);
+      cd.columnType.set_output_srid(4326);
+      cd.columnType.set_compression(kENCODING_GEOINT);
+      cd.columnType.set_comp_param(32);
+    }
+    cds.push_back(cd);
+  }
+
+  // get the names and types for the band column(s)
+  auto const band_names_and_types = raster_importer.getBandNamesAndSQLTypes();
+
+  // add column descriptors for each band
+  for (auto const& [band_name, sql_type] : band_names_and_types) {
+    ColumnDescriptor cd;
+    cd.columnName = cd.sourceName = band_name;
+    cd.columnType.set_type(sql_type);
+    cd.columnType.set_fixed_size();
+    cds.push_back(cd);
+  }
+
+  // return the results
+  return cds;
+}
+
+/* static */
+const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
     const std::string& file_name,
     const std::string& geo_column_name,
     const CopyParams& copy_params) {
   std::list<ColumnDescriptor> cds;
 
-  OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
+  Geospatial::GDAL::DataSourceUqPtr poDS(openGDALDataSource(file_name, copy_params));
   if (poDS == nullptr) {
-    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+    throw std::runtime_error("openGDALDataSource Error: Unable to open geo file " +
                              file_name);
+  }
+  if (poDS->GetLayerCount() == 0) {
+    throw std::runtime_error("gdalToColumnDescriptors Error: Geo file " + file_name +
+                             " has no layers");
   }
 
   OGRLayer& layer =
@@ -4862,7 +4867,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(
 
   layer.ResetReading();
   // TODO(andrewseidl): support multiple features
-  OGRFeatureUqPtr poFeature(layer.GetNextFeature());
+  Geospatial::GDAL::FeatureUqPtr poFeature(layer.GetNextFeature());
   if (poFeature == nullptr) {
     throw std::runtime_error("No features found in " + file_name);
   }
@@ -4932,6 +4937,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(
 
     cds.push_back(cd);
   }
+
   return cds;
 }
 
@@ -4940,9 +4946,11 @@ bool Importer::gdalStatInternal(const std::string& path,
                                 bool also_dir) {
   // lazy init GDAL
   Geospatial::GDAL::init();
-
-  // set authorization tokens
-  setGDALAuthorizationTokens(copy_params);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
+                                           copy_params.s3_endpoint,
+                                           copy_params.s3_access_key,
+                                           copy_params.s3_secret_key,
+                                           copy_params.s3_session_token);
 
 #if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
   // clear GDAL stat cache
@@ -5050,9 +5058,11 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(
     const CopyParams& copy_params) {
   // lazy init GDAL
   Geospatial::GDAL::init();
-
-  // set authorization tokens
-  setGDALAuthorizationTokens(copy_params);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
+                                           copy_params.s3_endpoint,
+                                           copy_params.s3_access_key,
+                                           copy_params.s3_secret_key,
+                                           copy_params.s3_session_token);
 
   // prepare to gather files
   std::vector<std::string> files;
@@ -5075,17 +5085,19 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
     const CopyParams& copy_params) {
   // lazy init GDAL
   Geospatial::GDAL::init();
-
-  // set authorization tokens
-  setGDALAuthorizationTokens(copy_params);
+  Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_region,
+                                           copy_params.s3_endpoint,
+                                           copy_params.s3_access_key,
+                                           copy_params.s3_secret_key,
+                                           copy_params.s3_session_token);
 
   // prepare to gather layer info
   std::vector<GeoFileLayerInfo> layer_info;
 
   // open the data set
-  OGRDataSourceUqPtr poDS(openGDALDataset(file_name, copy_params));
+  Geospatial::GDAL::DataSourceUqPtr poDS(openGDALDataSource(file_name, copy_params));
   if (poDS == nullptr) {
-    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+    throw std::runtime_error("openGDALDataSource Error: Unable to open geo file " +
                              file_name);
   }
 
@@ -5097,7 +5109,7 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
     // skip layer if empty
     if (poLayer->GetFeatureCount() > 0) {
       // get first feature
-      OGRFeatureUqPtr first_feature(poLayer->GetNextFeature());
+      Geospatial::GDAL::FeatureUqPtr first_feature(poLayer->GetNextFeature());
       CHECK(first_feature);
       // check feature for geometry
       const OGRGeometry* geometry = first_feature->GetGeometryRef();
@@ -5137,13 +5149,24 @@ std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
   return layer_info;
 }
 
-ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSourceNameMap,
-                                  const Catalog_Namespace::SessionInfo* session_info) {
+ImportStatus Importer::importGDAL(
+    const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
+    const Catalog_Namespace::SessionInfo* session_info,
+    const bool is_raster) {
+  if (is_raster) {
+    return importGDALRaster(session_info);
+  }
+  return importGDALGeo(columnNameToSourceNameMap, session_info);
+}
+
+ImportStatus Importer::importGDALGeo(
+    const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
+    const Catalog_Namespace::SessionInfo* session_info) {
   // initial status
   set_import_status(import_id, import_status_);
-  OGRDataSourceUqPtr poDS(openGDALDataset(file_path, copy_params));
+  Geospatial::GDAL::DataSourceUqPtr poDS(openGDALDataSource(file_path, copy_params));
   if (poDS == nullptr) {
-    throw std::runtime_error("openGDALDataset Error: Unable to open geo file " +
+    throw std::runtime_error("openGDALDataSource Error: Unable to open geo file " +
                              file_path);
   }
 
@@ -5165,7 +5188,7 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
   }
 
   // the geographic spatial reference we want to put everything in
-  OGRSpatialReferenceUqPtr poGeographicSR(new OGRSpatialReference());
+  Geospatial::GDAL::SpatialReferenceUqPtr poGeographicSR(new OGRSpatialReference());
   poGeographicSR->importFromEPSG(copy_params.geo_coords_srid);
 
 #if GDAL_VERSION_MAJOR >= 3
@@ -5180,14 +5203,8 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
   max_threads = 1;
 #else
   // how many threads to use
-  if (copy_params.threads == 0) {
-    max_threads = std::min(static_cast<size_t>(std::thread::hardware_concurrency()),
-                           g_max_import_threads);
-  } else {
-    max_threads = copy_params.threads;
-  }
+  max_threads = num_import_threads(copy_params.threads);
 #endif
-
   VLOG(1) << "GDAL import # threads: " << max_threads;
 
   // import geo table is specifically handled in both DBHandler and QueryRunner
@@ -5401,6 +5418,500 @@ ImportStatus Importer::importGDAL(ColumnNameToSourceNameMapType columnNameToSour
 
   checkpoint(table_epochs);
 
+  return import_status_;
+}
+
+ImportStatus Importer::importGDALRaster(
+    const Catalog_Namespace::SessionInfo* session_info) {
+  // initial status
+  set_import_status(import_id, import_status_);
+
+  // create a raster importer and do the detect
+  RasterImporter raster_importer;
+  raster_importer.detect(
+      file_path,
+      copy_params.raster_import_bands,
+      convert_raster_point_type(copy_params.raster_point_type),
+      convert_raster_point_transform(copy_params.raster_point_transform));
+
+  // get the table columns
+  auto const& column_descs = loader->get_column_descs();
+
+  // validate the point column types
+  // if we're importing the coords as a POINT, then the first column
+  // must be a POINT (two physical columns, POINT and TINYINT[])
+  // if we're not, the first two columns must be the matching type
+  auto const point_names_and_sql_types = raster_importer.getPointNamesAndSQLTypes();
+  auto cd_itr = column_descs.begin();
+  for (auto const& [col_name, sql_type] : point_names_and_sql_types) {
+    if (sql_type == kPOINT) {
+      // POINT column
+      {
+        auto const* cd = *cd_itr++;
+        if (cd->columnName != col_name) {
+          throw std::runtime_error("Column '" + cd->columnName +
+                                   "' name invalid (must be '" + col_name + "')");
+        }
+        auto const cd_type = cd->columnType.get_type();
+        if (cd_type != kPOINT) {
+          throw std::runtime_error("Column '" + cd->columnName +
+                                   "' overridden type invalid (must be POINT)");
+        }
+        if (cd->columnType.get_output_srid() != 4326) {
+          throw std::runtime_error("Column '" + cd->columnName +
+                                   "' overridden SRID invalid (must be 4326)");
+        }
+      }
+      // TINYINT[] coords sub-column
+      {
+        // if the above is true, this must be true
+        auto const* cd = *cd_itr++;
+        CHECK(cd->columnType.get_type() == kARRAY);
+        CHECK(cd->columnType.get_subtype() == kTINYINT);
+      }
+    } else {
+      // two columns of the matching type
+      auto const* cd = *cd_itr++;
+      if (cd->columnName != col_name) {
+        throw std::runtime_error("Column '" + cd->columnName +
+                                 "' name invalid (must be '" + col_name + "')");
+      }
+      auto const cd_type = cd->columnType.get_type();
+      if (cd_type != sql_type) {
+        throw std::runtime_error("Column '" + cd->columnName +
+                                 "' overridden type invalid (must be " +
+                                 to_string(sql_type) + ")");
+      }
+    }
+  }
+
+  // validate the band column types
+  // other columns must be of a limited set of types that
+  // are compatible with the supported GDAL band data types
+  // detection should only generate these types
+  // any Immerse overriding to other types must be rejected
+  while (cd_itr != column_descs.end()) {
+    auto const* cd = *cd_itr++;
+    auto const cd_type = cd->columnType.get_type();
+    if (cd_type != kSMALLINT && cd_type != kINT && cd_type != kBIGINT &&
+        cd_type != kFLOAT && cd_type != kDOUBLE) {
+      throw std::runtime_error("Column '" + cd->columnName +
+                               "' overridden type invalid (must be SMALLINT, INT, "
+                               "BIGINT, FLOAT, or DOUBLE)");
+    }
+  }
+
+  // validate that the table column count matches
+  auto const num_point_cols =
+      (copy_params.raster_point_type != RasterPointType::kNone) ? 2u : 0u;
+  auto const num_bands = raster_importer.getNumBands();
+  if (num_bands + num_point_cols != column_descs.size()) {
+    throw std::runtime_error("Raster Import aborted. Band/Column count mismatch.");
+  }
+
+  // import geo table is specifically handled in both DBHandler and QueryRunner
+  // that is separate path against a normal SQL execution
+  // so we here explicitly enroll the import session to allow interruption
+  // while importing geo table
+  auto query_session = session_info ? session_info->get_session_id() : "";
+  auto query_submitted_time = ::toString(std::chrono::system_clock::now());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto is_session_already_registered = false;
+  {
+    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+    is_session_already_registered =
+        executor->checkIsQuerySessionEnrolled(query_session, session_read_lock);
+  }
+  if (g_enable_non_kernel_time_query_interrupt && !query_session.empty() &&
+      !is_session_already_registered) {
+    executor->enrollQuerySession(query_session,
+                                 "IMPORT_GEO_TABLE",
+                                 query_submitted_time,
+                                 Executor::UNITARY_EXECUTOR_ID,
+                                 QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
+  }
+  ScopeGuard clearInterruptStatus = [executor, &query_session, &query_submitted_time] {
+    // reset the runtime query interrupt status
+    if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
+      executor->clearQuerySessionStatus(query_session, query_submitted_time);
+    }
+  };
+
+  // how many threads are we gonna use?
+  max_threads = num_import_threads(copy_params.threads);
+  VLOG(1) << "GDAL import # threads: " << max_threads;
+
+  if (copy_params.raster_scanlines_per_thread < 0) {
+    throw std::runtime_error("Invalid CopyParams.raster_scanlines_per_thread! (" +
+                             std::to_string(copy_params.raster_scanlines_per_thread) +
+                             ")");
+  }
+  const int max_scanlines_per_thread =
+      copy_params.raster_scanlines_per_thread == 0
+          ? kMaxRasterScanlinesPerThread
+          : std::min(copy_params.raster_scanlines_per_thread,
+                     kMaxRasterScanlinesPerThread);
+  VLOG(1) << "Raster Importer: Max scanlines per thread: " << max_scanlines_per_thread;
+
+  // make an import buffer for each thread
+  CHECK_EQ(import_buffers_vec.size(), 0u);
+  import_buffers_vec.resize(max_threads);
+  for (size_t i = 0; i < max_threads; i++) {
+    for (auto const& cd : loader->get_column_descs()) {
+      import_buffers_vec[i].emplace_back(
+          new TypedImportBuffer(cd, loader->getStringDict(cd)));
+    }
+  }
+
+  // status and times
+  using ThreadReturn = std::tuple<ImportStatus, std::array<float, 3>>;
+
+  // get the band dimensions
+  auto const band_size_x = raster_importer.getBandsWidth();
+  auto const band_size_y = raster_importer.getBandsHeight();
+
+  // allocate raw pixel buffers per thread
+  std::vector<std::vector<std::byte>> raw_pixel_bytes_per_thread(max_threads);
+  for (size_t i = 0; i < max_threads; i++) {
+    raw_pixel_bytes_per_thread[i].resize(band_size_x * max_scanlines_per_thread *
+                                         sizeof(double));
+  }
+
+  // just the sql type of the first point column (if any)
+  auto const point_sql_type = point_names_and_sql_types.size()
+                                  ? point_names_and_sql_types.begin()->second
+                                  : kNULLT;
+
+  // lambda for importing to raw data buffers (threadable)
+  auto import_rows =
+      [&](const size_t thread_idx, const int y_start, const int y_end) -> ThreadReturn {
+    // this threads's import buffers
+    auto& import_buffers = import_buffers_vec[thread_idx];
+
+    // this thread's raw pixel bytes
+    auto& raw_pixel_bytes = raw_pixel_bytes_per_thread[thread_idx];
+
+    // clear the buffers
+    for (auto& col_buffer : import_buffers) {
+      col_buffer->clear();
+    }
+
+    // prepare to iterate columns
+    auto col_itr = column_descs.begin();
+    int col_idx{0};
+
+    float proj_s{0.0f};
+    if (point_sql_type != kNULLT) {
+      // the first two columns (either lon/lat or POINT/coords)
+      auto const* cd_col0 = *col_itr++;
+      auto const* cd_col1 = *col_itr++;
+
+      // compute and add x and y
+      auto proj_timer = timer_start();
+      for (int y = y_start; y < y_end; y++) {
+        for (int x = 0; x < band_size_x; x++) {
+          // get projected pixel coords
+          auto [dx, dy] = raster_importer.getProjectedPixelCoords(thread_idx, x, y);
+
+          // add to buffers
+          switch (point_sql_type) {
+            case kPOINT: {
+              // add empty value to POINT buffer
+              TDatum td_point;
+              import_buffers[0]->add_value(cd_col0, td_point, false);
+
+              // convert lon/lat to bytes (compressed or not) and add to POINT coords
+              // buffer
+              auto const compressed_coords =
+                  Geospatial::compress_coords({dx, dy}, cd_col0->columnType);
+              std::vector<TDatum> td_coords_data;
+              for (auto const& cc : compressed_coords) {
+                TDatum td_byte;
+                td_byte.val.int_val = cc;
+                td_coords_data.push_back(td_byte);
+              }
+              TDatum td_coords;
+              td_coords.val.arr_val = td_coords_data;
+              td_coords.is_null = false;
+              import_buffers[1]->add_value(cd_col1, td_coords, false);
+            } break;
+            case kFLOAT:
+            case kDOUBLE: {
+              TDatum td;
+              td.is_null = false;
+              td.val.real_val = dx;
+              import_buffers[0]->add_value(cd_col0, td, false);
+              td.val.real_val = dy;
+              import_buffers[1]->add_value(cd_col1, td, false);
+            } break;
+            case kSMALLINT:
+            case kINT: {
+              TDatum td;
+              td.is_null = false;
+              td.val.int_val = static_cast<int64_t>(x);
+              import_buffers[0]->add_value(cd_col0, td, false);
+              td.val.int_val = static_cast<int64_t>(y);
+              import_buffers[1]->add_value(cd_col1, td, false);
+            } break;
+            default:
+              CHECK(false);
+          }
+        }
+      }
+      proj_s = TIMER_STOP(proj_timer);
+      col_idx += 2;
+    }
+
+    // prepare to accumulate read and conv times
+    float read_s{0.0f};
+    float conv_s{0.0f};
+
+    // y_end is one past the actual end, so don't add 1
+    auto const num_rows = y_end - y_start;
+    auto const num_elems = band_size_x * num_rows;
+
+    // for each band/column
+    for (uint32_t band_idx = 0; band_idx < num_bands; band_idx++) {
+      // the corresponding column
+      auto const* cd_band = *col_itr;
+      CHECK(cd_band);
+
+      // data type to read as
+      auto const cd_type = cd_band->columnType.get_type();
+
+      // read the scanlines (will do a data type conversion if necessary)
+      auto read_timer = timer_start();
+      raster_importer.getRawPixels(
+          thread_idx, band_idx, y_start, num_rows, cd_type, raw_pixel_bytes);
+      read_s += TIMER_STOP(read_timer);
+
+      // null value?
+      auto const [null_value, null_value_valid] =
+          raster_importer.getBandNullValue(band_idx);
+
+      // copy to this thread's import buffers
+      // convert any nulls we find
+      auto conv_timer = timer_start();
+      TDatum td;
+      switch (cd_type) {
+        case kSMALLINT: {
+          const int16_t* values =
+              reinterpret_cast<const int16_t*>(raw_pixel_bytes.data());
+          for (int idx = 0; idx < num_elems; idx++) {
+            auto const& value = values[idx];
+            if (null_value_valid && value == static_cast<int16_t>(null_value)) {
+              td.is_null = true;
+              td.val.int_val = NULL_SMALLINT;
+            } else {
+              td.is_null = false;
+              td.val.int_val = static_cast<int64_t>(value);
+            }
+            import_buffers[col_idx]->add_value(cd_band, td, false);
+          }
+        } break;
+        case kINT: {
+          const int32_t* values =
+              reinterpret_cast<const int32_t*>(raw_pixel_bytes.data());
+          for (int idx = 0; idx < num_elems; idx++) {
+            auto const& value = values[idx];
+            if (null_value_valid && value == static_cast<int32_t>(null_value)) {
+              td.is_null = true;
+              td.val.int_val = NULL_INT;
+            } else {
+              td.is_null = false;
+              td.val.int_val = static_cast<int64_t>(value);
+            }
+            import_buffers[col_idx]->add_value(cd_band, td, false);
+          }
+        } break;
+        case kBIGINT: {
+          const uint32_t* values =
+              reinterpret_cast<const uint32_t*>(raw_pixel_bytes.data());
+          for (int idx = 0; idx < num_elems; idx++) {
+            auto const& value = values[idx];
+            if (null_value_valid && value == static_cast<uint32_t>(null_value)) {
+              td.is_null = true;
+              td.val.int_val = NULL_INT;
+            } else {
+              td.is_null = false;
+              td.val.int_val = static_cast<int64_t>(value);
+            }
+            import_buffers[col_idx]->add_value(cd_band, td, false);
+          }
+        } break;
+        case kFLOAT: {
+          const float* values = reinterpret_cast<const float*>(raw_pixel_bytes.data());
+          for (int idx = 0; idx < num_elems; idx++) {
+            auto const& value = values[idx];
+            if (null_value_valid && value == static_cast<float>(null_value)) {
+              td.is_null = true;
+              td.val.real_val = NULL_FLOAT;
+            } else {
+              td.is_null = false;
+              td.val.real_val = static_cast<double>(value);
+            }
+            import_buffers[col_idx]->add_value(cd_band, td, false);
+          }
+        } break;
+        case kDOUBLE: {
+          const double* values = reinterpret_cast<const double*>(raw_pixel_bytes.data());
+          for (int idx = 0; idx < num_elems; idx++) {
+            auto const& value = values[idx];
+            if (null_value_valid && value == null_value) {
+              td.is_null = true;
+              td.val.real_val = NULL_DOUBLE;
+            } else {
+              td.is_null = false;
+              td.val.real_val = value;
+            }
+            import_buffers[col_idx]->add_value(cd_band, td, false);
+          }
+        } break;
+        default:
+          CHECK(false);
+      }
+      conv_s += TIMER_STOP(conv_timer);
+
+      // next column
+      col_idx++;
+      col_itr++;
+    }
+
+    // build status
+    ImportStatus thread_import_status;
+    thread_import_status.rows_estimated = num_elems;
+    thread_import_status.rows_completed = num_elems;
+
+    // done
+    return {std::move(thread_import_status), {proj_s, read_s, conv_s}};
+  };
+
+  // prepare to checkpoint the table
+  auto table_epochs = loader->getTableEpochs();
+
+  // start wall clock
+  auto wall_timer = timer_start();
+
+  // start the import
+  raster_importer.import(max_threads);
+
+  // time the phases
+  float total_proj_s{0.0f};
+  float total_read_s{0.0f};
+  float total_conv_s{0.0f};
+  float total_load_s{0.0f};
+
+  const int min_scanlines_per_thread = 8;
+  const int max_scanlines_per_block = max_scanlines_per_thread * max_threads;
+  for (int block_y = 0; block_y < band_size_y;
+       block_y += (max_threads * max_scanlines_per_thread)) {
+    using Future = std::future<ThreadReturn>;
+    std::vector<Future> futures;
+    const int scanlines_in_block =
+        std::min(band_size_y - block_y, max_scanlines_per_block);
+    const int pixels_in_block = scanlines_in_block * band_size_x;
+    const int block_max_scanlines_per_thread =
+        std::max((scanlines_in_block + static_cast<int>(max_threads) - 1) /
+                     static_cast<int>(max_threads),
+                 min_scanlines_per_thread);
+    VLOG(1) << "Raster Importer: scanlines_in_block: " << scanlines_in_block
+            << ", block_max_scanlines_per_thread:  " << block_max_scanlines_per_thread;
+
+    std::vector<size_t> rows_per_thread;
+    auto block_wall_timer = timer_start();
+    // run max_threads scanlines at once
+    for (size_t thread_id = 0; thread_id < max_threads; thread_id++) {
+      const int y_start = block_y + thread_id * block_max_scanlines_per_thread;
+      if (y_start < band_size_y) {
+        const int y_end = std::min(y_start + block_max_scanlines_per_thread, band_size_y);
+        if (y_start < y_end) {
+          rows_per_thread.emplace_back((y_end - y_start) * band_size_x);
+          futures.emplace_back(
+              std::async(std::launch::async, import_rows, thread_id, y_start, y_end));
+        }
+      }
+    }
+
+    // wait for the threads to finish and
+    // accumulate the results and times
+    float proj_s{0.0f}, read_s{0.0f}, conv_s{0.0f}, load_s{0.0f};
+    size_t thread_idx = 0;
+    size_t active_threads = 0;
+    for (auto& future : futures) {
+      auto const [import_status, times] = future.get();
+      import_status_ += import_status;
+      proj_s += times[0];
+      read_s += times[1];
+      conv_s += times[2];
+      // We load the data in thread order so we can get deterministic row-major raster
+      // ordering
+      auto thread_load_timer = timer_start();
+      // Todo: We should consider invoking the load on another thread in a ping-pong
+      // fashion so we can simultaneously read the next batch of data
+      load(import_buffers_vec[thread_idx], rows_per_thread[thread_idx], session_info);
+      ++thread_idx;
+      ++active_threads;
+
+      load_s += TIMER_STOP(thread_load_timer);
+    }
+
+    // average times over all threads (except for load which is single-threaded)
+    total_proj_s += (proj_s / float(active_threads));
+    total_read_s += (read_s / float(active_threads));
+    total_conv_s += (conv_s / float(active_threads));
+    total_load_s += load_s;
+
+    // update the status
+    set_import_status(import_id, import_status_);
+
+    // more debug
+    auto const block_wall_s = TIMER_STOP(block_wall_timer);
+    auto const scanlines_per_second = scanlines_in_block / block_wall_s;
+    auto const rows_per_second = pixels_in_block / block_wall_s;
+    LOG(INFO) << "Raster Importer: Loaded " << scanlines_in_block
+              << " scanlines starting at " << block_y << " out of " << band_size_y
+              << " in " << block_wall_s << "s at " << scanlines_per_second
+              << " scanlines/s and " << rows_per_second << " rows/s";
+
+    // check for interrupt
+    if (UNLIKELY(check_session_interrupted(query_session, executor.get()))) {
+      import_status_.load_failed = true;
+      import_status_.load_msg = "Raster Import interrupted";
+      throw QueryExecutionError(Executor::ERR_INTERRUPTED);
+    }
+  }
+
+  // checkpoint
+  auto checkpoint_timer = timer_start();
+  checkpoint(table_epochs);
+  auto const checkpoint_s = TIMER_STOP(checkpoint_timer);
+
+  // stop wall clock
+  auto const total_wall_s = TIMER_STOP(wall_timer);
+
+  // report
+  auto const total_scanlines_per_second = band_size_y / total_wall_s;
+  auto const total_rows_per_second = (band_size_x * band_size_y) / total_wall_s;
+  LOG(INFO) << "Raster Importer: Imported " << band_size_x * band_size_y << " rows";
+  LOG(INFO) << "Raster Importer: Total Import Time " << total_wall_s << "s at "
+            << total_scanlines_per_second << " scanlines/s and " << total_rows_per_second
+            << " rows/s";
+
+  // phase times (with proportions)
+  auto proj_pct = float(int(total_proj_s / total_wall_s * 1000.0f) * 0.1f);
+  auto read_pct = float(int(total_read_s / total_wall_s * 1000.0f) * 0.1f);
+  auto conv_pct = float(int(total_conv_s / total_wall_s * 1000.0f) * 0.1f);
+  auto load_pct = float(int(total_load_s / total_wall_s * 1000.0f) * 0.1f);
+  auto cpnt_pct = float(int(checkpoint_s / total_wall_s * 1000.0f) * 0.1f);
+
+  VLOG(1) << "Raster Importer: Import timing breakdown:";
+  VLOG(1) << "  Project    " << total_proj_s << "s (" << proj_pct << "%)";
+  VLOG(1) << "  Read       " << total_read_s << "s (" << read_pct << "%)";
+  VLOG(1) << "  Convert    " << total_conv_s << "s (" << conv_pct << "%)";
+  VLOG(1) << "  Load       " << total_load_s << "s (" << load_pct << "%)";
+  VLOG(1) << "  Checkpoint " << checkpoint_s << "s (" << cpnt_pct << "%)";
+
+  // all done
   return import_status_;
 }
 

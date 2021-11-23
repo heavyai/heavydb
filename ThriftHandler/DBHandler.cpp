@@ -68,6 +68,7 @@
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/ArrowUtil.h"
 #include "Shared/StringTransform.h"
+#include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -1275,8 +1276,8 @@ void DBHandler::sql_execute(TQueryResult& _return,
   stdlog.appendNameValuePairs("nonce", nonce);
   auto timer = DEBUG_TIMER(__func__);
   try {
-    ScopeGuard reset_was_geo_copy_from = [this, &session_ptr] {
-      geo_copy_from_sessions.remove(session_ptr->get_session_id());
+    ScopeGuard reset_was_deferred_copy_from = [this, &session_ptr] {
+      deferred_copy_from_sessions.remove(session_ptr->get_session_id());
     };
 
     if (first_n >= 0 && at_most_n >= 0) {
@@ -1310,7 +1311,7 @@ void DBHandler::sql_execute(TQueryResult& _return,
                         at_most_n,
                         use_calcite);
     }
-    _return.total_time_ms += process_geo_copy_from(session);
+    _return.total_time_ms += process_deferred_copy_from(session);
     std::string debug_json = timer.stopAndGetJson();
     if (!debug_json.empty()) {
       _return.__set_debug(std::move(debug_json));
@@ -1353,8 +1354,8 @@ void DBHandler::sql_execute(ExecutionResult& _return,
   auto timer = DEBUG_TIMER(__func__);
 
   try {
-    ScopeGuard reset_was_geo_copy_from = [this, &session_ptr] {
-      geo_copy_from_sessions.remove(session_ptr->get_session_id());
+    ScopeGuard reset_was_deferred_copy_from = [this, &session_ptr] {
+      deferred_copy_from_sessions.remove(session_ptr->get_session_id());
     };
 
     if (first_n >= 0 && at_most_n >= 0) {
@@ -1371,7 +1372,7 @@ void DBHandler::sql_execute(ExecutionResult& _return,
                                   use_calcite);
     });
 
-    _return.setExecutionTime(total_time_ms + process_geo_copy_from(session));
+    _return.setExecutionTime(total_time_ms + process_deferred_copy_from(session));
 
     stdlog.appendNameValuePairs(
         "execution_time_ms",
@@ -1393,33 +1394,32 @@ void DBHandler::sql_execute(ExecutionResult& _return,
   }
 }
 
-int64_t DBHandler::process_geo_copy_from(const TSessionId& session_id) {
+int64_t DBHandler::process_deferred_copy_from(const TSessionId& session_id) {
   int64_t total_time_ms(0);
   // if the SQL statement we just executed was a geo COPY FROM, the import
   // parameters were captured, and this flag set, so we do the actual import here
-  if (auto geo_copy_from_state = geo_copy_from_sessions(session_id)) {
+  if (auto deferred_copy_from_state = deferred_copy_from_sessions(session_id)) {
     // import_geo_table() calls create_table() which calls this function to
     // do the work, so reset the flag now to avoid executing this part a
     // second time at the end of that, which would fail as the table was
     // already created! Also reset the flag with a ScopeGuard on exiting
     // this function any other way, such as an exception from the code above!
-    geo_copy_from_sessions.remove(session_id);
+    deferred_copy_from_sessions.remove(session_id);
 
     // create table as replicated?
     TCreateParams create_params;
-    if (geo_copy_from_state->geo_copy_from_partitions == "REPLICATED") {
+    if (deferred_copy_from_state->partitions == "REPLICATED") {
       create_params.is_replicated = true;
     }
 
     // now do (and time) the import
     total_time_ms = measure<>::execution([&]() {
-      import_geo_table(
-          session_id,
-          geo_copy_from_state->geo_copy_from_table,
-          geo_copy_from_state->geo_copy_from_file_name,
-          copyparams_to_thrift(geo_copy_from_state->geo_copy_from_copy_params),
-          TRowDescriptor(),
-          create_params);
+      import_geo_table(session_id,
+                       deferred_copy_from_state->table,
+                       deferred_copy_from_state->file_name,
+                       copyparams_to_thrift(deferred_copy_from_state->copy_params),
+                       TRowDescriptor(),
+                       create_params);
     });
   }
   return total_time_ms;
@@ -3565,18 +3565,16 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   import_export::CopyParams copy_params;
   switch (cp.has_header) {
     case TImportHeaderRow::AUTODETECT:
-      copy_params.has_header = import_export::ImportHeaderRow::AUTODETECT;
+      copy_params.has_header = import_export::ImportHeaderRow::kAutoDetect;
       break;
     case TImportHeaderRow::NO_HEADER:
-      copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
       break;
     case TImportHeaderRow::HAS_HEADER:
-      copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid has_header in TCopyParams: " +
-                           std::to_string((int)cp.has_header));
-      break;
+      CHECK(false);
   }
   copy_params.quoted = cp.quoted;
   if (cp.delimiter.length() > 0) {
@@ -3634,21 +3632,24 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
 #endif
   switch (cp.file_type) {
-    case TFileType::POLYGON:
-      copy_params.file_type = import_export::FileType::POLYGON;
-      break;
     case TFileType::DELIMITED:
-      copy_params.file_type = import_export::FileType::DELIMITED;
+      copy_params.source_type = import_export::SourceType::kDelimitedFile;
       break;
-#ifdef ENABLE_IMPORT_PARQUET
+    case TFileType::GEO:
+      copy_params.source_type = import_export::SourceType::kGeoFile;
+      break;
     case TFileType::PARQUET:
-      copy_params.file_type = import_export::FileType::PARQUET;
+#ifdef ENABLE_IMPORT_PARQUET
+      copy_params.source_type = import_export::SourceType::kParquetFile;
       break;
+#else
+      THROW_MAPD_EXCEPTION("Parquet not supported");
 #endif
-    default:
-      THROW_MAPD_EXCEPTION("Invalid file_type in TCopyParams: " +
-                           std::to_string((int)cp.file_type));
+    case TFileType::RASTER:
+      copy_params.source_type = import_export::SourceType::kRasterFile;
       break;
+    default:
+      CHECK(false);
   }
   switch (cp.geo_coords_encoding) {
     case TEncodingType::GEOINT:
@@ -3660,7 +3661,6 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     default:
       THROW_MAPD_EXCEPTION("Invalid geo_coords_encoding in TCopyParams: " +
                            std::to_string((int)cp.geo_coords_encoding));
-      break;
   }
   copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
   switch (cp.geo_coords_type) {
@@ -3673,7 +3673,6 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     default:
       THROW_MAPD_EXCEPTION("Invalid geo_coords_type in TCopyParams: " +
                            std::to_string((int)cp.geo_coords_type));
-      break;
   }
   switch (cp.geo_coords_srid) {
     case 4326:
@@ -3684,13 +3683,60 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     default:
       THROW_MAPD_EXCEPTION("Invalid geo_coords_srid in TCopyParams (" +
                            std::to_string((int)cp.geo_coords_srid));
-      break;
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
   copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
   copy_params.geo_explode_collections = cp.geo_explode_collections;
   copy_params.source_srid = cp.source_srid;
+  switch (cp.raster_point_type) {
+    case TRasterPointType::NONE:
+      copy_params.raster_point_type = import_export::RasterPointType::kNone;
+      break;
+    case TRasterPointType::AUTO:
+      copy_params.raster_point_type = import_export::RasterPointType::kAuto;
+      break;
+    case TRasterPointType::SMALLINT:
+      copy_params.raster_point_type = import_export::RasterPointType::kSmallInt;
+      break;
+    case TRasterPointType::INT:
+      copy_params.raster_point_type = import_export::RasterPointType::kInt;
+      break;
+    case TRasterPointType::FLOAT:
+      copy_params.raster_point_type = import_export::RasterPointType::kFloat;
+      break;
+    case TRasterPointType::DOUBLE:
+      copy_params.raster_point_type = import_export::RasterPointType::kDouble;
+      break;
+    case TRasterPointType::POINT:
+      copy_params.raster_point_type = import_export::RasterPointType::kPoint;
+      break;
+    default:
+      CHECK(false);
+  }
+  copy_params.raster_import_bands = cp.raster_import_bands;
+  if (cp.raster_scanlines_per_thread < 0) {
+    THROW_MAPD_EXCEPTION("Invalid raster_scanlines_per_thread in TCopyParams (" +
+                         std::to_string((int)cp.raster_scanlines_per_thread));
+  } else {
+    copy_params.raster_scanlines_per_thread = cp.raster_scanlines_per_thread;
+  }
+  switch (cp.raster_point_transform) {
+    case TRasterPointTransform::NONE:
+      copy_params.raster_point_transform = import_export::RasterPointTransform::kNone;
+      break;
+    case TRasterPointTransform::AUTO:
+      copy_params.raster_point_transform = import_export::RasterPointTransform::kAuto;
+      break;
+    case TRasterPointTransform::FILE:
+      copy_params.raster_point_transform = import_export::RasterPointTransform::kFile;
+      break;
+    case TRasterPointTransform::WORLD:
+      copy_params.raster_point_transform = import_export::RasterPointTransform::kWorld;
+      break;
+    default:
+      CHECK(false);
+  }
   return copy_params;
 }
 
@@ -3699,18 +3745,17 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.delimiter = cp.delimiter;
   copy_params.null_str = cp.null_str;
   switch (cp.has_header) {
-    case import_export::ImportHeaderRow::AUTODETECT:
+    case import_export::ImportHeaderRow::kAutoDetect:
       copy_params.has_header = TImportHeaderRow::AUTODETECT;
       break;
-    case import_export::ImportHeaderRow::NO_HEADER:
+    case import_export::ImportHeaderRow::kNoHeader:
       copy_params.has_header = TImportHeaderRow::NO_HEADER;
       break;
-    case import_export::ImportHeaderRow::HAS_HEADER:
+    case import_export::ImportHeaderRow::kHasHeader:
       copy_params.has_header = TImportHeaderRow::HAS_HEADER;
       break;
     default:
       CHECK(false);
-      break;
   }
   copy_params.quoted = cp.quoted;
   copy_params.quote = cp.quote;
@@ -3725,13 +3770,21 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.s3_session_token = cp.s3_session_token;
   copy_params.s3_region = cp.s3_region;
   copy_params.s3_endpoint = cp.s3_endpoint;
-  switch (cp.file_type) {
-    case import_export::FileType::POLYGON:
-      copy_params.file_type = TFileType::POLYGON;
-      break;
-    default:
+  switch (cp.source_type) {
+    case import_export::SourceType::kDelimitedFile:
       copy_params.file_type = TFileType::DELIMITED;
       break;
+    case import_export::SourceType::kGeoFile:
+      copy_params.file_type = TFileType::GEO;
+      break;
+    case import_export::SourceType::kParquetFile:
+      copy_params.file_type = TFileType::PARQUET;
+      break;
+    case import_export::SourceType::kRasterFile:
+      copy_params.file_type = TFileType::RASTER;
+      break;
+    default:
+      CHECK(false);
   }
   switch (cp.geo_coords_encoding) {
     case kENCODING_GEOINT:
@@ -3751,7 +3804,6 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
       break;
     default:
       CHECK(false);
-      break;
   }
   copy_params.geo_coords_srid = cp.geo_coords_srid;
   copy_params.sanitize_column_names = cp.sanitize_column_names;
@@ -3759,6 +3811,49 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
   copy_params.geo_explode_collections = cp.geo_explode_collections;
   copy_params.source_srid = cp.source_srid;
+  switch (cp.raster_point_type) {
+    case import_export::RasterPointType::kNone:
+      copy_params.raster_point_type = TRasterPointType::NONE;
+      break;
+    case import_export::RasterPointType::kAuto:
+      copy_params.raster_point_type = TRasterPointType::AUTO;
+      break;
+    case import_export::RasterPointType::kSmallInt:
+      copy_params.raster_point_type = TRasterPointType::SMALLINT;
+      break;
+    case import_export::RasterPointType::kInt:
+      copy_params.raster_point_type = TRasterPointType::INT;
+      break;
+    case import_export::RasterPointType::kFloat:
+      copy_params.raster_point_type = TRasterPointType::FLOAT;
+      break;
+    case import_export::RasterPointType::kDouble:
+      copy_params.raster_point_type = TRasterPointType::DOUBLE;
+      break;
+    case import_export::RasterPointType::kPoint:
+      copy_params.raster_point_type = TRasterPointType::POINT;
+      break;
+    default:
+      CHECK(false);
+  }
+  copy_params.raster_import_bands = cp.raster_import_bands;
+  copy_params.raster_scanlines_per_thread = cp.raster_scanlines_per_thread;
+  switch (cp.raster_point_transform) {
+    case import_export::RasterPointTransform::kNone:
+      copy_params.raster_point_transform = TRasterPointTransform::NONE;
+      break;
+    case import_export::RasterPointTransform::kAuto:
+      copy_params.raster_point_transform = TRasterPointTransform::AUTO;
+      break;
+    case import_export::RasterPointTransform::kFile:
+      copy_params.raster_point_transform = TRasterPointTransform::FILE;
+      break;
+    case import_export::RasterPointTransform::kWorld:
+      copy_params.raster_point_transform = TRasterPointTransform::WORLD;
+      break;
+    default:
+      CHECK(false);
+  }
   return copy_params;
 }
 
@@ -3842,15 +3937,13 @@ bool path_has_valid_filename(const std::string& path) {
   return true;
 }
 
-bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
+bool is_a_supported_geo_file(const std::string& path) {
   if (!path_has_valid_filename(path)) {
     return false;
   }
-  if (include_gz) {
-    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz")) {
-      return true;
-    }
-  }
+  // this is now just for files that we want to recognize
+  // as geo when inside an archive (see below)
+  // @TODO(se) make this more flexible?
   if (boost::iends_with(path, ".shp") || boost::iends_with(path, ".geojson") ||
       boost::iends_with(path, ".json") || boost::iends_with(path, ".kml") ||
       boost::iends_with(path, ".kmz") || boost::iends_with(path, ".gdb") ||
@@ -3890,7 +3983,7 @@ std::string find_first_geo_file_in_archive(const std::string& archive_path,
   bool found_suitable_file = false;
   std::string file_name;
   for (const auto& file : files) {
-    if (is_a_supported_geo_file(file, false)) {
+    if (is_a_supported_geo_file(file)) {
       file_name = file;
       found_suitable_file = true;
       break;
@@ -3940,13 +4033,10 @@ void DBHandler::detect_column_types(TDetectResult& _return,
   }
   validate_import_file_path_if_local(file_name);
 
-  // if it's a geo table, handle alternative paths (S3, HTTP, archive etc.)
-  if (copy_params.file_type == import_export::FileType::POLYGON) {
-    if (is_a_supported_geo_file(file_name, true)) {
-      // prepare to detect geo file directly
-      add_vsi_network_prefix(file_name);
-      add_vsi_geo_prefix(file_name);
-    } else if (is_a_supported_archive_file(file_name)) {
+  // if it's a geo or raster import, handle alternative paths (S3, HTTP, archive etc.)
+  bool is_raster = false;
+  if (copy_params.source_type == import_export::SourceType::kGeoFile) {
+    if (is_a_supported_archive_file(file_name)) {
       // find the archive file
       add_vsi_network_prefix(file_name);
       if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
@@ -3960,9 +4050,15 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         file_name = file_name + std::string("/") + geo_file;
       }
     } else {
-      THROW_MAPD_EXCEPTION("File is not a supported geo or geo archive format: " +
-                           file_name_in);
+      // prepare to detect geo file directly
+      add_vsi_network_prefix(file_name);
+      add_vsi_geo_prefix(file_name);
     }
+  } else if (copy_params.source_type == import_export::SourceType::kRasterFile) {
+    // prepare to detect raster file directly
+    add_vsi_network_prefix(file_name);
+    add_vsi_geo_prefix(file_name);
+    is_raster = true;
   }
 
   auto file_path = boost::filesystem::path(file_name);
@@ -3974,8 +4070,9 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       file_name = file_path.string();
     }
 
-    if (copy_params.file_type == import_export::FileType::POLYGON) {
-      // check for geo file
+    if (copy_params.source_type == import_export::SourceType::kGeoFile ||
+        copy_params.source_type == import_export::SourceType::kRasterFile) {
+      // check for geo or raster file
       if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
         THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
       }
@@ -3988,9 +4085,9 @@ void DBHandler::detect_column_types(TDetectResult& _return,
   }
 
   try {
-    if (copy_params.file_type == import_export::FileType::DELIMITED
+    if (copy_params.source_type == import_export::SourceType::kDelimitedFile
 #ifdef ENABLE_IMPORT_PARQUET
-        || (copy_params.file_type == import_export::FileType::PARQUET)
+        || (copy_params.source_type == import_export::SourceType::kParquetFile)
 #endif
     ) {
       import_export::Detector detector(file_path, copy_params);
@@ -4038,32 +4135,36 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         }
         _return.row_set.rows.push_back(sample_row);
       }
-    } else if (copy_params.file_type == import_export::FileType::POLYGON) {
+    } else if (copy_params.source_type == import_export::SourceType::kGeoFile ||
+               copy_params.source_type == import_export::SourceType::kRasterFile) {
       // @TODO simon.eves get this from somewhere!
       const std::string geoColumnName(OMNISCI_GEO_PREFIX);
 
       check_geospatial_files(file_path, copy_params);
       std::list<ColumnDescriptor> cds = import_export::Importer::gdalToColumnDescriptors(
-          file_path.string(), geoColumnName, copy_params);
+          file_path.string(), is_raster, geoColumnName, copy_params);
       for (auto cd : cds) {
         if (copy_params.sanitize_column_names) {
           cd.columnName = ImportHelpers::sanitize_name(cd.columnName);
         }
         _return.row_set.row_desc.push_back(populateThriftColumnType(nullptr, &cd));
       }
-      std::map<std::string, std::vector<std::string>> sample_data;
-      import_export::Importer::readMetadataSampleGDAL(
-          file_path.string(), geoColumnName, sample_data, 100, copy_params);
-      if (sample_data.size() > 0) {
-        for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
-          TRow sample_row;
-          for (auto cd : cds) {
-            TDatum td;
-            td.val.str_val = sample_data[cd.sourceName].at(i);
-            td.is_null = td.val.str_val.empty();
-            sample_row.cols.push_back(td);
+      if (!is_raster) {
+        // @TODO(se) support for raster?
+        std::map<std::string, std::vector<std::string>> sample_data;
+        import_export::Importer::readMetadataSampleGDAL(
+            file_path.string(), geoColumnName, sample_data, 100, copy_params);
+        if (sample_data.size() > 0) {
+          for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
+            TRow sample_row;
+            for (auto cd : cds) {
+              TDatum td;
+              td.val.str_val = sample_data[cd.sourceName].at(i);
+              td.is_null = td.val.str_val.empty();
+              sample_row.cols.push_back(td);
+            }
+            _return.row_set.rows.push_back(sample_row);
           }
-          _return.row_set.rows.push_back(sample_row);
         }
       }
       _return.copy_params = copyparams_to_thrift(copy_params);
@@ -4701,6 +4802,7 @@ void DBHandler::create_table(const TSessionId& session,
                              const TRowDescriptor& rd,
                              const TFileType::type file_type,
                              const TCreateParams& create_params) {
+  // @TODO(se) remove file_type which is unused
   auto stdlog = STDLOG("table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   check_read_only("create_table");
@@ -4712,10 +4814,6 @@ void DBHandler::create_table(const TSessionId& session,
   }
 
   auto rds = rd;
-
-  // no longer need to manually add the poly column for a TFileType::POLYGON table
-  // a column of the correct geo type has already been added
-  // @TODO simon.eves rename TFileType::POLYGON to TFileType::GEO or something!
 
   std::string stmt{"CREATE TABLE " + table_name};
   std::vector<std::string> col_stmts;
@@ -4906,18 +5004,40 @@ std::string TTypeInfo_EncodingToString(const TEncodingType::type& t) {
 
 }  // namespace
 
-#define THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(attr, got, expected)                      \
-  THROW_MAPD_EXCEPTION("Could not append geo file '" + file_path.filename().string() + \
-                       "' to table '" + table_name + "'. Column '" + cd->columnName +  \
-                       "' " + attr + " mismatch (got '" + got + "', expected '" +      \
-                       expected + "')");
+#define THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(attr, got, expected)                    \
+  THROW_MAPD_EXCEPTION("Could not append geo/raster file '" +                        \
+                       file_path.filename().string() + "' to table '" + table_name + \
+                       "'. Column '" + cd->columnName + "' " + attr +                \
+                       " mismatch (got '" + got + "', expected '" + expected + "')");
 
 void DBHandler::import_geo_table(const TSessionId& session,
                                  const std::string& table_name,
-                                 const std::string& file_name_in,
+                                 const std::string& file_name,
                                  const TCopyParams& cp,
                                  const TRowDescriptor& row_desc,
                                  const TCreateParams& create_params) {
+  std::vector<std::string> file_names;
+  try {
+    // find matching local files
+    file_names = shared::local_glob_filter_sort_files(
+        file_name, std::nullopt, std::nullopt, std::nullopt);
+  } catch (const shared::FileNotFoundException& e) {
+    // no files match, just try the original filename, might be remote
+    file_names.push_back(file_name);
+  }
+  // import whatever we found
+  for (auto const& file_name : file_names) {
+    import_geo_table_internal(
+        session, table_name, file_name, cp, row_desc, create_params);
+  }
+}
+
+void DBHandler::import_geo_table_internal(const TSessionId& session,
+                                          const std::string& table_name,
+                                          const std::string& file_name_in,
+                                          const TCopyParams& cp,
+                                          const TRowDescriptor& row_desc,
+                                          const TCreateParams& create_params) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
@@ -4953,31 +5073,40 @@ void DBHandler::import_geo_table(const TSessionId& session,
   }
   validate_import_file_path_if_local(file_name);
 
-  if (is_a_supported_geo_file(file_name, true)) {
-    // prepare to load geo file directly
+  bool is_raster = false;
+  if (copy_params.source_type == import_export::SourceType::kGeoFile) {
+    if (is_a_supported_archive_file(file_name)) {
+      // find the archive file
+      add_vsi_network_prefix(file_name);
+      if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
+        THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+      }
+      // find geo file in archive
+      add_vsi_archive_prefix(file_name);
+      std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params);
+      // prepare to load that geo file
+      if (geo_file.size()) {
+        file_name = file_name + std::string("/") + geo_file;
+      }
+    } else {
+      // prepare to load geo file directly
+      add_vsi_network_prefix(file_name);
+      add_vsi_geo_prefix(file_name);
+    }
+  } else if (copy_params.source_type == import_export::SourceType::kRasterFile) {
+    // prepare to load geo raster file directly
     add_vsi_network_prefix(file_name);
     add_vsi_geo_prefix(file_name);
-  } else if (is_a_supported_archive_file(file_name)) {
-    // find the archive file
-    add_vsi_network_prefix(file_name);
-    if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
-      THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
-    }
-    // find geo file in archive
-    add_vsi_archive_prefix(file_name);
-    std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params);
-    // prepare to load that geo file
-    if (geo_file.size()) {
-      file_name = file_name + std::string("/") + geo_file;
-    }
+    is_raster = true;
   } else {
-    THROW_MAPD_EXCEPTION("File is not a supported geo or geo archive file: " +
-                         file_name_in);
+    THROW_MAPD_EXCEPTION(
+        "import_geo_table called with file_type other than GEO or RASTER");
   }
 
   // log what we're about to try to do
-  LOG(INFO) << "import_geo_table: Original filename: " << file_name_in;
-  LOG(INFO) << "import_geo_table: Actual filename: " << file_name;
+  VLOG(1) << "import_geo_table: Original filename: " << file_name_in;
+  VLOG(1) << "import_geo_table: Actual filename: " << file_name;
+  VLOG(1) << "import_geo_table: Raster: " << is_raster;
 
   // use GDAL to check the primary file exists (even if on S3 and/or in archive)
   auto file_path = boost::filesystem::path(file_name);
@@ -4999,17 +5128,21 @@ void DBHandler::import_geo_table(const TSessionId& session,
   //   NON_GEO: create a regular table from this
   //   UNSUPPORTED_GEO: report and skip
   std::vector<import_export::Importer::GeoFileLayerInfo> layer_info;
-  try {
-    layer_info = import_export::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
-  } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
+  if (!is_raster) {
+    try {
+      layer_info =
+          import_export::Importer::gdalGetLayersInGeoFile(file_name, copy_params);
+    } catch (const std::exception& e) {
+      THROW_MAPD_EXCEPTION("import_geo_table error: " + std::string(e.what()));
+    }
   }
 
   // categorize the results
   using LayerNameToContentsMap =
       std::map<std::string, import_export::Importer::GeoFileLayerContents>;
   LayerNameToContentsMap load_layers;
-  LOG(INFO) << "import_geo_table: Found the following layers in the geo file:";
+  LOG_IF(INFO, layer_info.size() > 0)
+      << "import_geo_table: Found the following layers in the geo file:";
   for (const auto& layer : layer_info) {
     switch (layer.contents) {
       case import_export::Importer::GeoFileLayerContents::GEO:
@@ -5035,13 +5168,13 @@ void DBHandler::import_geo_table(const TSessionId& session,
   }
 
   // if nothing is loadable, stop now
-  if (load_layers.size() == 0) {
+  if (!is_raster && load_layers.size() == 0) {
     THROW_MAPD_EXCEPTION("import_geo_table: No loadable layers found, aborting!");
   }
 
   // if we've been given an explicit layer name, check that it exists and is loadable
   // scan the original list, as it may exist but not have been gathered as loadable
-  if (copy_params.geo_layer_name.size()) {
+  if (!is_raster && copy_params.geo_layer_name.size()) {
     bool found = false;
     for (const auto& layer : layer_info) {
       if (copy_params.geo_layer_name == layer.name) {
@@ -5072,7 +5205,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
 
   // Immerse import of multiple layers is not yet supported
   // @TODO fix this!
-  if (row_desc.size() > 0 && load_layers.size() > 1) {
+  if (!is_raster && row_desc.size() > 0 && load_layers.size() > 1) {
     THROW_MAPD_EXCEPTION(
         "import_geo_table: Multi-layer geo import not yet supported from Immerse!");
   }
@@ -5093,7 +5226,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
   };
 
   // if we're importing multiple tables, then NONE of them must exist already
-  if (load_layers.size() > 1) {
+  if (!is_raster && load_layers.size() > 1) {
     for (const auto& layer : load_layers) {
       // construct table name
       auto this_table_name = construct_layer_table_name(table_name, layer.first);
@@ -5112,6 +5245,13 @@ void DBHandler::import_geo_table(const TSessionId& session,
 
   // prepare to time multi-layer import
   double total_import_ms = 0.0;
+
+  // for geo raster, we make a single dummy layer
+  // the name is irrelevant, but set it to the filename so the log makes sense
+  if (is_raster) {
+    CHECK_EQ(load_layers.size(), 0u);
+    load_layers.emplace(file_name, import_export::Importer::GeoFileLayerContents::GEO);
+  }
 
   // now we're safe to start importing
   // we loop over the layers we're going to attempt to load
@@ -5141,9 +5281,8 @@ void DBHandler::import_geo_table(const TSessionId& session,
       // we don't have a RowDescriptor
       // we have to detect the file ourselves
       TDetectResult cds;
-      TCopyParams cp_copy = cp;  // retain S3 auth tokens
+      TCopyParams cp_copy = cp;
       cp_copy.geo_layer_name = layer_name;
-      cp_copy.file_type = TFileType::POLYGON;
       try {
         detect_column_types(cds, session, file_name_in, cp_copy);
       } catch (const std::exception& e) {
@@ -5158,7 +5297,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
       const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
       if (!td) {
         try {
-          create_table(session, this_table_name, rd, TFileType::POLYGON, create_params);
+          create_table(session, this_table_name, rd, cp.file_type, create_params);
         } catch (const std::exception& e) {
           // capture the error and abort this layer
           caught_exception_messages.emplace_back("Failed to create table for Layer '" +
@@ -5187,9 +5326,10 @@ void DBHandler::import_geo_table(const TSessionId& session,
           lockmgr::InsertDataLockMgr::getWriteLockForTable(cat, this_table_name));
     } catch (const std::runtime_error& e) {
       // capture the error and abort this layer
-      std::string exception_message =
-          "Could not import geo file '" + file_path.filename().string() + "' to table '" +
-          this_table_name + "'; table does not exist or failed to create.";
+      std::string exception_message = "Could not import geo/raster file '" +
+                                      file_path.filename().string() + "' to table '" +
+                                      this_table_name +
+                                      "'; table does not exist or failed to create.";
       caught_exception_messages.emplace_back(exception_message);
       continue;
     }
@@ -5203,10 +5343,11 @@ void DBHandler::import_geo_table(const TSessionId& session,
     // first, compare the column count
     if (col_descriptors.size() != rd.size()) {
       // capture the error and abort this layer
-      std::string exception_message =
-          "Could not append geo file '" + file_path.filename().string() + "' to table '" +
-          this_table_name + "'. Column count mismatch (got " + std::to_string(rd.size()) +
-          ", expecting " + std::to_string(col_descriptors.size()) + ")";
+      std::string exception_message = "Could not append geo/raster file '" +
+                                      file_path.filename().string() + "' to table '" +
+                                      this_table_name + "'. Column count mismatch (got " +
+                                      std::to_string(rd.size()) + ", expecting " +
+                                      std::to_string(col_descriptors.size()) + ")";
       caught_exception_messages.emplace_back(exception_message);
       continue;
     }
@@ -5319,7 +5460,7 @@ void DBHandler::import_geo_table(const TSessionId& session,
       continue;
     }
 
-    if (is_geo_layer) {
+    if (!is_raster && is_geo_layer) {
       // Final check to ensure that we have exactly one geo column
       // before doing the actual import, in case the user naively
       // overrode the types in Immerse Preview (which as of 6/17/21
@@ -5344,6 +5485,8 @@ void DBHandler::import_geo_table(const TSessionId& session,
       }
     }
 
+    std::string layer_or_raster = is_raster ? "Raster" : "Layer";
+
     try {
       // import this layer only?
       copy_params.geo_layer_name = layer_name;
@@ -5362,13 +5505,13 @@ void DBHandler::import_geo_table(const TSessionId& session,
 
       // import
       auto ms = measure<>::execution(
-          [&]() { importer->importGDAL(colname_to_src, session_ptr.get()); });
-      LOG(INFO) << "Import of Layer '" << layer_name << "' took " << (double)ms / 1000.0
-                << "s";
+          [&]() { importer->importGDAL(colname_to_src, session_ptr.get(), is_raster); });
+      LOG(INFO) << "Import of " << layer_or_raster << " '" << layer_name << "' took "
+                << (double)ms / 1000.0 << "s";
       total_import_ms += ms;
     } catch (const std::exception& e) {
-      std::string exception_message =
-          "Import of Layer '" + this_table_name + "' failed: " + e.what();
+      std::string exception_message = "Import of " + layer_or_raster + " '" +
+                                      this_table_name + "' failed: " + e.what();
       caught_exception_messages.emplace_back(exception_message);
       continue;
     }
@@ -5501,12 +5644,8 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
   }
   validate_import_file_path_if_local(file_name);
 
-  // validate file_name
-  if (is_a_supported_geo_file(file_name, true)) {
-    // prepare to load geo file directly
-    add_vsi_network_prefix(file_name);
-    add_vsi_geo_prefix(file_name);
-  } else if (is_a_supported_archive_file(file_name)) {
+  // archive or file?
+  if (is_a_supported_archive_file(file_name)) {
     // find the archive file
     add_vsi_network_prefix(file_name);
     if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
@@ -5520,8 +5659,9 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
       file_name = file_name + std::string("/") + geo_file;
     }
   } else {
-    THROW_MAPD_EXCEPTION("File is not a supported geo or geo archive file: " +
-                         file_name_in);
+    // prepare to load geo file directly
+    add_vsi_network_prefix(file_name);
+    add_vsi_geo_prefix(file_name);
   }
 
   // check the file actually exists
@@ -6206,15 +6346,15 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                               ExecutionResult::SimpleResult,
                               import_stmt->get_success());
 
-      // get geo_copy_from info
-      if (import_stmt->was_geo_copy_from()) {
-        GeoCopyFromState geo_copy_from_state;
-        import_stmt->get_geo_copy_from_payload(
-            geo_copy_from_state.geo_copy_from_table,
-            geo_copy_from_state.geo_copy_from_file_name,
-            geo_copy_from_state.geo_copy_from_copy_params,
-            geo_copy_from_state.geo_copy_from_partitions);
-        geo_copy_from_sessions.add(session_ptr->get_session_id(), geo_copy_from_state);
+      // get deferred_copy_from info
+      if (import_stmt->was_deferred_copy_from()) {
+        DeferredCopyFromState deferred_copy_from_state;
+        import_stmt->get_deferred_copy_from_payload(deferred_copy_from_state.table,
+                                                    deferred_copy_from_state.file_name,
+                                                    deferred_copy_from_state.copy_params,
+                                                    deferred_copy_from_state.partitions);
+        deferred_copy_from_sessions.add(session_ptr->get_session_id(),
+                                        deferred_copy_from_state);
       }
       return;
     }

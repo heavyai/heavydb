@@ -3099,7 +3099,7 @@ TEST(ResultsetConversion, EnforceParallelColumnarConversion) {
   std::string import_large_t{
       "COPY t_large FROM "
       "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
-      "(header='false', parquet='true')"};
+      "(header='false', source_type='parquet_file')"};
   QR::get()->runDDLStatement(import_large_t);
 
   // load 50M rows - two frags (use default frag size)
@@ -3110,7 +3110,7 @@ TEST(ResultsetConversion, EnforceParallelColumnarConversion) {
   std::string import_large_t_multi_frag{
       "COPY t_large_multi_frag FROM "
       "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
-      "(header='false', parquet='true')"};
+      "(header='false', source_type='parquet_file')"};
   QR::get()->runDDLStatement(import_large_t_multi_frag);
 
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_small;");

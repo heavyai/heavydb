@@ -51,6 +51,8 @@
 #include "DBHandlerTestHelpers.h"
 #include "ThriftHandler/DBHandler.h"
 
+#include "ImportExport/RasterImporter.h"
+
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
@@ -145,13 +147,15 @@ class ImportExportTestBase : public DBHandlerTestFixture {
                        const int64_t cnt,
                        const double avg,
                        const std::map<std::string, std::string>& options = {}) {
-    return importTestCommon(
-        string("COPY trips FROM '") + "../../Tests/Import/datafiles/" + filename +
-            "' WITH (header='true'" +
-            (filename.find(".parquet") != std::string::npos ? ",parquet='true'" : "") +
-            options_to_string(options) + ");",
-        cnt,
-        avg);
+    return importTestCommon(string("COPY trips FROM '") +
+                                "../../Tests/Import/datafiles/" + filename +
+                                "' WITH (header='true'" +
+                                (filename.find(".parquet") != std::string::npos
+                                     ? ",source_type='parquet_file'"
+                                     : "") +
+                                options_to_string(options) + ");",
+                            cnt,
+                            avg);
   }
 
 #ifdef HAVE_AWS_S3
@@ -185,7 +189,7 @@ class ImportExportTestBase : public DBHandlerTestFixture {
             (s3_region.size() ? ",s3_region='" + s3_region + "'" : "") +
             (prefix.find(".parquet") != std::string::npos ||
                      filename.find(".parquet") != std::string::npos
-                 ? ",parquet='true'"
+                 ? ",source_type='parquet_file'"
                  : "") +
             options_to_string(options) + ");",
         cnt,
@@ -600,7 +604,7 @@ TEST_F(ParquetImportErrorHandling, GreaterThanMaxReject) {
       "(0) ENCODING FIXED(32), days DATE ENCODING DAYS(16), ts2days DATE ENCODING DAYS "
       "(16) );");
   sql("COPY test_table FROM '" + fsi_file_base_dir +
-      "/invalid_parquet/' WITH (parquet='True', max_reject=6);");
+      "/invalid_parquet/' WITH (source_type='parquet_file', max_reject=6);");
   TQueryResult query;
   sql(query, "SELECT count(*) FROM test_table;");
   assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
@@ -610,7 +614,7 @@ TEST_F(ParquetImportErrorHandling, MismatchNumberOfColumns) {
   sql("CREATE TABLE test_table (i INT);");
   queryAndAssertException(
       "COPY test_table FROM '" + fsi_file_base_dir +
-          "/two_col_1_2.parquet' WITH (parquet='True');",
+          "/two_col_1_2.parquet' WITH (source_type='parquet_file');",
       "Mismatched number of logical columns: (expected 1 columns, has 2): in file "
       "'../../Tests/FsiDataFiles/two_col_1_2.parquet'");
 }
@@ -619,7 +623,7 @@ TEST_F(ParquetImportErrorHandling, MismatchColumnType) {
   sql("CREATE TABLE test_table (i INT, t TEXT);");
   queryAndAssertException(
       "COPY test_table FROM '" + fsi_file_base_dir +
-          "/two_col_1_2.parquet' WITH (parquet='True');",
+          "/two_col_1_2.parquet' WITH (source_type='parquet_file');",
       "Conversion from Parquet type \"INT64\" to OmniSci type \"TEXT\" is not allowed. "
       "Please use an appropriate column type. Parquet column: col2, OmniSci column: t, "
       "Parquet file: ../../Tests/FsiDataFiles/two_col_1_2.parquet.");
@@ -641,7 +645,7 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
       "(0) ENCODING FIXED(32), days DATE ENCODING DAYS(16), ts2days DATE ENCODING DAYS "
       "(16) );");
   sql("COPY test_table FROM '" + fsi_file_base_dir + "/invalid_parquet/one_invalid_row_" +
-      GetParam() + ".parquet' WITH (parquet='True');");
+      GetParam() + ".parquet' WITH (source_type='parquet_file');");
   TQueryResult query;
   sql(query, "SELECT * FROM test_table ORDER BY id;");
   // clang-format off
@@ -657,7 +661,7 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
 }
 #endif
 
-using ImportAndSelectTestParameters = std::tuple</*file_type=*/std::string,
+using ImportAndSelectTestParameters = std::tuple</*source_type=*/std::string,
                                                  /*data_source_type=*/std::string>;
 
 class ImportAndSelectTest
@@ -756,7 +760,7 @@ class ImportAndSelectTest
                                  const std::string data_source_type) {
     std::vector<std::string> options;
     if (file_type == "parquet") {
-      options.emplace_back("parquet='True'");
+      options.emplace_back("source_type='parquet_file'");
     }
     if (data_source_type == "s3_public" || data_source_type == "s3_private") {
       options.emplace_back("s3_region='us-west-1'");
@@ -1353,7 +1357,7 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
   sql("CREATE TABLE unique_rowgroups (a float, b float, c float, d float);");
   sql("COPY unique_rowgroups FROM "
       "'../../Tests/Import/datafiles/unique_rowgroups.parquet' "
-      "WITH (parquet='true');");
+      "WITH (source_type='parquet_file');");
   std::string select_query_str = "SELECT * FROM unique_rowgroups ORDER BY a;";
   sqlAndCompareResult(select_query_str,
                       {{1.f, 3.f, 6.f, 7.1f},
@@ -1754,7 +1758,8 @@ class ImportTestGeo : public ImportExportTestBase {
         string("COPY geospatial FROM '") +
         boost::filesystem::canonical("../../Tests/Import/datafiles/" + filename)
             .string() +
-        "' WITH (geo=" + (is_csv ? "'false'" : "'true'") + " " + other_options + ");");
+        "' WITH (source_type=" + (is_csv ? "'delimited_file'" : "'geo_file'") + " " +
+        other_options + ");");
   }
 
   void checkGeoNumRows(const std::string& project_columns,
@@ -1958,12 +1963,13 @@ class ImportTestGDAL : public ImportTestGeo {
       options += ", geo_explode_collections = 'false'";
     }
     std::string copy_query = "COPY " + table_name + " FROM '" + file_path +
-                             "' WITH (geo='true' " + options + ");";
+                             "' WITH (source_type='geo_file' " + options + ");";
 
     auto& cat = getCatalog();
     const std::string geo_column_name(OMNISCI_GEO_PREFIX);
 
     import_export::CopyParams copy_params;
+    copy_params.source_type = import_export::SourceType::kGeoFile;
     if (compression) {
       copy_params.geo_coords_encoding = EncodingType::kENCODING_GEOINT;
       copy_params.geo_coords_comp_param = 32;
@@ -1984,7 +1990,7 @@ class ImportTestGDAL : public ImportTestGeo {
 
     std::map<std::string, std::string> colname_to_src;
     auto cds = import_export::Importer::gdalToColumnDescriptors(
-        vsi_file_path, geo_column_name, copy_params);
+        vsi_file_path, false, geo_column_name, copy_params);
 
     for (auto& cd : cds) {
       const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
@@ -2325,11 +2331,11 @@ TEST_F(ImportTest, S3_GCS_One_gz_file) {
 }
 
 TEST_F(ImportTestGeo, S3_GCS_One_geo_file) {
-  EXPECT_TRUE(
-      importTestCommonGeo("COPY geopatial FROM "
-                          "'s3://omnisci-importtest-data/geo-data/"
-                          "S_USA.Experimental_Area_Locations.gdb.zip' "
-                          "WITH (geo='true', s3_endpoint='storage.googleapis.com');"));
+  EXPECT_TRUE(importTestCommonGeo(
+      "COPY geopatial FROM "
+      "'s3://omnisci-importtest-data/geo-data/"
+      "S_USA.Experimental_Area_Locations.gdb.zip' "
+      "WITH (source_type='geo_file', s3_endpoint='storage.googleapis.com');"));
 }
 
 class ImportServerPrivilegeTest : public ImportExportTestBase {
@@ -3477,6 +3483,360 @@ TEST_F(ExportTest, Array_Null_Handling_NullField) {
   ASSERT_NO_THROW(
       doTestArrayNullHandling("query_export_test_array_null_handling_nullfield.geojson",
                               ", array_null_handling='nullfield'"));
+}
+
+//
+// Raster Tests
+//
+
+#define DEBUG_RASTER_TESTS 0
+
+static constexpr const char* kPNG = "beach.png";
+static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.tif";
+static constexpr const char* kGRIB = "hrrr.t00z.wrfsubhf00_small.grib2";
+
+// RasterImporter Class Tests
+
+class RasterImporterTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    raster_importer_.reset(new import_export::RasterImporter());
+  }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+
+  void doDetect(const std::string& file_name,
+                const std::string& import_bands,
+                const import_export::RasterImporter::PointType point_type,
+                const import_export::RasterImporter::PointTransform point_transform) {
+    // init GDAL
+    Geospatial::GDAL::init();
+
+    // get absolute filename
+    auto const abs_file_name =
+        boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + file_name)
+            .string();
+
+    // run a detect
+    raster_importer_->detect(abs_file_name, import_bands, point_type, point_transform);
+
+#if DEBUG_RASTER_TESTS
+    auto const& band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
+    std::cout << "Found " << band_names_and_sql_types.size() << " bands" << std::endl;
+    for (auto const [band_name, sql_type] : band_names_and_sql_types) {
+      std::cout << "  " << band_name << " (" << to_string(sql_type) << ")" << std::endl;
+    }
+#endif
+  }
+
+  void doImport(const int max_threads) { raster_importer_->import(max_threads); }
+
+  static constexpr float kFloatEpsilon = 1.0E-3;
+  static constexpr double kDoubleEpsilon = 1.0E-6;
+
+  void runDetectTest(const std::string& file_name,
+                     const std::string& import_bands,
+                     const import_export::RasterImporter::NamesAndSQLTypes&
+                         expected_band_names_and_sql_types,
+                     const int expected_width,
+                     const int expected_height) {
+    // detect phase
+    doDetect(file_name,
+             import_bands,
+             import_export::RasterImporter::PointType::kNone,
+             import_export::RasterImporter::PointTransform::kNone);
+
+    // check band names?
+    if (expected_band_names_and_sql_types.size()) {
+      auto const& band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
+      EXPECT_EQ(band_names_and_sql_types, expected_band_names_and_sql_types);
+    }
+
+    // check dimensions
+    auto const w = raster_importer_->getBandsWidth();
+    auto const h = raster_importer_->getBandsHeight();
+    EXPECT_EQ(expected_width, w);
+    EXPECT_EQ(expected_height, h);
+  }
+
+  void runProjectionTest(
+      const std::string& file_name,
+      const import_export::RasterImporter::PointType point_type,
+      const import_export::RasterImporter::PointTransform point_transform,
+      const int pixel_x,
+      const int pixel_y,
+      const double expected_proj_x,
+      const double expected_proj_y) {
+    // detect phase
+    doDetect(file_name, "", point_type, point_transform);
+
+    // import phase
+    static constexpr int max_threads{1};
+    doImport(max_threads);
+
+    // project given point
+    auto const proj_xy = raster_importer_->getProjectedPixelCoords(0u, pixel_x, pixel_y);
+
+#if DEBUG_RASTER_TESTS
+    std::cout << "Pixel (" << pixel_x << ", " << pixel_y << ") projects to ("
+              << proj_xy.first << ", " << proj_xy.second << ")" << std::endl;
+#endif
+
+    // check projection
+    EXPECT_NEAR(proj_xy.first, expected_proj_x, kDoubleEpsilon);
+    EXPECT_NEAR(proj_xy.second, expected_proj_y, kDoubleEpsilon);
+  }
+
+  void runValueTest(const std::string& file_name,
+                    const std::string& single_band_name,
+                    const int pixel_x,
+                    const int pixel_y,
+                    const SQLTypes value_type,
+                    const double value) {
+    // detect phase
+    doDetect(file_name,
+             single_band_name,
+             import_export::RasterImporter::PointType::kNone,
+             import_export::RasterImporter::PointTransform::kNone);
+
+    // validate band name and type
+    auto const band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
+    EXPECT_EQ(band_names_and_sql_types.size(), 1u);
+    auto const& [band_name, sql_type] = band_names_and_sql_types[0];
+    EXPECT_EQ(band_name, single_band_name);
+    EXPECT_EQ(sql_type, value_type);
+
+    // get dimensions
+    auto const width = raster_importer_->getBandsWidth();
+    auto const height = raster_importer_->getBandsHeight();
+
+    // avoid overflow
+    CHECK_LT(pixel_x, width);
+    CHECK_LT(pixel_y, height);
+
+    // import phase
+    static constexpr int max_threads{1};
+    doImport(max_threads);
+
+    // get a scanline
+    std::vector<std::byte> raw_bytes(width * sizeof(double));
+    static constexpr uint32_t thread_idx{0u};
+    static constexpr uint32_t band_idx{0u};
+    static constexpr uint32_t num_rows{1u};
+    raster_importer_->getRawPixels(
+        thread_idx, band_idx, pixel_y, num_rows, value_type, raw_bytes);
+
+    // extract the pixel and check the value
+    switch (value_type) {
+      case kSMALLINT: {
+        auto const* values = reinterpret_cast<const int16_t*>(raw_bytes.data());
+#if DEBUG_RASTER_TESTS
+        std::cout << "Band Pixel Value is " << values[pixel_x] << std::endl;
+#endif
+        EXPECT_EQ(values[pixel_x], static_cast<int16_t>(value));
+      } break;
+      case kFLOAT: {
+        auto const* values = reinterpret_cast<const float*>(raw_bytes.data());
+#if DEBUG_RASTER_TESTS
+        std::cout << "Band Pixel Value is " << values[pixel_x] << std::endl;
+#endif
+        EXPECT_NEAR(values[pixel_x], value, kFloatEpsilon);
+      } break;
+      case kDOUBLE: {
+        auto const* values = reinterpret_cast<const double*>(raw_bytes.data());
+#if DEBUG_RASTER_TESTS
+        std::cout << "Band Pixel Value is " << values[pixel_x] << std::endl;
+#endif
+        EXPECT_NEAR(values[pixel_x], value, kDoubleEpsilon);
+      } break;
+      default:
+        CHECK(false);
+    }
+  }
+
+  void runEnumsTest(const std::string& file_name,
+                    const import_export::RasterImporter::PointType point_type,
+                    const import_export::RasterImporter::PointTransform point_transform) {
+    doDetect(file_name, "", point_type, point_transform);
+  }
+
+  using TY = import_export::RasterImporter::PointType;
+  using TR = import_export::RasterImporter::PointTransform;
+
+ private:
+  std::unique_ptr<import_export::RasterImporter> raster_importer_;
+};
+
+TEST_F(RasterImporterTest, PNGDetectTest) {
+  ASSERT_NO_THROW(
+      runDetectTest(kPNG,
+                    "",
+                    {{"band1", kSMALLINT}, {"band2", kSMALLINT}, {"band3", kSMALLINT}},
+                    320,
+                    225));
+}
+
+TEST_F(RasterImporterTest, GeoTIFFDetectTest) {
+  ASSERT_NO_THROW(runDetectTest(kGeoTIFF, "", {{"band1", kFLOAT}}, 200, 200));
+}
+
+TEST_F(RasterImporterTest, GRIB2DetectTest) {
+  ASSERT_NO_THROW(runDetectTest(
+      kGRIB,
+      "MaximumCompositeradarreflectivitydB,EchoTopm",
+      {{"MaximumCompositeradarreflectivitydB", kDOUBLE}, {"EchoTopm", kDOUBLE}},
+      20,
+      20));
+}
+
+TEST_F(RasterImporterTest, PNGProjectionTest) {
+  ASSERT_NO_THROW(runProjectionTest(kPNG, TY::kNone, TR::kNone, 100, 100, 100.0, 100.0));
+}
+
+TEST_F(RasterImporterTest, GeoTIFFProjectionTest) {
+  ASSERT_NO_THROW(runProjectionTest(kGeoTIFF,
+                                    TY::kDouble,
+                                    TR::kWorld,
+                                    100,
+                                    100,
+                                    -83.223951477975234,
+                                    39.817841877096328));
+}
+
+TEST_F(RasterImporterTest, PNGValueTest) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ASSERT_NO_THROW(runValueTest(kPNG, "band1", 100, 100, kSMALLINT, 124));
+}
+
+TEST_F(RasterImporterTest, GeoTIFFValueTest) {
+  ASSERT_NO_THROW(runValueTest(kGeoTIFF, "band1", 50, 50, kFLOAT, 287.12179565429688));
+}
+
+TEST_F(RasterImporterTest, GRIB2ValueTest) {
+  ASSERT_NO_THROW(
+      runValueTest(kGRIB, "TemperatureC", 10, 10, kDOUBLE, 32.112359619140648));
+}
+
+TEST_F(RasterImporterTest, NonGeoEnumsTest) {
+  // for non-geo rasters, we reject:
+  //   point/world - no geospatial coordinate system to transform to
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kAuto, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kSmallInt, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kInt, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kNone));
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kPoint, TR::kNone), std::runtime_error);
+
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kAuto, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kSmallInt, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kInt, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kAuto));
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kPoint, TR::kAuto), std::runtime_error);
+
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kAuto, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kSmallInt, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kInt, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kFile));
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kPoint, TR::kFile), std::runtime_error);
+
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kNone, TR::kWorld), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kAuto, TR::kWorld), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kSmallInt, TR::kWorld), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kInt, TR::kWorld), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kFloat, TR::kWorld), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kDouble, TR::kWorld), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kPNG, TY::kPoint, TR::kWorld), std::runtime_error);
+}
+
+TEST_F(RasterImporterTest, GeoEnumsTest) {
+  // for geo rasters, we reject:
+  //   point/none and /file - point cannot [yet] store non-world coords
+  //   [small]int/auto and /world- auto would be world, which ints cannot store
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kNone, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kAuto, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kSmallInt, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kInt, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kFloat, TR::kNone));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kDouble, TR::kNone));
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kPoint, TR::kNone), std::runtime_error);
+
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kNone, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kAuto, TR::kAuto));
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kSmallInt, TR::kAuto), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kInt, TR::kAuto), std::runtime_error);
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kFloat, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kDouble, TR::kAuto));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kPoint, TR::kAuto));
+
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kNone, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kAuto, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kSmallInt, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kInt, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kFloat, TR::kFile));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kDouble, TR::kFile));
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kPoint, TR::kFile), std::runtime_error);
+
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kNone, TR::kWorld));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kAuto, TR::kWorld));
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kSmallInt, TR::kWorld), std::runtime_error);
+  EXPECT_THROW(runEnumsTest(kGeoTIFF, TY::kInt, TR::kWorld), std::runtime_error);
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kFloat, TR::kWorld));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kDouble, TR::kWorld));
+  ASSERT_NO_THROW(runEnumsTest(kGeoTIFF, TY::kPoint, TR::kWorld));
+}
+
+// Raster Import Tests
+
+class RasterImportTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("drop table if exists raster;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists raster;");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void importTestCommon(
+      const std::string& file_name,
+      const std::string& check_str,
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
+    auto const abs_file_name =
+        boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + file_name)
+            .string();
+    sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file');");
+    sqlAndCompareResult(check_str, expected_result_set);
+  }
+};
+
+TEST_F(RasterImportTest, ImportPNGTest) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+}
+
+TEST_F(RasterImportTest, ImportGeoTIFFTest) {
+  ASSERT_NO_THROW(
+      importTestCommon(kGeoTIFF,
+                       "SELECT raster_lon, raster_lat FROM raster WHERE rowid=42;",
+                       {{-83.224657689925579, 39.818729217287554}}));
+}
+
+TEST_F(RasterImportTest, ImportGRIBTest) {
+  ASSERT_NO_THROW(
+      importTestCommon(kGRIB,
+                       "SELECT raster_lon, raster_lat FROM raster WHERE rowid=42;",
+                       {{-111.24787702504845, 38.43639550624939}}));
 }
 
 }  // namespace

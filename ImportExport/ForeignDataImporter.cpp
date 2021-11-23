@@ -64,7 +64,7 @@ ImportStatus ForeignDataImporter::import(
   auto& catalog = session_info->getCatalog();
 
 #ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params_.file_type == import_export::FileType::PARQUET);
+  CHECK(copy_params_.source_type == import_export::SourceType::kParquetFile);
 #else
   UNREACHABLE() << "Unexpected method call for non-Parquet import";
 #endif

@@ -586,11 +586,14 @@ TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
   }
 #endif  // HAVE_AWS_S3
 
+  TCopyParams copy_params;
+  copy_params.file_type = TFileType::GEO;
+
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_geo_table(session_id,
                                "test_table_2",
                                getFilePath("example.geojson"),
-                               TCopyParams{},
+                               copy_params,
                                TRowDescriptor{},
                                TCreateParams{});
 }
@@ -618,10 +621,13 @@ TEST_P(DBHandlerFilePathTest, GetLayersInGeoFile) {
   }
 #endif  // HAVE_AWS_S3
 
+  TCopyParams copy_params;
+  copy_params.file_type = TFileType::GEO;
+
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::vector<TGeoFileLayerInfo> result;
   db_handler->get_layers_in_geo_file(
-      result, session_id, getFilePath("example.geojson"), TCopyParams());
+      result, session_id, getFilePath("example.geojson"), copy_params);
 }
 
 INSTANTIATE_TEST_SUITE_P(

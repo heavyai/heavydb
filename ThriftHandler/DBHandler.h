@@ -720,7 +720,7 @@ class DBHandler : public OmniSciIf {
       const int32_t at_most_n,
       const bool use_calcite);
 
-  int64_t process_geo_copy_from(const TSessionId& session_id);
+  int64_t process_deferred_copy_from(const TSessionId& session_id);
 
   static void convertData(TQueryResult& _return,
                           ExecutionResult& result,
@@ -949,38 +949,38 @@ class DBHandler : public OmniSciIf {
   const std::string& clang_path_;
   const std::vector<std::string>& clang_options_;
 
-  struct GeoCopyFromState {
-    std::string geo_copy_from_table;
-    std::string geo_copy_from_file_name;
-    import_export::CopyParams geo_copy_from_copy_params;
-    std::string geo_copy_from_partitions;
+  struct DeferredCopyFromState {
+    std::string table;
+    std::string file_name;
+    import_export::CopyParams copy_params;
+    std::string partitions;
   };
 
-  struct GeoCopyFromSessions {
-    std::unordered_map<std::string, GeoCopyFromState> was_geo_copy_from;
-    std::mutex geo_copy_from_mutex;
+  struct DeferredCopyFromSessions {
+    std::unordered_map<std::string, DeferredCopyFromState> was_deferred_copy_from;
+    std::mutex deferred_copy_from_mutex;
 
-    std::optional<GeoCopyFromState> operator()(const std::string& session_id) {
-      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
-      auto itr = was_geo_copy_from.find(session_id);
-      if (itr == was_geo_copy_from.end()) {
+    std::optional<DeferredCopyFromState> operator()(const std::string& session_id) {
+      std::lock_guard<std::mutex> map_lock(deferred_copy_from_mutex);
+      auto itr = was_deferred_copy_from.find(session_id);
+      if (itr == was_deferred_copy_from.end()) {
         return std::nullopt;
       }
       return itr->second;
     }
 
-    void add(const std::string& session_id, const GeoCopyFromState& state) {
-      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
-      const auto ret = was_geo_copy_from.insert(std::make_pair(session_id, state));
+    void add(const std::string& session_id, const DeferredCopyFromState& state) {
+      std::lock_guard<std::mutex> map_lock(deferred_copy_from_mutex);
+      const auto ret = was_deferred_copy_from.insert(std::make_pair(session_id, state));
       CHECK(ret.second);
     }
 
     void remove(const std::string& session_id) {
-      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
-      was_geo_copy_from.erase(session_id);
+      std::lock_guard<std::mutex> map_lock(deferred_copy_from_mutex);
+      was_deferred_copy_from.erase(session_id);
     }
   };
-  GeoCopyFromSessions geo_copy_from_sessions;
+  DeferredCopyFromSessions deferred_copy_from_sessions;
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;
@@ -1068,4 +1068,11 @@ class DBHandler : public OmniSciIf {
   RenderGroupAnalyzerSessionMap render_group_assignment_map_;
   std::mutex render_group_assignment_mutex_;
   mapd_shared_mutex custom_expressions_mutex_;
+
+  void import_geo_table_internal(const TSessionId& session,
+                                 const std::string& table_name,
+                                 const std::string& file_name,
+                                 const TCopyParams& copy_params,
+                                 const TRowDescriptor& row_desc,
+                                 const TCreateParams& create_params);
 };

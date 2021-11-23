@@ -13,8 +13,9 @@ enum TExecuteMode {
 
 enum TFileType {
   DELIMITED,
-  POLYGON,
-  PARQUET
+  GEO,
+  PARQUET,
+  RASTER
 }
 
 enum TPartitionDetail {
@@ -108,6 +109,23 @@ enum TMergeType {
   REDUCE
 }
 
+enum TRasterPointType {
+  NONE,
+  AUTO,
+  SMALLINT,
+  INT,
+  FLOAT,
+  DOUBLE,
+  POINT
+}
+
+enum TRasterPointTransform {
+  NONE,
+  AUTO,
+  FILE,
+  WORLD
+}
+
 struct TStepResult {
   1: serialized_result_set.TSerializedRows serialized_rows;
   2: bool execution_finished;
@@ -193,6 +211,10 @@ struct TCopyParams {
   24: bool geo_explode_collections=false;
   25: i32 source_srid=0;
   26: string s3_session_token;
+  27: TRasterPointType raster_point_type=TRasterPointType.AUTO;
+  28: string raster_import_bands;
+  29: i32 raster_scanlines_per_thread;
+  30: TRasterPointTransform raster_point_transform=TRasterPointTransform.AUTO;
 }
 
 struct TCreateParams {

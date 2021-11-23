@@ -1486,17 +1486,17 @@ class CopyTableStmt : public DDLStmt {
 
   bool get_success() const { return success_; }
 
-  bool was_geo_copy_from() const { return was_geo_copy_from_; }
+  bool was_deferred_copy_from() const { return was_deferred_copy_from_; }
 
-  void get_geo_copy_from_payload(std::string& geo_copy_from_table,
-                                 std::string& geo_copy_from_file_name,
-                                 import_export::CopyParams& geo_copy_from_copy_params,
-                                 std::string& geo_copy_from_partitions) {
-    geo_copy_from_table = *table_;
-    geo_copy_from_file_name = geo_copy_from_file_name_;
-    geo_copy_from_copy_params = geo_copy_from_copy_params_;
-    geo_copy_from_partitions = geo_copy_from_partitions_;
-    was_geo_copy_from_ = false;
+  void get_deferred_copy_from_payload(std::string& table,
+                                      std::string& file_name,
+                                      import_export::CopyParams& copy_params,
+                                      std::string& partitions) {
+    table = *table_;
+    file_name = deferred_copy_from_file_name_;
+    copy_params = deferred_copy_from_copy_params_;
+    partitions = deferred_copy_from_partitions_;
+    was_deferred_copy_from_ = false;
   }
 
  private:
@@ -1505,10 +1505,10 @@ class CopyTableStmt : public DDLStmt {
   bool success_;
   std::list<std::unique_ptr<NameValueAssign>> options_;
 
-  bool was_geo_copy_from_ = false;
-  std::string geo_copy_from_file_name_;
-  import_export::CopyParams geo_copy_from_copy_params_;
-  std::string geo_copy_from_partitions_;
+  bool was_deferred_copy_from_ = false;
+  std::string deferred_copy_from_file_name_;
+  import_export::CopyParams deferred_copy_from_copy_params_;
+  std::string deferred_copy_from_partitions_;
 };
 
 /*

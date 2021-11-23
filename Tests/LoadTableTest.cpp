@@ -682,6 +682,7 @@ class ImportGeoTableTest : public DBHandlerTestFixture {
 
   const TCopyParams getCopyParams() const {
     TCopyParams copy_params;
+    copy_params.file_type = TFileType::GEO;
     return copy_params;
   }
 
@@ -740,7 +741,7 @@ class ImportGeoTableTest : public DBHandlerTestFixture {
 TEST_F(ImportGeoTableTest, ImportGeoTableAuto) {
   // geo import with empty row descriptor
   // will automatically create table
-  // equivalent to COPY FROM WITH (geo='true')
+  // equivalent to COPY FROM WITH (source_type='geo_file')
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor;
@@ -765,7 +766,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableExplicit) {
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
-                                        TFileType::type::POLYGON,
+                                        TFileType::type::GEO,
                                         getCreateParams()));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
@@ -788,7 +789,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableOverride) {
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
-                                        TFileType::type::POLYGON,
+                                        TFileType::type::GEO,
                                         getCreateParams()));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
@@ -813,7 +814,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
-                                        TFileType::type::POLYGON,
+                                        TFileType::type::GEO,
                                         getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
@@ -838,7 +839,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
-                                        TFileType::type::POLYGON,
+                                        TFileType::type::GEO,
                                         getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
@@ -861,7 +862,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailNoGeoColumns) {
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
-                                        TFileType::type::POLYGON,
+                                        TFileType::type::GEO,
                                         getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
@@ -886,7 +887,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
-                                        TFileType::type::POLYGON,
+                                        TFileType::type::GEO,
                                         getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",

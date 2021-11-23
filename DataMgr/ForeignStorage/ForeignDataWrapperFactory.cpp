@@ -71,7 +71,7 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
     const import_export::CopyParams& copy_params) {
 // only supported for parquet import path currently
 #ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.file_type == import_export::FileType::PARQUET);
+  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile);
 #else
   UNREACHABLE() << "Unexpected method call for non-Parquet import";
 #endif
@@ -102,7 +102,7 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     const ForeignServer* server) {
 // only supported for parquet import path currently
 #ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.file_type == import_export::FileType::PARQUET);
+  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile);
 #else
   UNREACHABLE() << "Unexpected method call for non-Parquet import";
 #endif

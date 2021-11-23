@@ -617,7 +617,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
   std::string import_very_large_parquet_table_str{
       "COPY t_very_large_parquet FROM "
       "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
-      "(header='false', parquet='true')"};
+      "(header='false', source_type='parquet_file')"};
 
   try {
     std::string session1 = generate_random_string(32);
@@ -783,7 +783,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_GDAL) {
   std::string import_gdal_table_str{
       "COPY t_gdal FROM "
       "'../../Tests/Import/datafiles/interrupt_table_gdal.geojson' WITH "
-      "(geo='true')"};
+      "(source_type='geo_file')"};
 
   auto check_interrup_msg = [&catchInterruption](const std::string& msg,
                                                  bool is_pending_query) {

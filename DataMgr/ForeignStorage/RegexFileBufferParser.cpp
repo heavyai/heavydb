@@ -273,9 +273,9 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
   copy_params.plain_text = true;
   if (skip_first_line_) {
     // This branch should only be executed in tests
-    copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
+    copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
   } else {
-    copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
+    copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
   }
   if (auto it = foreign_table->options.find(BUFFER_SIZE_KEY);
       it != foreign_table->options.end()) {

@@ -22,9 +22,6 @@
 #ifndef _IMPORTER_H_
 #define _IMPORTER_H_
 
-#include <gdal.h>
-#include <ogrsf_frmts.h>
-
 #include <atomic>
 #include <boost/filesystem.hpp>
 #include <boost/noncopyable.hpp>
@@ -47,6 +44,7 @@
 #include "Catalog/TableDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "Fragmenter/Fragmenter.h"
+#include "Geospatial/GDAL.h"
 #include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
 #include "Shared/ThreadController.h"
@@ -775,8 +773,9 @@ class Importer : public DataStreamSink, public AbstractImporter {
       const std::string& file_path,
       const bool decompressed,
       const Catalog_Namespace::SessionInfo* session_info) override;
-  ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src,
-                          const Catalog_Namespace::SessionInfo* session_info);
+  ImportStatus importGDAL(const std::map<std::string, std::string>& colname_to_src,
+                          const Catalog_Namespace::SessionInfo* session_info,
+                          const bool is_raster);
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return loader->get_column_descs();
@@ -799,6 +798,7 @@ class Importer : public DataStreamSink, public AbstractImporter {
   static void set_import_status(const std::string& id, const ImportStatus is);
   static const std::list<ColumnDescriptor> gdalToColumnDescriptors(
       const std::string& fileName,
+      const bool is_raster,
       const std::string& geoColumnName,
       const CopyParams& copy_params);
   static void readMetadataSampleGDAL(
@@ -851,9 +851,23 @@ class Importer : public DataStreamSink, public AbstractImporter {
   static bool gdalStatInternal(const std::string& path,
                                const CopyParams& copy_params,
                                bool also_dir);
-  static OGRDataSource* openGDALDataset(const std::string& fileName,
-                                        const CopyParams& copy_params);
-  static void setGDALAuthorizationTokens(const CopyParams& copy_params);
+  static Geospatial::GDAL::DataSourceUqPtr openGDALDataSource(
+      const std::string& fileName,
+      const CopyParams& copy_params);
+
+  ImportStatus importGDALGeo(const std::map<std::string, std::string>& colname_to_src,
+                             const Catalog_Namespace::SessionInfo* session_info);
+  ImportStatus importGDALRaster(const Catalog_Namespace::SessionInfo* session_info);
+
+  static const std::list<ColumnDescriptor> gdalToColumnDescriptorsGeo(
+      const std::string& fileName,
+      const std::string& geoColumnName,
+      const CopyParams& copy_params);
+  static const std::list<ColumnDescriptor> gdalToColumnDescriptorsRaster(
+      const std::string& fileName,
+      const std::string& geoColumnName,
+      const CopyParams& copy_params);
+
   std::string import_id;
   size_t file_size;
   size_t max_threads;

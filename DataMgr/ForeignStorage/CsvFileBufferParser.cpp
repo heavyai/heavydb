@@ -304,9 +304,9 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
   auto has_header = validate_and_get_bool_value(foreign_table, "HEADER");
   if (has_header.has_value()) {
     if (has_header.value()) {
-      copy_params.has_header = import_export::ImportHeaderRow::HAS_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
     } else {
-      copy_params.has_header = import_export::ImportHeaderRow::NO_HEADER;
+      copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
     }
   }
   if (const auto& value = validate_and_get_delimiter(foreign_table, "LINE_DELIMITER");

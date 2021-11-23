@@ -206,7 +206,7 @@ StandardCommand(Status, { ContextOps::get_status(cmdContext(), output_stream); }
 
 StandardCommand(CopyGeo, {
   std::cout << "Error: The \\copygeo command is deprecated. Use: COPY <table> FROM "
-               "'<file>' WITH (geo='true');"
+               "'<file>' WITH (source_type='geo_file');"
             << std::endl;
 });
 

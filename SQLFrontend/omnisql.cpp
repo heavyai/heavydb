@@ -1308,6 +1308,8 @@ int main(int argc, char** argv) {
     }
     LineType* line = smart_line.get();  // Alias to make the C stuff work
 
+    std::string original_line = line;
+
     {
       TQueryResult empty;
       swap(_return, empty);
@@ -1460,6 +1462,14 @@ int main(int argc, char** argv) {
         filepath = strtok(0, " ");
       }
 #endif
+      // allow force interpretation as geo or raster file
+      if (boost::iequals(filepath, "geo")) {
+        copy_params.file_type = TFileType::GEO;
+        filepath = strtok(0, " ");
+      } else if (boost::iequals(filepath, "raster")) {
+        copy_params.file_type = TFileType::RASTER;
+        filepath = strtok(0, " ");
+      }
       copy_params.delimiter = ",";
       char* env;
       if (nullptr != (env = getenv("AWS_REGION"))) {
@@ -1561,10 +1571,11 @@ int main(int argc, char** argv) {
     }
 
     /* Add to the history. */
-    if (line[0] == '\\' && line[1] == 'c') {
-      linenoiseHistoryAdd(hide_sensitive_data_from_connect(line).c_str());
+    if (original_line.length() >= 2 && original_line[0] == '\\' &&
+        original_line[1] == 'c') {
+      linenoiseHistoryAdd(hide_sensitive_data_from_connect(original_line).c_str());
     } else {
-      linenoiseHistoryAdd(hide_sensitive_data_from_query(line).c_str());
+      linenoiseHistoryAdd(hide_sensitive_data_from_query(original_line).c_str());
     }
     linenoiseHistorySave(cmd_file);
   }

@@ -4658,13 +4658,16 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              const std::string& file_path,
                              const import_export::CopyParams& copy_params)
       -> std::unique_ptr<import_export::AbstractImporter> {
+    if (copy_params.source_type == import_export::SourceType::kParquetFile) {
 #ifdef ENABLE_IMPORT_PARQUET
-    if (copy_params.file_type == import_export::FileType::PARQUET &&
-        g_enable_parquet_import_fsi) {
-      return std::make_unique<import_export::ForeignDataImporter>(
-          file_path, copy_params, td);
-    }
+      if (g_enable_parquet_import_fsi) {
+        return std::make_unique<import_export::ForeignDataImporter>(
+            file_path, copy_params, td);
+      }
+#else
+      throw std::runtime_error("Parquet not supported!");
 #endif
+    }
     return std::make_unique<import_export::Importer>(catalog, td, file_path, copy_params);
   };
   return execute(session, importer_factory);
@@ -4730,6 +4733,9 @@ void CopyTableStmt::execute(
   // or a wildcard of file names;
   std::string file_path = *file_pattern_;
   import_export::CopyParams copy_params;
+
+  std::vector<std::string> warnings;
+
   if (!options_.empty()) {
     for (auto& p : options_) {
       if (boost::iequals(*p->get_name(), "max_reject")) {
@@ -4773,19 +4779,22 @@ void CopyTableStmt::execute(
           throw std::runtime_error("Header option must be a boolean.");
         }
         copy_params.has_header = bool_from_string_literal(str_literal)
-                                     ? import_export::ImportHeaderRow::HAS_HEADER
-                                     : import_export::ImportHeaderRow::NO_HEADER;
+                                     ? import_export::ImportHeaderRow::kHasHeader
+                                     : import_export::ImportHeaderRow::kNoHeader;
 #ifdef ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "parquet")) {
+        warnings.push_back(
+            "Deprecation Warning: COPY FROM WITH (parquet='true') is deprecated. Use "
+            "WITH (source_type='parquet_file') instead.");
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Parquet option must be a boolean.");
+          throw std::runtime_error("'parquet' option must be a boolean.");
         }
         if (bool_from_string_literal(str_literal)) {
           // not sure a parquet "table" type is proper, but to make code
           // look consistent in some places, let's set "table" type too
-          copy_params.file_type = import_export::FileType::PARQUET;
+          copy_params.source_type = import_export::SourceType::kParquetFile;
         }
 #endif  // ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
@@ -4892,14 +4901,43 @@ void CopyTableStmt::execute(
         }
         copy_params.lonlat = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "geo")) {
+        warnings.push_back(
+            "Deprecation Warning: COPY FROM WITH (geo='true') is deprecated. Use WITH "
+            "(source_type='geo_file') instead.");
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
-          throw std::runtime_error("Geo option must be a boolean.");
+          throw std::runtime_error("'geo' option must be a boolean.");
         }
-        copy_params.file_type = bool_from_string_literal(str_literal)
-                                    ? import_export::FileType::POLYGON
-                                    : import_export::FileType::DELIMITED;
+        if (bool_from_string_literal(str_literal)) {
+          copy_params.source_type = import_export::SourceType::kGeoFile;
+        }
+      } else if (boost::iequals(*p->get_name(), "source_type")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'source_type' option must be a string.");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "delimited_file")) {
+          copy_params.source_type = import_export::SourceType::kDelimitedFile;
+        } else if (boost::iequals(*s, "geo_file")) {
+          copy_params.source_type = import_export::SourceType::kGeoFile;
+#if ENABLE_IMPORT_PARQUET
+        } else if (boost::iequals(*s, "parquet_file")) {
+          copy_params.source_type = import_export::SourceType::kParquetFile;
+#endif
+        } else if (boost::iequals(*s, "raster_file")) {
+          copy_params.source_type = import_export::SourceType::kRasterFile;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'source_type' option (must be 'GEO_FILE', 'RASTER_FILE'"
+#if ENABLE_IMPORT_PARQUET
+              ", 'PARQUET_FILE'"
+#endif
+              " or 'DELIMITED_FILE'): " +
+              *s);
+        }
       } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -4918,6 +4956,67 @@ void CopyTableStmt::execute(
               "Invalid string for 'geo_coords_type' option (must be 'GEOGRAPHY' or "
               "'GEOMETRY'): " +
               *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_point_type")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_point_type' option must be a string");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "none")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kNone;
+        } else if (boost::iequals(*s, "auto")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kAuto;
+        } else if (boost::iequals(*s, "smallint")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kSmallInt;
+        } else if (boost::iequals(*s, "int")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kInt;
+        } else if (boost::iequals(*s, "float")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kFloat;
+        } else if (boost::iequals(*s, "double")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kDouble;
+        } else if (boost::iequals(*s, "point")) {
+          copy_params.raster_point_type = import_export::RasterPointType::kPoint;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'raster_point_type' option (must be 'NONE', 'AUTO', "
+              "'SMALLINT', 'INT', 'FLOAT', 'DOUBLE' or 'POINT'): " +
+              *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_point_transform")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_point_transform' option must be a string");
+        }
+        const std::string* s = str_literal->get_stringval();
+        if (boost::iequals(*s, "none")) {
+          copy_params.raster_point_transform = import_export::RasterPointTransform::kNone;
+        } else if (boost::iequals(*s, "auto")) {
+          copy_params.raster_point_transform = import_export::RasterPointTransform::kAuto;
+        } else if (boost::iequals(*s, "file")) {
+          copy_params.raster_point_transform = import_export::RasterPointTransform::kFile;
+        } else if (boost::iequals(*s, "world")) {
+          copy_params.raster_point_transform =
+              import_export::RasterPointTransform::kWorld;
+        } else {
+          throw std::runtime_error(
+              "Invalid string for 'raster_point_transform' option (must be 'NONE', "
+              "'AUTO', 'FILE' or 'WORLD'): " +
+              *s);
+        }
+      } else if (boost::iequals(*p->get_name(), "raster_import_bands")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_import_bands' option must be a string");
+        }
+        const std::string* raster_import_bands = str_literal->get_stringval();
+        if (raster_import_bands) {
+          copy_params.raster_import_bands = *raster_import_bands;
+        } else {
+          throw std::runtime_error("Invalid value for 'raster_import_bands' option");
         }
       } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
         const StringLiteral* str_literal =
@@ -4938,6 +5037,19 @@ void CopyTableStmt::execute(
               "'COMPRESSED(32)'): " +
               *s);
         }
+      } else if (boost::iequals(*p->get_name(), "raster_scanlines_per_thread")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error(
+              "'raster_scanlines_per_thread' option must be an integer");
+        }
+        const int raster_scanlines_per_thread = int_literal->get_intval();
+        if (raster_scanlines_per_thread < 0) {
+          throw std::runtime_error(
+              "'raster_scanlines_per_thread' option must be >= 0, with 0 denoting auto "
+              "sizing");
+        }
+        copy_params.raster_scanlines_per_thread = raster_scanlines_per_thread;
       } else if (boost::iequals(*p->get_name(), "geo_coords_srid")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr) {
@@ -4965,18 +5077,19 @@ void CopyTableStmt::execute(
           throw std::runtime_error("Invalid value for 'geo_layer_name' option");
         }
       } else if (boost::iequals(*p->get_name(), "partitions")) {
-        if (copy_params.file_type == import_export::FileType::POLYGON) {
+        if (copy_params.source_type == import_export::SourceType::kGeoFile) {
           const auto partitions =
               static_cast<const StringLiteral*>(p->get_value())->get_stringval();
           CHECK(partitions);
           const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
           if (partitions_uc != "REPLICATED") {
-            throw std::runtime_error("PARTITIONS must be REPLICATED for geo COPY");
+            throw std::runtime_error(
+                "Invalid value for 'partitions' option. Must be 'REPLICATED'.");
           }
-          geo_copy_from_partitions_ = partitions_uc;
+          deferred_copy_from_partitions_ = partitions_uc;
         } else {
-          throw std::runtime_error("PARTITIONS option not supported for non-geo COPY: " +
-                                   *p->get_name());
+          throw std::runtime_error(
+              "'partitions' option must come after 'source_type' option 'GEO_FILE'.");
         }
       } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
         const StringLiteral* str_literal =
@@ -4998,7 +5111,7 @@ void CopyTableStmt::execute(
           throw std::runtime_error("'source_srid' option must be an integer");
         }
         const int srid = int_literal->get_intval();
-        if (copy_params.file_type == import_export::FileType::DELIMITED) {
+        if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
           copy_params.source_srid = srid;
         } else {
           throw std::runtime_error(
@@ -5038,22 +5151,28 @@ void CopyTableStmt::execute(
   }
 
   std::string tr;
-  if (copy_params.file_type == import_export::FileType::POLYGON) {
+
+  for (auto const& warning : warnings) {
+    tr += warning + "\n";
+  }
+
+  if (copy_params.source_type == import_export::SourceType::kGeoFile ||
+      copy_params.source_type == import_export::SourceType::kRasterFile) {
     // geo import
     // we do nothing here, except stash the parameters so we can
     // do the import when we unwind to the top of the handler
-    geo_copy_from_file_name_ = file_path;
-    geo_copy_from_copy_params_ = copy_params;
-    was_geo_copy_from_ = true;
+    deferred_copy_from_file_name_ = file_path;
+    deferred_copy_from_copy_params_ = copy_params;
+    was_deferred_copy_from_ = true;
 
     // the result string
     // @TODO simon.eves put something more useful in here
     // except we really can't because we haven't done the import yet!
     if (td) {
-      tr = std::string("Appending geo to table '") + *table_ + std::string("'...");
+      tr += std::string("Appending geo to table '") + *table_ + std::string("'...");
     } else {
-      tr = std::string("Creating table '") + *table_ +
-           std::string("' and importing geo...");
+      tr += std::string("Creating table '") + *table_ +
+            std::string("' and importing geo...");
     }
   } else {
     if (td) {
@@ -5097,13 +5216,13 @@ void CopyTableStmt::execute(
         success_ = false;
       }
       if (!import_result.load_failed) {
-        tr = std::string(
+        tr += std::string(
             "Loaded: " + std::to_string(import_result.rows_completed) +
             " recs, Rejected: " + std::to_string(import_result.rows_rejected) +
             " recs in " + std::to_string((double)total_time / 1000.0) + " secs");
       } else {
-        tr = std::string("Loader Failed due to : " + import_result.load_msg + " in " +
-                         std::to_string((double)total_time / 1000.0) + " secs");
+        tr += std::string("Loader Failed due to : " + import_result.load_msg + " in " +
+                          std::to_string((double)total_time / 1000.0) + " secs");
       }
     } else {
       throw std::runtime_error("Table '" + *table_ + "' must exist before COPY FROM");
@@ -5811,8 +5930,8 @@ void ExportQueryStmt::parseOptions(
           throw std::runtime_error("Header option must be a boolean.");
         }
         copy_params.has_header = bool_from_string_literal(str_literal)
-                                     ? import_export::ImportHeaderRow::HAS_HEADER
-                                     : import_export::ImportHeaderRow::NO_HEADER;
+                                     ? import_export::ImportHeaderRow::kHasHeader
+                                     : import_export::ImportHeaderRow::kNoHeader;
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());

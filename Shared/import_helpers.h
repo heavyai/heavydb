@@ -33,6 +33,10 @@ inline std::string sanitize_name(const std::string& name) {
   boost::regex invalid_chars{R"([^0-9a-z_])",
                              boost::regex::extended | boost::regex::icase};
   std::string sanitized_name = boost::regex_replace(name, invalid_chars, "");
+  boost::regex starts_with_digit{R"(^[0-9].*)"};
+  if (boost::regex_match(sanitized_name, starts_with_digit)) {
+    sanitized_name = "_" + sanitized_name;
+  }
   if (is_reserved_name(sanitized_name)) {
     sanitized_name += "_";
   }

@@ -49,7 +49,7 @@ void QueryExporterCSV::beginExport(const std::string& file_path,
   }
 
   // write header?
-  if (copy_params.has_header == import_export::ImportHeaderRow::HAS_HEADER) {
+  if (copy_params.has_header == import_export::ImportHeaderRow::kHasHeader) {
     bool not_first{false};
     int column_index = 0;
     for (auto const& column_info : column_infos) {

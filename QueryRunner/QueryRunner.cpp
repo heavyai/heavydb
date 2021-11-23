@@ -1067,10 +1067,13 @@ void ImportDriver::importGeoTable(const std::string& file_path,
                                   const bool explode_collections) {
   using namespace import_export;
 
+  static constexpr bool kIsGeoRaster{false};
+
   CHECK(session_info_);
   const std::string geo_column_name(OMNISCI_GEO_PREFIX);
 
   CopyParams copy_params;
+  copy_params.source_type = import_export::SourceType::kGeoFile;
   if (compression) {
     copy_params.geo_coords_encoding = EncodingType::kENCODING_GEOINT;
     copy_params.geo_coords_comp_param = 32;
@@ -1083,7 +1086,8 @@ void ImportDriver::importGeoTable(const std::string& file_path,
 
   std::map<std::string, std::string> colname_to_src;
   auto& cat = session_info_->getCatalog();
-  auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
+  auto cds = Importer::gdalToColumnDescriptors(
+      file_path, kIsGeoRaster, geo_column_name, copy_params);
 
   for (auto& cd : cds) {
     const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
@@ -1154,7 +1158,7 @@ void ImportDriver::importGeoTable(const std::string& file_path,
 
   import_export::Importer importer(cat, td, file_path, copy_params);
   auto ms = measure<>::execution(
-      [&]() { importer.importGDAL(colname_to_src, session_info_.get()); });
+      [&]() { importer.importGDAL(colname_to_src, session_info_.get(), kIsGeoRaster); });
   LOG(INFO) << "Import Time for " << table_name << ": " << (double)ms / 1000.0 << " s";
 }
 

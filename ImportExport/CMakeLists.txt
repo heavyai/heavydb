@@ -12,7 +12,8 @@ set(IMPORT_SOURCES
   Importer.cpp
   ForeignDataImporter.cpp
   DistributedForeignDataImporter.cpp
-  DelimitedParserUtils.cpp)
+  DelimitedParserUtils.cpp
+  RasterImporter.cpp)
 
 set(EXPORT_SOURCES
   QueryExporter.cpp
