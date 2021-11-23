@@ -18,6 +18,7 @@ package com.mapd.tests;
 import com.omnisci.thrift.server.TColumnType;
 import com.omnisci.thrift.server.TCopyParams;
 import com.omnisci.thrift.server.TCreateParams;
+import com.omnisci.thrift.server.TFileType;
 import com.omnisci.thrift.server.TImportHeaderRow;
 
 import org.slf4j.Logger;
@@ -117,6 +118,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
           geo_copy_params.array_begin = "{";
           geo_copy_params.array_end = "}";
           geo_copy_params.threads = 0;
+          geo_copy_params.file_type = TFileType.GEO;
 
           try {
             barrier.await();
@@ -154,7 +156,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
               logger.info(logPrefix + " IMPORT GEO TABLE");
               user.import_geo_table(geoTableName,
                       geo_file_path,
-                      copy_params,
+                      geo_copy_params,
                       new java.util.ArrayList<TColumnType>(),
                       new TCreateParams());
             }
