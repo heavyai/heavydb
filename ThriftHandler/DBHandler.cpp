@@ -7489,6 +7489,54 @@ ExecutionResult DBHandler::getQueries(
   return ExecutionResult(rSet, label_infos);
 }
 
+void DBHandler::get_queries_info(std::vector<TQueryInfo>& _return,
+                                 const TSessionId& session) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  auto session_ptr = stdlog.getConstSessionInfo();
+  mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
+  for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
+    const auto id = session->first;
+    const auto query_session_ptr = session->second;
+    const auto query_session_user_name = query_session_ptr->get_currentUser().userName;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                          jit_debug_ ? "/tmp" : "",
+                                          jit_debug_ ? "mapdquery" : "",
+                                          system_parameters_);
+    CHECK(executor);
+    std::vector<QuerySessionStatus> query_infos;
+    {
+      mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
+      query_infos = executor->getQuerySessionInfo(query_session_ptr->get_session_id(),
+                                                  session_read_lock);
+    }
+    // if there exists query info fired from this session we report it to user
+    const std::string getQueryStatusStr[] = {"UNDEFINED",
+                                             "PENDING_QUEUE",
+                                             "PENDING_EXECUTOR",
+                                             "RUNNING_QUERY_KERNEL",
+                                             "RUNNING_REDUCTION",
+                                             "RUNNING_IMPORTER"};
+    TQueryInfo info;
+    for (QuerySessionStatus& query_info : query_infos) {
+      info.query_session_id = query_session_ptr->get_session_id();
+      info.query_public_session_id = query_session_ptr->get_public_session_id();
+      info.current_status = getQueryStatusStr[query_info.getQueryStatus()];
+      info.query_str = query_info.getQueryStr();
+      info.executor_id = query_info.getExecutorId();
+      info.submitted = query_info.getQuerySubmittedTime();
+      info.login_name = query_session_user_name;
+      info.client_address = query_session_ptr->get_connection_info();
+      info.db_name = query_session_ptr->getCatalog().getCurrentDB().dbName;
+      if (query_session_ptr->get_executor_device_type() == ExecutorDeviceType::GPU) {
+        info.exec_device_type = "GPU";
+      } else {
+        info.exec_device_type = "CPU";
+      }
+    }
+    _return.push_back(info);
+  }
+}
+
 void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_info,
                                const std::string& target_session) {
   // capture the interrupt request from user and then pass to corresponding Executors

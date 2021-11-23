@@ -15,20 +15,8 @@
  */
 package com.mapd.tests;
 
+import com.omnisci.thrift.server.*;
 import com.omnisci.thrift.server.OmniSci;
-import com.omnisci.thrift.server.TClusterHardwareInfo;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TCopyParams;
-import com.omnisci.thrift.server.TCreateParams;
-import com.omnisci.thrift.server.TDBObject;
-import com.omnisci.thrift.server.TDBObjectType;
-import com.omnisci.thrift.server.TDashboard;
-import com.omnisci.thrift.server.TNodeMemoryInfo;
-import com.omnisci.thrift.server.TOmniSciException;
-import com.omnisci.thrift.server.TQueryResult;
-import com.omnisci.thrift.server.TServerStatus;
-import com.omnisci.thrift.server.TTableDetails;
-import com.omnisci.thrift.server.TTableMeta;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -140,6 +128,10 @@ public class MapdTestClient {
   public Collection<String> get_all_roles_for_user(String username) throws Exception {
     List<String> roles = client.get_all_roles_for_user(sessionId, username);
     return new HashSet<String>(roles);
+  }
+
+  public List<TQueryInfo> get_queries_info() throws Exception {
+    return client.get_queries_info(sessionId);
   }
 
   public static MapdTestClient getClient(

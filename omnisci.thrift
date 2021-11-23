@@ -565,6 +565,19 @@ struct TCustomExpression {
   8: string data_source_name;
 }
 
+struct TQueryInfo {
+  1: string query_session_id;
+  2: string query_public_session_id;
+  3: string current_status;
+  4: i32 executor_id;
+  5: string submitted;
+  6: string query_str;
+  7: string login_name;
+  8: string client_address;
+  9: string db_name;
+  10: string exec_device_type;
+}
+
 service OmniSci {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TOmniSciException e)
@@ -602,6 +615,7 @@ service OmniSci {
   list<TTableEpochInfo> get_table_epochs(1: TSessionId session, 2: i32 db_id, 3: i32 table_id)
   void set_table_epochs(1: TSessionId session, 2: i32 db_id, 3: list<TTableEpochInfo> table_epochs)
   TSessionInfo get_session_info(1: TSessionId session) throws (1: TOmniSciException e)
+  list<TQueryInfo> get_queries_info(1: TSessionId session) throws (1: TOmniSciException e)
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query, 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TOmniSciException e)
   TDataFrame sql_execute_df(1: TSessionId session, 2: string query, 3: common.TDeviceType device_type, 4: i32 device_id = 0, 5: i32 first_n = -1, 6: TArrowTransport transport_method) throws (1: TOmniSciException e)
