@@ -2662,10 +2662,6 @@ FetchResult Executor::fetchChunks(
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
-      /// if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-      ///   frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
-      ///     col_id.get(), memory_level_for_column, device_id, device_allocator);
-      /// } else {
       if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
         // determine if we need special treatment to linearlize multi-frag table
         // i.e., a column that is classified as varlen type, i.e., array
@@ -2712,8 +2708,6 @@ FetchResult Executor::fetchChunks(
                                                      device_id,
                                                      device_allocator);
       }
-      ///}
-      //}
     }
     all_frag_col_buffers.push_back(frag_col_buffers);
   }
@@ -2834,10 +2828,6 @@ FetchResult Executor::fetchUnionChunks(
             plan_state_->columns_to_fetch_.end()) {
           memory_level_for_column = Data_Namespace::CPU_LEVEL;
         }
-        /// if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        ///  frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
-        ///      col_id.get(), memory_level_for_column, device_id, device_allocator);
-        ///} else {
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
           frag_col_buffers[it->second] =
               column_fetcher.getAllTableColumnFragments(table_id,
@@ -2859,7 +2849,6 @@ FetchResult Executor::fetchUnionChunks(
                                                        device_id,
                                                        device_allocator);
         }
-        ///}
       }
       all_frag_col_buffers.push_back(frag_col_buffers);
     }
