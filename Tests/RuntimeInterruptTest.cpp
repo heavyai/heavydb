@@ -322,7 +322,6 @@ TEST(Interrupt, Kill_PendingQuery) {
   auto dt = ExecutorDeviceType::CPU;
   std::future<std::shared_ptr<ResultSet>> query_thread1;
   std::future<std::shared_ptr<ResultSet>> query_thread2;
-  QR::get()->resizeDispatchQueue(2);
   std::vector<size_t> assigned_executor_ids_for_session1;
   std::vector<size_t> assigned_executor_ids_for_session2;
   auto executor =
