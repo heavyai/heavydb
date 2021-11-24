@@ -931,6 +931,74 @@ DEVICE ALWAYS_INLINE bool box_dwithin_box(double* bounds1,
   return true;
 }
 
+DEVICE ALWAYS_INLINE bool trim_linestring_to_buffered_box(int8_t* l1,
+                                                          int64_t l1size,
+                                                          int32_t ic1,
+                                                          int32_t isr1,
+                                                          double* bounds2,
+                                                          int64_t bounds2_size,
+                                                          int32_t isr2,
+                                                          int32_t osr,
+                                                          double distance,
+                                                          int64_t* res_l1,
+                                                          int64_t* res_l1size) {
+  // TODO: tolerance
+
+  // Bounds come in corresponding input spatial references.
+  // For example, here the first bounding box may come in 4326, second in 900913:
+  //   ST_DWithin(ST_Transform(linestring4326, 900913), linestring900913, 10)
+  // Distance is given in osr spatial reference units, in this case 10 meters.
+  // Bounds should be converted to osr before calculations, if isr != osr.
+
+  int8_t* relevant_section_l1 = nullptr;
+  int64_t relevant_section_l1size = 0;
+  // Interate through linestring segments.
+  // Mark the start of the relevant section FIRST TIME WE ENTER the buffered box.
+  // Set the size of the relevant section the LAST TIME WE GET OUT of the box.
+  auto l1_num_coords = l1size / compression_unit_size(ic1);
+  double l11x = coord_x(l1, 0, ic1, isr1, osr);
+  double l11y = coord_y(l1, 1, ic1, isr1, osr);
+  for (int32_t i1 = 2; i1 < l1_num_coords; i1 += 2) {
+    double l12x = coord_x(l1, i1, ic1, isr1, osr);
+    double l12y = coord_y(l1, i1 + 1, ic1, isr1, osr);
+    // Check for overlap between the line box and the buffered box
+    if (
+        // line box is left of buffered box
+        fmax(l11x, l12x) + distance < transform_coord_x(bounds2[0], isr2, osr) ||
+        // line box is right of buffered box
+        fmin(l11x, l12x) - distance > transform_coord_x(bounds2[2], isr2, osr) ||
+        // line box is below buffered box
+        fmax(l11y, l12y) + distance < transform_coord_y(bounds2[1], isr2, osr) ||
+        // line box is above buffered box
+        fmin(l11y, l12y) - distance > transform_coord_y(bounds2[3], isr2, osr)) {
+      // No overlap
+      if (relevant_section_l1 && relevant_section_l1size == 0) {
+        // Can finalize relevant section size
+        relevant_section_l1size =
+            l1 + i1 * compression_unit_size(ic1) - relevant_section_l1;
+      }
+    } else {
+      // Overlap
+      if (!relevant_section_l1) {
+        // Start tracking relevant section
+        relevant_section_l1 = l1 + (i1 - 2) * compression_unit_size(ic1);
+      }
+      // Keep relevant section size unfinalized while there is overlap,
+      // linestring may reenter the buffered box.
+      relevant_section_l1size = 0;
+    }
+    l11x = l12x;
+    l11y = l12y;
+  }
+  // Make sure that relevant section contains at least 2+ points.
+  if (relevant_section_l1 && (relevant_section_l1size > 2 * compression_unit_size(ic1))) {
+    *res_l1 = reinterpret_cast<int64_t>(relevant_section_l1);
+    *res_l1size = relevant_section_l1size;
+  }
+
+  return true;
+}
+
 EXTENSION_NOINLINE
 double ST_X_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr) {
   return coord_x(p, 0, ic, isr, osr);
@@ -2774,10 +2842,44 @@ bool ST_DWithin_LineString_MultiPolygon(int8_t* l1,
     }
   }
 
+  // First, assume the entire linestring is relevant.
+  int8_t* relevant_section_l1 = l1;
+  int64_t relevant_section_l1size = l1size;
+  // Mitigation for very long linestrings (5+ segments: think highways, powerlines)
+  if (mpoly_bounds && l1size > 10 * compression_unit_size(ic1)) {
+    // Before diving into distance calculations, try to trim the linestring
+    // just to the section that intersects the threshold-buffered bounding box.
+    int64_t res_l1 = 0;
+    int64_t res_l1size = 0;
+    trim_linestring_to_buffered_box(l1,
+                                    l1size,
+                                    ic1,
+                                    isr1,
+                                    mpoly_bounds,
+                                    mpoly_bounds_size,
+                                    isr2,
+                                    osr,
+                                    distance_within,
+                                    &res_l1,
+                                    &res_l1size);
+    if (res_l1size > 0) {
+      relevant_section_l1 = reinterpret_cast<int8_t*>(res_l1);
+      relevant_section_l1size = res_l1size;
+    } else {
+      // The big short-circuit: if not a single line segment bbox overlaped
+      // with buffered multipolygon bbox, then it means that the entire linestring
+      // doesn't come close enough to the multipolygon to be within distance.
+      // Even though bboxes do overlap, the linestring may go around mpoly.
+      // No need to run full distance calculation.
+      return false;
+    }
+  }
+
+  // Run distance calculation but only on the linestring section that is relevant.
   // May need to adjust the threshold by TOLERANCE_DEFAULT
   const double threshold = distance_within;
-  return ST_Distance_LineString_MultiPolygon(l1,
-                                             l1size,
+  return ST_Distance_LineString_MultiPolygon(relevant_section_l1,
+                                             relevant_section_l1size,
                                              mpoly_coords,
                                              mpoly_coords_size,
                                              mpoly_ring_sizes,
