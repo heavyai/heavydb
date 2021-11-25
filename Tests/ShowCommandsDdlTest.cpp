@@ -3010,6 +3010,21 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   // clang-format on
 }
 
+TEST_F(SystemTablesTest, SystemTablesJoin) {
+  // clang-format off
+  sqlAndCompareResult("SELECT databases.database_name, permissions.* "
+                      "FROM permissions, databases "
+                      "WHERE permissions.database_id = databases.database_id "
+                      "ORDER BY role_name;",
+                      {{"information_schema", "test_user_1", True, i(2),
+                        "information_schema", i(-1), getUserId("admin"),
+                        "database", array({"access"})},
+                       {"information_schema", "test_user_2", True, i(2),
+                        "information_schema", i(-1), getUserId("admin"),
+                        "database", array({"access"})}});
+  // clang-format on
+}
+
 struct StorageDetailsResult {
   std::string node{"Server"};
   int64_t database_id{0};

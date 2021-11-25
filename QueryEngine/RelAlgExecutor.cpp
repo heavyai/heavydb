@@ -163,23 +163,41 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
                                         const Catalog_Namespace::Catalog& catalog,
                                         const CompilationOptions& co) {
   if (g_enable_system_tables) {
-    std::set<int32_t> system_table_ids;
+    std::map<int32_t, std::vector<int32_t>> system_table_columns_by_table_id;
     for (const auto& physical_input : get_physical_inputs(&ra_node)) {
       int table_id = physical_input.table_id;
       auto table = catalog.getMetadataForTable(table_id, false);
       if (table && table->is_system_table) {
-        system_table_ids.emplace(table_id);
+        auto column_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
+        system_table_columns_by_table_id[table_id].emplace_back(column_id);
       }
     }
     // Execute on CPU for queries involving system tables
-    if (!system_table_ids.empty() && co.device_type != ExecutorDeviceType::CPU) {
+    if (!system_table_columns_by_table_id.empty() &&
+        co.device_type != ExecutorDeviceType::CPU) {
       throw QueryMustRunOnCpu();
     }
-    // Clear any previously cached data, since system tables depend on point in time data
-    // snapshots.
-    for (const auto table_id : system_table_ids) {
+
+    for (const auto& [table_id, column_ids] : system_table_columns_by_table_id) {
+      // Clear any previously cached data, since system tables depend on point in
+      // time data snapshots.
       catalog.getDataMgr().deleteChunksWithPrefix(
           ChunkKey{catalog.getDatabaseId(), table_id}, Data_Namespace::CPU_LEVEL);
+      auto td = catalog.getMetadataForTable(table_id);
+      CHECK(td);
+      CHECK(td->fragmenter);
+      auto fragment_count = td->fragmenter->getFragmentsForQuery().fragments.size();
+      CHECK_LE(fragment_count, static_cast<size_t>(1));
+      if (fragment_count > 0) {
+        for (auto column_id : column_ids) {
+          // Prefetch system table chunks in order to force chunk statistics metadata
+          // computation.
+          auto cd = catalog.getMetadataForColumn(table_id, column_id);
+          ChunkKey chunk_key{catalog.getDatabaseId(), table_id, column_id, 0};
+          Chunk_NS::Chunk::getChunk(
+              cd, &(catalog.getDataMgr()), chunk_key, Data_Namespace::CPU_LEVEL, 0, 0, 0);
+        }
+      }
     }
   }
 }
