@@ -118,6 +118,7 @@ extern bool g_allow_s3_server_privileges;
 #endif
 
 extern bool g_enable_system_tables;
+bool g_allow_system_dashboard_update{false};
 
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
@@ -4475,7 +4476,9 @@ int32_t DBHandler::create_dashboard(const TSessionId& session,
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("create_dashboard");
   auto& cat = session_ptr->getCatalog();
-  check_not_info_schema_db(cat.name(), true);
+  if (!g_allow_system_dashboard_update) {
+    check_not_info_schema_db(cat.name(), true);
+  }
 
   if (!session_ptr->checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType,
                                             AccessPrivileges::CREATE_DASHBOARD)) {
@@ -4520,6 +4523,9 @@ void DBHandler::replace_dashboard(const TSessionId& session,
   CHECK(session_ptr);
   check_read_only("replace_dashboard");
   auto& cat = session_ptr->getCatalog();
+  if (!g_allow_system_dashboard_update) {
+    check_not_info_schema_db(cat.name(), true);
+  }
 
   if (!is_allowed_on_dashboard(
           *session_ptr, dashboard_id, AccessPrivileges::EDIT_DASHBOARD)) {
@@ -4558,6 +4564,9 @@ void DBHandler::delete_dashboards(const TSessionId& session,
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("delete_dashboards");
   auto& cat = session_ptr->getCatalog();
+  if (!g_allow_system_dashboard_update) {
+    check_not_info_schema_db(cat.name(), true);
+  }
   // Checks will be performed in catalog
   try {
     cat.deleteMetadataForDashboards(dashboard_ids, session_ptr->get_currentUser());

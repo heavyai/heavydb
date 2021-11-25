@@ -350,8 +350,10 @@ std::map<int32_t, std::vector<DashboardDescriptor>> get_all_dashboards() {
   std::map<int32_t, std::vector<DashboardDescriptor>> dashboards_by_database;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
-    for (const auto& dashboard : catalog->getAllDashboardsMetadataCopy()) {
-      dashboards_by_database[catalog->getDatabaseId()].emplace_back(dashboard);
+    if (catalog->name() != INFORMATION_SCHEMA_DB) {
+      for (const auto& dashboard : catalog->getAllDashboardsMetadataCopy()) {
+        dashboards_by_database[catalog->getDatabaseId()].emplace_back(dashboard);
+      }
     }
   }
   return dashboards_by_database;

@@ -64,6 +64,7 @@
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
 #include "MigrationMgr/MigrationMgr.h"
+#include "OSDependent/omnisci_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -189,7 +190,7 @@ Catalog::Catalog(const string& basePath,
   if (g_serialize_temp_tables) {
     boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
   }
-  conditionallyInitializeSystemTables();
+  conditionallyInitializeSystemObjects();
   // once all initialized use real object
   initialized_ = true;
 }
@@ -938,10 +939,21 @@ void Catalog::CheckAndExecuteMigrationsPostBuildMaps() {
 }
 
 namespace {
-std::string getUserFromId(const int32_t id) {
-  UserMetadata user;
-  if (SysCatalog::instance().getMetadataForUserById(id, user)) {
-    return user.userName;
+std::map<int32_t, std::string> get_user_id_to_user_name_map() {
+  auto users = SysCatalog::instance().getAllUserMetadata();
+  std::map<int32_t, std::string> user_name_by_user_id;
+  for (const auto& user : users) {
+    user_name_by_user_id[user.userId] = user.userName;
+  }
+  return user_name_by_user_id;
+}
+
+std::string get_user_name_from_id(
+    int32_t id,
+    const std::map<int32_t, std::string>& user_name_by_user_id) {
+  auto entry = user_name_by_user_id.find(id);
+  if (entry != user_name_by_user_id.end()) {
+    return entry->second;
   }
   // a user could be deleted and a dashboard still exist?
   return "Unknown";
@@ -949,6 +961,11 @@ std::string getUserFromId(const int32_t id) {
 }  // namespace
 
 void Catalog::buildMaps() {
+  // Get all user id to username mapping here in order to avoid making a call to
+  // SysCatalog (and attempting to acquire SysCatalog locks) while holding locks for this
+  // catalog.
+  const auto user_name_by_user_id = get_user_id_to_user_name_map();
+
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
 
@@ -1119,7 +1136,7 @@ void Catalog::buildMaps() {
     vd->updateTime = sqliteConnector_.getData<string>(r, 4);
     vd->userId = sqliteConnector_.getData<int>(r, 5);
     vd->dashboardMetadata = sqliteConnector_.getData<string>(r, 6);
-    vd->user = getUserFromId(vd->userId);
+    vd->user = get_user_name_from_id(vd->userId, user_name_by_user_id);
     vd->dashboardSystemRoleName = generate_dashboard_system_rolename(
         std::to_string(currentDB_.dbId), sqliteConnector_.getData<string>(r, 0));
     dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->dashboardName] = vd;
@@ -3897,7 +3914,8 @@ void Catalog::renameColumn(const TableDescriptor* td,
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
-int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
+int32_t Catalog::createDashboard(DashboardDescriptor& vd,
+                                 bool skip_system_role_creation) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -3953,9 +3971,11 @@ int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
   addFrontendViewToMap(vd);
   sqlite_lock.unlock();
   write_lock.unlock();
-  // NOTE(wamsi): Transactionally unsafe
-  createOrUpdateDashboardSystemRole(
-      vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
+  if (!skip_system_role_creation) {
+    // NOTE(wamsi): Transactionally unsafe
+    createOrUpdateDashboardSystemRole(
+        vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
+  }
   return vd.dashboardId;
 }
 
@@ -5380,135 +5400,143 @@ void Catalog::restoreOldOwnersInMemory(
   }
 }
 
-void Catalog::conditionallyInitializeSystemTables() {
+void Catalog::conditionallyInitializeSystemObjects() {
   if (g_enable_system_tables && name() == INFORMATION_SCHEMA_DB) {
-    createSystemTableServer(CATALOG_SERVER_NAME,
-                            foreign_storage::DataWrapperType::INTERNAL_CATALOG);
-    createSystemTableServer(MEMORY_STATS_SERVER_NAME,
-                            foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS);
-    createSystemTableServer(STORAGE_STATS_SERVER_NAME,
-                            foreign_storage::DataWrapperType::INTERNAL_STORAGE_STATS);
-    if (!getMetadataForTable(USERS_SYS_TABLE_NAME, false)) {
-      createSystemTable(USERS_SYS_TABLE_NAME,
-                        CATALOG_SERVER_NAME,
-                        {{"user_id", {kINT}},
-                         {"user_name", {kTEXT}},
-                         {"is_super_user", {kBOOLEAN}},
-                         {"default_db_id", {kINT}},
-                         {"can_login", {kBOOLEAN}}});
-    }
+    initializeSystemServers();
+    initializeSystemTables();
+  }
+}
 
-    if (!getMetadataForTable(DATABASES_SYS_TABLE_NAME, false)) {
-      createSystemTable(
-          DATABASES_SYS_TABLE_NAME,
-          CATALOG_SERVER_NAME,
-          {{"database_id", {kINT}}, {"database_name", {kTEXT}}, {"owner_id", {kINT}}});
-    }
+void Catalog::initializeSystemServers() {
+  createSystemTableServer(CATALOG_SERVER_NAME,
+                          foreign_storage::DataWrapperType::INTERNAL_CATALOG);
+  createSystemTableServer(MEMORY_STATS_SERVER_NAME,
+                          foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS);
+  createSystemTableServer(STORAGE_STATS_SERVER_NAME,
+                          foreign_storage::DataWrapperType::INTERNAL_STORAGE_STATS);
+}
 
-    if (!getMetadataForTable(PERMISSIONS_SYS_TABLE_NAME, false)) {
-      createSystemTable(
-          PERMISSIONS_SYS_TABLE_NAME,
-          CATALOG_SERVER_NAME,
-          {{"role_name", {kTEXT}},
-           {"is_user_role", {kBOOLEAN}},
-           {"database_id", {kINT}},
-           {"object_name", {kTEXT}},
-           {"object_id", {kINT}},
-           {"object_owner_id", {kINT}},
-           {"object_permission_type", {kTEXT}},
-           {"object_permissions", {kARRAY, 0, 0, false, kENCODING_DICT, 0, kTEXT}}});
-    }
+void Catalog::initializeSystemTables() {
+  if (!getMetadataForTable(USERS_SYS_TABLE_NAME, false)) {
+    createSystemTable(USERS_SYS_TABLE_NAME,
+                      CATALOG_SERVER_NAME,
+                      {{"user_id", {kINT}},
+                       {"user_name", {kTEXT}},
+                       {"is_super_user", {kBOOLEAN}},
+                       {"default_db_id", {kINT}},
+                       {"can_login", {kBOOLEAN}}});
+  }
 
-    if (!getMetadataForTable(ROLES_SYS_TABLE_NAME, false)) {
-      createSystemTable(
-          ROLES_SYS_TABLE_NAME, CATALOG_SERVER_NAME, {{"role_name", {kTEXT}}});
-    }
+  if (!getMetadataForTable(DATABASES_SYS_TABLE_NAME, false)) {
+    createSystemTable(
+        DATABASES_SYS_TABLE_NAME,
+        CATALOG_SERVER_NAME,
+        {{"database_id", {kINT}}, {"database_name", {kTEXT}}, {"owner_id", {kINT}}});
+  }
 
-    if (!getMetadataForTable(TABLES_SYS_TABLE_NAME, false)) {
-      createSystemTable(TABLES_SYS_TABLE_NAME,
-                        CATALOG_SERVER_NAME,
-                        {{"database_id", {kINT}},
-                         {"table_id", {kINT}},
-                         {"table_name", {kTEXT}},
-                         {"owner_id", {kINT}},
-                         {"column_count", {kINT}},
-                         {"is_view", {kBOOLEAN}},
-                         {"view_sql", {kTEXT}},
-                         {"max_fragment_size", {kINT}},
-                         {"max_chunk_size", {kBIGINT}},
-                         {"fragment_page_size", {kINT}},
-                         {"max_rows", {kBIGINT}},
-                         {"max_rollback_epochs", {kINT}},
-                         {"shard_count", {kINT}}});
-    }
+  if (!getMetadataForTable(PERMISSIONS_SYS_TABLE_NAME, false)) {
+    createSystemTable(
+        PERMISSIONS_SYS_TABLE_NAME,
+        CATALOG_SERVER_NAME,
+        {{"role_name", {kTEXT}},
+         {"is_user_role", {kBOOLEAN}},
+         {"database_id", {kINT}},
+         {"object_name", {kTEXT}},
+         {"object_id", {kINT}},
+         {"object_owner_id", {kINT}},
+         {"object_permission_type", {kTEXT}},
+         {"object_permissions", {kARRAY, 0, 0, false, kENCODING_DICT, 0, kTEXT}}});
+  }
 
-    if (!getMetadataForTable(DASHBOARDS_SYS_TABLE_NAME, false)) {
-      createSystemTable(DASHBOARDS_SYS_TABLE_NAME,
-                        CATALOG_SERVER_NAME,
-                        {{"database_id", {kINT}},
-                         {"dashboard_id", {kINT}},
-                         {"dashboard_name", {kTEXT}},
-                         {"owner_id", {kINT}},
-                         {"last_updated_at", {kTIMESTAMP}}});
-    }
+  if (!getMetadataForTable(ROLES_SYS_TABLE_NAME, false)) {
+    createSystemTable(
+        ROLES_SYS_TABLE_NAME, CATALOG_SERVER_NAME, {{"role_name", {kTEXT}}});
+  }
 
-    if (!getMetadataForTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME, false)) {
-      createSystemTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
-                        CATALOG_SERVER_NAME,
-                        {{"role_name", {kTEXT}}, {"user_name", {kTEXT}}});
-    }
+  if (!getMetadataForTable(TABLES_SYS_TABLE_NAME, false)) {
+    createSystemTable(TABLES_SYS_TABLE_NAME,
+                      CATALOG_SERVER_NAME,
+                      {{"database_id", {kINT}},
+                       {"table_id", {kINT}},
+                       {"table_name", {kTEXT}},
+                       {"owner_id", {kINT}},
+                       {"column_count", {kINT}},
+                       {"is_view", {kBOOLEAN}},
+                       {"view_sql", {kTEXT}},
+                       {"max_fragment_size", {kINT}},
+                       {"max_chunk_size", {kBIGINT}},
+                       {"fragment_page_size", {kINT}},
+                       {"max_rows", {kBIGINT}},
+                       {"max_rollback_epochs", {kINT}},
+                       {"shard_count", {kINT}}});
+  }
 
-    if (!getMetadataForTable(MEMORY_SUMMARY_SYS_TABLE_NAME, false)) {
-      createSystemTable(MEMORY_SUMMARY_SYS_TABLE_NAME,
-                        MEMORY_STATS_SERVER_NAME,
-                        {{"node", {kTEXT}},
-                         {"device_id", {kINT}},
-                         {"device_type", {kTEXT}},
-                         {"max_page_count", {kBIGINT}},
-                         {"page_size", {kBIGINT}},
-                         {"allocated_page_count", {kBIGINT}},
-                         {"used_page_count", {kBIGINT}},
-                         {"free_page_count", {kBIGINT}}});
-    }
+  if (!getMetadataForTable(DASHBOARDS_SYS_TABLE_NAME, false)) {
+    createSystemTable(DASHBOARDS_SYS_TABLE_NAME,
+                      CATALOG_SERVER_NAME,
+                      {{"database_id", {kINT}},
+                       {"dashboard_id", {kINT}},
+                       {"dashboard_name", {kTEXT}},
+                       {"owner_id", {kINT}},
+                       {"last_updated_at", {kTIMESTAMP}}});
+  }
 
-    if (!getMetadataForTable(MEMORY_DETAILS_SYS_TABLE_NAME, false)) {
-      createSystemTable(MEMORY_DETAILS_SYS_TABLE_NAME,
-                        MEMORY_STATS_SERVER_NAME,
-                        {{"node", {kTEXT}},
-                         {"database_id", {kINT}},
-                         {"table_id", {kINT}},
-                         {"column_id", {kINT}},
-                         {"chunk_key", {kARRAY, 0, 0, false, kENCODING_NONE, 0, kINT}},
-                         {"device_id", {kINT}},
-                         {"device_type", {kTEXT}},
-                         {"memory_status", {kTEXT}},
-                         {"page_count", {kBIGINT}},
-                         {"page_size", {kBIGINT}},
-                         {"slab_id", {kINT}},
-                         {"start_page", {kBIGINT}},
-                         {"last_touch_epoch", {kBIGINT}}});
-    }
+  if (!getMetadataForTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME, false)) {
+    createSystemTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
+                      CATALOG_SERVER_NAME,
+                      {{"role_name", {kTEXT}}, {"user_name", {kTEXT}}});
+  }
 
-    if (!getMetadataForTable(STORAGE_DETAILS_SYS_TABLE_NAME, false)) {
-      createSystemTable(STORAGE_DETAILS_SYS_TABLE_NAME,
-                        STORAGE_STATS_SERVER_NAME,
-                        {{"node", {kTEXT}},
-                         {"database_id", {kINT}},
-                         {"table_id", {kINT}},
-                         {"epoch", {kINT}},
-                         {"epoch_floor", {kINT}},
-                         {"fragment_count", {kINT}},
-                         {"shard_id", {kINT}},
-                         {"data_file_count", {kINT}},
-                         {"metadata_file_count", {kINT}},
-                         {"total_data_file_size", {kBIGINT}},
-                         {"total_data_page_count", {kBIGINT}},
-                         {"total_free_data_page_count", {kBIGINT}},
-                         {"total_metadata_file_size", {kBIGINT}},
-                         {"total_metadata_page_count", {kBIGINT}},
-                         {"total_free_metadata_page_count", {kBIGINT}},
-                         {"total_dictionary_data_file_size", {kBIGINT}}});
-    }
+  if (!getMetadataForTable(MEMORY_SUMMARY_SYS_TABLE_NAME, false)) {
+    createSystemTable(MEMORY_SUMMARY_SYS_TABLE_NAME,
+                      MEMORY_STATS_SERVER_NAME,
+                      {{"node", {kTEXT}},
+                       {"device_id", {kINT}},
+                       {"device_type", {kTEXT}},
+                       {"max_page_count", {kBIGINT}},
+                       {"page_size", {kBIGINT}},
+                       {"allocated_page_count", {kBIGINT}},
+                       {"used_page_count", {kBIGINT}},
+                       {"free_page_count", {kBIGINT}}});
+  }
+
+  if (!getMetadataForTable(MEMORY_DETAILS_SYS_TABLE_NAME, false)) {
+    createSystemTable(MEMORY_DETAILS_SYS_TABLE_NAME,
+                      MEMORY_STATS_SERVER_NAME,
+                      {{"node", {kTEXT}},
+                       {"database_id", {kINT}},
+                       {"table_id", {kINT}},
+                       {"column_id", {kINT}},
+                       {"chunk_key", {kARRAY, 0, 0, false, kENCODING_NONE, 0, kINT}},
+                       {"device_id", {kINT}},
+                       {"device_type", {kTEXT}},
+                       {"memory_status", {kTEXT}},
+                       {"page_count", {kBIGINT}},
+                       {"page_size", {kBIGINT}},
+                       {"slab_id", {kINT}},
+                       {"start_page", {kBIGINT}},
+                       {"last_touch_epoch", {kBIGINT}}});
+  }
+
+  if (!getMetadataForTable(STORAGE_DETAILS_SYS_TABLE_NAME, false)) {
+    createSystemTable(STORAGE_DETAILS_SYS_TABLE_NAME,
+                      STORAGE_STATS_SERVER_NAME,
+                      {{"node", {kTEXT}},
+                       {"database_id", {kINT}},
+                       {"table_id", {kINT}},
+                       {"epoch", {kINT}},
+                       {"epoch_floor", {kINT}},
+                       {"fragment_count", {kINT}},
+                       {"shard_id", {kINT}},
+                       {"data_file_count", {kINT}},
+                       {"metadata_file_count", {kINT}},
+                       {"total_data_file_size", {kBIGINT}},
+                       {"total_data_page_count", {kBIGINT}},
+                       {"total_free_data_page_count", {kBIGINT}},
+                       {"total_metadata_file_size", {kBIGINT}},
+                       {"total_metadata_page_count", {kBIGINT}},
+                       {"total_free_metadata_page_count", {kBIGINT}},
+                       {"total_dictionary_data_file_size", {kBIGINT}}});
   }
 }
 

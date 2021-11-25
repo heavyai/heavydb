@@ -151,7 +151,8 @@ class Catalog final {
       TableDescriptor& td,
       const std::list<ColumnDescriptor>& columns,
       const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
-  int32_t createDashboard(DashboardDescriptor& vd);
+  int32_t createDashboard(DashboardDescriptor& vd,
+                          bool skip_system_role_creation = false);
   void replaceDashboard(DashboardDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
@@ -725,7 +726,9 @@ class Catalog final {
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 
-  void conditionallyInitializeSystemTables();
+  void conditionallyInitializeSystemObjects();
+  void initializeSystemServers();
+  void initializeSystemTables();
   void createSystemTableServer(const std::string& server_name,
                                const std::string& data_wrapper_type);
   void createSystemTable(

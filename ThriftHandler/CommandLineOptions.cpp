@@ -57,6 +57,7 @@ extern size_t g_estimator_failure_max_groupby_size;
 extern bool g_columnar_large_projections;
 extern size_t g_columnar_large_projections_threshold;
 extern bool g_enable_system_tables;
+extern bool g_allow_system_dashboard_update;
 #ifdef ENABLE_MEMKIND
 extern std::string g_pmem_path;
 #endif
