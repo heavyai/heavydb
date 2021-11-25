@@ -49,6 +49,7 @@ class NRings : public Codegen {
     auto ring_sizes_cd =
         get_column_descriptor(ring_sizes_column_id, col_var->get_table_id(), *cat_);
     CHECK(ring_sizes_cd);
+    CHECK(!ring_sizes_cd->isVirtualCol);
 
     operand_owned_ = std::make_unique<Analyzer::ColumnVar>(ring_sizes_cd->columnType,
                                                            col_var->get_table_id(),

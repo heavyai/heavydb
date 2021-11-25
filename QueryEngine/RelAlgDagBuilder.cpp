@@ -2282,7 +2282,18 @@ class RelAlgDispatcher {
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(cat_, scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
-    auto scan_node = std::make_shared<RelScan>(cat_.getCurrentDB().dbId, td, field_names);
+    std::vector<ColumnInfo> infos;
+    infos.reserve(field_names.size());
+    for (auto& col_name : field_names) {
+      auto cd = cat_.getMetadataForColumn(td->tableId, col_name);
+      infos.emplace_back(cat_.getDatabaseId(),
+                         td->tableId,
+                         infos.size(),
+                         col_name,
+                         cd->columnType,
+                         cd->isVirtualCol);
+    }
+    auto scan_node = std::make_shared<RelScan>(cat_.getCurrentDB().dbId, td, infos);
     if (scan_ra.HasMember("hints")) {
       getRelAlgHints(scan_ra, scan_node);
     }

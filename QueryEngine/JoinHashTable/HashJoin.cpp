@@ -406,8 +406,8 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
     ti = cmeta->columnType;
   }
 
-  auto cv =
-      std::make_shared<Analyzer::ColumnVar>(ti, tmeta->tableId, cmeta->columnId, rte_idx);
+  auto cv = std::make_shared<Analyzer::ColumnVar>(
+      ti, tmeta->tableId, cmeta->columnId, rte_idx, cmeta->isVirtualCol);
   return cv;
 }
 

@@ -59,7 +59,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
   auto generate_column_lvs = [this, catalog, geo_col_var, &co](const int column_id) {
     auto cd = get_column_descriptor(column_id, geo_col_var->get_table_id(), *catalog);
     CHECK(cd);
-
+    CHECK(!cd->isVirtualCol);
     const auto col_var = Analyzer::ColumnVar(cd->columnType,
                                              geo_col_var->get_table_id(),
                                              column_id,

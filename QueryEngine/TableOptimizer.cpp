@@ -215,6 +215,7 @@ DeletedColumnStats TableOptimizer::getDeletedColumnStats(
 
   auto cd = cat_.getDeletedColumn(td);
   const auto column_id = cd->columnId;
+  CHECK(!cd->isVirtualCol);
 
   const auto input_col_desc =
       std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0);
@@ -318,6 +319,7 @@ void TableOptimizer::recomputeColumnMetadata(
     return;
   }
 
+  CHECK(!cd->isVirtualCol);
   const auto column_id = cd->columnId;
   const auto input_col_desc =
       std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0);

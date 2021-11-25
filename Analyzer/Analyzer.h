@@ -188,11 +188,13 @@ using ExpressionPtrVector = std::vector<ExpressionPtr>;
  */
 class ColumnVar : public Expr {
  public:
-  ColumnVar(const SQLTypeInfo& ti, int r, int c, int i)
-      : Expr(ti), table_id(r), column_id(c), rte_idx(i) {}
+  // TODO (ienkovich): can we use a special column id to mark virtual rowid columns?
+  ColumnVar(const SQLTypeInfo& ti, int r, int c, int i, bool is_virtual = false)
+      : Expr(ti), table_id(r), column_id(c), rte_idx(i), is_virtual_(is_virtual) {}
   int get_table_id() const { return table_id; }
   int get_column_id() const { return column_id; }
   int get_rte_idx() const { return rte_idx; }
+  bool is_virtual() const { return is_virtual_; }
   EncodingType get_compression() const { return type_info.get_compression(); }
   int get_comp_param() const { return type_info.get_comp_param(); }
   void check_group_by(
@@ -228,6 +230,7 @@ class ColumnVar : public Expr {
   int table_id;   // the global table id
   int column_id;  // the column id
   int rte_idx;    // 0-based range table index, used for table ordering in multi-joins
+  bool is_virtual_;
 };
 
 /*
@@ -265,10 +268,10 @@ class ExpressionTuple : public Expr {
 class Var : public ColumnVar {
  public:
   enum WhichRow { kINPUT_OUTER, kINPUT_INNER, kOUTPUT, kGROUPBY };
-  Var(const SQLTypeInfo& ti, int r, int c, int i, WhichRow o, int v)
-      : ColumnVar(ti, r, c, i), which_row(o), varno(v) {}
+  Var(const SQLTypeInfo& ti, int r, int c, int i, bool is_virtual, WhichRow o, int v)
+      : ColumnVar(ti, r, c, i, is_virtual), which_row(o), varno(v) {}
   Var(const SQLTypeInfo& ti, WhichRow o, int v)
-      : ColumnVar(ti, 0, 0, -1), which_row(o), varno(v) {}
+      : ColumnVar(ti, 0, 0, -1, false), which_row(o), varno(v) {}
   WhichRow get_which_row() const { return which_row; }
   void set_which_row(WhichRow r) { which_row = r; }
   int get_varno() const { return varno; }
@@ -1851,9 +1854,10 @@ class GeoColumnVar : public ColumnVar {
                const int table_id,
                const int column_id,
                const int range_table_index,
+               const bool is_virtual,
                const bool with_bounds,
                const bool with_render_group)
-      : ColumnVar(ti, table_id, column_id, range_table_index)
+      : ColumnVar(ti, table_id, column_id, range_table_index, is_virtual)
       , with_bounds_(with_bounds)
       , with_render_group_(with_render_group) {}
 
@@ -1863,7 +1867,8 @@ class GeoColumnVar : public ColumnVar {
       : ColumnVar(column_var->get_type_info(),
                   column_var->get_table_id(),
                   column_var->get_column_id(),
-                  column_var->get_rte_idx())
+                  column_var->get_rte_idx(),
+                  column_var->is_virtual())
       , with_bounds_(with_bounds)
       , with_render_group_(with_render_group) {}
 
@@ -1980,8 +1985,9 @@ inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,
   const int table_id = col_expr ? col_expr->get_table_id() : 0;
   const int column_id = col_expr ? col_expr->get_column_id() : 0;
   const int rte_idx = col_expr ? col_expr->get_rte_idx() : -1;
+  const bool is_virtual = col_expr ? col_expr->is_virtual() : false;
   return makeExpr<Analyzer::Var>(
-      expr->get_type_info(), table_id, column_id, rte_idx, which_row, varno);
+      expr->get_type_info(), table_id, column_id, rte_idx, is_virtual, which_row, varno);
 }
 
 // Returns true iff the two expression lists are equal (same size and each element are

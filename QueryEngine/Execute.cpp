@@ -3925,7 +3925,7 @@ AggregatedColRange Executor::computeColRangesCache(
     CHECK(cd);
     if (ExpressionRange::typeSupportsRange(cd->columnType)) {
       const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
-          cd->columnType, phys_input.table_id, phys_input.col_id, 0);
+          cd->columnType, phys_input.table_id, phys_input.col_id, 0, cd->isVirtualCol);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
       agg_col_range_cache.setColRange(phys_input, col_range);
     }

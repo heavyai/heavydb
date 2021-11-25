@@ -16,10 +16,15 @@
 
 #pragma once
 
+#include "sqltypes.h"
+
 #include <unordered_set>
 
 // References table column using 0-based positional index.
 struct ColumnByIdxRef {
+  ColumnByIdxRef(int db_id_, int table_id_, int column_idx_)
+      : db_id(db_id_), table_id(table_id_), column_idx(column_idx_) {}
+
   int db_id;
   int table_id;
   int column_idx;
@@ -31,6 +36,23 @@ struct ColumnByIdxRef {
 };
 
 using ColumnByIdxRefSet = std::unordered_set<ColumnByIdxRef>;
+
+struct ColumnInfo : public ColumnByIdxRef {
+  ColumnInfo(int db_id_,
+             int table_id_,
+             int column_idx_,
+             const std::string name_,
+             SQLTypeInfo type_,
+             bool is_rowid_)
+      : ColumnByIdxRef(db_id_, table_id_, column_idx_)
+      , name(name_)
+      , type(type_)
+      , is_rowid(is_rowid_) {}
+
+  std::string name;
+  SQLTypeInfo type;
+  bool is_rowid;
+};
 
 namespace std {
 

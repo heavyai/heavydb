@@ -58,7 +58,7 @@ Query::~Query() {
 }
 
 std::shared_ptr<Analyzer::Expr> ColumnVar::deep_copy() const {
-  return makeExpr<ColumnVar>(type_info, table_id, column_id, rte_idx);
+  return makeExpr<ColumnVar>(type_info, table_id, column_id, rte_idx, is_virtual_);
 }
 
 void ExpressionTuple::collect_rte_idx(std::set<int>& rte_idx_set) const {
@@ -79,7 +79,8 @@ std::shared_ptr<Analyzer::Expr> ExpressionTuple::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> Var::deep_copy() const {
-  return makeExpr<Var>(type_info, table_id, column_id, rte_idx, which_row, varno);
+  return makeExpr<Var>(
+      type_info, table_id, column_id, rte_idx, is_virtual_, which_row, varno);
 }
 
 std::shared_ptr<Analyzer::Expr> Constant::deep_copy() const {
@@ -1855,6 +1856,7 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(
                            colvar->get_table_id(),
                            colvar->get_column_id(),
                            colvar->get_rte_idx(),
+                           colvar->is_virtual(),
                            Var::kINPUT_OUTER,
                            varno);
     }
@@ -1880,6 +1882,7 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(
                              colvar->get_table_id(),
                              colvar->get_column_id(),
                              colvar->get_rte_idx(),
+                             colvar->is_virtual(),
                              Var::kINPUT_OUTER,
                              varno);
       }

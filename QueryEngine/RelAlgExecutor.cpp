@@ -1141,12 +1141,12 @@ void collect_used_input_desc(
     auto it = input_to_nest_level.find(input_ra);
     if (it != input_to_nest_level.end()) {
       const int input_desc = it->second;
+      auto scan = dynamic_cast<const RelScan*>(input_ra);
       input_col_descs_unique.insert(std::make_shared<const InputColDescriptor>(
-          dynamic_cast<const RelScan*>(input_ra)
-              ? cat.getColumnIdBySpi(table_id, col_id + 1)
-              : col_id,
+          scan ? cat.getColumnIdBySpi(table_id, col_id + 1) : col_id,
           table_id,
-          input_desc));
+          input_desc,
+          scan ? scan->isVirtualCol(col_id) : false));
     } else if (!dynamic_cast<const RelLogicalUnion*>(ra_node)) {
       throw std::runtime_error("Bushy joins not supported");
     }
@@ -1609,6 +1609,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
 
       auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
       CHECK(cd);
+      CHECK(!cd->isVirtualCol);
       auto projected_column_to_update =
           makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
       const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
@@ -1717,7 +1718,7 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
       auto cd = cat_.getDeletedColumn(table_descriptor);
       CHECK(cd);
       auto delete_column_expr = makeExpr<Analyzer::ColumnVar>(
-          cd->columnType, table_descriptor->tableId, cd->columnId, 0);
+          cd->columnType, table_descriptor->tableId, cd->columnId, 0, false);
       const auto rewritten_exe_unit =
           query_rewrite->rewriteColumnarDelete(work_unit.exe_unit, delete_column_expr);
       execute_delete_ra_exe_unit(rewritten_exe_unit, is_aggregate);
@@ -1893,8 +1894,11 @@ std::shared_ptr<Analyzer::Expr> transform_to_inner(const Analyzer::Expr* expr) {
   if (!col) {
     throw std::runtime_error("Only columns supported in the window partition for now");
   }
-  return makeExpr<Analyzer::ColumnVar>(
-      col->get_type_info(), col->get_table_id(), col->get_column_id(), 1);
+  return makeExpr<Analyzer::ColumnVar>(col->get_type_info(),
+                                       col->get_table_id(),
+                                       col->get_column_id(),
+                                       1,
+                                       col->is_virtual());
 }
 
 }  // namespace
@@ -3144,7 +3148,6 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
   if (table_desc.getSourceType() != InputSourceType::TABLE) {
     return false;
   }
-  const int table_id = table_desc.getTableId();
   for (const auto& simple_qual : ra_exe_unit.simple_quals) {
     const auto comp_expr =
         std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
@@ -3161,11 +3164,7 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
     if (!rhs_const) {
       return false;
     }
-    auto cd = get_column_descriptor(lhs_col->get_column_id(), table_id, cat_);
-    if (cd->isVirtualCol) {
-      CHECK_EQ("rowid", cd->columnName);
-      return true;
-    }
+    return lhs_col->is_virtual();
   }
   return false;
 }
@@ -3882,11 +3881,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
   const auto scan_ra = dynamic_cast<const RelScan*>(input);
   int input_idx = 0;
   for (const auto& input_meta : in_metainfo) {
-    inputs.push_back(
-        std::make_shared<Analyzer::ColumnVar>(input_meta.get_type_info(),
-                                              table_id,
-                                              scan_ra ? input_idx + 1 : input_idx,
-                                              rte_idx));
+    inputs.push_back(std::make_shared<Analyzer::ColumnVar>(
+        input_meta.get_type_info(),
+        table_id,
+        scan_ra ? input_idx + 1 : input_idx,
+        rte_idx,
+        scan_ra ? scan_ra->isVirtualCol(input_idx) : false));
     ++input_idx;
   }
   return inputs;

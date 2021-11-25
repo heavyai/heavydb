@@ -54,8 +54,11 @@ void RangeTableEntry::expand_star_in_targetlist(
   column_descs =
       catalog.getAllColumnMetadataForTable(table_desc->tableId, false, true, true);
   for (auto col_desc : column_descs) {
-    auto cv = makeExpr<ColumnVar>(
-        col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
+    auto cv = makeExpr<ColumnVar>(col_desc->columnType,
+                                  table_desc->tableId,
+                                  col_desc->columnId,
+                                  rte_idx,
+                                  col_desc->isVirtualCol);
     auto tle = std::make_shared<TargetEntry>(col_desc->columnName, cv, false);
     tlist.push_back(tle);
   }

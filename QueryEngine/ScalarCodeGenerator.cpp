@@ -24,8 +24,10 @@ class UsedColumnExpressions : public ScalarExprVisitor<ScalarCodeGenerator::Colu
   ScalarCodeGenerator::ColumnMap visitColumnVar(
       const Analyzer::ColumnVar* column) const override {
     ScalarCodeGenerator::ColumnMap m;
-    InputColDescriptor input_desc(
-        column->get_column_id(), column->get_table_id(), column->get_rte_idx());
+    InputColDescriptor input_desc(column->get_column_id(),
+                                  column->get_table_id(),
+                                  column->get_rte_idx(),
+                                  column->is_virtual());
     m.emplace(input_desc,
               std::static_pointer_cast<Analyzer::ColumnVar>(column->deep_copy()));
     return m;
@@ -64,7 +66,8 @@ ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(const Analyzer::Expr
     global_col_ids.push_back(std::make_shared<InputColDescriptor>(
         used_column.first.getColId(),
         used_column.first.getScanDesc().getTableId(),
-        used_column.first.getScanDesc().getNestLevel()));
+        used_column.first.getScanDesc().getNestLevel(),
+        used_column.first.isVirtual()));
   }
   plan_state_->allocateLocalColumnIds(global_col_ids);
   return used_columns;

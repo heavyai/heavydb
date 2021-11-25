@@ -3054,6 +3054,7 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
     return nullptr;
   }
   CHECK(deleted_cd->columnType.is_boolean());
+  CHECK(!deleted_cd->isVirtualCol);
   const auto deleted_expr =
       makeExpr<Analyzer::ColumnVar>(deleted_cd->columnType,
                                     outer_input_desc.getTableId(),

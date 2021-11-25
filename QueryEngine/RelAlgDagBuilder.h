@@ -36,6 +36,7 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TypePunning.h"
 #include "QueryHint.h"
+#include "Shared/InputRef.h"
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
@@ -833,14 +834,14 @@ class RelScan : public RelAlgNode {
  public:
   RelScan(int32_t db_id,
           const TableDescriptor* td,
-          const std::vector<std::string>& field_names)
+          const std::vector<ColumnInfo>& column_infos)
       : db_id_(db_id)
       , td_(td)
-      , field_names_(field_names)
+      , column_infos_(column_infos)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {}
 
-  size_t size() const override { return field_names_.size(); }
+  size_t size() const override { return column_infos_.size(); }
 
   const TableDescriptor* getTableDescriptor() const { return td_; }
 
@@ -848,15 +849,28 @@ class RelScan : public RelAlgNode {
 
   const size_t getNumShards() const { return td_->nShards; }
 
-  const std::vector<std::string>& getFieldNames() const { return field_names_; }
-
-  const std::string getFieldName(const size_t i) const { return field_names_[i]; }
+  const std::string& getFieldName(const size_t i) const { return column_infos_[i].name; }
 
   int32_t getDatabaseId() const { return db_id_; }
 
+  bool isVirtualCol(const size_t col_idx) const {
+    // We might pass SPI for a GEO column field. It's never virtual.
+    // TODO: stop using physical column ids in execution part.
+    if (col_idx >= SPIMAP_MAGIC1) {
+      return false;
+    }
+
+    CHECK_LT(col_idx, column_infos_.size());
+    return column_infos_[col_idx].is_rowid;
+  }
+
   std::string toString() const override {
-    return cat(
-        ::typeName(this), "(", td_->tableName, ", ", ::toString(field_names_), ")");
+    std::vector<std::string_view> field_names;
+    field_names.reserve(column_infos_.size());
+    for (auto& info : column_infos_) {
+      field_names.emplace_back(info.name);
+    }
+    return cat(::typeName(this), "(", td_->tableName, ", ", ::toString(field_names), ")");
   }
 
   size_t toHash() const override {
@@ -864,7 +878,9 @@ class RelScan : public RelAlgNode {
       hash_ = typeid(RelScan).hash_code();
       boost::hash_combine(*hash_, td_->tableId);
       boost::hash_combine(*hash_, td_->tableName);
-      boost::hash_combine(*hash_, ::toString(field_names_));
+      for (auto& info : column_infos_) {
+        boost::hash_combine(*hash_, info.name);
+      }
     }
     return *hash_;
   }
@@ -902,7 +918,7 @@ class RelScan : public RelAlgNode {
  private:
   const int32_t db_id_;
   const TableDescriptor* td_;
-  const std::vector<std::string> field_names_;
+  const std::vector<ColumnInfo> column_infos_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
 };

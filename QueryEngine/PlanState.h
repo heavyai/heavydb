@@ -80,7 +80,8 @@ struct PlanState {
     Analyzer::ColumnVar column(SQLTypeInfo(),
                                col_desc.getScanDesc().getTableId(),
                                col_desc.getColId(),
-                               col_desc.getScanDesc().getNestLevel());
+                               col_desc.getScanDesc().getNestLevel(),
+                               col_desc.isVirtual());
     return isLazyFetchColumn(&column);
   }
 

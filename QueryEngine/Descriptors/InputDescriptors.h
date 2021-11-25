@@ -68,26 +68,34 @@ struct hash<InputDescriptor> {
 
 class InputColDescriptor {
  public:
-  InputColDescriptor(const int col_id, const int table_id, const int nest_level)
-      : col_id_(col_id), input_desc_(table_id, nest_level) {}
+  InputColDescriptor(const int col_id,
+                     const int table_id,
+                     const int nest_level,
+                     const bool is_virtual = false)
+      : col_id_(col_id), is_virtual_(is_virtual), input_desc_(table_id, nest_level) {}
 
   bool operator==(const InputColDescriptor& that) const {
-    return col_id_ == that.col_id_ && input_desc_ == that.input_desc_;
+    return col_id_ == that.col_id_ && is_virtual_ == that.is_virtual_ &&
+           input_desc_ == that.input_desc_;
   }
 
   int getColId() const { return col_id_; }
 
   const InputDescriptor& getScanDesc() const { return input_desc_; }
 
+  bool isVirtual() const { return is_virtual_; }
+
   virtual ~InputColDescriptor() {}
 
   std::string toString() const {
     return ::typeName(this) + "(col_id=" + std::to_string(col_id_) +
-           ", input_desc=" + ::toString(input_desc_) + ")";
+           (is_virtual_ ? "[virt]" : "") + ", input_desc=" + ::toString(input_desc_) +
+           ")";
   }
 
  private:
   const int col_id_;
+  const bool is_virtual_;
   const InputDescriptor input_desc_;
 };
 

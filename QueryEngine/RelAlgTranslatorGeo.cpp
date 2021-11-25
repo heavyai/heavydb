@@ -49,9 +49,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
 
     const auto gcd = cat_.getMetadataForColumnBySpi(table_id, rex_input->getIndex() + 1);
     CHECK(gcd);
+    CHECK(!gcd->isVirtualCol);
     ti = gcd->columnType;
     column_id = gcd->columnId;
-
   } else {
     // Likely backed by a temp table. Read the table ID from the source node and negate it
     // (see RelAlgTranslator::translateInput)
@@ -78,6 +78,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     for (auto i = 0; i < ti.get_physical_coord_cols(); i++) {
       const auto pcd = cat_.getMetadataForColumnBySpi(
           table_id, SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), i + 1));
+      CHECK(pcd && !pcd->isVirtualCol);
       auto pcol_ti = pcd->columnType;
       args.push_back(std::make_shared<Analyzer::ColumnVar>(
           pcol_ti, table_id, pcd->columnId, rte_idx));
@@ -91,6 +92,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
         table_id,
         SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
                                   ti.get_physical_coord_cols() + 1));
+    CHECK(bounds_cd && !bounds_cd->isVirtualCol);
     auto bounds_ti = bounds_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(
         bounds_ti, table_id, bounds_cd->columnId, rte_idx));
@@ -100,6 +102,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
         table_id,
         SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
                                   ti.get_physical_coord_cols() + 2));
+    CHECK(render_group_cd && !render_group_cd->isVirtualCol);
     auto render_group_ti = render_group_cd->columnType;
     args.push_back(std::make_shared<Analyzer::ColumnVar>(
         render_group_ti, table_id, render_group_cd->columnId, rte_idx));

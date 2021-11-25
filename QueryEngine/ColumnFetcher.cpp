@@ -613,6 +613,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
   AbstractBuffer* merged_data_buffer = nullptr;
   bool has_cached_merged_idx_buf = false;
   bool has_cached_merged_data_buf = false;
+  CHECK(!cd->isVirtualCol);
   const InputColDescriptor icd(cd->columnId, cd->tableId, int(0));
   // check linearized buffer's cache first
   // if not exists, alloc necessary buffer space to prepare linearization
@@ -930,6 +931,7 @@ MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
   // linearize collected fragments
   AbstractBuffer* merged_data_buffer = nullptr;
   bool has_cached_merged_data_buf = false;
+  CHECK(!cd->isVirtualCol);
   const InputColDescriptor icd(cd->columnId, cd->tableId, int(0));
   {
     std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
