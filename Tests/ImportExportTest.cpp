@@ -3509,7 +3509,8 @@ class RasterImporterTest : public DBHandlerTestFixture {
   void doDetect(const std::string& file_name,
                 const std::string& import_bands,
                 const import_export::RasterImporter::PointType point_type,
-                const import_export::RasterImporter::PointTransform point_transform) {
+                const import_export::RasterImporter::PointTransform point_transform,
+                const bool point_compute_angle) {
     // init GDAL
     Geospatial::GDAL::init();
 
@@ -3519,7 +3520,8 @@ class RasterImporterTest : public DBHandlerTestFixture {
             .string();
 
     // run a detect
-    raster_importer_->detect(abs_file_name, import_bands, point_type, point_transform);
+    raster_importer_->detect(
+        abs_file_name, import_bands, point_type, point_transform, point_compute_angle);
 
 #if DEBUG_RASTER_TESTS
     auto const& band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
@@ -3545,7 +3547,8 @@ class RasterImporterTest : public DBHandlerTestFixture {
     doDetect(file_name,
              import_bands,
              import_export::RasterImporter::PointType::kNone,
-             import_export::RasterImporter::PointTransform::kNone);
+             import_export::RasterImporter::PointTransform::kNone,
+             false);
 
     // check band names?
     if (expected_band_names_and_sql_types.size()) {
@@ -3569,23 +3572,26 @@ class RasterImporterTest : public DBHandlerTestFixture {
       const double expected_proj_x,
       const double expected_proj_y) {
     // detect phase
-    doDetect(file_name, "", point_type, point_transform);
+    doDetect(file_name, "", point_type, point_transform, false);
 
     // import phase
     static constexpr int max_threads{1};
     doImport(max_threads);
 
-    // project given point
-    auto const proj_xy = raster_importer_->getProjectedPixelCoords(0u, pixel_x, pixel_y);
+    // get projected scan-line positions
+    auto const coords = raster_importer_->getProjectedPixelCoords(0u, pixel_y);
+
+    // get for this pixel
+    auto const [x, y, angle] = coords[pixel_x];
 
 #if DEBUG_RASTER_TESTS
-    std::cout << "Pixel (" << pixel_x << ", " << pixel_y << ") projects to ("
-              << proj_xy.first << ", " << proj_xy.second << ")" << std::endl;
+    std::cout << "Pixel (" << pixel_x << ", " << pixel_y << ") projects to (" << x << ", "
+              << y << ")" << std::endl;
 #endif
 
     // check projection
-    EXPECT_NEAR(proj_xy.first, expected_proj_x, kDoubleEpsilon);
-    EXPECT_NEAR(proj_xy.second, expected_proj_y, kDoubleEpsilon);
+    EXPECT_NEAR(x, expected_proj_x, kDoubleEpsilon);
+    EXPECT_NEAR(y, expected_proj_y, kDoubleEpsilon);
   }
 
   void runValueTest(const std::string& file_name,
@@ -3598,7 +3604,8 @@ class RasterImporterTest : public DBHandlerTestFixture {
     doDetect(file_name,
              single_band_name,
              import_export::RasterImporter::PointType::kNone,
-             import_export::RasterImporter::PointTransform::kNone);
+             import_export::RasterImporter::PointTransform::kNone,
+             false);
 
     // validate band name and type
     auto const band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
@@ -3658,7 +3665,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
   void runEnumsTest(const std::string& file_name,
                     const import_export::RasterImporter::PointType point_type,
                     const import_export::RasterImporter::PointTransform point_transform) {
-    doDetect(file_name, "", point_type, point_transform);
+    doDetect(file_name, "", point_type, point_transform, false);
   }
 
   using TY = import_export::RasterImporter::PointType;
@@ -3807,12 +3814,14 @@ class RasterImportTest : public DBHandlerTestFixture {
 
   void importTestCommon(
       const std::string& file_name,
+      const std::string& extra_with_options,
       const std::string& check_str,
       const std::vector<std::vector<NullableTargetValue>>& expected_result_set) {
     auto const abs_file_name =
         boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + file_name)
             .string();
-    sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file');");
+    sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file'" +
+        extra_with_options + ");");
     sqlAndCompareResult(check_str, expected_result_set);
   }
 };
@@ -3828,6 +3837,7 @@ TEST_F(RasterImportTest, ImportPNGTest) {
 TEST_F(RasterImportTest, ImportGeoTIFFTest) {
   ASSERT_NO_THROW(
       importTestCommon(kGeoTIFF,
+                       "",
                        "SELECT raster_lon, raster_lat FROM raster WHERE rowid=42;",
                        {{-83.224657689925579, 39.818729217287554}}));
 }
@@ -3835,8 +3845,25 @@ TEST_F(RasterImportTest, ImportGeoTIFFTest) {
 TEST_F(RasterImportTest, ImportGRIBTest) {
   ASSERT_NO_THROW(
       importTestCommon(kGRIB,
+                       "",
                        "SELECT raster_lon, raster_lat FROM raster WHERE rowid=42;",
                        {{-111.24787702504845, 38.43639550624939}}));
+}
+
+TEST_F(RasterImportTest, ImportRotationFailTest) {
+  EXPECT_THROW(importTestCommon(kPNG,
+                                ", raster_point_compute_angle='true'",
+                                "SELECT raster_x, raster_y FROM raster WHERE rowid=42;",
+                                {{42L, 0L}}),
+               TOmniSciException);
+}
+
+TEST_F(RasterImportTest, ImportRotationTest) {
+  ASSERT_NO_THROW(importTestCommon(
+      kGeoTIFF,
+      ", raster_point_compute_angle='true'",
+      "SELECT raster_lon, raster_lat, raster_angle FROM raster WHERE rowid=42;",
+      {{-83.224657689925579, 39.818729217287554, -1.430678129196167}}));
 }
 
 }  // namespace

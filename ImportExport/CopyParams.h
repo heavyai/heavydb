@@ -84,6 +84,7 @@ struct CopyParams {
   std::string raster_import_bands;
   int32_t raster_scanlines_per_thread;
   RasterPointTransform raster_point_transform;
+  bool raster_point_compute_angle;
 
   CopyParams()
       : delimiter(',')
@@ -114,7 +115,8 @@ struct CopyParams {
       , source_srid(0)
       , raster_point_type(RasterPointType::kAuto)
       , raster_scanlines_per_thread(32)
-      , raster_point_transform(RasterPointTransform::kAuto) {}
+      , raster_point_transform(RasterPointTransform::kAuto)
+      , raster_point_compute_angle{false} {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
@@ -145,6 +147,8 @@ struct CopyParams {
       , source_srid(0)
       , raster_point_type(RasterPointType::kAuto)
       , raster_scanlines_per_thread(32)
-      , raster_point_transform(RasterPointTransform::kAuto) {}
+      , raster_point_transform(RasterPointTransform::kAuto)
+      , raster_point_compute_angle{false} {}
 };
+
 }  // namespace import_export

@@ -198,6 +198,14 @@ SQLTypes point_type_to_sql_type(const RasterImporter::PointType point_type) {
   return kNULLT;
 }
 
+double conv_4326_900913_x(const double x) {
+  return x * 111319.490778;
+}
+
+double conv_4326_900913_y(const double y) {
+  return 6378136.99911 * log(tan(.00872664626 * y + .785398163397));
+}
+
 }  // namespace
 
 //
@@ -207,7 +215,8 @@ SQLTypes point_type_to_sql_type(const RasterImporter::PointType point_type) {
 void RasterImporter::detect(const std::string& file_name,
                             const std::string& specified_band_names,
                             const PointType point_type,
-                            const PointTransform point_transform) {
+                            const PointTransform point_transform,
+                            const bool point_compute_angle) {
   // parse any specified band names
   parseSpecifiedBandNames(specified_band_names);
 
@@ -352,6 +361,9 @@ void RasterImporter::detect(const std::string& file_name,
     point_type_ = PointType::kSmallInt;
   }
 
+  // capture this
+  point_compute_angle_ = point_compute_angle;
+
   // validate final point type/transform
   if (!has_spatial_reference && point_transform_ == PointTransform::kWorld) {
     throw std::runtime_error(
@@ -377,6 +389,10 @@ void RasterImporter::detect(const std::string& file_name,
         "RasterImporter: Raster file '" + file_name +
         "' has band dimensions too large for 'SMALLINT' raster_point_type (" +
         std::to_string(bands_width_) + "x" + std::to_string(bands_height_) + ")");
+  }
+  if (point_compute_angle_ && point_transform_ != PointTransform::kWorld) {
+    throw std::runtime_error(
+        "Raster Importer: Must do World Transform with raster_point_compute_angle");
   }
 }
 
@@ -502,6 +518,9 @@ const RasterImporter::NamesAndSQLTypes RasterImporter::getPointNamesAndSQLTypes(
         names_and_sql_types.emplace_back("raster_lon", sql_type);
         names_and_sql_types.emplace_back("raster_lat", sql_type);
       }
+      if (point_compute_angle_) {
+        names_and_sql_types.emplace_back("raster_angle", kFLOAT);
+      }
     } else {
       names_and_sql_types.emplace_back("raster_x", sql_type);
       names_and_sql_types.emplace_back("raster_y", sql_type);
@@ -518,40 +537,74 @@ const RasterImporter::NamesAndSQLTypes RasterImporter::getBandNamesAndSQLTypes()
   return band_names_and_sql_types_;
 }
 
-const std::pair<double, bool> RasterImporter::getBandNullValue(const int band_idx) const {
+const RasterImporter::NullValue RasterImporter::getBandNullValue(
+    const int band_idx) const {
   CHECK_LT(static_cast<uint32_t>(band_idx), import_band_infos_.size());
   auto const& band_info = import_band_infos_[band_idx];
   return {band_info.null_value, band_info.null_value_valid};
 }
 
-const std::pair<double, double> RasterImporter::getProjectedPixelCoords(
+const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
     const uint32_t thread_idx,
-    const int x,
     const int y) const {
-  // start with the pixel coord
-  double dx = double(x);
-  double dy = double(y);
+  Coords coords(bands_width_);
 
-  if (point_transform_ != PointTransform::kNone) {
-    // affine transform to the file coordinate space
-    double fdx = affine_transform_matrix_[0] + (dx * affine_transform_matrix_[1]) +
-                 (dy * affine_transform_matrix_[2]);
-    double fdy = affine_transform_matrix_[3] + (dx * affine_transform_matrix_[4]) +
-                 (dy * affine_transform_matrix_[5]);
-    dx = fdx;
-    dy = fdy;
+  double prev_mx{0.0}, prev_my{0.0};
 
-    // do geo-spatial transform if we can (otherwise leave alone)
-    if (point_transform_ == PointTransform::kWorld &&
-        thread_idx < coordinate_transformations_.size()) {
-      int success{0};
-      coordinate_transformations_[thread_idx]->Transform(1, &dx, &dy, nullptr, &success);
-      CHECK(success);
+  for (int x = 0; x < bands_width_; x++) {
+    // start with the pixel coord
+    double dx = double(x);
+    double dy = double(y);
+
+    // transforms
+    if (point_transform_ != PointTransform::kNone) {
+      // affine transform to the file coordinate space
+      double fdx = affine_transform_matrix_[0] + (dx * affine_transform_matrix_[1]) +
+                   (dy * affine_transform_matrix_[2]);
+      double fdy = affine_transform_matrix_[3] + (dx * affine_transform_matrix_[4]) +
+                   (dy * affine_transform_matrix_[5]);
+      dx = fdx;
+      dy = fdy;
+
+      // do geo-spatial transform if we can (otherwise leave alone)
+      if (point_transform_ == PointTransform::kWorld &&
+          thread_idx < coordinate_transformations_.size()) {
+        int success{0};
+        coordinate_transformations_[thread_idx]->Transform(
+            1, &dx, &dy, nullptr, &success);
+        CHECK(success);
+      }
+    }
+
+    // store
+    coords[x] = {dx, dy, 0.0f};
+
+    // compute and overwrite angle?
+    if (point_compute_angle_) {
+      if (x == 0) {
+        // capture first pixel's Mercator coords
+        prev_mx = conv_4326_900913_x(dx);
+        prev_my = conv_4326_900913_y(dy);
+      } else {
+        // compute angle between this pixel's Mercator coords and the previous
+        // expressed as clockwise degrees for symbol rotation
+        auto const mx = conv_4326_900913_x(dx);
+        auto const my = conv_4326_900913_y(dy);
+        auto const angle = atan2f(my - prev_my, mx - prev_mx) * (-180.0f / M_PI);
+        prev_mx = mx;
+        prev_my = my;
+
+        // overwrite this angle (and that of the first pixel, if this is the second)
+        std::get<2>(coords[x]) = angle;
+        if (x == 1) {
+          std::get<2>(coords[0]) = angle;
+        }
+      }
     }
   }
 
   // done
-  return {dx, dy};
+  return coords;
 }
 
 void RasterImporter::getRawPixels(const uint32_t thread_idx,
@@ -559,7 +612,7 @@ void RasterImporter::getRawPixels(const uint32_t thread_idx,
                                   const int y_start,
                                   const int num_rows,
                                   const SQLTypes column_sql_type,
-                                  std::vector<std::byte>& raw_pixel_bytes) {
+                                  RawPixels& raw_pixel_bytes) {
   // get the band info
   CHECK_LT(band_idx, import_band_infos_.size());
   auto const band_info = import_band_infos_[band_idx];

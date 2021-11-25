@@ -47,11 +47,15 @@ class RasterImporter {
   void detect(const std::string& file_name,
               const std::string& specified_band_names,
               const PointType point_type,
-              const PointTransform point_transform);
+              const PointTransform point_transform,
+              const bool point_compute_angle);
 
   void import(const uint32_t max_threads);
 
   using NamesAndSQLTypes = std::vector<std::pair<std::string, SQLTypes>>;
+  using RawPixels = std::vector<std::byte>;
+  using NullValue = std::pair<double, bool>;
+  using Coords = std::vector<std::tuple<double, double, float>>;
 
   const uint32_t getNumBands() const;
   const PointTransform getPointTransform() const;
@@ -59,16 +63,14 @@ class RasterImporter {
   const NamesAndSQLTypes getBandNamesAndSQLTypes() const;
   const int getBandsWidth() const { return bands_width_; }
   const int getBandsHeight() const { return bands_height_; }
-  const std::pair<double, bool> getBandNullValue(const int band_idx) const;
-  const std::pair<double, double> getProjectedPixelCoords(const uint32_t thread_idx,
-                                                          const int x,
-                                                          const int y) const;
+  const NullValue getBandNullValue(const int band_idx) const;
+  const Coords getProjectedPixelCoords(const uint32_t thread_idx, const int y) const;
   void getRawPixels(const uint32_t thread_idx,
                     const uint32_t band_idx,
                     const int y_start,
                     const int num_rows,
                     const SQLTypes column_sql_type,
-                    std::vector<std::byte>& raw_pixel_bytes);
+                    RawPixels& raw_pixel_bytes);
 
  private:
   struct ImportBandInfo {
@@ -94,6 +96,7 @@ class RasterImporter {
   PointTransform point_transform_{PointTransform::kNone};
   std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>
       coordinate_transformations_;
+  bool point_compute_angle_{false};
 
   void initializeNaming();
   void parseSpecifiedBandNames(const std::string& specified_band_names);

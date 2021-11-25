@@ -3737,6 +3737,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     default:
       CHECK(false);
   }
+  copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   return copy_params;
 }
 
@@ -3854,6 +3855,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
     default:
       CHECK(false);
   }
+  copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   return copy_params;
 }
 
@@ -5287,8 +5289,8 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
         detect_column_types(cds, session, file_name_in, cp_copy);
       } catch (const std::exception& e) {
         // capture the error and abort this layer
-        caught_exception_messages.emplace_back(
-            "Invalid/Unsupported Column Types in Layer '" + layer_name + "':" + e.what());
+        caught_exception_messages.emplace_back("Column Type Detection failed for '" +
+                                               layer_name + "':" + e.what());
         continue;
       }
       rd = cds.row_set.row_desc;
@@ -5520,9 +5522,11 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
   // did we catch any exceptions?
   if (caught_exception_messages.size()) {
     // combine all the strings into one and throw a single Thrift exception
-    std::string combined_exception_message = "Failed to import geo file:\n";
+    std::string combined_exception_message = "Failed to import geo/raster file: ";
+    bool comma{false};
     for (const auto& message : caught_exception_messages) {
-      combined_exception_message += message + "\n";
+      combined_exception_message += comma ? (", " + message) : message;
+      comma = true;
     }
     THROW_MAPD_EXCEPTION(combined_exception_message);
   } else {

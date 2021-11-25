@@ -5144,6 +5144,16 @@ void CopyTableStmt::execute(
         const auto string_val = *str_literal->get_stringval();
         copy_params.file_sort_regex =
             string_val.empty() ? std::nullopt : std::optional<std::string>{string_val};
+      } else if (boost::iequals(*p->get_name(), "raster_point_compute_angle")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error(
+              "'raster_point_compute_angle' option must be a boolean.");
+        }
+        if (bool_from_string_literal(str_literal)) {
+          copy_params.raster_point_compute_angle = true;
+        }
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
