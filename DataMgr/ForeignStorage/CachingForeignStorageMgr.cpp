@@ -15,6 +15,7 @@
  */
 
 #include "CachingForeignStorageMgr.h"
+#include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
