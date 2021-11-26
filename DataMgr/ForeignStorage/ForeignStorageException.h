@@ -26,11 +26,19 @@ class ForeignStorageException : public std::runtime_error {
       : std::runtime_error(error_message) {}
 };
 
-inline void throw_removed_row_error(const std::string& file_path) {
+inline void throw_removed_row_in_result_set_error(const std::string& select_statement) {
+  throw ForeignStorageException{
+      "Refresh of foreign table created with \"APPEND\" update type failed as result set "
+      "of select statement "
+      "reduced in size: \"" +
+      select_statement + "\""};
+}
+
+inline void throw_removed_row_in_file_error(const std::string& file_path) {
   throw ForeignStorageException{
       "Refresh of foreign table created with \"APPEND\" update type failed as file "
-      "reduced in size: " +
-      file_path};
+      "reduced in size: \"" +
+      file_path + "\""};
 }
 
 inline void throw_removed_file_error(const std::string& file_path) {

@@ -147,7 +147,7 @@ void SingleTextFileReader::checkForMoreRows(size_t file_offset,
   size_t new_file_size = ftell(file_);
   size_t new_data_size = get_data_size(new_file_size, header_offset_);
   if (new_data_size < data_size_) {
-    throw_removed_row_error(file_path_);
+    throw_removed_row_in_file_error(file_path_);
   }
   if (fseek(file_, static_cast<long int>(file_offset + header_offset_), SEEK_SET) != 0) {
     throw std::runtime_error{"An error occurred when attempting to read offset " +

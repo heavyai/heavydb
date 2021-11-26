@@ -250,7 +250,7 @@ void ParquetDataWrapper::fetchChunkMetadata() {
       size_t row_count = reader->parquet_reader()->metadata()->num_rows();
 
       if (row_count < total_row_count_) {
-        throw_removed_row_error(file_path);
+        throw_removed_row_in_file_error(file_path);
       } else if (row_count > total_row_count_) {
         new_file_paths = all_file_paths;
         chunk_metadata_map_.clear();

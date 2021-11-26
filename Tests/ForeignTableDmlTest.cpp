@@ -338,7 +338,8 @@ class ForeignTableTest : public DBHandlerTestFixture {
       const std::map<std::string, std::string> options = {},
       const std::string& table_name = default_table_name,
       const std::vector<NameTypePair>& db_specific_column_pairs = {},
-      const bool is_odbc_geo = false) {
+      const bool is_odbc_geo = false,
+      const int order_by_column_index = -1) {
     std::stringstream ss;
     ss << "CREATE FOREIGN TABLE " << table_name << " ";
     std::string schema = createSchemaString(column_pairs);
@@ -678,19 +679,6 @@ class RecoverCacheQueryTest : public ForeignTableTest {
     cache_->clear();
     ForeignTableTest::TearDown();
   }
-};
-
-using AppendRefreshTestParam = std::tuple<int, std::string, std::string, bool, bool>;
-
-struct AppendRefreshTestStruct {
-  AppendRefreshTestStruct(const AppendRefreshTestParam& tuple) {
-    std::tie(fragment_size, wrapper, filename, recover_cache, evict) = tuple;
-  }
-  int fragment_size;
-  std::string wrapper;
-  std::string filename;
-  bool recover_cache;
-  bool evict;
 };
 
 class DataTypeFragmentSizeAndDataWrapperTest
@@ -1399,7 +1387,8 @@ TEST_P(DataWrapperSelectQueryTest, AggregateAndGroupBy) {
                               GetParam()));
 
   TQueryResult result;
-  sql(result, "SELECT t, avg(i), sum(f) FROM " + default_table_name + " group by t;");
+  sql(result,
+      "SELECT t, avg(i), sum(f) FROM " + default_table_name + " group by t order by t;");
   // clang-format off
   assertResultSetEqual({{"a", 1.0, 1.1},
                         {"aa", 1.5, 3.3},
@@ -3127,7 +3116,6 @@ class AppendRefreshBase : public RecoverCacheQueryTest, public TempDirManager {
  protected:
   const std::string table_name_ = "refresh_tmp";
 
-  std::string wrapper_type_;
   std::string file_name_;
   int32_t fragment_size_{1};
   bool recover_cache_{false};
@@ -3200,7 +3188,10 @@ class FragmentSizesAppendRefreshTest
                                 wrapper_type_,
                                 {{"FRAGMENT_SIZE", std::to_string(fragment_size_)},
                                  {"REFRESH_UPDATE_TYPE", "APPEND"}},
-                                table_name_));
+                                table_name_,
+                                {},
+                                false,
+                                0));
   }
 };
 
@@ -3271,6 +3262,21 @@ INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsRegexParserRecover,
                                                           "csv_dir_file",
                                                           "csv_dir_file_multi",
                                                           "dir_file_multi.zip"),
+                                          testing::Values(true)),
+                         FragmentSizesAppendRefreshTest::getTestName);
+
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsOdbc,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1, 4, 3200000),
+                                          testing::Values("postgres", "sqlite"),
+                                          testing::Values("single_file.csv"),
+                                          testing::Values(false)),
+                         FragmentSizesAppendRefreshTest::getTestName);
+INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsOdbcRecover,
+                         FragmentSizesAppendRefreshTest,
+                         testing::Combine(testing::Values(1),
+                                          testing::Values("postgres", "sqlite"),
+                                          testing::Values("single_file.csv"),
                                           testing::Values(true)),
                          FragmentSizesAppendRefreshTest::getTestName);
 
@@ -3351,7 +3357,10 @@ class StringDictAppendTest
                                 wrapper_type_,
                                 {{"FRAGMENT_SIZE", std::to_string(fragment_size_)},
                                  {"REFRESH_UPDATE_TYPE", "APPEND"}},
-                                custom_table_name));
+                                custom_table_name,
+                                {},
+                                false,
+                                0));
   }
 };
 
@@ -3409,6 +3418,16 @@ INSTANTIATE_TEST_SUITE_P(StringDictAppendParamaterizedTestsRegexParserFromDisk,
                                           testing::Values(true),
                                           testing::Values(true, false)),
                          StringDictAppendTest::getTestName);
+
+INSTANTIATE_TEST_SUITE_P(
+    StringDictAppendParamaterizedTestsOdbcFromDisk,
+    StringDictAppendTest,
+    testing::Combine(testing::Values(2),
+                     testing::Values("postgres", "sqlite"),
+                     testing::Values("csv_string_dir/single_file.csv"),
+                     testing::Values(true),
+                     testing::Values(true, false)),
+    StringDictAppendTest::getTestName);
 
 TEST_P(StringDictAppendTest, AppendStringDictFilter) {
   sqlCreateTestTable(table_name_);
@@ -3469,13 +3488,16 @@ class DataWrapperAppendRefreshTest
                                 wrapper_type_,
                                 {{"FRAGMENT_SIZE", std::to_string(fragment_size_)},
                                  {"REFRESH_UPDATE_TYPE", "APPEND"}},
-                                table_name_));
+                                table_name_,
+                                {},
+                                false,
+                                0));
   }
 };
 
 INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTests,
                          DataWrapperAppendRefreshTest,
-                         ::testing::Combine(::testing::ValuesIn(file_wrappers),
+                         ::testing::Combine(::testing::ValuesIn(local_wrappers),
                                             ::testing::Values(true, false)),
                          [](const auto& info) {
                            std::stringstream ss;
@@ -3497,9 +3519,6 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
-  if (is_odbc(wrapper_type_)) {
-    GTEST_SKIP() << "UNIMPLEMTNED: ODBC does not support this append functionality yet";
-  }
   file_name_ = "single_file_delete_rows"s + wrapper_ext(wrapper_type_);
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
@@ -3507,11 +3526,18 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
 
   // Refresh command
-  queryAndAssertException(
-      "REFRESH FOREIGN TABLES " + table_name_ + ";",
-      "Refresh of foreign table created with \"APPEND\" update type failed as "
-      "file reduced in size: " +
-          TEMP_DIR + file_name_);
+  if (is_odbc(wrapper_type_)) {
+    queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
+                            "Refresh of foreign table created with \"APPEND\" update "
+                            "type failed as result set of select statement reduced in "
+                            "size: \"select i from refresh_tmp order by i\"");
+  } else {
+    queryAndAssertException(
+        "REFRESH FOREIGN TABLES " + table_name_ + ";",
+        "Refresh of foreign table created with \"APPEND\" update type failed as "
+        "file reduced in size: \"" +
+            TEMP_DIR + file_name_ + "\"");
+  }
 }
 
 TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
@@ -4738,9 +4764,6 @@ TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand
 // data
 TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   int fragment_size = 2;
-  if (is_odbc(wrapper_type_)) {
-    GTEST_SKIP() << "UNIMPLEMENTED: Append is not yet supported for odbc";
-  }
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
 
@@ -4751,7 +4774,11 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
                               file_path,
                               wrapper_type_,
                               {{"FRAGMENT_SIZE", std::to_string(fragment_size)},
-                               {"REFRESH_UPDATE_TYPE", "APPEND"}}));
+                               {"REFRESH_UPDATE_TYPE", "APPEND"}},
+                              default_table_name,
+                              {},
+                              false,
+                              0));
 
   auto td = cat_->getMetadataForTable(default_table_name, false);
   ChunkKey key{cat_->getCurrentDB().dbId, td->tableId, 1, 0};
@@ -4771,6 +4798,14 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   // Modify tables on disk
   bf::remove_all(getDataFilesPath() + "append_tmp");
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
+  // Recreate table for ODBC data wrappers
+  if (is_odbc(wrapper_type_)) {
+    createODBCSourceTable(default_table_name,
+                          createSchemaString({{"i", "BIGINT"}}, wrapper_type_),
+                          file_path,
+                          wrapper_type_,
+                          false);
+  }
 
   // Refresh command
   sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
