@@ -14,10 +14,12 @@ public class OmniSqlSanitizedString {
   }
 
   private String sanitizeString(final String s) {
+    String sanitized_s = s;
     if (s.startsWith("'") && s.endsWith("'")) {
-      return s.substring(1, s.length() - 1);
+      sanitized_s = s.substring(1, s.length() - 1);
     }
-    return s;
+    sanitized_s = sanitized_s.replace("''", "'");
+    return sanitized_s;
   }
 
   @Override
