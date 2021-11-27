@@ -34,6 +34,7 @@
 #include "StringDictionary/StringDictionary.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
+#include <x86intrin.h>
 #include <future>
 #endif
 
@@ -86,6 +87,67 @@ inline int64_t translate_str_id_to_outer_dict(const int64_t elem,
   return outer_id;
 }
 
+/**
+ * For non-AVX512 we are fine with auto-vectorized loop.
+ */
+__attribute__((target("default"))) void init_hash_join_buff_cpu(
+    int32_t* groups_buffer,
+    const int32_t invalid_slot_val,
+    const int64_t start,
+    const int64_t end) {
+  for (int64_t pos = start; pos < end; ++pos) {
+    groups_buffer[pos] = invalid_slot_val;
+  }
+}
+
+/**
+ * For AVX512 target we perform manual vectorization to use non-temporal stores.
+ */
+__attribute__((target("avx512f"), optimize("no-tree-vectorize"))) void
+init_hash_join_buff_cpu(int32_t* groups_buffer,
+                        const int32_t invalid_slot_val,
+                        const int64_t start,
+                        const int64_t end) {
+  int64_t pos = start;
+
+  // Align buffer pointer.
+  int64_t align_iters =
+      ((64ULL - reinterpret_cast<uint64_t>(groups_buffer + pos)) & 0x3F) /
+      sizeof(invalid_slot_val);
+  int64_t align_end = std::min(pos + align_iters, end);
+  while (pos < align_end) {
+    groups_buffer[pos++] = invalid_slot_val;
+  }
+
+  // Fill using 512-byte vector template.
+  __m512i vec_val = (__m512i)(__v16si){invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val,
+                                       invalid_slot_val};
+  int64_t vec_end = pos + (end - pos) / 16 * 16;
+  while (pos < vec_end) {
+    _mm512_stream_si512(reinterpret_cast<__m512i*>(groups_buffer + pos), vec_val);
+    pos += 16;
+  }
+
+  // Scalar tail.
+  while (pos < end) {
+    groups_buffer[pos++] = invalid_slot_val;
+  }
+}
+
 }  // namespace
 #endif
 
@@ -97,13 +159,14 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
-#else
-  int32_t start = cpu_thread_idx;
-  int32_t step = cpu_thread_count;
-#endif
   for (int64_t i = start; i < hash_entry_count; i += step) {
     groups_buffer[i] = invalid_slot_val;
   }
+#else
+  int64_t start = hash_entry_count * cpu_thread_idx / cpu_thread_count;
+  int32_t end = hash_entry_count * (cpu_thread_idx + 1) / cpu_thread_count;
+  init_hash_join_buff_cpu(groups_buffer, invalid_slot_val, start, end);
+#endif
 }
 
 #ifdef __CUDACC__

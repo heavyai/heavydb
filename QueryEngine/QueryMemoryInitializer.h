@@ -141,6 +141,8 @@ class QueryMemoryInitializer {
                          const bool output_columnar,
                          const Executor* executor);
 
+  bool useVectorRowGroupsInit(const size_t row_size, const size_t entries) const;
+
   void initRowGroups(const QueryMemoryDescriptor& query_mem_desc,
                      int64_t* groups_buffer,
                      const std::vector<int64_t>& init_vals,

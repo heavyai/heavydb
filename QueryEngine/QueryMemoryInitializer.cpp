@@ -26,6 +26,8 @@
 
 #include <Shared/checked_alloc.h>
 
+#include <x86intrin.h>
+
 // 8 GB, the limit of perfect hash group by under normal conditions
 int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
 
@@ -147,6 +149,80 @@ inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
     col_frag_offsets.push_back(col_offsets);
   }
   return col_frag_offsets;
+}
+
+constexpr size_t const_log2(size_t v) {
+  if (v == 1) {
+    return 0;
+  } else {
+    assert(!(v & 1));
+    return const_log2(v / 2) + 1;
+  }
+}
+
+// Return a min number of rows required to fill a pattern
+// divisible by vec_size.
+template <size_t vec_size>
+size_t get_num_rows_for_vec_sample(const size_t row_size) {
+  auto rem = row_size & (vec_size - 1);
+  if (!rem) {
+    return 1;
+  }
+
+  auto vp2 = const_log2(vec_size);
+  auto p2 = 0;
+  while (!(rem & 1)) {
+    rem >>= 1;
+    p2++;
+  }
+
+  return 1 << (vp2 - p2);
+}
+
+// It's assumed sample has 64 extra bytes to handle alignment.
+__attribute__((target("avx512f"))) void spread_vec_sample(int8_t* dst,
+                                                          const size_t dst_size,
+                                                          const int8_t* sample_ptr,
+                                                          const size_t sample_size) {
+  assert((reinterpret_cast<uint64_t>(dst) & 0x3F) ==
+         (reinterpret_cast<uint64_t>(sample_ptr) & 0x3F));
+  // Align buffers.
+  int64_t align_bytes = ((64ULL - reinterpret_cast<uint64_t>(dst)) & 0x3F);
+  memcpy(dst, sample_ptr, align_bytes);
+
+  int8_t* align_dst = dst + align_bytes;
+  const int8_t* align_sample = sample_ptr + align_bytes;
+  size_t rem = dst_size - align_bytes;
+  size_t rem_scalar = rem % sample_size;
+  size_t rem_vector = rem - rem_scalar;
+
+  // Aligned vector part.
+  auto vecs = sample_size / 64;
+  auto vec_end = align_dst + rem_vector;
+  while (align_dst < vec_end) {
+    for (size_t i = 0; i < vecs; ++i) {
+      __m512i vec_val =
+          _mm512_load_si512(reinterpret_cast<const __m512i*>(align_sample) + i);
+      _mm512_stream_si512(reinterpret_cast<__m512i*>(align_dst) + i, vec_val);
+    }
+    align_dst += sample_size;
+  }
+
+  // Scalar tail.
+  memcpy(align_dst, align_sample, rem_scalar);
+}
+
+__attribute__((target("default"))) void spread_vec_sample(int8_t* dst,
+                                                          const size_t dst_size,
+                                                          const int8_t* sample_ptr,
+                                                          const size_t sample_size) {
+  size_t rem = dst_size;
+  while (rem >= sample_size) {
+    memcpy(dst, sample_ptr, sample_size);
+    rem -= sample_size;
+    dst += sample_size;
+  }
+  memcpy(dst, sample_ptr, rem);
 }
 
 }  // namespace
@@ -425,6 +501,18 @@ void QueryMemoryInitializer::initGroupByBuffer(
   }
 }
 
+bool QueryMemoryInitializer::useVectorRowGroupsInit(const size_t row_size,
+                                                    const size_t entries) const {
+  if (!g_optimize_row_initialization) {
+    return false;
+  }
+
+  // Assume 512-bit vector size. Don't bother if
+  // the sample is too big.
+  auto rows_per_sample = get_num_rows_for_vec_sample<64>(row_size);
+  return entries / rows_per_sample > 3;
+}
+
 void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_mem_desc,
                                            int64_t* groups_buffer,
                                            const std::vector<int64_t>& init_vals,
@@ -447,33 +535,43 @@ void QueryMemoryInitializer::initRowGroups(const QueryMemoryDescriptor& query_me
   // we fallback to default implementation in that cases
   if (!std::any_of(agg_bitmap_size.begin(), agg_bitmap_size.end(), is_true) &&
       !std::any_of(quantile_params.begin(), quantile_params.end(), is_true) &&
-      g_optimize_row_initialization) {
-    std::vector<int8_t> sample_row(row_size - col_base_off);
+      useVectorRowGroupsInit(row_size, groups_buffer_entry_count * warp_size)) {
+    auto rows_per_sample = get_num_rows_for_vec_sample<64>(row_size);
+    auto sample_size = row_size * rows_per_sample;
+    // Additional bytes are required to achieve the same alignment
+    // as groups_buffer has and still use aligned vector operations to
+    // copy the whole sample.
+    std::vector<int8_t> vec_sample(sample_size + 128);
+    int8_t* sample_ptr = vec_sample.data();
+    sample_ptr += (reinterpret_cast<uint64_t>(buffer_ptr) -
+                   reinterpret_cast<uint64_t>(sample_ptr)) &
+                  0x3F;
 
-    initColumnsPerRow(query_mem_desc_fixedup,
-                      sample_row.data(),
-                      init_vals,
-                      agg_bitmap_size,
-                      quantile_params);
+    for (size_t i = 0; i < rows_per_sample; ++i) {
+      initColumnsPerRow(query_mem_desc_fixedup,
+                        sample_ptr + row_size * i + col_base_off,
+                        init_vals,
+                        agg_bitmap_size,
+                        quantile_params);
+    }
 
+    size_t rows_count = groups_buffer_entry_count;
     if (query_mem_desc.hasKeylessHash()) {
       CHECK(warp_size >= 1);
       CHECK(key_count == 1 || warp_size == 1);
-      for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
-        for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-             ++bin, buffer_ptr += row_size) {
-          memcpy(buffer_ptr + col_base_off, sample_row.data(), sample_row.size());
-        }
+      rows_count *= warp_size;
+    } else {
+      for (size_t i = 0; i < rows_per_sample; ++i) {
+        result_set::fill_empty_key(
+            sample_ptr + row_size * i, key_count, query_mem_desc.getEffectiveKeyWidth());
       }
-      return;
     }
 
-    for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
-         ++bin, buffer_ptr += row_size) {
-      memcpy(buffer_ptr + col_base_off, sample_row.data(), sample_row.size());
-      result_set::fill_empty_key(
-          buffer_ptr, key_count, query_mem_desc.getEffectiveKeyWidth());
-    }
+    // Duplicate the first 64 bytes of the sample to enable
+    // copy after alignment.
+    memcpy(sample_ptr + sample_size, sample_ptr, 64);
+
+    spread_vec_sample(buffer_ptr, rows_count * row_size, sample_ptr, sample_size);
   } else {
     if (query_mem_desc.hasKeylessHash()) {
       CHECK(warp_size >= 1);
