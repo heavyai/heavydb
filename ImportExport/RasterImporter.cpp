@@ -217,9 +217,6 @@ void RasterImporter::detect(const std::string& file_name,
                             const PointType point_type,
                             const PointTransform point_transform,
                             const bool point_compute_angle) {
-  // parse any specified band names
-  parseSpecifiedBandNames(specified_band_names);
-
   // open base file to check for subdatasources
   bool has_spatial_reference{false};
   {
@@ -288,7 +285,8 @@ void RasterImporter::detect(const std::string& file_name,
   }
 
   // lambda to process a datasource
-  auto process_datasource = [&](const Geospatial::GDAL::DataSourceUqPtr& datasource) {
+  auto process_datasource = [&](const Geospatial::GDAL::DataSourceUqPtr& datasource,
+                                const uint32_t datasource_idx) {
     auto raster_count = datasource->GetRasterCount();
     if (raster_count == 0) {
       throw std::runtime_error("RasterImporter: Raster file " + file_name +
@@ -300,7 +298,15 @@ void RasterImporter::detect(const std::string& file_name,
       auto band = datasource->GetRasterBand(i);
       CHECK(band);
 
-      // validate dimensions
+      // get band name (does all file-specific logic and de-duplication)
+      auto band_name = getBandName(band, i);
+
+      // if there are specified band names, and this isn't one of them, skip
+      if (!shouldImportBandWithName(band_name)) {
+        continue;
+      }
+
+      // get band dimensions
       auto const band_width = band->GetXSize();
       auto const band_height = band->GetYSize();
       int block_size_x, block_size_y;
@@ -310,6 +316,7 @@ void RasterImporter::detect(const std::string& file_name,
           << "Band: " << i << "[" << band_width << ", " << band_height << "]: "
           << "Block Size: [" << block_size_x << ", " << block_size_y << "]";
 
+      // validate dimensions
       if (bands_width_ < 0) {
         bands_width_ = band_width;
         bands_height_ = band_height;
@@ -320,24 +327,44 @@ void RasterImporter::detect(const std::string& file_name,
             "cannot be imported into a single table.");
       }
 
-      // get band name (does all file-specific logic and de-duplication)
-      auto band_name = getBandName(band, i);
-
-      // skip if not in the given band names
-      if (!shouldImportBandWithName(band_name)) {
-        continue;
-      }
-
-      // store name and SQL type
+      // get SQL type
       auto sql_type = gdal_data_type_to_sql_type(band->GetRasterDataType());
-      band_names_and_sql_types_.emplace_back(band_name, sql_type);
+
+      // get null value and validity
+      int null_value_valid{0};
+      auto null_value = band->GetNoDataValue(&null_value_valid);
+
+      // store info
+      if (specified_band_names_map_.size()) {
+        // find and finalize existing info for this band
+        auto itr =
+            std::find_if(import_band_infos_.begin(),
+                         import_band_infos_.end(),
+                         [&](ImportBandInfo& info) { return info.name == band_name; });
+        CHECK(itr != import_band_infos_.end());
+        itr->datasource_idx = datasource_idx;
+        itr->band_idx = i;
+        itr->sql_type = sql_type;
+        itr->null_value = null_value;
+        itr->null_value_valid = (null_value_valid != 0);
+      } else {
+        // import all bands
+        import_band_infos_.push_back({band_name,
+                                      band_name,
+                                      sql_type,
+                                      datasource_idx,
+                                      i,
+                                      null_value,
+                                      null_value_valid != 0});
+      }
     }
   };
 
   // initialize naming
-  initializeNaming();
+  initializeNaming(specified_band_names);
 
   // process datasources
+  uint32_t datasource_idx{0u};
   for (auto const& datasource_name : datasource_names_) {
     // open it
     Geospatial::GDAL::DataSourceUqPtr datasource_handle =
@@ -349,7 +376,7 @@ void RasterImporter::detect(const std::string& file_name,
     }
 
     // process it
-    process_datasource(datasource_handle);
+    process_datasource(datasource_handle, datasource_idx++);
   }
 
   // fail if any specified import band names were not found
@@ -398,6 +425,11 @@ void RasterImporter::detect(const std::string& file_name,
 
 void RasterImporter::import(const uint32_t max_threads) {
   // validate
+  if (import_band_infos_.size() == 0) {
+    throw std::runtime_error("Raster Import aborted. No bands to import.");
+  }
+
+  // validate
   CHECK_GE(max_threads, 1u);
 
   // open all datasources on all threads
@@ -413,30 +445,6 @@ void RasterImporter::import(const uint32_t max_threads) {
       datasource_thread_handles.emplace_back(std::move(datasource_handle));
     }
     datasource_handles_.emplace_back(std::move(datasource_thread_handles));
-  }
-
-  // re-initialize naming
-  initializeNaming();
-
-  // capture the info per band that we need
-  for (uint32_t datasource_idx = 0; datasource_idx < datasource_handles_.size();
-       datasource_idx++) {
-    auto const& datasource_handle = datasource_handles_[datasource_idx][0];
-    int num_bands = datasource_handle->GetRasterCount();
-    for (int band_idx = 1; band_idx <= num_bands; band_idx++) {
-      auto* band = datasource_handle->GetRasterBand(band_idx);
-      auto band_name = getBandName(band, band_idx);
-      if (shouldImportBandWithName(band_name)) {
-        int valid{0};
-        import_band_infos_.push_back(
-            {datasource_idx, band_idx, band->GetNoDataValue(&valid), (valid != 0)});
-      }
-    }
-  }
-
-  // validate
-  if (import_band_infos_.size() == 0) {
-    throw std::runtime_error("Raster Import aborted. No bands to import.");
   }
 
   // use handle for the first datasource from the first thread to read the globals
@@ -504,7 +512,7 @@ void RasterImporter::import(const uint32_t max_threads) {
 }
 
 const uint32_t RasterImporter::getNumBands() const {
-  return band_names_and_sql_types_.size();
+  return import_band_infos_.size();
 }
 
 const RasterImporter::NamesAndSQLTypes RasterImporter::getPointNamesAndSQLTypes() const {
@@ -534,14 +542,19 @@ const RasterImporter::PointTransform RasterImporter::getPointTransform() const {
 }
 
 const RasterImporter::NamesAndSQLTypes RasterImporter::getBandNamesAndSQLTypes() const {
-  return band_names_and_sql_types_;
+  NamesAndSQLTypes names_and_sql_types;
+  // return alt names
+  for (auto const& info : import_band_infos_) {
+    names_and_sql_types.emplace_back(info.alt_name, info.sql_type);
+  }
+  return names_and_sql_types;
 }
 
 const RasterImporter::NullValue RasterImporter::getBandNullValue(
     const int band_idx) const {
   CHECK_LT(static_cast<uint32_t>(band_idx), import_band_infos_.size());
-  auto const& band_info = import_band_infos_[band_idx];
-  return {band_info.null_value, band_info.null_value_valid};
+  auto const& info = import_band_infos_[band_idx];
+  return {info.null_value, info.null_value_valid};
 }
 
 const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
@@ -652,7 +665,29 @@ void RasterImporter::getRawPixels(const uint32_t thread_idx,
 // private
 //
 
-void RasterImporter::initializeNaming() {
+void RasterImporter::initializeNaming(const std::string& specified_band_names) {
+  // specified names?
+  if (specified_band_names.length()) {
+    // tokenize names
+    std::vector<std::string> names_and_alt_names;
+    boost::split(names_and_alt_names, specified_band_names, boost::is_any_of(","));
+
+    // pre-populate infos (in given order) and found map
+    for (auto const& name_and_alt_name : names_and_alt_names) {
+      // parse for optional alt name
+      std::vector<std::string> tokens;
+      boost::split(tokens, name_and_alt_name, boost::is_any_of("="));
+      if (tokens.size() < 1 || tokens.size() > 2) {
+        throw std::runtime_error("Failed to parse specified name '" + name_and_alt_name +
+                                 "'");
+      }
+      auto const& name = strip(tokens[0]);
+      auto const& alt_name = strip(tokens[tokens.size() == 2 ? 1 : 0]);
+      import_band_infos_.push_back({name, alt_name, kNULLT, 0u, 0, 0.0, false});
+      specified_band_names_map_.emplace(name, false);
+    }
+  }
+
   column_name_repeats_map_.clear();
 
   // initialize repeats map with point column names(s)
@@ -663,18 +698,6 @@ void RasterImporter::initializeNaming() {
   }
 
   ome_tiff_band_name_idx_ = 0u;
-}
-
-void RasterImporter::parseSpecifiedBandNames(const std::string& specified_band_names) {
-  if (specified_band_names.length()) {
-    // tokenize name list
-    boost::char_separator<char> separator(", ");
-    boost::tokenizer<boost::char_separator<char>> tokens(specified_band_names, separator);
-    // register all names as not yet found
-    for (auto const& token : tokens) {
-      specified_band_names_map_.emplace(token, false);
-    }
-  }
 }
 
 bool RasterImporter::shouldImportBandWithName(const std::string& name) {

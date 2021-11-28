@@ -74,6 +74,9 @@ class RasterImporter {
 
  private:
   struct ImportBandInfo {
+    std::string name;
+    std::string alt_name;
+    SQLTypes sql_type;
     uint32_t datasource_idx;
     int band_idx;
     double null_value;
@@ -81,7 +84,6 @@ class RasterImporter {
   };
 
   std::vector<std::string> datasource_names_;
-  NamesAndSQLTypes band_names_and_sql_types_;
   std::vector<std::string> ome_tiff_band_names_;
   std::map<std::string, bool> specified_band_names_map_;
   std::map<std::string, int> column_name_repeats_map_;
@@ -98,8 +100,7 @@ class RasterImporter {
       coordinate_transformations_;
   bool point_compute_angle_{false};
 
-  void initializeNaming();
-  void parseSpecifiedBandNames(const std::string& specified_band_names);
+  void initializeNaming(const std::string& specified_band_names);
   bool shouldImportBandWithName(const std::string& name);
   std::string getBandName(GDALRasterBand* band, const int band_idx);
   void checkSpecifiedBandNamesFound() const;

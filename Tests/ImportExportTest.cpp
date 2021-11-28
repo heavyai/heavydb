@@ -3676,6 +3676,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
 };
 
 TEST_F(RasterImporterTest, PNGDetectTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       runDetectTest(kPNG,
                     "",
@@ -3685,10 +3686,12 @@ TEST_F(RasterImporterTest, PNGDetectTest) {
 }
 
 TEST_F(RasterImporterTest, GeoTIFFDetectTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runDetectTest(kGeoTIFF, "", {{"band1", kFLOAT}}, 200, 200));
 }
 
 TEST_F(RasterImporterTest, GRIB2DetectTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runDetectTest(
       kGRIB,
       "MaximumCompositeradarreflectivitydB,EchoTopm",
@@ -3698,10 +3701,12 @@ TEST_F(RasterImporterTest, GRIB2DetectTest) {
 }
 
 TEST_F(RasterImporterTest, PNGProjectionTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runProjectionTest(kPNG, TY::kNone, TR::kNone, 100, 100, 100.0, 100.0));
 }
 
 TEST_F(RasterImporterTest, GeoTIFFProjectionTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runProjectionTest(kGeoTIFF,
                                     TY::kDouble,
                                     TR::kWorld,
@@ -3717,15 +3722,18 @@ TEST_F(RasterImporterTest, PNGValueTest) {
 }
 
 TEST_F(RasterImporterTest, GeoTIFFValueTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runValueTest(kGeoTIFF, "band1", 50, 50, kFLOAT, 287.12179565429688));
 }
 
 TEST_F(RasterImporterTest, GRIB2ValueTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       runValueTest(kGRIB, "TemperatureC", 10, 10, kDOUBLE, 32.112359619140648));
 }
 
 TEST_F(RasterImporterTest, NonGeoEnumsTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   // for non-geo rasters, we reject:
   //   point/world - no geospatial coordinate system to transform to
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kNone));
@@ -3762,6 +3770,7 @@ TEST_F(RasterImporterTest, NonGeoEnumsTest) {
 }
 
 TEST_F(RasterImporterTest, GeoEnumsTest) {
+  SKIP_ALL_ON_AGGREGATOR();
   // for geo rasters, we reject:
   //   point/none and /file - point cannot [yet] store non-world coords
   //   [small]int/auto and /world- auto would be world, which ints cannot store
@@ -3838,32 +3847,56 @@ TEST_F(RasterImportTest, ImportGeoTIFFTest) {
   ASSERT_NO_THROW(
       importTestCommon(kGeoTIFF,
                        "",
-                       "SELECT raster_lon, raster_lat FROM raster WHERE rowid=42;",
-                       {{-83.224657689925579, 39.818729217287554}}));
+                       "SELECT max(raster_lon), max(raster_lat), max(band1) FROM raster;",
+                       {{-83.222766892364277, 39.818764365787992, 287.54092407226562}}));
 }
 
 TEST_F(RasterImportTest, ImportGRIBTest) {
-  ASSERT_NO_THROW(
-      importTestCommon(kGRIB,
-                       "",
-                       "SELECT raster_lon, raster_lat FROM raster WHERE rowid=42;",
-                       {{-111.24787702504845, 38.43639550624939}}));
+  ASSERT_NO_THROW(importTestCommon(kGRIB,
+                                   "",
+                                   "SELECT max(raster_lon), max(raster_lat) FROM raster;",
+                                   {{-110.58529479972468, 38.556625347271748}}));
 }
 
-TEST_F(RasterImportTest, ImportRotationFailTest) {
+TEST_F(RasterImportTest, ImportComputeAngleFailTest) {
   EXPECT_THROW(importTestCommon(kPNG,
                                 ", raster_point_compute_angle='true'",
-                                "SELECT raster_x, raster_y FROM raster WHERE rowid=42;",
-                                {{42L, 0L}}),
+                                "SELECT raster_x, raster_y FROM raster;",
+                                {}),
                TOmniSciException);
 }
 
-TEST_F(RasterImportTest, ImportRotationTest) {
+TEST_F(RasterImportTest, ImportComputeAngleTest) {
   ASSERT_NO_THROW(importTestCommon(
       kGeoTIFF,
       ", raster_point_compute_angle='true'",
-      "SELECT raster_lon, raster_lat, raster_angle FROM raster WHERE rowid=42;",
-      {{-83.224657689925579, 39.818729217287554, -1.430678129196167}}));
+      "SELECT max(raster_lon), max(raster_lat), max(raster_angle) FROM raster;",
+      {{-83.222766892364277, 39.818764365787992, -1.4294090270996094}}));
+}
+
+TEST_F(RasterImportTest, ImportSpecifiedBandsTest) {
+  ASSERT_NO_THROW(importTestCommon(
+      kGRIB,
+      ", raster_import_bands='PressurePa,FrozenRainkgm2,TemperatureC'",
+      "SELECT max(PressurePa), max(FrozenRainkgm2), max(TemperatureC) FROM raster;",
+      {{86880.0, 0.0, 33.674859619140648}}));
+}
+
+TEST_F(RasterImportTest, ImportSpecifiedBandsBadTest) {
+  EXPECT_THROW(importTestCommon(kGRIB,
+                                ", "
+                                "raster_import_bands='bad,worse,terrible'",
+                                "",
+                                {}),
+               TOmniSciException);
+}
+
+TEST_F(RasterImportTest, ImportSpecifiedBandsRenameTest) {
+  ASSERT_NO_THROW(importTestCommon(
+      kGRIB,
+      ", raster_import_bands='PressurePa=p,FrozenRainkgm2=r,TemperatureC=t'",
+      "SELECT max(p), max(r), max(t) FROM raster;",
+      {{86880.0, 0.0, 33.674859619140648}}));
 }
 
 }  // namespace
