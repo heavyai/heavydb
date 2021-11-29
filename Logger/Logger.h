@@ -88,11 +88,11 @@ namespace logger {
 
 // Channel, ChannelNames, and ChannelSymbols must be updated together.
 // Each Channel has its own ChannelLogger declared below and defined in Logger.cpp.
-enum Channel { IR = 0, PTX, ASM, _NCHANNELS };
+enum Channel { IR = 0, PTX, ASM, EXECUTOR, _NCHANNELS };
 
-constexpr std::array<char const*, 3> ChannelNames{"IR", "PTX", "ASM"};
+constexpr std::array<char const*, 4> ChannelNames{"IR", "PTX", "ASM", "EXECUTOR"};
 
-constexpr std::array<char, 3> ChannelSymbols{'R', 'P', 'A'};
+constexpr std::array<char, 4> ChannelSymbols{'R', 'P', 'A', 'X'};
 
 static_assert(Channel::_NCHANNELS == ChannelNames.size(),
               "Size of ChannelNames must equal number of Channels.");

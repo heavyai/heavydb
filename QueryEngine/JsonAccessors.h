@@ -25,6 +25,8 @@
 #ifndef QUERYENGINE_JSONACCESSORS_H
 #define QUERYENGINE_JSONACCESSORS_H
 
+#include <iostream>
+
 #include <rapidjson/document.h>
 #include "Logger/Logger.h"
 

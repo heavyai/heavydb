@@ -6060,6 +6060,8 @@ void Catalog::initializeSystemServers() {
                           foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS);
   createSystemTableServer(STORAGE_STATS_SERVER_NAME,
                           foreign_storage::DataWrapperType::INTERNAL_STORAGE_STATS);
+  createSystemTableServer(EXECUTOR_STATS_SERVER_NAME,
+                          foreign_storage::DataWrapperType::INTERNAL_EXECUTOR_STATS);
 
   if (g_enable_logs_system_tables) {
     foreign_storage::OptionsMap log_server_options;
@@ -6323,6 +6325,33 @@ void Catalog::initializeStorageDetailsSystemTable() {
                             {"total_metadata_page_count", {kBIGINT}},
                             {"total_free_metadata_page_count", {kBIGINT}},
                             {"total_dictionary_data_file_size", {kBIGINT}}},
+                           true);
+  recreateSystemTableIfUpdated(foreign_table, columns);
+
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(EXECUTOR_RESOURCE_POOL_SUMMARY_SYS_TABLE_NAME,
+                           EXECUTOR_STATS_SERVER_NAME,
+                           {{"total_cpu_slots", {kINT}},
+                            {"total_gpu_slots", {kINT}},
+                            {"total_cpu_result_mem", {kBIGINT}},
+                            {"total_cpu_buffer_pool_mem", {kBIGINT}},
+                            {"total_gpu_buffer_pool_mem", {kBIGINT}},
+                            {"allocated_cpu_slots", {kINT}},
+                            {"allocated_gpu_slots", {kINT}},
+                            {"allocated_cpu_result_mem", {kBIGINT}},
+                            {"allocated_cpu_buffer_pool_mem", {kBIGINT}},
+                            {"allocated_gpu_buffer_pool_mem", {kBIGINT}},
+                            {"allocated_cpu_buffers", {kINT}},
+                            {"allocated_gpu_buffers", {kINT}},
+                            {"allocated_temp_cpu_buffer_pool_mem", {kBIGINT}},
+                            {"allocated_temp_gpu_buffer_pool_mem", {kBIGINT}},
+                            {"total_requests", {kBIGINT}},
+                            {"outstanding_requests", {kINT}},
+                            {"outstanding_cpu_slots_requests", {kINT}},
+                            {"outstanding_gpu_slots_requests", {kINT}},
+                            {"outstanding_cpu_result_mem_requests", {kINT}},
+                            {"outstanding_cpu_buffer_pool_mem_requests", {kINT}},
+                            {"outstanding_gpu_buffer_pool_mem_requests", {kINT}}},
                            true);
   recreateSystemTableIfUpdated(foreign_table, columns);
 }

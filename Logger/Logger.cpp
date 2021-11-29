@@ -54,6 +54,7 @@ using ChannelLogger = boost::log::sources::channel_logger_mt<Channel>;
 BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_IR, ChannelLogger)
 BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_PTX, ChannelLogger)
 BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_ASM, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger_EXECUTOR, ChannelLogger)
 
 using SeverityLogger = boost::log::sources::severity_logger_mt<Severity>;
 BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
@@ -79,6 +80,9 @@ BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(gChannelLogger_PTX,
 BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(gChannelLogger_ASM,
                                   ChannelLogger,
                                   (keywords::channel = ASM))
+BOOST_LOG_GLOBAL_LOGGER_CTOR_ARGS(gChannelLogger_EXECUTOR,
+                                  ChannelLogger,
+                                  (keywords::channel = EXECUTOR))
 BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gSeverityLogger, SeverityLogger)
 
 // Return last component of path
@@ -479,6 +483,8 @@ ChannelLogger& get_channel_logger(Channel const channel) {
       return gChannelLogger_PTX::get();
     case ASM:
       return gChannelLogger_ASM::get();
+    case EXECUTOR:
+      return gChannelLogger_EXECUTOR::get();
   }
 }
 }  // namespace

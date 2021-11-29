@@ -111,6 +111,8 @@ static constexpr const char* ROLE_ASSIGNMENTS_SYS_TABLE_NAME{"role_assignments"}
 static constexpr const char* MEMORY_SUMMARY_SYS_TABLE_NAME{"memory_summary"};
 static constexpr const char* MEMORY_DETAILS_SYS_TABLE_NAME{"memory_details"};
 static constexpr const char* STORAGE_DETAILS_SYS_TABLE_NAME{"storage_details"};
+static constexpr const char* EXECUTOR_RESOURCE_POOL_SUMMARY_SYS_TABLE_NAME{
+    "executor_pool_summary"};
 static constexpr const char* SERVER_LOGS_SYS_TABLE_NAME{"server_logs"};
 static constexpr const char* REQUEST_LOGS_SYS_TABLE_NAME{"request_logs"};
 static constexpr const char* WS_SERVER_LOGS_SYS_TABLE_NAME{"web_server_logs"};
@@ -838,10 +840,12 @@ class Catalog final {
   static constexpr const char* CATALOG_SERVER_NAME{"system_catalog_server"};
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};
   static constexpr const char* STORAGE_STATS_SERVER_NAME{"system_storage_stats_server"};
+  static constexpr const char* EXECUTOR_STATS_SERVER_NAME{"system_executor_stats_server"};
   static constexpr const char* LOGS_SERVER_NAME{"system_logs_server"};
-  static constexpr std::array<const char*, 4> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
+  static constexpr std::array<const char*, 5> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
                                                                MEMORY_STATS_SERVER_NAME,
                                                                STORAGE_STATS_SERVER_NAME,
+                                                               EXECUTOR_STATS_SERVER_NAME,
                                                                LOGS_SERVER_NAME};
 
  public:

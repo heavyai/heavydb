@@ -561,6 +561,18 @@ std::string DdlCommandExecutor::returnCacheType() const {
   return ddl_payload["cacheType"].GetString();
 }
 
+bool DdlCommandExecutor::isAlterSystemControlExecutorQueue() const {
+  return (ddl_command_ == "ALTER_SYSTEM_CONTROL_EXECUTOR_QUEUE");
+}
+
+std::string DdlCommandExecutor::returnQueueAction() const {
+  CHECK(ddl_command_ == "ALTER_SYSTEM_CONTROL_EXECUTOR_QUEUE");
+  auto& ddl_payload = extractPayload(*ddl_data_);
+  CHECK(ddl_payload.HasMember("queueAction"));
+  CHECK(ddl_payload["queueAction"].IsString());
+  return ddl_payload["queueAction"].GetString();
+}
+
 DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() const {
   DistributedExecutionDetails execution_details;
   if (ddl_command_ == "CREATE_DATAFRAME" || ddl_command_ == "RENAME_TABLE" ||

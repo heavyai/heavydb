@@ -110,6 +110,115 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(g_bigint_count)
                               ->implicit_value(true),
                           "Use 64-bit count.");
+
+  help_desc.add_options()(
+      "enable-executor-resource-mgr",
+      po::value<bool>(&g_enable_executor_resource_mgr)
+          ->default_value(g_enable_executor_resource_mgr)
+          ->implicit_value(true),
+      "Enable executor resource manager to track execution resources and selectively "
+      "gate concurrency based on resource availability.");
+
+  // Note we allow executor-cpu-result-mem-ratio to have values > 0 to allow
+  // oversubscription of memory when warranted, but user should be careful with this as
+  // too high a value can cause OOM errors.
+  help_desc.add_options()(
+      "executor-cpu-result-mem-ratio",
+      po::value<double>(&g_executor_resource_mgr_cpu_result_mem_ratio)
+          ->default_value(g_executor_resource_mgr_cpu_result_mem_ratio),
+      "Set executor resource manager reserved memory for query result sets as a ratio "
+      "greater than 0, representing the fraction of the system memory not allocated for "
+      "the CPU buffer pool. Values of 1.0 are permitted to allow oversubscription when "
+      "warranted, but too high a value can cause out-of-memory errors. Requires "
+      "--executor-resource-mgr to be set");
+
+  help_desc.add_options()(
+      "executor-cpu-result-mem-bytes",
+      po::value<size_t>(&g_executor_resource_mgr_cpu_result_mem_bytes)
+          ->default_value(g_executor_resource_mgr_cpu_result_mem_bytes),
+      "Set executor resource manager reserved memory for query result sets in bytes, "
+      "this overrides the default reservation of 80% the size of the system memory that "
+      "is not allocated for the CPU buffer pool. Use 0 for auto. Requires "
+      "--enable-executor-resource-mgr to be set.");
+
+  // Note we allow executor-per-query-max-cpu-threads-ratio to have values > 1 to allow
+  // oversubscription of threads when warranted, given we may be overly pessimistic about
+  // kernel core occupation for some classes of queries. Care should be taken however with
+  // setting this value too high as thrashing and thread starvation can result.
+  help_desc.add_options()(
+      "executor-per-query-max-cpu-threads-ratio",
+      po::value<double>(&g_executor_resource_mgr_per_query_max_cpu_slots_ratio)
+          ->default_value(g_executor_resource_mgr_per_query_max_cpu_slots_ratio),
+      "Set max fraction of executor resource manager total CPU slots/threads that can be "
+      "allocated for a single query. Requires --enable-executor-resource-mgr to be set.");
+
+  // Note we allow executor-per-query-max-cpu-result-mem-ratio to have values > 0 to allow
+  // oversubscription of memory when warranted, but user should be careful with this as
+  // too high a value can cause OOM errors.
+  help_desc.add_options()(
+      "executor-per-query-max-cpu-result-mem-ratio",
+      po::value<double>(&g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio)
+          ->default_value(g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio),
+      "Set max fraction of executor resource manager total CPU result memory reservation "
+      "that can be "
+      "allocated for a single query. Requires --enable-executor-resource-mgr to be set.");
+
+  help_desc.add_options()(
+      "allow-cpu-kernel-concurrency",
+      po::value<bool>(&g_executor_resource_mgr_allow_cpu_kernel_concurrency)
+          ->default_value(g_executor_resource_mgr_allow_cpu_kernel_concurrency)
+          ->implicit_value(true),
+      "Allow for multiple queries to run execution kernels concurrently on CPU. Requires "
+      "--enable-executor-resource-mgr to be set.");
+
+  help_desc.add_options()(
+      "allow-cpu-gpu-kernel-concurrency",
+      po::value<bool>(&g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency)
+          ->default_value(g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency)
+          ->implicit_value(true),
+      "Allow multiple queries to run execution kernels concurrently on CPU while a "
+      "GPU query is executing. Requires --enable-executor-resource-mgr to be set.");
+
+  // Below controls whether multiple concurrent queries in conjunction can oversubscribe
+  // CPU slots/threads Single query CPU slot oversubscription should be controlled with
+  // --executor-per-query-max-cpu-threads-ratio (i.e. by setting it to > 1.0)
+
+  help_desc.add_options()(
+      "allow-cpu-thread-oversubscription-concurrency",
+      po::value<bool>(
+          &g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency)
+          ->default_value(
+              g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency)
+          ->implicit_value(true),
+      "Allow for concurrent query kernel execution even if it results in "
+      "oversubscription of CPU threads. Caution should be used when turning this on as "
+      "it can lead to thread exhaustion. Requires --enable-executor-resource-mgr to be "
+      "set.");
+
+  // Below controls whether multiple concurrent queries in conjunction can oversubscribe
+  // CPU result memory. Single query CPU result memory oversubscription should be
+  // controlled with
+  // --executor-per-query-cpu-result-mem-ratio (i.e. by setting it to > 1.0)
+
+  help_desc.add_options()(
+      "allow-cpu-result-mem-oversubscription-concurrency",
+      po::value<bool>(
+          &g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency)
+          ->default_value(
+              g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency)
+          ->implicit_value(true),
+      "Allow for concurrent query kernel execution even if it results in "
+      "oversubscription of CPU memory. Caution should be used when turning this on as it "
+      "can lead to out-of-memory errors. Requires --enable-executor-resource-mgr to be "
+      "set.");
+
+  help_desc.add_options()(
+      "executor-max-available-resource-use-ratio",
+      po::value<double>(&g_executor_resource_mgr_max_available_resource_use_ratio)
+          ->default_value(g_executor_resource_mgr_max_available_resource_use_ratio),
+      "Set max proportion (0 < ratio <= 1.0) of available resources that should be "
+      "granted to a query. Requires --executor-resource-mgr to be set");
+
   help_desc.add_options()("calcite-max-mem",
                           po::value<size_t>(&system_parameters.calcite_max_mem)
                               ->default_value(system_parameters.calcite_max_mem),
@@ -145,6 +254,7 @@ void CommandLineOptions::fillOptions() {
                           po::value<bool>(&optimize_cuda_block_and_grid_sizes)
                               ->default_value(false)
                               ->implicit_value(true));
+
   if (!dist_v5_) {
     help_desc.add_options()(
         "data",
@@ -1263,6 +1373,110 @@ void CommandLineOptions::validate() {
     LOG(INFO) << "FSI has been enabled as a side effect of enabling non-legacy import.";
   }
 
+  const bool executor_resource_mgr_cpu_result_mem_ratio_flag_set =
+      vm["executor-cpu-result-mem-ratio"].defaulted() ? false : true;
+  const bool executor_resource_mgr_cpu_result_mem_bytes_flag_set =
+      vm["executor-cpu-result-mem-bytes"].defaulted() ? false : true;
+  const bool executor_resource_mgr_per_query_max_cpu_thread_ratio_flag_set =
+      vm["executor-per-query-max-cpu-threads-ratio"].defaulted() ? false : true;
+  const bool executor_resource_mgr_per_query_max_cpu_result_mem_ratio_flag_set =
+      vm["executor-per-query-max-cpu-result-mem-ratio"].defaulted() ? false : true;
+  const bool executor_resource_mgr_cpu_kernel_concurrency_flag_set =
+      vm["allow-cpu-kernel-concurrency"].defaulted() ? false : true;
+  const bool executor_resource_mgr_cpu_gpu_kernel_concurrency_flag_set =
+      vm["allow-cpu-gpu-kernel-concurrency"].defaulted() ? false : true;
+  const bool executor_resource_mgr_cpu_thread_oversubscription_concurrency_flag_set =
+      vm["allow-cpu-thread-oversubscription-concurrency"].defaulted() ? false : true;
+  const bool executor_resource_mgr_cpu_result_mem_oversubscription_concurrency_flag_set =
+      vm["allow-cpu-result-mem-oversubscription-concurrency"].defaulted() ? false : true;
+
+  if (!g_enable_executor_resource_mgr) {
+    if (executor_resource_mgr_cpu_result_mem_bytes_flag_set) {
+      throw std::runtime_error(
+          "Cannot set executor-cpu-result-mem-bytes without enable-executor-resource-mgr "
+          "option enabled");
+    }
+    if (executor_resource_mgr_cpu_result_mem_ratio_flag_set) {
+      throw std::runtime_error(
+          "Cannot set executor-cpu-result-mem-ratio without enable-executor-resource-mgr "
+          "option enabled");
+    }
+    if (executor_resource_mgr_per_query_max_cpu_thread_ratio_flag_set) {
+      throw std::runtime_error(
+          "Cannot set executor-per-query-max-cpu-slots-ratio without "
+          "enable-executor-resource-mgr option enabled");
+    }
+    if (executor_resource_mgr_per_query_max_cpu_result_mem_ratio_flag_set) {
+      throw std::runtime_error(
+          "Cannot set executor-per-query-max-cpu-result-mem-ratio without "
+          "enable-executor-resource-mgr option enabled");
+    }
+    if (executor_resource_mgr_cpu_kernel_concurrency_flag_set) {
+      throw std::runtime_error(
+          "Cannot set allow-cpu-kernel-concurrency without "
+          "enable-executor-resource-mgr option enabled");
+    }
+    if (executor_resource_mgr_cpu_gpu_kernel_concurrency_flag_set) {
+      throw std::runtime_error(
+          "Cannot set allow-cpu-gpu-kernel-concurrency without "
+          "enable-executor-resource-mgr option enabled");
+    }
+    if (executor_resource_mgr_cpu_thread_oversubscription_concurrency_flag_set) {
+      throw std::runtime_error(
+          "Cannot set allow-cpu-thread-oversubscription-concurrency without "
+          "enable-executor-resource-mgr option enabled");
+    }
+    if (executor_resource_mgr_cpu_result_mem_oversubscription_concurrency_flag_set) {
+      throw std::runtime_error(
+          "Cannot set allow-cpu-thread-result-mem-concurrency without "
+          "enable-executor-resource-mgr option enabled");
+    }
+  }
+  if (executor_resource_mgr_cpu_result_mem_bytes_flag_set &&
+      executor_resource_mgr_cpu_result_mem_ratio_flag_set) {
+    throw std::runtime_error(
+        "Setting both executor-cpu-result-mem-bytes and executor-cpu-result-mem-ratio is "
+        "not allowed as the flags are mutually exclusive.");
+  }
+  if (!(g_executor_resource_mgr_allow_cpu_kernel_concurrency ||
+        g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency)) {
+    if (g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency) {
+      throw std::runtime_error(
+          "allow-cpu-thread-oversubscription-concurrency cannot be set without at least "
+          "one of allow-cpu-kernel-concurrency or allow-cpu-gpu-kernel-concurrency being "
+          "set.");
+    }
+    if (g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency) {
+      throw std::runtime_error(
+          "allow-cpu-result-mem-oversubscription-concurrency cannot be set without at "
+          "least one of allow-cpu-kernel-concurrency or allow-cpu-gpu-kernel-concurrency "
+          "being set.");
+    }
+  }
+
+  if (g_executor_resource_mgr_cpu_result_mem_ratio <= 0.0) {
+    throw std::runtime_error(
+        "Invalid value for executor-cpu-result-mem-ratio, must be greater than 0.");
+  }
+  if (g_executor_resource_mgr_per_query_max_cpu_slots_ratio <= 0.0) {
+    throw std::runtime_error(
+        "Invalid value for executor-per-query-max-cpu-slots-ratio, must be greater than "
+        "0.");
+  }
+  if (g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio <= 0.0) {
+    throw std::runtime_error(
+        "Invalid value for executor-per-query-max-cpu-result-mem-ratio, must be greater "
+        "than "
+        "0.");
+  }
+  if (g_executor_resource_mgr_max_available_resource_use_ratio <= 0.0 ||
+      g_executor_resource_mgr_max_available_resource_use_ratio > 1.0) {
+    throw std::runtime_error(
+        "Invalid value for executor-max-available-resource-use-ratio, must be greater "
+        "than "
+        "0. and less than or equal to 1.0");
+  }
+
   if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {
       disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::fsi;
@@ -1663,9 +1877,40 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << " \t Use chunk metadata cache: "
               << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
   }
+  LOG(INFO) << "Executor Resource Manager: "
+            << (g_enable_executor_resource_mgr ? "enabled" : "disabled");
+  if (g_enable_executor_resource_mgr) {
+    LOG(INFO) << "\tCPU kernel concurrency: "
+              << (g_executor_resource_mgr_allow_cpu_kernel_concurrency ? "enabled"
+                                                                       : "disabled");
+    LOG(INFO) << "\tCPU-GPU kernel concurrency: "
+              << (g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency ? "enabled"
+                                                                           : "disabled");
+    if (g_executor_resource_mgr_cpu_result_mem_bytes != 0UL) {
+      LOG(INFO) << "\tCPU result set reserved allocation: "
+                << g_executor_resource_mgr_cpu_result_mem_bytes / (1024 * 1024) << " MB";
+    } else {
+      LOG(INFO) << "\tCPU result set reserved ratio of CPU buffer pool size: "
+                << g_executor_resource_mgr_cpu_result_mem_ratio;
+    }
+    LOG(INFO) << "\tPer-query max CPU threads ratio: "
+              << g_executor_resource_mgr_per_query_max_cpu_slots_ratio;
+    LOG(INFO) << "\tPer-query max CPU result memory ratio of allocated total: "
+              << g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio;
+    LOG(INFO) << "\tAllow concurrent CPU thread/slot oversubscription: "
+              << (g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency
+                      ? "enabled"
+                      : "disabled");
+    LOG(INFO)
+        << "\tAllow concurrent CPU result memory oversubscription: "
+        << (g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency
+                ? "enabled"
+                : "disabled");
+    LOG(INFO) << "\tPer-query Max available resource utilization ratio: "
+              << g_executor_resource_mgr_max_available_resource_use_ratio;
+  }
 
-  const std::string udf_reg_policy_log_prefix{
-      " \t\t Runtime UDF/UDTF Registration Policy: "};
+  const std::string udf_reg_policy_log_prefix{"Runtime UDF/UDTF Registration Policy: "};
   switch (system_parameters.runtime_udf_registration_policy) {
     case SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED: {
       LOG(INFO) << udf_reg_policy_log_prefix << " DISALLOWED";
