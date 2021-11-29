@@ -239,6 +239,108 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
   resetSessionsStore();
 }
 
+void DBHandler::init_executor_resource_mgr() {
+  size_t num_cpu_slots{0};
+  size_t num_gpu_slots{0};
+  size_t cpu_result_mem{0};
+  size_t cpu_buffer_pool_mem{0};
+  size_t gpu_buffer_pool_mem{0};
+  LOG(INFO) << "Initializing Executor Resource Manager";
+
+  if (g_cpu_threads_override != 0) {
+    LOG(INFO) << "\tSetting Executor resource pool avaiable CPU threads/slots to "
+                 "user-specified value of "
+              << g_cpu_threads_override << ".";
+    num_cpu_slots = g_cpu_threads_override;
+  } else {
+    LOG(INFO) << "\tSetting Executor resource pool avaiable CPU threads/slots to default "
+                 "value of "
+              << cpu_threads() << ".";
+    // Setting the number of CPU slots to cpu_threads() will cause the ExecutorResourceMgr
+    // to set the logical number of available cpu slots to mirror the number of threads in
+    // the tbb thread pool and used elsewhere in the system, but we may want to consider a
+    // capability to allow the executor resource pool number of threads to be set
+    // independently as some fraction of the what cpu_threads() will return, to give some
+    // breathing room for all the other processes in the system that use CPU threadds
+    num_cpu_slots = cpu_threads();
+  }
+  LOG(INFO) << "\tSetting max per-query CPU threads to ratio of "
+            << g_executor_resource_mgr_per_query_max_cpu_slots_ratio << " of "
+            << num_cpu_slots << " available threads, or "
+            << static_cast<size_t>(g_executor_resource_mgr_per_query_max_cpu_slots_ratio *
+                                   num_cpu_slots)
+            << " threads.";
+
+  // system_parameters_.num_gpus will be -1 if there are no GPUs enabled so we need to
+  // guard against this
+  num_gpu_slots = system_parameters_.num_gpus < 0 ? static_cast<size_t>(0)
+                                                  : system_parameters_.num_gpus;
+
+  if (g_executor_resource_mgr_cpu_result_mem_bytes != Executor::auto_cpu_mem_bytes) {
+    cpu_result_mem = g_executor_resource_mgr_cpu_result_mem_bytes;
+  } else {
+    const size_t system_mem_bytes = DataMgr::getTotalSystemMemory();
+    CHECK_GT(system_mem_bytes, size_t(0));
+    cpu_buffer_pool_mem = data_mgr_->getCpuBufferPoolSize();
+    const size_t remaining_cpu_mem_bytes = system_mem_bytes >= cpu_buffer_pool_mem
+                                               ? system_mem_bytes - cpu_buffer_pool_mem
+                                               : 0UL;
+    cpu_result_mem =
+        std::max(static_cast<size_t>(remaining_cpu_mem_bytes *
+                                     g_executor_resource_mgr_cpu_result_mem_ratio),
+                 static_cast<size_t>(1UL << 32));
+  }
+  // Below gets total combined size of all gpu buffer pools
+  // Likely will move to per device pool resource management,
+  // but keeping simple for now
+  gpu_buffer_pool_mem = data_mgr_->getGpuBufferPoolSize();
+
+  // When we move to using the BufferMgrs directly in
+  // ExecutorResourcePool, there won't be a need for
+  // the buffer_pool_max_occupancy variable - a
+  // safety "fudge" factor as what the resource pool sees
+  // and what the BufferMgrs see will be exactly the same.
+
+  // However we need to ensure we can quickly access
+  // chunk state of BufferMgrs without going through coarse lock
+  // before we do this, so use this fudge ratio for now
+
+  // Note that if we are not conservative enough with the below and
+  // overshoot, the error will still be caught and if on GPU, the query
+  // can be re-run on CPU
+
+  constexpr double buffer_pool_max_occupancy{0.95};
+  const size_t conservative_cpu_buffer_pool_mem =
+      static_cast<size_t>(cpu_buffer_pool_mem * buffer_pool_max_occupancy);
+  const size_t conservative_gpu_buffer_pool_mem =
+      static_cast<size_t>(gpu_buffer_pool_mem * buffer_pool_max_occupancy);
+
+  LOG(INFO)
+      << "\tSetting Executor resource pool reserved space for CPU buffer pool memory to "
+      << format_num_bytes(conservative_cpu_buffer_pool_mem) << ".";
+  if (gpu_buffer_pool_mem > 0UL) {
+    LOG(INFO) << "\tSetting Executor resource pool reserved space for GPU buffer pool "
+                 "memory to "
+              << format_num_bytes(conservative_gpu_buffer_pool_mem) << ".";
+  }
+  LOG(INFO) << "\tSetting Executor resource pool reserved space for CPU result memory to "
+            << format_num_bytes(cpu_result_mem) << ".";
+
+  Executor::init_resource_mgr(
+      num_cpu_slots,
+      num_gpu_slots,
+      cpu_result_mem,
+      conservative_cpu_buffer_pool_mem,
+      conservative_gpu_buffer_pool_mem,
+      g_executor_resource_mgr_per_query_max_cpu_slots_ratio,
+      g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio,
+      g_executor_resource_mgr_allow_cpu_kernel_concurrency,
+      g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency,
+      g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency,
+      g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency,
+      g_executor_resource_mgr_max_available_resource_use_ratio);
+}
+
 void DBHandler::resetSessionsStore() {
   if (sessions_store_) {
     // Disconnect any existing sessions.
@@ -300,6 +402,12 @@ void DBHandler::initialize(const bool is_new_db) {
     try {
       cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(
           system_parameters_.num_gpus, system_parameters_.start_gpu);
+      if (system_parameters_.num_gpus < 0) {
+        system_parameters_.num_gpus = cuda_mgr->getDeviceCount();
+      } else {
+        system_parameters_.num_gpus =
+            std::min(system_parameters_.num_gpus, cuda_mgr->getDeviceCount());
+      }
     } catch (const std::exception& e) {
       LOG(ERROR) << "Unable to instantiate CudaMgr, falling back to CPU-only mode. "
                  << e.what();
@@ -320,6 +428,9 @@ void DBHandler::initialize(const bool is_new_db) {
                                                 disk_cache_config_));
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize data manager: " << e.what();
+  }
+  if (g_enable_executor_resource_mgr) {
+    init_executor_resource_mgr();
   }
 
   std::string udf_ast_filename("");
@@ -2777,6 +2888,34 @@ void DBHandler::clearRenderMemory(const TSessionId& session_id_or_json) {
   if (render_handler_) {
     render_handler_->clear_cpu_memory();
     render_handler_->clear_gpu_memory();
+  }
+}
+
+void DBHandler::pause_executor_queue(const TSessionId& session) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto session_ptr = stdlog.getConstSessionInfo();
+  if (!session_ptr->get_currentUser().isSuper) {
+    THROW_DB_EXCEPTION("Superuser privilege is required to run PAUSE EXECUTOR QUEUE");
+  }
+  try {
+    Executor::pause_executor_queue();
+  } catch (const std::exception& e) {
+    THROW_DB_EXCEPTION(e.what());
+  }
+}
+
+void DBHandler::resume_executor_queue(const TSessionId& session) {
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto session_ptr = stdlog.getConstSessionInfo();
+  if (!session_ptr->get_currentUser().isSuper) {
+    THROW_DB_EXCEPTION("Superuser privilege is required to run RESUME EXECUTOR QUEUE");
+  }
+  try {
+    Executor::resume_executor_queue();
+  } catch (const std::exception& e) {
+    THROW_DB_EXCEPTION(e.what());
   }
 }
 
@@ -7909,6 +8048,17 @@ void DBHandler::executeDdl(
                    executor.getSessionParameter(),
                    execution_time_ms);
       _return.execution_time_ms += execution_time_ms;
+    } else if (executor.isAlterSystemControlExecutorQueue()) {
+      result = ExecutionResult();
+      if (executor.returnQueueAction() == "PAUSE") {
+        _return.execution_time_ms += measure<>::execution(
+            [&]() { pause_executor_queue(session_ptr->get_session_id()); });
+      } else if (executor.returnQueueAction() == "RESUME") {
+        _return.execution_time_ms += measure<>::execution(
+            [&]() { resume_executor_queue(session_ptr->get_session_id()); });
+      } else {
+        throw std::runtime_error("Unknown queue command.");
+      }
     } else {
       _return.execution_time_ms +=
           measure<>::execution([&]() { result = executor.execute(read_only_); });
@@ -7951,6 +8101,17 @@ void DBHandler::executeDdl(
                    _return,
                    executor.getSessionParameter(),
                    execution_time_ms);
+    } else if (executor.isAlterSystemControlExecutorQueue()) {
+      _return = ExecutionResult();
+      if (executor.returnQueueAction() == "PAUSE") {
+        execution_time_ms = measure<>::execution(
+            [&]() { pause_executor_queue(session_ptr->get_session_id()); });
+      } else if (executor.returnQueueAction() == "RESUME") {
+        execution_time_ms = measure<>::execution(
+            [&]() { resume_executor_queue(session_ptr->get_session_id()); });
+      } else {
+        throw std::runtime_error("Unknwon queue command.");
+      }
     } else {
       execution_time_ms =
           measure<>::execution([&]() { _return = executor.execute(read_only_); });

@@ -89,6 +89,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlExportQuery"
         "com.mapd.parser.extension.ddl.SqlValidateSystem"
         "com.mapd.parser.extension.ddl.SqlAlterSystemClear"
+        "com.mapd.parser.extension.ddl.SqlAlterSystemControlExecutorQueue"
         "com.mapd.parser.extension.ddl.heavysql.*"
         "java.util.Map"
         "java.util.HashMap"
@@ -158,6 +159,10 @@ data: {
         "ROLES"
         "POLICY"
         "POLICIES"
+        "PAUSE"
+        "RESUME"
+        "EXECUTOR"
+        "QUEUE"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -532,6 +537,10 @@ data: {
         "MEMORY"
         "POLICY"
         "POLICIES"
+        "PAUSE"
+        "RESUME"
+        "EXECUTOR"
+        "QUEUE"
       ]
 
       # List of non-reserved keywords to remove;
@@ -570,7 +579,7 @@ data: {
         "SqlOptimizeTable(span())"
         "SqlCopyTable(span())"
         "SqlValidateSystem(span())"
-        "SqlAlterSystemClear(span())"
+        "SqlAlterSystem(span())"
         "SqlAlterSessionSet(span())"
       ]
 

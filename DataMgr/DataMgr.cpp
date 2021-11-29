@@ -635,7 +635,25 @@ PersistentStorageMgr* DataMgr::getPersistentStorageMgr() const {
   return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[MemoryLevel::DISK_LEVEL][0]);
 }
 
+size_t DataMgr::getCpuBufferPoolSize() const {
+  return getCpuBufferMgr()->getMaxSize();
+}
+
+// following gets total size of all gpu buffer pools
+size_t DataMgr::getGpuBufferPoolSize() const {
+  if (bufferMgrs_.size() <= MemoryLevel::GPU_LEVEL) {
+    return static_cast<size_t>(0);
+  }
+  size_t total_gpu_buffer_pools_size{0};
+  for (auto const gpu_buffer_mgr : bufferMgrs_[MemoryLevel::GPU_LEVEL]) {
+    total_gpu_buffer_pools_size +=
+        dynamic_cast<Buffer_Namespace::GpuCudaBufferMgr*>(gpu_buffer_mgr)->getMaxSize();
+  }
+  return total_gpu_buffer_pools_size;
+}
+
 Buffer_Namespace::CpuBufferMgr* DataMgr::getCpuBufferMgr() const {
+  CHECK(bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
   return dynamic_cast<Buffer_Namespace::CpuBufferMgr*>(
       bufferMgrs_[MemoryLevel::CPU_LEVEL][0]);
 }

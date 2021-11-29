@@ -172,6 +172,20 @@ extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
 extern bool g_null_div_by_zero;
 extern bool g_bigint_count;
+
+// Following are options that are specific to ExecutorResourceMgr (and require
+// g_enable_executor_resource_mgr to be true to apply/allow to be flagged)
+extern bool g_enable_executor_resource_mgr;
+extern double g_executor_resource_mgr_cpu_result_mem_ratio;
+extern size_t g_executor_resource_mgr_cpu_result_mem_bytes;
+extern double g_executor_resource_mgr_per_query_max_cpu_slots_ratio;
+extern double g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio;
+extern bool g_executor_resource_mgr_allow_cpu_kernel_concurrency;
+extern bool g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency;
+extern bool g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency;
+extern bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency;
+extern double g_executor_resource_mgr_max_available_resource_use_ratio;
+
 extern bool g_inner_join_fragment_skipping;
 extern float g_filter_push_down_low_frac;
 extern float g_filter_push_down_high_frac;

@@ -249,6 +249,9 @@ class DataMgr {
                               const size_t num_reader_threads,
                               const SystemParameters& sys_params);
 
+  size_t getCpuBufferPoolSize() const;
+  size_t getGpuBufferPoolSize() const;
+
   // Used for testing.
   Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() const;
 

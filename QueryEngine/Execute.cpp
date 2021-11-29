@@ -48,6 +48,7 @@
 #include "QueryEngine/DynamicWatchdog.h"
 #include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/ErrorHandling.h"
+#include "QueryEngine/ExecutorResourceMgr/ExecutorResourceMgr.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/GpuMemUtils.h"
@@ -162,6 +163,25 @@ size_t g_approx_quantile_centroids{300};
 bool g_enable_automatic_ir_metadata{true};
 
 size_t g_max_log_length{500};
+
+bool g_enable_executor_resource_mgr{false};
+
+double g_executor_resource_mgr_cpu_result_mem_ratio{0.8};
+size_t g_executor_resource_mgr_cpu_result_mem_bytes{Executor::auto_cpu_mem_bytes};
+double g_executor_resource_mgr_per_query_max_cpu_slots_ratio{0.9};
+double g_executor_resource_mgr_per_query_max_cpu_result_mem_ratio{0.8};
+
+// Todo: rework ConcurrentResourceGrantPolicy and ExecutorResourcePool to allow
+// thresholds for concurrent oversubscription, rather than just boolean allowed/disallowed
+bool g_executor_resource_mgr_allow_cpu_kernel_concurrency{true};
+bool g_executor_resource_mgr_allow_cpu_gpu_kernel_concurrency{true};
+// Whether a single query can oversubscribe CPU slots should be controlled with
+// g_executor_resource_mgr_per_query_max_cpu_slots_ratio
+bool g_executor_resource_mgr_allow_cpu_slot_oversubscription_concurrency{false};
+// Whether a single query can oversubscribe CPU memory should be controlled with
+// g_executor_resource_mgr_per_query_max_cpu_slots_ratio
+bool g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency{false};
+double g_executor_resource_mgr_max_available_resource_use_ratio{0.8};
 
 extern bool g_cache_string_hash;
 
@@ -687,6 +707,63 @@ ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
   return agg_col_range_cache_.getColRange(phys_input);
 }
 
+namespace {
+
+size_t get_col_byte_width(const shared::ColumnKey& column_key) {
+  if (column_key.table_id < 0) {
+    // We have an intermediate results table
+
+    // Todo(todd): Get more accurate representation of column width
+    // for intermediate tables
+    return size_t(8);
+  } else {
+    const auto cd = Catalog_Namespace::get_metadata_for_column(column_key);
+    const auto& ti = cd->columnType;
+    const auto sz = ti.get_size();
+    if (sz < 0) {
+      // for varlen types, only account for the pointer/size for each row, for now
+      if (ti.is_logical_geo_type()) {
+        // Don't count size for logical geo types, as they are
+        // backed by physical columns
+        return size_t(0);
+      } else {
+        return size_t(16);
+      }
+    } else {
+      return sz;
+    }
+  }
+}
+
+}  // anonymous namespace
+
+std::map<shared::ColumnKey, size_t> Executor::getColumnByteWidthMap(
+    const std::set<shared::TableKey>& table_ids_to_fetch,
+    const bool include_lazy_fetched_cols) const {
+  using TableId = shared::TableKey;
+  using ColumnId = int;
+  std::map<shared::ColumnKey, size_t> col_byte_width_map;
+
+  for (const auto& fetched_col : plan_state_->columns_to_fetch_) {
+    if (table_ids_to_fetch.count({fetched_col.db_id, fetched_col.table_id}) == 0) {
+      continue;
+    }
+    const size_t col_byte_width = get_col_byte_width(fetched_col);
+    CHECK(col_byte_width_map.insert({fetched_col, col_byte_width}).second);
+  }
+  if (include_lazy_fetched_cols) {
+    for (const auto& lazy_fetched_col : plan_state_->columns_to_not_fetch_) {
+      if (table_ids_to_fetch.count({lazy_fetched_col.db_id, lazy_fetched_col.table_id}) ==
+          0) {
+        continue;
+      }
+      const size_t col_byte_width = get_col_byte_width(lazy_fetched_col);
+      CHECK(col_byte_width_map.insert({lazy_fetched_col, col_byte_width}).second);
+    }
+  }
+  return col_byte_width_map;
+}
+
 size_t Executor::getNumBytesForFetchedRow(
     const std::set<shared::TableKey>& table_ids_to_fetch) const {
   size_t num_bytes = 0;
@@ -718,6 +795,135 @@ size_t Executor::getNumBytesForFetchedRow(
     }
   }
   return num_bytes;
+}
+
+ExecutorResourceMgr_Namespace::ChunkRequestInfo Executor::getChunkRequestInfo(
+    const ExecutorDeviceType device_type,
+    const std::vector<InputDescriptor>& input_descs,
+    const std::vector<InputTableInfo>& query_infos,
+    const std::vector<std::pair<int32_t, FragmentsList>>& kernel_fragment_lists) const {
+  using TableFragmentId = std::pair<shared::TableKey, int32_t>;
+  using TableFragmentSizeMap = std::map<TableFragmentId, size_t>;
+
+  /* Calculate bytes per column */
+
+  // Only fetch lhs table ids for now...
+  // Allows us to cleanly lower number of kernels in flight to save
+  // buffer pool space, but is not a perfect estimate when big rhs
+  // join tables are involved. Will revisit.
+
+  std::set<shared::TableKey> lhs_table_keys;
+  for (const auto& input_desc : input_descs) {
+    if (input_desc.getNestLevel() == 0) {
+      lhs_table_keys.insert(input_desc.getTableKey());
+    }
+  }
+
+  const bool include_lazy_fetch_cols = device_type == ExecutorDeviceType::CPU;
+  const auto column_byte_width_map =
+      getColumnByteWidthMap(lhs_table_keys, include_lazy_fetch_cols);
+
+  /* Calculate the byte width per row (sum of all columns widths)
+     Assumes each fragment touches the same columns, which is a DB-wide
+     invariant for now */
+
+  size_t const byte_width_per_row =
+      std::accumulate(column_byte_width_map.begin(),
+                      column_byte_width_map.end(),
+                      size_t(0),
+                      [](size_t sum, auto& col_entry) { return sum + col_entry.second; });
+
+  /* Calculate num tuples for all fragments */
+
+  TableFragmentSizeMap all_table_fragments_size_map;
+
+  for (auto& query_info : query_infos) {
+    const auto& table_key = query_info.table_key;
+    for (const auto& frag : query_info.info.fragments) {
+      const int32_t frag_id = frag.fragmentId;
+      const TableFragmentId table_frag_id = std::make_pair(table_key, frag_id);
+      const size_t fragment_num_tuples = frag.getNumTuples();  // num_tuples;
+      all_table_fragments_size_map.insert(
+          std::make_pair(table_frag_id, fragment_num_tuples));
+    }
+  }
+
+  /* Calculate num tuples only for fragments actually touched by query
+     Also calculate the num bytes needed for each kernel */
+
+  TableFragmentSizeMap query_table_fragments_size_map;
+  std::vector<size_t> bytes_per_kernel;
+  bytes_per_kernel.reserve(kernel_fragment_lists.size());
+
+  size_t max_kernel_bytes{0};
+
+  for (auto& kernel_frag_list : kernel_fragment_lists) {
+    size_t kernel_bytes{0};
+    const auto frag_list = kernel_frag_list.second;
+    for (const auto& table_frags : frag_list) {
+      const auto& table_key = table_frags.table_key;
+      for (const size_t frag_id : table_frags.fragment_ids) {
+        const TableFragmentId table_frag_id = std::make_pair(table_key, frag_id);
+        const size_t fragment_num_tuples = all_table_fragments_size_map[table_frag_id];
+        kernel_bytes += fragment_num_tuples * byte_width_per_row;
+        query_table_fragments_size_map.insert(
+            std::make_pair(table_frag_id, fragment_num_tuples));
+      }
+    }
+    bytes_per_kernel.emplace_back(kernel_bytes);
+    if (kernel_bytes > max_kernel_bytes) {
+      max_kernel_bytes = kernel_bytes;
+    }
+  }
+
+  /* Calculate bytes per chunk touched by the query */
+
+  std::map<ChunkKey, size_t> all_chunks_byte_sizes_map;
+  constexpr int32_t subkey_min = std::numeric_limits<int32_t>::min();
+
+  for (const auto& col_byte_width_entry : column_byte_width_map) {
+    // Build a chunk key prefix of (db_id, table_id, column_id)
+    const int32_t db_id = col_byte_width_entry.first.db_id;
+    const int32_t table_id = col_byte_width_entry.first.table_id;
+    const int32_t col_id = col_byte_width_entry.first.column_id;
+    const size_t col_byte_width = col_byte_width_entry.second;
+    const shared::TableKey table_key(db_id, table_id);
+
+    const auto frag_start =
+        query_table_fragments_size_map.lower_bound({table_key, subkey_min});
+    for (auto frag_itr = frag_start; frag_itr != query_table_fragments_size_map.end() &&
+                                     frag_itr->first.first == table_key;
+         frag_itr++) {
+      const ChunkKey chunk_key = {db_id, table_id, col_id, frag_itr->first.second};
+      const size_t chunk_byte_size = col_byte_width * frag_itr->second;
+      all_chunks_byte_sizes_map.insert({chunk_key, chunk_byte_size});
+    }
+  }
+
+  size_t total_chunk_bytes{0};
+  const size_t num_chunks = all_chunks_byte_sizes_map.size();
+  std::vector<std::pair<ChunkKey, size_t>> chunks_with_byte_sizes;
+  chunks_with_byte_sizes.reserve(num_chunks);
+  for (const auto& chunk_byte_size_entry : all_chunks_byte_sizes_map) {
+    chunks_with_byte_sizes.emplace_back(
+        std::make_pair(chunk_byte_size_entry.first, chunk_byte_size_entry.second));
+    // Add here, post mapping of the chunks, to make sure chunks are deduped and we get an
+    // accurate size estimate
+    total_chunk_bytes += chunk_byte_size_entry.second;
+  }
+  // Don't allow scaling of bytes per kernel launches for GPU yet as we're not set up for
+  // this at this point
+  const bool bytes_scales_per_kernel = device_type == ExecutorDeviceType::CPU;
+
+  // Return ChunkRequestInfo
+
+  return {device_type,
+          chunks_with_byte_sizes,
+          num_chunks,
+          total_chunk_bytes,
+          bytes_per_kernel,
+          max_kernel_bytes,
+          bytes_scales_per_kernel};
 }
 
 bool Executor::hasLazyFetchColumns(
@@ -1901,8 +2107,17 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      render_info,
                                      available_gpus,
                                      available_cpus);
-        launchKernels(
-            shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
+        if (g_enable_executor_resource_mgr) {
+          launchKernelsViaResourceMgr(shared_context,
+                                      std::move(kernels),
+                                      query_comp_desc_owned->getDeviceType(),
+                                      ra_exe_unit.input_descs,
+                                      *query_mem_desc_owned);
+        } else {
+          launchKernelsLocked(
+              shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
+        }
+
       } catch (QueryExecutionError& e) {
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.getErrorCode() == ERR_OUT_OF_TIME) {
@@ -2638,13 +2853,20 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   return execution_kernels;
 }
 
-void Executor::launchKernels(SharedKernelContext& shared_context,
-                             std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
-                             const ExecutorDeviceType device_type) {
-  auto clock_begin = timer_start();
-  std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
-  kernel_queue_time_ms_ += timer_stop(clock_begin);
-
+void Executor::launchKernelsImpl(SharedKernelContext& shared_context,
+                                 std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+                                 const ExecutorDeviceType device_type,
+                                 const size_t requested_num_threads) {
+#ifdef HAVE_TBB
+  const size_t num_threads =
+      requested_num_threads == Executor::auto_num_threads
+          ? std::min(kernels.size(), static_cast<size_t>(cpu_threads()))
+          : requested_num_threads;
+  tbb::task_arena local_arena(num_threads);
+#else
+  const size_t num_threads = cpu_threads();
+#endif
+  LOG(EXECUTOR) << "Launching query step with " << num_threads << " threads.";
   threading::task_group tg;
   // A hack to have unused unit for results collection.
   const RelAlgExecutionUnit* ra_exe_unit =
@@ -2658,22 +2880,44 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
 #endif  // HAVE_TBB
 
   VLOG(1) << "Launching " << kernels.size() << " kernels for query on "
-          << (device_type == ExecutorDeviceType::CPU ? "CPU"s : "GPU"s) << ".";
+          << (device_type == ExecutorDeviceType::CPU ? "CPU"s : "GPU"s)
+          << " using pool of " << num_threads << " threads.";
   size_t kernel_idx = 1;
+
   for (auto& kernel : kernels) {
     CHECK(kernel.get());
-    tg.run([this,
-            &kernel,
-            &shared_context,
-            parent_thread_local_ids = logger::thread_local_ids(),
-            crt_kernel_idx = kernel_idx++] {
-      logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
-      DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
-      const size_t thread_i = crt_kernel_idx % cpu_threads();
-      kernel->run(this, thread_i, shared_context);
-    });
+#ifdef HAVE_TBB
+    local_arena.execute([&] {
+#endif
+      tg.run([this,
+              &kernel,
+              &shared_context,
+              parent_thread_local_ids = logger::thread_local_ids(),
+              num_threads,
+              crt_kernel_idx = kernel_idx++] {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+        // Keep monotonicity of thread_idx by kernel launch time, so that optimizations
+        // such as launching kernels with data already in pool first become possible
+#ifdef HAVE_TBB
+        const size_t old_thread_idx = crt_kernel_idx % num_threads;
+        const size_t thread_idx = tbb::this_task_arena::current_thread_index();
+        LOG(EXECUTOR) << "Thread idx: " << thread_idx
+                      << " Old thread idx: " << old_thread_idx;
+#else
+      const size_t thread_idx = crt_kernel_idx % num_threads;
+#endif
+        kernel->run(this, thread_idx, shared_context);
+      });
+#ifdef HAVE_TBB
+    });  // local_arena.execute[&]
+#endif
   }
+#ifdef HAVE_TBB
+  local_arena.execute([&] { tg.wait(); });
+#else
   tg.wait();
+#endif
 
   for (auto& exec_ctx : shared_context.getTlsExecutionContext()) {
     // The first arg is used for GPU only, it's not our case.
@@ -2689,6 +2933,111 @@ void Executor::launchKernels(SharedKernelContext& shared_context,
       shared_context.addDeviceResults(std::move(results), {});
     }
   }
+}
+
+void Executor::launchKernelsLocked(
+    SharedKernelContext& shared_context,
+    std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+    const ExecutorDeviceType device_type) {
+  auto clock_begin = timer_start();
+  std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
+  kernel_queue_time_ms_ += timer_stop(clock_begin);
+
+  launchKernelsImpl(
+      shared_context, std::move(kernels), device_type, Executor::auto_num_threads);
+}
+
+void Executor::launchKernelsViaResourceMgr(
+    SharedKernelContext& shared_context,
+    std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+    const ExecutorDeviceType device_type,
+    const std::vector<InputDescriptor>& input_descs,
+    const QueryMemoryDescriptor& query_mem_desc) {
+  // CPU queries in general, plus some GPU queries, i.e. certain types of top-k sorts,
+  // can generate more kernels than cores/GPU devices, so allow handle this for now
+  // by capping the number of requested slots from GPU than actual GPUs
+  const size_t num_kernels = kernels.size();
+  constexpr bool cap_slots = false;
+  const size_t num_compute_slots =
+      cap_slots
+          ? std::min(num_kernels,
+                     executor_resource_mgr_
+                         ->get_resource_info(
+                             device_type == ExecutorDeviceType::GPU
+                                 ? ExecutorResourceMgr_Namespace::ResourceType::GPU_SLOTS
+                                 : ExecutorResourceMgr_Namespace::ResourceType::CPU_SLOTS)
+                         .second)
+          : num_kernels;
+  const size_t cpu_result_mem_bytes_per_kernel =
+      query_mem_desc.getBufferSizeBytes(device_type);
+
+  std::vector<std::pair<int32_t, FragmentsList>> kernel_fragments_list;
+  kernel_fragments_list.reserve(num_kernels);
+  for (auto& kernel : kernels) {
+    const auto device_id = kernel->get_chosen_device_id();
+    const auto frag_list = kernel->get_fragment_list();
+    if (!frag_list.empty()) {
+      kernel_fragments_list.emplace_back(std::make_pair(device_id, frag_list));
+    }
+  }
+  const auto chunk_request_info = getChunkRequestInfo(
+      device_type, input_descs, shared_context.getQueryInfos(), kernel_fragments_list);
+
+  auto gen_resource_request_info = [device_type,
+                                    num_compute_slots,
+                                    cpu_result_mem_bytes_per_kernel,
+                                    &chunk_request_info]() {
+    if (device_type == ExecutorDeviceType::GPU) {
+      return ExecutorResourceMgr_Namespace::RequestInfo(
+          device_type,
+          static_cast<size_t>(0),                               // priority_level
+          static_cast<size_t>(0),                               // cpu_slots
+          static_cast<size_t>(0),                               // min_cpu_slots,
+          num_compute_slots,                                    // gpu_slots
+          num_compute_slots,                                    // min_gpu_slots
+          cpu_result_mem_bytes_per_kernel * num_compute_slots,  // cpu_result_mem,
+          cpu_result_mem_bytes_per_kernel * num_compute_slots,  // min_cpu_result_mem,
+          chunk_request_info);                                  // chunks needed
+    } else {
+      const size_t min_cpu_slots{1};
+      return ExecutorResourceMgr_Namespace::RequestInfo(
+          device_type,
+          static_cast<size_t>(0),                               // priority_level
+          num_compute_slots,                                    // cpu_slots
+          min_cpu_slots,                                        // min_cpu_slots
+          size_t(0),                                            // gpu_slots
+          size_t(0),                                            // min_gpu_slots
+          cpu_result_mem_bytes_per_kernel * num_compute_slots,  // cpu_result_mem
+          cpu_result_mem_bytes_per_kernel * num_compute_slots,  // min_cpu_result_mem
+          chunk_request_info);                                  // chunks needed
+    }
+  };
+
+  const auto resource_request_info = gen_resource_request_info();
+
+  auto clock_begin = timer_start();
+  const bool is_empty_request =
+      resource_request_info.cpu_slots == 0UL && resource_request_info.gpu_slots == 0UL;
+  auto resource_handle =
+      is_empty_request ? nullptr
+                       : executor_resource_mgr_->request_resources(resource_request_info);
+  const auto num_cpu_threads =
+      is_empty_request ? 0UL : resource_handle->get_resource_grant().cpu_slots;
+  if (device_type == ExecutorDeviceType::GPU) {
+    const auto num_gpu_slots =
+        is_empty_request ? 0UL : resource_handle->get_resource_grant().gpu_slots;
+    VLOG(1) << "In Executor::LaunchKernels executor " << getExecutorId() << " requested "
+            << "between " << resource_request_info.min_gpu_slots << " and "
+            << resource_request_info.gpu_slots << " GPU slots, and was granted "
+            << num_gpu_slots << " GPU slots.";
+  } else {
+    VLOG(1) << "In Executor::LaunchKernels executor " << getExecutorId() << " requested "
+            << "between " << resource_request_info.min_cpu_slots << " and "
+            << resource_request_info.cpu_slots << " CPU slots, and was granted "
+            << num_cpu_threads << " CPU slots.";
+  }
+  kernel_queue_time_ms_ += timer_stop(clock_begin);
+  launchKernelsImpl(shared_context, std::move(kernels), device_type, num_cpu_threads);
 }
 
 std::vector<size_t> Executor::getTableFragmentIndices(
@@ -4818,6 +5167,109 @@ const QueryPlanDAG Executor::getLatestQueryPlanDagExtracted() const {
   return latest_query_plan_extracted_;
 }
 
+void Executor::init_resource_mgr(
+    const size_t num_cpu_slots,
+    const size_t num_gpu_slots,
+    const size_t cpu_result_mem,
+    const size_t cpu_buffer_pool_mem,
+    const size_t gpu_buffer_pool_mem,
+    const double per_query_max_cpu_slots_ratio,
+    const double per_query_max_cpu_result_mem_ratio,
+    const bool allow_cpu_kernel_concurrency,
+    const bool allow_cpu_gpu_kernel_concurrency,
+    const bool allow_cpu_slot_oversubscription_concurrency,
+    const bool allow_cpu_result_mem_oversubscription_concurrency,
+    const double max_available_resource_use_ratio) {
+  CHECK(!Executor::executor_resource_mgr_);
+  const double per_query_max_pinned_cpu_buffer_pool_mem_ratio{1.0};
+  const double per_query_max_pageable_cpu_buffer_pool_mem_ratio{0.5};
+  executor_resource_mgr_ = ExecutorResourceMgr_Namespace::generate_executor_resource_mgr(
+      num_cpu_slots,
+      num_gpu_slots,
+      cpu_result_mem,
+      cpu_buffer_pool_mem,
+      gpu_buffer_pool_mem,
+      per_query_max_cpu_slots_ratio,
+      per_query_max_cpu_result_mem_ratio,
+      per_query_max_pinned_cpu_buffer_pool_mem_ratio,
+      per_query_max_pageable_cpu_buffer_pool_mem_ratio,
+      allow_cpu_kernel_concurrency,
+      allow_cpu_gpu_kernel_concurrency,
+      allow_cpu_slot_oversubscription_concurrency,
+      true,  // allow_gpu_slot_oversubscription
+      allow_cpu_result_mem_oversubscription_concurrency,
+      max_available_resource_use_ratio);
+}
+
+void Executor::pause_executor_queue() {
+  if (!g_enable_executor_resource_mgr) {
+    throw std::runtime_error(
+        "Executor queue cannot be paused as it requires Executor Resource Manager to be "
+        "enabled");
+  }
+  executor_resource_mgr_->pause_process_queue();
+}
+
+void Executor::resume_executor_queue() {
+  if (!g_enable_executor_resource_mgr) {
+    throw std::runtime_error(
+        "Executor queue cannot be resumed as it requires Executor Resource Manager to be "
+        "enabled");
+  }
+  executor_resource_mgr_->resume_process_queue();
+}
+
+size_t Executor::get_executor_resource_pool_total_resource_quantity(
+    const ExecutorResourceMgr_Namespace::ResourceType resource_type) {
+  if (!g_enable_executor_resource_mgr) {
+    throw std::runtime_error(
+        "ExecutorResourceMgr must be enabled to obtain executor resource pool stats.");
+  }
+  return executor_resource_mgr_->get_resource_info(resource_type).second;
+}
+
+ExecutorResourceMgr_Namespace::ResourcePoolInfo
+Executor::get_executor_resource_pool_info() {
+  if (!g_enable_executor_resource_mgr) {
+    throw std::runtime_error(
+        "ExecutorResourceMgr must be enabled to obtain executor resource pool stats.");
+  }
+  return executor_resource_mgr_->get_resource_info();
+}
+
+void Executor::set_executor_resource_pool_resource(
+    const ExecutorResourceMgr_Namespace::ResourceType resource_type,
+    const size_t resource_quantity) {
+  if (!g_enable_executor_resource_mgr) {
+    throw std::runtime_error(
+        "ExecutorResourceMgr must be enabled to set executor resource pool resource.");
+  }
+  executor_resource_mgr_->set_resource(resource_type, resource_quantity);
+}
+
+const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy
+Executor::get_concurrent_resource_grant_policy(
+    const ExecutorResourceMgr_Namespace::ResourceType resource_type) {
+  if (!g_enable_executor_resource_mgr) {
+    throw std::runtime_error(
+        "ExecutorResourceMgr must be enabled to set executor concurrent resource grant "
+        "policy.");
+  }
+  return executor_resource_mgr_->get_concurrent_resource_grant_policy(resource_type);
+}
+
+void Executor::set_concurrent_resource_grant_policy(
+    const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy&
+        concurrent_resource_grant_policy) {
+  if (!g_enable_executor_resource_mgr) {
+    throw std::runtime_error(
+        "ExecutorResourceMgr must be enabled to set executor concurrent resource grant "
+        "policy.");
+  }
+  executor_resource_mgr_->set_concurrent_resource_grant_policy(
+      concurrent_resource_grant_policy);
+}
+
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
 
 // contain the interrupt flag's status per query session
@@ -4836,6 +5288,9 @@ void* Executor::gpu_active_modules_[max_gpu_count];
 
 std::mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
+
+std::shared_ptr<ExecutorResourceMgr_Namespace::ExecutorResourceMgr>
+    Executor::executor_resource_mgr_ = nullptr;
 
 QueryPlanDagCache Executor::query_plan_dag_cache_;
 heavyai::shared_mutex Executor::recycler_mutex_;

@@ -49,6 +49,7 @@
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/ExecutionKernel.h"
+#include "QueryEngine/ExecutorResourceMgr/ExecutorResourceMgr.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/GpuSharedMemoryContext.h"
 #include "QueryEngine/GroupByAndAggregate.h"
@@ -362,6 +363,12 @@ class QueryCompilationDescriptor;
 
 std::ostream& operator<<(std::ostream&, FetchResult const&);
 
+namespace ExecutorResourceMgr_Namespace {
+class ExecutorResourceMgr;
+struct ChunkRequestInfo;
+struct ResourcePoolInfo;
+};  // namespace ExecutorResourceMgr_Namespace
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -585,6 +592,44 @@ class Executor {
 
   size_t getNumBytesForFetchedRow(
       const std::set<shared::TableKey>& table_keys_to_fetch) const;
+
+  std::map<shared::ColumnKey, size_t> getColumnByteWidthMap(
+      const std::set<shared::TableKey>& table_ids_to_fetch,
+      const bool include_lazy_fetched_cols) const;
+
+  size_t getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetch) const;
+
+  /**
+   * @brief Determines a unique list of chunks and their associated byte sizes for a given
+   * query plan
+   *
+   * Called by Executor::launchKernelsViaResourceMgr
+   *
+   * Note that we currently need the kernel's fragment lists generated in
+   * Executor::createKernels (which calls
+   * QueryFragmentDescriptor::buildFragmentKernelMap), but would be nice to hoist that
+   * logic out so that we could call this earlier, i.e. before compilation such that we
+   * don't waste compilation cycles in an attempt to run a query on GPU, only to see there
+   * are insufficient resources for it and it must be kicked to CPU
+   *
+   * Note this method currently has two key limitations:
+   * 1. Only accounts for chunks in the lhs table if a join is involved.
+   * 2. Conservatively estimates that column widths for intermediate results are always
+   * 8 bytes, when in some cases they may have a lower byte width.
+   *
+   * @param device_type - specifies whether the query needs CPU or GPU buffer pool memory
+   * @param input_descs - tables needed by the query
+   * @param query_infos
+   * @param kernel_fragment_lists
+   * @return ExecutorResourceMgr_Namespace::ChunkRequestInfo - contains various info used
+   * by ExecutorResourceMgr to gate (and soon optimize scheduling of) query step resource
+   * requests.
+   */
+  ExecutorResourceMgr_Namespace::ChunkRequestInfo getChunkRequestInfo(
+      const ExecutorDeviceType device_type,
+      const std::vector<InputDescriptor>& input_descs,
+      const std::vector<InputTableInfo>& query_infos,
+      const std::vector<std::pair<int32_t, FragmentsList>>& device_fragment_lists) const;
 
   bool hasLazyFetchColumns(const std::vector<Analyzer::Expr*>& target_exprs) const;
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
@@ -844,9 +889,45 @@ class Executor {
    * Launches execution kernels created by `createKernels` asynchronously using a thread
    * pool.
    */
-  void launchKernels(SharedKernelContext& shared_context,
-                     std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
-                     const ExecutorDeviceType device_type);
+  void launchKernelsImpl(SharedKernelContext& shared_context,
+                         std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+                         const ExecutorDeviceType device_type,
+                         const size_t requested_num_threads);
+
+  void launchKernelsLocked(SharedKernelContext& shared_context,
+                           std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+                           const ExecutorDeviceType device_type);
+
+  /**
+   * @brief Launches a vector of kernels for a given query step,
+   * gated/scheduled by ExecutorResourceMgr.
+   *
+   * This function first calculates the neccessary CPU, GPU, result set
+   * memory and buffer pool memory neccessary for the query, which it then requests
+   * from ExecutorResourceMgr. The query thread will be conditionally put into
+   * a wait state until there are enough resources to execute the query,
+   * which might or might not be concurrently with other query steps,
+   * depending on the resource grant policies in place and the resources
+   * needed by this thread's query step and all other in-flight queries
+   * requesting resources. After the thread is given the green light by
+   * ExecutorResourceMgr, it then calls launchKernelsImpl which does the actual
+   * work of launching the kernels.
+   *
+   * @param shared_context - used to obtain InputTableInfo vector (query_infos) used for
+   * input chunk calculation
+   * @param kernels - vector of kernels that will be launched, one per fragment for CPU
+   * execution, but can be multi-fragment (one per device) for GPU execution
+   * @param device_type - specifies whether the query step should run on CPU or GPU
+   * @param input_descs - neccessary to get the input table and column ids for a query for
+   * input chunk calculation
+   * @param query_mem_desc - neccessary to get result set size per kernel
+   */
+  void launchKernelsViaResourceMgr(
+      SharedKernelContext& shared_context,
+      std::vector<std::unique_ptr<ExecutionKernel>>&& kernels,
+      const ExecutorDeviceType device_type,
+      const std::vector<InputDescriptor>& input_descs,
+      const QueryMemoryDescriptor& query_mem_desc);
 
   std::vector<size_t> getTableFragmentIndices(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -1266,6 +1347,28 @@ class Executor {
       executor_item.second->update_extension_modules(update_runtime_modules_only);
     }
   }
+  static void init_resource_mgr(const size_t num_cpu_slots,
+                                const size_t num_gpu_slots,
+                                const size_t cpu_result_mem,
+                                const size_t cpu_buffer_pool_mem,
+                                const size_t gpu_buffer_pool_mem,
+                                const double per_query_max_cpu_slots_ratio,
+                                const double per_query_max_cpu_result_mem_ratio,
+                                const bool allow_cpu_kernel_concurrency,
+                                const bool allow_cpu_gpu_kernel_concurrency,
+                                const bool allow_cpu_slot_oversubscription_concurrency,
+                                const bool allow_cpu_result_mem_oversubscription,
+                                const double max_available_resource_use_ratio);
+
+  static void pause_executor_queue();
+  static void resume_executor_queue();
+  static size_t get_executor_resource_pool_total_resource_quantity(
+      const ExecutorResourceMgr_Namespace::ResourceType resource_type);
+  static ExecutorResourceMgr_Namespace::ResourcePoolInfo
+  get_executor_resource_pool_info();
+  static void set_executor_resource_pool_resource(
+      const ExecutorResourceMgr_Namespace::ResourceType resource_type,
+      const size_t resource_quantity);
 
   static size_t getBaselineThreshold(bool for_count_distinct,
                                      ExecutorDeviceType device_type) {
@@ -1274,6 +1377,13 @@ class Executor {
                                      : Executor::baseline_threshold)
                               : Executor::baseline_threshold;
   }
+  static const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy
+  get_concurrent_resource_grant_policy(
+      const ExecutorResourceMgr_Namespace::ResourceType resource_type);
+
+  static void set_concurrent_resource_grant_policy(
+      const ExecutorResourceMgr_Namespace::ConcurrentResourceGrantPolicy&
+          concurrent_resource_grant_policy);
 
  private:
   std::vector<int8_t> serializeLiterals(
@@ -1348,6 +1458,7 @@ class Executor {
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
   static const int max_gpu_count{16};
+  static const size_t auto_num_threads{size_t(0)};
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
   static std::mutex gpu_active_modules_mutex_;
@@ -1452,6 +1563,10 @@ class Executor {
   // until the update is complete.
   static std::mutex register_runtime_extension_functions_mutex_;
   static std::mutex kernel_mutex_;  // TODO: should this be executor-local mutex?
+
+  static const size_t auto_cpu_mem_bytes{size_t(0)};
+  static std::shared_ptr<ExecutorResourceMgr_Namespace::ExecutorResourceMgr>
+      executor_resource_mgr_;
 
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;

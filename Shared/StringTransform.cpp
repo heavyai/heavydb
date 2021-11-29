@@ -23,6 +23,10 @@
 #include <numeric>
 #include <random>
 #include <regex>
+#include <string>
+
+#include <math.h>  // format_bytes round call
+#include <vector>  // format_bytes
 
 #ifndef __CUDACC__
 #include <boost/filesystem.hpp>
@@ -95,6 +99,31 @@ std::string hide_sensitive_data_from_query(std::string const& query_str) {
       rules.begin(), rules.end(), query_str, [](auto& str, auto& rule) {
         return std::regex_replace(str, rule.first, rule.second);
       });
+}
+
+std::string format_num_bytes(const size_t bytes) {
+  const size_t units_per_k_unit{1024};
+  const std::vector<std::string> byte_units = {" bytes", "KB", "MB", "GB", "TB", "PB"};
+  const std::vector<size_t> bytes_per_scale_unit = {size_t(1),
+                                                    size_t(1) << 10,
+                                                    size_t(1) << 20,
+                                                    size_t(1) << 30,
+                                                    size_t(1) << 40,
+                                                    size_t(1) << 50,
+                                                    size_t(1) << 60};
+  if (bytes < units_per_k_unit) {
+    return std::to_string(bytes) + " bytes";
+  }
+  CHECK_GE(bytes, units_per_k_unit);
+  const size_t byte_scale = log(bytes) / log(units_per_k_unit);
+  CHECK_GE(byte_scale, size_t(1));
+  CHECK_LE(byte_scale, size_t(5));
+  const size_t scaled_bytes_left_of_decimal = bytes / bytes_per_scale_unit[byte_scale];
+  const size_t scaled_bytes_right_of_decimal = bytes % bytes_per_scale_unit[byte_scale];
+  const size_t fractional_digits = static_cast<double>(scaled_bytes_right_of_decimal) /
+                                   bytes_per_scale_unit[byte_scale] * 100.;
+  return std::to_string(scaled_bytes_left_of_decimal) + "." +
+         std::to_string(fractional_digits) + " " + byte_units[byte_scale];
 }
 
 template <>

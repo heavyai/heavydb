@@ -265,6 +265,12 @@ class DBHandler : public HeavyIf {
   void clear_gpu_memory(const TSessionId& session) override;
   void clearRenderMemory(const TSessionId& session);  // it's not declared on thrifth
                                                       // and on persisten leaf client
+
+  void pause_executor_queue(
+      const TSessionId& session);  // Not implemented for persistent leaf client
+  void resume_executor_queue(
+      const TSessionId& session);  // Not implemented for persistent leaf client
+
   void set_cur_session(const TSessionId& parent_session,
                        const TSessionId& leaf_session,
                        const std::string& start_time_str,
@@ -679,6 +685,7 @@ class DBHandler : public HeavyIf {
 
  private:
   std::atomic<bool> initialized_{false};
+  void init_executor_resource_mgr();
   std::shared_ptr<Catalog_Namespace::SessionInfo> create_new_session(
       TSessionId& session,
       const std::string& dbname,
