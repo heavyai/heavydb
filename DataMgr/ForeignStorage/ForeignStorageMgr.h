@@ -127,13 +127,10 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                   const std::set<ChunkKey>& required_chunk_keys,
                   const ForeignDataWrapper::ParallelismLevel parallelism_level) const;
 
-  std::set<ChunkKey> getOptionalKeysWithinSizeLimit(
-      size_t total_chunk_size,
+  virtual std::set<ChunkKey> getOptionalKeysWithinSizeLimit(
       const ChunkKey& chunk_key,
       const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
       const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const;
-
-  size_t getRequiredBuffersSize(const ChunkKey& chunk_key) const;
 
   static void checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key);
 

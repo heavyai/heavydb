@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <optional>
 #include "DataMgr/ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.h"
 #include "FileMgr.h"
 #include "Shared/File.h"
@@ -206,9 +207,7 @@ class CachingFileMgr : public FileMgr {
   inline size_t getAllocated() override {
     return getFilesSize() + getTableFileMgrsSize();
   }
-  inline size_t getMaxDataFilesSize() const {
-    return getMaxDataFiles() * getDataFileSize();
-  }
+  size_t getMaxDataFilesSize() const;
 
   /**
    * @brief Free pages for chunk and remove it from the chunk eviction algorithm.
@@ -363,6 +362,7 @@ class CachingFileMgr : public FileMgr {
   void setMaxNumMetadataFiles(size_t max) { max_num_meta_files_ = max; }
   void setMaxWrapperSpace(size_t max) { max_wrapper_space_ = max; }
   std::set<ChunkKey> getKeysWithMetadata() const;
+  void setDataSizeLimit(size_t max) { limit_data_size_ = max; }
 
  private:
   /**
@@ -486,6 +486,8 @@ class CachingFileMgr : public FileMgr {
   size_t max_num_meta_files_;  // set based on max_size_.
   size_t max_wrapper_space_;   // set based on max_size_.
   size_t max_size_;
+  std::optional<size_t> limit_data_size_{};  // Used for testing artifically small caches.
+
   mutable LRUEvictionAlgorithm chunk_evict_alg_;  // last chunk touched.
   mutable LRUEvictionAlgorithm table_evict_alg_;  // last table touched.
 };

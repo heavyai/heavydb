@@ -32,29 +32,51 @@ class CachingForeignStorageMgr : public ForeignStorageMgr {
   void fetchBuffer(const ChunkKey& chunk_key,
                    AbstractBuffer* destination_buffer,
                    const size_t num_bytes) override;
+
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunk_metadata,
                                        const ChunkKey& chunk_key_prefix) override;
+
   void getChunkMetadataVecFromDataWrapper(ChunkMetadataVector& chunk_metadata,
                                           const ChunkKey& chunk_key_prefix);
+
   void removeTableRelatedDS(const int db_id, const int table_id) override;
+
   void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries) override;
+
   bool createDataWrapperIfNotExists(const ChunkKey& chunk_key) override;
 
  private:
   void refreshTableInCache(const ChunkKey& table_key);
+
   int getHighestCachedFragId(const ChunkKey& table_key);
+
   void refreshAppendTableInCache(const ChunkKey& table_key,
                                  const std::vector<ChunkKey>& old_chunk_keys);
+
   void refreshNonAppendTableInCache(const ChunkKey& table_key,
                                     const std::vector<ChunkKey>& old_chunk_keys);
+
   void refreshChunksInCacheByFragment(const std::vector<ChunkKey>& old_chunk_keys,
                                       int last_frag_id);
+
   void populateChunkBuffersSafely(ForeignDataWrapper& data_wrapper,
                                   ChunkToBufferMap& required_buffers,
                                   ChunkToBufferMap& optional_buffers);
+
   void clearTable(const ChunkKey& table_key);
+
   size_t maxFetchSize(int32_t db_id) const override;
+
   bool hasMaxFetchSize() const override;
+
+  std::set<ChunkKey> getOptionalKeysWithinSizeLimit(
+      const ChunkKey& chunk_key,
+      const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
+      const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const override;
+
+  size_t getBufferSize(const ChunkKey& key) const;
+
+  size_t getRequiredBuffersSize(const ChunkKey& chunk_key) const;
 
   ForeignStorageCache* disk_cache_;
 };

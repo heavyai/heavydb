@@ -88,6 +88,13 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     buffer->copyTo(destination_buffer, num_bytes);
     return;
   } else {
+    auto required_size = getRequiredBuffersSize(chunk_key);
+    if (required_size > maxFetchSize(chunk_key[CHUNK_KEY_DB_IDX])) {
+      // If we don't have space in the cache then skip the caching.
+      ForeignStorageMgr::fetchBuffer(chunk_key, destination_buffer, num_bytes);
+      return;
+    }
+
     auto column_keys = get_column_key_set(chunk_key);
 
     // Use hints to prefetch other chunks in fragment into cache
@@ -334,6 +341,63 @@ size_t CachingForeignStorageMgr::maxFetchSize(int32_t db_id) const {
 
 bool CachingForeignStorageMgr::hasMaxFetchSize() const {
   return true;
+}
+
+size_t CachingForeignStorageMgr::getRequiredBuffersSize(const ChunkKey& chunk_key) const {
+  auto key_set = get_column_key_set(chunk_key);
+  size_t total_size = 0U;
+  for (const auto& key : key_set) {
+    total_size += getBufferSize(key);
+  }
+  return total_size;
+}
+
+std::set<ChunkKey> CachingForeignStorageMgr::getOptionalKeysWithinSizeLimit(
+    const ChunkKey& chunk_key,
+    const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
+    const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const {
+  std::set<ChunkKey> optional_keys;
+  auto total_chunk_size = getRequiredBuffersSize(chunk_key);
+  auto max_size = maxFetchSize(chunk_key[CHUNK_KEY_DB_IDX]);
+  // Add keys to the list of optional keys starting with the same fragment.  If we run out
+  // of space, then exit early with what we have added so far.
+  for (const auto& keys : {same_fragment_keys, diff_fragment_keys}) {
+    for (const auto& key : keys) {
+      auto column_keys = get_column_key_set(key);
+      for (const auto& column_key : column_keys) {
+        total_chunk_size += getBufferSize(column_key);
+      }
+      // Early exist if we exceed the size limit.
+      if (total_chunk_size > max_size) {
+        return optional_keys;
+      }
+      for (const auto& column_key : column_keys) {
+        optional_keys.emplace(column_key);
+      }
+    }
+  }
+  return optional_keys;
+}
+
+size_t CachingForeignStorageMgr::getBufferSize(const ChunkKey& key) const {
+  size_t num_bytes = 0;
+  ChunkMetadataVector meta;
+  disk_cache_->getCachedMetadataVecForKeyPrefix(meta, get_fragment_key(key));
+  CHECK_EQ(meta.size(), 1U) << show_chunk(key);
+  auto metadata = meta.begin()->second;
+
+  if (is_varlen_key(key)) {
+    if (is_varlen_data_key(key)) {
+      num_bytes = get_max_chunk_size(key);
+    } else {
+      num_bytes = (metadata->sqlType.is_string())
+                      ? sizeof(StringOffsetT) * (metadata->numElements + 1)
+                      : sizeof(ArrayOffsetT) * (metadata->numElements + 1);
+    }
+  } else {
+    num_bytes = metadata->numBytes;
+  }
+  return num_bytes;
 }
 
 }  // namespace foreign_storage

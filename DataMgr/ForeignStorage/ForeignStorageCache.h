@@ -98,6 +98,11 @@ class ForeignStorageCache {
 
   void storeDataWrapper(const std::string& doc, int32_t db_id, int32_t tb_id);
 
+  // Used for unit testing
+  inline void setDataSizeLimit(size_t max) const {
+    caching_file_mgr_->setDataSizeLimit(max);
+  }
+
  private:
   // These methods are private and assume locks are already acquired when called.
   std::set<ChunkKey>::iterator eraseChunk(const std::set<ChunkKey>::iterator&);

@@ -725,6 +725,13 @@ std::set<ChunkKey> CachingFileMgr::getKeysWithMetadata() const {
   return ret;
 }
 
+size_t CachingFileMgr::getMaxDataFilesSize() const {
+  if (limit_data_size_) {
+    return *limit_data_size_;
+  }
+  return getMaxDataFiles() * getDataFileSize();
+}
+
 TableFileMgr::TableFileMgr(const std::string& table_path)
     : table_path_(table_path)
     , epoch_file_path_(table_path_ + "/" + FileMgr::EPOCH_FILENAME)

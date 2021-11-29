@@ -496,42 +496,19 @@ ForeignStorageMgr::getPrefetchSets(
 }
 
 std::set<ChunkKey> ForeignStorageMgr::getOptionalKeysWithinSizeLimit(
-    size_t total_chunk_size,
     const ChunkKey& chunk_key,
     const std::set<ChunkKey, decltype(set_comp)*>& same_fragment_keys,
     const std::set<ChunkKey, decltype(set_comp)*>& diff_fragment_keys) const {
   std::set<ChunkKey> optional_keys;
-  auto max_chunk_size = get_max_chunk_size(chunk_key);
-  auto max_size = maxFetchSize(chunk_key[CHUNK_KEY_DB_IDX]);
-  // Add keys to the list of optional keys starting with the same fragment.  If we run out
-  // of space, then exit early with what we have added so far.
   for (const auto& keys : {same_fragment_keys, diff_fragment_keys}) {
     for (auto key : keys) {
       auto column_keys = get_column_key_set(key);
-      if (hasMaxFetchSize()) {
-        // If we have a maximum size, then early exist if we exceed it.
-        total_chunk_size += max_chunk_size * column_keys.size();
-        if (total_chunk_size > max_size) {
-          return optional_keys;
-        }
-      }
       for (auto column_key : column_keys) {
         optional_keys.emplace(column_key);
       }
     }
   }
   return optional_keys;
-}
-
-size_t ForeignStorageMgr::getRequiredBuffersSize(const ChunkKey& chunk_key) const {
-  auto max_chunk_size = get_max_chunk_size(chunk_key);
-  auto max_size = maxFetchSize(chunk_key[CHUNK_KEY_DB_IDX]);
-  size_t total_size = max_chunk_size * get_column_key_set(chunk_key).size();
-  if (hasMaxFetchSize()) {
-    // Query cannot complete if the required buffers alone are larger than the cache.
-    CHECK_LE(total_size, max_size);
-  }
-  return total_size;
 }
 
 std::set<ChunkKey> ForeignStorageMgr::getOptionalChunkKeySet(
@@ -542,12 +519,11 @@ std::set<ChunkKey> ForeignStorageMgr::getOptionalChunkKeySet(
     return {};
   }
 
-  auto total_size = getRequiredBuffersSize(chunk_key);
   auto [same_fragment_keys, diff_fragment_keys] =
       getPrefetchSets(chunk_key, required_chunk_keys, parallelism_level);
 
   return getOptionalKeysWithinSizeLimit(
-      total_size, chunk_key, same_fragment_keys, diff_fragment_keys);
+      chunk_key, same_fragment_keys, diff_fragment_keys);
 }
 
 size_t ForeignStorageMgr::maxFetchSize(int32_t db_id) const {
