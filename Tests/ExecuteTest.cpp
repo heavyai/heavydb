@@ -20659,7 +20659,7 @@ TEST(Select, WindowFunctionComplexExpressions) {
   }
 }
 
-TEST(Select, WindowFunctionParallelism) {
+TEST(Select, DISABLED_WindowFunctionParallelism) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (std::string table_name :
        {"test_window_func_large", "test_window_func_large_multi_frag"}) {
