@@ -17,16 +17,16 @@
 #ifndef ENCODER_H
 #define ENCODER_H
 
-#include "../Shared/DateConverters.h"
-#include "../Shared/sqltypes.h"
-#include "../Shared/types.h"
-#include "ChunkMetadata.h"
-
 #include <cmath>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <vector>
+
+#include "ChunkMetadata.h"
+#include "Shared/DateConverters.h"
+#include "Shared/sqltypes.h"
+#include "Shared/types.h"
 
 namespace Data_Namespace {
 class AbstractBuffer;

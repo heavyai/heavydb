@@ -550,6 +550,8 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null) {
         auto ti = cd->columnType;
         Datum d = StringToDatum(val, ti);
+        DecimalOverflowValidator validator(ti);
+        validator.validate(d.bigintval);
         addBigint(d.bigintval);
       } else {
         if (cd->columnType.get_notnull()) {
