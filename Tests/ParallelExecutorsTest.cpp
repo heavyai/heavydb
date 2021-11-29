@@ -36,6 +36,7 @@ size_t g_max_num_executors{4};
 size_t g_num_tables{25};
 
 extern bool g_is_test_env;
+extern bool g_enable_executor_resource_mgr;
 
 using namespace TestHelpers;
 
@@ -537,6 +538,12 @@ int main(int argc, char* argv[]) {
       "Maximum number of parallel executors to test (most tests will start with 1 "
       "executor and increase by doubling until max is reached).");
 
+  desc.add_options()(
+      "enable-executor-resource-mgr",
+      po::value<bool>(&g_enable_executor_resource_mgr)->implicit_value(true),
+      "Enable executor resource manager to track execution resources and "
+      "selectively gate concurrency based on resource availability.");
+
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
   desc.add(log_options.get_options());
@@ -547,6 +554,24 @@ int main(int argc, char* argv[]) {
 
   if (vm.count("keep-data")) {
     g_keep_data = true;
+  }
+  if (vm.count("enable-executor-resource-mgr")) {
+#ifndef HAVE_TSAN
+    // Parallel executor tests allocate too much memory to
+    // instrument under TSAN, so only enable the ExecutorResourceMgr
+    // (i.e. parallel kernel execution) if TSAN is off.
+    // Note that some parallel kernel execution is tested under TSAN
+    // in ConcurrencyTest, although before we turn on parallel kernel execution
+    // by default we probably will want to find a way to moderate resource requirements
+    // to run this test under TSAN as well.
+    // Todo(todd): Find way to run this test with parallel kernel execution on
+    // and TSAN enabled
+    g_enable_executor_resource_mgr = true;
+#else
+    g_enable_executor_resource_mgr = false;
+#endif
+  } else {
+    g_enable_executor_resource_mgr = false;
   }
 
   int err{0};

@@ -18,11 +18,11 @@
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
 #include <vector>
+#include "ExecutorDeviceType.h"
 #ifndef __CUDACC__
 #include <ostream>
 #endif
 
-enum class ExecutorDeviceType { CPU = 0, GPU };
 #ifndef __CUDACC__
 inline std::ostream& operator<<(std::ostream& os, ExecutorDeviceType const dt) {
   constexpr char const* strings[]{"CPU", "GPU"};

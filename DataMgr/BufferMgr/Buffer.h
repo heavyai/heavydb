@@ -133,6 +133,7 @@ class Buffer : public AbstractBuffer {
     CHECK(pin_count_ > 0);
     return (--pin_count_);
   }
+
   inline int getPinCount() override {
     std::lock_guard<std::mutex> pin_lock(pin_mutex_);
     return (pin_count_);

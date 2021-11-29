@@ -354,6 +354,17 @@ class DdlCommandExecutor {
   std::string returnCacheType() const;
 
   /**
+   * Returns true if this command is ALTER SYSTEM PAUSE|RESUME EXECUTOR QUEUE
+   */
+  bool isAlterSystemControlExecutorQueue() const;
+
+  /**
+   * Returns whether PAUSE or RESUME request
+   * has been delivered to ALTER SYSTEM <CONTROL> EXECUTOR qUEUE
+   */
+  std::string returnQueueAction() const;
+
+  /**
    * Returns target query session if this command is KILL QUERY
    */
   const std::string getTargetQuerySessionToKill() const;

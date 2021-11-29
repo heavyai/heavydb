@@ -47,6 +47,7 @@ set(datamgr_source_files
     ForeignStorage/AbstractFileStorageDataWrapper.cpp
     ForeignStorage/ForeignDataWrapperFactory.cpp
     ForeignStorage/InternalCatalogDataWrapper.cpp
+    ForeignStorage/InternalExecutorStatsDataWrapper.cpp
     ForeignStorage/InternalMemoryStatsDataWrapper.cpp
     ForeignStorage/InternalStorageStatsDataWrapper.cpp
     ForeignStorage/InternalSystemDataWrapper.cpp

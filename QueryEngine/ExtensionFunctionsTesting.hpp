@@ -44,5 +44,17 @@ int32_t ct_device_selection_udf_both__gpu_(int32_t input) {
   return GPU_DEVICE_CODE;
 }
 
+#ifndef __CUDACC__
+
+#include <chrono>
+#include <thread>
+EXTENSION_NOINLINE
+int32_t ct_sleep_us__cpu_(int64_t usec) {
+  std::this_thread::sleep_for(std::chrono::microseconds(usec));
+  return usec;
+}
+
+#endif  // #ifndef __CUDACC__
+
 #undef CPU_DEVICE_CODE
 #undef GPU_DEVICE_CODE

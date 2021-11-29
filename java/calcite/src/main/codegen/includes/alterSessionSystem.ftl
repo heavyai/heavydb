@@ -11,6 +11,23 @@
  limitations under the License.
 -->
 
+SqlDdl SqlAlterSystem(Span s) :
+{
+    SqlDdl alterSystem;
+}
+{
+    <ALTER>
+    <SYSTEM>
+    (
+      alterSystem = SqlAlterSystemClear(s)
+    |
+      alterSystem = SqlAlterSystemControlExecutorQueue(s)
+    )
+    {
+        return alterSystem;
+    }
+}
+
 /*
  * Clear CPU or GPU memory
  *
@@ -21,8 +38,6 @@ SqlDdl SqlAlterSystemClear(Span s) :
     String cacheType;
 }
 {
-    <ALTER>
-    <SYSTEM>
     <CLEAR>
     (
         <CPU>
@@ -43,6 +58,34 @@ SqlDdl SqlAlterSystemClear(Span s) :
     <MEMORY>
     {
         return new SqlAlterSystemClear(s.end(this), cacheType);
+    }
+}
+
+/*
+ * Pause/Resume Executor Queue
+ *
+ * ALTER SYSTEM PAUSE|RESUME EXECUTOR QUEUE
+ */
+SqlDdl SqlAlterSystemControlExecutorQueue(Span s) :
+{
+    String queueAction;
+}
+{
+    (
+      <PAUSE>
+      {
+          queueAction = "PAUSE";
+      }
+    |
+      <RESUME>
+      {
+          queueAction = "RESUME";
+      }
+    )
+    <EXECUTOR>
+    <QUEUE>
+    {
+        return new SqlAlterSystemControlExecutorQueue(s.end(this), queueAction);
     }
 }
 

@@ -569,6 +569,8 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
           << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
   LOG(PTX) << "SQL query\n"
            << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
+  LOG(EXECUTOR) << "SQL query\n"
+                << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
 
   std::vector<TRestriction> trestrictions;
 

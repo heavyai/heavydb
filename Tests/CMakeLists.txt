@@ -153,6 +153,13 @@ list(APPEND SANITY_TEST_PROGRAMS ComputeMetadataTest)
 
 ##########
 
+add_executable(ConcurrencyTest ConcurrencyTest.cpp)
+target_link_libraries(ConcurrencyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(ConcurrencyTest ConcurrencyTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS ConcurrencyTest)
+
+##########
+
 add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
 add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
@@ -265,6 +272,13 @@ list(APPEND INSANITY_TESTS ExecuteTestTemporaryTables)
 
 endif()  # Partition 2
 if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 3)  # Partition 3
+
+##########
+
+add_executable(ExecutorResourceMgrTest ExecutorResourceMgrTest.cpp)
+target_link_libraries(ExecutorResourceMgrTest ${EXECUTE_TEST_LIBS})
+add_test(ExecutorResourceMgrTest ExecutorResourceMgrTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS ExecutorResourceMgrTest)
 
 ##########
 
@@ -436,6 +450,8 @@ add_executable(ParallelExecutorsTest ParallelExecutorsTest.cpp)
 target_link_libraries(ParallelExecutorsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(ParallelExecutorsTest ParallelExecutorsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ParallelExecutorsTest)
+add_test(NAME ParallelExecutorsResourceMgrTest COMMAND ParallelExecutorsTest ${TEST_ARGS} "--enable-executor-resource-mgr")
+list(APPEND SANITY_TESTS ParallelExecutorsResourceMgrTest)
 
 ##########
 

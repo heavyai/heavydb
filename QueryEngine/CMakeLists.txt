@@ -45,6 +45,9 @@ set(query_engine_source_files
   Execute.cpp
   ExecuteUpdate.cpp
   ExecutionKernel.cpp
+  ExecutorResourceMgr/ExecutorResourcePool.cpp
+  ExecutorResourceMgr/ExecutorResourceMgr.cpp
+  ExecutorResourceMgr/ResourceGrantPolicy.cpp
   ExpressionRange.cpp
   ExpressionRewrite.cpp
   ExtensionFunctionsBinding.cpp

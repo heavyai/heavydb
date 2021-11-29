@@ -440,6 +440,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     const CompilationOptions& co) {
   auto timer = DEBUG_TIMER(__func__);
   llvm::Module* llvm_module = func->getParent();
+  CHECK(llvm_module);
   // run optimizations
 #ifndef WITH_JIT_DEBUG
   llvm::legacy::PassManager pass_manager;
@@ -467,6 +468,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
 
   std::string err_str;
   std::unique_ptr<llvm::Module> owner(llvm_module);
+  CHECK(owner);
   llvm::EngineBuilder eb(std::move(owner));
   eb.setErrorStr(&err_str);
   eb.setEngineKind(llvm::EngineKind::JIT);

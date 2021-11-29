@@ -98,6 +98,8 @@ class ExecutionKernel {
            const size_t thread_idx,
            SharedKernelContext& shared_context);
 
+  FragmentsList get_fragment_list() const { return frag_list; }
+  int32_t get_chosen_device_id() const { return chosen_device_id; }
   const RelAlgExecutionUnit& ra_exe_unit_;
 
  private:

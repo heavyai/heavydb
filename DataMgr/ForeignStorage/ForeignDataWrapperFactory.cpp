@@ -20,6 +20,7 @@
 #include "CsvDataWrapper.h"
 #include "ForeignDataWrapper.h"
 #include "InternalCatalogDataWrapper.h"
+#include "InternalExecutorStatsDataWrapper.h"
 #include "InternalLogsDataWrapper.h"
 #include "InternalMemoryStatsDataWrapper.h"
 #include "InternalStorageStatsDataWrapper.h"
@@ -350,6 +351,9 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::create(
     data_wrapper = std::make_unique<RegexParserDataWrapper>(db_id, foreign_table);
   } else if (data_wrapper_type == DataWrapperType::INTERNAL_CATALOG) {
     data_wrapper = std::make_unique<InternalCatalogDataWrapper>(db_id, foreign_table);
+  } else if (data_wrapper_type == DataWrapperType::INTERNAL_EXECUTOR_STATS) {
+    data_wrapper =
+        std::make_unique<InternalExecutorStatsDataWrapper>(db_id, foreign_table);
   } else if (data_wrapper_type == DataWrapperType::INTERNAL_MEMORY_STATS) {
     data_wrapper = std::make_unique<InternalMemoryStatsDataWrapper>(db_id, foreign_table);
   } else if (data_wrapper_type == DataWrapperType::INTERNAL_STORAGE_STATS) {
@@ -395,6 +399,9 @@ const ForeignDataWrapper& ForeignDataWrapperFactory::createForValidation(
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_CATALOG) {
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<InternalCatalogDataWrapper>();
+    } else if (data_wrapper_type == DataWrapperType::INTERNAL_EXECUTOR_STATS) {
+      validation_data_wrappers_[data_wrapper_type_key] =
+          std::make_unique<InternalExecutorStatsDataWrapper>();
     } else if (data_wrapper_type == DataWrapperType::INTERNAL_MEMORY_STATS) {
       validation_data_wrappers_[data_wrapper_type_key] =
           std::make_unique<InternalMemoryStatsDataWrapper>();

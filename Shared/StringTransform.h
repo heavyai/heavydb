@@ -50,6 +50,8 @@ std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& q
 // Replace passwords, keys, etc. in a sql query with 'XXXXXXXX'.
 std::string hide_sensitive_data_from_query(std::string const& query_str);
 
+std::string format_num_bytes(const size_t bytes);
+
 #ifndef __CUDACC__
 std::optional<size_t> inside_string_literal(
     const size_t start,

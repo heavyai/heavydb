@@ -69,7 +69,7 @@ struct SystemParameters {
       true;  // allow calcite to optimize the relalgebra for a view query
   size_t calcite_timeout = 5000;     // calcite connect/send/receive timeout
   size_t calcite_keepalive = false;  // calcite keepalive connection
-  int num_executors = 2;
+  int num_executors = 4;
   int num_sessions = -1;  // maximum number of user sessions
   enum class RuntimeUdfRegistrationPolicy {
     DISALLOWED,
