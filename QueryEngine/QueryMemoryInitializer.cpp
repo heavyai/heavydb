@@ -473,7 +473,13 @@ void QueryMemoryInitializer::initGroupByBuffer(
     const bool output_columnar,
     const Executor* executor) {
   if (output_columnar) {
-    initColumnarGroups(query_mem_desc, buffer, init_agg_vals_, executor);
+    // When we run CPU projection code, we always compute a number of matched rows.
+    // This number is then used for columnar output buffer compaction (see
+    // compactProjectionBuffersCpu). This means we would never read uninitialized keys.
+    if (device_type == ExecutorDeviceType::GPU ||
+        query_mem_desc.getQueryDescriptionType() != QueryDescriptionType::Projection) {
+      initColumnarGroups(query_mem_desc, buffer, init_agg_vals_, executor);
+    }
   } else {
     auto rows_ptr = buffer;
     auto actual_entry_count = query_mem_desc.getEntryCount();
