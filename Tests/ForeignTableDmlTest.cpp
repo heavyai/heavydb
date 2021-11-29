@@ -605,7 +605,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   foreign_storage::ForeignStorageCache* cache_;
 
  protected:
-    void resetPersistentStorageMgr(File_Namespace::DiskCacheConfig cache_config) {
+  void resetPersistentStorageMgr(File_Namespace::DiskCacheConfig cache_config) {
     for (auto table_it : cat_->getAllTableMetadata()) {
       cat_->removeFragmenterForTable(table_it->tableId);
     }
@@ -2176,11 +2176,7 @@ class FsiImportSelectTest : public SelectQueryTest {
   }
 
   void TearDown() override {
-    try {
-      // This may throw if default_table_name is a foreign table instead of a regular one
-      sql("DROP TABLE IF EXISTS " + default_table_name + ";");
-    } catch (...) {
-    }
+    sql("DROP TABLE IF EXISTS " + default_table_name + ";");
     SelectQueryTest::TearDown();
   }
 
@@ -2238,15 +2234,18 @@ class FsiImportSelectTest : public SelectQueryTest {
   /**
    * Create FSI/Import table and import data from files
    */
-  static void sqlCreateTable(const ImportFlag import,
-                             const std::string& columns,
-                             const std::string& file_name,
-                             const std::string& data_wrapper_type,
-                             const std::map<std::string, std::string>& table_options) {
+  static void sqlCreateTable(
+      const ImportFlag import,
+      const std::string& columns,
+      const std::string& file_name,
+      const std::string& data_wrapper_type,
+      const std::map<std::string, std::string>& table_options = {},
+      const std::map<std::string, std::string>& copy_options = {}) {
     if (import) {
       sql(createImportTableQuery(columns, table_options));
       std::string filename = getDataFilesPath() + file_name + "." + data_wrapper_type;
-      sql(sqlCopyFromQuery(getDataFilesPath() + file_name + "." + data_wrapper_type));
+      sql(sqlCopyFromQuery(getDataFilesPath() + file_name + "." + data_wrapper_type,
+                           copy_options));
     } else {
       sqlCreateForeignTable(columns, file_name, data_wrapper_type, table_options);
     }
@@ -2265,7 +2264,13 @@ class FsiImportSelectTest : public SelectQueryTest {
 };
 
 class FsiImportDecimalTest : public FsiImportSelectTest,
-                             public ::testing::WithParamInterface<ImportFlag> {};
+                             public ::testing::WithParamInterface<ImportFlag> {
+  void TearDown() override {
+    std::string table_type = GetParam() ? "TABLE" : "FOREIGN TABLE";
+    sql("DROP " + table_type + " IF EXISTS " + default_table_name + ";");
+    SelectQueryTest::TearDown();
+  }
+};
 
 TEST_P(FsiImportDecimalTest, LongStrTruncate) {
   sqlCreateTable(GetParam(), "(d DECIMAL(18,2))", "decimal_longstr", wrapper_type_, {});
@@ -2314,9 +2319,12 @@ TEST_P(FsiImportDecimalTest, OutOfRangeMax) {
     // Failure will result in empty table
     assertResultSetEqual({}, result);
   } else {
-    queryAndAssertException(default_select,
-                            "Decimal overflow: value is greater than 10^16 max "
-                            "1000000000000000000 value 1000000000000000000");
+    queryAndAssertException(
+        default_select,
+        "Parsing failure \"Decimal overflow: value is greater than 10^16 max "
+        "1000000000000000000 value 1000000000000000000\" in row \"" +
+            getLastRow(file_name) + "\" in file \"" + getDataFilesPath() + file_name +
+            ".csv\"");
   }
 }
 
@@ -2330,9 +2338,12 @@ TEST_P(FsiImportDecimalTest, OutOfRangeMaxRound) {
     // Failure will result in empty table
     assertResultSetEqual({}, result);
   } else {
-    queryAndAssertException(default_select,
-                            "Decimal overflow: value is greater than 10^16 max "
-                            "1000000000000000000 value 1000000000000000000");
+    queryAndAssertException(
+        default_select,
+        "Parsing failure \"Decimal overflow: value is greater than 10^16 max "
+        "1000000000000000000 value 1000000000000000000\" in row \"" +
+            getLastRow(file_name) + "\" in file \"" + getDataFilesPath() + file_name +
+            ".csv\"");
   }
 }
 
@@ -2346,9 +2357,12 @@ TEST_P(FsiImportDecimalTest, OutOfRangeMin) {
     // Failure will result in empty table
     assertResultSetEqual({}, result);
   } else {
-    queryAndAssertException(default_select,
-                            "Decimal overflow: value is less than -10^16 min "
-                            "-1000000000000000000 value -1000000000000000000");
+    queryAndAssertException(
+        default_select,
+        "Parsing failure \"Decimal overflow: value is less than -10^16 min "
+        "-1000000000000000000 value -1000000000000000000\" in row \"" +
+            getLastRow(file_name) + "\" in file \"" + getDataFilesPath() + file_name +
+            ".csv\"");
   }
 }
 
@@ -2362,10 +2376,44 @@ TEST_P(FsiImportDecimalTest, OutOfRangeMinRound) {
     // Failure will result in empty table
     assertResultSetEqual({}, result);
   } else {
-    queryAndAssertException(default_select,
-                            "Decimal overflow: value is less than -10^16 min "
-                            "-1000000000000000000 value -1000000000000000000");
+    queryAndAssertException(
+        default_select,
+        "Parsing failure \"Decimal overflow: value is less than -10^16 min "
+        "-1000000000000000000 value -1000000000000000000\" in row \"" +
+            getLastRow(file_name) + "\" in file \"" + getDataFilesPath() + file_name +
+            ".csv\"");
   }
+}
+
+TEST_P(FsiImportDecimalTest, ImportAcceptableRejectThreshold) {
+  auto import_flag = GetParam();
+  if (!import_flag) {
+    GTEST_SKIP() << "FSI does not support max_reject";
+  }
+  std::string file_name = "decimal_survival";
+  sqlCreateTable(import_flag, "(d DECIMAL(18,2))", file_name, wrapper_type_, {});
+  TQueryResult result;
+  sql(result, default_select);
+  // Only rows within bounds end up being imported
+  assertResultSetEqual({{100.00}, {0.00}, {-100.00}}, result);
+}
+
+TEST_P(FsiImportDecimalTest, ImportExceedRejectThreshold) {
+  auto import_flag = GetParam();
+  if (!import_flag) {
+    GTEST_SKIP() << "FSI does not support max_reject";
+  }
+  std::string file_name = "decimal_survival";
+  sqlCreateTable(import_flag,
+                 "(d DECIMAL(18,2))",
+                 file_name,
+                 wrapper_type_,
+                 {},
+                 {{"max_reject", "3"}});
+  TQueryResult result;
+  sql(result, default_select);
+  // max_reject exceed, import halted
+  assertResultSetEqual({}, result);
 }
 
 INSTANTIATE_TEST_SUITE_P(FsiImportDecimalParamaterizedTest,
