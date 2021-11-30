@@ -110,7 +110,8 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     pkg-config \
     libxerces-c-dev \
     libxmlsec1-dev \
-    libtool
+    libtool \
+    patchelf
 
 # Set up gcc-8 as default gcc
 sudo update-alternatives \

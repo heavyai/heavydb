@@ -435,11 +435,17 @@ function install_memkind() {
   pushd memkind-${MEMKIND_VERSION}
   ./autogen.sh
   if [[ $(cat /etc/os-release) = *"fedora"* ]]; then
-    ./configure --prefix=${PREFIX} --libdir=${PREFIX}/lib64
-  else
-    ./configure --prefix=${PREFIX} --libdir=${PREFIX}/lib
+    memkind_dir=${PREFIX}/lib64
+  else 
+    memkind_dir=${PREFIX}/lib
   fi
+  ./configure --prefix=${PREFIX} --libdir=${memkind_dir}
   makej
   make_install
+
+  (find ${memkind_dir}/libmemkind.so \
+    && patchelf --force-rpath --set-rpath '$ORIGIN/../lib' ${memkind_dir}/libmemkind.so) \
+    || echo "${memkind_dir}/libmemkind.so was not found"
+
   popd
 }

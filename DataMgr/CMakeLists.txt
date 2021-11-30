@@ -58,6 +58,7 @@ endif()
 
 if (ENABLE_MEMKIND)
   list(APPEND datamgr_source_files Allocators/PMemAllocator.cpp)
+  set(memkind_LIBRARIES ${MEMKIND_LIB_PATH})
 endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

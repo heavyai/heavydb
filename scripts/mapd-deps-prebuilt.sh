@@ -214,7 +214,9 @@ elif [ "$ID" == "centos" ] ; then
     mesa-libGL-devel \
     environment-modules \
     valgrind \
-    openldap-devel
+    openldap-devel \
+    patchelf
+
   # Install packages from EPEL
   sudo yum install -y \
     cloc \

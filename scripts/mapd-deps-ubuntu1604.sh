@@ -62,7 +62,8 @@ sudo apt install -y \
     python-dev \
     python-yaml \
     pkg-config \
-    swig
+    swig \
+    patchelf
 
 # Install gcc 8
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y

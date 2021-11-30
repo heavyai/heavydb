@@ -59,7 +59,8 @@ sudo yum install -y \
     wget \
     curl \
     python3 \
-    openldap-devel
+    openldap-devel \
+    patchelf
 sudo yum install -y \
     jq \
     pxz
