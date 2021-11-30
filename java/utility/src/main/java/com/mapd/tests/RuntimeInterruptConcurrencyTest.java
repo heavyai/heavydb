@@ -18,6 +18,7 @@ package com.mapd.tests;
 import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TQueryInfo;
 
+import org.checkerframework.checker.units.qual.A;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 public class RuntimeInterruptConcurrencyTest {
@@ -44,6 +46,15 @@ public class RuntimeInterruptConcurrencyTest {
     Path path_obj = Paths.get(path).toAbsolutePath();
     assert Files.exists(path_obj);
     return path_obj;
+  }
+
+  private MapdTestClient getClient(String db, String username) {
+    try {
+      return MapdTestClient.getClient("localhost", 6274, db, username, "password");
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    return null;
   }
 
   private void cleanupUserAndDB(MapdTestClient su) {
@@ -67,12 +78,12 @@ public class RuntimeInterruptConcurrencyTest {
   private void runTest(
           String db, String dbaUser, String dbaPassword, String dbUser, String dbPassword)
           throws Exception {
-    int num_threads = 4;
+    int num_threads = 5;
+    int INTERRUPTER_TID = num_threads - 1;
     int num_runs = 5;
     final String large_table = "test_large";
     final String small_table = "test_small";
     final String geo_table = "test_geo";
-    Exception[] exceptions = new Exception[num_threads];
     String loop_join_query =
             "SELECT /*+ cpu_mode */ COUNT(1) FROM test_large T1, test_large T2;";
     String hash_join_query =
@@ -83,6 +94,8 @@ public class RuntimeInterruptConcurrencyTest {
             getAbsolutePath("../java/utility/src/main/java/com/mapd/tests/data/1M.csv");
     Path small_table_path =
             getAbsolutePath("../java/utility/src/main/java/com/mapd/tests/data/1K.csv");
+    Path geojson_table_path = getAbsolutePath(
+            "../java/utility/src/main/java/com/mapd/tests/data/geogdal.geojson");
     try {
       MapdTestClient dba =
               MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
@@ -108,173 +121,186 @@ public class RuntimeInterruptConcurrencyTest {
       } catch (IOException e) {
         e.printStackTrace();
       }
+
+      File geojson_data = new File(geojson_table_path.toString());
+      ArrayList<String> geojson_header = new ArrayList<>();
+      ArrayList<String> geojson_footer = new ArrayList<>();
+      ArrayList<String> geojson_feature = new ArrayList<>();
+      geojson_header.add("{");
+      geojson_header.add("\"type\": \"FeatureCollection\",");
+      geojson_header.add("\"name\": \"geospatial_point\",");
+      geojson_header.add(
+              "\"crs\": { \"type\": \"name\", \"properties\": { \"name\": \"urn:ogc:def:crs:OGC:1.3:CRS84\" } },");
+      geojson_header.add("\"features\": [");
+      geojson_footer.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 10.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 10.0, 9.0 ] } }");
+      geojson_footer.add("]");
+      geojson_footer.add("}");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 0.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 0.0, 1.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 1.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 1.0, 2.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 2.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 2.0, 3.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 3.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 3.0, 4.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 4.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 4.0, 5.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 5.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 5.0, 6.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 6.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 6.0, 7.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 7.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 7.0, 8.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 8.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 8.0, 9.0 ] } },");
+      geojson_feature.add(
+              "{ \"type\": \"Feature\", \"properties\": { \"trip\": 9.0 }, \"geometry\": { \"type\": \"Point\", \"coordinates\": [ 9.0, 0.0 ] } },");
+      try (BufferedWriter writer = new BufferedWriter(new FileWriter(geojson_data))) {
+        for (String str : geojson_header) {
+          writer.write(str + "\n");
+        }
+        for (int i = 0; i < 1000; i++) {
+          for (String str : geojson_feature) {
+            writer.write(str + "\n");
+          }
+        }
+        for (String str : geojson_footer) {
+          writer.write(str + "\n");
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
       dba.runSql("COPY " + large_table + " FROM '" + large_table_path.toString()
               + "' WITH (header='false');");
-      dba.runSql("COPY " + large_table + " FROM '" + small_table_path.toString()
+      dba.runSql("COPY " + small_table + " FROM '" + small_table_path.toString()
               + "' WITH (header='false');");
+      dba.runSql("COPY " + geo_table + " FROM '" + geojson_table_path.toString()
+              + "' WITH (header='false', geo='true');");
     } catch (Exception e) {
       logger.error("[" + Thread.currentThread().getId() + "]"
                       + " Caught Exception: " + e.getMessage(),
               e);
-      exceptions[0] = e;
     }
 
     ArrayList<Thread> queryThreads = new ArrayList<>();
     ArrayList<Thread> interrupterThreads = new ArrayList<>();
-    for (int i = 0; i < num_threads; i++) {
-      logger.info("Starting " + i);
-      final int threadId = i;
-      final String user_name = "u".concat(Integer.toString(threadId));
-      for (int r = 0; r < num_runs; r++) {
-        if (i < 2) {
-          String[] queries = {hash_join_query, gby_query, loop_join_query};
-          boolean interrupted = false;
-          Thread interrupt_case_t = new Thread(new Runnable() {
-            @Override
-            public void run() {
-              long tid = Thread.currentThread().getId();
-              String logPrefix = "[" + tid + "]";
-              try {
-                MapdTestClient user = MapdTestClient.getClient(
-                        "localhost", 6274, db, user_name, "password");
-                MapdTestClient interrupter = MapdTestClient.getClient(
-                        "localhost", 6274, db, "interrupter", "password");
-                for (int r = 0; r < num_runs; r++) {
-                  boolean interrupted = false;
-                  for (int q = 0; q < 3; q++) {
-                    if (q == 2) {
-                      Thread interrupt_thread = new Thread(new Runnable() {
-                        @Override
-                        public void run() {
-                          // try to interrupt
-                          boolean foundRunningQuery = false;
-                          while (!foundRunningQuery) {
-                            try {
-                              List<TQueryInfo> queryInfos =
-                                      interrupter.get_queries_info();
-                              for (TQueryInfo queryInfo : queryInfos) {
-                                if (queryInfo.query_session_id.equals(user.sessionId)
-                                        && queryInfo.current_status.equals(
-                                                "RUNNING_QUERY_KERNEL")) {
-                                  foundRunningQuery = true;
-                                  interrupter.runSql("KILL QUERY '"
-                                          + queryInfo.query_public_session_id + "';");
-                                  break;
-                                }
-                              }
-                              Thread.sleep(100);
-                            } catch (Exception e) {
-                              logger.error(
-                                      logPrefix + " Caught Exception: " + e.getMessage(),
-                                      e);
-                              exceptions[threadId] = e;
-                            }
-                          }
-                        }
-                      });
-                      interrupt_thread.start();
-                      interrupterThreads.add(interrupt_thread);
-                    }
-                    try {
-                      logger.info(logPrefix + "Run SELECT query: " + queries[q]);
-                      user.runSql(queries[q]);
-                    } catch (Exception e3) {
-                      if (e3 instanceof TOmniSciException) {
-                        TOmniSciException ee = (TOmniSciException) e3;
-                        if (q == 2 && ee.error_msg.contains("ERR_INTERRUPTED")) {
-                          interrupted = true;
-                          logger.info(
-                                  logPrefix + "Select query issued has been interrupted");
-                        }
-                      } else {
-                        logger.error(
-                                logPrefix + " Caught Exception: " + e3.getMessage(), e3);
-                        exceptions[threadId] = e3;
-                      }
-                    }
-                  }
-                  assert interrupted;
-                }
-              } catch (Exception e) {
-                logger.error(logPrefix + " Caught Exception: " + e.getMessage(), e);
-                exceptions[threadId] = e;
+    Thread query_interrupter = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        // try to interrupt
+        int tid = INTERRUPTER_TID;
+        String logPrefix = "[" + tid + "]";
+        MapdTestClient interrupter = getClient(db, "interrupter");
+        int check_empty_session_queue = 0;
+        while (true) {
+          try {
+            List<TQueryInfo> queryInfos = interrupter.get_queries_info();
+            boolean found_target_query = false;
+            for (TQueryInfo queryInfo : queryInfos) {
+              String session_id = queryInfo.query_public_session_id;
+              boolean select_query =
+                      queryInfo.current_status.equals("RUNNING_QUERY_KERNEL");
+              boolean import_query = queryInfo.current_status.equals("RUNNING_IMPORTER");
+              boolean can_interrupt = false;
+              if (import_query
+                      || (select_query
+                              && queryInfo.query_str.compareTo(loop_join_query) == 0)) {
+                can_interrupt = true;
+              }
+              if (can_interrupt) {
+                interrupter.runSql("KILL QUERY '" + session_id + "';");
+                check_empty_session_queue = 0;
+                found_target_query = true;
               }
             }
-          });
-          interrupt_case_t.start();
-          queryThreads.add(interrupt_case_t);
-        } else {
-          boolean interrupted = false;
-          Thread importer_case_t = new Thread(new Runnable() {
+            if (!found_target_query || queryInfos.isEmpty()) {
+              ++check_empty_session_queue;
+            }
+            if (check_empty_session_queue > 20) {
+              break;
+            }
+            Thread.sleep(1000);
+          } catch (Exception e) {
+            logger.error(logPrefix + " Caught Exception: " + e.getMessage(), e);
+          }
+        }
+      }
+    });
+    query_interrupter.start();
+    interrupterThreads.add(query_interrupter);
+
+    for (int i = 0; i < num_runs; i++) {
+      logger.info("Starting run-" + i);
+      for (int r = 0; r < num_threads; r++) {
+        final int tid = r;
+        final String logPrefix = "[" + tid + "]";
+        final String user_name = "u".concat(Integer.toString(tid));
+        if (r < num_threads - 2) {
+          String[] queries = {hash_join_query, gby_query, loop_join_query};
+          Thread select_query_runner = new Thread(new Runnable() {
             @Override
             public void run() {
-              long tid = Thread.currentThread().getId();
-              String logPrefix = "[" + tid + "]";
-              try {
-                MapdTestClient user = MapdTestClient.getClient(
-                        "localhost", 6274, db, user_name, "password");
-                MapdTestClient interrupter = MapdTestClient.getClient(
-                        "localhost", 6274, db, "interrupter", "password");
-                for (int r = 0; r < num_runs; r++) {
-                  boolean interrupted = false;
-                  Thread interrupt_thread = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                      // try to interrupt
-                      boolean foundRunningQuery = false;
-                      while (!foundRunningQuery) {
-                        try {
-                          List<TQueryInfo> queryInfos = interrupter.get_queries_info();
-                          for (TQueryInfo queryInfo : queryInfos) {
-                            if (queryInfo.query_session_id.equals(user.sessionId)
-                                    && queryInfo.current_status.equals(
-                                            "RUNNING_IMPORTER")) {
-                              foundRunningQuery = true;
-                              interrupter.runSql("KILL QUERY '"
-                                      + queryInfo.query_public_session_id + "';");
-                              break;
-                            }
-                          }
-                          Thread.sleep(100);
-                        } catch (Exception e) {
-                          logger.error(
-                                  logPrefix + " Caught Exception: " + e.getMessage(), e);
-                          exceptions[threadId] = e;
-                        }
-                      }
-                    }
-                  });
-                  interrupt_thread.start();
-                  interrupterThreads.add(interrupt_thread);
+              logger.info("Starting thread-" + tid);
+              final MapdTestClient user = getClient(db, user_name);
+              for (int k = 0; k < 5; k++) {
+                boolean interrupted = false;
+                for (int q = 0; q < 3; q++) {
                   try {
-                    Path geo_table_path = getAbsolutePath(
-                            "../Tests/Import/datafiles/interrupt_table_gdal.geojson");
-                    user.runSql("COPY " + geo_table + " FROM '"
-                            + geo_table_path.toString() + "' WITH (geo='true');");
-                    logger.info(logPrefix + "Run Import query");
-                  } catch (Exception e3) {
-                    if (e3 instanceof TOmniSciException) {
-                      TOmniSciException ee = (TOmniSciException) e3;
-                      if (ee.error_msg.contains("error code 10")) {
+                    logger.info(logPrefix + " Run SELECT query: " + queries[q]);
+                    user.runSql(queries[q]);
+                  } catch (Exception e2) {
+                    if (e2 instanceof TOmniSciException) {
+                      TOmniSciException ee = (TOmniSciException) e2;
+                      if (q == 2 && ee.error_msg.contains("ERR_INTERRUPTED")) {
                         interrupted = true;
-                        logger.info(logPrefix + "Import query has been interrupted");
+                        logger.info(
+                                logPrefix + " Select query issued has been interrupted");
                       }
                     } else {
                       logger.error(
-                              logPrefix + " Caught Exception: " + e3.getMessage(), e3);
-                      exceptions[threadId] = e3;
+                              logPrefix + " Caught Exception: " + e2.getMessage(), e2);
                     }
                   }
-                  assert interrupted;
                 }
-              } catch (Exception e) {
-                logger.error(logPrefix + " Caught Exception: " + e.getMessage(), e);
-                exceptions[threadId] = e;
+                assert interrupted;
               }
             }
           });
-          importer_case_t.start();
-          queryThreads.add(importer_case_t);
+          select_query_runner.start();
+          queryThreads.add(select_query_runner);
+        } else {
+          Thread import_query_runner = new Thread(new Runnable() {
+            @Override
+            public void run() {
+              logger.info("Starting thread-" + tid);
+              final MapdTestClient user = getClient(db, user_name);
+              for (int k = 0; k < 2; k++) {
+                boolean interrupted = false;
+                try {
+                  Path geo_table_path = getAbsolutePath(
+                          "../Tests/Import/datafiles/interrupt_table_gdal.geojson");
+                  user.runSql("COPY " + geo_table + " FROM '" + geo_table_path.toString()
+                          + "' WITH (geo='true');");
+                  logger.info(logPrefix + " Run Import query");
+                } catch (Exception e2) {
+                  if (e2 instanceof TOmniSciException) {
+                    TOmniSciException ee = (TOmniSciException) e2;
+                    if (ee.error_msg.contains("error code 10")) {
+                      interrupted = true;
+                      logger.info(logPrefix + " Import query has been interrupted");
+                    }
+                  } else {
+                    logger.error(logPrefix + " Caught Exception: " + e2.getMessage(), e2);
+                  }
+                }
+                assert interrupted;
+              }
+            }
+          });
+          import_query_runner.start();
+          queryThreads.add(import_query_runner);
         }
       }
     }
@@ -293,11 +319,15 @@ public class RuntimeInterruptConcurrencyTest {
     dba.runSql("DROP TABLE " + geo_table + ";");
     File large_data = new File(large_table_path.toString());
     File small_data = new File(small_table_path.toString());
+    File geojson_data = new File(geojson_table_path.toString());
     if (large_data.exists()) {
       large_data.delete();
     }
     if (small_data.exists()) {
       small_data.delete();
+    }
+    if (geojson_data.exists()) {
+      geojson_data.delete();
     }
   }
 

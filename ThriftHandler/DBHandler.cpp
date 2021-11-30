@@ -814,17 +814,16 @@ void DBHandler::interrupt(const TSessionId& query_session,
       if (executor->checkIsQuerySessionEnrolled(query_session, session_read_lock)) {
         session_read_lock.unlock();
         VLOG(1) << "Received interrupt: "
-                << "Session " << *session_it->second << ", User "
-                << session_it->second->get_currentUser().userLoggable() << ", Database "
-                << dbname << std::endl;
+                << "User " << session_it->second->get_currentUser().userLoggable()
+                << ", Database " << dbname << std::endl;
         executor->interrupt(query_session, interrupt_session);
       }
     } else {
       for (auto& executor_id : target_executor_ids) {
         VLOG(1) << "Received interrupt: "
-                << "Session " << *session_it->second << ", Executor " << executor_id
-                << ", User " << session_it->second->get_currentUser().userLoggable()
-                << ", Database " << dbname << std::endl;
+                << "Executor " << executor_id << ", User "
+                << session_it->second->get_currentUser().userLoggable() << ", Database "
+                << dbname << std::endl;
         auto target_executor = Executor::getExecutor(executor_id);
         target_executor->interrupt(query_session, interrupt_session);
       }
@@ -7439,6 +7438,11 @@ ExecutionResult DBHandler::getQueries(
 
   std::vector<RelLogicalValues::RowValues> logical_values;
   if (!sessions_.empty()) {
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                          jit_debug_ ? "/tmp" : "",
+                                          jit_debug_ ? "mapdquery" : "",
+                                          system_parameters_);
+    CHECK(executor);
     for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
       const auto id = session->first;
       const auto query_session_ptr = session->second;
@@ -7447,11 +7451,6 @@ ExecutionResult DBHandler::getQueries(
         // non-admin user can only see the owned queries
         continue;
       }
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                            jit_debug_ ? "/tmp" : "",
-                                            jit_debug_ ? "mapdquery" : "",
-                                            system_parameters_);
-      CHECK(executor);
       std::vector<QuerySessionStatus> query_infos;
       {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -7506,16 +7505,16 @@ void DBHandler::get_queries_info(std::vector<TQueryInfo>& _return,
                                  const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
   auto session_ptr = stdlog.getConstSessionInfo();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        jit_debug_ ? "/tmp" : "",
+                                        jit_debug_ ? "mapdquery" : "",
+                                        system_parameters_);
+  CHECK(executor);
   mapd_lock_guard<mapd_shared_mutex> read_lock(sessions_mutex_);
   for (auto session = sessions_.begin(); sessions_.end() != session; session++) {
     const auto id = session->first;
     const auto query_session_ptr = session->second;
     const auto query_session_user_name = query_session_ptr->get_currentUser().userName;
-    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                          jit_debug_ ? "/tmp" : "",
-                                          jit_debug_ ? "mapdquery" : "",
-                                          system_parameters_);
-    CHECK(executor);
     std::vector<QuerySessionStatus> query_infos;
     {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -7623,9 +7622,8 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
                                                   session_read_lock)) {
           session_read_lock.unlock();
           VLOG(1) << "Received interrupt: "
-                  << "Session " << target_query_session << ", leafCount "
-                  << leaf_aggregator_.leafCount() << ", User "
-                  << session_info.get_currentUser().userLoggable() << ", Database "
+                  << "User " << session_info.get_currentUser().userLoggable()
+                  << ", LeafCount " << leaf_aggregator_.leafCount() << ", Database "
                   << session_info.getCatalog().getCurrentDB().dbName << std::endl;
           executor->interrupt(target_query_session, session_info.get_session_id());
           found_valid_session = true;
@@ -7633,9 +7631,9 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
       } else {
         for (auto& executor_id : target_executor_ids) {
           VLOG(1) << "Received interrupt: "
-                  << "Session " << target_query_session << ", Executor " << executor_id
-                  << ", leafCount " << leaf_aggregator_.leafCount() << ", User "
-                  << session_info.get_currentUser().userLoggable() << ", Database "
+                  << "User " << session_info.get_currentUser().userLoggable()
+                  << ", Executor " << executor_id << ", LeafCount "
+                  << leaf_aggregator_.leafCount() << ", Database "
                   << session_info.getCatalog().getCurrentDB().dbName << std::endl;
           auto target_executor = Executor::getExecutor(executor_id);
           target_executor->interrupt(target_query_session, session_info.get_session_id());
