@@ -222,6 +222,13 @@ class SQLImporter_args {
                     .build());
 
     options.addOption(
+            Option.builder("ain")
+                    .desc("Allow conversion from bigger integer types to smaller. Overflow might occur, "
+                            + "use it only when casting is impossible")
+                    .longOpt("AllowIntegerNarrowing")
+                    .build());
+
+    options.addOption(
             Option.builder("nprg")
                     .desc("Do not assign Render Groups to Polygons (faster import, but not renderable)")
                     .longOpt("noPolyRenderGroups")
@@ -589,6 +596,10 @@ public class SQLImporter {
           match |= dstType == TDatumType.INT;
         case java.sql.Types.BIGINT:
           match |= dstType == TDatumType.BIGINT;
+          if (cmd.hasOption("AllowIntegerNarrowing")) {
+            match |= dstType == TDatumType.TINYINT || dstType == TDatumType.SMALLINT
+                    || dstType == TDatumType.INT;
+          }
           break;
         case java.sql.Types.DECIMAL:
         case java.sql.Types.NUMERIC:
