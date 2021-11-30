@@ -1022,12 +1022,10 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
          null_key_lv,
          order_entry_lv});
   } else {
-    const auto output_buffer_entry_count_lv =
-        LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "max_matched"));
     const auto group_expr_lv =
         LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
     std::vector<llvm::Value*> args{groups_buffer,
-                                   output_buffer_entry_count_lv,
+                                   get_arg_by_name(ROW_FUNC, "max_matched"),
                                    group_expr_lv,
                                    code_generator.posArg(nullptr)};
     if (query_mem_desc.didOutputColumnar()) {

@@ -145,7 +145,7 @@ llvm::Function* row_process(llvm::Module* mod,
     func_args.push_back(pi32_type);  // 1 iff current row matched, else 0
     func_args.push_back(pi32_type);  // total rows matched from the caller
     func_args.push_back(pi32_type);  // total rows matched before atomic increment
-    func_args.push_back(pi32_type);  // max number of slots in the output buffer
+    func_args.push_back(i32_type);   // max number of slots in the output buffer
   }
 
   func_args.push_back(pi64_type);  // aggregate init values
@@ -284,6 +284,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
     }
 
     Attrs.push_back(PAS);
+    // applied to i32* total_matched
+    {
+      AttrBuilder B;
+      B.addAttribute(Attribute::NoAlias);
+      Attrs.push_back(Attributes::get(mod->getContext(), 10U, B));
+    }
 
     query_func_pal = Attributes::get(mod->getContext(), Attrs);
   }
@@ -646,6 +652,14 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
     }
 
     Attrs.push_back(PAS);
+    // applied to i32* total_matched
+    {
+      AttrBuilder B;
+      B.addAttribute(Attribute::NoAlias);
+      PAS = Attributes::get(mod->getContext(), 10U, B);
+    }
+
+    Attrs.push_back(PAS);
     {
       AttrBuilder B;
       B.addAttribute(Attribute::UWTable);
@@ -700,8 +714,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   row_count->setAlignment(LLVM_ALIGN(8));
   row_count->setName("row_count");
 
-  LoadInst* max_matched = new LoadInst(
-      get_pointer_element_type(max_matched_ptr), max_matched_ptr, "", false, bb_entry);
+  LoadInst* max_matched = new LoadInst(get_pointer_element_type(max_matched_ptr),
+                                       max_matched_ptr,
+                                       "max_matched",
+                                       false,
+                                       bb_entry);
   max_matched->setAlignment(LLVM_ALIGN(8));
 
   auto crt_matched_ptr = new AllocaInst(i32_type, 0, "crt_matched", bb_entry);
@@ -795,7 +812,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template_impl(
   row_process_params.push_back(crt_matched_ptr);
   row_process_params.push_back(total_matched);
   row_process_params.push_back(old_total_matched_ptr);
-  row_process_params.push_back(max_matched_ptr);
+  row_process_params.push_back(max_matched);
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
   row_process_params.push_back(frag_row_off_ptr);
