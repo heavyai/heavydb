@@ -1,0 +1,9 @@
+Struct import_export::RasterImporter::ImportBandInfo
+====================================================
+
+.. doxygenstruct:: import_export::RasterImporter::ImportBandInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

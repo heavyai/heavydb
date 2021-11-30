@@ -1,0 +1,9 @@
+Struct Geospatial::GDAL::FeatureDeleter
+=======================================
+
+.. doxygenstruct:: Geospatial::GDAL::FeatureDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

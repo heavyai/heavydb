@@ -1,0 +1,9 @@
+Struct Geospatial::GDAL::SpatialReferenceDeleter
+================================================
+
+.. doxygenstruct:: Geospatial::GDAL::SpatialReferenceDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

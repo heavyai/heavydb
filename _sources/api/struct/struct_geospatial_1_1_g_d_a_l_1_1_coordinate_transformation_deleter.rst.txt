@@ -1,0 +1,9 @@
+Struct Geospatial::GDAL::CoordinateTransformationDeleter
+========================================================
+
+.. doxygenstruct:: Geospatial::GDAL::CoordinateTransformationDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

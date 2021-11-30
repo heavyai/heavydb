@@ -1,0 +1,9 @@
+Class com::mapd::tests::RuntimeInterruptConcurrencyTest
+=======================================================
+
+.. doxygenclass:: com::mapd::tests::RuntimeInterruptConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

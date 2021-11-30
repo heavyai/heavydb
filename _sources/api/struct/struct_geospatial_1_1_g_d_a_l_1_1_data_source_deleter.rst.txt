@@ -1,0 +1,9 @@
+Struct Geospatial::GDAL::DataSourceDeleter
+==========================================
+
+.. doxygenstruct:: Geospatial::GDAL::DataSourceDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
