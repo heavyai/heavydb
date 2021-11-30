@@ -987,8 +987,15 @@ DEVICE ALWAYS_INLINE bool trim_linestring_to_buffered_box(int8_t* l1,
       // linestring may reenter the buffered box.
       relevant_section_l1size = 0;
     }
+    // Advance to the next line segment.
     l11x = l12x;
     l11y = l12y;
+  }
+  if (relevant_section_l1 && relevant_section_l1size == 0) {
+    // If we did start tracking the relevant section (i.e. entered the buffered bbox)
+    // and haven't finalized the size (i.e. stayed in the bbox until the end)
+    // finalize now based on the last point.
+    relevant_section_l1size = l1size - (relevant_section_l1 - l1);
   }
   // Make sure that relevant section contains at least 2+ points.
   if (relevant_section_l1 && (relevant_section_l1size > 2 * compression_unit_size(ic1))) {
