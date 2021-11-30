@@ -2800,10 +2800,43 @@ bool ST_DWithin_LineString_Polygon(int8_t* l1,
     }
   }
 
+  // First, assume the entire linestring is relevant.
+  int8_t* relevant_section_l1 = l1;
+  int64_t relevant_section_l1size = l1size;
+  // Mitigation for very long linestrings (5+ segments: think highways, powerlines)
+  if (poly_bounds && l1size > 10 * compression_unit_size(ic1)) {
+    // Before diving into distance calculations, try to trim the linestring
+    // just to the section that intersects the threshold-buffered bounding box.
+    int64_t res_l1 = 0;
+    int64_t res_l1size = 0;
+    trim_linestring_to_buffered_box(l1,
+                                    l1size,
+                                    ic1,
+                                    isr1,
+                                    poly_bounds,
+                                    poly_bounds_size,
+                                    isr2,
+                                    osr,
+                                    distance_within,
+                                    &res_l1,
+                                    &res_l1size);
+    if (res_l1size > 0) {
+      relevant_section_l1 = reinterpret_cast<int8_t*>(res_l1);
+      relevant_section_l1size = res_l1size;
+    } else {
+      // The big short-circuit: if not a single line segment bbox overlaped
+      // with buffered polygon bbox, then it means that the entire linestring
+      // doesn't come close enough to the polygon to be within distance.
+      // Even though bboxes do overlap, the linestring may go around the poly.
+      // No need to run full distance calculation.
+      return false;
+    }
+  }
+
   // May need to adjust the threshold by TOLERANCE_DEFAULT
   const double threshold = distance_within;
-  return ST_Distance_LineString_Polygon(l1,
-                                        l1size,
+  return ST_Distance_LineString_Polygon(relevant_section_l1,
+                                        relevant_section_l1size,
                                         poly_coords,
                                         poly_coords_size,
                                         poly_ring_sizes,
