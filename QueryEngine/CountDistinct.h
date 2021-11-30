@@ -53,7 +53,7 @@ inline size_t bitmap_set_size(const int8_t* bitmap, const size_t bitmap_byte_sz)
 
 inline void bitmap_set_union(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
   for (size_t i = 0; i < bitmap_sz; ++i) {
-    lhs[i] = rhs[i] = lhs[i] | rhs[i];
+    lhs[i] = lhs[i] | rhs[i];
   }
 }
 
@@ -146,7 +146,6 @@ inline void count_distinct_set_union(
     auto old_set = reinterpret_cast<std::set<int64_t>*>(old_set_handle);
     auto new_set = reinterpret_cast<std::set<int64_t>*>(new_set_handle);
     new_set->insert(old_set->begin(), old_set->end());
-    old_set->insert(new_set->begin(), new_set->end());
   }
 }
 
