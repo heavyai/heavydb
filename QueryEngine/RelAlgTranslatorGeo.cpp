@@ -268,6 +268,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       throw QueryNotSupported("Geo function is expecting a geo column argument");
     }
     if (use_geo_expressions) {
+      arg_ti = column->get_type_info();
       return {makeExpr<Analyzer::GeoColumnVar>(column, with_bounds, with_render_group)};
     }
     return translateGeoColumn(
@@ -1020,6 +1021,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
         std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()});
   } else if (func_resolve(rex_function->getName(), "ST_Perimeter"sv, "ST_Area"sv)) {
     SQLTypeInfo arg_ti;
+    int legacy_transform_srid = 0;  // discard
     auto geoargs = translateGeoFunctionArg(rex_function->getOperand(0),
                                            arg_ti,
                                            /*with_bounds=*/false,
@@ -1028,6 +1030,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
                                            /*is_projection=*/false,
                                            /*use_geo_expressions=*/true);
     CHECK_EQ(geoargs.size(), size_t(1));
+    if (arg_ti.get_input_srid() != arg_ti.get_output_srid() &&
+        arg_ti.get_output_srid() > 0 &&
+        std::dynamic_pointer_cast<Analyzer::ColumnVar>(geoargs.front())) {
+      // legacy transform
+      legacy_transform_srid = arg_ti.get_output_srid();
+    }
     arg_ti = geoargs.front()->get_type_info();
     if (arg_ti.get_type() != kPOLYGON && arg_ti.get_type() != kMULTIPOLYGON) {
       throw QueryNotSupported(rex_function->getName() +
@@ -1037,7 +1045,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     return makeExpr<Analyzer::GeoOperator>(
         rex_function->getType(),
         rex_function->getName(),
-        std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()});
+        std::vector<std::shared_ptr<Analyzer::Expr>>{geoargs.front()},
+        legacy_transform_srid > 0 ? std::make_optional<int>(legacy_transform_srid)
+                                  : std::nullopt);
   }
 
   // Accessors for poly bounds and render group for in-situ poly render queries

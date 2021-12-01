@@ -107,7 +107,11 @@ class AreaPerimeter : public Codegen {
     operand_lvs.push_back(
         cgen_state->llInt(Geospatial::get_compression_scheme(operand_ti)));  // ic
     operand_lvs.push_back(cgen_state->llInt(operand_ti.get_input_srid()));   // in srid
-    operand_lvs.push_back(cgen_state->llInt(operand_ti.get_output_srid()));  // out srid
+    auto output_srid = operand_ti.get_output_srid();
+    if (const auto srid_override = operator_->getOutputSridOverride()) {
+      output_srid = *srid_override;
+    }
+    operand_lvs.push_back(cgen_state->llInt(output_srid));  // out srid
 
     const auto& ret_ti = operator_->get_type_info();
     CHECK(ret_ti.get_type() == kDOUBLE || ret_ti.get_type() == kFLOAT);

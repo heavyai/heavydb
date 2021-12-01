@@ -966,6 +966,13 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
             R"(SELECT ST_Area(gpoly4326) FROM geospatial_test WHERE id = 4;)", dt)),
         double(12.5),
         double(10e-5));
+    // Same area projected to web mercator - square meters
+    ASSERT_NEAR(
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Area(ST_Transform(gpoly4326,900913)) FROM geospatial_test WHERE id = 4;)",
+            dt)),
+        double(155097342153.4868),
+        double(0.01));
 
     // order by (unsupported)
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
