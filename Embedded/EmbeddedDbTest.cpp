@@ -68,11 +68,10 @@ int main(int argc, char* argv[]) {
   try {
     auto opt_str = base_path + " --calcite-port " + std::to_string(calcite_port);
     if (columnar_output) {
-      opt_str += "--columnar-output";
+      opt_str += " --columnar-output";
     }
     auto dbe = DBEngine::create(opt_str);
     if (dbe) {
-      auto memory_pool = arrow::default_memory_pool();
       arrow::io::IOContext io_context = arrow::io::default_io_context();
       auto arrow_parse_options = arrow::csv::ParseOptions::Defaults();
       auto arrow_read_options = arrow::csv::ReadOptions::Defaults();
