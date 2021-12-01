@@ -231,8 +231,16 @@ function install_gdal() {
     # proj
     download_make_install ${HTTP_DEPS}/proj-${PROJ_VERSION}.tar.gz "" "--disable-tiff"
 
-    # gdal
-    download_make_install ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal"
+    # gdal (with patch for GRIB raster thread contention)
+    download ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz
+    extract gdal-${GDAL_VERSION}.tar.gz
+    pushd gdal-${GDAL_VERSION}
+    patch -p0 frmts/grib/degrib/degrib/myerror.c $SCRIPTS_DIR/gdal-3.2.2_grib_thread_contention.patch
+    mv frmts/grib/degrib/degrib/myerror.c frmts/grib/degrib/degrib/myerror.cpp
+    ./configure --prefix=$PREFIX --without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal
+    makej
+    make_install
+    popd
 }
 
 GEOS_VERSION=3.8.1
