@@ -34,7 +34,7 @@ ForeignDataImporter::ForeignDataImporter(const std::string& file_path,
 void ForeignDataImporter::finalize(
     const Catalog_Namespace::SessionInfo& parent_session_info,
     ImportStatus& import_status,
-    const std::vector<std::pair<const ColumnDescriptor*, StringDictionary*> >&
+    const std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>&
         string_dictionaries) {
   if (table_->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident
