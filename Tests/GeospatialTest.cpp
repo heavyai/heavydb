@@ -974,6 +974,21 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         double(155097342153.4868),
         double(0.01));
 
+    // centroid
+    ASSERT_NEAR(
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance(ST_Centroid(gpoly4326),'POINT (1.6666666 1.66666666)') FROM geospatial_test WHERE id = 4;)",
+            dt)),
+        double(0.0),
+        double(10e-5));
+    // web mercator centroid
+    ASSERT_NEAR(
+        v<double>(run_simple_agg(
+            R"(SELECT ST_Distance(ST_Centroid(ST_Transform(gpoly4326,900913)), 'POINT (185532.482988 185768.418973)') FROM geospatial_test WHERE id = 4;)",
+            dt)),
+        double(0.0),
+        double(10e-5));
+
     // order by (unsupported)
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
     EXPECT_ANY_THROW(run_multiple_agg(
