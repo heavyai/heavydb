@@ -69,6 +69,7 @@ set(query_engine_source_files
     JoinHashTable/PerfectJoinHashTable.cpp
     JoinHashTable/Runtime/HashJoinRuntime.cpp
     JoinHashTable/RangeJoinHashTable.cpp
+    L0Kernel.cpp
     LogicalIR.cpp
     LLVMFunctionAttributesUtil.cpp
     LLVMGlobalContext.cpp
@@ -135,8 +136,9 @@ set(query_engine_source_files
     Codec.h
     Execute.h
     NvidiaKernel.h
-    QueryTemplateGenerator.h
-    TableFunctions/TableFunctionManager.h)
+    TableFunctions/TableFunctionManager.h
+    L0Kernel.h
+    QueryTemplateGenerator.h)
 
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
@@ -175,6 +177,10 @@ if(ENABLE_CUDA)
   else()
     list(APPEND NVCC_BUILD_TYPE_ARGS -O3)
   endif()
+endif()
+
+if(ENABLE_L0)
+  list(APPEND MAPD_DEFINITIONS "-DHAVE_L0")
 endif()
 
 if(ENABLE_DECODERS_BOUNDS_CHECKING)
@@ -309,6 +315,11 @@ set(QUERY_ENGINE_LIBS
 )
 
 list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
+list(APPEND QUERY_ENGINE_LIBS LLVMSPIRVLib)
+
+if(ENABLE_L0)
+  list(APPEND QUERY_ENGINE_LIBS L0Mgr)
+endif()
 
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
