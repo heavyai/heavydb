@@ -408,7 +408,10 @@ public class MetaConnect {
     int id = getTableId(tableName);
     if (id == -1) {
       try {
-        return get_table_detail_JSON(tableName);
+        // need to mark it as temporary table
+        TTableDetails tempTableTd = get_table_detail_JSON(tableName);
+        tempTableTd.is_temporary = true;
+        return tempTableTd;
       } catch (Exception e) {
         String err =
                 "Table '" + tableName + "' does not exist for DB '" + default_db + "'";

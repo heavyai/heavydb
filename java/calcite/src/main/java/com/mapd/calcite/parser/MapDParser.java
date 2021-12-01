@@ -18,79 +18,39 @@ package com.mapd.calcite.parser;
 import static org.apache.calcite.sql.parser.SqlParserPos.ZERO;
 
 import com.google.common.collect.ImmutableList;
-import com.mapd.calcite.parser.MapDParserOptions.FilterPushDownInfo;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import com.mapd.parser.hint.OmniSciHintStrategyTable;
-import com.mapd.parser.server.ExtensionFunction;
+import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
-import org.apache.calcite.linq4j.function.Functions;
-import org.apache.calcite.plan.*;
+import org.apache.calcite.plan.Context;
+import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.hep.HepPlanner;
-import org.apache.calcite.plan.hep.HepProgram;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
-import org.apache.calcite.plan.volcano.VolcanoPlanner;
-import org.apache.calcite.prepare.CalciteCatalogReader;
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelShuttleImpl;
-import org.apache.calcite.rel.core.Join;
-import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
-import org.apache.calcite.rel.externalize.MapDRelJsonReader;
-import org.apache.calcite.rel.hint.HintStrategyTable;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
-import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.CoreRules;
-import org.apache.calcite.rel.rules.FilterMergeRule;
-import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
-import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
-import org.apache.calcite.rel.rules.ProjectMergeRule;
-import org.apache.calcite.rel.rules.ProjectRemoveRule;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
-import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
-import org.apache.calcite.rex.RexBuilder;
-import org.apache.calcite.rex.RexCall;
-import org.apache.calcite.rex.RexInputRef;
-import org.apache.calcite.rex.RexNode;
-import org.apache.calcite.rex.RexShuttle;
+import org.apache.calcite.rex.*;
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.sql.JoinConditionType;
-import org.apache.calcite.sql.JoinType;
-import org.apache.calcite.sql.SqlBasicCall;
-import org.apache.calcite.sql.SqlBasicTypeNameSpec;
-import org.apache.calcite.sql.SqlCall;
-import org.apache.calcite.sql.SqlDataTypeSpec;
-import org.apache.calcite.sql.SqlDdl;
-import org.apache.calcite.sql.SqlDelete;
-import org.apache.calcite.sql.SqlDynamicParam;
-import org.apache.calcite.sql.SqlFunctionCategory;
-import org.apache.calcite.sql.SqlIdentifier;
-import org.apache.calcite.sql.SqlIntervalQualifier;
-import org.apache.calcite.sql.SqlJoin;
-import org.apache.calcite.sql.SqlKind;
-import org.apache.calcite.sql.SqlLiteral;
-import org.apache.calcite.sql.SqlNode;
-import org.apache.calcite.sql.SqlNodeList;
-import org.apache.calcite.sql.SqlNumericLiteral;
-import org.apache.calcite.sql.SqlOrderBy;
-import org.apache.calcite.sql.SqlSelect;
-import org.apache.calcite.sql.SqlUnresolvedFunction;
-import org.apache.calcite.sql.SqlUpdate;
-import org.apache.calcite.sql.SqlWith;
+import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -101,16 +61,9 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.sql.util.SqlShuttle;
-import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
-import org.apache.calcite.tools.FrameworkConfig;
-import org.apache.calcite.tools.Frameworks;
-import org.apache.calcite.tools.Planner;
-import org.apache.calcite.tools.Program;
-import org.apache.calcite.tools.Programs;
-import org.apache.calcite.tools.RelConversionException;
-import org.apache.calcite.tools.ValidationException;
+import org.apache.calcite.tools.*;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 import org.slf4j.Logger;
@@ -118,15 +71,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
@@ -155,7 +100,6 @@ public final class MapDParser {
   private final int mapdPort;
   private MapDUser mapdUser;
   private String schemaJson;
-  SqlNode sqlNode_;
   private SockTransportProperties sock_transport_properties = null;
 
   private static Map<String, Boolean> SubqueryCorrMemo = new ConcurrentHashMap<>();
@@ -243,68 +187,52 @@ public final class MapDParser {
           return false;
         }
 
-        // special handling of sub-queries
-        if (expression.isA(SCALAR) || expression.isA(EXISTS) || expression.isA(IN)) {
-          // only expand if it is correlated.
-
-          if (expression.isA(EXISTS)) {
-            // always expand subquery by EXISTS clause
-            return true;
-          }
+        if (expression.isA(EXISTS) || expression.isA(IN)) {
+          // always expand subquery by EXISTS and IN clauses
+          // note that current Calcite decorrelator fails to flat
+          // NOT-IN clause in some cases, so we do not decorrelate it for now
 
           if (expression.isA(IN)) {
-            // expand subquery by IN clause
-            // but correlated subquery by NOT_IN clause is not available
-            // currently due to a lack of supporting in Calcite
-            boolean found_expression = false;
-            if (expression instanceof SqlCall) {
-              SqlCall call = (SqlCall) expression;
-              if (call.getOperandList().size() == 2) {
-                // if IN clause is correlated, its second operand of corresponding
-                // expression is SELECT clause which indicates a correlated subquery.
-                // Here, an expression "f.val IN (SELECT ...)" has two operands.
-                // Since we have interest in its subquery, so try to check whether
-                // the second operand, i.e., call.getOperandList().get(1)
-                // is a type of SqlSelect and also is correlated.
-                // Note that the second operand of non-correlated IN clause
-                // does not have SqlSelect as its second operand
-                if (call.getOperandList().get(1) instanceof SqlSelect) {
-                  expression = call.getOperandList().get(1);
-                  SqlSelect select_call = (SqlSelect) expression;
-                  if (select_call.hasWhere()) {
-                    found_expression = true;
-                  }
-                }
+            // occasionally, Calcite cannot properly decorrelate IN-clause listed in
+            // SELECT clause e.g., SELECT x, CASE WHEN x in (SELECT x FROM R) ... FROM ...
+            // in that case we disable input query's decorrelation
+            if (root instanceof SqlSelect) {
+              SqlSelect selectCall = (SqlSelect) root;
+              if (new ExpressionListedInSelectClauseChecker().containsExpression(
+                          selectCall, expression)) {
+                return false;
               }
-            }
-            if (!found_expression) {
-              return false;
             }
           }
 
-          if (isCorrelated(expression)) {
-            SqlSelect select = null;
-            if (expression instanceof SqlCall) {
-              SqlCall call = (SqlCall) expression;
-              if (call.getOperator().equals(SqlStdOperatorTable.SCALAR_QUERY)) {
-                expression = call.getOperandList().get(0);
-              }
-            }
+          // otherwise, let's decorrelate the expression
+          return true;
+        }
 
-            if (expression instanceof SqlSelect) {
-              select = (SqlSelect) expression;
+        // special handling of sub-queries
+        if (expression.isA(SCALAR) && isCorrelated(expression)) {
+          // only expand if it is correlated.
+          SqlSelect select = null;
+          if (expression instanceof SqlCall) {
+            SqlCall call = (SqlCall) expression;
+            if (call.getOperator().equals(SqlStdOperatorTable.SCALAR_QUERY)) {
+              expression = call.getOperandList().get(0);
             }
-
-            if (null != select) {
-              if (null != select.getFetch() || null != select.getOffset()
-                      || (null != select.getOrderList()
-                              && select.getOrderList().size() != 0)) {
-                throw new CalciteException(
-                        "Correlated sub-queries with ordering not supported.", null);
-              }
-            }
-            return true;
           }
+
+          if (expression instanceof SqlSelect) {
+            select = (SqlSelect) expression;
+          }
+
+          if (null != select) {
+            if (null != select.getFetch() || null != select.getOffset()
+                    || (null != select.getOrderList()
+                            && select.getOrderList().size() != 0)) {
+              throw new CalciteException(
+                      "Correlated sub-queries with ordering not supported.", null);
+            }
+          }
+          return true;
         }
 
         // per default we do not want to expand
@@ -328,7 +256,8 @@ public final class MapDParser {
     final MetaConnect mc =
             new MetaConnect(mapdPort, dataDir, mapdUser, this, sock_transport_properties);
 
-    // TODO MAT for this checkin we are not going to actually allow any additional schemas
+    // TODO MAT for this checkin we are not going to actually allow any additional
+    // schemas
     // Eveything should work and perform as it ever did
     if (false) {
       for (String db : mc.getDatabases()) {
@@ -628,6 +557,34 @@ public final class MapDParser {
               null);
     }
 
+    boolean allowSubqueryDecorrelation = true;
+    SqlNode updateCondition = update.getCondition();
+    if (null != updateCondition) {
+      boolean hasInClause =
+              new FindSqlOperator().containsSqlOperator(updateCondition, SqlKind.IN);
+      if (hasInClause) {
+        SqlNode updateTargetTable = update.getTargetTable();
+        if (null != updateTargetTable && updateTargetTable instanceof SqlIdentifier) {
+          SqlIdentifier targetTable = (SqlIdentifier) updateTargetTable;
+          if (targetTable.names.size() == 2) {
+            final MetaConnect mc = new MetaConnect(mapdPort,
+                    dataDir,
+                    mapdUser,
+                    this,
+                    sock_transport_properties,
+                    targetTable.names.get(0),
+                    schemaJson);
+            TTableDetails updateTargetTableDetails =
+                    mc.get_table_details(targetTable.names.get(1));
+            if (null != updateTargetTableDetails
+                    && updateTargetTableDetails.is_temporary) {
+              allowSubqueryDecorrelation = false;
+            }
+          }
+        }
+      }
+    }
+
     SqlNodeList sourceExpression = new SqlNodeList(SqlParserPos.ZERO);
     LogicalTableModify dummyModify = getDummyUpdate(update);
     RelOptTable targetTable = dummyModify.getTable();
@@ -710,7 +667,7 @@ public final class MapDParser {
               null);
     }
 
-    MapDPlanner planner = getPlanner(true);
+    MapDPlanner planner = getPlanner(allowSubqueryDecorrelation);
     SqlNode node = null;
     try {
       node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
@@ -1466,5 +1423,62 @@ public final class MapDParser {
   protected RelDataTypeSystem createTypeSystem() {
     final MapDTypeSystem typeSystem = new MapDTypeSystem();
     return typeSystem;
+  }
+
+  private static class ExpressionListedInSelectClauseChecker
+          extends SqlBasicVisitor<Void> {
+    @Override
+    public Void visit(SqlCall call) {
+      if (call instanceof SqlSelect) {
+        SqlSelect selectNode = (SqlSelect) call;
+        String targetString = targetExpression.toString();
+        for (SqlNode listedNode : selectNode.getSelectList()) {
+          if (listedNode.toString().contains(targetString)) {
+            throw Util.FoundOne.NULL;
+          }
+        }
+      }
+      return super.visit(call);
+    }
+
+    boolean containsExpression(SqlNode node, SqlNode targetExpression) {
+      try {
+        this.targetExpression = targetExpression;
+        node.accept(this);
+        return false;
+      } catch (Util.FoundOne e) {
+        return true;
+      }
+    }
+
+    SqlNode targetExpression;
+  }
+
+  // this visitor checks whether a parse tree contains at least one
+  // specific SQL operator we have an interest in
+  // (do not count the accurate # operators we found)
+  private static class FindSqlOperator extends SqlBasicVisitor<Void> {
+    @Override
+    public Void visit(SqlCall call) {
+      if (call instanceof SqlBasicCall) {
+        SqlBasicCall basicCall = (SqlBasicCall) call;
+        if (basicCall.getKind().equals(targetKind)) {
+          throw Util.FoundOne.NULL;
+        }
+      }
+      return super.visit(call);
+    }
+
+    boolean containsSqlOperator(SqlNode node, SqlKind operatorKind) {
+      try {
+        targetKind = operatorKind;
+        node.accept(this);
+        return false;
+      } catch (Util.FoundOne e) {
+        return true;
+      }
+    }
+
+    private SqlKind targetKind;
   }
 }

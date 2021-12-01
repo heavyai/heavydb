@@ -858,6 +858,92 @@ TEST(Select, JoinCorrelation_InClause) {
   ASSERT_EQ(val, 4);
 }
 
+TEST(Select, DISABLED_Very_Large_In) {
+  // unsupported updates
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/very_large_in.csv");
+  if (boost::filesystem::exists(file_path)) {
+    boost::filesystem::remove(file_path);
+  }
+  std::ofstream file_out(file_path.string());
+  // 100K unique integer
+  for (int i = 1; i <= 100000; i++) {
+    if (file_out.is_open()) {
+      const auto val = ::toString(i);
+      file_out << val << ",\'" << val << "\'\n";
+    }
+  }
+  file_out.close();
+  auto drop_table = []() { QR::get()->runDDLStatement("DROP TABLE IF EXISTS T_100K;"); };
+  auto create_table = []() {
+    QR::get()->runDDLStatement(
+        "CREATE TABLE T_100K (x int not null, y text encoding dict);");
+  };
+  auto import_table = []() {
+    std::string import_stmt{
+        "COPY T_100K FROM "
+        "'../../Tests/Import/datafiles/very_large_in.csv' WITH "
+        "(header='false')"};
+    QR::get()->runDDLStatement(import_stmt);
+  };
+
+  drop_table();
+  create_table();
+  import_table();
+
+  std::string q1 =
+      "SELECT COUNT(1) FROM T_100K WHERE rowid IN (SELECT MAX(F.rowid) FROM T_100K F "
+      "INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
+  auto result = QR::get()->runSQL(q1, ExecutorDeviceType::CPU);
+  const auto crt_row = result->getNextRow(true, false);
+  auto res_val = getIntValue(crt_row[0]);
+  EXPECT_EQ(100000, res_val);
+
+  std::string update_q1 =
+      "UPDATE T_100K SET x = 100001 WHERE rowid IN (SELECT MAX(F.rowid) FROM T_100K "
+      "F INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
+  // since IN-clause is decorrelated and evaluated as our hash-join,
+  // so we should not get the exception regarding IN-clause
+  EXPECT_NO_THROW(QR::get()->runSQL(update_q1, ExecutorDeviceType::CPU));
+  std::string query2 = "SELECT COUNT(1) FROM T_100K WHERE x = 100001;";
+  auto result2 = QR::get()->runSQL(query2, ExecutorDeviceType::CPU);
+  const auto crt_row2 = result2->getNextRow(true, false);
+  auto res_val2 = getIntValue(crt_row2[0]);
+  EXPECT_EQ(100000, res_val2);
+
+  drop_table();
+  create_table();
+  import_table();
+
+  std::string update_q2 =
+      "UPDATE T_100K SET y = '100001' WHERE rowid IN (SELECT MAX(F.rowid) FROM T_100K "
+      "F INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
+  EXPECT_NO_THROW(QR::get()->runSQL(update_q2, ExecutorDeviceType::CPU));
+  std::string query3 = "SELECT COUNT(1) FROM T_100K WHERE y = '100001';";
+  auto result3 = QR::get()->runSQL(query3, ExecutorDeviceType::CPU);
+  const auto crt_row3 = result3->getNextRow(true, false);
+  auto res_val3 = getIntValue(crt_row3[0]);
+  EXPECT_EQ(100000, res_val3);
+
+  drop_table();
+  create_table();
+  import_table();
+
+  std::string update_q3 =
+      "UPDATE T_100K SET x = 200000, y = '2000000' WHERE rowid IN (SELECT MAX(F.rowid) "
+      "FROM T_100K "
+      "F INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
+  EXPECT_NO_THROW(QR::get()->runSQL(update_q3, ExecutorDeviceType::CPU));
+  std::string query4 = "SELECT COUNT(1) FROM T_100K WHERE y = '2000000';";
+  auto result4 = QR::get()->runSQL(query4, ExecutorDeviceType::CPU);
+  const auto crt_row4 = result4->getNextRow(true, false);
+  auto res_val4 = getIntValue(crt_row4[0]);
+  EXPECT_EQ(100000, res_val4);
+
+  QR::get()->runDDLStatement("DROP TABLE IF EXISTS INT_100K;");
+  boost::filesystem::remove(file_path);
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
