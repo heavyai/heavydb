@@ -996,6 +996,19 @@ ReductionCode get_reduction_code(
 
 }  // namespace
 
+bool couldUseParallelReduce(const QueryMemoryDescriptor& desc) {
+  if (desc.getQueryDescriptionType() == QueryDescriptionType::NonGroupedAggregate &&
+      desc.getCountDistinctDescriptorsSize()) {
+    return true;
+  }
+
+  if (desc.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash) {
+    return true;
+  }
+
+  return false;
+}
+
 ResultSetPtr Executor::reduceMultiDeviceResultSets(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -1048,9 +1061,39 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   const auto reduction_code =
       get_reduction_code(results_per_device, &compilation_queue_time);
 
-  for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results->getStorage()->reduce(
-        *(results_per_device[i].first->getStorage()), {}, reduction_code);
+  if (couldUseParallelReduce(query_mem_desc)) {
+    std::vector<ResultSetStorage*> storages;
+    for (auto& rs : results_per_device) {
+      storages.push_back(const_cast<ResultSetStorage*>(rs.first->getStorage()));
+    }
+    threading::parallel_reduce(
+        threading::blocked_range(storages.begin(), storages.end()),
+        (ResultSetStorage*)nullptr,
+        [&](auto r, ResultSetStorage* res) {
+          for (auto i = r.begin() + 1; i != r.end(); ++i) {
+            (*r.begin())->reduce(**i, {}, reduction_code);
+          }
+          if (res) {
+            res->reduce(*(*r.begin()), {}, reduction_code);
+            return res;
+          }
+          return *r.begin();
+        },
+        [&](ResultSetStorage* lhs, ResultSetStorage* rhs) {
+          if (!lhs) {
+            return rhs;
+          }
+          if (!rhs) {
+            return lhs;
+          }
+          lhs->reduce(*rhs, {}, reduction_code);
+          return lhs;
+        });
+  } else {
+    for (size_t i = 1; i < results_per_device.size(); ++i) {
+      reduced_results->getStorage()->reduce(
+          *(results_per_device[i].first->getStorage()), {}, reduction_code);
+    }
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);
   return reduced_results;

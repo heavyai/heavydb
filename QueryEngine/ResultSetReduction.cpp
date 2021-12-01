@@ -31,6 +31,7 @@
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"
+#include "Shared/threading.h"
 
 #include <llvm/ExecutionEngine/GenericValue.h>
 
@@ -236,47 +237,31 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
           "supported in Distributed mode");
     }
     if (use_multithreaded_reduction(that_entry_count)) {
-      const size_t thread_count = cpu_threads();
-      std::vector<std::future<void>> reduction_threads;
-      for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-        const auto thread_entry_count =
-            (that_entry_count + thread_count - 1) / thread_count;
-        const auto start_index = thread_idx * thread_entry_count;
-        const auto end_index =
-            std::min(start_index + thread_entry_count, that_entry_count);
-        reduction_threads.emplace_back(std::async(
-            std::launch::async,
-            [this,
-             this_buff,
-             that_buff,
-             start_index,
-             end_index,
-             that_entry_count,
-             &reduction_code,
-             &that] {
-              if (reduction_code.ir_reduce_loop) {
-                run_reduction_code(reduction_code,
-                                   this_buff,
-                                   that_buff,
-                                   start_index,
-                                   end_index,
-                                   that_entry_count,
-                                   &query_mem_desc_,
-                                   &that.query_mem_desc_,
-                                   nullptr);
-              } else {
-                for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-                  reduceOneEntryBaseline(
-                      this_buff, that_buff, entry_idx, that_entry_count, that);
-                }
+      if (reduction_code.ir_reduce_loop) {
+        threading::parallel_for(
+            threading::blocked_range<size_t>(0, that_entry_count),
+            [this, this_buff, that_buff, that_entry_count, &reduction_code, &that](
+                auto r) {
+              run_reduction_code(reduction_code,
+                                 this_buff,
+                                 that_buff,
+                                 r.begin(),
+                                 r.end(),
+                                 that_entry_count,
+                                 &query_mem_desc_,
+                                 &that.query_mem_desc_,
+                                 nullptr);
+            });
+      } else {
+        threading::parallel_for(
+            threading::blocked_range<size_t>(0, that_entry_count),
+            [this, this_buff, that_buff, that_entry_count, &reduction_code, &that](
+                auto r) {
+              for (size_t entry_idx = r.begin(); entry_idx < r.end(); ++entry_idx) {
+                reduceOneEntryBaseline(
+                    this_buff, that_buff, entry_idx, that_entry_count, that);
               }
-            }));
-      }
-      for (auto& reduction_thread : reduction_threads) {
-        reduction_thread.wait();
-      }
-      for (auto& reduction_thread : reduction_threads) {
-        reduction_thread.get();
+            });
       }
     } else {
       if (reduction_code.ir_reduce_loop) {
@@ -303,61 +288,39 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
   }
   auto executor_id = executor->getExecutorId();
   if (use_multithreaded_reduction(entry_count)) {
-    const size_t thread_count = cpu_threads();
-    std::vector<std::future<void>> reduction_threads;
-    for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      const auto thread_entry_count = (entry_count + thread_count - 1) / thread_count;
-      const auto start_index = thread_idx * thread_entry_count;
-      const auto end_index = std::min(start_index + thread_entry_count, entry_count);
-      if (query_mem_desc_.didOutputColumnar()) {
-        reduction_threads.emplace_back(std::async(std::launch::async,
-                                                  [this,
+    if (query_mem_desc_.didOutputColumnar()) {
+      threading::parallel_for(
+          threading::blocked_range<size_t>(0, entry_count),
+          [this, this_buff, that_buff, &that, &serialized_varlen_buffer, &executor_id](
+              auto r) {
+            reduceEntriesNoCollisionsColWise(this_buff,
+                                             that_buff,
+                                             that,
+                                             r.begin(),
+                                             r.end(),
+                                             serialized_varlen_buffer,
+                                             executor_id);
+          });
+    } else {
+      CHECK(reduction_code.ir_reduce_loop);
+      threading::parallel_for(threading::blocked_range<size_t>(0, entry_count),
+                              [this,
+                               this_buff,
+                               that_buff,
+                               that_entry_count,
+                               &reduction_code,
+                               &that,
+                               &serialized_varlen_buffer](auto r) {
+                                run_reduction_code(reduction_code,
                                                    this_buff,
                                                    that_buff,
-                                                   start_index,
-                                                   end_index,
-                                                   &that,
-                                                   &serialized_varlen_buffer,
-                                                   &executor_id] {
-                                                    reduceEntriesNoCollisionsColWise(
-                                                        this_buff,
-                                                        that_buff,
-                                                        that,
-                                                        start_index,
-                                                        end_index,
-                                                        serialized_varlen_buffer,
-                                                        executor_id);
-                                                  }));
-      } else {
-        reduction_threads.emplace_back(std::async(std::launch::async,
-                                                  [this,
-                                                   this_buff,
-                                                   that_buff,
-                                                   start_index,
-                                                   end_index,
+                                                   r.begin(),
+                                                   r.end(),
                                                    that_entry_count,
-                                                   &reduction_code,
-                                                   &that,
-                                                   &serialized_varlen_buffer] {
-                                                    CHECK(reduction_code.ir_reduce_loop);
-                                                    run_reduction_code(
-                                                        reduction_code,
-                                                        this_buff,
-                                                        that_buff,
-                                                        start_index,
-                                                        end_index,
-                                                        that_entry_count,
-                                                        &query_mem_desc_,
-                                                        &that.query_mem_desc_,
-                                                        &serialized_varlen_buffer);
-                                                  }));
-      }
-    }
-    for (auto& reduction_thread : reduction_threads) {
-      reduction_thread.wait();
-    }
-    for (auto& reduction_thread : reduction_threads) {
-      reduction_thread.get();
+                                                   &query_mem_desc_,
+                                                   &that.query_mem_desc_,
+                                                   &serialized_varlen_buffer);
+                              });
     }
   } else {
     if (query_mem_desc_.didOutputColumnar()) {

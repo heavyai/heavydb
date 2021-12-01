@@ -19,17 +19,13 @@ extern tbb::task_arena g_tbb_arena;
 
 template <typename... X>
 void parallel_for(X&&... x) {
-  g_tbb_arena.execute([&] {
-    this_task_arena::isolate([&] { tbb::parallel_for(std::forward<X>(x)...); });
-  });
+  this_task_arena::isolate([&] { tbb::parallel_for(std::forward<X>(x)...); });
 }
 
 template <typename... X>
 auto parallel_reduce(X&&... x) -> decltype(tbb::parallel_reduce(std::forward<X>(x)...)) {
-  return g_tbb_arena.execute([&] {
-    return this_task_arena::isolate(
-        [&] { return tbb::parallel_reduce(std::forward<X>(x)...); });
-  });
+  return this_task_arena::isolate(
+      [&] { return tbb::parallel_reduce(std::forward<X>(x)...); });
 }
 
 template <typename T>
