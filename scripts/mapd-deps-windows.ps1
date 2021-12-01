@@ -73,7 +73,8 @@ $package_list = @("glog",
                   "boost-iostream",
                   "aws-sdk-cpp",
                   "librdkafka",
-                  "libarchive"
+                  "libarchive",
+                  "xerces-c"
                   )
 
 foreach ($package in $package_list) {

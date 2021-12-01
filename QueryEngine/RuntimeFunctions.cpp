@@ -331,7 +331,7 @@ extern "C" ALWAYS_INLINE int8_t logical_or(const int8_t lhs,
 
 // aggregator implementations
 
-extern "C" ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const int64_t) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE uint64_t agg_count(uint64_t* agg, const int64_t) {
   return (*agg)++;
 }
 
@@ -989,7 +989,7 @@ extern "C" GPU_RT_STUB int64_t get_block_index() {
 
 #undef GPU_RT_STUB
 
-extern "C" ALWAYS_INLINE void record_error_code(const int32_t err_code,
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE void record_error_code(const int32_t err_code,
                                                 int32_t* error_codes) {
   // NB: never override persistent error codes (with code greater than zero).
   // On GPU, a projection query with a limit can run out of slots without it
@@ -1507,7 +1507,7 @@ extern "C" NEVER_INLINE void query_stub_hoisted_literals(const int8_t** col_buff
 #endif
 }
 
-extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
+extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                                  const uint64_t* num_fragments,
                                                  const int8_t* literals,
                                                  const int64_t* num_rows,
@@ -1519,7 +1519,9 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                                  int32_t* error_code,
                                                  const uint32_t* num_tables_ptr,
                                                  const int64_t* join_hash_tables) {
+  printf("multifrag_query_hoisted_literals %llu\n", *num_fragments);
   for (uint32_t i = 0; i < *num_fragments; ++i) {
+    printf("multifrag_query_hoisted_literals %u\n", i);
     query_stub_hoisted_literals(col_buffers ? col_buffers[i] : nullptr,
                                 literals,
                                 &num_rows[i * (*num_tables_ptr)],
@@ -1531,7 +1533,9 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                 join_hash_tables,
                                 total_matched,
                                 error_code);
+    printf("multifrag_query_hoisted_literals Bottom of loop %lld\n", **out);
   }
+  printf("multifrag_query_hoisted_literals ALL DONE\n");
 }
 
 extern "C" NEVER_INLINE void query_stub(const int8_t** col_buffers,
