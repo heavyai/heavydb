@@ -5077,20 +5077,15 @@ void CopyTableStmt::execute(
           throw std::runtime_error("Invalid value for 'geo_layer_name' option");
         }
       } else if (boost::iequals(*p->get_name(), "partitions")) {
-        if (copy_params.source_type == import_export::SourceType::kGeoFile) {
-          const auto partitions =
-              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-          CHECK(partitions);
-          const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
-          if (partitions_uc != "REPLICATED") {
-            throw std::runtime_error(
-                "Invalid value for 'partitions' option. Must be 'REPLICATED'.");
-          }
-          deferred_copy_from_partitions_ = partitions_uc;
-        } else {
+        const auto partitions =
+            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        CHECK(partitions);
+        const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
+        if (partitions_uc != "REPLICATED") {
           throw std::runtime_error(
-              "'partitions' option must come after 'source_type' option 'GEO_FILE'.");
+              "Invalid value for 'partitions' option. Must be 'REPLICATED'.");
         }
+        deferred_copy_from_partitions_ = partitions_uc;
       } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
