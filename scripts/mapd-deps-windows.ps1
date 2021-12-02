@@ -74,7 +74,8 @@ $package_list = @("glog",
                   "aws-sdk-cpp",
                   "librdkafka",
                   "libarchive",
-                  "xerces-c"
+                  "xerces-c",
+                  "arrow"
                   )
 
 foreach ($package in $package_list) {
@@ -82,7 +83,7 @@ foreach ($package in $package_list) {
   .\vcpkg install $package_config
 }
 
-pkg install "arrow:x64-windows" --overlay-ports="$script_path\windows\port_overlays\arrow"
+#pkg install "arrow:x64-windows" --overlay-ports="$script_path\windows\port_overlays\arrow"
 
 
 Pop-Location

@@ -23,8 +23,12 @@ set(EXPORT_SOURCES
 add_library(RenderGroupAnalyzer RenderGroupAnalyzer.cpp)
 add_library(ImportExport ${IMPORT_SOURCES} ${EXPORT_SOURCES} ${S3Archive})
 
-target_link_libraries(ImportExport RenderGroupAnalyzer mapd_thrift Logger Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS} xerces-c
- ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})
+if(MSVC)
+  find_package(XercesC REQUIRED)
+  target_link_libraries(ImportExport RenderGroupAnalyzer mapd_thrift Logger Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS} ${XercesC_LIBRARIES} ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})
+else()
+  target_link_libraries(ImportExport RenderGroupAnalyzer mapd_thrift Logger Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS} xerces-c ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})
+endif()
 
 add_library(RowToColumn RowToColumnLoader.cpp RowToColumnLoader.h DelimitedParserUtils.cpp DelimitedParserUtils.h)
 target_link_libraries(RowToColumn ThriftClient)
