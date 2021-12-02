@@ -547,6 +547,47 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
 }
 
 /**
+ * Parses a SHOW statement.
+ *
+ *  These SHOW statements used to be listed directly in statementParserMethods in
+ *  config.fmpp but those all default to LOOKAHEAD(2), hardcoded in Calcite's Parser.jj
+ *  source code. Some SHOW statements needed LOOKAHEAD(3) there so all SHOW statements
+ *  had to be moved into this two-stage SqlCustomShow definition (where they only have
+ *  LOOKAHEAD(1) or LOOKAHEAD(2) because the <SHOW> is no longer part of that count).
+ */
+SqlDdl SqlCustomShow(Span s) :
+{
+    final SqlDdl show;
+}
+{
+    <SHOW>
+    (
+        LOOKAHEAD(2) show = SqlShowUserDetails(s)
+        |
+        LOOKAHEAD(2) show = SqlShowUserSessions(s)
+        |
+        LOOKAHEAD(1) show = SqlShowTables(s)
+        |
+        LOOKAHEAD(1) show = SqlShowTableDetails(s)
+        |
+        LOOKAHEAD(1) show = SqlShowDatabases(s)
+        |
+        LOOKAHEAD(1) show = SqlShowForeignServers(s)
+        |
+        LOOKAHEAD(1) show = SqlShowQueries(s)
+        |
+        LOOKAHEAD(1) show = SqlShowDiskCacheUsage(s)
+        |
+        LOOKAHEAD(1) show = SqlShowCreateTable(s)
+        |
+        LOOKAHEAD(1) show = SqlShowRoles(s)
+    )
+    {
+        return show;
+    }
+}
+
+/**
  * Parses a DROP statement.
  *
  *  This broke away from the default Calcite implementation because it was
