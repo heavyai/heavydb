@@ -13,43 +13,52 @@
 
 /*
  *
- * <SHOW> <USER> <DETAILS>
- * <SHOW> <USER> <SESSIONS>
+ * SHOW USER DETAILS
  *
  */
 
-SqlDdl SqlShowUser(Span s) :
+SqlDdl SqlShowUserDetails(Span s) :
 {
     SqlIdentifier userName = null;
     List<String> userNames = null;
 }
 {
-    <SHOW> <USER>
-    (
-        <SESSIONS>
+    <USER>
+    <DETAILS>
+    [
+        userName = CompoundIdentifier()
         {
-            return new SqlShowUserSessions(s.end(this));
+            userNames = new ArrayList<String>();
+            userNames.add(userName.toString());
         }
-    |
-        <DETAILS>
-        [
+        (
+            <COMMA>
             userName = CompoundIdentifier()
             {
-                userNames = new ArrayList<String>();
                 userNames.add(userName.toString());
             }
-            (
-                <COMMA>
-                userName = CompoundIdentifier()
-                {
-                    userNames.add(userName.toString());
-                }
-            )*
-        ]
-        {
-            return new SqlShowUserDetails(s.end(this), userNames);
-        }
-    )
+        )*
+    ]
+    {
+        return new SqlShowUserDetails(s.end(this), userNames);
+    }
+}
+
+/*
+ *
+ * SHOW USER SESSIONS
+ *
+ */
+
+SqlDdl SqlShowUserSessions(Span s) :
+{
+}
+{
+    <USER>
+    <SESSIONS>
+    {
+        return new SqlShowUserSessions(s.end(this));
+    }
 }
 
 /*
@@ -61,7 +70,7 @@ SqlDdl SqlShowTables(Span s) :
 {
 }
 {
-    <SHOW> <TABLES>
+    <TABLES>
     {
         return new SqlShowTables(s.end(this));
     }
@@ -77,7 +86,7 @@ SqlDdl SqlShowDatabases(Span s) :
 {
 }
 {
-    <SHOW> <DATABASES>
+    <DATABASES>
     {
         return new SqlShowDatabases(s.end(this));
     }
@@ -93,7 +102,7 @@ SqlDdl SqlShowQueries(Span s) :
 {
 }
 {
-    <SHOW> <QUERIES>
+    <QUERIES>
     {
         return new SqlShowQueries(s.end(this));
     }
@@ -104,7 +113,7 @@ SqlDdl SqlShowDiskCacheUsage(Span s) : {
     List<String> tableNames = new ArrayList<String>();
 }
 {
-    <SHOW> <DISK> <CACHE> <USAGE>
+    <DISK> <CACHE> <USAGE>
     (
         tableName = CompoundIdentifier()
         { tableNames.add(tableName.toString()); }
@@ -130,7 +139,7 @@ SqlDdl SqlShowTableDetails(Span s) :
     List<String> tableNames = null;
 }
 {
-    <SHOW> <TABLE> <DETAILS>
+    <TABLE> <DETAILS>
     [
         tableName = CompoundIdentifier()
         {
@@ -158,7 +167,7 @@ SqlDdl SqlShowCreateTable(Span s) :
     SqlIdentifier tableName = null;
 }
 {
-    <SHOW> <CREATE> <TABLE>
+    <CREATE> <TABLE>
     tableName = CompoundIdentifier()
     {
         return new SqlShowCreateTable(s.end(this), tableName.toString());
@@ -166,7 +175,7 @@ SqlDdl SqlShowCreateTable(Span s) :
 }
 
 /*
- * SHOW ROLES [username]
+ * SHOW [EFFECTIVE] ROLES [username]
  */
 SqlDdl SqlShowRoles(Span s) :
 {
@@ -174,7 +183,6 @@ SqlDdl SqlShowRoles(Span s) :
     boolean effective = false;
 }
 {
-    <SHOW>
     [<EFFECTIVE> {effective = true;}]
     <ROLES>
     [userName = CompoundIdentifier()]

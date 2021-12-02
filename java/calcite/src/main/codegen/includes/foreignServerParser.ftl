@@ -133,7 +133,7 @@ SqlDdl SqlShowForeignServers(Span s) :
     SqlShowForeignServers.Builder sqlShowForeignServersBuilder = new SqlShowForeignServers.Builder();
 }
 {
-    <SHOW> <SERVERS> 
+    <SERVERS>
     
     [
         WhereClause(sqlShowForeignServersBuilder)

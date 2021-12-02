@@ -514,12 +514,11 @@ data: {
       ]
 
       # List of methods for parsing custom SQL statements.
+      # Note that DROP commands are handled specially by SqlCustomDrop
+      # and SHOW commands are handled specially by SqlCustomShow because
+      # all of the statements listed here have LOOKAHEAD(2) which is
+      # hardcoded in Calcite's Parser.jj source code.
       statementParserMethods: [
-        "SqlShowUser(span())"
-        "SqlShowTables(span())"
-        "SqlShowTableDetails(span())"
-        "SqlShowDatabases(span())"
-        "SqlShowForeignServers(span())"
         "SqlAlterTable(span())"
         "SqlAlterServer(span())"
         "SqlAlterForeignTable(span())"
@@ -529,21 +528,18 @@ data: {
         "SqlRenameDB(span())"
         "SqlRenameTable(span())"
         "SqlInsertIntoTable(span())"
-        "SqlShowQueries(span())"
-        "SqlShowDiskCacheUsage(span())"
         "SqlKillQuery(span())"
         "SqlCustomDrop(span())"
+        "SqlCustomShow(span())"
         "SqlGrant(span())"
         "SqlRevoke(span())"
         "SqlDumpTable(span())"
         "SqlRestoreTable(span())"
         "SqlTruncateTable(span())"
         "SqlOptimizeTable(span())"
-        "SqlShowCreateTable(span())"
         "SqlCopyTable(span())"
         "SqlValidateSystem(span())"
         "SqlAlterSystemClear(span())"
-        "SqlShowRoles(span())"
       ]
 
       # List of methods for parsing custom literals.
