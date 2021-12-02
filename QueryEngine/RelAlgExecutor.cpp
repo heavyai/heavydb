@@ -1323,7 +1323,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources_for_update
     const RelAlgTranslator& translator,
     int32_t tableId,
     const Catalog_Namespace::Catalog& cat,
-    const ColumnNameList& colNames,
+    const ColumnInfoList& colInfos,
     size_t starting_projection_column_idx) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
@@ -1336,10 +1336,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources_for_update
 
     std::shared_ptr<Analyzer::Expr> translated_expr;
     if (i >= starting_projection_column_idx && i < get_scalar_sources_size(ra_node) - 1) {
-      translated_expr = cast_to_column_type(translator.translateScalarRex(scalar_rex),
-                                            tableId,
-                                            cat,
-                                            colNames[i - starting_projection_column_idx]);
+      translated_expr =
+          cast_to_column_type(translator.translateScalarRex(scalar_rex),
+                              tableId,
+                              cat,
+                              colInfos[i - starting_projection_column_idx].name);
     } else {
       translated_expr = translator.translateScalarRex(scalar_rex);
     }
@@ -1601,13 +1602,13 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
       CHECK(update_transaction_params);
       const auto td = update_transaction_params->getTableDescriptor();
       CHECK(td);
-      const auto update_column_names = update_transaction_params->getUpdateColumnNames();
-      if (update_column_names.size() > 1) {
+      const auto update_columns = update_transaction_params->getUpdateColumns();
+      if (update_columns.size() > 1) {
         throw std::runtime_error(
             "Multi-column update is not yet supported for temporary tables.");
       }
 
-      auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
+      auto cd = cat_.getMetadataForColumn(td->tableId, update_columns.front().name);
       CHECK(cd);
       CHECK(!cd->isVirtualCol);
       auto projected_column_to_update =

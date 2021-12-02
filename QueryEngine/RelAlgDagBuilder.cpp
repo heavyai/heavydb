@@ -2413,13 +2413,34 @@ class RelAlgDispatcher {
     RelModify::TargetColumnList target_column_list;
 
     if (op == "UPDATE") {
+      auto all_col_desc =
+          cat_.getAllColumnMetadataForTable(table_descriptor->tableId, true, true, false);
+      std::unordered_map<std::string, int> name_to_idx;
+      int idx = 0;
+      for (auto cd : all_col_desc) {
+        name_to_idx[cd->columnName] = idx++;
+      }
       const auto& update_columns = field(logical_modify_ra, "updateColumnList");
       CHECK(update_columns.IsArray());
 
       for (auto column_arr_it = update_columns.Begin();
            column_arr_it != update_columns.End();
            ++column_arr_it) {
-        target_column_list.push_back(column_arr_it->GetString());
+        auto name = column_arr_it->GetString();
+        ColumnInfo info(cat_.getDatabaseId(),
+                        table_descriptor->tableId,
+                        name_to_idx[name],
+                        name,
+                        SQLTypeInfo(kBIGINT, false),
+                        false);
+        auto cd = cat_.getMetadataForColumn(table_descriptor->tableId, name);
+        if (cd) {
+          info.type = cd->columnType;
+          info.is_rowid = cd->isVirtualCol;
+        } else {
+          CHECK_EQ(std::string(name), "EXPR$DELETE_OFFSET_IN_FRAGMENT");
+        }
+        target_column_list.push_back(info);
       }
     }
 

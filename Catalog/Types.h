@@ -35,6 +35,7 @@ using TableDescriptorMap = std::map<std::string, TableDescriptor*>;
 using TableDescriptorMapById = std::map<int, TableDescriptor*>;
 using LogicalToPhysicalTableMapById = std::map<int32_t, std::vector<int32_t>>;
 using ColumnKey = std::tuple<int, std::string>;
+using ColumnIdxMap = std::map<ColumnKey, int>;
 using ColumnDescriptorMap = std::map<ColumnKey, ColumnDescriptor*>;
 using ColumnIdKey = std::tuple<int, int>;
 using ColumnDescriptorMapById = std::map<ColumnIdKey, ColumnDescriptor*>;

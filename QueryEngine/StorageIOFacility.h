@@ -111,7 +111,7 @@ class StorageIOFacility {
   using DeleteVictimOffsetList = std::vector<uint64_t>;
   using UpdateTargetOffsetList = std::vector<uint64_t>;
   using UpdateTargetTypeList = std::vector<TargetMetaInfo>;
-  using UpdateTargetColumnNamesList = std::vector<std::string>;
+  using UpdateTargetColumnInfoList = std::vector<ColumnInfo>;
 
   using TransactionLog =
       Fragmenter_Namespace::InsertOrderFragmenter::ModifyTransactionTracker;
@@ -163,18 +163,18 @@ class StorageIOFacility {
   class UpdateTransactionParameters : public TransactionParameters {
    public:
     UpdateTransactionParameters(TableDescriptorType const* table_descriptor,
-                                UpdateTargetColumnNamesList const& update_column_names,
+                                UpdateTargetColumnInfoList const& update_columns,
                                 UpdateTargetTypeList const& target_types,
                                 bool varlen_update_required)
         : TransactionParameters(table_descriptor)
-        , update_column_names_(update_column_names)
+        , update_columns_(update_columns)
         , targets_meta_(target_types)
         , varlen_update_required_(varlen_update_required) {}
 
-    auto getUpdateColumnCount() const { return update_column_names_.size(); }
+    auto getUpdateColumnCount() const { return update_columns_.size(); }
     auto const& getTargetsMetaInfo() const { return targets_meta_; }
     auto getTargetsMetaInfoSize() const { return targets_meta_.size(); }
-    auto const& getUpdateColumnNames() const { return update_column_names_; }
+    auto const& getUpdateColumns() const { return update_columns_; }
     auto isVarlenUpdateRequired() const { return varlen_update_required_; }
 
    private:
@@ -182,7 +182,7 @@ class StorageIOFacility {
     UpdateTransactionParameters& operator=(UpdateTransactionParameters const& other) =
         delete;
 
-    UpdateTargetColumnNamesList update_column_names_;
+    UpdateTargetColumnInfoList update_columns_;
     UpdateTargetTypeList const& targets_meta_;
     bool varlen_update_required_ = false;
   };
@@ -203,9 +203,8 @@ class StorageIOFacility {
         std::vector<const ColumnDescriptor*> columnDescriptors;
         std::vector<TargetMetaInfo> sourceMetaInfos;
 
-        for (size_t idx = 0; idx < update_parameters.getUpdateColumnNames().size();
-             idx++) {
-          auto& column_name = update_parameters.getUpdateColumnNames()[idx];
+        for (size_t idx = 0; idx < update_parameters.getUpdateColumns().size(); idx++) {
+          auto& column_name = update_parameters.getUpdateColumns()[idx].name;
           auto target_column =
               catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
           columnDescriptors.push_back(target_column);
@@ -252,7 +251,7 @@ class StorageIOFacility {
         const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(td);
         const auto cd = catalog_.getMetadataForColumn(
-            td->tableId, update_parameters.getUpdateColumnNames().front());
+            td->tableId, update_parameters.getUpdateColumns().front().name);
         CHECK(cd);
         auto chunk_metadata =
             fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
@@ -420,7 +419,7 @@ class StorageIOFacility {
           const auto fragmenter = table_descriptor->fragmenter;
           CHECK(fragmenter);
           auto const* target_column = catalog_.getMetadataForColumn(
-              table_id, update_parameters.getUpdateColumnNames()[column_index]);
+              table_id, update_parameters.getUpdateColumns()[column_index].name);
           auto update_stats =
               fragmenter->updateColumn(&catalog_,
                                        table_descriptor,

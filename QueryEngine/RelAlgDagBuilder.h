@@ -40,7 +40,7 @@
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
-using ColumnNameList = std::vector<std::string>;
+using ColumnInfoList = std::vector<ColumnInfo>;
 
 class Rex {
  public:
@@ -929,7 +929,7 @@ class ModifyManipulationTarget {
                            bool const delete_via_select = false,
                            bool const varlen_update_required = false,
                            TableDescriptor const* table_descriptor = nullptr,
-                           ColumnNameList target_columns = ColumnNameList())
+                           ColumnInfoList target_columns = ColumnInfoList())
       : is_update_via_select_(update_via_select)
       , is_delete_via_select_(delete_via_select)
       , varlen_update_required_(varlen_update_required)
@@ -951,10 +951,10 @@ class ModifyManipulationTarget {
   auto const isDeleteViaSelect() const { return is_delete_via_select_; }
   auto const isVarlenUpdateRequired() const { return varlen_update_required_; }
 
-  void setTargetColumns(ColumnNameList const& target_columns) const {
+  void setTargetColumns(ColumnInfoList const& target_columns) const {
     target_columns_ = target_columns;
   }
-  ColumnNameList const& getTargetColumns() const { return target_columns_; }
+  ColumnInfoList const& getTargetColumns() const { return target_columns_; }
 
   template <typename VALIDATION_FUNCTOR>
   bool validateTargetColumns(VALIDATION_FUNCTOR validator) const {
@@ -971,7 +971,7 @@ class ModifyManipulationTarget {
   mutable bool is_delete_via_select_ = false;
   mutable bool varlen_update_required_ = false;
   mutable TableDescriptor const* table_descriptor_ = nullptr;
-  mutable ColumnNameList target_columns_;
+  mutable ColumnInfoList target_columns_;
 };
 
 class RelProject : public RelAlgNode, public ModifyManipulationTarget {
@@ -1556,7 +1556,7 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
               bool delete_disguised_as_select = false,
               bool varlen_update_required = false,
               TableDescriptor const* manipulation_target_table = nullptr,
-              ColumnNameList target_columns = ColumnNameList())
+              ColumnInfoList target_columns = ColumnInfoList())
       : ModifyManipulationTarget(update_disguised_as_select,
                                  delete_disguised_as_select,
                                  varlen_update_required,
@@ -1746,7 +1746,7 @@ class RelModify : public RelAlgNode {
  public:
   enum class ModifyOperation { Insert, Delete, Update };
   using RelAlgNodeInputPtr = std::shared_ptr<const RelAlgNode>;
-  using TargetColumnList = std::vector<std::string>;
+  using TargetColumnList = std::vector<ColumnInfo>;
 
   static std::string yieldModifyOperationString(ModifyOperation const op) {
     switch (op) {
@@ -1808,7 +1808,7 @@ class RelModify : public RelAlgNode {
   TableDescriptor const* const getTableDescriptor() const { return table_descriptor_; }
   bool const isFlattened() const { return flattened_; }
   ModifyOperation getOperation() const { return operation_; }
-  TargetColumnList const& getUpdateColumnNames() const { return target_column_list_; }
+  TargetColumnList const& getUpdateColumnInfos() const { return target_column_list_; }
   int getUpdateColumnCount() const { return target_column_list_.size(); }
 
   size_t size() const override { return 0; }
@@ -1876,25 +1876,22 @@ class RelModify : public RelAlgNode {
       if (index >= target_update_column_expr_start &&
           index <= target_update_column_expr_end) {
         auto target_index = index - target_update_column_expr_start;
-
-        auto* column_desc = catalog_.getMetadataForColumn(
-            table_descriptor_->tableId, target_column_list_[target_index]);
-        CHECK(column_desc);
+        auto& column_info = target_column_list_[target_index];
 
         if (table_descriptor_->nShards) {
           const auto shard_cd =
               catalog_.getShardColumnMetadataForTable(table_descriptor_);
           CHECK(shard_cd);
-          if ((column_desc->columnName == shard_cd->columnName)) {
+          if ((column_info.name == shard_cd->columnName)) {
             throw std::runtime_error("UPDATE of a shard key is currently unsupported.");
           }
         }
 
         // Check for valid types
-        if (column_desc->columnType.is_varlen()) {
+        if (column_info.type.is_varlen()) {
           varlen_update_required = true;
         }
-        if (column_desc->columnType.is_geometry()) {
+        if (column_info.type.is_geometry()) {
           throw std::runtime_error("UPDATE of a geo column is unsupported.");
         }
       }
