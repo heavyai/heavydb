@@ -47,11 +47,6 @@ void QueryPlanDagChecker::visit(const RelModify* rel_alg_node) {
   return;
 }
 
-void QueryPlanDagChecker::visit(const RelTableFunction* rel_alg_node) {
-  detectNonSupportedNode("Detect RelTableFunction node");
-  return;
-}
-
 void QueryPlanDagChecker::visit(const RelProject* rel_alg_node) {
   if (rel_alg_node->isDeleteViaSelect() || rel_alg_node->isUpdateViaSelect() ||
       rel_alg_node->isVarlenUpdateRequired()) {

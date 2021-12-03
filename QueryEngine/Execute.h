@@ -1026,6 +1026,8 @@ class Executor {
   // check whether the current session that this executor manages is interrupted
   // while performing non-kernel time task
   bool checkNonKernelTimeInterrupted() const;
+  void registerExtractedQueryPlanDag(const QueryPlan& query_plan_dag);
+  const QueryPlan getLatestQueryPlanDagExtracted() const;
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
@@ -1152,6 +1154,10 @@ class Executor {
   const QueryPlanHash INVALID_QUERY_PLAN_HASH{std::hash<std::string>{}(EMPTY_QUERY_PLAN)};
   static mapd_shared_mutex recycler_mutex_;
   static std::unordered_map<std::string, size_t> cardinality_cache_;
+
+  // a variable used for testing query plan DAG extractor when a query has a table
+  // function
+  static QueryPlan latest_query_plan_extracted_;
 
  public:
   static const int32_t ERR_DIV_BY_ZERO{1};

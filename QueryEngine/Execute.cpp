@@ -4445,6 +4445,17 @@ bool Executor::checkNonKernelTimeInterrupted() const {
          flag_it->second;
 }
 
+void Executor::registerExtractedQueryPlanDag(const QueryPlan& query_plan_dag) {
+  // this function is called under the recycler lock
+  // e.g., QueryPlanDagExtractor::extractQueryPlanDagImpl()
+  latest_query_plan_extracted_ = query_plan_dag;
+}
+
+const QueryPlan Executor::getLatestQueryPlanDagExtracted() const {
+  mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
+  return latest_query_plan_extracted_;
+}
+
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
 
 // contain the interrupt flag's status per query session
@@ -4467,3 +4478,4 @@ std::mutex Executor::kernel_mutex_;
 QueryPlanDagCache Executor::query_plan_dag_cache_;
 mapd_shared_mutex Executor::recycler_mutex_;
 std::unordered_map<std::string, size_t> Executor::cardinality_cache_;
+QueryPlan Executor::latest_query_plan_extracted_{EMPTY_QUERY_PLAN};

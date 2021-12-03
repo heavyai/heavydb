@@ -20,6 +20,8 @@
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 
+extern bool g_is_test_env;
+
 namespace {
 struct IsEquivBinOp {
   bool operator()(std::shared_ptr<Analyzer::Expr> const& qual) {
@@ -123,31 +125,41 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
   dag_extractor.extracted_dag_.push_back(res.value());
 
   // visit child node if necessary
-  auto num_child_node = node->inputCount();
-  switch (num_child_node) {
-    case 1:  // unary op
-      dag_extractor.visit(node, node->getInput(0));
-      break;
-    case 2:  // binary op
-      if (auto trans_join_node = dynamic_cast<const RelTranslatedJoin*>(node)) {
-        dag_extractor.visit(trans_join_node, trans_join_node->getLHS());
-        dag_extractor.visit(trans_join_node, trans_join_node->getRHS());
+  if (auto table_func_node = dynamic_cast<const RelTableFunction*>(node)) {
+    for (size_t i = 0; i < table_func_node->inputCount(); ++i) {
+      dag_extractor.visit(table_func_node, table_func_node->getInput(i));
+    }
+  } else {
+    auto num_child_node = node->inputCount();
+    switch (num_child_node) {
+      case 1:  // unary op
+        dag_extractor.visit(node, node->getInput(0));
         break;
-      }
-      VLOG(1) << "Visit an invalid rel node while extracting query plan DAG: "
-              << ::toString(node);
-      return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
-    case 0:  // leaf node
-      break;
-    default:
-      // since we replace RelLeftDeepJoin as a set of RelTranslatedJoin
-      // which is a binary op, # child nodes for every rel node should be <= 2
-      UNREACHABLE();
+      case 2:  // binary op
+        if (auto trans_join_node = dynamic_cast<const RelTranslatedJoin*>(node)) {
+          dag_extractor.visit(trans_join_node, trans_join_node->getLHS());
+          dag_extractor.visit(trans_join_node, trans_join_node->getRHS());
+          break;
+        }
+        VLOG(1) << "Visit an invalid rel node while extracting query plan DAG: "
+                << ::toString(node);
+        return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
+      case 0:  // leaf node
+        break;
+      default:
+        // since we replace RelLeftDeepJoin as a set of RelTranslatedJoin
+        // which is a binary op, # child nodes for every rel node should be <= 2
+        UNREACHABLE();
+    }
   }
 
   // check whether extracted DAG is available to use
   if (dag_extractor.extracted_dag_.empty() || dag_extractor.isDagExtractionAvailable()) {
     return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
+  }
+
+  if (g_is_test_env) {
+    executor->registerExtractedQueryPlanDag(dag_extractor.getExtractedQueryPlanDagStr());
   }
 
   return {node,

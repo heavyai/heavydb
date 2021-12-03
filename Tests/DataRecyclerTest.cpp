@@ -31,6 +31,8 @@
 #include <stdexcept>
 
 extern bool g_is_test_env;
+extern bool g_enable_table_functions;
+extern bool g_enable_dev_table_functions;
 
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
@@ -133,6 +135,7 @@ int drop_table() {
     run_ddl_statement("DROP TABLE IF EXISTS T2;");
     run_ddl_statement("DROP TABLE IF EXISTS T3;");
     run_ddl_statement("DROP TABLE IF EXISTS T4;");
+    run_ddl_statement("DROP TABLE IF EXISTS TF_TEST;");
     drop_tables_for_overlaps_hashjoin();
   } catch (...) {
     LOG(ERROR) << "Failed to drop table";
@@ -169,6 +172,14 @@ int create_and_populate_table() {
     QR::get()->runSQL("INSERT INTO T4 VALUES(4,2,'4');", ExecutorDeviceType::CPU);
     QR::get()->runSQL("INSERT INTO T4 VALUES(5,2,'5');", ExecutorDeviceType::CPU);
     QR::get()->runSQL("INSERT INTO T4 VALUES(6,2,'6');", ExecutorDeviceType::CPU);
+
+    run_ddl_statement("CREATE TABLE TF_TEST(d DOUBLE, d2 DOUBLE);");
+    auto insert_dml = "INSERT INTO TF_TEST VALUES(";
+    for (int i = 0; i < 20; i++) {
+      double dv = i + (0.1 * i);
+      auto v = std::to_string(dv);
+      QR::get()->runSQL(insert_dml + v + ", " + v + ");", ExecutorDeviceType::CPU);
+    }
 
     create_table_for_overlaps_hashjoin();
     insert_dml_for_overlaps_hashjoin();
@@ -428,6 +439,41 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
                                                  executor,
                                                  *q5_rel_alg_translator);
   ASSERT_TRUE(q3_plan_dag.extracted_dag.compare(q5_plan_dag.extracted_dag) != 0);
+}
+
+TEST(DataRecycler, QueryPlanDagExtractor_TableFunction) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+
+  auto q1_str = "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM TF_TEST), 1));";
+  auto res1 = QR::get()->runSQL(q1_str, ExecutorDeviceType::CPU, false, false);
+  auto q1_plan_dag = executor->getLatestQueryPlanDagExtracted();
+  EXPECT_TRUE(q1_plan_dag.compare(EMPTY_QUERY_PLAN) != 0);
+
+  auto q2_str = "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM TF_TEST), 2));";
+  auto res2 = QR::get()->runSQL(q2_str, ExecutorDeviceType::CPU, false, false);
+  auto q2_plan_dag = executor->getLatestQueryPlanDagExtracted();
+  EXPECT_TRUE(q2_plan_dag.compare(EMPTY_QUERY_PLAN) != 0);
+  EXPECT_TRUE(q2_plan_dag.compare(q1_plan_dag) != 0);
+
+  auto q3_str =
+      "SELECT out0 FROM TABLE(row_adder(1, cursor(SELECT d, d2 FROM TF_TEST)));";
+  auto res3 = QR::get()->runSQL(q3_str, ExecutorDeviceType::CPU, false, false);
+  auto q3_plan_dag = executor->getLatestQueryPlanDagExtracted();
+  EXPECT_TRUE(q3_plan_dag.compare(EMPTY_QUERY_PLAN) != 0);
+  EXPECT_TRUE(q3_plan_dag.compare(q2_plan_dag) != 0);
+
+  auto q4_str =
+      "SELECT out0, out1 FROM TABLE(row_addsub(1, cursor(SELECT d, d2 FROM TF_TEST)))";
+  auto res4 = QR::get()->runSQL(q4_str, ExecutorDeviceType::CPU, false, false);
+  auto q4_plan_dag = executor->getLatestQueryPlanDagExtracted();
+  EXPECT_TRUE(q4_plan_dag.compare(EMPTY_QUERY_PLAN) != 0);
+  EXPECT_TRUE(q4_plan_dag.compare(q3_plan_dag) != 0);
+
+  auto q5_str = q1_str;
+  auto res5 = QR::get()->runSQL(q5_str, ExecutorDeviceType::CPU, false, false);
+  auto q5_plan_dag = executor->getLatestQueryPlanDagExtracted();
+  EXPECT_TRUE(q5_plan_dag.compare(EMPTY_QUERY_PLAN) != 0);
+  EXPECT_TRUE(q5_plan_dag.compare(q1_plan_dag) == 0);
 }
 
 TEST(DataRecycler, DAG_Cache_Size_Management) {
@@ -1614,8 +1660,11 @@ int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
 
-  QR::init(BASE_PATH);
   g_is_test_env = true;
+  g_enable_table_functions = true;
+  g_enable_dev_table_functions = true;
+  QR::init(BASE_PATH);
+
   int err{0};
   try {
     err = create_and_populate_table();
