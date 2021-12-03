@@ -105,7 +105,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   try {
     ColumnCacheMap column_cache;
     filtered_result = executor_->executeWorkUnit(
-        one, true, table_infos, ra_exe_unit, co, eo, cat_, nullptr, false, column_cache);
+        one, true, table_infos, ra_exe_unit, co, eo, nullptr, false, column_cache);
   } catch (...) {
     return {false, 1.0, 0};
   }

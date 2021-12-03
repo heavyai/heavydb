@@ -297,13 +297,8 @@ DeletedColumnStats TableOptimizer::getDeletedColumnStats(
             std::make_pair(fragment_info.fragmentId, num_tuples));
       };
 
-  executor_->executeWorkUnitPerFragment(ra_exe_unit,
-                                        table_infos[0],
-                                        co,
-                                        eo,
-                                        cat_,
-                                        compute_deleted_callback,
-                                        fragment_indexes);
+  executor_->executeWorkUnitPerFragment(
+      ra_exe_unit, table_infos[0], co, eo, compute_deleted_callback, fragment_indexes);
   return deleted_column_stats;
 }
 
@@ -392,13 +387,8 @@ void TableOptimizer::recomputeColumnMetadata(
             std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
       };
 
-  executor_->executeWorkUnitPerFragment(ra_exe_unit,
-                                        table_infos[0],
-                                        co,
-                                        eo,
-                                        cat_,
-                                        compute_metadata_callback,
-                                        fragment_indexes);
+  executor_->executeWorkUnitPerFragment(
+      ra_exe_unit, table_infos[0], co, eo, compute_metadata_callback, fragment_indexes);
 
   auto* fragmenter = td->fragmenter.get();
   CHECK(fragmenter);

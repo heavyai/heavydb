@@ -488,7 +488,6 @@ class Executor {
                                const RelAlgExecutionUnit&,
                                const CompilationOptions&,
                                const ExecutionOptions& options,
-                               const Catalog_Namespace::Catalog&,
                                RenderInfo* render_info,
                                const bool has_cardinality_estimation,
                                ColumnCacheMap& column_cache);
@@ -579,7 +578,6 @@ class Executor {
                                   const InputTableInfo& table_info,
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo,
-                                  const Catalog_Namespace::Catalog& cat,
                                   PerFragmentCallBack& cb,
                                   const std::set<size_t>& fragment_indexes_param);
 
@@ -593,8 +591,7 @@ class Executor {
   ResultSetPtr executeTableFunction(const TableFunctionExecutionUnit exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
                                     const CompilationOptions& co,
-                                    const ExecutionOptions& eo,
-                                    const Catalog_Namespace::Catalog& cat);
+                                    const ExecutionOptions& eo);
 
   ExecutorDeviceType getDeviceTypeForTargets(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -794,7 +791,6 @@ class Executor {
                                      const RelAlgExecutionUnit&,
                                      const CompilationOptions&,
                                      const ExecutionOptions& options,
-                                     const Catalog_Namespace::Catalog&,
                                      std::shared_ptr<RowSetMemoryOwner>,
                                      RenderInfo* render_info,
                                      const bool has_cardinality_estimation,

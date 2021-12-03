@@ -1867,7 +1867,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
 
   try {
     result = {executor_->executeTableFunction(
-                  table_func_work_unit.exe_unit, table_infos, co, eo, cat_),
+                  table_func_work_unit.exe_unit, table_infos, co, eo),
               body->getOutputMetainfo()};
   } catch (const QueryExecutionError& e) {
     handlePersistentError(e.getErrorCode());
@@ -3023,7 +3023,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          ra_exe_unit,
                                          co,
                                          eo,
-                                         cat_,
                                          render_info,
                                          has_cardinality_estimation,
                                          column_cache),
@@ -3120,7 +3119,6 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    count_all_exe_unit,
                                    co,
                                    eo,
-                                   cat_,
                                    nullptr,
                                    false,
                                    column_cache);
@@ -3238,7 +3236,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            ra_exe_unit,
                                            co,
                                            eo_no_multifrag,
-                                           cat_,
                                            nullptr,
                                            true,
                                            column_cache),
@@ -3276,7 +3273,6 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            ra_exe_unit,
                                            co_cpu,
                                            eo_no_multifrag,
-                                           cat_,
                                            nullptr,
                                            true,
                                            column_cache),
