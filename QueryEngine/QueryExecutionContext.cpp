@@ -94,7 +94,8 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
                                   -1,
                                   deinterleaved_query_mem_desc,
                                   row_set_mem_owner_,
-                                  executor_->getCatalog(),
+                                  executor_->getDataMgr(),
+                                  executor_->getCatalog()->getDatabaseId(),
                                   executor_->blockSize(),
                                   executor_->gridSize());
   auto deinterleaved_storage =
@@ -633,7 +634,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     // result set.
     if (!estimator_result_set_) {
       estimator_result_set_.reset(
-          new ResultSet(ra_exe_unit.estimator, ExecutorDeviceType::CPU, 0, nullptr));
+          new ResultSet(ra_exe_unit.estimator, ExecutorDeviceType::CPU, 0, nullptr, -1));
     }
     out_vec.push_back(
         reinterpret_cast<int64_t*>(estimator_result_set_->getHostEstimatorBuffer()));

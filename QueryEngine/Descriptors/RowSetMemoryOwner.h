@@ -139,10 +139,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return it->second.get();
   }
 
-  StringDictionaryProxy* getOrAddStringDictProxy(
-      const int dict_id_in,
-      const bool with_generation,
-      const Catalog_Namespace::Catalog* catalog);
+  StringDictionaryProxy* getOrAddStringDictProxy(const int db_id,
+                                                 const int dict_id_in,
+                                                 const bool with_generation,
+                                                 const Data_Namespace::DataMgr* data_mgr);
 
   void addLiteralStringDictProxy(
       std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {

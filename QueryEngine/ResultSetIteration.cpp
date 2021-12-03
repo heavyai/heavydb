@@ -790,10 +790,11 @@ TargetValue build_array_target_value(
 TargetValue build_string_array_target_value(
     const int32_t* buff,
     const size_t buff_sz,
+    const int db_id,
     const int dict_id,
     const bool translate_strings,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const Catalog_Namespace::Catalog* catalog) {
+    const Data_Namespace::DataMgr* data_mgr) {
   std::vector<ScalarTargetValue> values;
   CHECK_EQ(size_t(0), buff_sz % sizeof(int32_t));
   const size_t num_elems = buff_sz / sizeof(int32_t);
@@ -808,10 +809,11 @@ TargetValue build_string_array_target_value(
           StringDictionaryProxy* sdp = row_set_mem_owner->getLiteralStringDictProxy();
           values.emplace_back(sdp->getString(string_id));
         } else {
-          values.emplace_back(NullableString(
-              row_set_mem_owner
-                  ->getOrAddStringDictProxy(dict_id, /*with_generation=*/false, catalog)
-                  ->getString(string_id)));
+          values.emplace_back(
+              NullableString(row_set_mem_owner
+                                 ->getOrAddStringDictProxy(
+                                     db_id, dict_id, /*with_generation=*/false, data_mgr)
+                                 ->getString(string_id)));
         }
       }
     }
@@ -828,16 +830,18 @@ TargetValue build_array_target_value(const SQLTypeInfo& array_ti,
                                      const size_t buff_sz,
                                      const bool translate_strings,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                     const Catalog_Namespace::Catalog* catalog) {
+                                     const Data_Namespace::DataMgr* data_mgr,
+                                     const int db_id) {
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
   if (elem_ti.is_string()) {
     return build_string_array_target_value(reinterpret_cast<const int32_t*>(buff),
                                            buff_sz,
+                                           db_id,
                                            elem_ti.get_comp_param(),
                                            translate_strings,
                                            row_set_mem_owner,
-                                           catalog);
+                                           data_mgr);
   }
   switch (elem_ti.get_size()) {
     case 1:
@@ -1338,7 +1342,8 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
           varlen_buffer[varlen_ptr].size(),
           translate_strings,
           row_set_mem_owner_,
-          catalog_);
+          data_mgr_,
+          db_id_for_dict_);
     } else {
       CHECK(false);
     }
@@ -1389,7 +1394,8 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                         ad.length,
                                         translate_strings,
                                         row_set_mem_owner_,
-                                        catalog_);
+                                        data_mgr_,
+                                        db_id_for_dict_);
       }
     }
   }
@@ -1423,7 +1429,8 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
                                     length,
                                     translate_strings,
                                     row_set_mem_owner_,
-                                    catalog_);
+                                    data_mgr_,
+                                    db_id_for_dict_);
   }
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
@@ -1843,9 +1850,12 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
       if (!chosen_type.get_comp_param()) {
         sdp = row_set_mem_owner_->getLiteralStringDictProxy();
       } else {
-        sdp = catalog_
+        sdp = data_mgr_
                   ? row_set_mem_owner_->getOrAddStringDictProxy(
-                        chosen_type.get_comp_param(), /*with_generation=*/false, catalog_)
+                        db_id_for_dict_,
+                        chosen_type.get_comp_param(),
+                        /*with_generation=*/false,
+                        data_mgr_)
                   : row_set_mem_owner_->getStringDictProxy(
                         chosen_type.get_comp_param());  // unit tests bypass the catalog
       }

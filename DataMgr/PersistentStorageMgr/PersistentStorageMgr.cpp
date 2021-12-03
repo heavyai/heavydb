@@ -172,6 +172,12 @@ void PersistentStorageMgr::prepareTablesForExecution(const ColumnByIdxRefSet& in
   getForeignStorageMgr()->prepareTablesForExecution(foreign_input_cols, co, eo, phase);
 }
 
+const DictDescriptor* PersistentStorageMgr::getDictMetadata(int db_id,
+                                                            int dict_id,
+                                                            bool load_dict) {
+  return getGlobalFileMgr()->getDictMetadata(db_id, dict_id, load_dict);
+}
+
 bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
   CHECK(has_table_prefix(chunk_key));
   auto db_id = chunk_key[CHUNK_KEY_DB_IDX];

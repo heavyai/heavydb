@@ -5807,6 +5807,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      nullptr,
+                                                     -1,
                                                      0,
                                                      0),
                          {}};

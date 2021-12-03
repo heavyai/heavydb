@@ -131,7 +131,8 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
       ExecutorDeviceType::CPU,
       query_mem_desc_rs,
       row_set_mem_owner,
-      executor->getCatalog(),
+      executor->getDataMgr(),
+      executor->getCatalog()->getDatabaseId(),
       executor->blockSize(),
       executor->gridSize());
   auto rs_storage = rs->allocateStorage();

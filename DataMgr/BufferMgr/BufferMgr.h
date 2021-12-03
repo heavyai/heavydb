@@ -162,6 +162,12 @@ class BufferMgr : public AbstractBufferMgr {  // implements
     UNREACHABLE();
   }
 
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) override {
+    UNREACHABLE();
+  }
+
   // Buffer API
   AbstractBuffer* alloc(const size_t num_bytes = 0) override;
   void free(AbstractBuffer* buffer) override;

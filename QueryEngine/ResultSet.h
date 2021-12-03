@@ -164,7 +164,8 @@ class ResultSet {
             const ExecutorDeviceType device_type,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Catalog_Namespace::Catalog* catalog,
+            Data_Namespace::DataMgr* data_mgr,
+            const int db_id_for_dict,
             const unsigned block_size,
             const unsigned grid_size);
 
@@ -177,14 +178,16 @@ class ResultSet {
             const int device_id,
             const QueryMemoryDescriptor& query_mem_desc,
             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-            const Catalog_Namespace::Catalog* catalog,
+            Data_Namespace::DataMgr* data_mgr,
+            const int db_id_for_dict,
             const unsigned block_size,
             const unsigned grid_size);
 
   ResultSet(const std::shared_ptr<const Analyzer::Estimator>,
             const ExecutorDeviceType device_type,
             const int device_id,
-            Data_Namespace::DataMgr* data_mgr);
+            Data_Namespace::DataMgr* data_mgr,
+            const int db_id_for_dict);
 
   ResultSet(const std::string& explanation);
 
@@ -761,7 +764,6 @@ class ResultSet {
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   Permutation permutation_;
 
-  const Catalog_Namespace::Catalog* catalog_;
   unsigned block_size_{0};
   unsigned grid_size_{0};
   QueryExecutionTimings timings_;
@@ -781,7 +783,8 @@ class ResultSet {
   const std::shared_ptr<const Analyzer::Estimator> estimator_;
   Data_Namespace::AbstractBuffer* device_estimator_buffer_{nullptr};
   mutable int8_t* host_estimator_buffer_{nullptr};
-  Data_Namespace::DataMgr* data_mgr_;
+  Data_Namespace::DataMgr* data_mgr_{nullptr};
+  const int db_id_for_dict_{-1};
 
   // only used by serialization
   using SerializedVarlenBufferStorage = std::vector<std::string>;

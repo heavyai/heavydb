@@ -2737,6 +2737,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      nullptr,
+                                                     -1,
                                                      0,
                                                      0),
                          {}};

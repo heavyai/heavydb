@@ -366,6 +366,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
     UNREACHABLE();
   }
 
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) override {
+    UNREACHABLE();
+  }
+
   static constexpr size_t DEFAULT_NUM_PAGES_PER_DATA_FILE{256};
   static constexpr size_t DEFAULT_NUM_PAGES_PER_METADATA_FILE{4096};
 

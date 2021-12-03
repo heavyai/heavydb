@@ -62,7 +62,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const ExecutorDeviceType device_type,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const Catalog_Namespace::Catalog* catalog,
+                     Data_Namespace::DataMgr* data_mgr,
+                     const int db_id_for_dict,
                      const unsigned block_size,
                      const unsigned grid_size)
     : targets_(targets)
@@ -74,10 +75,10 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , catalog_(catalog)
     , block_size_(block_size)
     , grid_size_(grid_size)
-    , data_mgr_(nullptr)
+    , data_mgr_(data_mgr)
+    , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
@@ -93,7 +94,8 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const int device_id,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const Catalog_Namespace::Catalog* catalog,
+                     Data_Namespace::DataMgr* data_mgr,
+                     const int db_id_for_dict,
                      const unsigned block_size,
                      const unsigned grid_size)
     : targets_(targets)
@@ -105,14 +107,14 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , drop_first_(0)
     , keep_first_(0)
     , row_set_mem_owner_(row_set_mem_owner)
-    , catalog_(catalog)
     , block_size_(block_size)
     , grid_size_(grid_size)
     , lazy_fetch_info_(lazy_fetch_info)
     , col_buffers_{col_buffers}
     , frag_offsets_{frag_offsets}
     , consistent_frag_sizes_{consistent_frag_sizes}
-    , data_mgr_(nullptr)
+    , data_mgr_(data_mgr)
+    , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
@@ -122,13 +124,15 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
                      const int device_id,
-                     Data_Namespace::DataMgr* data_mgr)
+                     Data_Namespace::DataMgr* data_mgr,
+                     const int db_id_for_dict)
     : device_type_(device_type)
     , device_id_(device_id)
     , query_mem_desc_{}
     , crt_row_buff_idx_(0)
     , estimator_(estimator)
     , data_mgr_(data_mgr)
+    , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
@@ -963,9 +967,8 @@ PermutationView ResultSet::topPermutation(PermutationView permutation,
 void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
-  auto data_mgr = &catalog_->getDataMgr();
   const int device_id{0};
-  CudaAllocator cuda_allocator(data_mgr, device_id);
+  CudaAllocator cuda_allocator(data_mgr_, device_id);
   CHECK_GT(block_size_, 0);
   CHECK_GT(grid_size_, 0);
   std::vector<int64_t*> group_by_buffers(block_size_);
@@ -985,9 +988,9 @@ void ResultSet::radixSortOnGpu(
                                   /*has_varlen_output=*/false,
                                   /*insitu_allocator*=*/nullptr);
   inplace_sort_gpu(
-      order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr, device_id);
+      order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr_, device_id);
   copy_group_by_buffers_from_gpu(
-      data_mgr,
+      data_mgr_,
       group_by_buffers,
       query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
       dev_group_by_buffers.data,
@@ -1046,7 +1049,7 @@ size_t ResultSet::getLimit() const {
 std::shared_ptr<const std::vector<std::string>> ResultSet::getStringDictionaryPayloadCopy(
     const int dict_id) const {
   const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
-      dict_id, /*with_generation=*/false, catalog_);
+      db_id_for_dict_, dict_id, /*with_generation=*/false, data_mgr_);
   CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
 }

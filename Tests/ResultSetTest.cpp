@@ -68,6 +68,7 @@ TEST(Construct, Allocate) {
                        query_mem_desc,
                        std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize()),
                        nullptr,
+                       -1,
                        0,
                        0);
   result_set.allocateStorage();
@@ -890,6 +891,7 @@ void test_iterate(const std::vector<TargetInfo>& target_infos,
                        query_mem_desc,
                        row_set_mem_owner,
                        nullptr,
+                       -1,
                        0,
                        0);
   for (size_t i = 0; i < query_mem_desc.getEntryCount(); ++i) {
@@ -1011,6 +1013,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   storage1 = rs1->allocateStorage();
@@ -1021,6 +1024,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   storage2 = rs2->allocateStorage();
@@ -1047,6 +1051,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   storage1 = rs1->allocateStorage();
@@ -1057,6 +1062,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   storage2 = rs2->allocateStorage();
@@ -1151,6 +1157,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               query_mem_desc,
                               row_set_mem_owner,
                               nullptr,
+                              -1,
                               0,
                               0));
       storage1 = rs1->allocateStorage();
@@ -1159,6 +1166,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               query_mem_desc,
                               row_set_mem_owner,
                               nullptr,
+                              -1,
                               0,
                               0));
       storage2 = rs2->allocateStorage();
@@ -1170,6 +1178,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               query_mem_desc,
                               row_set_mem_owner,
                               nullptr,
+                              -1,
                               0,
                               0));
       storage1 = rs1->allocateStorage();
@@ -1178,6 +1187,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
                               query_mem_desc,
                               row_set_mem_owner,
                               nullptr,
+                              -1,
                               0,
                               0));
       storage2 = rs2->allocateStorage();
@@ -1899,6 +1909,7 @@ TEST(MoreReduce, MissingValues) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage1 = rs1->allocateStorage();
@@ -1907,6 +1918,7 @@ TEST(MoreReduce, MissingValues) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage2 = rs2->allocateStorage();
@@ -1971,6 +1983,7 @@ TEST(MoreReduce, MissingValuesKeyless) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage1 = rs1->allocateStorage();
@@ -1979,6 +1992,7 @@ TEST(MoreReduce, MissingValuesKeyless) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage2 = rs2->allocateStorage();
@@ -2039,6 +2053,7 @@ TEST(MoreReduce, OffsetRewrite) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage1 = rs1->allocateStorage();
@@ -2047,6 +2062,7 @@ TEST(MoreReduce, OffsetRewrite) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage2 = rs2->allocateStorage();
@@ -2141,6 +2157,7 @@ TEST(MoreReduce, OffsetRewriteGeo) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage1 = rs1->allocateStorage();
@@ -2149,6 +2166,7 @@ TEST(MoreReduce, OffsetRewriteGeo) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage2 = rs2->allocateStorage();
@@ -2251,6 +2269,7 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage1 = rs1->allocateStorage();
@@ -2259,6 +2278,7 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
                                                query_mem_desc,
                                                row_set_mem_owner,
                                                nullptr,
+                                               -1,
                                                0,
                                                0);
   const auto storage2 = rs2->allocateStorage();

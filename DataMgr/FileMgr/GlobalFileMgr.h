@@ -195,6 +195,10 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                                  const ExecutionOptions& eo,
                                  ExecutionPhase phase) override {}
 
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) override;
+
  protected:
   std::shared_ptr<ForeignStorageInterface> fsi_;
 

@@ -77,6 +77,7 @@ void test_columnar_conversion(const std::vector<TargetInfo>& target_infos,
                        query_mem_desc,
                        row_set_mem_owner,
                        nullptr,
+                       -1,
                        0,
                        0);
 
@@ -175,6 +176,7 @@ TEST(Construct, Empty) {
                        query_mem_desc,
                        row_set_mem_owner,
                        nullptr,
+                       -1,
                        0,
                        0);
   ColumnarResultsTester columnar_results(

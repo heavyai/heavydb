@@ -237,16 +237,16 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
   return row_set_mem_owner->getOrAddStringDictProxy(
-      dict_id_in, with_generation, catalog_);
+      catalog_->getDatabaseId(), dict_id_in, with_generation, data_mgr_);
 }
 
 StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
+    const int db_id,
     const int dict_id_in,
     const bool with_generation,
-    const Catalog_Namespace::Catalog* catalog) {
+    const Data_Namespace::DataMgr* data_mgr) {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
-  CHECK(catalog);
-  const auto dd = catalog->getMetadataForDict(dict_id);
+  const auto dd = data_mgr->getDictMetadata(db_id, dict_id);
   if (dd) {
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
@@ -922,7 +922,8 @@ TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
                                        ExecutorDeviceType::CPU,
                                        QueryMemoryDescriptor(),
                                        row_set_mem_owner_,
-                                       catalog_,
+                                       data_mgr_,
+                                       catalog_->getDatabaseId(),
                                        blockSize(),
                                        gridSize());
   }
@@ -968,7 +969,8 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
                                        ExecutorDeviceType::CPU,
                                        QueryMemoryDescriptor(),
                                        nullptr,
-                                       catalog_,
+                                       data_mgr_,
+                                       catalog_->getDatabaseId(),
                                        blockSize(),
                                        gridSize());
   }
@@ -1036,7 +1038,8 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
-                                                  catalog_,
+                                                  data_mgr_,
+                                                  catalog_->getDatabaseId(),
                                                   blockSize(),
                                                   gridSize());
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
@@ -1671,7 +1674,8 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                      ExecutorDeviceType::CPU,
                                      QueryMemoryDescriptor(),
                                      nullptr,
-                                     catalog_,
+                                     data_mgr_,
+                                     catalog_->getDatabaseId(),
                                      blockSize(),
                                      gridSize());
 }
@@ -1778,7 +1782,8 @@ ResultSetPtr Executor::executeTableFunction(
         co.device_type,
         ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
         this->getRowSetMemoryOwner(),
-        this->getCatalog(),
+        data_mgr_,
+        this->getCatalog()->getDatabaseId(),
         this->blockSize(),
         this->gridSize());
   }
@@ -1978,7 +1983,8 @@ ResultSetPtr build_row_for_empty_input(
                                         device_type,
                                         query_mem_desc,
                                         row_set_mem_owner,
-                                        executor->getCatalog(),
+                                        executor->getDataMgr(),
+                                        executor->getCatalog()->getDatabaseId(),
                                         executor->blockSize(),
                                         executor->gridSize());
   rs->allocateStorage();
@@ -2124,7 +2130,8 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
                                                     first_result_set->getDeviceType(),
                                                     top_query_mem_desc,
                                                     first_result_set->getRowSetMemOwner(),
-                                                    catalog_,
+                                                    data_mgr_,
+                                                    catalog_->getDatabaseId(),
                                                     blockSize(),
                                                     gridSize());
   auto top_storage = top_result_set->allocateStorage();

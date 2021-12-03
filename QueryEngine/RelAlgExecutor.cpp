@@ -1854,14 +1854,16 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   const auto table_infos =
       get_table_infos(table_func_work_unit.exe_unit.input_descs, executor_);
 
-  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type,
-                                                     QueryMemoryDescriptor(),
-                                                     nullptr,
-                                                     executor_->getCatalog(),
-                                                     executor_->blockSize(),
-                                                     executor_->gridSize()),
-                         {}};
+  ExecutionResult result{
+      std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                  co.device_type,
+                                  QueryMemoryDescriptor(),
+                                  nullptr,
+                                  executor_->getDataMgr(),
+                                  executor_->getCatalog()->getDatabaseId(),
+                                  executor_->blockSize(),
+                                  executor_->gridSize()),
+      {}};
 
   try {
     result = {executor_->executeTableFunction(
@@ -2196,7 +2198,8 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
                                         ExecutorDeviceType::CPU,
                                         QueryMemoryDescriptor(),
                                         executor_->getRowSetMemoryOwner(),
-                                        executor_->getCatalog(),
+                                        executor_->getDataMgr(),
+                                        executor_->getCatalog()->getDatabaseId(),
                                         executor_->blockSize(),
                                         executor_->gridSize());
 
@@ -2547,6 +2550,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
                                         QueryMemoryDescriptor(),
                                         executor_->getRowSetMemoryOwner(),
                                         nullptr,
+                                        -1,
                                         0,
                                         0);
   std::vector<TargetMetaInfo> empty_targets;
@@ -2994,14 +2998,16 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       }
     }
   }
-  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type,
-                                                     QueryMemoryDescriptor(),
-                                                     nullptr,
-                                                     executor_->getCatalog(),
-                                                     executor_->blockSize(),
-                                                     executor_->gridSize()),
-                         {}};
+  ExecutionResult result{
+      std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                  co.device_type,
+                                  QueryMemoryDescriptor(),
+                                  nullptr,
+                                  executor_->getDataMgr(),
+                                  executor_->getCatalog()->getDatabaseId(),
+                                  executor_->blockSize(),
+                                  executor_->gridSize()),
+      {}};
 
   auto execute_and_handle_errors = [&](const auto max_groups_buffer_entry_guess_in,
                                        const bool has_cardinality_estimation,
@@ -3186,14 +3192,16 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   auto ra_exe_unit_in = work_unit.exe_unit;
   ra_exe_unit_in.use_bump_allocator = false;
 
-  auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                            co.device_type,
-                                                            QueryMemoryDescriptor(),
-                                                            nullptr,
-                                                            executor_->getCatalog(),
-                                                            executor_->blockSize(),
-                                                            executor_->gridSize()),
-                                {}};
+  auto result = ExecutionResult{
+      std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                  co.device_type,
+                                  QueryMemoryDescriptor(),
+                                  nullptr,
+                                  executor_->getDataMgr(),
+                                  executor_->getCatalog()->getDatabaseId(),
+                                  executor_->blockSize(),
+                                  executor_->gridSize()),
+      {}};
 
   const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;

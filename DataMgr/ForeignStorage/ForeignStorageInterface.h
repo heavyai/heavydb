@@ -215,6 +215,12 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     UNREACHABLE();
   }
 
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) override {
+    UNREACHABLE();
+  }
+
  private:
   PersistentForeignStorageInterface* persistent_foreign_storage_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;

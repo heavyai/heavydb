@@ -51,6 +51,8 @@ namespace Buffer_Namespace {
 class CpuBufferMgr;
 }
 
+struct DictDescriptor;
+
 namespace Data_Namespace {
 
 struct MemoryData {
@@ -242,6 +244,10 @@ class DataMgr {
 
   // Used for testing.
   Buffer_Namespace::CpuBufferMgr* getCpuBufferMgr() const;
+
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) const;
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,

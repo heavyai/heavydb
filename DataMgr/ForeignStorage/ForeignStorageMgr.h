@@ -102,6 +102,12 @@ class ForeignStorageMgr : public AbstractBufferMgr {
                                  const ExecutionOptions& eo,
                                  ExecutionPhase phase) override;
 
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) override {
+    UNREACHABLE();
+  }
+
   using ParallelismHint = std::pair<int, int>;
   void setParallelismHints(
       const std::map<ChunkKey, std::set<ParallelismHint>>& hints_per_table);

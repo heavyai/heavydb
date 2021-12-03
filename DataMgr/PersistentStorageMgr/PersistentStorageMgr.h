@@ -64,6 +64,10 @@ class PersistentStorageMgr : public AbstractBufferMgr {
                                  const ExecutionOptions& eo,
                                  ExecutionPhase phase) override;
 
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) override;
+
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
   foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
   foreign_storage::ForeignStorageCache* getDiskCache() const;

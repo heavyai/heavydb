@@ -335,4 +335,12 @@ void GlobalFileMgr::compactDataFiles(const int32_t db_id, const int32_t tb_id) {
   getFileMgr(db_id, tb_id);
 }
 
+const DictDescriptor* GlobalFileMgr::getDictMetadata(int db_id,
+                                                     int dict_id,
+                                                     bool load_dict) {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  return catalog->getMetadataForDict(dict_id, load_dict);
+}
+
 }  // namespace File_Namespace

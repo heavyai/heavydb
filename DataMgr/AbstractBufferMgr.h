@@ -49,6 +49,8 @@ DEFINE_ENUM_WITH_STRING_CONVERSIONS(
     (CACHING_FILE_MGR)(FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR)(
         PERSISTENT_STORAGE_MGR)(FOREIGN_STORAGE_MGR)(TIERED_CPU_MGR))
 
+struct DictDescriptor;
+
 namespace Data_Namespace {
 
 /**
@@ -102,6 +104,10 @@ class AbstractBufferMgr {
                                          const CompilationOptions& co,
                                          const ExecutionOptions& eo,
                                          ExecutionPhase phase) = 0;
+
+  virtual const DictDescriptor* getDictMetadata(int db_id,
+                                                int dict_id,
+                                                bool load_dict = true) = 0;
 
   // Buffer API
   virtual AbstractBuffer* alloc(const size_t numBytes = 0) = 0;
