@@ -72,6 +72,7 @@ extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
+extern size_t g_parallel_top_max;
 extern size_t g_constrained_by_in_threshold;
 
 extern bool g_enable_window_functions;
@@ -8455,6 +8456,41 @@ TEST(Select, SpeculativeTopNSort) {
         "LIMIT 2;",
         "SELECT w, COUNT(DISTINCT x) acd FROM test GROUP BY w ORDER BY acd DESC LIMIT 2;",
         dt);
+    }
+  }
+}
+
+TEST(Select, TopNSortWithWatchdogOn) {
+  ScopeGuard reset = [top_min = g_parallel_top_min,
+                      top_max = g_parallel_top_max,
+                      watchdog = g_enable_watchdog] {
+    g_parallel_top_min = top_min;
+    g_parallel_top_max = top_max;
+    g_enable_watchdog = watchdog;
+  };
+  g_parallel_top_min = 0;
+  g_parallel_top_max = 10;
+  // Let's assume we have top-K query as SELECT ... ORDER BY ... LIMIT K
+  // Currently, when columnar output is on (either by default or manually turned on)
+  // QMD decides to use resultset's cardinality instead of K for its entry count
+  // Then if we enable watchdog, we get the watchdog exception when sorting
+  // if QMD's entry_count > g_parallel_top_max (also > g_parallel_top_min)
+  // ("Sorting the result would be too slow")
+  bool test_values[]{true, false};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto watchdog : test_values) {
+      g_enable_watchdog = watchdog;
+      EXPECT_NO_THROW(
+          run_multiple_agg("SELECT x FROM gpu_sort_test ORDER BY x DESC", dt));
+      EXPECT_NO_THROW(run_multiple_agg(
+          "SELECT x FROM gpu_sort_test ORDER BY x DESC LIMIT 2 OFFSET 0;", dt));
+      try {
+        run_multiple_agg("SELECT x FROM gpu_sort_test ORDER BY x DESC LIMIT 8 OFFSET 0;",
+                         dt);
+      } catch (const WatchdogException& e) {
+        EXPECT_TRUE(true);
+      }
     }
   }
 }

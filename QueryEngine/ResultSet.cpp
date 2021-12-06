@@ -49,6 +49,7 @@
 
 size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
+size_t g_streaming_topn_max = 100e3;
 
 constexpr int64_t uninitialized_cached_row_count{-1};
 

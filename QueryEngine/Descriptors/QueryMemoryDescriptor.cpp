@@ -29,6 +29,7 @@
 
 bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
+extern size_t g_streaming_topn_max;
 
 namespace {
 
@@ -167,7 +168,7 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
     const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     if ((order_entry_expr->get_type_info().is_number() ||
          order_entry_expr->get_type_info().is_time()) &&
-        n <= 100000) {  // TODO(miyu): relax?
+        n <= g_streaming_topn_max) {
       return true;
     }
   }

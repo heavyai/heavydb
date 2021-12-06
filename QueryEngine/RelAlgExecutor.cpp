@@ -86,6 +86,10 @@ bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
   if (render_info && render_info->isPotentialInSituRender()) {
     return false;
   }
+  if (!ra_exe_unit.sort_info.order_entries.empty()) {
+    // disable output columnar when we have top-sort node query
+    return false;
+  }
   return ra_exe_unit.scan_limit >= g_columnar_large_projections_threshold;
 }
 
