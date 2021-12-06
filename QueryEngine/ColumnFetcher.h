@@ -95,7 +95,8 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator,
       const size_t thread_idx) const;
 
-  const int8_t* getResultSetColumn(const InputColDescriptor* col_desc,
+  const int8_t* getResultSetColumn(const int table_id,
+                                   const int col_id,
                                    const int frag_id,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id,
@@ -157,11 +158,13 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator,
       const size_t thread_idx) const;
 
-  void addMergedChunkIter(const InputColDescriptor col_desc,
+  void addMergedChunkIter(const int table_id,
+                          const int col_id,
                           const int device_id,
                           int8_t* chunk_iter_ptr) const;
 
-  const int8_t* getChunkiter(const InputColDescriptor col_desc,
+  const int8_t* getChunkiter(const int table_id,
+                             const int col_id,
                              const int device_id = 0) const;
 
   ChunkIter prepareChunkIter(AbstractBuffer* merged_data_buf,
@@ -186,17 +189,18 @@ class ColumnFetcher {
   mutable std::mutex chunk_list_mutex_;
   mutable std::mutex linearized_col_cache_mutex_;
   mutable ColumnCacheMap columnarized_table_cache_;
-  mutable std::unordered_map<InputColDescriptor, std::unique_ptr<const ColumnarResults>>
+  // All caches map [table_id, col_id] to cached data
+  mutable std::unordered_map<std::pair<int, int>, std::unique_ptr<const ColumnarResults>>
       columnarized_scan_table_cache_;
   using DeviceMergedChunkIterMap = std::unordered_map<int, int8_t*>;
   using DeviceMergedChunkMap = std::unordered_map<int, AbstractBuffer*>;
-  mutable std::unordered_map<InputColDescriptor, DeviceMergedChunkIterMap>
+  mutable std::unordered_map<std::pair<int, int>, DeviceMergedChunkIterMap>
       linearized_multi_frag_chunk_iter_cache_;
   mutable std::unordered_map<int, AbstractBuffer*>
       linearlized_temporary_cpu_index_buf_cache_;
-  mutable std::unordered_map<InputColDescriptor, DeviceMergedChunkMap>
+  mutable std::unordered_map<std::pair<int, int>, DeviceMergedChunkMap>
       linearized_data_buf_cache_;
-  mutable std::unordered_map<InputColDescriptor, DeviceMergedChunkMap>
+  mutable std::unordered_map<std::pair<int, int>, DeviceMergedChunkMap>
       linearized_idx_buf_cache_;
 
   friend class QueryCompilationDescriptor;

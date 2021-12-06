@@ -483,14 +483,14 @@ class Executor {
   size_t maxGpuSlabSize() const;
 
   TemporaryTable executeWorkUnit(size_t& max_groups_buffer_entry_guess,
-                               const bool is_agg,
-                               const std::vector<InputTableInfo>&,
-                               const RelAlgExecutionUnit&,
-                               const CompilationOptions&,
-                               const ExecutionOptions& options,
-                               RenderInfo* render_info,
-                               const bool has_cardinality_estimation,
-                               ColumnCacheMap& column_cache);
+                                 const bool is_agg,
+                                 const std::vector<InputTableInfo>&,
+                                 const RelAlgExecutionUnit&,
+                                 const CompilationOptions&,
+                                 const ExecutionOptions& options,
+                                 RenderInfo* render_info,
+                                 const bool has_cardinality_estimation,
+                                 ColumnCacheMap& column_cache);
 
   TableUpdateMetadata executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
@@ -560,8 +560,7 @@ class Executor {
                              const RelAlgExecutionUnit& ra_exe_unit,
                              const FragmentsList& selected_fragments) const;
 
-  bool needLinearizeAllFragments(const ColumnDescriptor* cd,
-                                 const InputColDescriptor& inner_col_desc,
+  bool needLinearizeAllFragments(const InputColDescriptor& inner_col_desc,
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const FragmentsList& selected_fragments,
                                  const Data_Namespace::MemoryLevel memory_level) const;
@@ -660,7 +659,6 @@ class Executor {
                           const Data_Namespace::MemoryLevel,
                           const std::map<int, const TableFragments*>&,
                           const FragmentsList& selected_fragments,
-                          const Catalog_Namespace::Catalog&,
                           std::list<ChunkIter>&,
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
                           DeviceAllocator* device_allocator,
@@ -673,7 +671,6 @@ class Executor {
                                const Data_Namespace::MemoryLevel,
                                const std::map<int, const TableFragments*>&,
                                const FragmentsList& selected_fragments,
-                               const Catalog_Namespace::Catalog&,
                                std::list<ChunkIter>&,
                                std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
                                DeviceAllocator* device_allocator,

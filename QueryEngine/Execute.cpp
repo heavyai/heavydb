@@ -2567,7 +2567,6 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
 }
 
 bool Executor::needLinearizeAllFragments(
-    const ColumnDescriptor* cd,
     const InputColDescriptor& inner_col_desc,
     const RelAlgExecutionUnit& ra_exe_unit,
     const FragmentsList& selected_fragments,
@@ -2577,9 +2576,9 @@ bool Executor::needLinearizeAllFragments(
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
-  auto need_linearize =
-      cd->columnType.is_array() ||
-      (cd->columnType.is_string() && !cd->columnType.is_dict_encoded_type());
+  auto need_linearize = inner_col_desc.getType().is_array() ||
+                        (inner_col_desc.getType().is_string() &&
+                         !inner_col_desc.getType().is_dict_encoded_type());
   return table_id > 0 && need_linearize && fragments.size() > 1;
 }
 
@@ -2596,7 +2595,6 @@ FetchResult Executor::fetchChunks(
     const Data_Namespace::MemoryLevel memory_level,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const FragmentsList& selected_fragments,
-    const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
     DeviceAllocator* device_allocator,
@@ -2638,12 +2636,10 @@ FetchResult Executor::fetchChunks(
         throw QueryExecutionError(ERR_INTERRUPTED);
       }
       CHECK(col_id);
-      const int table_id = col_id->getScanDesc().getTableId();
-      const auto cd = try_get_column_descriptor(col_id.get(), cat);
-      if (cd && cd->isVirtualCol) {
-        CHECK_EQ("rowid", cd->columnName);
+      if (col_id->isVirtual()) {
         continue;
       }
+      const int table_id = col_id->getScanDesc().getTableId();
       const auto fragments_it = all_tables_fragments.find(table_id);
       CHECK(fragments_it != all_tables_fragments.end());
       const auto fragments = fragments_it->second;
@@ -2669,13 +2665,13 @@ FetchResult Executor::fetchChunks(
         // for now, we only support fixed-length array that contains
         // geo point coordianates but we can support more types in this way
         if (needLinearizeAllFragments(
-                cd, *col_id, ra_exe_unit, selected_fragments, memory_level)) {
+                *col_id, ra_exe_unit, selected_fragments, memory_level)) {
           bool for_lazy_fetch = false;
           if (plan_state_->columns_to_not_fetch_.find(tbl_col_ids) !=
               plan_state_->columns_to_not_fetch_.end()) {
             for_lazy_fetch = true;
-            VLOG(2) << "Try to linearize lazy fetch column (col_id: " << cd->columnId
-                    << ", col_name: " << cd->columnName << ")";
+            VLOG(2) << "Try to linearize lazy fetch column (col_id: "
+                    << col_id->getColId() << ")";
           }
           frag_col_buffers[it->second] = column_fetcher.linearizeColumnFragments(
               table_id,
@@ -2726,7 +2722,6 @@ FetchResult Executor::fetchUnionChunks(
     const Data_Namespace::MemoryLevel memory_level,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const FragmentsList& selected_fragments,
-    const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
     DeviceAllocator* device_allocator,
@@ -2804,9 +2799,7 @@ FetchResult Executor::fetchUnionChunks(
         CHECK(col_id);
         const int table_id = col_id->getScanDesc().getTableId();
         CHECK_EQ(table_id, pair.first);
-        const auto cd = try_get_column_descriptor(col_id.get(), cat);
-        if (cd && cd->isVirtualCol) {
-          CHECK_EQ("rowid", cd->columnName);
+        if (col_id->isVirtual()) {
           continue;
         }
         const auto fragments_it = all_tables_fragments.find(table_id);
@@ -3629,8 +3622,11 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
     }
     if (!found) {
       // add deleted column
-      ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
-          deleted_cd->columnId, deleted_cd->tableId, input_table.getNestLevel()));
+      ra_exe_unit_with_deleted.input_col_descs.emplace_back(
+          new InputColDescriptor(deleted_cd->columnId,
+                                 deleted_cd->tableId,
+                                 input_table.getNestLevel(),
+                                 deleted_cd->columnType));
       add_deleted_col_to_map(deleted_cols_map, deleted_cd);
     }
   }

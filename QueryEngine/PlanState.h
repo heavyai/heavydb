@@ -77,7 +77,7 @@ struct PlanState {
   bool isLazyFetchColumn(const Analyzer::Expr* target_expr) const;
 
   bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
-    Analyzer::ColumnVar column(SQLTypeInfo(),
+    Analyzer::ColumnVar column(col_desc.getType(),
                                col_desc.getScanDesc().getTableId(),
                                col_desc.getColId(),
                                col_desc.getScanDesc().getNestLevel(),

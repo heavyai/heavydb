@@ -37,6 +37,7 @@
 #include "QueryEngine/TypePunning.h"
 #include "QueryHint.h"
 #include "Shared/InputRef.h"
+#include "Shared/sqltypes_geo.h"
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
@@ -862,6 +863,26 @@ class RelScan : public RelAlgNode {
 
     CHECK_LT(col_idx, column_infos_.size());
     return column_infos_[col_idx].is_rowid;
+  }
+
+  SQLTypeInfo getColumnTypeBySpi(int spi) const {
+    int col_idx;
+    int geo_idx = 0;
+    if (spi >= SPIMAP_MAGIC1) {
+      col_idx = (spi - SPIMAP_MAGIC1) / SPIMAP_MAGIC2 - 1;
+      geo_idx = (spi - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
+    } else {
+      col_idx = spi - 1;
+    }
+
+    // Physical geo column case.
+    if (geo_idx > 0) {
+      CHECK(column_infos_[col_idx].type.is_geometry());
+      return get_geo_physical_col_type(column_infos_[col_idx].type, geo_idx - 1);
+    }
+
+    CHECK_LT(col_idx, column_infos_.size());
+    return column_infos_[col_idx].type;
   }
 
   std::string toString() const override {

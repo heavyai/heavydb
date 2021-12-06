@@ -1146,6 +1146,8 @@ void collect_used_input_desc(
           scan ? cat.getColumnIdBySpi(table_id, col_id + 1) : col_id,
           table_id,
           input_desc,
+          scan ? scan->getColumnTypeBySpi(col_id + 1)
+               : input_ra->getOutputMetainfo()[col_id].get_type_info(),
           scan ? scan->isVirtualCol(col_id) : false));
     } else if (!dynamic_cast<const RelLogicalUnion*>(ra_node)) {
       throw std::runtime_error("Bushy joins not supported");

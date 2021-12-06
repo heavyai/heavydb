@@ -71,8 +71,12 @@ class InputColDescriptor {
   InputColDescriptor(const int col_id,
                      const int table_id,
                      const int nest_level,
+                     SQLTypeInfo type,
                      const bool is_virtual = false)
-      : col_id_(col_id), is_virtual_(is_virtual), input_desc_(table_id, nest_level) {}
+      : col_id_(col_id)
+      , type_(type)
+      , is_virtual_(is_virtual)
+      , input_desc_(table_id, nest_level) {}
 
   bool operator==(const InputColDescriptor& that) const {
     return col_id_ == that.col_id_ && is_virtual_ == that.is_virtual_ &&
@@ -82,6 +86,8 @@ class InputColDescriptor {
   int getColId() const { return col_id_; }
 
   const InputDescriptor& getScanDesc() const { return input_desc_; }
+
+  const SQLTypeInfo& getType() const { return type_; }
 
   bool isVirtual() const { return is_virtual_; }
 
@@ -95,6 +101,7 @@ class InputColDescriptor {
 
  private:
   const int col_id_;
+  SQLTypeInfo type_;
   const bool is_virtual_;
   const InputDescriptor input_desc_;
 };

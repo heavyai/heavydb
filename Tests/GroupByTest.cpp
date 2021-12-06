@@ -96,9 +96,9 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0));
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0, cd->columnType));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(
+      filter_cd->columnId, td->tableId, 0, filter_cd->columnType));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
@@ -191,9 +191,9 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0));
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0, cd->columnType));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(
+      filter_cd->columnId, td->tableId, 0, filter_cd->columnType));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
@@ -279,9 +279,9 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0));
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->columnId, td->tableId, 0));
+      std::make_shared<InputColDescriptor>(cd->columnId, td->tableId, 0, cd->columnType));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(
+      filter_cd->columnId, td->tableId, 0, filter_cd->columnType));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 

@@ -27,6 +27,7 @@ class UsedColumnExpressions : public ScalarExprVisitor<ScalarCodeGenerator::Colu
     InputColDescriptor input_desc(column->get_column_id(),
                                   column->get_table_id(),
                                   column->get_rte_idx(),
+                                  column->get_type_info(),
                                   column->is_virtual());
     m.emplace(input_desc,
               std::static_pointer_cast<Analyzer::ColumnVar>(column->deep_copy()));
@@ -67,6 +68,7 @@ ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(const Analyzer::Expr
         used_column.first.getColId(),
         used_column.first.getScanDesc().getTableId(),
         used_column.first.getScanDesc().getNestLevel(),
+        used_column.second->get_type_info(),
         used_column.first.isVirtual()));
   }
   plan_state_->allocateLocalColumnIds(global_col_ids);
