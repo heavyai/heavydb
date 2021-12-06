@@ -202,6 +202,22 @@ public final class MapDParser {
                           selectCall, expression)) {
                 return false;
               }
+              if (null != selectCall.getWhere()) {
+                if (new ExpressionListedAsChildOROperatorChecker().containsExpression(
+                            selectCall.getWhere(), expression)) {
+                  // Decorrelation logic of the current Calcite cannot cover IN-clause
+                  // well if it is listed as a child operand of OR-op
+                  return false;
+                }
+              }
+              if (null != selectCall.getHaving()) {
+                if (new ExpressionListedAsChildOROperatorChecker().containsExpression(
+                            selectCall.getHaving(), expression)) {
+                  // Decorrelation logic of the current Calcite cannot cover IN-clause
+                  // well if it is listed as a child operand of OR-op
+                  return false;
+                }
+              }
             }
           }
 
@@ -1435,6 +1451,37 @@ public final class MapDParser {
         for (SqlNode listedNode : selectNode.getSelectList()) {
           if (listedNode.toString().contains(targetString)) {
             throw Util.FoundOne.NULL;
+          }
+        }
+      }
+      return super.visit(call);
+    }
+
+    boolean containsExpression(SqlNode node, SqlNode targetExpression) {
+      try {
+        this.targetExpression = targetExpression;
+        node.accept(this);
+        return false;
+      } catch (Util.FoundOne e) {
+        return true;
+      }
+    }
+
+    SqlNode targetExpression;
+  }
+
+  private static class ExpressionListedAsChildOROperatorChecker
+          extends SqlBasicVisitor<Void> {
+    @Override
+    public Void visit(SqlCall call) {
+      if (call instanceof SqlBasicCall) {
+        SqlBasicCall basicCall = (SqlBasicCall) call;
+        if (basicCall.getKind() == SqlKind.OR) {
+          String targetString = targetExpression.toString();
+          for (SqlNode listedOperand : basicCall.operands) {
+            if (listedOperand.toString().contains(targetString)) {
+              throw Util.FoundOne.NULL;
+            }
           }
         }
       }

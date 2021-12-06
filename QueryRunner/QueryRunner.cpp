@@ -317,6 +317,30 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   return query_hints ? *query_hints : RegisteredQueryHint::defaults();
 }
 
+std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
+    const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  const auto& cat = session_info_->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
+                                        cat.getDataMgr().getBufferProvider());
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      {},
+                                      true,
+                                      false,
+                                      false,
+                                      true)
+                            .plan_result;
+  auto ra_executor = RelAlgExecutor(
+      executor.get(), &cat, cat.getDataMgr().getDataProvider(), query_ra, query_state);
+  return ra_executor.getRootRelAlgNodeShPtr();
+}
+
 std::optional<std::unordered_map<size_t, RegisteredQueryHint>>
 QueryRunner::getParsedQueryHints(const std::string& query_str) {
   CHECK(session_info_);

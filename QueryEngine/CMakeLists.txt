@@ -127,6 +127,7 @@ set(query_engine_source_files
     DataRecycler/HashingSchemeRecycler.cpp
     DataRecycler/OverlapsTuningParamRecycler.cpp
     Visitors/QueryPlanDagChecker.cpp
+    Visitors/SQLOperatorDetector.cpp
 
     Codec.h
     Execute.h

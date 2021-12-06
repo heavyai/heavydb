@@ -187,6 +187,8 @@ class QueryRunner {
   virtual RegisteredQueryHint getParsedQueryHint(const std::string&);
   virtual std::optional<std::unordered_map<size_t, RegisteredQueryHint>>
   getParsedQueryHints(const std::string& query_str);
+  std::shared_ptr<const RelAlgNode> getRootNodeFromParsedQuery(
+      const std::string& query_str);
   virtual void runImport(Parser::CopyTableStmt* import_stmt);
   virtual std::unique_ptr<import_export::Loader> getLoader(
       const TableDescriptor* td) const;

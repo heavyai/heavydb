@@ -23,6 +23,7 @@
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
+#include "../QueryEngine/Visitors/SQLOperatorDetector.h"
 #include "../Shared/file_delete.h"
 #include "TestHelpers.h"
 
@@ -942,6 +943,39 @@ TEST(Select, DISABLED_Very_Large_In) {
 
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS INT_100K;");
   boost::filesystem::remove(file_path);
+}
+
+TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
+  int factsCount = 13;
+  int lookupCount = 5;
+  setupTest("int", factsCount, lookupCount);
+
+  auto check_query = [](const std::string& query, bool expected) {
+    auto root_node = QR::get()->getRootNodeFromParsedQuery(query);
+    auto has_in_expr = SQLOperatorDetector::detect(root_node.get(), SQLOps::kIN);
+    EXPECT_EQ(has_in_expr, expected);
+  };
+
+  auto q1 =
+      "WITH TT1 AS (SELECT val AS key0 FROM test_facts) SELECT val FROM test_facts WHERE "
+      "val IN (SELECT key0 FROM TT1);";
+
+  auto q2 =
+      "WITH TT1 AS (SELECT val AS key0 FROM test_facts) SELECT val FROM test_facts WHERE "
+      "(val IN (SELECT key0 FROM TT1) OR val IS NULL);";
+
+  auto q3 =
+      "WITH TT1 AS (SELECT val AS key0 FROM test_facts) SELECT val FROM test_facts GROUP "
+      "BY val HAVING val IN (SELECT key0 FROM TT1);";
+
+  auto q4 =
+      "WITH TT1 AS (SELECT val AS key0 FROM test_facts) SELECT val FROM test_facts GROUP "
+      "BY val HAVING (val IN (SELECT key0 FROM TT1) OR val IS NULL);";
+
+  check_query(q1, false);
+  check_query(q2, true);
+  check_query(q3, false);
+  check_query(q4, true);
 }
 
 int main(int argc, char* argv[]) {
