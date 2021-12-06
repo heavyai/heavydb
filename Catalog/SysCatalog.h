@@ -52,7 +52,6 @@
 #include "LeafHostInfo.h"
 
 #include "../Calcite/Calcite.h"
-#include "Shared/Restriction.h"
 #include "Shared/mapd_shared_mutex.h"
 
 inline const std::string OMNISCI_SYSTEM_CATALOG = "omnisci_system_catalog";
@@ -98,9 +97,7 @@ struct UserMetadata {
                      user_meta.isSuper.load(),
                      user_meta.defaultDbId,
                      user_meta.can_login,
-                     user_meta.is_temporary) {
-    restriction = user_meta.restriction;
-  }
+                     user_meta.is_temporary) {}
   UserMetadata& operator=(UserMetadata const& user_meta) {
     if (this != &user_meta) {
       userId = user_meta.userId;
@@ -110,7 +107,6 @@ struct UserMetadata {
       defaultDbId = user_meta.defaultDbId;
       can_login = user_meta.can_login;
       is_temporary = user_meta.is_temporary;
-      restriction = user_meta.restriction;
     }
     return *this;
   }
@@ -121,12 +117,9 @@ struct UserMetadata {
   int32_t defaultDbId;
   bool can_login{true};
   bool is_temporary{false};
-  Restriction restriction;
 
   // Return a string that is safe to log for the username based on --log-user-id.
   std::string userLoggable() const;
-
-  void setRestriction(Restriction in_restriction) { restriction = in_restriction; }
 };
 
 /*

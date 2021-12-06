@@ -540,7 +540,8 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       ddl_command_ == "ALTER_USER" || ddl_command_ == "RENAME_USER" ||
       ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
       ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE" ||
-      ddl_command_ == "REASSIGN_OWNED") {
+      ddl_command_ == "REASSIGN_OWNED" || ddl_command_ == "CREATE_POLICY" ||
+      ddl_command_ == "DROP_POLICY") {
     // group user/role/db commands
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;

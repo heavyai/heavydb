@@ -580,7 +580,9 @@ SqlDdl SqlCustomShow(Span s) :
         |
         LOOKAHEAD(1) show = SqlShowCreateTable(s)
         |
-        LOOKAHEAD(1) show = SqlShowRoles(s)
+        LOOKAHEAD(2) show = SqlShowRoles(s)
+        |
+        LOOKAHEAD(2) show = SqlShowPolicies(s)
     )
     {
         return show;
@@ -620,6 +622,8 @@ SqlDdl SqlCustomDrop(Span s) :
         LOOKAHEAD(2) drop = SqlDropUser(s)
         |
         LOOKAHEAD(2) drop = SqlDropRole(s)
+        |
+        LOOKAHEAD(2) drop = SqlDropPolicy(s)
     )
     {
         return drop;
@@ -1348,6 +1352,51 @@ SqlCreate SqlCreateDataframe(Span s, boolean replace) :
     [ <WITH> dataframeOptions = OptionsOpt() ]
     {
         return new SqlCreateDataframe(s.end(this), name, elementList, filePath, dataframeOptions);
+    }
+}
+
+/*
+ * CREATE POLICY
+ */
+SqlCreate SqlCreatePolicy(Span s, boolean replace) :
+{
+    SqlIdentifier columnName = null;
+    SqlIdentifier granteeName = null;
+    SqlNodeList valuesList = null;
+}
+{
+    <POLICY>
+    <ON>
+    <COLUMN>
+    columnName = CompoundIdentifier()
+    <TO>
+    granteeName = CompoundIdentifier()
+    <VALUES>
+    (
+        valuesList = ParenthesizedLiteralOptionCommaList()
+    )
+    {
+        return new SqlCreatePolicy(s.end(this), columnName.names, valuesList, granteeName);
+    }
+}
+
+/*
+ * DROP POLICY
+ */
+SqlDrop SqlDropPolicy(Span s) :
+{
+    SqlIdentifier columnName = null;
+    SqlIdentifier granteeName = null;
+}
+{
+    <POLICY>
+    <ON>
+    <COLUMN>
+    columnName = CompoundIdentifier()
+    <FROM>
+    granteeName = CompoundIdentifier()
+    {
+        return new SqlDropPolicy(s.end(this), columnName.names, granteeName);
     }
 }
 

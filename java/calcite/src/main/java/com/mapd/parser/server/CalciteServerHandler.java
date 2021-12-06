@@ -141,7 +141,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
           boolean legacySyntax,
           boolean isExplain,
           boolean isViewOptimize,
-          TRestriction restriction) throws InvalidParseRequest, TException {
+          List<TRestriction> trestrictions) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
 
@@ -154,11 +154,19 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
-    Restriction rest = null;
-    if (restriction != null && !restriction.column.isEmpty()) {
-      rest = new Restriction(restriction.column, restriction.values);
+    List<Restriction> rests = null;
+    if (trestrictions != null && !trestrictions.isEmpty()) {
+      rests = new ArrayList<>();
+      for (TRestriction trestriction : trestrictions) {
+        Restriction rest = null;
+        rest = new Restriction(trestriction.database,
+                trestriction.table,
+                trestriction.column,
+                trestriction.values);
+        rests.add(rest);
+      }
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, rest);
+    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, rests);
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
     parser.setUser(mapDUser);

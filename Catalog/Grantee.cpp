@@ -266,19 +266,23 @@ void Grantee::updatePrivileges(Role* role) {
 
 // Pull privileges from upper roles
 void Grantee::updatePrivileges() {
+  // Zero out the effective privileges. DBObjects may still exist, but will be empty.
   for (auto& dbObject : effectivePrivileges_) {
     dbObject.second->resetPrivileges();
   }
+  // Load this Grantee's direct privileges into its effective privileges.
   for (auto it = directPrivileges_.begin(); it != directPrivileges_.end(); ++it) {
     if (effectivePrivileges_.find(it->first) != effectivePrivileges_.end()) {
       effectivePrivileges_[it->first]->updatePrivileges(*it->second);
     }
   }
+  // Load any other roles that we've been granted into the effective privileges.
   for (auto role : roles_) {
     if (role->getDbObjects(false)->size() > 0) {
       updatePrivileges(role);
     }
   }
+  // Free any DBObjects that are still empty in the effective privileges.
   for (auto dbObjectIt = effectivePrivileges_.begin();
        dbObjectIt != effectivePrivileges_.end();) {
     if (!dbObjectIt->second->getPrivileges().hasAny()) {

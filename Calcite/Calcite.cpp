@@ -554,13 +554,8 @@ TPlanResult Calcite::processImpl(
   LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
   LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
 
-  TRestriction restriction;
-  auto rest = user_session_info->get_restriction_ptr();
-  if (rest != nullptr && !rest->column.empty()) {
-    VLOG(1) << "This users session has a restriction : " << *rest;
-    restriction.column = rest->column;
-    restriction.values = rest->values;
-  }
+  std::vector<TRestriction> trestrictions;
+
   TPlanResult ret;
   if (server_available_) {
     try {
@@ -580,7 +575,7 @@ TPlanResult Calcite::processImpl(
                                legacy_syntax,
                                is_explain,
                                is_view_optimize,
-                               restriction);
+                               trestrictions);
         clientP.second->close();
       });
 
