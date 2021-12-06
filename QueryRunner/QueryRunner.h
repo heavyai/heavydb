@@ -215,6 +215,8 @@ class QueryRunner {
   std::optional<
       std::unordered_map<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>>
   getParsedQueryHints(const std::string& query_str);
+  std::shared_ptr<const RelAlgNode> getRootNodeFromParsedQuery(
+      const std::string& query_str);
   std::optional<RegisteredQueryHint> getParsedGlobalQueryHints(
       const std::string& query_str);
   const int32_t* getCachedPerfectHashTable(QueryPlan plan_dag);
