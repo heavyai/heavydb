@@ -36,6 +36,10 @@ namespace Geospatial {
 
 namespace {
 
+// must not throw exceptions during a datasource open
+// otherwise the GDAL loader will get into a bad state
+static bool g_disable_gdal_exception_on_error = false;
+
 void gdal_error_handler(CPLErr err_class, int err_no, const char* err_msg) {
   CHECK(err_class >= CE_None && err_class <= CE_Fatal);
   static constexpr std::array<const char*, 5> err_class_strings{
@@ -48,7 +52,11 @@ void gdal_error_handler(CPLErr err_class, int err_no, const char* err_msg) {
   std::string log_msg = std::string("GDAL ") + err_class_strings[err_class] + ": " +
                         err_msg + " (" + std::to_string(err_no) + ")";
   if (err_class >= CE_Failure) {
-    throw std::runtime_error(log_msg);
+    if (g_disable_gdal_exception_on_error) {
+      LOG(ERROR) << log_msg;
+    } else {
+      throw std::runtime_error(log_msg);
+    }
   } else {
     LOG(INFO) << log_msg;
   }
@@ -59,6 +67,7 @@ void gdal_error_handler(CPLErr err_class, int err_no, const char* err_msg) {
 bool GDAL::initialized_ = false;
 
 std::mutex GDAL::init_mutex_;
+std::mutex GDAL::open_datasource_mutex_;
 
 void GDAL::init() {
   // this should not be called from multiple threads, but...
@@ -198,21 +207,23 @@ GDAL::DataSourceUqPtr GDAL::openDataSource(const std::string& name,
       CHECK(false) << "Invalid datasource source type";
   }
 
+  // lock while opening
+  std::lock_guard<std::mutex> lock(open_datasource_mutex_);
+
   OGRDataSource* datasource{nullptr};
 
-  try {
+  // scope to ensure flag/mutex release order
+  {
+    // disable exception on error just for the open
+    ScopeGuard enable_exception_on_error = [&]() {
+      g_disable_gdal_exception_on_error = false;
+    };
+    g_disable_gdal_exception_on_error = true;
+
+    // attempt to open datasource
+    // error will simply log and return null to be trapped later
     datasource = static_cast<OGRDataSource*>(GDALOpenEx(
         name.c_str(), open_flags | GDAL_OF_READONLY, nullptr, nullptr, nullptr));
-  } catch (std::runtime_error& e) {
-    if (datasource) {
-      GDALClose(datasource);
-    }
-    datasource = nullptr;
-  }
-
-  // log any error
-  if (datasource == nullptr) {
-    LOG(ERROR) << "Failed to open datasource: " << CPLGetLastErrorMsg();
   }
 
   // done
