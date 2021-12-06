@@ -44,6 +44,7 @@
 
 size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
+size_t g_streaming_topn_max = 100e3;
 
 void ResultSet::keepFirstN(const size_t n) {
   CHECK_EQ(-1, cached_row_count_);
