@@ -1883,6 +1883,35 @@ TEST(GeoSpatial, Math) {
         R"(SELECT ST_DWithin(ST_GeogFromText('POLYGON((-118.4079 33.9434, -119.4079 32.9434, -117.4079 34.9434))', 4326), ST_GeogFromText('POINT(2.5559 49.0083)', 4326), 9000000.0);)",
         dt));
 
+    // ST_DWithin optimization to trim irrelevant heads and tails of very big linestrings
+    // Discarding very big linestring if its every segment is too far from buffered bbox
+    ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_DWithin('LINESTRING(0 5, 1 5, 2 5, 3 5, 4 5, 5 5, 5 4, 5 3, 5 2, 5 1, 4 0)', 'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), ((1 1, -1 1, -1 -1, 1 -1, 1 1)))', 1);)",
+            dt)));
+    // Trimming very big linestring just to a portion that might be within distance,
+    // but distance calc shows that it's actually not
+    ASSERT_EQ(
+        static_cast<int64_t>(0),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_DWithin('LINESTRING(0 5, 1 5, 2 5, 3 4, 4 3, 5 2, 5 1, 5 0)', 'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), ((1 1, -1 1, -1 -1, 1 -1, 1 1)))', 1.9);)",
+            dt)));
+    // Trimming very big linestring just to a portion that might be within distance
+    // and distance calc confirms that it actually is
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_DWithin('LINESTRING(0 5, 1 5, 2 5, 3 4, 4 3, 5 2, 5 1, 5 0)', 'POLYGON((2 2, -2 2, -2 -2, 2 -2, 2 2)), ((1 1, -1 1, -1 -1, 1 -1, 1 1))', 2.15);)",
+            dt)));
+    // Trimming very big linestring just to a portion that might be within distance,
+    // with the linestring's tail landing inside the buffered bbox. Only head is trimmed
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT ST_DWithin('LINESTRING(0 5, 1 5, 2 5, 3 5, 4 5, 5 5, 5 4, 5 3, 5 2, 5 1, 4 0)', 'MULTIPOLYGON(((2 2, -2 2, -2 -2, 2 -2, 2 2)), ((1 1, -1 1, -1 -1, 1 -1, 1 1)))', 2.1);)",
+            dt)));
+
     // Coord accessors
     ASSERT_NEAR(
         static_cast<double>(-118.4079),
