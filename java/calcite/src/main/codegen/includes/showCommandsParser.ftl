@@ -179,8 +179,8 @@ SqlDdl SqlShowCreateTable(Span s) :
  */
 SqlDdl SqlShowRoles(Span s) :
 {
-    SqlIdentifier userName = null;
     boolean effective = false;
+    SqlIdentifier userName = null;
 }
 {
     [<EFFECTIVE> {effective = true;}]
@@ -192,5 +192,28 @@ SqlDdl SqlShowRoles(Span s) :
           u = userName.toString();
         }
         return new SqlShowRoles(s.end(this), u, effective);
+    }
+}
+
+/*
+ * SHOW [EFFECTIVE] POLICIES [username]
+ */
+SqlDdl SqlShowPolicies(Span s) :
+{
+    boolean effective = false;
+    SqlIdentifier granteeName = null;
+}
+{
+    [<EFFECTIVE> {effective = true;}]
+    <POLICIES>
+    granteeName = CompoundIdentifier()
+    {
+        String n;
+        if (granteeName != null) {
+          n = granteeName.toString();
+        } else {
+          n = "";
+        }
+        return new SqlShowPolicies(s.end(this), effective, n);
     }
 }

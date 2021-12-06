@@ -17,6 +17,8 @@ package com.mapd.calcite.parser;
 
 import org.apache.calcite.rel.rules.Restriction;
 
+import java.util.List;
+
 /**
  *
  * @author michael
@@ -26,22 +28,22 @@ public class MapDUser {
   private final String catalog;
   private final int mapDPort;
   private final String session;
-  private final Restriction restriction;
+  private final List<Restriction> restrictions;
 
   public MapDUser(String user,
           String session,
           String catalog,
           int mapDPort,
-          Restriction restriction) {
+          List<Restriction> restrictions) {
     this.user = user;
     this.catalog = catalog;
     this.mapDPort = mapDPort;
     this.session = session;
-    this.restriction = restriction;
+    this.restrictions = restrictions;
   }
 
-  public Restriction getRestriction() {
-    return restriction;
+  public List<Restriction> getRestrictions() {
+    return restrictions;
   }
 
   public String getDB() {

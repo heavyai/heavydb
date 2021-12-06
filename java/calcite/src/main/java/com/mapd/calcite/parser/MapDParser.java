@@ -292,7 +292,7 @@ public final class MapDParser {
                     .context(MAPD_CONNECTION_CONTEXT)
                     .build();
     MapDPlanner planner = new MapDPlanner(config);
-    planner.setRestriction(mapdUser.getRestriction());
+    planner.setRestrictions(mapdUser.getRestrictions());
     return planner;
   }
 

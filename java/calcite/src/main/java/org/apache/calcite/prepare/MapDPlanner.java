@@ -75,7 +75,7 @@ public class MapDPlanner extends PlannerImpl {
   FrameworkConfig config;
   private List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
           new ArrayList<>();
-  private Restriction restriction = null;
+  private List<Restriction> restrictions = null;
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDPlanner.class);
 
   public MapDPlanner(FrameworkConfig config) {
@@ -181,19 +181,19 @@ public class MapDPlanner extends PlannerImpl {
   @Override
   public RelRoot rel(SqlNode sql) {
     RelRoot root = super.rel(sql);
-    if (restriction != null) {
-      root = applyInjectFilterRule(root, restriction);
+    if (restrictions != null) {
+      root = applyInjectFilterRule(root, restrictions);
     }
     root = applyQueryOptimizationRules(root);
     root = applyFilterPushdown(root);
     return root;
   }
 
-  private RelRoot applyInjectFilterRule(RelRoot root, Restriction restriction) {
+  private RelRoot applyInjectFilterRule(RelRoot root, List<Restriction> restrictions) {
     // TODO consider doing these rules in one preplan pass
 
     final InjectFilterRule injectFilterRule =
-            InjectFilterRule.Config.DEFAULT.toRule(restriction);
+            InjectFilterRule.Config.DEFAULT.toRule(restrictions);
 
     final HepProgram program =
             HepProgram.builder().addRuleInstance(injectFilterRule).build();
@@ -250,8 +250,8 @@ public class MapDPlanner extends PlannerImpl {
 
     RelRoot relR = RelRoot.of(reader.read(query), SqlKind.SELECT);
 
-    if (restriction != null) {
-      relR = applyInjectFilterRule(relR, restriction);
+    if (restrictions != null) {
+      relR = applyInjectFilterRule(relR, restrictions);
     }
 
     relR = applyQueryOptimizationRules(relR);
@@ -273,8 +273,8 @@ public class MapDPlanner extends PlannerImpl {
     this.filterPushDownInfo = filterPushDownInfo;
   }
 
-  public void setRestriction(Restriction restriction) {
-    this.restriction = restriction;
+  public void setRestrictions(List<Restriction> restrictions) {
+    this.restrictions = restrictions;
   }
 }
 

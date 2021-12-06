@@ -199,6 +199,30 @@ class RefreshForeignTablesCommand : public DdlCommand {
   ExecutionResult execute() override;
 };
 
+class CreatePolicyCommand : public DdlCommand {
+ public:
+  CreatePolicyCommand(const DdlCommandData& ddl_data,
+                      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute() override;
+};
+
+class ShowPoliciesCommand : public DdlCommand {
+ public:
+  ShowPoliciesCommand(const DdlCommandData& ddl_data,
+                      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute() override;
+};
+
+class DropPolicyCommand : public DdlCommand {
+ public:
+  DropPolicyCommand(const DdlCommandData& ddl_data,
+                    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute() override;
+};
+
 class ReassignOwnedCommand : public DdlCommand {
  public:
   ReassignOwnedCommand(const DdlCommandData& ddl_data,

@@ -150,7 +150,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
           }
         } else {
           boost::regex create_regex{
-              R"(CREATE\s+(DATABASE|DATAFRAME|(TEMPORARY\s+|\s*)+TABLE|ROLE|USER|VIEW).*)",
+              R"(CREATE\s+(DATABASE|DATAFRAME|(TEMPORARY\s+|\s*)+TABLE|ROLE|USER|VIEW|POLICY).*)",
               boost::regex::extended | boost::regex::icase};
           if (g_enable_calcite_ddl_parser &&
               boost::regex_match(query_string, create_regex)) {
@@ -178,7 +178,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
         is_legacy_ddl_ = false;
         return;
       } else if (ddl == "DROP") {
-        boost::regex drop_regex{R"(DROP\s+(TABLE|ROLE|VIEW|DATABASE|USER).*)",
+        boost::regex drop_regex{R"(DROP\s+(TABLE|ROLE|VIEW|DATABASE|USER|POLICY).*)",
                                 boost::regex::extended | boost::regex::icase};
         if (g_enable_calcite_ddl_parser &&
             (boost::regex_match(query_string, drop_regex))) {

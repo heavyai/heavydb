@@ -21,7 +21,6 @@ import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelRule;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.logical.LogicalTableScan;
-import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexNode;
@@ -33,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
@@ -40,11 +40,11 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
 
   public static Set<String> visitedMemo = new HashSet<>();
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(InjectFilterRule.class);
-  final Restriction restriction;
+  final List<Restriction> restrictions;
 
-  public InjectFilterRule(Config config, Restriction restriction) {
+  public InjectFilterRule(Config config, List<Restriction> restrictions) {
     super(config);
-    this.restriction = restriction;
+    this.restrictions = restrictions;
     clearMemo();
   }
 
@@ -61,25 +61,77 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       visitedMemo.add(parentNode.toString());
     }
     RelOptTable table = parentNode.getTable();
+    List<String> qname = table.getQualifiedName();
 
-    RelDataTypeField field =
-            table.getRowType().getField(restriction.getRestrictionColumn(), false, false);
-    if (field != null) {
+    String query_database = null;
+    String query_table = null;
+    if (qname.size() == 2) {
+      query_database = qname.get(0);
+      query_table = qname.get(1);
+    }
+    if (query_database == null || query_database.isEmpty() || query_table == null
+            || query_table.isEmpty()) {
+      throw new RuntimeException(
+              "Restrictions: Expected qualified name as [database, table] but got: "
+              + qname);
+    }
+
+    ArrayList<RexNode> orList = new ArrayList<RexNode>();
+    RelBuilder builder = call.builder();
+    RexBuilder rBuilder = builder.getRexBuilder();
+    builder = builder.push(parentNode);
+    boolean found = false;
+    for (Restriction restriction : restrictions) {
+      // Match the database name.
+      String rest_database = restriction.getRestrictionDatabase();
+      if (rest_database != null && !rest_database.isEmpty()
+              && !rest_database.equals(query_database)) {
+        // TODO(sy): Maybe remove the isEmpty() wildcarding in OmniSciDB 6.0.
+        MAPDLOGGER.debug("RLS row-level security restriction for database "
+                + rest_database + " ignored because this query is on database "
+                + query_database);
+        continue;
+      }
+
+      // Match the table name.
+      String rest_table = restriction.getRestrictionTable();
+      if (rest_table != null && !rest_table.isEmpty()
+              && !rest_table.equals(query_table)) {
+        // TODO(sy): Maybe remove the isEmpty() wildcarding in OmniSciDB 6.0.
+        MAPDLOGGER.debug("RLS row-level security restriction for table " + rest_table
+                + " ignored because this query is on table " + query_table);
+        continue;
+      }
+
+      // Match the column name.
+      RelDataTypeField field = table.getRowType().getField(
+              restriction.getRestrictionColumn(), false, false);
+      if (field == null) {
+        MAPDLOGGER.debug("RLS row-level security restriction for column "
+                + restriction.getRestrictionColumn()
+                + " ignored because column not present in query table " + query_table);
+        continue;
+      }
+
+      // Generate the RLS row-level security filter for one Restriction.
+      found = true;
       MAPDLOGGER.debug(
-              " Scan is " + parentNode.toString() + " TABLE is " + table.toString());
+              "Scan is " + parentNode.toString() + " TABLE is " + table.toString());
       MAPDLOGGER.debug("Column " + restriction.getRestrictionColumn()
               + " exists in table " + table.getQualifiedName());
-      RelBuilder builder = call.builder();
-      RexBuilder rBuilder = builder.getRexBuilder();
-      builder = builder.push(parentNode);
 
-      ArrayList<RexNode> orList = new ArrayList<RexNode>();
       for (String val : restriction.getRestrictionValues()) {
-        MAPDLOGGER.debug(" Column is " + restriction.getRestrictionColumn()
+        MAPDLOGGER.debug("Column is " + restriction.getRestrictionColumn()
                 + " literal is '" + val + "'");
         RexNode lit;
         if (SqlTypeName.NUMERIC_TYPES.indexOf(field.getType().getSqlTypeName()) == -1) {
-          lit = rBuilder.makeLiteral(val, field.getType(), false);
+          if (val.length() < 2 || val.charAt(0) != '\''
+                  || val.charAt(val.length() - 1) != '\'') {
+            throw new RuntimeException(
+                    "Restrictions: Expected a CREATE POLICY VALUES string with single quotes.");
+          }
+          lit = rBuilder.makeLiteral(
+                  val.substring(1, val.length() - 1), field.getType(), false);
         } else {
           lit = rBuilder.makeLiteral(Integer.parseInt(val), field.getType(), false);
         }
@@ -88,9 +140,10 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
                 lit);
         orList.add(rn);
       }
+    }
 
+    if (found) {
       RexNode relOr = builder.call(SqlStdOperatorTable.OR, orList);
-
       final RelNode newNode = builder.filter(relOr).build();
       call.transformTo(newNode);
     }
@@ -107,8 +160,8 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       return new InjectFilterRule(this, null);
     }
 
-    default InjectFilterRule toRule(Restriction rest) {
-      return new InjectFilterRule(this, rest);
+    default InjectFilterRule toRule(List<Restriction> rests) {
+      return new InjectFilterRule(this, rests);
     }
   }
 }

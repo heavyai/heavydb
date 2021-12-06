@@ -31,8 +31,10 @@ struct TFilterPushDownInfo {
 }
 
 struct TRestriction {
-  1: string column;
-  2: list<string> values;
+  1: string database;
+  2: string table;
+  3: string column;
+  4: list<string> values;
 }
 
 service CalciteServer {
@@ -41,7 +43,7 @@ service CalciteServer {
    void shutdown()
    TPlanResult process(1:string user, 2:string passwd, 3:string catalog, 4:string sql_text
                        5:list<TFilterPushDownInfo> filterPushDownInfo, 6:bool legacySyntax
-                       7:bool isexplain, 8:bool isViewOptimize, 9:TRestriction restriction)
+                       7:bool isexplain, 8:bool isViewOptimize, 9:list<TRestriction> restrictions)
                       throws (1:InvalidParseRequest parseErr)
    string getExtensionFunctionWhitelist()
    string getUserDefinedFunctionWhitelist()

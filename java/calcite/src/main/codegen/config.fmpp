@@ -74,6 +74,9 @@ data: {
         "com.mapd.parser.extension.ddl.SqlGrantPrivilege"
         "com.mapd.parser.extension.ddl.SqlRevokePrivilege"
         "com.mapd.parser.extension.ddl.SqlCreateDataframe"
+        "com.mapd.parser.extension.ddl.SqlCreatePolicy"
+        "com.mapd.parser.extension.ddl.SqlShowPolicies"
+        "com.mapd.parser.extension.ddl.SqlDropPolicy"
         "com.mapd.parser.extension.ddl.SqlCopyTable"
         "com.mapd.parser.extension.ddl.SqlExportQuery"
         "com.mapd.parser.extension.ddl.SqlValidateSystem"
@@ -137,6 +140,8 @@ data: {
         "RENDER"
         "MEMORY"
         "ROLES"
+        "POLICY"
+        "POLICIES"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -501,6 +506,8 @@ data: {
         "GPU"
         "RENDER"
         "MEMORY"
+        "POLICY"
+        "POLICIES"
       ]
 
       # List of non-reserved keywords to remove;
@@ -576,6 +583,7 @@ data: {
         "SqlCreateUser"
         "SqlCreateView"
         "SqlCreateRole"
+        "SqlCreatePolicy"
       ]
 
       # List of methods for parsing extensions to "DROP" calls.
