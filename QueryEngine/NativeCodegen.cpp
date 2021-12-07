@@ -1058,6 +1058,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     `gpu_target.cgen_state->module_` appears to be the same as `module`
    */
   CHECK(gpu_target.cgen_state->module_ == module);
+  CHECK(func->getParent() == wrapper_func->getParent());
   module->setDataLayout(
       "e-p:64:64:64-i1:8:8-i8:8:8-"
       "i16:16:16-i32:32:32-i64:64:64-"
@@ -1074,6 +1075,24 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   bool requires_libdevice = check_module_requires_libdevice(module);
 
   if (requires_libdevice) {
+    if (g_rt_libdevice_module == nullptr) {
+      // raise error
+      throw std::runtime_error(
+          "libdevice library is not available but required by the UDF module");
+    }
+
+    // Bind libdevice it to the current module
+    CodeGenerator::link_udf_module(g_rt_libdevice_module,
+                                   *module,
+                                   gpu_target.cgen_state,
+                                   llvm::Linker::Flags::OverrideFromSrc);
+
+    // activate nvvm-reflect-ftz flag on the module
+    module->addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", (int)1);
+    for (llvm::Function& fn : *module) {
+      fn.addFnAttr("nvptx-f32ftz", "true");
+    }
+
     // add nvvm reflect pass replacing any NVVM conditionals with constants
     gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
     llvm::legacy::FunctionPassManager FPM(module);
@@ -1284,26 +1303,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                                       cgen_state_.get(),
                                       row_func_not_inlined};
   std::shared_ptr<GpuCompilationContext> compilation_context;
-
-  if (check_module_requires_libdevice(module)) {
-    if (g_rt_libdevice_module == nullptr) {
-      // raise error
-      throw std::runtime_error(
-          "libdevice library is not available but required by the UDF module");
-    }
-
-    // Bind libdevice it to the current module
-    CodeGenerator::link_udf_module(g_rt_libdevice_module,
-                                   *module,
-                                   cgen_state_.get(),
-                                   llvm::Linker::Flags::OverrideFromSrc);
-
-    // activate nvvm-reflect-ftz flag on the module
-    module->addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", (int)1);
-    for (llvm::Function& fn : *module) {
-      fn.addFnAttr("nvptx-f32ftz", "true");
-    }
-  }
 
   try {
     compilation_context = CodeGenerator::generateNativeGPUCode(
