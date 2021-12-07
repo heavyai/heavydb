@@ -80,10 +80,21 @@ class CursorImpl : public Cursor {
     return record_batch_;
   }
 
+  std::shared_ptr<arrow::Table> getArrowTable() {
+    if (table_) {
+      return table_;
+    }
+    auto converter =
+        std::make_unique<ArrowResultSetConverter>(result_set_, col_names_, -1);
+    table_ = converter->convertToArrowTable();
+    return table_;
+  }
+
  private:
   std::shared_ptr<ResultSet> result_set_;
   std::vector<std::string> col_names_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
+  std::shared_ptr<arrow::Table> table_;
 };
 
 /**
@@ -143,6 +154,7 @@ class DBEngineImpl : public DBEngine {
 
     prog_config_opts_.system_parameters.omnisci_server_port = -1;
     prog_config_opts_.system_parameters.calcite_keepalive = true;
+
     try {
       db_handler_ =
           std::make_shared<DBHandler>(prog_config_opts_.db_leaves,
@@ -540,4 +552,10 @@ std::shared_ptr<arrow::RecordBatch> Cursor::getArrowRecordBatch() {
   CHECK(cursor);
   return cursor->getArrowRecordBatch();
 }
+
+std::shared_ptr<arrow::Table> Cursor::getArrowTable() {
+  CursorImpl* cursor = getImpl(this);
+  return cursor->getArrowTable();
+}
+
 }  // namespace EmbeddedDatabase

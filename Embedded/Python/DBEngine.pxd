@@ -15,6 +15,9 @@ cdef extern from "arrow/api.h" namespace "arrow" nogil:
         int num_columns()
         int64_t num_rows()
 
+    cdef cppclass CTable" arrow::Table":
+        pass
+
 cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase':
     cdef cppclass ColumnType:
         pass
@@ -47,6 +50,7 @@ cdef extern from "DBEngine.h" namespace 'EmbeddedDatabase':
         Row getNextRow()
         ColumnType getColType(uint32_t nPos)
         shared_ptr[CRecordBatch] getArrowRecordBatch() nogil except +
+        shared_ptr[CTable] getArrowTable() nogil except +
 
     cdef cppclass DBEngine:
         void executeDDL(string) except +

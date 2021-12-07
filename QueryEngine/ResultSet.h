@@ -35,6 +35,7 @@
 #include <atomic>
 #include <functional>
 #include <list>
+#include <utility>
 
 /*
  * Stores the underlying buffer and the meta-data for a result set. The buffer
@@ -405,12 +406,20 @@ class ResultSet {
                             int8_t* output_buffer,
                             const size_t output_buffer_size) const;
 
-  bool isDirectColumnarConversionPossible() const;
 
   bool didOutputColumnar() const { return this->query_mem_desc_.didOutputColumnar(); }
 
+  //  Columnar Conversion checker functions
+  bool isDirectColumnarConversionPossible() const;
   bool isZeroCopyColumnarConversionPossible(size_t column_idx) const;
+  bool isChunkedZeroCopyColumnarConversionPossible(size_t column_idx) const;
+
+  //  Buffer Accessors
   const int8_t* getColumnarBuffer(size_t column_idx) const;
+
+  //  Returns vector of std::pair<chunk buffer ptr, chunk row count>
+  std::vector<std::pair<const int8_t*, size_t>>
+      getChunkedColumnarBuffer(size_t column_idx) const;
 
   QueryDescriptionType getQueryDescriptionType() const {
     return query_mem_desc_.getQueryDescriptionType();

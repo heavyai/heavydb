@@ -213,13 +213,17 @@ class ArrowResultSetConverter {
       : results_(results), col_names_(col_names), top_n_(first_n) {}
 
   std::shared_ptr<arrow::RecordBatch> convertToArrow() const;
+  std::shared_ptr<arrow::Table> convertToArrowTable() const;
 
  private:
   std::shared_ptr<arrow::RecordBatch> getArrowBatch(
       const std::shared_ptr<arrow::Schema>& schema) const;
+  std::shared_ptr<arrow::Table> getArrowTable(
+      const std::shared_ptr<arrow::Schema>& schema) const;
 
   std::shared_ptr<arrow::Field> makeField(const std::string name,
                                           const SQLTypeInfo& target_type) const;
+  std::shared_ptr<arrow::Schema> makeSchema() const;
 
   struct SerializedArrowOutput {
     std::shared_ptr<arrow::Buffer> schema;

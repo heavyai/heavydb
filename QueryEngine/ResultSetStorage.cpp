@@ -170,3 +170,7 @@ int64_t result_set::lazy_decode(const ColumnLazyFetchInfo& col_lazy_fetch,
   }
   return val;
 }
+
+size_t ResultSetStorage::getColOffInBytes(size_t column_idx) const{
+  return query_mem_desc_.getColOffInBytes(column_idx);
+}

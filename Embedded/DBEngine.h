@@ -29,6 +29,7 @@ class Cursor {
   Row getNextRow();
   ColumnType getColType(uint32_t col_num);
   std::shared_ptr<arrow::RecordBatch> getArrowRecordBatch();
+  std::shared_ptr<arrow::Table> getArrowTable();
 
  protected:
   Cursor() {}

@@ -6,7 +6,7 @@ install(FILES DBEngine.h DBETypes.h DESTINATION "Embedded" COMPONENT "include")
 install(FILES Python/DBEngine.pxd DESTINATION "Embedded" COMPONENT "include")
 
 add_executable(EmbeddedDbTest EmbeddedDbTest.cpp)
-target_link_libraries(EmbeddedDbTest DBEngine)
+target_link_libraries(EmbeddedDbTest DBEngine gtest)
 
 add_executable(EmbeddedDbFSITest EmbeddedDbFSITest.cpp)
 target_link_libraries(EmbeddedDbFSITest DBEngine)

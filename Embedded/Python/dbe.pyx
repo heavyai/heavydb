@@ -108,6 +108,7 @@ cdef class PyRow:
 cdef class PyCursor:
     cdef shared_ptr[_Cursor] c_cursor  #Hold a C++ instance which we're wrapping
     cdef shared_ptr[CRecordBatch] c_batch
+    cdef shared_ptr[CTable] c_table
 
     def colCount(self):
         return self.c_cursor.get().getColCount()
@@ -148,11 +149,18 @@ cdef class PyCursor:
         with nogil:
             self.c_batch = self.c_cursor.get().getArrowRecordBatch()
         if self.c_batch.get() is NULL:
-            print('Record batch is NULL')
             return None
         else:
             prb = pyarrow_wrap_batch(self.c_batch)
             return prb
+
+    def getArrowTable(self):
+        with nogil:
+            self.c_table = self.c_cursor.get().getArrowTable()
+        if self.c_table.get() is NULL:
+            return None
+        else:
+            return pyarrow_wrap_table(self.c_table)
 
 ColumnDetailsTp = namedtuple("ColumnDetails", ["name", "type", "nullable",
                                              "precision", "scale",

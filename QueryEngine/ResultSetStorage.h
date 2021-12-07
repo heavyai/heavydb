@@ -114,6 +114,8 @@ class ResultSetStorage {
 
   size_t getEntryCount() const { return query_mem_desc_.getEntryCount(); }
 
+  size_t getColOffInBytes(size_t column_idx) const;
+
   template <class KeyType>
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
