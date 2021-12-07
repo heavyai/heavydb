@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
 
 #include <cstring>  // std::memcpy
@@ -345,4 +344,3 @@ bool is_valid_tf_input(const T input,
 }
 
 #endif  // __CUDACC__
-#endif  // HAVE_SYSTEM_TFS

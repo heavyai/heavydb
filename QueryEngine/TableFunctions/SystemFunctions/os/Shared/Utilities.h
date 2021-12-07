@@ -16,7 +16,6 @@
 
 #pragma once
 
-#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
 
 #include <filesystem>
@@ -121,4 +120,3 @@ bool is_valid_tf_input(const T input,
 #include "Utilities.cpp"
 
 #endif  //__CUDACC__
-#endif  // HAVE_SYSTEM_TFS

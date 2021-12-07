@@ -25,6 +25,11 @@
 #include "../Shared/InlineNullValues.h"
 #include "../Shared/funcannotations.h"
 
+// declaring CPU functions as __host__ can help catch erroneous compilation of
+// these being done by the CUDA compiler at build time
+#define EXTENSION_INLINE_HOST extern "C" RUNTIME_EXPORT ALWAYS_INLINE HOST
+#define EXTENSION_NOINLINE_HOST extern "C" RUNTIME_EXPORT NEVER_INLINE HOST
+
 #define EXTENSION_INLINE extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE
 #define EXTENSION_NOINLINE extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE
 #define TEMPLATE_INLINE ALWAYS_INLINE DEVICE
@@ -45,13 +50,13 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
 #define TABLE_FUNCTION_ERROR(MSG) table_function_error(ERROR_STRING(MSG))
 #define ERROR_MESSAGE(MSG) error_message(ERROR_STRING(MSG))
 
-EXTENSION_NOINLINE void set_output_row_size(int64_t num_rows);
-EXTENSION_NOINLINE void TableFunctionManager_set_output_row_size(int8_t* mgr_ptr,
-                                                                 int64_t num_rows);
-EXTENSION_NOINLINE int8_t* TableFunctionManager_get_singleton();
-EXTENSION_NOINLINE int32_t table_function_error(const char* message);
-EXTENSION_NOINLINE int32_t TableFunctionManager_error_message(int8_t* mgr_ptr,
-                                                              const char* message);
+EXTENSION_NOINLINE_HOST void set_output_row_size(int64_t num_rows);
+EXTENSION_NOINLINE_HOST void TableFunctionManager_set_output_row_size(int8_t* mgr_ptr,
+                                                                      int64_t num_rows);
+EXTENSION_NOINLINE_HOST int8_t* TableFunctionManager_get_singleton();
+EXTENSION_NOINLINE_HOST int32_t table_function_error(const char* message);
+EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_error_message(int8_t* mgr_ptr,
+                                                                   const char* message);
 
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
@@ -340,5 +345,5 @@ struct TableFunctionManager {
     return result;
   }
 
-#endif
+#endif  // HAVE_TOSTRING
 };

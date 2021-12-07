@@ -1826,17 +1826,7 @@ content = '''
 /*
   Include the UDTF template initiations:
 */
-#ifdef __CUDACC__
-#include "TableFunctionsFactory_init_gpu.hpp"
-#else
 #include "TableFunctionsFactory_init_cpu.hpp"
-#endif
-
-extern bool g_enable_table_functions;
-
-namespace table_functions {
-
-std::once_flag init_flag;
 
 // volatile+noinline prevents compiler optimization
 #ifdef _WIN32
@@ -1844,21 +1834,24 @@ __declspec(noinline)
 #else
  __attribute__((noinline))
 #endif
-volatile bool avoid_opt_address(void *address) {
+volatile
+bool avoid_opt_address(void *address) {
   return address != nullptr;
 }
 
 bool functions_exist() {
-  bool ret = true;
+    bool ret = true;
 
-  ret &= (%s);
+    ret &= (%s);
 
-#ifdef __CUDACC__
-  ret &= (%s);
-#endif
-
-  return ret;
+    return ret;
 }
+
+extern bool g_enable_table_functions;
+
+namespace table_functions {
+
+std::once_flag init_flag;
 
 void TableFunctionsFactory::init() {
   if (!g_enable_table_functions) {
@@ -1883,7 +1876,6 @@ void TableFunctionsFactory::init() {
 ''' % (sys.argv[0],
         '\n'.join(header_includes),
         ' &&\n'.join(cpu_address_expressions),
-        ' &&\n'.join(gpu_address_expressions),
         '\n    '.join(add_stmts),
         ''.join(cond_fns))
 

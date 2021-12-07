@@ -7,7 +7,7 @@ set(ENABLE_CONDA OFF)
 if(DEFINED ENV{CONDA_PREFIX})
   set(ENABLE_CONDA ON)
   list(APPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
-  # resolves link issue for zlib 
+  # resolves link issue for zlib
   link_directories("$ENV{CONDA_PREFIX}/lib")
   # various fixes and workarounds
   add_definitions("-Dsecure_getenv=getenv")
@@ -16,7 +16,7 @@ if(DEFINED ENV{CONDA_PREFIX})
   # Adding formating macros
   add_definitions("-D__STDC_FORMAT_MACROS=1")
   # fixes always_inline attribute errors
-  add_compile_options("-fno-semantic-interposition")
+  add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-fno-semantic-interposition>")
   # Adding `--sysroot=...` resolves `no member named 'signbit' in the global namespace` error:
   set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
 endif(DEFINED ENV{CONDA_PREFIX})
@@ -141,6 +141,7 @@ endif()
 
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
+  enable_language(CUDA)
   find_package(CUDA REQUIRED)
   include_directories(${CUDA_INCLUDE_DIRS})
   list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
@@ -340,7 +341,6 @@ else()
 endif()
 
 if(ENABLE_SYSTEM_TFS)
-  add_definitions("-DHAVE_SYSTEM_TFS")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
     if(ENABLE_RF_PROP_TFS)
       add_definitions ("-DHAVE_RF_PROP_TFS")

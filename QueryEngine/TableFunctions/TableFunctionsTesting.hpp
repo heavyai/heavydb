@@ -47,12 +47,16 @@ int32_t ct_device_selection_udtf_any(const Column<int32_t>& input, Column<int64_
   return 1;
 }
 
-EXTENSION_NOINLINE
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST
 int32_t ct_device_selection_udtf_cpu__cpu_(const Column<int32_t>& input,
                                            Column<int64_t>& out) {
   out[0] = CPU_DEVICE_CODE;
   return 1;
 }
+
+#endif  // #ifndef __CUDACC__
 
 EXTENSION_NOINLINE
 int32_t ct_device_selection_udtf_gpu__gpu_(const Column<int32_t>& input,
@@ -61,12 +65,16 @@ int32_t ct_device_selection_udtf_gpu__gpu_(const Column<int32_t>& input,
   return 1;
 }
 
-EXTENSION_NOINLINE
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST
 int32_t ct_device_selection_udtf_both__cpu_(const Column<int32_t>& input,
                                             Column<int64_t>& out) {
   out[0] = CPU_DEVICE_CODE;
   return 1;
 }
+
+#endif  // #ifndef __CUDACC__
 
 EXTENSION_NOINLINE
 int32_t ct_device_selection_udtf_both__gpu_(const Column<int32_t>& input,
@@ -115,67 +123,74 @@ int32_t ct_device_selection_udtf_both__gpu_(const Column<int32_t>& input,
 */
 // clang-format on
 
-EXTENSION_NOINLINE int32_t ct_binding_udtf_constant__cpu_1(const Column<int32_t>& input1,
-                                                           Column<int32_t>& out) {
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf_constant__cpu_1(const Column<int32_t>& input1, Column<int32_t>& out) {
   out[0] = 1;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf_constant__cpu_2(const Column<int32_t>& input1,
-                                                           const Column<int32_t>& input2,
-                                                           Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf_constant__cpu_2(const Column<int32_t>& input1,
+                                const Column<int32_t>& input2,
+                                Column<int32_t>& out) {
   out[0] = 11;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf_constant__cpu_3(const Column<int32_t>& input1,
-                                                           const Column<int32_t>& input2,
-                                                           const Column<int32_t>& input3,
-                                                           Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf_constant__cpu_3(const Column<int32_t>& input1,
+                                const Column<int32_t>& input2,
+                                const Column<int32_t>& input3,
+                                Column<int32_t>& out) {
   out[0] = 111;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf_constant__cpu_4(const Column<int64_t>& input1,
-                                                           const Column<int32_t>& input2,
-                                                           const Column<int32_t>& input3,
-                                                           Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf_constant__cpu_4(const Column<int64_t>& input1,
+                                const Column<int32_t>& input2,
+                                const Column<int32_t>& input3,
+                                Column<int32_t>& out) {
   out[0] = 211;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf_constant__cpu_5(const Column<int64_t>& input1,
-                                                           const Column<int64_t>& input2,
-                                                           const Column<int32_t>& input3,
-                                                           Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf_constant__cpu_5(const Column<int64_t>& input1,
+                                const Column<int64_t>& input2,
+                                const Column<int32_t>& input3,
+                                Column<int32_t>& out) {
   out[0] = 221;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf_constant__cpu_6(const Column<int64_t>& input1,
-                                                           const Column<int32_t>& input2,
-                                                           const Column<int64_t>& input3,
-                                                           Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf_constant__cpu_6(const Column<int64_t>& input1,
+                                const Column<int32_t>& input2,
+                                const Column<int64_t>& input3,
+                                Column<int32_t>& out) {
   out[0] = 212;
   return 1;
 }
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_udtf_constant__cpu_7(const Column<int32_t>& input1,
                                 const ColumnList<int32_t>& input2,
                                 Column<int32_t>& out) {
   out[0] = 13;
   return 1;
 }
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_udtf_constant__cpu_8(const ColumnList<int32_t>& input1,
                                 const Column<int64_t>& input2,
                                 Column<int32_t>& out) {
   out[0] = 32;
   return 1;
 }
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_udtf_constant__cpu_9(const ColumnList<int32_t>& input1,
                                 const ColumnList<int64_t>& input2,
                                 Column<int32_t>& out) {
   out[0] = 34;
   return 1;
 }
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_udtf_constant__cpu_10(const Column<int64_t>& input1,
                                  const ColumnList<int64_t>& input2,
                                  const Column<int64_t>& input3,
@@ -184,115 +199,119 @@ ct_binding_udtf_constant__cpu_10(const Column<int64_t>& input1,
   return 1;
 }
 
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_11(const Column<int32_t>& input1,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_11(const Column<int32_t>& input1,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 19 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_12(const Column<int32_t>& input1,
-                                                   const Column<int32_t>& input2,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_12(const Column<int32_t>& input1,
+                                                        const Column<int32_t>& input2,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 119 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_13(const Column<int32_t>& input1,
-                                                   const Column<int32_t>& input2,
-                                                   const Column<int32_t>& input3,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_13(const Column<int32_t>& input1,
+                                                        const Column<int32_t>& input2,
+                                                        const Column<int32_t>& input3,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 1119 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_14(const Column<int64_t>& input1,
-                                                   const Column<int32_t>& input2,
-                                                   const Column<int32_t>& input3,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_14(const Column<int64_t>& input1,
+                                                        const Column<int32_t>& input2,
+                                                        const Column<int32_t>& input3,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 2119 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_15(const Column<int64_t>& input1,
-                                                   const Column<int64_t>& input2,
-                                                   const Column<int32_t>& input3,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_15(const Column<int64_t>& input1,
+                                                        const Column<int64_t>& input2,
+                                                        const Column<int32_t>& input3,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 2219 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_16(const Column<int64_t>& input1,
-                                                   const Column<int32_t>& input2,
-                                                   const Column<int64_t>& input3,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_16(const Column<int64_t>& input1,
+                                                        const Column<int32_t>& input2,
+                                                        const Column<int64_t>& input3,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 2129 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_17(const Column<int32_t>& input1,
-                                                   const ColumnList<int32_t>& input2,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_17(const Column<int32_t>& input1,
+                                                        const ColumnList<int32_t>& input2,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 139 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_18(const ColumnList<int32_t>& input1,
-                                                   const Column<int64_t>& input2,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_18(const ColumnList<int32_t>& input1,
+                                                        const Column<int64_t>& input2,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 329 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_19(const ColumnList<int32_t>& input1,
-                                                   const ColumnList<int64_t>& input2,
-                                                   const int32_t multiplier,
-                                                   Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_19(const ColumnList<int32_t>& input1,
+                                                        const ColumnList<int64_t>& input2,
+                                                        const int32_t multiplier,
+                                                        Column<int32_t>& out) {
   out[0] = 1000 + 349 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf__cpu_20(const Column<int64_t>& input1,
-                                                   const ColumnList<int64_t>& input2,
-                                                   const Column<int64_t>& input3,
-                                                   const int32_t multiplier,
-                                                   Column<int64_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf__cpu_20(const Column<int64_t>& input1,
+                                                        const ColumnList<int64_t>& input2,
+                                                        const Column<int64_t>& input3,
+                                                        const int32_t multiplier,
+                                                        Column<int64_t>& out) {
   out[0] = 1000 + 2429 + multiplier;
   return 1;
 }
 
-EXTENSION_NOINLINE int32_t ct_binding_udtf2__cpu_21(const int32_t multiplier,
-                                                    const Column<int32_t>& input1,
-                                                    Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf2__cpu_21(const int32_t multiplier,
+                                                         const Column<int32_t>& input1,
+                                                         Column<int32_t>& out) {
   out[0] = 1000 + 91 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf6__cpu_22(const Column<int32_t>& input1,
-                                                    const int32_t multiplier,
-                                                    const int32_t input2,
-                                                    Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf6__cpu_22(const Column<int32_t>& input1,
+                                                         const int32_t multiplier,
+                                                         const int32_t input2,
+                                                         Column<int32_t>& out) {
   out[0] = 1000 + 196 + multiplier + 10 * input2;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf4__cpu_23(const ColumnList<int32_t>& input1,
-                                                    const int32_t multiplier,
-                                                    const int32_t input2,
-                                                    Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf4__cpu_23(const ColumnList<int32_t>& input1,
+                         const int32_t multiplier,
+                         const int32_t input2,
+                         Column<int32_t>& out) {
   out[0] = 1000 + 396 + multiplier + 10 * input2;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf5__cpu_24(const ColumnList<int32_t>& input1,
-                                                    const int32_t input2,
-                                                    const int32_t multiplier,
-                                                    Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_binding_udtf5__cpu_24(const ColumnList<int32_t>& input1,
+                         const int32_t input2,
+                         const int32_t multiplier,
+                         Column<int32_t>& out) {
   out[0] = 1000 + 369 + multiplier + 10 * input2;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_binding_udtf3__cpu_25(const Column<int32_t>& input1,
-                                                    const int32_t input2,
-                                                    const int32_t multiplier,
-                                                    Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_binding_udtf3__cpu_25(const Column<int32_t>& input1,
+                                                         const int32_t input2,
+                                                         const int32_t multiplier,
+                                                         Column<int32_t>& out) {
   out[0] = 1000 + 169 + multiplier + 10 * input2;
   return 1;
 }
+
+#endif  // #ifndef __CUDACC__
 
 /*
  Test functions for default sizer parameter:
@@ -313,87 +332,103 @@ EXTENSION_NOINLINE int32_t ct_binding_udtf3__cpu_25(const Column<int32_t>& input
   UDTF: ct_udtf_default_sizer4b__cpu_2(RowMultiplier, Cursor<int32_t>, int32_t) -> Column<int32_t>
 */
 // clang-format on
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer1a__cpu_1(const Column<int32_t>& input1,
-                                                          const int32_t multiplier,
-                                                          Column<int32_t>& out) {
+
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer1a__cpu_1(const Column<int32_t>& input1,
+                               const int32_t multiplier,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 1 + 10 * multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer1b__cpu_2(const Column<int32_t>& input1,
-                                                          const Column<int32_t>& input2,
-                                                          const int32_t multiplier,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer1b__cpu_2(const Column<int32_t>& input1,
+                               const Column<int32_t>& input2,
+                               const int32_t multiplier,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 2 + 11 * multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer1c__cpu_3(const Column<int32_t>& input1,
-                                                          const Column<int32_t>& input2,
-                                                          const Column<int32_t>& input3,
-                                                          const int32_t multiplier,
-                                                          const Column<int32_t>& input4,
-                                                          const int32_t x,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer1c__cpu_3(const Column<int32_t>& input1,
+                               const Column<int32_t>& input2,
+                               const Column<int32_t>& input3,
+                               const int32_t multiplier,
+                               const Column<int32_t>& input4,
+                               const int32_t x,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 101 + 10 * multiplier + x;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer1d__cpu_4(const int32_t multiplier,
-                                                          const int32_t x,
-                                                          const Column<int32_t>& input1,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer1d__cpu_4(const int32_t multiplier,
+                               const int32_t x,
+                               const Column<int32_t>& input1,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 99 + 10 * multiplier + x;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer2a__cpu_1(const Column<int32_t>& input1,
-                                                          const int32_t x,
-                                                          const int32_t multiplier,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer2a__cpu_1(const Column<int32_t>& input1,
+                               const int32_t x,
+                               const int32_t multiplier,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 98 + multiplier + 10 * x;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer2b__cpu_2(const Column<int32_t>& input1,
-                                                          const int32_t multiplier,
-                                                          const Column<int32_t>& input2,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer2b__cpu_2(const Column<int32_t>& input1,
+                               const int32_t multiplier,
+                               const Column<int32_t>& input2,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 2 + multiplier;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer2c__cpu_3(const int32_t x,
-                                                          const int32_t multiplier,
-                                                          const Column<int32_t>& input1,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer2c__cpu_3(const int32_t x,
+                               const int32_t multiplier,
+                               const Column<int32_t>& input1,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 99 + multiplier + 11 * x;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer3a__cpu_1(const Column<int32_t>& input1,
-                                                          const int32_t multiplier,
-                                                          const int32_t x,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer3a__cpu_1(const Column<int32_t>& input1,
+                               const int32_t multiplier,
+                               const int32_t x,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 98 + 100 * multiplier + x;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer3b__cpu_2(const Column<int32_t>& input1,
-                                                          const int32_t x,
-                                                          const Column<int32_t>& input2,
-                                                          const int32_t multiplier,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer3b__cpu_2(const Column<int32_t>& input1,
+                               const int32_t x,
+                               const Column<int32_t>& input2,
+                               const int32_t multiplier,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 99 + 100 * multiplier + x;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer4a__cpu_1(const Column<int32_t>& input1,
-                                                          const int32_t multiplier,
-                                                          const Column<int32_t>& input2,
-                                                          const int32_t x,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer4a__cpu_1(const Column<int32_t>& input1,
+                               const int32_t multiplier,
+                               const Column<int32_t>& input2,
+                               const int32_t x,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 99 + 10 * multiplier + x;
   return 1;
 }
-EXTENSION_NOINLINE int32_t ct_udtf_default_sizer4b__cpu_2(const int32_t multiplier,
-                                                          const Column<int32_t>& input,
-                                                          const int32_t x,
-                                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t
+ct_udtf_default_sizer4b__cpu_2(const int32_t multiplier,
+                               const Column<int32_t>& input,
+                               const int32_t x,
+                               Column<int32_t>& out) {
   out[0] = 1000 + 99 + 9 * multiplier + x;
   return 1;
 }
+
+#endif  // #ifndef __CUDACC__
 
 // clang-format off
 /*
@@ -405,7 +440,10 @@ EXTENSION_NOINLINE int32_t ct_udtf_default_sizer4b__cpu_2(const int32_t multipli
   UDTF: ct_binding_dict_encoded6__cpu_1(Cursor<ColumnList<TextEncodingDict>>) -> Column<TextEncodingDict> | input_id=args<0,0>, Column<TextEncodingDict> | input_id=args<0,1>
 */
 // clang-format on
-EXTENSION_NOINLINE int32_t
+
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_dict_encoded1__cpu_1(const Column<TextEncodingDict>& input,
                                 const int32_t multiplier,
                                 Column<TextEncodingDict>& out) {
@@ -415,7 +453,7 @@ ct_binding_dict_encoded1__cpu_1(const Column<TextEncodingDict>& input,
   return multiplier * input.size();
 }
 
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_dict_encoded2__cpu_1(const Column<TextEncodingDict>& input1,
                                 const Column<TextEncodingDict>& input2,
                                 Column<TextEncodingDict>& out1,
@@ -428,7 +466,7 @@ ct_binding_dict_encoded2__cpu_1(const Column<TextEncodingDict>& input1,
   return input1.size();
 }
 
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_dict_encoded3__cpu_1(const Column<TextEncodingDict>& input1,
                                 const Column<TextEncodingDict>& input2,
                                 Column<TextEncodingDict>& out1,
@@ -441,7 +479,7 @@ ct_binding_dict_encoded3__cpu_1(const Column<TextEncodingDict>& input1,
   return input1.size();
 }
 
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_dict_encoded4__cpu_1(const ColumnList<TextEncodingDict>& input,
                                 Column<TextEncodingDict>& out) {
   int64_t sz = input[0].size();
@@ -452,7 +490,7 @@ ct_binding_dict_encoded4__cpu_1(const ColumnList<TextEncodingDict>& input,
   return sz;
 }
 
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_dict_encoded5__cpu_1(const ColumnList<TextEncodingDict>& input,
                                 Column<TextEncodingDict>& out) {
   int64_t sz = input[1].size();
@@ -463,7 +501,7 @@ ct_binding_dict_encoded5__cpu_1(const ColumnList<TextEncodingDict>& input,
   return sz;
 }
 
-EXTENSION_NOINLINE int32_t
+EXTENSION_NOINLINE_HOST int32_t
 ct_binding_dict_encoded6__cpu_1(const ColumnList<TextEncodingDict>& input,
                                 Column<TextEncodingDict>& out0,
                                 Column<TextEncodingDict>& out1) {
@@ -476,6 +514,8 @@ ct_binding_dict_encoded6__cpu_1(const ColumnList<TextEncodingDict>& input,
   return sz;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_binding_template__cpu_template(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> | input_id=args<0>
@@ -483,8 +523,11 @@ ct_binding_dict_encoded6__cpu_1(const ColumnList<TextEncodingDict>& input,
   UDTF: ct_binding_template__cpu_template(Cursor<float>) -> Column<float>
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_binding_template__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t ct_binding_template__cpu_template(const Column<T>& input,
                                                             Column<T>& out) {
   set_output_row_size(input.size());
   for (int64_t i = 0; i < input.size(); i++) {
@@ -492,6 +535,8 @@ TEMPLATE_NOINLINE int32_t ct_binding_template__cpu_template(const Column<T>& inp
   }
   return input.size();
 }
+
+#endif  // #ifndef __CUDACC__
 
 // clang-format off
 /*
@@ -501,8 +546,11 @@ TEMPLATE_NOINLINE int32_t ct_binding_template__cpu_template(const Column<T>& inp
   UDTF: ct_binding_columnlist__cpu_template(Cursor<int16_t, ColumnList<int16_t>>) -> Column<int32_t>
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_binding_columnlist__cpu_template(const Column<T>& input1,
+NEVER_INLINE HOST int32_t ct_binding_columnlist__cpu_template(const Column<T>& input1,
                                                               const ColumnList<T>& input2,
                                                               Column<int32_t>& out) {
   set_output_row_size(1);
@@ -518,14 +566,19 @@ TEMPLATE_NOINLINE int32_t ct_binding_columnlist__cpu_template(const Column<T>& i
   return 1;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_binding_column__cpu_template(Column<int32_t>) -> Column<int32_t>
   UDTF: ct_binding_column__cpu_template(Column<float>) -> Column<int32_t>
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_binding_column__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t ct_binding_column__cpu_template(const Column<T>& input,
                                                           Column<int32_t>& out) {
   set_output_row_size(1);
   if constexpr (std::is_same<T, int32_t>::value) {
@@ -536,6 +589,8 @@ TEMPLATE_NOINLINE int32_t ct_binding_column__cpu_template(const Column<T>& input
   return 1;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_binding_scalar_multiply__cpu_template(Cursor<Column<float>>, float) -> Column<float>
@@ -544,8 +599,11 @@ TEMPLATE_NOINLINE int32_t ct_binding_column__cpu_template(const Column<T>& input
   UDTF: ct_binding_scalar_multiply__cpu_template(Cursor<Column<int64_t>>, int64_t) -> Column<int64_t>
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_binding_scalar_multiply__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(const Column<T>& input,
                                                                    const T multiplier,
                                                                    Column<T>& out) {
   const int64_t num_rows = input.size();
@@ -559,6 +617,8 @@ TEMPLATE_NOINLINE int32_t ct_binding_scalar_multiply__cpu_template(const Column<
   }
   return num_rows;
 }
+
+#endif  // #ifndef __CUDACC__
 
 #ifndef __CUDACC__
 
@@ -610,7 +670,7 @@ struct SortDesc {
 // clang-format on
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t sort_column_limit__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(const Column<T>& input,
                                                           const int32_t limit,
                                                           const bool sort_ascending,
                                                           const bool nulls_last,
@@ -637,8 +697,11 @@ TEMPLATE_NOINLINE int32_t sort_column_limit__cpu_template(const Column<T>& input
   UDTF: ct_binding_column2__cpu_template(Column<T>, Column<T>) -> Column<T> | input_id=args<0>, T=[TextEncodingDict]
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename T, typename U, typename K>
-TEMPLATE_NOINLINE int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
+NEVER_INLINE HOST int32_t ct_binding_column2__cpu_template(const Column<T>& input1,
                                                            const Column<U>& input2,
                                                            Column<K>& out) {
   if constexpr (std::is_same<T, TextEncodingDict>::value &&
@@ -665,6 +728,8 @@ TEMPLATE_NOINLINE int32_t ct_binding_column2__cpu_template(const Column<T>& inpu
   return 1;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_named_output__cpu_template(Column<T> input) -> Column<T> total, T=[int32_t, double]
@@ -674,8 +739,10 @@ TEMPLATE_NOINLINE int32_t ct_binding_column2__cpu_template(const Column<T>& inpu
 */
 // clang-format on
 
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_named_output__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t ct_named_output__cpu_template(const Column<T>& input,
                                                         Column<T>& out) {
   set_output_row_size(1);
   T acc = 0;
@@ -687,7 +754,7 @@ TEMPLATE_NOINLINE int32_t ct_named_output__cpu_template(const Column<T>& input,
 }
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_named_const_output__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t ct_named_const_output__cpu_template(const Column<T>& input,
                                                               Column<T>& out) {
   T acc1 = 0, acc2 = 0;
   for (int64_t i = 0; i < input.size(); i++) {
@@ -703,7 +770,7 @@ TEMPLATE_NOINLINE int32_t ct_named_const_output__cpu_template(const Column<T>& i
 }
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_named_user_const_output__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t ct_named_user_const_output__cpu_template(const Column<T>& input,
                                                                    int32_t c,
                                                                    Column<T>& out) {
   for (int64_t i = 0; i < c; i++) {
@@ -716,7 +783,7 @@ TEMPLATE_NOINLINE int32_t ct_named_user_const_output__cpu_template(const Column<
 }
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_named_rowmul_output__cpu_template(const Column<T>& input,
+NEVER_INLINE HOST int32_t ct_named_rowmul_output__cpu_template(const Column<T>& input,
                                                                int32_t m,
                                                                Column<T>& out) {
   for (int64_t j = 0; j < m; j++) {
@@ -727,26 +794,32 @@ TEMPLATE_NOINLINE int32_t ct_named_rowmul_output__cpu_template(const Column<T>& 
   return m * input.size();
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_no_arg_runtime_sizing__cpu_template() -> Column<T> answer, T=[int32_t]
 */
 // clang-format on
 
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_no_arg_runtime_sizing__cpu_template(Column<T>& answer) {
+NEVER_INLINE HOST int32_t ct_no_arg_runtime_sizing__cpu_template(Column<T>& answer) {
   set_output_row_size(1);
   answer[0] = 42;
   return 1;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
-  UDTF: ct_no_arg_constant_sizing__cpu_(Constant<42>) -> Column<int32_t> answer 
+  UDTF: ct_no_arg_constant_sizing(Constant<42>) -> Column<int32_t> answer 
 */
 // clang-format on
 
-EXTENSION_NOINLINE int32_t ct_no_arg_constant_sizing__cpu_(Column<int32_t>& answer) {
+EXTENSION_NOINLINE int32_t ct_no_arg_constant_sizing(Column<int32_t>& answer) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t stop = static_cast<int32_t>(42);
@@ -768,8 +841,10 @@ EXTENSION_NOINLINE int32_t ct_no_arg_constant_sizing__cpu_(Column<int32_t>& answ
 */
 // clang-format on
 
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t
+NEVER_INLINE HOST int32_t
 ct_scalar_1_arg_runtime_sizing__cpu_template(const T num, Column<T>& answer) {
   T quotient = num;
   set_output_row_size(30);
@@ -780,6 +855,8 @@ ct_scalar_1_arg_runtime_sizing__cpu_template(const T num, Column<T>& answer) {
   }
   return counter;
 }
+
+#endif  // #ifndef __CUDACC__
 
 // clang-format off
 /*
@@ -813,7 +890,9 @@ EXTENSION_NOINLINE int32_t ct_scalar_2_args_constant_sizing(const int64_t num1,
 */
 // clang-format on
 
-EXTENSION_NOINLINE int32_t
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t
 ct_no_cursor_user_constant_sizer__cpu_(const int32_t input_num,
                                        int32_t c,
                                        Column<int32_t>& output) {
@@ -823,14 +902,18 @@ ct_no_cursor_user_constant_sizer__cpu_(const int32_t input_num,
   return c;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_templated_no_cursor_user_constant_sizer__cpu_template(T, ConstantParameter c) -> Column<T> output, T=[int32_t, float]
 */
 // clang-format on
 
+#ifndef __CUDACC__
+
 template <typename T>
-TEMPLATE_NOINLINE int32_t
+NEVER_INLINE HOST int32_t
 ct_templated_no_cursor_user_constant_sizer__cpu_template(const T input_num,
                                                          int32_t c,
                                                          Column<T>& output) {
@@ -840,11 +923,13 @@ ct_templated_no_cursor_user_constant_sizer__cpu_template(const T input_num,
   return c;
 }
 
+#endif  // #ifndef __CUDACC__
+
 #ifdef __CUDACC__
 
 // clang-format off
 /*
-  UDTF: ct_user_constant_sizer__gpu_(int32_t, ConstantParameter c) -> Column<int32_t> output
+  UDTF: ct_no_cursor_user_constant_sizer__gpu_(int32_t, ConstantParameter c) -> Column<int32_t> output
 */
 // clang-format on
 
@@ -903,9 +988,11 @@ T safe_addition(T x, T y) {
 */
 // clang-format on
 
+#ifndef __CUDACC__
+
 template <typename T>
-int32_t column_list_safe_row_sum__cpu_template(const ColumnList<T>& input,
-                                               Column<T>& out) {
+NEVER_INLINE HOST int32_t
+column_list_safe_row_sum__cpu_template(const ColumnList<T>& input, Column<T>& out) {
   int32_t output_num_rows = input.numCols();
   set_output_row_size(output_num_rows);
   for (int i = 0; i < output_num_rows; i++) {
@@ -924,6 +1011,8 @@ int32_t column_list_safe_row_sum__cpu_template(const ColumnList<T>& input,
   }
   return output_num_rows;
 }
+
+#endif  // #ifndef __CUDACC__
 
 // clang-format off
 /*
@@ -1007,9 +1096,9 @@ TEMPLATE_NOINLINE int32_t ct_get_string_chars__template(const Column<T>& indices
 */
 // clang-format on
 
-EXTENSION_NOINLINE int32_t ct_string_to_chars__cpu_(const TextEncodingNone& input,
-                                                    Column<int32_t>& char_idx,
-                                                    Column<int8_t>& char_bytes) {
+EXTENSION_NOINLINE_HOST int32_t ct_string_to_chars__cpu_(const TextEncodingNone& input,
+                                                         Column<int32_t>& char_idx,
+                                                         Column<int8_t>& char_bytes) {
   const std::string str{input.getString()};
   const int64_t str_size(str.size());
   set_output_row_size(str_size);
@@ -1029,7 +1118,7 @@ EXTENSION_NOINLINE int32_t ct_string_to_chars__cpu_(const TextEncodingNone& inpu
   are managed with a thread-safe manager instance, hence, ct_sleep2
   can be run in parallel.
 
-  UDTF: ct_sleep1(int32_t seconds, int32_t mode) -> Column<int32_t> output
+  UDTF: ct_sleep1__cpu_(int32_t seconds, int32_t mode) -> Column<int32_t> output
   UDTF: ct_sleep2(TableFunctionManager, int32_t seconds, int32_t mode) -> Column<int32_t> output
 
   Here mode argument is used to test various approaches of accessing
@@ -1070,9 +1159,9 @@ EXTENSION_NOINLINE int32_t ct_sleep_worker(int32_t seconds, Column<int32_t>& out
   return 3;
 }
 
-EXTENSION_NOINLINE int32_t ct_sleep1(int32_t seconds,
-                                     int32_t mode,
-                                     Column<int32_t>& output) {
+EXTENSION_NOINLINE_HOST int32_t ct_sleep1__cpu_(int32_t seconds,
+                                                int32_t mode,
+                                                Column<int32_t>& output) {
   switch (mode) {
     case 0: {
       set_output_row_size(3);  // uses global singleton of TableFunctionManager
@@ -1096,10 +1185,10 @@ EXTENSION_NOINLINE int32_t ct_sleep1(int32_t seconds,
   return ct_sleep_worker(seconds, output);
 }
 
-EXTENSION_NOINLINE int32_t ct_sleep2(TableFunctionManager& mgr,
-                                     int32_t seconds,
-                                     int32_t mode,
-                                     Column<int32_t>& output) {
+EXTENSION_NOINLINE_HOST int32_t ct_sleep2(TableFunctionManager& mgr,
+                                          int32_t seconds,
+                                          int32_t mode,
+                                          Column<int32_t>& output) {
   switch (mode) {
     case 0:
     case 1: {
@@ -1135,7 +1224,7 @@ EXTENSION_NOINLINE int32_t ct_sleep2(TableFunctionManager& mgr,
 // clang-format on
 
 template <typename T>
-TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager& mgr,
+NEVER_INLINE HOST int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager& mgr,
                                                            const Column<T>& input,
                                                            Column<T>& output) {
   int64_t num_rows = input.size();
@@ -1170,9 +1259,9 @@ TEMPLATE_NOINLINE int32_t ct_throw_if_gt_100__cpu_template(TableFunctionManager&
 */
 // clang-format on
 
-EXTENSION_NOINLINE int32_t ct_copy_and_add_size(TableFunctionManager& mgr,
-                                                const Column<int32_t>& input,
-                                                Column<int32_t>& output) {
+EXTENSION_NOINLINE_HOST int32_t ct_copy_and_add_size(TableFunctionManager& mgr,
+                                                     const Column<int32_t>& input,
+                                                     Column<int32_t>& output) {
   mgr.set_output_row_size(input.size());
   for (int32_t i = 0; i < input.size(); i++) {
     output[i] = input[i] + input.size();
@@ -1180,12 +1269,12 @@ EXTENSION_NOINLINE int32_t ct_copy_and_add_size(TableFunctionManager& mgr,
   return output.size();
 }
 
-EXTENSION_NOINLINE int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
-                                                     const Column<int32_t>& input1,
-                                                     const Column<int32_t>& input2,
-                                                     int32_t alpha,
-                                                     Column<int32_t>& output1,
-                                                     Column<int32_t>& output2) {
+EXTENSION_NOINLINE_HOST int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
+                                                          const Column<int32_t>& input1,
+                                                          const Column<int32_t>& input2,
+                                                          int32_t alpha,
+                                                          Column<int32_t>& output1,
+                                                          Column<int32_t>& output2) {
   auto size = input1.size();
   mgr.set_output_row_size(size);
   for (int32_t i = 0; i < size; i++) {
@@ -1201,15 +1290,16 @@ EXTENSION_NOINLINE int32_t ct_add_size_and_mul_alpha(TableFunctionManager& mgr,
   columns. Unspecified points are assumed to have the specified fill
   value.
 */
-EXTENSION_NOINLINE int32_t ct_sparse_add(TableFunctionManager& mgr,
-                                         const Column<int32_t>& x1,
-                                         const Column<int32_t>& d1,
-                                         int32_t f1,
-                                         const Column<int32_t>& x2,
-                                         const Column<int32_t>& d2,
-                                         int32_t f2,
-                                         Column<int32_t>& x,
-                                         Column<int32_t>& d) {
+
+EXTENSION_NOINLINE_HOST int32_t ct_sparse_add(TableFunctionManager& mgr,
+                                              const Column<int32_t>& x1,
+                                              const Column<int32_t>& d1,
+                                              int32_t f1,
+                                              const Column<int32_t>& x2,
+                                              const Column<int32_t>& d2,
+                                              int32_t f2,
+                                              Column<int32_t>& x,
+                                              Column<int32_t>& d) {
   // sorted set of common coordinates:
   std::set<int32_t, std::less<int32_t>> x12;
   // inverse map of coordinates and indices, keys are sorted:
@@ -1248,7 +1338,7 @@ EXTENSION_NOINLINE int32_t ct_sparse_add(TableFunctionManager& mgr,
   return size;
 }
 
-#endif
+#endif  // #ifndef __CUDACC__
 
 enum TFAggType { MIN, MAX };
 
@@ -1280,8 +1370,11 @@ TEMPLATE_INLINE T get_min_or_max_union(const Column<T>& col1,
   UDTF: ct_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename K, typename T, typename Z>
-TEMPLATE_NOINLINE int32_t
+NEVER_INLINE HOST int32_t
 ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
                                 const TextEncodingNone& agg_type,
                                 const Column<K>& input_id,
@@ -1304,14 +1397,18 @@ ct_pushdown_stats__cpu_template(TableFunctionManager& mgr,
   return 1;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0>, Column<T> x, Column<T> y, Column<Z> z, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
 */
 // clang-format on
 
+#ifndef __CUDACC__
+
 template <typename K, typename T, typename Z>
-TEMPLATE_NOINLINE int32_t ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
+NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(TableFunctionManager& mgr,
                                                                const Column<K>& input_id,
                                                                const Column<T>& input_x,
                                                                const Column<T>& input_y,
@@ -1331,13 +1428,18 @@ TEMPLATE_NOINLINE int32_t ct_pushdown_projection__cpu_template(TableFunctionMana
   return input_size;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_union_pushdown_stats__cpu_template(TableFunctionManager, TextEncodingNone agg_type, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<int32_t> row_count, Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename K, typename T, typename Z>
-TEMPLATE_NOINLINE int32_t
+NEVER_INLINE HOST int32_t
 ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
                                       const TextEncodingNone& agg_type,
                                       const Column<K>& input1_id,
@@ -1372,13 +1474,18 @@ ct_union_pushdown_stats__cpu_template(TableFunctionManager& mgr,
   return 1;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: ct_union_pushdown_projection__cpu_template(TableFunctionManager, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z>, Cursor<Column<K> id, Column<T> x, Column<T> y, Column<Z> z, Column<T> w>) | filter_table_function_transpose=on -> Column<K> id | input_id=args<0, 0>, Column<T> x, Column<T> y, Column<Z> z, Column<T> w, K=[int32_t, int64_t, TextEncodingDict], T=[int32_t, int64_t, float, double], Z=[int32_t, int64_t, float, double]
 */
 // clang-format on
+
+#ifndef __CUDACC__
+
 template <typename K, typename T, typename Z>
-TEMPLATE_NOINLINE int32_t
+NEVER_INLINE HOST int32_t
 ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
                                            const Column<K>& input1_id,
                                            const Column<T>& input1_x,
@@ -1415,46 +1522,51 @@ ct_union_pushdown_projection__cpu_template(TableFunctionManager& mgr,
   return output_size;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
-  UDTF: ct_require(Column<int32_t>, int | name=i | require="i > 0") -> Column<int32_t>
+  UDTF: ct_require__cpu_(Column<int32_t>, int | name=i | require="i > 0") -> Column<int32_t>
   UDTF: ct_require_mgr(TableFunctionManager, Column<int32_t>, int i | require="i > 1" | require="i < 5") -> Column<int32_t>
-  UDTF: ct_require_str(Column<int32_t>, TextEncodingNone s | require="s == \"hello\"") -> Column<int32_t>
-  UDTF: ct_require_templating__template(Column<T>, int i | require="i > 0") -> Column<K>, T=[int, double], K=[int]
-  UDTF: ct_require_and(Column<int>, int i | require="i > 0 && i < 5") -> Column<int>
-  UDTF: ct_require_or_str(Column<int>, TextEncodingNone i | require="i == \"MAX\" || i == \"MIN\"") -> Column<int>
-  UDTF: ct_require_str_diff(Column<int>, TextEncodingNone i | require="i != \"MAX\"") -> Column<int>
+  UDTF: ct_require_str__cpu_(Column<int32_t>, TextEncodingNone s | require="s == \"hello\"") -> Column<int32_t>
+  UDTF: ct_require_templating__cpu_template(Column<T>, int i | require="i > 0") -> Column<K>, T=[int, double], K=[int]
+  UDTF: ct_require_and__cpu_(Column<int>, int i | require="i > 0 && i < 5") -> Column<int>
+  UDTF: ct_require_or_str__cpu_(Column<int>, TextEncodingNone i | require="i == \"MAX\" || i == \"MIN\"") -> Column<int>
+  UDTF: ct_require_str_diff__cpu_(Column<int>, TextEncodingNone i | require="i != \"MAX\"") -> Column<int>
 */
 // clang-format on
-EXTENSION_NOINLINE int32_t ct_require(const Column<int32_t>& input1,
-                                      const int32_t i,
-                                      Column<int32_t>& out) {
+
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t ct_require__cpu_(const Column<int32_t>& input1,
+                                                 const int32_t i,
+                                                 Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 3;
   return 1;
 }
 
-EXTENSION_NOINLINE int32_t ct_require_str(const Column<int32_t>& input1,
-                                          const TextEncodingNone& s,
-                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_require_str__cpu_(const Column<int32_t>& input1,
+                                                     const TextEncodingNone& s,
+                                                     Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 3;
   return 1;
 }
 
-EXTENSION_NOINLINE int32_t ct_require_mgr(TableFunctionManager& mgr,
-                                          const Column<int32_t>& input1,
-                                          const int32_t i,
-                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_require_mgr(TableFunctionManager& mgr,
+                                               const Column<int32_t>& input1,
+                                               const int32_t i,
+                                               Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 4;
   return 1;
 }
 
 template <typename T, typename K>
-TEMPLATE_NOINLINE int32_t ct_require_templating__template(const Column<T>& input1,
-                                                          const int32_t i,
-                                                          Column<K>& out) {
+NEVER_INLINE HOST int32_t ct_require_templating__cpu_template(const Column<T>& input1,
+                                                              const int32_t i,
+                                                              Column<K>& out) {
   set_output_row_size(1);
   if constexpr (std::is_same<T, int32_t>::value) {
     out[0] = 5;
@@ -1464,29 +1576,31 @@ TEMPLATE_NOINLINE int32_t ct_require_templating__template(const Column<T>& input
   return 1;
 }
 
-EXTENSION_NOINLINE int32_t ct_require_and(const Column<int32_t>& input1,
-                                          const int32_t i,
-                                          Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_require_and__cpu_(const Column<int32_t>& input1,
+                                                     const int32_t i,
+                                                     Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 7;
   return 1;
 }
 
-EXTENSION_NOINLINE int32_t ct_require_or_str(const Column<int32_t>& input1,
-                                             const TextEncodingNone& i,
-                                             Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_require_or_str__cpu_(const Column<int32_t>& input1,
+                                                        const TextEncodingNone& i,
+                                                        Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 8;
   return 1;
 }
 
-EXTENSION_NOINLINE int32_t ct_require_str_diff(const Column<int32_t>& input1,
-                                               const TextEncodingNone& i,
-                                               Column<int32_t>& out) {
+EXTENSION_NOINLINE_HOST int32_t ct_require_str_diff__cpu_(const Column<int32_t>& input1,
+                                                          const TextEncodingNone& i,
+                                                          Column<int32_t>& out) {
   set_output_row_size(1);
   out[0] = 9;
   return 1;
 }
+
+#endif  // #ifndef __CUDACC__
 
 #ifdef __CUDACC__
 

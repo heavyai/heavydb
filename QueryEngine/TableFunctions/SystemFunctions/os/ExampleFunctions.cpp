@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_SYSTEM_TFS
+#include "ExampleFunctions.h"
+
 #ifndef __CUDACC__
 
 #ifdef HAVE_TBB
 #include <tbb/parallel_for.h>
 #endif
 #endif
-
-#include "ExampleFunctions.h"
 
 namespace Mandelbrot {
 // Modified from original code by Akanksha Jolly,
@@ -61,9 +60,9 @@ TEMPLATE_INLINE int32_t mandelbrot_pixel(const T cx,
   return num_iterations;
 }
 
-ALWAYS_INLINE DEVICE double get_scale(const double domain_min,
-                                      const double domain_max,
-                                      const int32_t num_bins) {
+DEVICE inline double get_scale(const double domain_min,
+                               const double domain_max,
+                               const int32_t num_bins) {
   return (domain_max - domain_min) / num_bins;
 }
 
@@ -346,4 +345,3 @@ int32_t tf_mandelbrot_cuda_float__gpu_(const int32_t x_pixels,
 }
 
 #endif  // #ifndef __CUDACC__
-#endif  // HAVE_SYSTEM_TFS

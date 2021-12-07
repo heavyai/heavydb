@@ -139,6 +139,13 @@ set(query_engine_source_files
     QueryTemplateGenerator.h
     TableFunctions/TableFunctionManager.h)
 
+set(query_engine_cuda_source_files
+    TopKSort.cu
+    InPlaceSortImpl.cu
+    ResultSetSortImpl.cu
+    GpuInitGroups.cu
+    JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
+
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderAllocator.cpp
@@ -163,21 +170,6 @@ set(group_by_hash_test_files
     RuntimeFunctions.cpp
 )
 
-if(ENABLE_CUDA)
-  message(DEBUG "QueryEngine CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
-  set(MAPD_DEFINITIONS "-DHAVE_CUDA")
-  set(NVCC_BUILD_TYPE_ARGS)
-  string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
-  if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
-    list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG --debug)
-    if (ENABLE_CUDA_KERNEL_DEBUG)
-        list(APPEND NVCC_BUILD_TYPE_ARGS --device-debug)
-    endif()
-  else()
-    list(APPEND NVCC_BUILD_TYPE_ARGS -O3)
-  endif()
-endif()
-
 if(ENABLE_DECODERS_BOUNDS_CHECKING)
   list(APPEND MAPD_DEFINITIONS "-DWITH_DECODERS_BOUNDS_CHECKING")
 endif()
@@ -200,6 +192,95 @@ if(ENABLE_JIT_DEBUG AND NOT ENABLE_CUDA)
   set(RT_OPT_FLAGS -O0 -g)
 else()
   set(RT_OPT_FLAGS -O3)
+endif()
+
+if(ENABLE_CUDA)
+  message(DEBUG "QueryEngine CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
+  set(MAPD_DEFINITIONS "-DHAVE_CUDA")
+  set(NVCC_BUILD_TYPE_ARGS)
+  set(CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp)
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
+  if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
+    list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG --debug)
+    if (ENABLE_CUDA_KERNEL_DEBUG)
+        list(APPEND NVCC_BUILD_TYPE_ARGS --device-debug)
+    endif()
+  else()
+    list(APPEND NVCC_BUILD_TYPE_ARGS -O3)
+  endif()
+endif()
+
+set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctionsTesting.hpp)
+
+if (ENABLE_SYSTEM_TFS)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Utilities.h)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleFunctions.h)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleFunctions.cpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GeoRaster.h)
+
+  if (ENABLE_CUDA)
+    list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleFunctions.cpp)
+  endif()
+
+  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    if(ENABLE_RF_PROP_TFS)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFProp.h)
+    endif()
+    if(ENABLE_POINT_CLOUD_TFS)
+      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/PointCloud.h)
+    endif()
+  endif()
+
+  if(ENABLE_MLPACK)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/MLFunctions.hpp)
+  endif()
+endif()
+
+if(ENABLE_CUDA)
+  add_library(QueryEngine ${query_engine_source_files} ${query_engine_cuda_source_files})
+  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init QueryEngineCudaTargets)
+else()
+  add_library(QueryEngine ${query_engine_source_files})
+  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
+endif()
+
+if(ENABLE_CUDA)
+  if("${CMAKE_CUDA_COMPILER_ID}" STREQUAL "NVIDIA")
+    include(ProcessorCount)
+    ProcessorCount(N)
+    if (CMAKE_CUDA_COMPILER_VERSION GREATER_EQUAL 11.3 AND NOT N EQUAL 0)
+      target_compile_options(QueryEngine PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+          --threads ${N};>)
+      set(NVCC_THREADS --threads ${N})
+    endif()
+  endif()
+
+  if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.0") 
+    message(STATUS "CMake 3.18+, Setting CUDA_ARCHITECTURES.")
+    set_target_properties(QueryEngine PROPERTIES CUDA_ARCHITECTURES 
+        35-virtual
+        50-virtual
+        60-virtual
+        70-virtual
+        75-virtual)
+  else()
+    message(STATUS "CMake 3.17 or under, setting CUDA architecture flags manually.")
+    target_compile_options(QueryEngine PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+      -gencode=arch=compute_35,code=compute_35;
+      -gencode=arch=compute_50,code=compute_50;
+      -gencode=arch=compute_60,code=compute_60;
+      -gencode=arch=compute_70,code=compute_70;
+      -gencode=arch=compute_75,code=compute_75;
+      -Wno-deprecated-gpu-targets>)
+  endif()
+
+  target_compile_options(QueryEngine PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+      ${MAPD_HOST_COMPILER_FLAG};
+      -Xcompiler -fPIC;
+      -std=c++17;
+      -D_FORCE_INLINES;
+      ${MAPD_DEFINITIONS};
+      ${NVCC_BUILD_TYPE_ARGS};>)
 endif()
 
 add_custom_command(
@@ -248,29 +329,6 @@ add_custom_target(QueryEngineFunctionsTargets
         ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
     )
 
-set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctionsTesting.hpp)
-
-if (ENABLE_SYSTEM_TFS)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Utilities.h)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleFunctions.h)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleFunctions.cpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GeoRaster.h)
-
-  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    if(ENABLE_RF_PROP_TFS)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFProp.h)
-    endif()
-    if(ENABLE_POINT_CLOUD_TFS)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/PointCloud.h)
-    endif()
-  endif()
-
-  if(ENABLE_MLPACK)
-    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/MLFunctions.hpp)
-  endif()
-endif()
-
-
 add_custom_command(
     DEPENDS ${TABLE_FUNCTION_HEADERS}
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_cpu.hpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp 
@@ -285,14 +343,6 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFa
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine COMPONENT "QE")
-
-if(ENABLE_CUDA)
-  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
-  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init QueryEngineCudaTargets)
-else()
-  add_library(QueryEngine ${query_engine_source_files})
-  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
-endif()
 
 target_precompile_headers(QueryEngine PRIVATE
   [["QueryEngine/Execute.h"]]
@@ -332,96 +382,41 @@ add_custom_command(
         ${CUDA_COMPILATION_ARCH}
         -std=c++17
         ${NVCC_BUILD_TYPE_ARGS}
+        ${NVCC_THREADS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
     )
 
+# TODO (Breno): Find a way to build as regular library (with cuda_add_library())
+# There's no simple way to compile a file with two different compilers in CMake.
+# Since we already compile these as C++ source files in libQueryEngine, we need
+# to recompile them explicitly with nvcc.
 add_custom_command(
-    DEPENDS TopKSort.cu
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
-    COMMAND nvcc
-    ARGS
-        -I ${CMAKE_SOURCE_DIR}
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -std=c++17
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/TopKSort.cu
-    )
-
-add_custom_command(
-    DEPENDS InPlaceSortImpl.cu
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
-    COMMAND nvcc
-    ARGS
-        -I ${CMAKE_SOURCE_DIR}
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        -std=c++17
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/InPlaceSortImpl.cu
-    )
-
-add_custom_command(
-    DEPENDS ResultSetSortImpl.cu
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o
-    COMMAND nvcc
-    ARGS
-        -I ${CMAKE_SOURCE_DIR}
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -std=c++17
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/ResultSetSortImpl.cu
-    )
-
-add_custom_command(
-    DEPENDS GpuInitGroups.cu
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
-    COMMAND nvcc
-    ARGS
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        -std=c++17
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu
-    )
-
-add_custom_command(
-    DEPENDS JoinHashTable/Runtime/HashJoinRuntimeGpu.cu JoinHashTable/Runtime/HashJoinRuntime.cpp
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
-    COMMAND nvcc
-    ARGS
-        -I ${CMAKE_SOURCE_DIR}
-        ${MAPD_HOST_COMPILER_FLAG}
-        -Xcompiler -fPIC
-        -D_FORCE_INLINES
-        ${MAPD_DEFINITIONS}
-        ${CUDA_COMPILATION_ARCH}
-        -std=c++17
-        ${NVCC_BUILD_TYPE_ARGS}
-        -c ${CMAKE_CURRENT_SOURCE_DIR}/JoinHashTable/Runtime/HashJoinRuntimeGpu.cu
-    )
+  DEPENDS ${CUDA_TABLE_FUNCTION_FILES}
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
+  COMMAND ${CMAKE_CUDA_COMPILER}
+  ARGS
+      -I ${CMAKE_SOURCE_DIR}
+      -I ${CMAKE_CURRENT_BINARY_DIR}
+      ${MAPD_HOST_COMPILER_FLAG}
+      -DNO_BOOST
+      -Xcompiler -fPIC
+      -Xcompiler -Wno-return-type-c-linkage --expt-relaxed-constexpr
+      ${MAPD_DEFINITIONS}
+      ${compDef}
+      --lib
+      -rdc=true
+      ${CUDA_COMPILATION_ARCH}
+      -std=c++17
+      ${NVCC_BUILD_TYPE_ARGS}
+      ${NVCC_THREADS}
+      -x cu
+      ${CUDA_TABLE_FUNCTION_FILES} -o ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
+  )
 
 add_custom_target(QueryEngineCudaTargets
     DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
-        ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
-        ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
-        ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o
-        ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
-        ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
+        ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})

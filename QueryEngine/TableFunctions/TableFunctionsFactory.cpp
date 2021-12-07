@@ -275,6 +275,8 @@ bool is_table_function_whitelisted(const std::string& function_name) {
   static const std::unordered_set<std::string> whitelisted_table_functions = {
       "tf_mandelbrot",
       "tf_mandelbrot_float",
+      "tf_mandelbrot_cuda",
+      "tf_mandelbrot_cuda_float",
       "tf_geo_rasterize",
       "tf_geo_rasterize_slope",
       "tf_rf_prop",

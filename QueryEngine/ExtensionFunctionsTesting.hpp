@@ -16,20 +16,28 @@ int32_t ct_device_selection_udf_any(int32_t input) {
 #endif
 }
 
-EXTENSION_NOINLINE
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST
 int32_t ct_device_selection_udf_cpu__cpu_(int32_t input) {
   return CPU_DEVICE_CODE;
 }
+
+#endif
 
 EXTENSION_NOINLINE
 int32_t ct_device_selection_udf_gpu__gpu_(int32_t input) {
   return GPU_DEVICE_CODE;
 }
 
-EXTENSION_NOINLINE
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST
 int32_t ct_device_selection_udf_both__cpu_(int32_t input) {
   return CPU_DEVICE_CODE;
 }
+
+#endif
 
 EXTENSION_NOINLINE
 int32_t ct_device_selection_udf_both__gpu_(int32_t input) {

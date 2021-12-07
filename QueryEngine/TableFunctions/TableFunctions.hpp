@@ -56,10 +56,12 @@ EXTENSION_NOINLINE int32_t row_copier(const Column<double>& input_col,
   return output_row_count;
 }
 
-EXTENSION_NOINLINE int32_t row_copier2__cpu__(const Column<double>& input_col,
-                                              int copy_multiplier,
-                                              Column<double>& output_col,
-                                              Column<double>& output_col2) {
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t row_copier2__cpu__(const Column<double>& input_col,
+                                                   int copy_multiplier,
+                                                   Column<double>& output_col,
+                                                   Column<double>& output_col2) {
   if (copy_multiplier == -1) {
     // Test UDTF return without allocating output columns, expect
     // empty output columns.
@@ -96,6 +98,8 @@ EXTENSION_NOINLINE int32_t row_copier2__cpu__(const Column<double>& input_col,
   }
   return result;
 }
+
+#endif  // #ifndef __CUDACC__
 
 EXTENSION_NOINLINE int32_t row_copier_text(const Column<TextEncodingDict>& input_col,
                                            int copy_multiplier,
@@ -211,7 +215,10 @@ EXTENSION_NOINLINE int32_t row_addsub(const int copy_multiplier,
   UDTF: get_max_with_row_offset__cpu_(Cursor<int>, Constant<1>) -> Column<int>, Column<int>
 */
 // clang-format on
-EXTENSION_NOINLINE int32_t
+
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t
 get_max_with_row_offset__cpu_(const Column<int>& input_col,
                               Column<int>& output_max_col,
                               Column<int>& output_max_row_col) {
@@ -235,18 +242,25 @@ get_max_with_row_offset__cpu_(const Column<int>& input_col,
   return 1;
 }
 
+#endif  // #ifndef __CUDACC__
+
 // clang-format off
 /*
   UDTF: column_list_get__cpu_(ColumnList<double>, int, RowMultiplier) -> Column<double>
 */
 // clang-format on
-EXTENSION_NOINLINE int32_t column_list_get__cpu_(const ColumnList<double>& col_list,
-                                                 const int index,
-                                                 const int m,
-                                                 Column<double>& col) {
+
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t column_list_get__cpu_(const ColumnList<double>& col_list,
+                                                      const int index,
+                                                      const int m,
+                                                      Column<double>& col) {
   col = col_list[index];  // copy the data of col_list item to output column
   return col.size();
 }
+
+#endif  // #ifndef __CUDACC__
 
 // clang-format off
 /*
@@ -269,8 +283,10 @@ EXTENSION_NOINLINE int32_t column_list_first_last(const ColumnList<double>& col_
  */
 // clang-format on
 
-EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& input,
-                                                     Column<int32_t>& out) {
+#ifndef __CUDACC__
+
+EXTENSION_NOINLINE_HOST int32_t
+column_list_row_sum__cpu_(const ColumnList<int32_t>& input, Column<int32_t>& out) {
   int32_t output_num_rows = input.numCols();
   set_output_row_size(output_num_rows);
   for (int i = 0; i < output_num_rows; i++) {
@@ -283,3 +299,5 @@ EXTENSION_NOINLINE int32_t column_list_row_sum__cpu_(const ColumnList<int32_t>& 
   }
   return output_num_rows;
 }
+
+#endif  // #ifndef __CUDACC__

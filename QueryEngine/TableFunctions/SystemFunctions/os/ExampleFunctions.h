@@ -16,10 +16,9 @@
 
 #pragma once
 
-#ifdef HAVE_SYSTEM_TFS
-#ifndef __CUDACC__
-
 #include "QueryEngine/OmniSciTypes.h"
+
+#ifndef __CUDACC__
 
 // clang-format off
 /*
@@ -100,4 +99,3 @@ int32_t tf_mandelbrot_cuda_float__gpu_(const int32_t x_pixels,
                                        Column<int32_t>& output_num_iterations);
 
 #endif  // __CUDACC__
-#endif  // HAVE_SYSTEM_TFS

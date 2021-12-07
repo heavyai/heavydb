@@ -16,7 +16,6 @@
 
 #pragma once
 
-#ifdef HAVE_SYSTEM_TFS
 #ifndef __CUDACC__
 
 #include <vector>
@@ -278,4 +277,3 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
 #include "GeoRaster.cpp"
 
 #endif  // __CUDACC__
-#endif  // HAVE_SYSTEM_TFS

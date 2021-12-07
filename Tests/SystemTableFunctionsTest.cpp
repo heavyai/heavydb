@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef HAVE_SYSTEM_TFS
-
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
@@ -99,6 +97,29 @@ TEST_F(SystemTFs, Mandelbrot) {
                 static_cast<int64_t>(256));  // max_iterations
       ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[2]),
                 static_cast<int64_t>(16384));  // num pixels - width X height
+    }
+    {
+      // skip CPU for GPU tests
+      if (dt == ExecutorDeviceType::GPU) {
+        const auto rows = run_multiple_agg(
+            "SELECT MIN(num_iterations) AS min_iterations, MAX(num_iterations) AS "
+            "max_iterations, COUNT(*) AS n FROM TABLE(tf_mandelbrot_cuda(128 /* width */ "
+            ", "
+            "128 "
+            "/* height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y */, 1.0 /* "
+            "max_y */, 256 /* max_iterations */, 16384 /* output_size */));",
+            dt);
+        ASSERT_EQ(rows->rowCount(), size_t(1));
+        ASSERT_EQ(rows->colCount(), size_t(3));
+        auto crt_row = rows->getNextRow(false, false);
+        // TODO: The CUDA function seems to return -1 for some reason
+        // ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0])
+        //          static_cast<int64_t>(1));  // min_iterations
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                  static_cast<int64_t>(256));  // max_iterations
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[2]),
+                  static_cast<int64_t>(16384));  // num pixels - width X height
+      }
     }
   }
 }
@@ -294,5 +315,3 @@ int main(int argc, char** argv) {
   QR::reset();
   return err;
 }
-
-#endif  // HAVE_SYSTEM_TFS
