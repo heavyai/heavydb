@@ -73,6 +73,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
+#include "Shared/sqltypes_geo.h"
 #include "StringDictionary/StringDictionaryClient.h"
 
 #include "MapDRelease.h"
@@ -2124,19 +2125,7 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
       case kPOINT: {
         ColumnDescriptor physical_cd_coords(true);
         physical_cd_coords.columnName = cd.columnName + "_coords";
-        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        // Raw data: compressed/uncompressed coords
-        coords_ti.set_subtype(kTINYINT);
-        size_t unit_size;
-        if (col_ti.get_compression() == kENCODING_GEOINT &&
-            col_ti.get_comp_param() == 32) {
-          unit_size = 4 * sizeof(int8_t);
-        } else {
-          CHECK(col_ti.get_compression() == kENCODING_NONE);
-          unit_size = 8 * sizeof(int8_t);
-        }
-        coords_ti.set_size(2 * unit_size);
-        physical_cd_coords.columnType = coords_ti;
+        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
         // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
@@ -2146,18 +2135,12 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
       case kLINESTRING: {
         ColumnDescriptor physical_cd_coords(true);
         physical_cd_coords.columnName = cd.columnName + "_coords";
-        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        // Raw data: compressed/uncompressed coords
-        coords_ti.set_subtype(kTINYINT);
-        physical_cd_coords.columnType = coords_ti;
+        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
         ColumnDescriptor physical_cd_bounds(true);
         physical_cd_bounds.columnName = cd.columnName + "_bounds";
-        SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        bounds_ti.set_subtype(kDOUBLE);
-        bounds_ti.set_size(4 * sizeof(double));
-        physical_cd_bounds.columnType = bounds_ti;
+        physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 1);
         columns.push_back(physical_cd_bounds);
 
         // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
@@ -2167,31 +2150,22 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
       case kPOLYGON: {
         ColumnDescriptor physical_cd_coords(true);
         physical_cd_coords.columnName = cd.columnName + "_coords";
-        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        // Raw data: compressed/uncompressed coords
-        coords_ti.set_subtype(kTINYINT);
-        physical_cd_coords.columnType = coords_ti;
+        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
         ColumnDescriptor physical_cd_ring_sizes(true);
         physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
-        SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        ring_sizes_ti.set_subtype(kINT);
-        physical_cd_ring_sizes.columnType = ring_sizes_ti;
+        physical_cd_ring_sizes.columnType = get_geo_physical_col_type(col_ti, 1);
         columns.push_back(physical_cd_ring_sizes);
 
         ColumnDescriptor physical_cd_bounds(true);
         physical_cd_bounds.columnName = cd.columnName + "_bounds";
-        SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        bounds_ti.set_subtype(kDOUBLE);
-        bounds_ti.set_size(4 * sizeof(double));
-        physical_cd_bounds.columnType = bounds_ti;
+        physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 2);
         columns.push_back(physical_cd_bounds);
 
         ColumnDescriptor physical_cd_render_group(true);
         physical_cd_render_group.columnName = cd.columnName + "_render_group";
-        SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, col_ti.get_notnull());
-        physical_cd_render_group.columnType = render_group_ti;
+        physical_cd_render_group.columnType = get_geo_physical_col_type(col_ti, 3);
         columns.push_back(physical_cd_render_group);
 
         // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
@@ -2201,38 +2175,27 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
       case kMULTIPOLYGON: {
         ColumnDescriptor physical_cd_coords(true);
         physical_cd_coords.columnName = cd.columnName + "_coords";
-        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        // Raw data: compressed/uncompressed coords
-        coords_ti.set_subtype(kTINYINT);
-        physical_cd_coords.columnType = coords_ti;
+        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
         ColumnDescriptor physical_cd_ring_sizes(true);
         physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
-        SQLTypeInfo ring_sizes_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        ring_sizes_ti.set_subtype(kINT);
-        physical_cd_ring_sizes.columnType = ring_sizes_ti;
+        physical_cd_ring_sizes.columnType = get_geo_physical_col_type(col_ti, 1);
         columns.push_back(physical_cd_ring_sizes);
 
         ColumnDescriptor physical_cd_poly_rings(true);
         physical_cd_poly_rings.columnName = cd.columnName + "_poly_rings";
-        SQLTypeInfo poly_rings_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        poly_rings_ti.set_subtype(kINT);
-        physical_cd_poly_rings.columnType = poly_rings_ti;
+        physical_cd_poly_rings.columnType = get_geo_physical_col_type(col_ti, 2);
         columns.push_back(physical_cd_poly_rings);
 
         ColumnDescriptor physical_cd_bounds(true);
         physical_cd_bounds.columnName = cd.columnName + "_bounds";
-        SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
-        bounds_ti.set_subtype(kDOUBLE);
-        bounds_ti.set_size(4 * sizeof(double));
-        physical_cd_bounds.columnType = bounds_ti;
+        physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 3);
         columns.push_back(physical_cd_bounds);
 
         ColumnDescriptor physical_cd_render_group(true);
         physical_cd_render_group.columnName = cd.columnName + "_render_group";
-        SQLTypeInfo render_group_ti = SQLTypeInfo(kINT, col_ti.get_notnull());
-        physical_cd_render_group.columnType = render_group_ti;
+        physical_cd_render_group.columnType = get_geo_physical_col_type(col_ti, 4);
         columns.push_back(physical_cd_render_group);
 
         // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
