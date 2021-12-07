@@ -15,6 +15,9 @@
  */
 
 #include "CachingForeignStorageMgr.h"
+
+#include <boost/filesystem.hpp>
+
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
 #include "ForeignStorageException.h"
