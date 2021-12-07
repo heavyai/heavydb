@@ -418,7 +418,9 @@ add_custom_target(QueryEngineCudaTargets
         ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
         ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
     )
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")
+if(ENABLE_CUDA)
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")
+endif()
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest Logger Shared ${Boost_LIBRARIES} ${PROFILER_LIBS})
