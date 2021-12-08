@@ -110,24 +110,18 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
   CHECK_LT(static_cast<size_t>(rte_idx), cgen_state_->frag_offsets_.size());
-  const auto catalog = executor()->getCatalog();
-  CHECK(catalog);
   if (col_var->get_table_id() > 0) {
-    auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog);
-    if (cd->isVirtualCol) {
-      CHECK(cd->columnName == "rowid");
+    if (col_var->is_virtual()) {
       return {codegenRowId(col_var, co)};
     }
-    auto col_ti = cd->columnType;
+    auto col_ti = col_var->get_type_info();
     if (col_ti.get_physical_coord_cols() > 0) {
       std::vector<llvm::Value*> cols;
       for (auto i = 0; i < col_ti.get_physical_coord_cols(); i++) {
-        auto cd0 =
-            get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *catalog);
-        auto col0_ti = cd0->columnType;
-        CHECK(!cd0->isVirtualCol);
+        int col0_id = col_id + i + 1;
+        auto col0_ti = get_geo_physical_col_type(col_ti, i);
         auto col0_var = makeExpr<Analyzer::ColumnVar>(
-            col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
+            col0_ti, col_var->get_table_id(), col0_id, rte_idx);
         auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
         if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
