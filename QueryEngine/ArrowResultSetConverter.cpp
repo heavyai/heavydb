@@ -1145,7 +1145,11 @@ std::shared_ptr<arrow::Table> ArrowResultSetConverter::getArrowTable(
                       });
   }
 
-  {
+  bool use_rowwise_conversion = std::any_of(std::begin(columnar_conversion),
+                                            std::end(columnar_conversion),
+                                            [](bool val) { return val == false; });
+
+  if (use_rowwise_conversion) {
     auto timer = DEBUG_TIMER("row-wise conversion");
     std::vector<std::shared_ptr<ValueArray>> column_values(col_count, nullptr);
     std::vector<std::shared_ptr<std::vector<bool>>> null_bitmaps(col_count, nullptr);
