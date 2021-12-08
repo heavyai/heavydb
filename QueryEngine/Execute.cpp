@@ -327,17 +327,16 @@ size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetc
   if (!plan_state_) {
     return 0;
   }
-  for (const auto& fetched_col_pair : plan_state_->columns_to_fetch_) {
-    if (table_ids_to_fetch.count(fetched_col_pair.first) == 0) {
+  for (const auto& fetched_col : plan_state_->columns_to_fetch_) {
+    int table_id = fetched_col.getScanDesc().getTableId();
+    if (table_ids_to_fetch.count(table_id) == 0) {
       continue;
     }
 
-    if (fetched_col_pair.first < 0) {
+    if (table_id < 0) {
       num_bytes += 8;
     } else {
-      const auto cd =
-          catalog_->getMetadataForColumn(fetched_col_pair.first, fetched_col_pair.second);
-      const auto& ti = cd->columnType;
+      const auto& ti = fetched_col.getType();
       const auto sz = ti.get_type() == kTEXT && ti.get_compression() == kENCODING_DICT
                           ? 4
                           : ti.get_size();
@@ -2653,9 +2652,7 @@ FetchResult Executor::fetchChunks(
       }
       CHECK_LT(frag_id, fragments->size());
       auto memory_level_for_column = memory_level;
-      auto tbl_col_ids =
-          std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId());
-      if (plan_state_->columns_to_fetch_.find(tbl_col_ids) ==
+      if (plan_state_->columns_to_fetch_.find(*col_id) ==
           plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
@@ -2667,7 +2664,7 @@ FetchResult Executor::fetchChunks(
         if (needLinearizeAllFragments(
                 *col_id, ra_exe_unit, selected_fragments, memory_level)) {
           bool for_lazy_fetch = false;
-          if (plan_state_->columns_to_not_fetch_.find(tbl_col_ids) !=
+          if (plan_state_->columns_to_not_fetch_.find(*col_id) !=
               plan_state_->columns_to_not_fetch_.end()) {
             for_lazy_fetch = true;
             VLOG(2) << "Try to linearize lazy fetch column (col_id: "
@@ -2817,8 +2814,7 @@ FetchResult Executor::fetchUnionChunks(
         }
         CHECK_LT(frag_id, fragments->size());
         auto memory_level_for_column = memory_level;
-        if (plan_state_->columns_to_fetch_.find(
-                std::make_pair(col_id->getScanDesc().getTableId(), col_id->getColId())) ==
+        if (plan_state_->columns_to_fetch_.find(*col_id) ==
             plan_state_->columns_to_fetch_.end()) {
           memory_level_for_column = Data_Namespace::CPU_LEVEL;
         }

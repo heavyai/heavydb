@@ -44,6 +44,15 @@ struct PlanState {
   using DeletedColumnsMap = std::unordered_map<TableId, const ColumnDescriptor*>;
   using HoistedFiltersSet = std::unordered_set<std::shared_ptr<Analyzer::Expr>>;
 
+  struct CompareInputColDescId {
+    bool operator()(const InputColDescriptor& lhs, const InputColDescriptor& rhs) const {
+      return std::make_pair(lhs.getScanDesc().getTableId(), lhs.getColId()) <
+             std::make_pair(rhs.getScanDesc().getTableId(), rhs.getColId());
+    }
+  };
+
+  using InputColDescriptorSet = std::set<InputColDescriptor, CompareInputColDescId>;
+
   PlanState(const bool allow_lazy_fetch,
             const std::vector<InputTableInfo>& query_infos,
             const DeletedColumnsMap& deleted_columns,
@@ -58,8 +67,8 @@ struct PlanState {
   std::vector<Analyzer::Expr*> target_exprs_;
   HoistedFiltersSet hoisted_filters_;
   std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
-  std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
-  std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
+  InputColDescriptorSet columns_to_fetch_;
+  InputColDescriptorSet columns_to_not_fetch_;
   std::unordered_map<size_t, std::vector<std::shared_ptr<Analyzer::Expr>>>
       left_join_non_hashtable_quals_;
   bool allow_lazy_fetch_;

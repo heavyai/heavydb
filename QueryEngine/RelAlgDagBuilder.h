@@ -31,6 +31,7 @@
 #include <boost/functional/hash.hpp>
 
 #include "Catalog/Catalog.h"
+#include "Descriptors/InputDescriptors.h"
 #include "QueryEngine/QueryHint.h"
 #include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/TargetMetaInfo.h"
@@ -2351,3 +2352,11 @@ using RANodeOutput = std::vector<RexInput>;
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
 
 std::string tree_string(const RelAlgNode*, const size_t depth = 0);
+
+inline InputColDescriptor column_var_to_descriptor(const Analyzer::ColumnVar* var) {
+  return InputColDescriptor(var->get_column_id(),
+                            var->get_table_id(),
+                            var->get_rte_idx(),
+                            var->get_type_info(),
+                            var->is_virtual());
+}

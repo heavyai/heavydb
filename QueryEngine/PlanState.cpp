@@ -33,17 +33,17 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
       return false;
     }
   }
-  std::set<std::pair<int, int>> intersect;
+  InputColDescriptorSet intersect;
   std::set_intersection(columns_to_fetch_.begin(),
                         columns_to_fetch_.end(),
                         columns_to_not_fetch_.begin(),
                         columns_to_not_fetch_.end(),
-                        std::inserter(intersect, intersect.begin()));
+                        std::inserter(intersect, intersect.begin()),
+                        CompareInputColDescId());
   if (!intersect.empty()) {
     throw CompilationRetryNoLazyFetch();
   }
-  return columns_to_fetch_.find(std::make_pair(do_not_fetch_column->get_table_id(),
-                                               do_not_fetch_column->get_column_id())) ==
+  return columns_to_fetch_.find(column_var_to_descriptor(do_not_fetch_column)) ==
          columns_to_fetch_.end();
 }
 
@@ -70,7 +70,7 @@ int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
   const auto it = global_to_local_col_ids_.find(scan_col_desc);
   CHECK(it != global_to_local_col_ids_.end()) << "Expected to find " << scan_col_desc;
   if (fetch_column) {
-    columns_to_fetch_.insert(std::make_pair(table_id, global_col_id));
+    columns_to_fetch_.insert(column_var_to_descriptor(col_var));
   }
   return it->second;
 }
