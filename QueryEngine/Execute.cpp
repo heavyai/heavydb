@@ -2467,17 +2467,6 @@ bool Executor::skipFragmentPair(
   return shard_count;
 }
 
-namespace {
-
-const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_desc,
-                                                  const Catalog_Namespace::Catalog& cat) {
-  const int table_id = col_desc->getScanDesc().getTableId();
-  const int col_id = col_desc->getColId();
-  return get_column_descriptor_maybe(col_id, table_id, cat);
-}
-
-}  // namespace
-
 std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(
     const std::vector<InputDescriptor>& input_descs,
     const std::map<int, const TableFragments*>& all_tables_fragments) {
