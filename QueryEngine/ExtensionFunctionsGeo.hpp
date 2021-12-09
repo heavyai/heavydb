@@ -982,26 +982,26 @@ DEVICE ALWAYS_INLINE CoordData trim_linestring_to_buffered_box(int8_t* l1,
   // Distance is given in osr spatial reference units, in this case 10 meters.
   // Bounds should be converted to osr before calculations, if isr != osr.
 
+  Point2D const lb = transform_point<XY>({bounds2[0], bounds2[1]}, isr2, osr);
+  Point2D const rt = transform_point<XY>({bounds2[2], bounds2[3]}, isr2, osr);
   CoordData l1_relevant_section;
   // Interate through linestring segments.
   // Mark the start of the relevant section FIRST TIME WE ENTER the buffered box.
   // Set the size of the relevant section the LAST TIME WE GET OUT of the box.
   auto l1_num_coords = l1size / compression_unit_size(ic1);
-  double l11x = coord_x(l1, 0, ic1, isr1, osr);
-  double l11y = coord_y(l1, 1, ic1, isr1, osr);
+  Point2D l11 = get_point(l1, 0, ic1, isr1, osr);
   for (int32_t i1 = 2; i1 < l1_num_coords; i1 += 2) {
-    double l12x = coord_x(l1, i1, ic1, isr1, osr);
-    double l12y = coord_y(l1, i1 + 1, ic1, isr1, osr);
+    Point2D l12 = get_point(l1, i1, ic1, isr1, osr);
     // Check for overlap between the line box and the buffered box
     if (
         // line box is left of buffered box
-        fmax(l11x, l12x) + distance < transform_coord_x(bounds2[0], isr2, osr) ||
+        fmax(l11.x, l12.x) + distance < lb.x ||
         // line box is right of buffered box
-        fmin(l11x, l12x) - distance > transform_coord_x(bounds2[2], isr2, osr) ||
+        fmin(l11.x, l12.x) - distance > rt.x ||
         // line box is below buffered box
-        fmax(l11y, l12y) + distance < transform_coord_y(bounds2[1], isr2, osr) ||
+        fmax(l11.y, l12.y) + distance < lb.y ||
         // line box is above buffered box
-        fmin(l11y, l12y) - distance > transform_coord_y(bounds2[3], isr2, osr)) {
+        fmin(l11.y, l12.y) - distance > rt.y) {
       // No overlap
       if (l1_relevant_section.ptr && l1_relevant_section.size == 0) {
         // Can finalize relevant section size
@@ -1019,8 +1019,8 @@ DEVICE ALWAYS_INLINE CoordData trim_linestring_to_buffered_box(int8_t* l1,
       l1_relevant_section.size = 0;
     }
     // Advance to the next line segment.
-    l11x = l12x;
-    l11y = l12y;
+    l11.x = l12.x;
+    l11.y = l12.y;
   }
   if (l1_relevant_section.ptr && l1_relevant_section.size == 0) {
     // If we did start tracking the relevant section (i.e. entered the buffered bbox)
