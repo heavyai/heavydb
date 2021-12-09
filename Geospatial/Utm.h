@@ -20,7 +20,6 @@
  * @brief   Convert to/from WGS84 (long,lat) and UTM (x,y) given utm zone srid.
  */
 
-#include "Shared/funcannotations.h"
 #include "Shared/math_consts.h"
 #include "Shared/misc.h"
 
@@ -111,6 +110,10 @@ std::array<double, 9> deltas
 constexpr unsigned N = 6;  // N = 6 is smallest value that passes GeoSpatial.UTMTransform
 }  // namespace
 
+DEVICE inline bool is_utm_srid(unsigned const srid) {
+  return (32601 <= srid && srid <= 32660) || (32701 <= srid && srid <= 32760);
+}
+
 // The small_dlambda_ functions are used when x is within 4.77 degrees of the UTM zone's
 // central meridian. This allows for a 1.77 degree overlap with the UTM zones on its
 // east and west sides to use the faster trig/hypertrig functions.
@@ -128,7 +131,9 @@ class Transform4326ToUTM {
 
  public:
   // Required: srid in [32601,32660] U [32701,32760]
-  ALWAYS_INLINE Transform4326ToUTM(unsigned const srid, double const x, double const y)
+  DEVICE ALWAYS_INLINE Transform4326ToUTM(unsigned const srid,
+                                          double const x,
+                                          double const y)
       : srid_(srid) {
     unsigned const zone = srid_ % 100u;
     double const x0 = zone * 6.0 - 183;
@@ -162,7 +167,7 @@ class Transform4326ToUTM {
     */
   }
 
-  ALWAYS_INLINE double calculateX() const {
+  DEVICE ALWAYS_INLINE double calculateX() const {
     double sum = 0;  // Sum in reverse to add smallest numbers first
     if (small_dlambda_) {
       for (unsigned j = N; j; --j) {
@@ -187,7 +192,7 @@ class Transform4326ToUTM {
   //  dereferenceable(24) %0) #1
   //                            ^
   //. Switching to CPU execution target.
-  ALWAYS_INLINE double calculateY() const {
+  DEVICE ALWAYS_INLINE double calculateY() const {
     double const N0 = (32700 < srid_) * 10e6;  // UTM False northing (m)
     double sum = 0;
     if (small_dlambda_) {
@@ -216,7 +221,9 @@ class TransformUTMTo4326 {
   // ALWAYS_INLINE is required here.
   // inline didn't fix similar problem as with Transform4326ToUTM::calculateY() above.
   // Required: srid in [32601,32660] U [32701,32760]
-  ALWAYS_INLINE TransformUTMTo4326(unsigned const srid, double const x, double const y)
+  DEVICE ALWAYS_INLINE TransformUTMTo4326(unsigned const srid,
+                                          double const x,
+                                          double const y)
       : srid_(srid) {
     double const eta = (x - E0) / k0_A;
     small_eta_ = -1.0 / 12 <= eta && eta <= 1.0 / 12;
@@ -245,7 +252,7 @@ class TransformUTMTo4326 {
   }
 
   // lambda (longitude, degrees)
-  ALWAYS_INLINE double calculateX() const {
+  DEVICE ALWAYS_INLINE double calculateX() const {
     unsigned const zone = srid_ % 100u;
     double const lambda0 = zone * 6.0 - 183;
     double const sinh_eta = small_eta_ ? shared::fastSinh(eta_) : sinh(eta_);
@@ -253,7 +260,7 @@ class TransformUTMTo4326 {
   }
 
   // phi (latitude, degrees)
-  ALWAYS_INLINE double calculateY() const {
+  DEVICE ALWAYS_INLINE double calculateY() const {
 #if 1
     // https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system#Simplified_formulae
     double const cosh_eta = small_eta_ ? shared::fastCosh(eta_) : cosh(eta_);
@@ -266,7 +273,8 @@ class TransformUTMTo4326 {
 #else
     // Heavier calculation from Transverse Mercator with an accuracy of a few nanometers
     // by Karney 3 Feb 2011.  This does not make use of the constexpr delta Fourier
-    // coefficients used by Kawase 2011 above which appears to be more accurate.
+    // coefficients used by Kawase 2011 above which appears to be more accurate and
+    // probably faster.
     double const e = std::sqrt(f * (2 - f));
     double const taup =
         std::sin(xi_) / std::sqrt(sq(std::sinh(eta_)) + sq(std::cos(xi_)));

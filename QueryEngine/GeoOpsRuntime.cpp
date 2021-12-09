@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include <cmath>
 #include "Geospatial/Utm.h"
-#include "Shared/math_consts.h"
 
 extern "C" ALWAYS_INLINE double transform_4326_900913_x(const double x, double) {
   constexpr double a = 6378137;  // WGS84 Equatorial radius (m)

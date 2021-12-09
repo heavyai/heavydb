@@ -202,7 +202,7 @@ struct RangeKeyHandler {
       coords[0] = Geospatial::decompress_longitude_coord_geoint32(
           SUFFIX(fixed_width_int_decode_noinline)(
               join_column_iterators->ptr(), /*byte_width=*/4, 0));
-      coords[1] = Geospatial::decompress_lattitude_coord_geoint32(
+      coords[1] = Geospatial::decompress_latitude_coord_geoint32(
           SUFFIX(fixed_width_int_decode_noinline)(
               join_column_iterators->ptr(), /*byte_width=*/4, 1));
     } else {

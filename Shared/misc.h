@@ -17,6 +17,8 @@
 #ifndef SHARED_MISC_H
 #define SHARED_MISC_H
 
+#include "funcannotations.h"
+
 #include <array>
 #include <cstdint>
 #include <cstring>
@@ -194,7 +196,7 @@ inline bool contains(const T& container, const U& element) {
 
 // Calculate polynomial c0 + c1*x + c2*x^2 + ... + cn*x^n using Horner's method.
 template <typename... COEFFICIENTS>
-constexpr double horner(double const x, double const c0, COEFFICIENTS... c) {
+DEVICE constexpr double horner(double const x, double const c0, COEFFICIENTS... c) {
   if constexpr (sizeof...(COEFFICIENTS) == 0) {  // NOLINT
     return c0;
   } else {
@@ -204,13 +206,13 @@ constexpr double horner(double const x, double const c0, COEFFICIENTS... c) {
 }
 
 // OK for -0.15 <= x <= 0.15
-inline double fastAtanh(double const x) {
+DEVICE inline double fastAtanh(double const x) {
   // Mathematica: CoefficientList[Normal@Series[ArcTanh[x],{x,0,16}],x] // InputForm
   return x * horner(x * x, 1, 1 / 3., 1 / 5., 1 / 7., 1 / 9., 1 / 11., 1 / 13., 1 / 15.);
 }
 
 // OK for -1 <= x <= 1
-inline double fastCos(double const x) {
+DEVICE inline double fastCos(double const x) {
   // Mathematica: CoefficientList[Normal@Series[Cos[x],{x,0,16}],x] // InputForm
   // clang-format off
   return horner(x * x, 1, -1/2., 1/24., -1/720., 1/40320., -1/3628800.,
@@ -219,7 +221,7 @@ inline double fastCos(double const x) {
 }
 
 // OK for -1 <= x <= 1
-inline double fastCosh(double const x) {
+DEVICE inline double fastCosh(double const x) {
   // Mathematica: CoefficientList[Normal@Series[Cosh[x],{x,0,16}],x] // InputForm
   // clang-format off
   return horner(x * x, 1, 1/2., 1/24., 1/720., 1/40320., 1/3628800.,
@@ -228,7 +230,7 @@ inline double fastCosh(double const x) {
 }
 
 // OK for -1 <= x <= 1
-inline double fastSin(double const x) {
+DEVICE inline double fastSin(double const x) {
   // Mathematica: CoefficientList[Normal@Series[Sin[x],{x,0,16}],x] // InputForm
   // clang-format off
   return x * horner(x * x, 1, -1/6., 1/120., -1/5040., 1/362880.,
@@ -237,7 +239,7 @@ inline double fastSin(double const x) {
 }
 
 // OK for -1 <= x <= 1
-inline double fastSinh(double const x) {
+DEVICE inline double fastSinh(double const x) {
   // Mathematica: CoefficientList[Normal@Series[Sinh[x],{x,0,16}],x] // InputForm
   // clang-format off
   return x * horner(x * x, 1, 1/6., 1/120., 1/5040., 1/362880.,

@@ -33,7 +33,7 @@ int32_t get_compression_scheme(const SQLTypeInfo& ti) {
 uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
     return x ? Geospatial::compress_longitude_coord_geoint32(coord)
-             : Geospatial::compress_lattitude_coord_geoint32(coord);
+             : Geospatial::compress_latitude_coord_geoint32(coord);
   }
   return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
 }
@@ -41,7 +41,7 @@ uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
 uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
     return x ? Geospatial::compress_null_point_longitude_geoint32()
-             : Geospatial::compress_null_point_lattitude_geoint32();
+             : Geospatial::compress_null_point_latitude_geoint32();
   }
   double n = x ? NULL_ARRAY_DOUBLE : NULL_DOUBLE;
   auto u = *reinterpret_cast<uint64_t*>(may_alias_ptr(&n));
@@ -139,8 +139,7 @@ void decompress_geo_coords_geoint32(std::vector<T>& dec,
   dec.resize(num_coords);
   for (size_t i = 0; i < num_coords; i += 2) {
     dec[i] = Geospatial::decompress_longitude_coord_geoint32(compressed_coords[i]);
-    dec[i + 1] =
-        Geospatial::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]);
+    dec[i + 1] = Geospatial::decompress_latitude_coord_geoint32(compressed_coords[i + 1]);
   }
 }
 

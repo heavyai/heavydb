@@ -1,6 +1,8 @@
 #include "Geospatial/CompressionRuntime.h"
+#include "Geospatial/Utm.h"
 
 #ifndef __CUDACC__
+#include <string>
 #include "Shared/likely.h"
 #else
 #define LIKELY
@@ -51,21 +53,38 @@ DEVICE ALWAYS_INLINE bool tol_ge(const double x,
   return (x + tolerance) >= y;
 }
 
+namespace {
+enum Coords {
+  None = 0,
+  Y,  // 01
+  X,  // 10
+  XY  // 11
+};
+
+struct Point2D {
+  double x{std::numeric_limits<double>::quiet_NaN()};
+  double y{std::numeric_limits<double>::quiet_NaN()};
+};
+}  // namespace
+
+// x_index is always of the x coordinate, y is assumed to be at x_index + 1.
+template <Coords C>
 DEVICE ALWAYS_INLINE double decompress_coord(const int8_t* data,
-                                             const int32_t index,
-                                             const int32_t ic,
-                                             const bool x) {
+                                             const int32_t x_index,
+                                             const int32_t ic) {
+  static_assert(C == Coords::X || C == Coords::Y);
+  const int32_t adjusted_index = x_index + (C == Coords::Y);
   if (ic == COMPRESSION_GEOINT32) {
     auto compressed_coords = reinterpret_cast<const int32_t*>(data);
-    auto compressed_coord = compressed_coords[index];
-    if (x) {
+    auto compressed_coord = compressed_coords[adjusted_index];
+    if constexpr (C == Coords::X) {
       return Geospatial::decompress_longitude_coord_geoint32(compressed_coord);
     } else {
-      return Geospatial::decompress_lattitude_coord_geoint32(compressed_coord);
+      return Geospatial::decompress_latitude_coord_geoint32(compressed_coord);
     }
   }
   auto double_coords = reinterpret_cast<const double*>(data);
-  return double_coords[index];
+  return double_coords[adjusted_index];
 }
 
 DEVICE ALWAYS_INLINE int32_t compression_unit_size(const int32_t ic) {
@@ -75,69 +94,111 @@ DEVICE ALWAYS_INLINE int32_t compression_unit_size(const int32_t ic) {
   return 8;
 }
 
-DEVICE ALWAYS_INLINE double transform_coord(const double coord,
-                                            const int32_t isr,
-                                            const int32_t osr,
-                                            const bool x) {
-  if (isr == 4326) {
+template <Coords C>
+DEVICE ALWAYS_INLINE Point2D conv_4326_900913(const Point2D point) {
+  Point2D retval;
+  if constexpr (static_cast<bool>(C & Coords::X)) {
+    retval.x = conv_4326_900913_x(point.x);
+  }
+  if constexpr (static_cast<bool>(C & Coords::Y)) {
+    retval.y = conv_4326_900913_y(point.y);
+  }
+  return retval;
+}
+
+template <Coords C>
+DEVICE ALWAYS_INLINE Point2D conv_4326_utm(const Point2D point, const int32_t utm_srid) {
+  Point2D retval;
+  Transform4326ToUTM const utm(utm_srid, point.x, point.y);
+  if constexpr (static_cast<bool>(C & Coords::X)) {
+    retval.x = utm.calculateX();
+  }
+  if constexpr (static_cast<bool>(C & Coords::Y)) {
+    retval.y = utm.calculateY();
+  }
+  return retval;
+}
+
+template <Coords C>
+DEVICE ALWAYS_INLINE Point2D conv_utm_4326(const Point2D point, const int32_t utm_srid) {
+  Point2D retval;
+  TransformUTMTo4326 const wgs84(utm_srid, point.x, point.y);
+  if constexpr (static_cast<bool>(C & Coords::X)) {
+    retval.x = wgs84.calculateX();
+  }
+  if constexpr (static_cast<bool>(C & Coords::Y)) {
+    retval.y = wgs84.calculateY();
+  }
+  return retval;
+}
+
+// C = Coordinate(s) to calculate.
+// isr = input SRID
+// osr = output SRID
+// return: Point2D where only the coordinates C are calculated.
+template <Coords C>
+DEVICE ALWAYS_INLINE Point2D transform_point(const Point2D point,
+                                             const int32_t isr,
+                                             const int32_t osr) {
+  if (isr == osr || osr == 0) {
+    return point;
+  } else if (isr == 4326) {
     if (osr == 900913) {
-      // WGS 84 --> Web Mercator
-      if (x) {
-        return conv_4326_900913_x(coord);
-      } else {
-        return conv_4326_900913_y(coord);
-      }
+      return conv_4326_900913<C>(point);  // WGS 84 --> Web Mercator
+    } else if (is_utm_srid(osr)) {
+      return conv_4326_utm<C>(point, osr);  // WGS 84 --> UTM
+    }
+  } else if (is_utm_srid(isr)) {
+    if (osr == 4326) {
+      return conv_utm_4326<C>(point, osr);  // UTM --> WGS 84
     }
   }
-  return coord;
+#ifdef __CUDACC__
+  return {};  // (NaN,NaN)
+#else
+  throw std::runtime_error("Unhandled geo transformation from " + std::to_string(isr) +
+                           " to " + std::to_string(osr) + '.');
+#endif
 }
 
-DEVICE ALWAYS_INLINE double transform_coord_x(const double coord,
-                                              const int32_t isr,
-                                              const int32_t osr) {
-  if (isr == 4326) {
-    if (osr == 900913) {
-      // WGS 84 --> Web Mercator
-      return conv_4326_900913_x(coord);
+// Return false iff osr(x) depends only on isr(x), and same with y.
+DEVICE ALWAYS_INLINE bool x_and_y_are_dependent(const int32_t isr, const int32_t osr) {
+  return isr != osr && (is_utm_srid(isr) || is_utm_srid(osr));
+}
+
+// Point2D accessor handling on-the-fly decompression and transforms.
+// x_index is always of the x coordinate, y is assumed to be at x_index + 1.
+DEVICE ALWAYS_INLINE Point2D get_point(const int8_t* data,
+                                       const int32_t x_index,
+                                       const int32_t ic,
+                                       const int32_t isr,
+                                       const int32_t osr) {
+  Point2D const decompressed{decompress_coord<X>(data, x_index, ic),
+                             decompress_coord<Y>(data, x_index, ic)};
+  return transform_point<XY>(decompressed, isr, osr);
+}
+
+// Point2D accessor handling on-the-fly decompression and transforms for x or y.
+// x_index is always of the x coordinate, y is assumed to be at x_index + 1.
+template <Coords C>
+DEVICE ALWAYS_INLINE Point2D coord(const int8_t* data,
+                                   const int32_t x_index,
+                                   const int32_t ic,
+                                   const int32_t isr,
+                                   const int32_t osr) {
+  Point2D decompressed;
+  static_assert(C == Coords::X || C == Coords::Y, "Use get_point() instead of XY.");
+  if (x_and_y_are_dependent(isr, osr)) {
+    decompressed = {decompress_coord<X>(data, x_index, ic),
+                    decompress_coord<Y>(data, x_index, ic)};
+  } else {
+    if constexpr (C == Coords::X) {
+      decompressed.x = decompress_coord<X>(data, x_index, ic);
+    } else {
+      decompressed.y = decompress_coord<Y>(data, x_index, ic);
     }
   }
-  return coord;
-}
-
-DEVICE ALWAYS_INLINE double transform_coord_y(const double coord,
-                                              const int32_t isr,
-                                              const int32_t osr) {
-  if (isr == 4326) {
-    if (osr == 900913) {
-      // WGS 84 --> Web Mercator
-      return conv_4326_900913_y(coord);
-    }
-  }
-  return coord;
-}
-
-// X coord accessor handling on-the-fly decommpression and transforms
-DEVICE ALWAYS_INLINE double coord_x(const int8_t* data,
-                                    const int32_t index,
-                                    const int32_t ic,
-                                    const int32_t isr,
-                                    const int32_t osr) {
-  auto decompressed_coord_x = decompress_coord(data, index, ic, true);
-  auto decompressed_transformed_coord_x =
-      transform_coord(decompressed_coord_x, isr, osr, true);
-  return decompressed_transformed_coord_x;
-}
-
-// Y coord accessor handling on-the-fly decommpression and transforms
-DEVICE ALWAYS_INLINE double coord_y(const int8_t* data,
-                                    const int32_t index,
-                                    const int32_t ic,
-                                    const int32_t isr,
-                                    const int32_t osr) {
-  auto decompressed_coord_y = decompress_coord(data, index, ic, false);
-  auto decompressed_transformed_coord_y =
-      transform_coord(decompressed_coord_y, isr, osr, false);
-  return decompressed_transformed_coord_y;
+  return transform_point<C>(decompressed, isr, osr);
 }
 
 // coord accessor for compressed coords at location index
@@ -303,16 +364,13 @@ bool linestring_intersects_line(int8_t* l,
                                 int32_t ic1,
                                 int32_t isr1,
                                 int32_t osr) {
-  double e1x = coord_x(l, 0, ic1, isr1, osr);
-  double e1y = coord_y(l, 1, ic1, isr1, osr);
+  Point2D e1 = get_point(l, 0, ic1, isr1, osr);
   for (int64_t i = 2; i < lnum_coords; i += 2) {
-    double e2x = coord_x(l, i, ic1, isr1, osr);
-    double e2y = coord_y(l, i + 1, ic1, isr1, osr);
-    if (line_intersects_line(e1x, e1y, e2x, e2y, l1x, l1y, l2x, l2y)) {
+    Point2D e2 = get_point(l, i, ic1, isr1, osr);
+    if (line_intersects_line(e1.x, e1.y, e2.x, e2.y, l1x, l1y, l2x, l2y)) {
       return true;
     }
-    e1x = e2x;
-    e1y = e2y;
+    e1 = e2;
   }
   return false;
 }
@@ -327,11 +385,9 @@ bool ring_intersects_line(int8_t* ring,
                           int32_t ic1,
                           int32_t isr1,
                           int32_t osr) {
-  double e1x = coord_x(ring, ring_num_coords - 2, ic1, isr1, osr);
-  double e1y = coord_y(ring, ring_num_coords - 1, ic1, isr1, osr);
-  double e2x = coord_x(ring, 0, ic1, isr1, osr);
-  double e2y = coord_y(ring, 1, ic1, isr1, osr);
-  if (line_intersects_line(e1x, e1y, e2x, e2y, l1x, l1y, l2x, l2y)) {
+  Point2D e1 = get_point(ring, ring_num_coords - 2, ic1, isr1, osr);
+  Point2D e2 = get_point(ring, 0, ic1, isr1, osr);
+  if (line_intersects_line(e1.x, e1.y, e2.x, e2.y, l1x, l1y, l2x, l2y)) {
     return true;
   }
   return linestring_intersects_line(
@@ -348,16 +404,13 @@ bool linestring_intersects_linestring(int8_t* l,
                                       int32_t ic1,
                                       int32_t isr1,
                                       int32_t osr) {
-  double e1x = coord_x(l, 0, ic1, isr1, osr);
-  double e1y = coord_y(l, 1, ic1, isr1, osr);
+  Point2D e1 = get_point(l, 0, ic1, isr1, osr);
   for (int64_t i = 2; i < lnum_coords; i += 2) {
-    double e2x = coord_x(l, i, ic1, isr1, osr);
-    double e2y = coord_y(l, i + 1, ic1, isr1, osr);
-    if (line_intersects_line(e1x, e1y, e2x, e2y, l1x, l1y, l2x, l2y)) {
+    Point2D e2 = get_point(l, i, ic1, isr1, osr);
+    if (line_intersects_line(e1.x, e1.y, e2.x, e2.y, l1x, l1y, l2x, l2y)) {
       return true;
     }
-    e1x = e2x;
-    e1y = e2y;
+    e1 = e2;
   }
   return false;
 }
@@ -415,19 +468,14 @@ double distance_ring_linestring(int8_t* ring,
                                 double threshold) {
   double min_distance = 0.0;
 
-  double re1x = coord_x(ring, ring_num_coords - 2, ic1, isr1, osr);
-  double re1y = coord_y(ring, ring_num_coords - 1, ic1, isr1, osr);
+  Point2D re1 = get_point(ring, ring_num_coords - 2, ic1, isr1, osr);
   for (auto i = 0; i < ring_num_coords; i += 2) {
-    double re2x = coord_x(ring, i, ic1, isr1, osr);
-    double re2y = coord_y(ring, i + 1, ic1, isr1, osr);
-
-    double le1x = coord_x(l, 0, ic2, isr2, osr);
-    double le1y = coord_y(l, 1, ic2, isr2, osr);
+    Point2D re2 = get_point(ring, i, ic1, isr1, osr);
+    Point2D le1 = get_point(l, 0, ic2, isr2, osr);
     for (auto j = 2; j < lnum_coords; j += 2) {
-      double le2x = coord_x(l, j, ic2, isr2, osr);
-      double le2y = coord_y(l, j + 1, ic2, isr2, osr);
-
-      auto distance = distance_line_line(re1x, re1y, re2x, re2y, le1x, le1y, le2x, le2y);
+      Point2D le2 = get_point(l, j, ic2, isr2, osr);
+      auto distance =
+          distance_line_line(re1.x, re1.y, re2.x, re2.y, le1.x, le1.y, le2.x, le2.y);
       if ((i == 0 && j == 2) || min_distance > distance) {
         min_distance = distance;
         if (tol_zero(min_distance)) {
@@ -437,13 +485,10 @@ double distance_ring_linestring(int8_t* ring,
           return min_distance;
         }
       }
-      le1x = le2x;
-      le1y = le2y;
+      le1 = le2;
     }
-    re1x = re2x;
-    re1y = re2y;
+    re1 = re2;
   }
-
   return min_distance;
 }
 
@@ -459,20 +504,14 @@ double distance_ring_ring(int8_t* ring1,
                           int32_t osr,
                           double threshold) {
   double min_distance = 0.0;
-
-  double e11x = coord_x(ring1, ring1_num_coords - 2, ic1, isr1, osr);
-  double e11y = coord_y(ring1, ring1_num_coords - 1, ic1, isr1, osr);
+  Point2D e11 = get_point(ring1, ring1_num_coords - 2, ic1, isr1, osr);
   for (auto i = 0; i < ring1_num_coords; i += 2) {
-    double e12x = coord_x(ring1, i, ic1, isr1, osr);
-    double e12y = coord_y(ring1, i + 1, ic1, isr1, osr);
-
-    double e21x = coord_x(ring2, ring2_num_coords - 2, ic2, isr2, osr);
-    double e21y = coord_y(ring2, ring2_num_coords - 1, ic2, isr2, osr);
+    Point2D e12 = get_point(ring1, i, ic1, isr1, osr);
+    Point2D e21 = get_point(ring2, ring2_num_coords - 2, ic2, isr2, osr);
     for (auto j = 0; j < ring2_num_coords; j += 2) {
-      double e22x = coord_x(ring2, j, ic2, isr2, osr);
-      double e22y = coord_y(ring2, j + 1, ic2, isr2, osr);
-
-      auto distance = distance_line_line(e11x, e11y, e12x, e12y, e21x, e21y, e22x, e22y);
+      Point2D e22 = get_point(ring2, j, ic2, isr2, osr);
+      auto distance =
+          distance_line_line(e11.x, e11.y, e12.x, e12.y, e21.x, e21.y, e22.x, e22.y);
       if ((i == 0 && j == 0) || min_distance > distance) {
         min_distance = distance;
         if (tol_zero(min_distance)) {
@@ -482,13 +521,10 @@ double distance_ring_ring(int8_t* ring1,
           return min_distance;
         }
       }
-      e21x = e22x;
-      e21y = e22y;
+      e21 = e22;
     }
-    e11x = e12x;
-    e11y = e12y;
+    e11 = e12;
   }
-
   return min_distance;
 }
 
@@ -541,7 +577,7 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(const int8_t* poly,
 
   auto get_x_coord = [=](const auto data, const auto index) -> T {
     if constexpr (std::is_floating_point<T>::value) {
-      return coord_x(data, index, ic1, isr1, osr);
+      return get_point(data, index, ic1, isr1, osr).x;
     } else {
       return compressed_coord(data, index);
     }
@@ -550,9 +586,9 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(const int8_t* poly,
 
   auto get_y_coord = [=](const auto data, const auto index) -> T {
     if constexpr (std::is_floating_point<T>::value) {
-      return coord_y(data, index, ic1, isr1, osr);
+      return get_point(data, index, ic1, isr1, osr).y;
     } else {
-      return compressed_coord(data, index);
+      return compressed_coord(data, index + 1);
     }
     return T{};  // https://stackoverflow.com/a/64561686/2700898
   };
@@ -562,7 +598,7 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(const int8_t* poly,
 
   int64_t e0_index = 0;
   T e0x = get_x_coord(poly, e0_index * 2);
-  T e0y = get_y_coord(poly, (e0_index * 2) + 1);
+  T e0y = get_y_coord(poly, e0_index * 2);
 
   int64_t e1_index;
   T e1x, e1y;
@@ -572,7 +608,7 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(const int8_t* poly,
     // build the edge
     e1_index = edge % num_edges;
     e1x = get_x_coord(poly, e1_index * 2);
-    e1y = get_y_coord(poly, (e1_index * 2) + 1);
+    e1y = get_y_coord(poly, e1_index * 2);
 
     DEBUG_STMT(printf("edge 0: %ld : %f, %f\n", e0_index, (double)e0x, (double)e0y));
     DEBUG_STMT(printf("edge 1: %ld : %f, %f\n", e1_index, (double)e1x, (double)e1y));
@@ -673,58 +709,56 @@ DEVICE ALWAYS_INLINE bool polygon_contains_point(const int8_t* poly,
   bool horizontal_edge = false;
   bool yray_intersects = false;
 
-  double e1x = coord_x(poly, poly_num_coords - 2, ic1, isr1, osr);
-  double e1y = coord_y(poly, poly_num_coords - 1, ic1, isr1, osr);
+  Point2D e1 = get_point(poly, poly_num_coords - 2, ic1, isr1, osr);
   for (int64_t i = 0; i < poly_num_coords; i += 2) {
-    double e2x = coord_x(poly, i, ic1, isr1, osr);
-    double e2y = coord_y(poly, i + 1, ic1, isr1, osr);
+    Point2D e2 = get_point(poly, i, ic1, isr1, osr);
 
     // Check if point sits on an edge.
-    if (tol_zero(distance_point_line(px, py, e1x, e1y, e2x, e2y))) {
+    if (tol_zero(distance_point_line(px, py, e1.x, e1.y, e2.x, e2.y))) {
       return true;
     }
 
     // Before flipping the switch, check if xray hit a horizontal edge
     // - If an edge lays on the xray, one of the previous edges touched it
     //   so while moving horizontally we're in 'xray_touch' state
-    // - Last edge that touched xray at (e2x,e2y) didn't register intersection
+    // - Last edge that touched xray at (e2.x,e2.y) didn't register intersection
     // - Next edge that diverges from xray at (e1,e1y) will register intersection
     // - Can have several horizontal edges, one after the other, keep moving though
     //   in 'xray_touch' state without flipping the switch
-    horizontal_edge = (xray_touch != 0) && tol_eq(py, e1y) && tol_eq(py, e2y);
+    horizontal_edge = (xray_touch != 0) && tol_eq(py, e1.y) && tol_eq(py, e2.y);
 
     // Main probe: xray
     // Overshoot the xray to detect an intersection if there is one.
-    double xray = fmax(e2x, e1x) + 1.0;
+    double xray = fmax(e2.x, e1.x) + 1.0;
     if (px <= xray &&        // Only check for intersection if the edge is on the right
         !horizontal_edge &&  // Keep moving through horizontal edges
         line_intersects_line(px,  // xray shooting from point p to the right
                              py,
                              xray,
                              py,
-                             e1x,  // polygon edge
-                             e1y,
-                             e2x,
-                             e2y)) {
+                             e1.x,  // polygon edge
+                             e1.y,
+                             e2.x,
+                             e2.y)) {
       // Register intersection
       result = !result;
 
       // Adjust for special cases
       if (xray_touch == 0) {
-        if (tol_zero(distance_point_line(e2x, e2y, px, py, xray + 1.0, py))) {
+        if (tol_zero(distance_point_line(e2.x, e2.y, px, py, xray + 1.0, py))) {
           // Xray goes through the edge's second vertex, unregister intersection -
           // that vertex will be crossed again when we look at the following edge(s)
           result = !result;
           // Enter the xray-touch state:
           // (1) - xray was touched by the edge from above, (-1) from below
-          xray_touch = (e1y > py) ? 1 : -1;
+          xray_touch = (e1.y > py) ? 1 : -1;
         }
       } else {
         // Previous edge touched the xray, intersection hasn't been registered,
         // it has to be registered now if this edge continues across the xray.
         if (xray_touch > 0) {
           // Previous edge touched the xray from above
-          if (e2y <= py) {
+          if (e2.y <= py) {
             // Current edge crosses under xray: intersection is already registered
           } else {
             // Current edge just touched the xray and pulled up: unregister intersection
@@ -732,7 +766,7 @@ DEVICE ALWAYS_INLINE bool polygon_contains_point(const int8_t* poly,
           }
         } else {
           // Previous edge touched the xray from below
-          if (e2y > py) {
+          if (e2.y > py) {
             // Current edge crosses over xray: intersection is already registered
           } else {
             // Current edge just touched the xray and pulled down: unregister intersection
@@ -749,22 +783,21 @@ DEVICE ALWAYS_INLINE bool polygon_contains_point(const int8_t* poly,
     // error. Perform a simple secondary check for edge intersections to see if point is
     // outside.
     if (!yray_intersects) {  // Continue checking on yray until intersection is found
-      double yray = fmin(e2y, e1y) - 1.0;
+      double yray = fmin(e2.y, e1.y) - 1.0;
       if (yray <= py) {  // Only check for yray intersection if point P is above the edge
         yray_intersects = line_intersects_line(px,  // yray shooting from point P down
                                                py,
                                                px,
                                                yray,
-                                               e1x,  // polygon edge
-                                               e1y,
-                                               e2x,
-                                               e2y);
+                                               e1.x,  // polygon edge
+                                               e1.y,
+                                               e2.x,
+                                               e2.y);
       }
     }
 
     // Advance to the next vertex
-    e1x = e2x;
-    e1y = e2y;
+    e1 = e2;
   }
   if (!yray_intersects) {
     // yray has zero intersections - point is outside the polygon
@@ -786,22 +819,20 @@ bool polygon_contains_linestring(int8_t* poly,
                                  int32_t isr2,
                                  int32_t osr) {
   // Check that the first point is in the polygon
-  double l1x = coord_x(l, 0, ic2, isr2, osr);
-  double l1y = coord_y(l, 1, ic2, isr2, osr);
-  if (!polygon_contains_point(poly, poly_num_coords, l1x, l1y, ic1, isr1, osr)) {
+  Point2D l1 = get_point(l, 0, ic2, isr2, osr);
+  if (!polygon_contains_point(poly, poly_num_coords, l1.x, l1.y, ic1, isr1, osr)) {
     return false;
   }
 
   // Go through line segments and check if there are no intersections with poly edges,
   // i.e. linestring doesn't escape
   for (int32_t i = 2; i < lnum_coords; i += 2) {
-    double l2x = coord_x(l, i, ic2, isr2, osr);
-    double l2y = coord_y(l, i + 1, ic2, isr2, osr);
-    if (ring_intersects_line(poly, poly_num_coords, l1x, l1y, l2x, l2y, ic1, isr1, osr)) {
+    Point2D l2 = get_point(l, i, ic2, isr2, osr);
+    if (ring_intersects_line(
+            poly, poly_num_coords, l1.x, l1.y, l2.x, l2.y, ic1, isr1, osr)) {
       return false;
     }
-    l1x = l2x;
-    l1y = l2y;
+    l1 = l2;
   }
   return true;
 }
@@ -879,17 +910,13 @@ DEVICE ALWAYS_INLINE bool point_dwithin_box(int8_t* p1,
 
   // Point has to be uncompressed and transformed to output SR.
   // Bounding box has to be transformed to output SR.
-  auto px = coord_x(p1, 0, ic1, isr1, osr);
-  auto py = coord_y(p1, 1, ic1, isr1, osr);
-  if (
-      // point is left of box2:  px < box2.xmin - distance
-      px < transform_coord_x(bounds2[0], isr2, osr) - distance ||
-      // point is right of box2: px > box2.xmax + distance
-      px > transform_coord_x(bounds2[2], isr2, osr) + distance ||
-      // point is below box2:    py < box2.ymin - distance
-      py < transform_coord_y(bounds2[1], isr2, osr) - distance ||
-      // point is above box2:    py > box2.ymax + distance
-      py > transform_coord_y(bounds2[3], isr2, osr) + distance) {
+  Point2D p = get_point(p1, 0, ic1, isr1, osr);
+  Point2D const lb = transform_point<XY>({bounds2[0], bounds2[1]}, isr2, osr);
+  Point2D const rt = transform_point<XY>({bounds2[2], bounds2[3]}, isr2, osr);
+  if (p.x < lb.x - distance ||  // point is left of box2:  px < box2.xmin - distance
+      p.x > rt.x + distance ||  // point is right of box2: px > box2.xmax + distance
+      p.y < lb.y - distance ||  // point is below box2:    py < box2.ymin - distance
+      p.y > rt.y + distance) {  // point is above box2:    py > box2.ymax + distance
     return false;
   }
   return true;
@@ -913,19 +940,19 @@ DEVICE ALWAYS_INLINE bool box_dwithin_box(double* bounds1,
 
   // TODO: revise all other functions that process bounds
 
+  Point2D const lb1 = transform_point<XY>({bounds1[0], bounds1[1]}, isr1, osr);
+  Point2D const rt1 = transform_point<XY>({bounds1[2], bounds1[3]}, isr1, osr);
+  Point2D const lb2 = transform_point<XY>({bounds2[0], bounds2[1]}, isr2, osr);
+  Point2D const rt2 = transform_point<XY>({bounds2[2], bounds2[3]}, isr2, osr);
   if (
       // box1 is left of box2:  box1.xmax + distance < box2.xmin
-      transform_coord_x(bounds1[2], isr1, osr) + distance <
-          transform_coord_x(bounds2[0], isr2, osr) ||
+      rt1.x + distance < lb2.x ||
       // box1 is right of box2: box1.xmin - distance > box2.xmax
-      transform_coord_x(bounds1[0], isr1, osr) - distance >
-          transform_coord_x(bounds2[2], isr2, osr) ||
+      lb1.x - distance > rt2.x ||
       // box1 is below box2:    box1.ymax + distance < box2.ymin
-      transform_coord_y(bounds1[3], isr1, osr) + distance <
-          transform_coord_y(bounds2[1], isr2, osr) ||
+      rt1.y + distance < lb2.y ||
       // box1 is above box2:    box1.ymin - distance > box1.ymax
-      transform_coord_y(bounds1[1], isr1, osr) - distance >
-          transform_coord_y(bounds2[3], isr2, osr)) {
+      lb1.y - distance > rt2.y) {
     return false;
   }
   return true;
@@ -933,12 +960,12 @@ DEVICE ALWAYS_INLINE bool box_dwithin_box(double* bounds1,
 
 EXTENSION_NOINLINE
 double ST_X_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr) {
-  return coord_x(p, 0, ic, isr, osr);
+  return coord<X>(p, 0, ic, isr, osr).x;
 }
 
 EXTENSION_NOINLINE
 double ST_Y_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr) {
-  return coord_y(p, 1, ic, isr, osr);
+  return coord<Y>(p, 0, ic, isr, osr).y;
 }
 
 EXTENSION_NOINLINE
@@ -946,7 +973,7 @@ double ST_XMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
   auto num_coords = size / compression_unit_size(ic);
   double xmin = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
-    double x = coord_x(coords, i, ic, isr, osr);
+    double x = coord<X>(coords, i, ic, isr, osr).x;
     if (i == 0 || x < xmin) {
       xmin = x;
     }
@@ -958,9 +985,9 @@ EXTENSION_NOINLINE
 double ST_YMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t osr) {
   auto num_coords = size / compression_unit_size(ic);
   double ymin = 0.0;
-  for (int32_t i = 1; i < num_coords; i += 2) {
-    double y = coord_y(coords, i, ic, isr, osr);
-    if (i == 1 || y < ymin) {
+  for (int32_t i = 0; i < num_coords; i += 2) {
+    double y = coord<Y>(coords, i, ic, isr, osr).y;
+    if (i == 0 || y < ymin) {
       ymin = y;
     }
   }
@@ -972,7 +999,7 @@ double ST_XMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
   auto num_coords = size / compression_unit_size(ic);
   double xmax = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
-    double x = coord_x(coords, i, ic, isr, osr);
+    double x = coord<X>(coords, i, ic, isr, osr).x;
     if (i == 0 || x > xmax) {
       xmax = x;
     }
@@ -984,9 +1011,9 @@ EXTENSION_NOINLINE
 double ST_YMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t osr) {
   auto num_coords = size / compression_unit_size(ic);
   double ymax = 0.0;
-  for (int32_t i = 1; i < num_coords; i += 2) {
-    double y = coord_y(coords, i, ic, isr, osr);
-    if (i == 1 || y > ymax) {
+  for (int32_t i = 0; i < num_coords; i += 2) {
+    double y = coord<Y>(coords, i, ic, isr, osr).y;
+    if (i == 0 || y > ymax) {
       ymax = y;
     }
   }
@@ -995,22 +1022,22 @@ double ST_YMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
 
 EXTENSION_INLINE
 double ST_XMin_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
-  return transform_coord(bounds[0], isr, osr, true);
+  return transform_point<X>({bounds[0], bounds[1]}, isr, osr).x;
 }
 
 EXTENSION_INLINE
 double ST_YMin_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
-  return transform_coord(bounds[1], isr, osr, false);
+  return transform_point<Y>({bounds[0], bounds[1]}, isr, osr).y;
 }
 
 EXTENSION_INLINE
 double ST_XMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
-  return transform_coord(bounds[2], isr, osr, true);
+  return transform_point<X>({bounds[2], bounds[3]}, isr, osr).x;
 }
 
 EXTENSION_INLINE
 double ST_YMax_Bounds(double* bounds, int64_t size, int32_t isr, int32_t osr) {
-  return transform_coord(bounds[3], isr, osr, false);
+  return transform_point<Y>({bounds[2], bounds[3]}, isr, osr).y;
 }
 
 //
@@ -1028,22 +1055,18 @@ DEVICE ALWAYS_INLINE double length_linestring(int8_t* l,
 
   double length = 0.0;
 
-  double l0x = coord_x(l, 0, ic, isr, osr);
-  double l0y = coord_y(l, 1, ic, isr, osr);
-  double l2x = l0x;
-  double l2y = l0y;
+  Point2D l0 = get_point(l, 0, ic, isr, osr);
+  Point2D l2 = l0;
   for (int32_t i = 2; i < l_num_coords; i += 2) {
-    double l1x = l2x;
-    double l1y = l2y;
-    l2x = coord_x(l, i, ic, isr, osr);
-    l2y = coord_y(l, i + 1, ic, isr, osr);
-    double ldist = geodesic ? distance_in_meters(l1x, l1y, l2x, l2y)
-                            : distance_point_point(l1x, l1y, l2x, l2y);
+    Point2D l1 = l2;
+    l2 = get_point(l, i, ic, isr, osr);
+    double ldist = geodesic ? distance_in_meters(l1.x, l1.y, l2.x, l2.y)
+                            : distance_point_point(l1.x, l1.y, l2.x, l2.y);
     length += ldist;
   }
   if (check_closed) {
-    double ldist = geodesic ? distance_in_meters(l2x, l2y, l0x, l0y)
-                            : distance_point_point(l2x, l2y, l0x, l0y);
+    double ldist = geodesic ? distance_in_meters(l2.x, l2.y, l0.x, l0.y)
+                            : distance_point_point(l2.x, l2.y, l0.x, l0.y);
     length += ldist;
   }
   return length;
@@ -1222,16 +1245,12 @@ DEVICE ALWAYS_INLINE double area_ring(int8_t* ring,
 
   double area = 0.0;
 
-  double x1 = coord_x(ring, 0, ic, isr, osr);
-  double y1 = coord_y(ring, 1, ic, isr, osr);
-  double x2 = coord_x(ring, 2, ic, isr, osr);
-  double y2 = coord_y(ring, 3, ic, isr, osr);
+  Point2D p1 = get_point(ring, 0, ic, isr, osr);
+  Point2D p2 = get_point(ring, 2, ic, isr, osr);
   for (int32_t i = 4; i < ring_num_coords; i += 2) {
-    double x3 = coord_x(ring, i, ic, isr, osr);
-    double y3 = coord_y(ring, i + 1, ic, isr, osr);
-    area += area_triangle(x1, y1, x2, y2, x3, y3);
-    x2 = x3;
-    y2 = y3;
+    Point2D p3 = get_point(ring, i, ic, isr, osr);
+    area += area_triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+    p2 = p3;
   }
   return area;
 }
@@ -1342,8 +1361,9 @@ void ST_Centroid_Point(int8_t* p,
                        int32_t isr,
                        int32_t osr,
                        double* point_centroid) {
-  point_centroid[0] = coord_y(p, 0, ic, isr, osr);
-  point_centroid[1] = coord_x(p, 1, ic, isr, osr);
+  Point2D const centroid = get_point(p, 0, ic, isr, osr);
+  point_centroid[0] = centroid.x;
+  point_centroid[1] = centroid.y;
 }
 
 DEVICE ALWAYS_INLINE bool centroid_add_segment(double x1,
@@ -1373,26 +1393,22 @@ DEVICE ALWAYS_INLINE bool centroid_add_linestring(int8_t* l,
                                                   double* point_centroid_sum) {
   auto l_num_coords = lsize / compression_unit_size(ic);
   double length = 0.0;
-  double l0x = coord_x(l, 0, ic, isr, osr);
-  double l0y = coord_y(l, 1, ic, isr, osr);
-  double l2x = l0x;
-  double l2y = l0y;
+  Point2D const l0 = get_point(l, 0, ic, isr, osr);
+  Point2D l2 = l0;
   for (int32_t i = 2; i < l_num_coords; i += 2) {
-    double l1x = l2x;
-    double l1y = l2y;
-    l2x = coord_x(l, i, ic, isr, osr);
-    l2y = coord_y(l, i + 1, ic, isr, osr);
-    centroid_add_segment(l1x, l1y, l2x, l2y, &length, linestring_centroid_sum);
+    Point2D const l1 = l2;
+    l2 = get_point(l, i, ic, isr, osr);
+    centroid_add_segment(l1.x, l1.y, l2.x, l2.y, &length, linestring_centroid_sum);
   }
   if (l_num_coords > 4 && closed) {
     // Also add the closing segment between the last and the first points
-    centroid_add_segment(l2x, l2y, l0x, l0y, &length, linestring_centroid_sum);
+    centroid_add_segment(l2.x, l2.y, l0.x, l0.y, &length, linestring_centroid_sum);
   }
   *total_length += length;
   if (length == 0.0 && l_num_coords > 0) {
     *num_points += 1;
-    point_centroid_sum[0] += l0x;
-    point_centroid_sum[1] += l0y;
+    point_centroid_sum[0] += l0.x;
+    point_centroid_sum[1] += l0.y;
   }
   return true;
 }
@@ -1463,16 +1479,12 @@ DEVICE ALWAYS_INLINE bool centroid_add_ring(int8_t* ring,
     return false;
   }
 
-  double x1 = coord_x(ring, 0, ic, isr, osr);
-  double y1 = coord_y(ring, 1, ic, isr, osr);
-  double x2 = coord_x(ring, 2, ic, isr, osr);
-  double y2 = coord_y(ring, 3, ic, isr, osr);
+  Point2D p1 = get_point(ring, 0, ic, isr, osr);
+  Point2D p2 = get_point(ring, 2, ic, isr, osr);
   for (int32_t i = 4; i < ring_num_coords; i += 2) {
-    double x3 = coord_x(ring, i, ic, isr, osr);
-    double y3 = coord_y(ring, i + 1, ic, isr, osr);
-    centroid_add_triangle(x1, y1, x2, y2, x3, y3, sign, total_area2, cg3);
-    x2 = x3;
-    y2 = y3;
+    Point2D p3 = get_point(ring, i, ic, isr, osr);
+    centroid_add_triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, sign, total_area2, cg3);
+    p2 = p3;
   }
 
   centroid_add_linestring(ring,
@@ -1574,8 +1586,9 @@ void ST_Centroid_Polygon(int8_t* poly_coords,
     poly_centroid[0] = point_centroid_sum[0] / num_points;
     poly_centroid[1] = point_centroid_sum[1] / num_points;
   } else {
-    poly_centroid[0] = coord_x(poly_coords, 0, ic, isr, osr);
-    poly_centroid[1] = coord_y(poly_coords, 1, ic, isr, osr);
+    Point2D centroid = get_point(poly_coords, 0, ic, isr, osr);
+    poly_centroid[0] = centroid.x;
+    poly_centroid[1] = centroid.y;
   }
 }
 
@@ -1645,8 +1658,9 @@ void ST_Centroid_MultiPolygon(int8_t* mpoly_coords,
     mpoly_centroid[0] = point_centroid_sum[0] / num_points;
     mpoly_centroid[1] = point_centroid_sum[1] / num_points;
   } else {
-    mpoly_centroid[0] = coord_x(mpoly_coords, 0, ic, isr, osr);
-    mpoly_centroid[1] = coord_y(mpoly_coords, 1, ic, isr, osr);
+    Point2D centroid = get_point(mpoly_coords, 0, ic, isr, osr);
+    mpoly_centroid[0] = centroid.x;
+    mpoly_centroid[1] = centroid.y;
   }
 }
 
@@ -1664,11 +1678,9 @@ double ST_Distance_Point_Point(int8_t* p1,
                                int32_t ic2,
                                int32_t isr2,
                                int32_t osr) {
-  double p1x = coord_x(p1, 0, ic1, isr1, osr);
-  double p1y = coord_y(p1, 1, ic1, isr1, osr);
-  double p2x = coord_x(p2, 0, ic2, isr2, osr);
-  double p2y = coord_y(p2, 1, ic2, isr2, osr);
-  return distance_point_point(p1x, p1y, p2x, p2y);
+  Point2D const pt1 = get_point(p1, 0, ic1, isr1, osr);
+  Point2D const pt2 = get_point(p2, 0, ic2, isr2, osr);
+  return distance_point_point(pt1.x, pt1.y, pt2.x, pt2.y);
 }
 
 EXTENSION_NOINLINE
@@ -1681,11 +1693,9 @@ double ST_Distance_Point_Point_Squared(int8_t* p1,
                                        int32_t ic2,
                                        int32_t isr2,
                                        int32_t osr) {
-  double p1x = coord_x(p1, 0, ic1, isr1, osr);
-  double p1y = coord_y(p1, 1, ic1, isr1, osr);
-  double p2x = coord_x(p2, 0, ic2, isr2, osr);
-  double p2y = coord_y(p2, 1, ic2, isr2, osr);
-  return distance_point_point_squared(p1x, p1y, p2x, p2y);
+  Point2D const pt1 = get_point(p1, 0, ic1, isr1, osr);
+  Point2D const pt2 = get_point(p2, 0, ic2, isr2, osr);
+  return distance_point_point_squared(pt1.x, pt1.y, pt2.x, pt2.y);
 }
 
 EXTENSION_NOINLINE
@@ -1698,11 +1708,9 @@ double ST_Distance_Point_Point_Geodesic(int8_t* p1,
                                         int32_t ic2,
                                         int32_t isr2,
                                         int32_t osr) {
-  double p1x = coord_x(p1, 0, ic1, 4326, 4326);
-  double p1y = coord_y(p1, 1, ic1, 4326, 4326);
-  double p2x = coord_x(p2, 0, ic2, 4326, 4326);
-  double p2y = coord_y(p2, 1, ic2, 4326, 4326);
-  return distance_in_meters(p1x, p1y, p2x, p2y);
+  Point2D const pt1 = get_point(p1, 0, ic1, 4326, 4326);
+  Point2D const pt2 = get_point(p2, 0, ic2, 4326, 4326);
+  return distance_in_meters(pt1.x, pt1.y, pt2.x, pt2.y);
 }
 
 EXTENSION_NOINLINE
@@ -1716,12 +1724,10 @@ double ST_Distance_Point_LineString_Geodesic(int8_t* p,
                                              int32_t isr2,
                                              int32_t osr) {
   // Currently only statically indexed LineString is supported
-  double px = coord_x(p, 0, ic1, 4326, 4326);
-  double py = coord_y(p, 1, ic1, 4326, 4326);
+  Point2D const pt = get_point(p, 0, ic1, 4326, 4326);
   const auto lpoints = lsize / (2 * compression_unit_size(ic2));
-  double lx = coord_x(l, 2 * (lpoints - 1), ic2, 4326, 4326);
-  double ly = coord_y(l, 2 * (lpoints - 1) + 1, ic2, 4326, 4326);
-  return distance_in_meters(px, py, lx, ly);
+  Point2D const pl = get_point(l, 2 * (lpoints - 1), ic2, 4326, 4326);
+  return distance_in_meters(pt.x, pt.y, pl.x, pl.y);
 }
 
 EXTENSION_INLINE
@@ -1750,23 +1756,18 @@ DEVICE ALWAYS_INLINE double distance_point_linestring(int8_t* p,
                                                       int32_t osr,
                                                       bool check_closed,
                                                       double threshold) {
-  double px = coord_x(p, 0, ic1, isr1, osr);
-  double py = coord_y(p, 1, ic1, isr1, osr);
+  Point2D pt = get_point(p, 0, ic1, isr1, osr);
 
   auto l_num_coords = lsize / compression_unit_size(ic2);
 
-  double l1x = coord_x(l, 0, ic2, isr2, osr);
-  double l1y = coord_y(l, 1, ic2, isr2, osr);
-  double l2x = coord_x(l, 2, ic2, isr2, osr);
-  double l2y = coord_y(l, 3, ic2, isr2, osr);
+  Point2D l1 = get_point(l, 0, ic2, isr2, osr);
+  Point2D l2 = get_point(l, 2, ic2, isr2, osr);
 
-  double dist = distance_point_line(px, py, l1x, l1y, l2x, l2y);
+  double dist = distance_point_line(pt.x, pt.y, l1.x, l1.y, l2.x, l2.y);
   for (int32_t i = 4; i < l_num_coords; i += 2) {
-    l1x = l2x;  // advance one point
-    l1y = l2y;
-    l2x = coord_x(l, i, ic2, isr2, osr);
-    l2y = coord_y(l, i + 1, ic2, isr2, osr);
-    double ldist = distance_point_line(px, py, l1x, l1y, l2x, l2y);
+    l1 = l2;  // advance one point
+    l2 = get_point(l, i, ic2, isr2, osr);
+    double ldist = distance_point_line(pt.x, pt.y, l1.x, l1.y, l2.x, l2.y);
     if (dist > ldist) {
       dist = ldist;
     }
@@ -1776,9 +1777,8 @@ DEVICE ALWAYS_INLINE double distance_point_linestring(int8_t* p,
   }
   if (l_num_coords > 4 && check_closed) {
     // Also check distance to the closing edge between the first and the last points
-    l1x = coord_x(l, 0, ic2, isr2, osr);
-    l1y = coord_y(l, 1, ic2, isr2, osr);
-    double ldist = distance_point_line(px, py, l1x, l1y, l2x, l2y);
+    l1 = get_point(l, 0, ic2, isr2, osr);
+    double ldist = distance_point_line(pt.x, pt.y, l1.x, l1.y, l2.x, l2.y);
     if (dist > ldist) {
       dist = ldist;
     }
@@ -1835,9 +1835,9 @@ double ST_Distance_Point_Polygon(int8_t* p,
   }
   auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic2);
 
-  double px = coord_x(p, 0, ic1, isr1, osr);
-  double py = coord_y(p, 1, ic1, isr1, osr);
-  if (!polygon_contains_point(poly, exterior_ring_num_coords, px, py, ic2, isr2, osr)) {
+  Point2D pt = get_point(p, 0, ic1, isr1, osr);
+  if (!polygon_contains_point(
+          poly, exterior_ring_num_coords, pt.x, pt.y, ic2, isr2, osr)) {
     // Outside the exterior ring
     return ST_Distance_Point_ClosedLineString(
         p, psize, poly, exterior_ring_coords_size, ic1, isr1, ic2, isr2, osr, threshold);
@@ -1850,7 +1850,8 @@ double ST_Distance_Point_Polygon(int8_t* p,
     auto interior_ring_num_coords = poly_ring_sizes[r] * 2;
     auto interior_ring_coords_size =
         interior_ring_num_coords * compression_unit_size(ic2);
-    if (polygon_contains_point(poly, interior_ring_num_coords, px, py, ic2, isr2, osr)) {
+    if (polygon_contains_point(
+            poly, interior_ring_num_coords, pt.x, pt.y, ic2, isr2, osr)) {
       // Inside an interior ring
       return ST_Distance_Point_ClosedLineString(p,
                                                 psize,
@@ -1961,22 +1962,18 @@ double ST_Distance_LineString_LineString(int8_t* l1,
 
   double threshold_squared = threshold * threshold;
   double dist_squared = 0.0;
-  double l11x = coord_x(l1, 0, ic1, isr1, osr);
-  double l11y = coord_y(l1, 1, ic1, isr1, osr);
+  Point2D l11 = get_point(l1, 0, ic1, isr1, osr);
   for (int32_t i1 = 2; i1 < l1_num_coords; i1 += 2) {
-    double l12x = coord_x(l1, i1, ic1, isr1, osr);
-    double l12y = coord_y(l1, i1 + 1, ic1, isr1, osr);
-
-    double l21x = coord_x(l2, 0, ic2, isr2, osr);
-    double l21y = coord_y(l2, 1, ic2, isr2, osr);
+    Point2D l12 = get_point(l1, i1, ic1, isr1, osr);
+    Point2D l21 = get_point(l2, 0, ic2, isr2, osr);
     for (int32_t i2 = 2; i2 < l2_num_coords; i2 += 2) {
-      double l22x = coord_x(l2, i2, ic2, isr2, osr);
-      double l22y = coord_y(l2, i2 + 1, ic2, isr2, osr);
+      Point2D l22 = get_point(l2, i2, ic2, isr2, osr);
 
       // double ldist_squared =
       //    distance_line_line_squared(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
       // TODO: fix distance_line_line_squared
-      double ldist = distance_line_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
+      double ldist =
+          distance_line_line(l11.x, l11.y, l12.x, l12.y, l21.x, l21.y, l22.x, l22.y);
       double ldist_squared = ldist * ldist;
 
       if (i1 == 2 && i2 == 2) {
@@ -1994,12 +1991,10 @@ double ST_Distance_LineString_LineString(int8_t* l1,
         return sqrt(dist_squared);
       }
 
-      l21x = l22x;  // advance to the next point on l2
-      l21y = l22y;
+      l21 = l22;  // advance to the next point on l2
     }
 
-    l11x = l12x;  // advance to the next point on l1
-    l11y = l12y;
+    l11 = l12;  // advance to the next point on l1
   }
   return sqrt(dist_squared);
 }
@@ -2989,32 +2984,26 @@ DEVICE ALWAYS_INLINE double max_distance_point_linestring(int8_t* p,
                                                           int32_t osr,
                                                           bool check_closed) {
   // TODO: switch to squared distances
-  double px = coord_x(p, 0, ic1, isr1, osr);
-  double py = coord_y(p, 1, ic1, isr1, osr);
+  Point2D pt = get_point(p, 0, ic1, isr1, osr);
 
   auto l_num_coords = lsize / compression_unit_size(ic2);
 
-  double l1x = coord_x(l, 0, ic2, isr2, osr);
-  double l1y = coord_y(l, 1, ic2, isr2, osr);
-  double l2x = coord_x(l, 2, ic2, isr2, osr);
-  double l2y = coord_y(l, 3, ic2, isr2, osr);
+  Point2D l1 = get_point(l, 0, ic2, isr2, osr);
+  Point2D l2 = get_point(l, 2, ic2, isr2, osr);
 
-  double max_dist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
+  double max_dist = max_distance_point_line(pt.x, pt.y, l1.x, l1.y, l2.x, l2.y);
   for (int32_t i = 4; i < l_num_coords; i += 2) {
-    l1x = l2x;  // advance one point
-    l1y = l2y;
-    l2x = coord_x(l, i, ic2, isr2, osr);
-    l2y = coord_y(l, i + 1, ic2, isr2, osr);
-    double ldist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
+    l1 = l2;  // advance one point
+    l2 = get_point(l, i, ic2, isr2, osr);
+    double ldist = max_distance_point_line(pt.x, pt.y, l1.x, l1.y, l2.x, l2.y);
     if (max_dist < ldist) {
       max_dist = ldist;
     }
   }
   if (l_num_coords > 4 && check_closed) {
     // Also check distance to the closing edge between the first and the last points
-    l1x = coord_x(l, 0, ic2, isr2, osr);
-    l1y = coord_y(l, 1, ic2, isr2, osr);
-    double ldist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
+    l1 = get_point(l, 0, ic2, isr2, osr);
+    double ldist = max_distance_point_line(pt.x, pt.y, l1.x, l1.y, l2.x, l2.y);
     if (max_dist < ldist) {
       max_dist = ldist;
     }
@@ -3066,12 +3055,10 @@ bool ST_Contains_Point_Point(int8_t* p1,
                              int32_t ic2,
                              int32_t isr2,
                              int32_t osr) {
-  double p1x = coord_x(p1, 0, ic1, isr1, osr);
-  double p1y = coord_y(p1, 1, ic1, isr1, osr);
-  double p2x = coord_x(p2, 0, ic2, isr2, osr);
-  double p2y = coord_y(p2, 1, ic2, isr2, osr);
+  Point2D const pt1 = get_point(p1, 0, ic1, isr1, osr);
+  Point2D const pt2 = get_point(p2, 0, ic2, isr2, osr);
   double tolerance = tol(ic1, ic2);
-  return tol_eq(p1x, p2x, tolerance) && tol_eq(p1y, p2y, tolerance);
+  return tol_eq(pt1.x, pt2.x, tolerance) && tol_eq(pt1.y, pt2.y, tolerance);
 }
 
 EXTENSION_NOINLINE
@@ -3086,21 +3073,19 @@ bool ST_Contains_Point_LineString(int8_t* p,
                                   int32_t ic2,
                                   int32_t isr2,
                                   int32_t osr) {
-  double px = coord_x(p, 0, ic1, isr1, osr);
-  double py = coord_y(p, 1, ic1, isr1, osr);
+  Point2D const pt = get_point(p, 0, ic1, isr1, osr);
 
   if (lbounds) {
-    if (tol_eq(px, lbounds[0]) && tol_eq(py, lbounds[1]) && tol_eq(px, lbounds[2]) &&
-        tol_eq(py, lbounds[3])) {
+    if (tol_eq(pt.x, lbounds[0]) && tol_eq(pt.y, lbounds[1]) &&
+        tol_eq(pt.x, lbounds[2]) && tol_eq(pt.y, lbounds[3])) {
       return true;
     }
   }
 
   auto l_num_coords = lsize / compression_unit_size(ic2);
   for (int i = 0; i < l_num_coords; i += 2) {
-    double lx = coord_x(l, i, ic2, isr2, osr);
-    double ly = coord_y(l, i + 1, ic2, isr2, osr);
-    if (tol_eq(px, lx) && tol_eq(py, ly)) {
+    Point2D pl = get_point(l, i, ic2, isr2, osr);
+    if (tol_eq(pt.x, pl.x) && tol_eq(pt.y, pl.y)) {
       continue;
     }
     return false;
@@ -3193,10 +3178,8 @@ DEVICE ALWAYS_INLINE bool Contains_Polygon_Point_Impl(const int8_t* poly_coords,
                                                       const int32_t osr) {
   if (poly_bounds) {
     // TODO: codegen
-    if (!box_contains_point(poly_bounds,
-                            poly_bounds_size,
-                            coord_x(p, 0, ic2, isr2, osr),
-                            coord_y(p, 1, ic2, isr2, osr))) {
+    Point2D const pt = get_point(p, 0, ic2, isr2, osr);
+    if (!box_contains_point(poly_bounds, poly_bounds_size, pt.x, pt.y)) {
       DEBUG_STMT(printf("Bounding box does not contain point, exiting.\n"));
       return false;
     }
@@ -3204,7 +3187,7 @@ DEVICE ALWAYS_INLINE bool Contains_Polygon_Point_Impl(const int8_t* poly_coords,
 
   auto get_x_coord = [=]() -> T {
     if constexpr (std::is_floating_point<T>::value) {
-      return coord_x(p, 0, ic2, isr2, osr);
+      return get_point(p, 0, ic2, isr2, osr).x;
     } else {
       return compressed_coord(p, 0);
     }
@@ -3213,7 +3196,7 @@ DEVICE ALWAYS_INLINE bool Contains_Polygon_Point_Impl(const int8_t* poly_coords,
 
   auto get_y_coord = [=]() -> T {
     if constexpr (std::is_floating_point<T>::value) {
-      return coord_y(p, 1, ic2, isr2, osr);
+      return get_point(p, 0, ic2, isr2, osr).y;
     } else {
       return compressed_coord(p, 1);
     }
@@ -3416,10 +3399,8 @@ DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_Point_Impl(
   // TODO: mpoly_bounds could contain individual bounding boxes too:
   // first two points - box for the entire multipolygon, then a pair for each polygon
   if (mpoly_bounds) {
-    if (!box_contains_point(mpoly_bounds,
-                            mpoly_bounds_size,
-                            coord_x(p, 0, ic2, isr2, osr),
-                            coord_y(p, 1, ic2, isr2, osr))) {
+    Point2D const pt = get_point(p, 0, ic2, isr2, osr);
+    if (!box_contains_point(mpoly_bounds, mpoly_bounds_size, pt.x, pt.y)) {
       return false;
     }
   }
@@ -3624,11 +3605,9 @@ bool ST_Intersects_Point_LineString(int8_t* p,
                                     int32_t ic2,
                                     int32_t isr2,
                                     int32_t osr) {
-  double px = coord_x(p, 0, ic1, isr1, osr);
-  double py = coord_y(p, 1, ic1, isr1, osr);
-
   if (lbounds) {
-    if (!box_contains_point(lbounds, lbounds_size, px, py)) {
+    Point2D const pt = get_point(p, 0, ic1, isr1, osr);
+    if (!box_contains_point(lbounds, lbounds_size, pt.x, pt.y)) {
       return false;
     }
   }
@@ -4167,6 +4146,7 @@ int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
   return OmniSci_Geo_PolyRenderGroup(render_group);
 }
 
+// TODO Update for UTM. This assumes x and y are independent, which is not true for UTM.
 EXTENSION_NOINLINE
 double convert_meters_to_pixel_width(const double meters,
                                      int8_t* p,
@@ -4180,15 +4160,15 @@ double convert_meters_to_pixel_width(const double meters,
                                      const double min_width) {
   const double const1 = 0.017453292519943295769236907684886;
   const double const2 = 6372797.560856;
-  const auto lon = decompress_coord(p, 0, ic, true);
-  const auto lat = decompress_coord(p, 1, ic, false);
+  const auto lon = decompress_coord<X>(p, 0, ic);
+  const auto lat = decompress_coord<Y>(p, 0, ic);
   double t1 = sinf(meters / (2.0 * const2));
   double t2 = cosf(const1 * lat);
   const double newlon = lon - (2.0 * asinf(t1 / t2)) / const1;
-  t1 = transform_coord(lon, isr, osr, true);
-  t2 = transform_coord(newlon, isr, osr, true);
-  const double min_domain_x = transform_coord(min_lon, isr, osr, true);
-  const double max_domain_x = transform_coord(max_lon, isr, osr, true);
+  t1 = transform_point<X>({lon, {}}, isr, osr).x;
+  t2 = transform_point<X>({newlon, {}}, isr, osr).x;
+  const double min_domain_x = transform_point<X>({min_lon, {}}, isr, osr).x;
+  const double max_domain_x = transform_point<X>({max_lon, {}}, isr, osr).x;
   const double domain_diff = max_domain_x - min_domain_x;
   t1 = ((t1 - min_domain_x) / domain_diff) * static_cast<double>(img_width);
   t2 = ((t2 - min_domain_x) / domain_diff) * static_cast<double>(img_width);
@@ -4198,6 +4178,7 @@ double convert_meters_to_pixel_width(const double meters,
   return (sz < min_width ? min_width : sz);
 }
 
+// TODO Update for UTM. This assumes x and y are independent, which is not true for UTM.
 EXTENSION_NOINLINE
 double convert_meters_to_pixel_height(const double meters,
                                       int8_t* p,
@@ -4211,14 +4192,14 @@ double convert_meters_to_pixel_height(const double meters,
                                       const double min_height) {
   const double const1 = 0.017453292519943295769236907684886;
   const double const2 = 6372797.560856;
-  const auto lat = decompress_coord(p, 1, ic, false);
+  const auto lat = decompress_coord<Y>(p, 0, ic);
   const double latdiff = meters / (const1 * const2);
   const double newlat =
       (lat < 0) ? lat + latdiff : lat - latdiff;  // assumes a lat range of [-90, 90]
-  double t1 = transform_coord(lat, isr, osr, false);
-  double t2 = transform_coord(newlat, isr, osr, false);
-  const double min_domain_y = transform_coord(min_lat, isr, osr, false);
-  const double max_domain_y = transform_coord(max_lat, isr, osr, false);
+  double t1 = transform_point<Y>({{}, lat}, isr, osr).y;
+  double t2 = transform_point<Y>({{}, newlat}, isr, osr).y;
+  const double min_domain_y = transform_point<Y>({{}, min_lat}, isr, osr).y;
+  const double max_domain_y = transform_point<Y>({{}, max_lat}, isr, osr).y;
   const double domain_diff = max_domain_y - min_domain_y;
   t1 = ((t1 - min_domain_y) / domain_diff) * static_cast<double>(img_height);
   t2 = ((t2 - min_domain_y) / domain_diff) * static_cast<double>(img_height);
@@ -4235,8 +4216,8 @@ EXTENSION_NOINLINE bool is_point_in_view(int8_t* p,
                                          const double max_lon,
                                          const double min_lat,
                                          const double max_lat) {
-  const auto lon = decompress_coord(p, 0, ic, true);
-  const auto lat = decompress_coord(p, 1, ic, false);
+  const auto lon = decompress_coord<X>(p, 0, ic);
+  const auto lat = decompress_coord<Y>(p, 0, ic);
   return !(lon < min_lon || lon > max_lon || lat < min_lat || lat > max_lat);
 }
 
@@ -4250,8 +4231,8 @@ EXTENSION_NOINLINE bool is_point_size_in_view(int8_t* p,
                                               const double max_lat) {
   const double const1 = 0.017453292519943295769236907684886;
   const double const2 = 6372797.560856;
-  const auto lon = decompress_coord(p, 0, ic, true);
-  const auto lat = decompress_coord(p, 1, ic, false);
+  const auto lon = decompress_coord<X>(p, 0, ic);
+  const auto lat = decompress_coord<Y>(p, 0, ic);
   const double latdiff = meters / (const1 * const2);
   const double t1 = sinf(meters / (2.0 * const2));
   const double t2 = cosf(const1 * lat);

@@ -121,7 +121,7 @@ get_bucket_key_for_range_compressed_impl(const int8_t* range,
         bucket_size);
   } else {
     return get_bucket_key_for_value_impl(
-        Geospatial::decompress_lattitude_coord_geoint32(range_ptr[range_component_index]),
+        Geospatial::decompress_latitude_coord_geoint32(range_ptr[range_component_index]),
         bucket_size);
   }
 }

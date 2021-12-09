@@ -2779,6 +2779,19 @@ TEST(GeoSpatial, UTMTransform) {
   }
 }
 
+TEST(GeoSpatial, UTMTransformCoords) {
+  constexpr double eps = 1e-10;
+  // Length of 1-degree arc along equator centered at longitude=3 according to UTM.
+  constexpr double one_degree_in_meters = 111276.3876347362;
+  char const* const query =
+      "SELECT ST_LENGTH(ST_TRANSFORM(ST_GeogFromText('LINESTRING(2.5 0, 3.5 0)', 4326), "
+      "32601));";
+  for (auto const dt : {ExecutorDeviceType::GPU, ExecutorDeviceType::CPU}) {
+    SKIP_NO_GPU();
+    ASSERT_NEAR(one_degree_in_meters, v<double>(run_simple_agg(query, dt, false)), eps);
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(GeospatialMultiFragExecutionTests,
                          GeoSpatialMultiFragTestTablesFixture,
                          ::testing::Values(true, false));

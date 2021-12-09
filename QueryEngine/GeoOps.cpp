@@ -33,7 +33,7 @@ extern "C" DEVICE RUNTIME_EXPORT double decompress_x_coord_geoint(const int32_t 
 }
 
 extern "C" DEVICE RUNTIME_EXPORT double decompress_y_coord_geoint(const int32_t coord) {
-  return Geospatial::decompress_lattitude_coord_geoint32(coord);
+  return Geospatial::decompress_latitude_coord_geoint32(coord);
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t compress_x_coord_geoint(const double coord) {
@@ -41,7 +41,7 @@ extern "C" DEVICE RUNTIME_EXPORT int32_t compress_x_coord_geoint(const double co
 }
 
 extern "C" DEVICE RUNTIME_EXPORT int32_t compress_y_coord_geoint(const double coord) {
-  return static_cast<int32_t>(Geospatial::compress_lattitude_coord_geoint32(coord));
+  return static_cast<int32_t>(Geospatial::compress_latitude_coord_geoint32(coord));
 }
 
 #endif
