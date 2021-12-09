@@ -456,23 +456,17 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
   }
 }
 
-TPlanResult Calcite::process(
-    query_state::QueryStateProxy query_state_proxy,
-    std::string sql_string,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-    const bool legacy_syntax,
-    const bool is_explain,
-    const bool is_view_optimize,
-    const bool check_privileges,
-    const std::string& calcite_session_id) {
+TPlanResult Calcite::process(query_state::QueryStateProxy query_state_proxy,
+                             std::string sql_string,
+                             const TQueryParsingOption& query_parsing_option,
+                             const TOptimizationOption& optimization_option,
+                             const std::string& calcite_session_id) {
   TPlanResult result = processImpl(query_state_proxy,
                                    std::move(sql_string),
-                                   filter_push_down_info,
-                                   legacy_syntax,
-                                   is_explain,
-                                   is_view_optimize,
+                                   query_parsing_option,
+                                   optimization_option,
                                    calcite_session_id);
-  if (check_privileges && !is_explain) {
+  if (query_parsing_option.check_privileges && !query_parsing_option.is_explain) {
     checkAccessedObjectsPrivileges(query_state_proxy, result);
   }
   return result;
@@ -537,14 +531,11 @@ std::vector<std::string> Calcite::get_db_objects(const std::string ra) {
   return v_db_obj;
 }
 
-TPlanResult Calcite::processImpl(
-    query_state::QueryStateProxy query_state_proxy,
-    const std::string sql_string,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-    const bool legacy_syntax,
-    const bool is_explain,
-    const bool is_view_optimize,
-    const std::string& calcite_session_id) {
+TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
+                                 const std::string sql_string,
+                                 const TQueryParsingOption& query_parsing_option,
+                                 const TOptimizationOption& optimization_option,
+                                 const std::string& calcite_session_id) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   const auto& user_session_info = query_state_proxy.getQueryState().getConstSessionInfo();
   const auto& cat = user_session_info->getCatalog();
@@ -571,10 +562,8 @@ TPlanResult Calcite::processImpl(
                                    : calcite_session_id,
                                catalog,
                                sql_string,
-                               filter_push_down_info,
-                               legacy_syntax,
-                               is_explain,
-                               is_view_optimize,
+                               query_parsing_option,
+                               optimization_option,
                                trestrictions);
         clientP.second->close();
       });
@@ -690,4 +679,25 @@ void Calcite::setRuntimeExtensionFunctions(
   } else {
     LOG(FATAL) << "Not routing to Calcite, server is not up";
   }
+}
+
+TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
+                                                          bool is_explain,
+                                                          bool check_privileges) {
+  TQueryParsingOption query_parsing_info;
+  query_parsing_info.legacy_syntax = legacy_syntax;
+  query_parsing_info.is_explain = is_explain;
+  query_parsing_info.check_privileges = check_privileges;
+  return query_parsing_info;
+}
+
+TOptimizationOption Calcite::getCalciteOptimizationOption(
+    bool is_view_optimize,
+    bool enable_watchdog,
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info) {
+  TOptimizationOption optimization_option;
+  optimization_option.filter_push_down_info = filter_push_down_info;
+  optimization_option.is_view_optimize = is_view_optimize;
+  optimization_option.enable_watchdog = enable_watchdog;
+  return optimization_option;
 }

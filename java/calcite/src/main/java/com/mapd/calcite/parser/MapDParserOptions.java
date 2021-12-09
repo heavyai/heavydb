@@ -32,15 +32,18 @@ public final class MapDParserOptions {
   private boolean legacySyntax;
   private boolean isExplain;
   private boolean isViewOptimizeEnabled;
+  private boolean isWatchdogEnabled;
 
   public MapDParserOptions(List<FilterPushDownInfo> inFilterPushDownInfo,
           boolean inLegacySyntax,
           boolean inIsExplain,
-          boolean inIsViewOptimzeEnabled) {
+          boolean inIsViewOptimzeEnabled,
+          boolean inWatchdogEnabled) {
     filterPushDownInfo = inFilterPushDownInfo;
     legacySyntax = inLegacySyntax;
     isExplain = inIsExplain;
     isViewOptimizeEnabled = inIsViewOptimzeEnabled;
+    isWatchdogEnabled = inWatchdogEnabled;
   }
 
   public MapDParserOptions() {
@@ -48,6 +51,7 @@ public final class MapDParserOptions {
     legacySyntax = true;
     isExplain = false;
     isViewOptimizeEnabled = false;
+    isWatchdogEnabled = false;
   }
 
   /**
@@ -117,5 +121,13 @@ public final class MapDParserOptions {
    */
   public void setViewOptimizeEnabled(boolean isViewOptimizeEnabled) {
     this.isViewOptimizeEnabled = isViewOptimizeEnabled;
+  }
+
+  public boolean isWatchdogEnabled() {
+    return isWatchdogEnabled;
+  }
+
+  public void setWatchdogEnabled(boolean isWatchdogEnabled) {
+    this.isWatchdogEnabled = isWatchdogEnabled;
   }
 }
