@@ -107,6 +107,19 @@ std::string to_string(std::string&& v) {
   return std::move(v);
 }
 
+std::pair<std::string_view, const char*> substring(const std::string& str,
+                                                   size_t substr_length) {
+  // return substring with a post_fix
+  // assume input str is valid and we perform substring starting from str's initial pos
+  // (=0)
+  const auto str_size = str.size();
+  if (substr_length >= str_size) {
+    return {str, ""};
+  }
+  std::string_view substr(str.c_str(), substr_length);
+  return {substr, "..."};
+}
+
 std::string generate_random_string(const size_t len) {
   static char charset[] =
       "0123456789"

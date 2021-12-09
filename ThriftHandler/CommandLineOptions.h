@@ -217,6 +217,7 @@ extern float g_vacuum_min_selectivity;
 extern bool g_read_only;
 extern bool g_enable_automatic_ir_metadata;
 extern size_t g_enable_parallel_linearization;
+extern size_t g_max_log_length;
 #ifdef ENABLE_MEMKIND
 extern bool g_enable_tiered_cpu_mem;
 extern size_t g_pmem_size;

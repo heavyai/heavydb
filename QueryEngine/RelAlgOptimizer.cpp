@@ -333,13 +333,9 @@ void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
       VLOG(1) << "Node (ID: " << (*nodeIt)->getId() << ") deleted.";
       if (logger::fast_logging_check(logger::Severity::DEBUG2)) {
         auto node_str = (*nodeIt)->toString();
-        constexpr size_t max_node_print_len{500};
-        const size_t node_str_len = node_str.size();
-        if (node_str_len > max_node_print_len) {
-          node_str = node_str.substr(0, max_node_print_len) + "...";
-        }
+        auto [node_substr, post_fix] = ::substring(node_str, g_max_log_length);
         VLOG(2) << "Deleted Node (ID: " << (*nodeIt)->getId()
-                << ") contents: " << node_str;
+                << ") contents: " << node_substr << post_fix;
       }
       nodeIt->reset();
     }
@@ -827,8 +823,10 @@ void add_new_indices_for(
     CHECK(node_sz_it != orig_node_sizes.end());
     const auto node_size = node_sz_it->second;
     CHECK_GT(node_size, live_fields.size());
-    LOG(INFO) << node->toString() << " eliminated " << node_size - live_fields.size()
-              << " columns.";
+    auto node_str = node->toString();
+    auto [node_substr, post_fix] = ::substring(node_str, g_max_log_length);
+    LOG(INFO) << node_substr << post_fix << " eliminated "
+              << node_size - live_fields.size() << " columns.";
     std::vector<size_t> ordered_indices(live_fields.begin(), live_fields.end());
     std::sort(ordered_indices.begin(), ordered_indices.end());
     for (size_t i = 0; i < ordered_indices.size(); ++i) {
@@ -1494,13 +1492,9 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
                 << "ID=" << folded_filter->getId();
         if (logger::fast_logging_check(logger::Severity::DEBUG2)) {
           auto node_str = folded_filter->toString();
-          constexpr size_t max_node_print_len{500};
-          const size_t node_str_len = node_str.size();
-          if (node_str_len > max_node_print_len) {
-            node_str = node_str.substr(0, max_node_print_len) + "...";
-          }
+          auto [node_substr, post_fix] = ::substring(node_str, g_max_log_length);
           VLOG(2) << "Folded Node (ID: " << folded_filter->getId()
-                  << ") contents: " << node_str;
+                  << ") contents: " << node_substr << post_fix;
         }
         std::vector<std::unique_ptr<const RexScalar>> operands;
         operands.emplace_back(folded_filter->getAndReleaseCondition());
