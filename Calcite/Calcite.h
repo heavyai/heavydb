@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include "gen-cpp/calciteserver_types.h"
 #include "gen-cpp/extension_functions_types.h"
 
 #include <thrift/transport/TTransport.h>
@@ -72,11 +73,8 @@ class Calcite final {
   // sql_string may differ from what is in query_state due to legacy_syntax option.
   TPlanResult process(query_state::QueryStateProxy,
                       std::string sql_string,
-                      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-                      const bool legacy_syntax,
-                      const bool is_explain,
-                      const bool is_view_optimize,
-                      const bool check_privileges,
+                      const TQueryParsingOption& query_parsing_option,
+                      const TOptimizationOption& optimization_option,
                       const std::string& calcite_session_id = "");
   TPlanResult process(const std::string& user,
                       const std::string& db_name,
@@ -105,6 +103,13 @@ class Calcite final {
                                     bool isruntime = true);
   std::string const getInternalSessionProxyUserName() { return kCalciteUserName; }
   std::string const getInternalSessionProxyPassword() { return kCalciteUserPassword; }
+  TQueryParsingOption getCalciteQueryParsingOption(bool legacy_syntax,
+                                                   bool is_explain,
+                                                   bool check_privileges);
+  TOptimizationOption getCalciteOptimizationOption(
+      bool is_view_optimize,
+      bool enable_watchdog,
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info);
 
   void setSchema(const std::string schema_json);
 
@@ -121,10 +126,8 @@ class Calcite final {
                  const std::string& udf_filename);
   TPlanResult processImpl(query_state::QueryStateProxy,
                           std::string sql_string,
-                          const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-                          const bool legacy_syntax,
-                          const bool is_explain,
-                          const bool is_view_optimize,
+                          const TQueryParsingOption& query_parsing_option,
+                          const TOptimizationOption& optimization_option,
                           const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);

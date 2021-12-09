@@ -28,7 +28,9 @@ import com.omnisci.thrift.calciteserver.TCompletionHint;
 import com.omnisci.thrift.calciteserver.TCompletionHintType;
 import com.omnisci.thrift.calciteserver.TExtArgumentType;
 import com.omnisci.thrift.calciteserver.TFilterPushDownInfo;
+import com.omnisci.thrift.calciteserver.TOptimizationOption;
 import com.omnisci.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.TQueryParsingOption;
 import com.omnisci.thrift.calciteserver.TRestriction;
 import com.omnisci.thrift.calciteserver.TUserDefinedFunction;
 import com.omnisci.thrift.calciteserver.TUserDefinedTableFunction;
@@ -137,10 +139,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
           String session,
           String catalog,
           String queryText,
-          java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo,
-          boolean legacySyntax,
-          boolean isExplain,
-          boolean isViewOptimize,
+          TQueryParsingOption queryParsingOption,
+          TOptimizationOption optimizationOption,
           TRestriction restriction,
           String schemaJson) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
@@ -186,12 +186,15 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     try {
       final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
               new ArrayList<>();
-      for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
+      for (final TFilterPushDownInfo req : optimizationOption.filter_push_down_info) {
         filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
                 req.input_prev, req.input_start, req.input_next));
       }
-      MapDParserOptions parserOptions = new MapDParserOptions(
-              filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
+      MapDParserOptions parserOptions = new MapDParserOptions(filterPushDownInfo,
+              queryParsingOption.legacy_syntax,
+              queryParsingOption.is_explain,
+              optimizationOption.is_view_optimize,
+              optimizationOption.enable_watchdog);
 
       if (!isRAQuery) {
         Pair<String, SqlIdentifierCapturer> res;

@@ -93,33 +93,49 @@ TEST_F(ViewObject, BasicTest) {
   auto session = QR::get()->getSession();
   CHECK(session);
 
+  auto calciteQueryParsingOption =
+      g_calcite->getCalciteQueryParsingOption(true, false, true);
+  auto calciteOptimizationOption =
+      g_calcite->getCalciteOptimizationOption(false, false, {});
+
   auto qs1 = QR::create_query_state(session, "select i1 from table1");
-  TPlanResult tresult = g_calcite->process(
-      qs1->createQueryStateProxy(), qs1->getQueryStr(), {}, true, false, false, true);
+  TPlanResult tresult = g_calcite->process(qs1->createQueryStateProxy(),
+                                           qs1->getQueryStr(),
+                                           calciteQueryParsingOption,
+                                           calciteOptimizationOption);
 
   auto qs2 = QR::create_query_state(session, "select i1 from view_view_table1");
-  TPlanResult vresult = g_calcite->process(
-      qs2->createQueryStateProxy(), qs2->getQueryStr(), {}, true, false, false, true);
+  TPlanResult vresult = g_calcite->process(qs2->createQueryStateProxy(),
+                                           qs2->getQueryStr(),
+                                           calciteQueryParsingOption,
+                                           calciteOptimizationOption);
 
   EXPECT_EQ(vresult.plan_result, tresult.plan_result);
 
+  calciteOptimizationOption.is_view_optimize = true;
   auto qs3 = QR::create_query_state(session, "select i1 from view_view_table1");
-  TPlanResult ovresult = g_calcite->process(
-      qs3->createQueryStateProxy(), qs3->getQueryStr(), {}, true, false, true, true);
+  TPlanResult ovresult = g_calcite->process(qs3->createQueryStateProxy(),
+                                            qs3->getQueryStr(),
+                                            calciteQueryParsingOption,
+                                            calciteOptimizationOption);
 
   EXPECT_EQ(ovresult.plan_result, tresult.plan_result);
 
   auto qs4 = QR::create_query_state(
       session,
       R"(SELECT shape_table.rowid FROM shape_table, attribute_table WHERE shape_table.block_group_id = attribute_table.block_group_id)");
-  TPlanResult tab_result = g_calcite->process(
-      qs4->createQueryStateProxy(), qs4->getQueryStr(), {}, true, false, true, true);
+  TPlanResult tab_result = g_calcite->process(qs4->createQueryStateProxy(),
+                                              qs4->getQueryStr(),
+                                              calciteQueryParsingOption,
+                                              calciteOptimizationOption);
 
   auto qs5 = QR::create_query_state(
       session,
       R"(SELECT shape_view.rowid FROM shape_view, attribute_view WHERE shape_view.block_group_id = attribute_view.block_group_id)");
-  TPlanResult view_result = g_calcite->process(
-      qs5->createQueryStateProxy(), qs5->getQueryStr(), {}, true, false, true, true);
+  TPlanResult view_result = g_calcite->process(qs5->createQueryStateProxy(),
+                                               qs5->getQueryStr(),
+                                               calciteQueryParsingOption,
+                                               calciteOptimizationOption);
   EXPECT_EQ(tab_result.plan_result, view_result.plan_result);
 }
 
@@ -127,16 +143,25 @@ TEST_F(ViewObject, Joins) {
   auto session = QR::get()->getSession();
   CHECK(session);
 
+  auto calciteQueryParsingOption =
+      g_calcite->getCalciteQueryParsingOption(true, false, true);
+  auto calciteOptimizationOption =
+      g_calcite->getCalciteOptimizationOption(true, false, {});
+
   {
     auto qs1 = QR::create_query_state(
         session,
         R"(SELECT i1 FROM table1 LEFT JOIN attribute_shape_view ON table1.i1 = attribute_shape_view.block_group_id)");
-    TPlanResult tresult = g_calcite->process(
-        qs1->createQueryStateProxy(), qs1->getQueryStr(), {}, true, false, true, true);
+    TPlanResult tresult = g_calcite->process(qs1->createQueryStateProxy(),
+                                             qs1->getQueryStr(),
+                                             calciteQueryParsingOption,
+                                             calciteOptimizationOption);
 
     auto qs2 = QR::create_query_state(session, "SELECT i1 FROM left_join_3tables");
-    TPlanResult vresult = g_calcite->process(
-        qs2->createQueryStateProxy(), qs2->getQueryStr(), {}, true, false, true, true);
+    TPlanResult vresult = g_calcite->process(qs2->createQueryStateProxy(),
+                                             qs2->getQueryStr(),
+                                             calciteQueryParsingOption,
+                                             calciteOptimizationOption);
 
     EXPECT_EQ(vresult.plan_result, tresult.plan_result);
   }
@@ -146,12 +171,19 @@ TEST_F(ViewObject, Restrict) {
   auto session = QR::get()->getSession();
   CHECK(session);
 
+  auto calciteQueryParsingOption =
+      g_calcite->getCalciteQueryParsingOption(true, false, true);
+  auto calciteOptimizationOption =
+      g_calcite->getCalciteOptimizationOption(true, /*enable_watchdog=*/true, {});
+
   {
     auto qs1 = QR::create_query_state(
         session,
         R"(SELECT segment_name FROM attribute_table where segment_name = 'ab' or segment_name = 'ac')");
-    TPlanResult tresult = g_calcite->process(
-        qs1->createQueryStateProxy(), qs1->getQueryStr(), {}, true, false, true, true);
+    TPlanResult tresult = g_calcite->process(qs1->createQueryStateProxy(),
+                                             qs1->getQueryStr(),
+                                             calciteQueryParsingOption,
+                                             calciteOptimizationOption);
 
     std::string col = "segment_name";
     std::vector<std::string> values = {"ab", "ac"};
@@ -160,14 +192,18 @@ TEST_F(ViewObject, Restrict) {
 
     auto qs2 =
         QR::create_query_state(session, "SELECT segment_name FROM attribute_table");
-    TPlanResult resResult = g_calcite->process(
-        qs2->createQueryStateProxy(), qs2->getQueryStr(), {}, true, false, true, true);
+    TPlanResult resResult = g_calcite->process(qs2->createQueryStateProxy(),
+                                               qs2->getQueryStr(),
+                                               calciteQueryParsingOption,
+                                               calciteOptimizationOption);
 
     EXPECT_EQ(tresult.plan_result, resResult.plan_result);
 
     auto qs3 = QR::create_query_state(session, R"(select i1 from table1 where i1 = 1)");
-    TPlanResult riResult = g_calcite->process(
-        qs3->createQueryStateProxy(), qs3->getQueryStr(), {}, true, false, true, true);
+    TPlanResult riResult = g_calcite->process(qs3->createQueryStateProxy(),
+                                              qs3->getQueryStr(),
+                                              calciteQueryParsingOption,
+                                              calciteOptimizationOption);
 
     col = "i1";
     values = {"1"};
@@ -175,8 +211,10 @@ TEST_F(ViewObject, Restrict) {
     session->set_restriction(rest);
 
     auto qs4 = QR::create_query_state(session, "select i1 from table1");
-    TPlanResult rrResult = g_calcite->process(
-        qs4->createQueryStateProxy(), qs4->getQueryStr(), {}, true, false, true, true);
+    TPlanResult rrResult = g_calcite->process(qs4->createQueryStateProxy(),
+                                              qs4->getQueryStr(),
+                                              calciteQueryParsingOption,
+                                              calciteOptimizationOption);
 
     EXPECT_EQ(riResult.plan_result, rrResult.plan_result);
   }

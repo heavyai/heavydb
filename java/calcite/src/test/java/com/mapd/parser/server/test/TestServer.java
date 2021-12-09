@@ -21,7 +21,9 @@ import static org.junit.Assert.*;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerWrapper;
 import com.omnisci.thrift.calciteserver.CalciteServer;
+import com.omnisci.thrift.calciteserver.TOptimizationOption;
 import com.omnisci.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.TQueryParsingOption;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -244,14 +246,23 @@ public class TestServer {
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
       CalciteServer.Client client = new CalciteServer.Client(protocol);
+
+      TQueryParsingOption queryParsingOption = new TQueryParsingOption();
+      queryParsingOption.legacy_syntax = false;
+      queryParsingOption.is_explain = false;
+      queryParsingOption.check_privileges = false;
+
+      TOptimizationOption optimizationOption = new TOptimizationOption();
+      optimizationOption.is_view_optimize = false;
+      optimizationOption.enable_watchdog = false;
+      optimizationOption.filter_push_down_info = new ArrayList<>();
+
       TPlanResult algebra = client.process("user",
               "passwd",
               "SALES",
               query,
-              new ArrayList<>(),
-              false,
-              false,
-              false,
+              queryParsingOption,
+              optimizationOption,
               null,
               "");
       transport.close();

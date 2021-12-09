@@ -5210,7 +5210,6 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
   TPlanResult result;
-
   if (pw.isCalcitePathPermissable(read_only_)) {
     auto cat = query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr();
     auto session_cleanup_handler = [&](const auto& session_id) {
@@ -5219,13 +5218,17 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     auto process_calcite_request = [&] {
       const auto& in_memory_session_id = createInMemoryCalciteSession(cat);
       try {
+        auto query_parsing_option = calcite_->getCalciteQueryParsingOption(
+            legacy_syntax_, pw.isCalciteExplain(), check_privileges);
+        auto optimization_option = calcite_->getCalciteOptimizationOption(
+            system_parameters.enable_calcite_view_optimize,
+            g_enable_watchdog,
+            filter_push_down_info);
+
         result = calcite_->process(timer.createQueryStateProxy(),
                                    legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                   filter_push_down_info,
-                                   legacy_syntax_,
-                                   pw.isCalciteExplain(),
-                                   system_parameters.enable_calcite_view_optimize,
-                                   check_privileges,
+                                   query_parsing_option,
+                                   optimization_option,
                                    in_memory_session_id);
         session_cleanup_handler(in_memory_session_id);
       } catch (std::exception&) {

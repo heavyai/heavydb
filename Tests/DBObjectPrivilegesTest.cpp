@@ -1156,15 +1156,17 @@ TEST_F(ViewObject, CalciteViewResolution) {
     return;
   }
 
+  auto calciteQueryParsingOption =
+      g_calcite->getCalciteQueryParsingOption(true, false, true);
+  auto calciteOptimizationOption =
+      g_calcite->getCalciteOptimizationOption(false, false, {});
+
   auto query_state1 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
   TPlanResult result = ::g_calcite->process(query_state1->createQueryStateProxy(),
                                             query_state1->getQueryStr(),
-                                            {},
-                                            true,
-                                            false,
-                                            false,
-                                            true);
+                                            calciteQueryParsingOption,
+                                            calciteOptimizationOption);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1180,11 +1182,8 @@ TEST_F(ViewObject, CalciteViewResolution) {
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view");
   result = ::g_calcite->process(query_state2->createQueryStateProxy(),
                                 query_state2->getQueryStr(),
-                                {},
-                                true,
-                                false,
-                                false,
-                                true);
+                                calciteQueryParsingOption,
+                                calciteOptimizationOption);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1200,11 +1199,8 @@ TEST_F(ViewObject, CalciteViewResolution) {
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view_outer");
   result = ::g_calcite->process(query_state3->createQueryStateProxy(),
                                 query_state3->getQueryStr(),
-                                {},
-                                true,
-                                false,
-                                false,
-                                true);
+                                calciteQueryParsingOption,
+                                calciteOptimizationOption);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);

@@ -7,7 +7,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerHandler;
+import com.omnisci.thrift.calciteserver.TOptimizationOption;
 import com.omnisci.thrift.calciteserver.TPlanResult;
+import com.omnisci.thrift.calciteserver.TQueryParsingOption;
 
 import org.junit.Before;
 
@@ -30,8 +32,18 @@ public class DDLTest {
   }
 
   TPlanResult processDdlCommand(final String ddlCommand) throws Exception {
+    TQueryParsingOption queryParsingOption = new TQueryParsingOption();
+    queryParsingOption.legacy_syntax = false;
+    queryParsingOption.is_explain = false;
+    queryParsingOption.check_privileges = false;
+
+    TOptimizationOption optimizationOption = new TOptimizationOption();
+    optimizationOption.is_view_optimize = false;
+    optimizationOption.enable_watchdog = false;
+    optimizationOption.filter_push_down_info = new ArrayList<>();
+
     return calciteServerHandler.process(
-            "", "", "", ddlCommand, new ArrayList<>(), false, false, false, null, "");
+            "", "", "", ddlCommand, queryParsingOption, optimizationOption, null, null);
   }
 
   JsonObject getJsonFromFile(final String fileName) throws Exception {

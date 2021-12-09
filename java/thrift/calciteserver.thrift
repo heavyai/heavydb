@@ -35,14 +35,29 @@ struct TRestriction {
   2: list<string> values;
 }
 
+struct TQueryParsingOption {
+ 1: bool legacy_syntax;
+ 2: bool is_explain;
+ 3: bool check_privileges;
+}
+
+struct TOptimizationOption {
+  1: bool is_view_optimize;
+  2: bool enable_watchdog;
+  3: list<TFilterPushDownInfo> filter_push_down_info;
+}
+
 service CalciteServer {
 
    void ping()
    void shutdown()
-   TPlanResult process(1:string user, 2:string passwd, 3:string catalog, 4:string sql_text
-                       5:list<TFilterPushDownInfo> filterPushDownInfo, 6:bool legacySyntax
-                       7:bool isexplain, 8:bool isViewOptimize, 9:TRestriction restriction,
-                       10:string temp_tables_json)
+   TPlanResult process(1:string user, 
+                      2:string passwd, 
+                      3:string catalog, 
+                      4:string sql_text
+                      5:TQueryParsingOption query_parsing_option, 6:TOptimizationOption optimization_option,
+                      7:TRestriction restriction,
+                      8:string temp_tables_json)
                       throws (1:InvalidParseRequest parseErr)
    string getExtensionFunctionWhitelist()
    string getUserDefinedFunctionWhitelist()

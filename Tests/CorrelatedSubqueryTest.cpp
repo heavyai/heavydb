@@ -31,6 +31,8 @@
 #define BASE_PATH "./tmp"
 #endif
 
+extern bool g_enable_watchdog;
+
 using QR = QueryRunner::QueryRunner;
 
 bool skip_tests_on_gpu(const ExecutorDeviceType device_type) {
@@ -976,6 +978,30 @@ TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
   check_query(q2, true);
   check_query(q3, false);
   check_query(q4, true);
+}
+
+TEST(Select, Disable_INExpr_Decorrelation_Under_Watchdog) {
+  int factsCount = 13;
+  int lookupCount = 5;
+  setupTest("int", factsCount, lookupCount);
+
+  auto check_query = [](const std::string& query, bool expected) {
+    auto root_node = QR::get()->getRootNodeFromParsedQuery(query);
+    auto has_in_expr = SQLOperatorDetector::detect(root_node.get(), SQLOps::kIN);
+    EXPECT_EQ(has_in_expr, expected);
+  };
+
+  auto query =
+      "WITH TT1 AS (SELECT val AS key0 FROM test_facts) SELECT val FROM test_facts WHERE "
+      "val IN (SELECT key0 FROM TT1);";
+
+  ScopeGuard reset = [orig = g_enable_watchdog] { g_enable_watchdog = orig; };
+  for (auto watchdog : {false, true}) {
+    g_enable_watchdog = watchdog;
+    // we do not decorrelate IN-expr if watchdog is enabled, so
+    // we expect to see the existence of IN-expr in the query plan
+    check_query(query, watchdog);
+  }
 }
 
 int main(int argc, char* argv[]) {
