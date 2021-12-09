@@ -855,15 +855,28 @@ class RelScan : public RelAlgNode {
 
   int32_t getDatabaseId() const { return db_id_; }
 
-  bool isVirtualCol(const size_t col_idx) const {
-    // We might pass SPI for a GEO column field. It's never virtual.
-    // TODO: stop using physical column ids in execution part.
-    if (col_idx >= SPIMAP_MAGIC1) {
+  bool isVirtualColBySpi(int spi) const {
+    // GEO column is never virtual.
+    if (spi >= SPIMAP_MAGIC1) {
       return false;
     }
 
+    CHECK_LE(spi, column_infos_.size());
+    return column_infos_[spi - 1].is_rowid;
+  }
+
+  int getColumnIdBySpi(int spi) const {
+    int col_idx;
+    int geo_idx = 0;
+    if (spi >= SPIMAP_MAGIC1) {
+      col_idx = (spi - SPIMAP_MAGIC1) / SPIMAP_MAGIC2 - 1;
+      geo_idx = (spi - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
+    } else {
+      col_idx = spi - 1;
+    }
+
     CHECK_LT(col_idx, column_infos_.size());
-    return column_infos_[col_idx].is_rowid;
+    return column_infos_[col_idx].id + geo_idx;
   }
 
   SQLTypeInfo getColumnTypeBySpi(int spi) const {

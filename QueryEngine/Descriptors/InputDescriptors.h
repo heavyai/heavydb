@@ -85,6 +85,10 @@ class InputColDescriptor {
 
   int getColId() const { return col_id_; }
 
+  int getTableId() const { return input_desc_.getTableId(); }
+
+  int getNestLevel() const { return input_desc_.getNestLevel(); }
+
   const InputDescriptor& getScanDesc() const { return input_desc_; }
 
   const SQLTypeInfo& getType() const { return type_; }

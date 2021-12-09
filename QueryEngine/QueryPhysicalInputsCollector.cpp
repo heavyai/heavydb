@@ -24,7 +24,7 @@
 
 namespace {
 
-using PhysicalInputSet = std::unordered_set<PhysicalInput>;
+using InputColDescriptorSet = std::unordered_set<InputColDescriptor>;
 
 template <typename RexVisitor, typename ResultType>
 class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<ResultType> {
@@ -162,11 +162,11 @@ class RexInputVisitorBase : public RexVisitor<ResultType> {
 };
 
 class RexPhysicalInputsVisitor
-    : public RexInputVisitorBase<RexPhysicalInputsVisitor, PhysicalInputSet> {
+    : public RexInputVisitorBase<RexPhysicalInputsVisitor, InputColDescriptorSet> {
  public:
   RexPhysicalInputsVisitor() {}
 
-  PhysicalInputSet visitInput(const RexInput* input) const override {
+  InputColDescriptorSet visitInput(const RexInput* input) const override {
     const auto source_ra = input->getSourceNode();
     const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
     if (!scan_ra) {
@@ -176,15 +176,17 @@ class RexPhysicalInputsVisitor
         CHECK_LT(input->getIndex(), node_inputs.size());
         return visitInput(&node_inputs[input->getIndex()]);
       }
-      return PhysicalInputSet{};
+      return InputColDescriptorSet{};
     }
 
     const auto scan_td = scan_ra->getTableDescriptor();
     CHECK(scan_td);
-    const int col_id = input->getIndex() + 1;
+    const int col_id = scan_ra->getColumnIdBySpi(input->getIndex() + 1);
     const int table_id = scan_td->tableId;
+    SQLTypeInfo col_ti = scan_ra->getColumnTypeBySpi(input->getIndex() + 1);
+    bool is_virtual = scan_ra->isVirtualColBySpi(input->getIndex() + 1);
     CHECK_GT(table_id, 0);
-    return {{col_id, table_id}};
+    return {{col_id, table_id, 0, col_ti, is_virtual}};
   }
 };
 
@@ -236,8 +238,8 @@ class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set
 
 }  // namespace
 
-std::unordered_set<PhysicalInput> get_physical_inputs(const RelAlgNode* ra) {
-  RelAlgPhysicalInputsVisitor<RexPhysicalInputsVisitor, PhysicalInputSet>
+std::unordered_set<InputColDescriptor> get_physical_inputs(const RelAlgNode* ra) {
+  RelAlgPhysicalInputsVisitor<RexPhysicalInputsVisitor, InputColDescriptorSet>
       phys_inputs_visitor;
   return phys_inputs_visitor.visit(ra);
 }

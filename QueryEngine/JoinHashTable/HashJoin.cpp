@@ -445,12 +445,16 @@ void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* e
     phys_table_ids.insert(cv->get_table_id());
   }
 
-  std::unordered_set<PhysicalInput> phys_inputs;
+  std::unordered_set<InputColDescriptor> col_descs;
   for (auto cv : cvs) {
-    phys_inputs.emplace(PhysicalInput{cv->get_column_id(), cv->get_table_id()});
+    col_descs.emplace(InputColDescriptor{cv->get_column_id(),
+                                         cv->get_table_id(),
+                                         cv->get_rte_idx(),
+                                         cv->get_type_info(),
+                                         cv->is_virtual()});
   }
 
-  executor->setupCaching(phys_inputs, phys_table_ids);
+  executor->setupCaching(col_descs, phys_table_ids);
 }
 
 std::vector<InputTableInfo> getSyntheticInputTableInfo(

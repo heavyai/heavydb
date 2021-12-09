@@ -950,13 +950,13 @@ class Executor {
       const size_t frag_idx);
 
   AggregatedColRange computeColRangesCache(
-      const std::unordered_set<PhysicalInput>& phys_inputs);
+      const std::unordered_set<InputColDescriptor>& col_descs);
   StringDictionaryGenerations computeStringDictionaryGenerations(
-      const std::unordered_set<PhysicalInput>& phys_inputs);
+      const std::unordered_set<InputColDescriptor>& col_descs);
   TableGenerations computeTableGenerations(std::unordered_set<int> phys_table_ids);
 
  public:
-  void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
+  void setupCaching(const std::unordered_set<InputColDescriptor>& col_descs,
                     const std::unordered_set<int>& phys_table_ids);
   void setColRangeCache(const AggregatedColRange& aggregated_col_range) {
     agg_col_range_cache_ = aggregated_col_range;

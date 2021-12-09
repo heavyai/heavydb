@@ -38,18 +38,21 @@ struct ColumnByIdxRef {
 using ColumnByIdxRefSet = std::unordered_set<ColumnByIdxRef>;
 
 struct ColumnInfo : public ColumnByIdxRef {
-  ColumnInfo(int db_id_,
-             int table_id_,
-             int column_idx_,
+  ColumnInfo(int db_id,
+             int table_id,
+             int column_idx,
              const std::string name_,
+             int id_,
              SQLTypeInfo type_,
              bool is_rowid_)
-      : ColumnByIdxRef(db_id_, table_id_, column_idx_)
+      : ColumnByIdxRef(db_id, table_id, column_idx)
       , name(name_)
+      , id(id_)
       , type(type_)
       , is_rowid(is_rowid_) {}
 
   std::string name;
+  int id;
   SQLTypeInfo type;
   bool is_rowid;
 };

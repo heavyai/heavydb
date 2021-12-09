@@ -3744,9 +3744,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
     bool is_rowid{false};
     size_t start_rowid{0};
     if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
-      auto cd = get_column_descriptor(col_id, table_id, *catalog_);
-      if (cd->isVirtualCol) {
-        CHECK(cd->columnName == "rowid");
+      if (lhs_col->is_virtual()) {
         const auto& table_generation = getTableGeneration(table_id);
         start_rowid = table_generation.start_rowid;
         chunk_min = frag_offsets[frag_idx] + start_rowid;
@@ -3890,41 +3888,38 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
 }
 
 AggregatedColRange Executor::computeColRangesCache(
-    const std::unordered_set<PhysicalInput>& phys_inputs) {
+    const std::unordered_set<InputColDescriptor>& col_descs) {
   AggregatedColRange agg_col_range_cache;
-  CHECK(catalog_);
   std::unordered_set<int> phys_table_ids;
-  for (const auto& phys_input : phys_inputs) {
-    phys_table_ids.insert(phys_input.table_id);
+  for (const auto& col_desc : col_descs) {
+    phys_table_ids.insert(col_desc.getTableId());
   }
   std::vector<InputTableInfo> query_infos;
   for (const int table_id : phys_table_ids) {
     query_infos.emplace_back(InputTableInfo{table_id, getTableInfo(table_id)});
   }
-  for (const auto& phys_input : phys_inputs) {
-    const auto cd =
-        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
-    CHECK(cd);
-    if (ExpressionRange::typeSupportsRange(cd->columnType)) {
-      const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
-          cd->columnType, phys_input.table_id, phys_input.col_id, 0, cd->isVirtualCol);
+  for (const auto& col_desc : col_descs) {
+    if (ExpressionRange::typeSupportsRange(col_desc.getType())) {
+      const auto col_var = boost::make_unique<Analyzer::ColumnVar>(col_desc.getType(),
+                                                                   col_desc.getTableId(),
+                                                                   col_desc.getColId(),
+                                                                   0,
+                                                                   col_desc.isVirtual());
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
-      agg_col_range_cache.setColRange(phys_input, col_range);
+      agg_col_range_cache.setColRange({col_desc.getColId(), col_desc.getTableId()},
+                                      col_range);
     }
   }
   return agg_col_range_cache;
 }
 
 StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
-    const std::unordered_set<PhysicalInput>& phys_inputs) {
+    const std::unordered_set<InputColDescriptor>& col_descs) {
   StringDictionaryGenerations string_dictionary_generations;
-  CHECK(catalog_);
-  for (const auto& phys_input : phys_inputs) {
-    const auto cd =
-        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
-    CHECK(cd);
-    const auto& col_ti =
-        cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
+  for (const auto& col_desc : col_descs) {
+    const auto& col_ti = col_desc.getType().is_array()
+                             ? col_desc.getType().get_elem_type()
+                             : col_desc.getType();
     if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
       const int dict_id = col_ti.get_comp_param();
       const auto dd = catalog_->getMetadataForDict(dict_id);
@@ -3948,14 +3943,13 @@ TableGenerations Executor::computeTableGenerations(
   return table_generations;
 }
 
-void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
+void Executor::setupCaching(const std::unordered_set<InputColDescriptor>& col_descs,
                             const std::unordered_set<int>& phys_table_ids) {
-  CHECK(catalog_);
   row_set_mem_owner_ =
       std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
   row_set_mem_owner_->setDictionaryGenerations(
-      computeStringDictionaryGenerations(phys_inputs));
-  agg_col_range_cache_ = computeColRangesCache(phys_inputs);
+      computeStringDictionaryGenerations(col_descs));
+  agg_col_range_cache_ = computeColRangesCache(col_descs);
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 

@@ -66,18 +66,6 @@ bool node_is_aggregate(const RelAlgNode* ra) {
   return ((compound && compound->isAggregate()) || aggregate);
 }
 
-std::unordered_set<PhysicalInput> get_physical_inputs(
-    const Catalog_Namespace::Catalog& cat,
-    const RelAlgNode* ra) {
-  auto phys_inputs = get_physical_inputs(ra);
-  std::unordered_set<PhysicalInput> phys_inputs2;
-  for (auto& phi : phys_inputs) {
-    phys_inputs2.insert(
-        PhysicalInput{cat.getColumnIdBySpi(phi.table_id, phi.col_id), phi.table_id});
-  }
-  return phys_inputs2;
-}
-
 bool is_extracted_dag_valid(ExtractedPlanDag& dag) {
   return !dag.contain_not_supported_rel_node &&
          dag.extracted_dag.compare(EMPTY_QUERY_PLAN) != 0;
@@ -119,10 +107,10 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   auto lock = executor_->acquireExecuteMutex();
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
-  const auto phys_inputs = get_physical_inputs(cat_, &ra);
+  const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
-  executor_->setupCaching(phys_inputs, phys_table_ids);
+  executor_->setupCaching(col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_seq = RaExecutionSequence(&ra);
@@ -303,10 +291,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
-  const auto phys_inputs = get_physical_inputs(cat_, &ra);
+  const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
-  executor_->setupCaching(phys_inputs, phys_table_ids);
+  executor_->setupCaching(col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_seq = RaExecutionSequence(&ra);
@@ -383,13 +371,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
 AggregatedColRange RelAlgExecutor::computeColRangesCache() {
   AggregatedColRange agg_col_range_cache;
-  const auto phys_inputs = get_physical_inputs(cat_, &getRootRelAlgNode());
-  return executor_->computeColRangesCache(phys_inputs);
+  const auto col_descs = get_physical_inputs(&getRootRelAlgNode());
+  return executor_->computeColRangesCache(col_descs);
 }
 
 StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations() {
-  const auto phys_inputs = get_physical_inputs(cat_, &getRootRelAlgNode());
-  return executor_->computeStringDictionaryGenerations(phys_inputs);
+  const auto col_descs = get_physical_inputs(&getRootRelAlgNode());
+  return executor_->computeStringDictionaryGenerations(col_descs);
 }
 
 TableGenerations RelAlgExecutor::computeTableGenerations() {
@@ -1148,7 +1136,7 @@ void collect_used_input_desc(
           input_desc,
           scan ? scan->getColumnTypeBySpi(col_id + 1)
                : input_ra->getOutputMetainfo()[col_id].get_type_info(),
-          scan ? scan->isVirtualCol(col_id) : false));
+          scan ? scan->isVirtualColBySpi(col_id + 1) : false));
     } else if (!dynamic_cast<const RelLogicalUnion*>(ra_node)) {
       throw std::runtime_error("Bushy joins not supported");
     }
@@ -3893,7 +3881,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
         table_id,
         scan_ra ? input_idx + 1 : input_idx,
         rte_idx,
-        scan_ra ? scan_ra->isVirtualCol(input_idx) : false));
+        scan_ra ? scan_ra->isVirtualColBySpi(input_idx + 1) : false));
     ++input_idx;
   }
   return inputs;

@@ -2290,6 +2290,7 @@ class RelAlgDispatcher {
                          td->tableId,
                          infos.size(),
                          col_name,
+                         cd->columnId,
                          cd->columnType,
                          cd->isVirtualCol);
     }
@@ -2431,10 +2432,12 @@ class RelAlgDispatcher {
                         table_descriptor->tableId,
                         name_to_idx[name],
                         name,
+                        -1,
                         SQLTypeInfo(kBIGINT, false),
                         false);
         auto cd = cat_.getMetadataForColumn(table_descriptor->tableId, name);
         if (cd) {
+          info.id = cd->columnId;
           info.type = cd->columnType;
           info.is_rowid = cd->isVirtualCol;
         } else {

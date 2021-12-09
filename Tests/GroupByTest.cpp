@@ -85,13 +85,15 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  PhysicalInput group_phys_input{cd->columnId, td->tableId};
-  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId};
+  InputColDescriptor group_col_desc{
+      cd->columnId, td->tableId, 0, cd->columnType, cd->isVirtualCol};
+  InputColDescriptor filter_col_desc{
+      filter_cd->columnId, td->tableId, 0, cd->columnType, cd->isVirtualCol};
 
-  std::unordered_set<PhysicalInput> phys_inputs{group_phys_input, filter_phys_input};
+  std::unordered_set<InputColDescriptor> col_descs{group_col_desc, filter_col_desc};
   std::unordered_set<int> phys_table_ids;
-  phys_table_ids.insert(group_phys_input.table_id);
-  executor->setupCaching(phys_inputs, phys_table_ids);
+  phys_table_ids.insert(group_col_desc.getTableId());
+  executor->setupCaching(col_descs, phys_table_ids);
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
@@ -147,23 +149,26 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   EXPECT_EQ(v<int64_t>(row[0]), 1);
 }
 
-std::unordered_set<PhysicalInput> setup_str_col_caching(PhysicalInput& group_phys_input,
-                                                        const int64_t min,
-                                                        const int64_t max,
-                                                        PhysicalInput& filter_phys_input,
-                                                        Executor* executor) {
-  std::unordered_set<PhysicalInput> phys_inputs{group_phys_input, filter_phys_input};
+std::unordered_set<InputColDescriptor> setup_str_col_caching(
+    InputColDescriptor& group_col_desc,
+    const int64_t min,
+    const int64_t max,
+    InputColDescriptor& filter_col_desc,
+    Executor* executor) {
+  std::unordered_set<InputColDescriptor> col_descs{group_col_desc, filter_col_desc};
   std::unordered_set<int> phys_table_ids;
-  phys_table_ids.insert(group_phys_input.table_id);
-  executor->setupCaching(phys_inputs, phys_table_ids);
-  auto filter_col_range = executor->getColRange(filter_phys_input);
+  phys_table_ids.insert(group_col_desc.getTableId());
+  executor->setupCaching(col_descs, phys_table_ids);
+  auto filter_col_range =
+      executor->getColRange({filter_col_desc.getColId(), filter_col_desc.getTableId()});
   // reset the col range to trigger the optimization
   AggregatedColRange col_range_cache;
-  col_range_cache.setColRange(group_phys_input,
+  col_range_cache.setColRange({group_col_desc.getColId(), group_col_desc.getTableId()},
                               ExpressionRange::makeIntRange(min, max, 0, false));
-  col_range_cache.setColRange(filter_phys_input, filter_col_range);
+  col_range_cache.setColRange({filter_col_desc.getColId(), filter_col_desc.getTableId()},
+                              filter_col_range);
   executor->setColRangeCache(col_range_cache);
-  return phys_inputs;
+  return col_descs;
 }
 
 TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
@@ -181,12 +186,14 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  PhysicalInput group_phys_input{cd->columnId, td->tableId};
-  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId};
+  InputColDescriptor group_col_desc{
+      cd->columnId, td->tableId, 0, cd->columnType, cd->isVirtualCol};
+  InputColDescriptor filter_col_desc{
+      filter_cd->columnId, td->tableId, 0, cd->columnType, cd->isVirtualCol};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(
-      group_phys_input, /*min=*/0, /*max=*/134217728, filter_phys_input, executor.get());
+      group_col_desc, /*min=*/0, /*max=*/134217728, filter_col_desc, executor.get());
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
@@ -269,12 +276,14 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  PhysicalInput group_phys_input{cd->columnId, td->tableId};
-  PhysicalInput filter_phys_input{filter_cd->columnId, td->tableId};
+  InputColDescriptor group_col_desc{
+      cd->columnId, td->tableId, 0, cd->columnType, cd->isVirtualCol};
+  InputColDescriptor filter_col_desc{
+      filter_cd->columnId, td->tableId, 0, cd->columnType, cd->isVirtualCol};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(
-      group_phys_input, /*min=*/0, /*max=*/134217728, filter_phys_input, executor.get());
+      group_col_desc, /*min=*/0, /*max=*/134217728, filter_col_desc, executor.get());
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
