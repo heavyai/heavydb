@@ -2725,10 +2725,16 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
 
   // TODO MAT this should actually get the global or the session parameter for
   // view optimization
-  const auto query_ra =
-      calcite_mgr
-          ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
-          .plan_result;
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto query_ra = calcite_mgr
+                            ->process(query_state_proxy,
+                                      pg_shim(select_stmt),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption)
+                            .plan_result;
   RelAlgExecutor ra_executor(executor.get(),
                              catalog,
                              query_ra,
@@ -2783,11 +2789,16 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
 
   // TODO MAT this should actually get the global or the session parameter for
   // view optimization
-  const auto query_ra =
-      calcite_mgr
-          ->process(
-              query_state_proxy, pg_shim(sql_query_string), {}, true, false, false, true)
-          .plan_result;
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto query_ra = calcite_mgr
+                            ->process(query_state_proxy,
+                                      pg_shim(sql_query_string),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption)
+                            .plan_result;
   RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   CompilationOptions co = {device_type, true, ExecutorOptLevel::Default, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
@@ -3456,13 +3467,14 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
 
   // TODO MAT this should actually get the global or the session parameter for
   // view optimization
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
   const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
                                            pg_shim(select_query_),
-                                           {},
-                                           true,
-                                           false,
-                                           false,
-                                           true);
+                                           calciteQueryParsingOption,
+                                           calciteOptimizationOption);
 
   for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
     tables.emplace_back(tab[0]);
@@ -3560,13 +3572,14 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     // TODO MAT this should actually get the global or the session parameter for
     // view optimization
+    const auto calciteQueryParsingOption =
+        calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+    const auto calciteOptimizationOption =
+        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
     const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
                                              pg_shim(select_query_),
-                                             {},
-                                             true,
-                                             false,
-                                             false,
-                                             true);
+                                             calciteQueryParsingOption,
+                                             calciteOptimizationOption);
 
     // TODO 12 Apr 2021 MAT schema change need to keep schema in future
     // just keeping it moving for now
@@ -6088,15 +6101,17 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   const auto query_after_shim = pg_shim(select_query_);
+  auto calcite_mgr = catalog.getCalciteMgr();
 
   // this now also ensures that access permissions are checked
-  catalog.getCalciteMgr()->process(query_state->createQueryStateProxy(),
-                                   query_after_shim,
-                                   {},
-                                   true,
-                                   false,
-                                   false,
-                                   true);
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  calcite_mgr->process(query_state->createQueryStateProxy(),
+                       query_after_shim,
+                       calciteQueryParsingOption,
+                       calciteOptimizationOption);
 
   // Take write lock after the query is processed to ensure no deadlocks
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
