@@ -806,6 +806,11 @@ void CommandLineOptions::fillAdvancedOptions() {
                                    ->implicit_value(true),
                                "Enable automatic IR metadata (debug builds only).");
   developer_desc.add_options()(
+      "max-log-length",
+      po::value<size_t>(&g_max_log_length)->default_value(g_max_log_length),
+      "The maximum number of characters that a log message can has. If the log message "
+      "is longer than this, we only record \'g_max_log_message_length\' characters.");
+  developer_desc.add_options()(
       "estimator-failure-max-groupby-size",
       po::value<size_t>(&g_estimator_failure_max_groupby_size)
           ->default_value(g_estimator_failure_max_groupby_size),

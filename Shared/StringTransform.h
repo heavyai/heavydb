@@ -121,6 +121,10 @@ std::vector<std::string> split(std::string_view str,
 
 //! trim any whitespace from the left and right ends of a string
 std::string strip(std::string_view str);
+
+//! return substring of str with postfix if str.size() > substr_length
+std::pair<std::string_view, const char*> substring(const std::string& str,
+                                                   size_t substr_length);
 #endif  // __CUDACC__
 
 //! sanitize an SQL string

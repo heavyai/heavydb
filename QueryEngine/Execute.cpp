@@ -148,6 +148,8 @@ size_t g_approx_quantile_centroids{300};
 
 bool g_enable_automatic_ir_metadata{true};
 
+size_t g_max_log_length{500};
+
 extern bool g_cache_string_hash;
 bool g_enable_multifrag_rs{false};
 
