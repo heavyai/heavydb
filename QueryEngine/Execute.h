@@ -445,6 +445,8 @@ class Executor {
   const Catalog_Namespace::Catalog* getCatalog() const;
   void setCatalog(const Catalog_Namespace::Catalog* catalog);
 
+  int getDatabaseId() const { return db_id_; }
+
   Data_Namespace::DataMgr* getDataMgr() const {
     CHECK(data_mgr_);
     return data_mgr_;
@@ -1095,6 +1097,7 @@ class Executor {
 
   const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
+  int db_id_ = -1;
   Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
   TableIdToNodeMap table_id_to_node_map_;

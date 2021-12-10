@@ -237,7 +237,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
   return row_set_mem_owner->getOrAddStringDictProxy(
-      catalog_->getDatabaseId(), dict_id_in, with_generation, data_mgr_);
+      db_id_, dict_id_in, with_generation, data_mgr_);
 }
 
 StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
@@ -300,6 +300,7 @@ const Catalog_Namespace::Catalog* Executor::getCatalog() const {
 
 void Executor::setCatalog(const Catalog_Namespace::Catalog* catalog) {
   catalog_ = catalog;
+  db_id_ = catalog->getDatabaseId();
 }
 
 const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {
@@ -915,7 +916,7 @@ TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
                                        QueryMemoryDescriptor(),
                                        row_set_mem_owner_,
                                        data_mgr_,
-                                       catalog_->getDatabaseId(),
+                                       db_id_,
                                        blockSize(),
                                        gridSize());
   }
@@ -962,7 +963,7 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
                                        QueryMemoryDescriptor(),
                                        nullptr,
                                        data_mgr_,
-                                       catalog_->getDatabaseId(),
+                                       db_id_,
                                        blockSize(),
                                        gridSize());
   }
@@ -1031,7 +1032,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
                                                   query_mem_desc,
                                                   row_set_mem_owner,
                                                   data_mgr_,
-                                                  catalog_->getDatabaseId(),
+                                                  db_id_,
                                                   blockSize(),
                                                   gridSize());
     auto result_storage = reduced_results->allocateStorage(plan_state_->init_agg_vals_);
@@ -1663,7 +1664,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                      QueryMemoryDescriptor(),
                                      nullptr,
                                      data_mgr_,
-                                     catalog_->getDatabaseId(),
+                                     db_id_,
                                      blockSize(),
                                      gridSize());
 }
@@ -1769,7 +1770,7 @@ ResultSetPtr Executor::executeTableFunction(
         ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
         this->getRowSetMemoryOwner(),
         data_mgr_,
-        this->getCatalog()->getDatabaseId(),
+        db_id_,
         this->blockSize(),
         this->gridSize());
   }
@@ -1970,7 +1971,7 @@ ResultSetPtr build_row_for_empty_input(
                                         query_mem_desc,
                                         row_set_mem_owner,
                                         executor->getDataMgr(),
-                                        executor->getCatalog()->getDatabaseId(),
+                                        executor->getDatabaseId(),
                                         executor->blockSize(),
                                         executor->gridSize());
   rs->allocateStorage();
@@ -2117,7 +2118,7 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
                                                     top_query_mem_desc,
                                                     first_result_set->getRowSetMemOwner(),
                                                     data_mgr_,
-                                                    catalog_->getDatabaseId(),
+                                                    db_id_,
                                                     blockSize(),
                                                     gridSize());
   auto top_storage = top_result_set->allocateStorage();
