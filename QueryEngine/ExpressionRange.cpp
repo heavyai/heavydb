@@ -576,9 +576,7 @@ ExpressionRange getLeafColumnRange(const Analyzer::ColumnVar* col_expr,
       CHECK(ti_idx);
       const auto& query_info = query_infos[*ti_idx].info;
       const auto& fragments = query_info.fragments;
-      const auto cd = executor->getColumnDescriptor(col_expr);
-      if (cd && cd->isVirtualCol) {
-        CHECK(cd->columnName == "rowid");
+      if (col_expr->is_virtual()) {
         CHECK_EQ(kBIGINT, col_ti.get_type());
         const int64_t num_tuples = query_info.getNumTuples();
         return ExpressionRange::makeIntRange(

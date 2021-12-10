@@ -1895,10 +1895,11 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
           int32_t fixlen = -1;
           if (target_ti.get_type() == kPOINT) {
             const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-            if (col_var) {
-              const auto coords_cd = executor_->getPhysicalColumnDescriptor(col_var, 1);
-              if (coords_cd && coords_cd->columnType.get_type() == kARRAY) {
-                fixlen = coords_cd->columnType.get_size();
+            if (col_var && col_var->get_table_id() > 0) {
+              CHECK_GE(col_var->get_type_info().get_physical_cols(), 1);
+              auto coords_type = get_geo_physical_col_type(col_var->get_type_info(), 0);
+              if (coords_type.get_type() == kARRAY) {
+                fixlen = coords_type.get_size();
               }
             }
           }

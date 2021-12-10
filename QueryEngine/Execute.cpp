@@ -277,23 +277,6 @@ bool Executor::isCPUOnly() const {
   return !data_mgr_->getCudaMgr();
 }
 
-const ColumnDescriptor* Executor::getColumnDescriptor(
-    const Analyzer::ColumnVar* col_var) const {
-  return get_column_descriptor_maybe(
-      col_var->get_column_id(), col_var->get_table_id(), *catalog_);
-}
-
-const ColumnDescriptor* Executor::getPhysicalColumnDescriptor(
-    const Analyzer::ColumnVar* col_var,
-    int n) const {
-  const auto cd = getColumnDescriptor(col_var);
-  if (!cd || n > cd->columnType.get_physical_cols()) {
-    return nullptr;
-  }
-  return get_column_descriptor_maybe(
-      col_var->get_column_id() + n, col_var->get_table_id(), *catalog_);
-}
-
 const Catalog_Namespace::Catalog* Executor::getCatalog() const {
   return catalog_;
 }

@@ -437,11 +437,6 @@ class Executor {
     return cgen_state_->contains_left_deep_outer_join_;
   }
 
-  const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
-
-  const ColumnDescriptor* getPhysicalColumnDescriptor(const Analyzer::ColumnVar*,
-                                                      int) const;
-
   const Catalog_Namespace::Catalog* getCatalog() const;
   void setCatalog(const Catalog_Namespace::Catalog* catalog);
 
