@@ -20,7 +20,10 @@
 #include <cstdio>
 #include <exception>
 #include <map>
+#include <optional>
+#include <string>
 #include <thread>
+#include <vector>
 #include "Archive.h"
 
 #include <openssl/evp.h>

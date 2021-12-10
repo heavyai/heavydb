@@ -235,6 +235,9 @@ void TargetExprCodegen::codegen(
           LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                      acc_i64,
                                      LL_INT(int64_t(1)),
+#if LLVM_VERSION_MAJOR > 12
+                                     LLVM_ALIGN(8),
+#endif
                                      llvm::AtomicOrdering::Monotonic);
         }
       } else {
@@ -248,6 +251,9 @@ void TargetExprCodegen::codegen(
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    acc_i32,
                                    LL_INT(1),
+#if LLVM_VERSION_MAJOR > 12
+                                   LLVM_ALIGN(4),
+#endif
                                    llvm::AtomicOrdering::Monotonic);
       }
     } else {
@@ -259,11 +265,17 @@ void TargetExprCodegen::codegen(
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    shared_acc_i32,
                                    LL_INT(1),
+#if LLVM_VERSION_MAJOR > 12
+                                   LLVM_ALIGN(4),
+#endif
                                    llvm::AtomicOrdering::Monotonic);
       } else {
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    acc_i32,
                                    LL_INT(1),
+#if LLVM_VERSION_MAJOR > 12
+                                   LLVM_ALIGN(4),
+#endif
                                    llvm::AtomicOrdering::Monotonic);
       }
     }

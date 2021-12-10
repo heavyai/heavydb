@@ -162,7 +162,12 @@ void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn) {
   }
 
   llvm::SmallVector<llvm::ReturnInst*, 8> Returns;  // Ignore returns cloned.
+#if LLVM_VERSION_MAJOR > 12
+  llvm::CloneFunctionInto(
+      fn, func_impl, vmap_, llvm::CloneFunctionChangeType::DifferentModule, Returns);
+#else
   llvm::CloneFunctionInto(fn, func_impl, vmap_, /*ModuleLevelChanges=*/true, Returns);
+#endif
 
   for (auto it = llvm::inst_begin(fn), e = llvm::inst_end(fn); it != e; ++it) {
     if (llvm::isa<llvm::CallInst>(*it)) {
@@ -210,7 +215,7 @@ llvm::Type* getTy(llvm::LLVMContext& ctx) { return getTy<std::remove_pointer_t<T
 // template<> llvm::Type* getTy<float>(llvm::LLVMContext& ctx) { return llvm::Type::getFloatTy(ctx); }
 template<> llvm::Type* getTy<double>(llvm::LLVMContext& ctx) { return llvm::Type::getDoubleTy(ctx); }
 //template<> llvm::Type* getTy<void>(llvm::LLVMContext& ctx) { return llvm::Type::getVoidTy(ctx); }
-// clang-format on
+//  clang-format on
 
 struct GpuFunctionDefinition {
   GpuFunctionDefinition(char const* name) : name_(name) {}
