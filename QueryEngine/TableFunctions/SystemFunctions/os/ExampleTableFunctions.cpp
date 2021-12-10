@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "ExampleFunctions.h"
+#include "ExampleTableFunctions.h"
 
 #ifndef __CUDACC__
 

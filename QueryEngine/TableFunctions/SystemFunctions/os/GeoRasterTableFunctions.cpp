@@ -22,7 +22,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
-#include "Shared/Utilities.h"
+#include "Shared/TableFunctionsCommon.h"
 #include "Shared/math_consts.h"
 
 const size_t max_inputs_per_thread = 1000000L;

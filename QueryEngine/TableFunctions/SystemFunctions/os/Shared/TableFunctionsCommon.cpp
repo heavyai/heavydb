@@ -29,7 +29,7 @@
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
 
-#include "Utilities.h"
+#include "TableFunctionsCommon.h"
 
 #define NANOSECONDS_PER_SECOND 1000000000
 

@@ -274,6 +274,6 @@ tf_geo_rasterize__cpu_template(TableFunctionManager& mgr,
   return geo_raster.outputDenseColumns(mgr, output_x, output_y, output_z);
 }
 
-#include "GeoRaster.cpp"
+#include "GeoRasterTableFunctions.cpp"
 
 #endif  // __CUDACC__

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "ExampleFunctions.h"
-
 #ifndef __CUDACC__
 
 #include <string>
@@ -23,6 +21,8 @@
 #ifdef HAVE_TBB
 #include <tbb/parallel_for.h>
 #endif
+
+#include "UtilityTableFunctions.h"
 
 EXTENSION_NOINLINE
 #ifdef _WIN32

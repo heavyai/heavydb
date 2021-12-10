@@ -117,6 +117,6 @@ bool is_valid_tf_input(const T input,
                        const BoundsType bounds_type,
                        const IntervalType interval_type);
 
-#include "Utilities.cpp"
+#include "TableFunctionsCommon.cpp"
 
 #endif  //__CUDACC__
