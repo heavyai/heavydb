@@ -3916,7 +3916,7 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
                              : col_desc.getType();
     if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
       const int dict_id = col_ti.get_comp_param();
-      const auto dd = catalog_->getMetadataForDict(dict_id);
+      const auto dd = data_mgr_->getDictMetadata(db_id_, dict_id);
       CHECK(dd && dd->stringDict);
       string_dictionary_generations.setGeneration(dict_id,
                                                   dd->stringDict->storageEntryCount());
