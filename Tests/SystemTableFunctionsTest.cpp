@@ -69,6 +69,132 @@ class SystemTFs : public ::testing::Test {
   void SetUp() override {}
 };
 
+TEST_F(SystemTFs, GenerateSeries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Step of 0 is not permitted
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_series(3, 10, 0));", dt),
+          UserTableFunctionError);
+    }
+
+    // Test step of 2
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT generate_series FROM TABLE(generate_series(1, 10, 2)) ORDER BY "
+          "generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(5));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      for (int64_t val = 1; val <= 10; val += 2) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), val);
+      }
+    }
+
+    // Series should be inclusive of stop value
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT generate_series FROM TABLE(generate_series(1, 9, 2)) ORDER BY "
+          "generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(5));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      for (int64_t val = 1; val <= 9; val += 2) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), val);
+      }
+    }
+
+    // Negative step
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT generate_series FROM TABLE(generate_series(30, -25, -3)) ORDER BY "
+          "generate_series DESC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t((-25 - 30) / -3 + 1));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      for (int64_t val = 30; val >= -25; val -= 3) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), val);
+      }
+    }
+
+    // Negative step and stop > start should return 0 rows
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series(2, 5, -1)) ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(0));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+    }
+
+    // Positive step and stop < start should return 0 rows
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series(5, 2, 1)) ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(0));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+    }
+
+    // Negative step and stop == start should return 1 row (start)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series(2, 2, -1)) ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(2));
+    }
+
+    // Positive step and stop == start should return 1 row (start)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(generate_series(2, 2, 1)) ORDER BY generate_series ASC;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(2));
+    }
+
+    // Generate large series > 10K which is threshold for parallelized implementation
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT COUNT(*) AS n, MIN(generate_series) AS min_series, "
+          "MAX(generate_series) AS max_series, CAST(AVG(generate_series) AS BIGINT) as "
+          "avg_series FROM "
+          "(SELECT * FROM TABLE(generate_series(1, 1000000, 2)));",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(4));
+      auto crt_row = rows->getNextRow(false, false);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]),
+                static_cast<int64_t>(500000L));  // 500,000 rows
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]),
+                static_cast<int64_t>(1L));  // min of start value of 1
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[2]),
+                static_cast<int64_t>(999999L));  // max of stop value of 999,999
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[3]),
+                static_cast<int64_t>(500000L));  // avg of 500,000
+    }
+
+    // Outputs of more than 2^30 rows are not allowed
+    {
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT COUNT(*) AS n, MIN(generate_series) AS min_series, "
+              "MAX(generate_series) AS max_series, AVG(generate_series) as avg_series "
+              "FROM (SELECT * FROM TABLE(generate_series(0, 2000000000, 1)));",
+              dt),
+          UserTableFunctionError);
+    }
+  }
+}
+
 TEST_F(SystemTFs, Mandelbrot) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

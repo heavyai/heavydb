@@ -276,6 +276,7 @@ bool is_table_function_whitelisted(const std::string& function_name) {
   // All table functions that will be on by default (and not just for testing)
   // must be added to the whitelisted_table_functions set below.
   static const std::unordered_set<std::string> whitelisted_table_functions = {
+      "generate_series",
       "tf_mandelbrot",
       "tf_mandelbrot_float",
       "tf_mandelbrot_cuda",
