@@ -365,7 +365,6 @@ bool Executor::hasLazyFetchColumns(
 std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
     const std::vector<Analyzer::Expr*>& target_exprs) const {
   CHECK(plan_state_);
-  CHECK(catalog_);
   std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
   for (const auto target_expr : target_exprs) {
     if (!plan_state_->isLazyFetchColumn(target_expr)) {
@@ -376,19 +375,13 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
       CHECK(col_var);
       auto col_id = col_var->get_column_id();
       auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
-      auto cd = (col_var->get_table_id() > 0)
-                    ? get_column_descriptor(col_id, col_var->get_table_id(), *catalog_)
-                    : nullptr;
-      if (cd && IS_GEO(cd->columnType.get_type())) {
+      if (col_var->get_type_info().is_geometry()) {
         // Geo coords cols will be processed in sequence. So we only need to track the
         // first coords col in lazy fetch info.
         {
-          auto cd0 =
-              get_column_descriptor(col_id + 1, col_var->get_table_id(), *catalog_);
-          auto col0_ti = cd0->columnType;
-          CHECK(!cd0->isVirtualCol);
+          auto col0_ti = get_geo_physical_col_type(col_var->get_type_info(), 0);
           auto col0_var = makeExpr<Analyzer::ColumnVar>(
-              col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
+              col0_ti, col_var->get_table_id(), col_id + 1, rte_idx);
           auto local_col0_id = plan_state_->getLocalColumnId(col0_var.get(), false);
           col_lazy_fetch_info.emplace_back(
               ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
