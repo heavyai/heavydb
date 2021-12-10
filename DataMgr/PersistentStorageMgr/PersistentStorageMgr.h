@@ -59,7 +59,7 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
 
-  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+  void prepareTablesForExecution(const ColumnRefSet& input_cols,
                                  const CompilationOptions& co,
                                  const ExecutionOptions& eo,
                                  ExecutionPhase phase) override;

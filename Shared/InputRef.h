@@ -18,51 +18,51 @@
 
 #include "sqltypes.h"
 
+#include <memory>
 #include <unordered_set>
 
 // References table column using 0-based positional index.
-struct ColumnByIdxRef {
-  ColumnByIdxRef(int db_id_, int table_id_, int column_idx_)
-      : db_id(db_id_), table_id(table_id_), column_idx(column_idx_) {}
+struct ColumnRef {
+  ColumnRef(int db_id_, int table_id_, int column_id_)
+      : db_id(db_id_), table_id(table_id_), column_id(column_id_) {}
 
   int db_id;
   int table_id;
-  int column_idx;
+  int column_id;
 
-  bool operator==(const ColumnByIdxRef& other) const {
-    return column_idx == other.column_idx && table_id == other.table_id &&
+  bool operator==(const ColumnRef& other) const {
+    return column_id == other.column_id && table_id == other.table_id &&
            db_id == other.db_id;
   }
 };
 
-using ColumnByIdxRefSet = std::unordered_set<ColumnByIdxRef>;
+using ColumnRefSet = std::unordered_set<ColumnRef>;
 
-struct ColumnInfo : public ColumnByIdxRef {
+struct ColumnInfo : public ColumnRef {
   ColumnInfo(int db_id,
              int table_id,
-             int column_idx,
+             int column_id,
              const std::string name_,
-             int id_,
              SQLTypeInfo type_,
              bool is_rowid_)
-      : ColumnByIdxRef(db_id, table_id, column_idx)
+      : ColumnRef(db_id, table_id, column_id)
       , name(name_)
-      , id(id_)
       , type(type_)
       , is_rowid(is_rowid_) {}
 
   std::string name;
-  int id;
   SQLTypeInfo type;
   bool is_rowid;
 };
 
+using ColumnInfoPtr = std::shared_ptr<ColumnInfo>;
+
 namespace std {
 
 template <>
-struct hash<ColumnByIdxRef> {
-  size_t operator()(const ColumnByIdxRef& col) const {
-    return col.db_id ^ col.table_id ^ col.column_idx;
+struct hash<ColumnRef> {
+  size_t operator()(const ColumnRef& col) const {
+    return col.db_id ^ col.table_id ^ col.column_id;
   }
 };
 

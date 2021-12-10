@@ -58,6 +58,6 @@ struct hash<PhysicalInput> {
 std::unordered_set<InputColDescriptor> get_physical_inputs(const RelAlgNode*);
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode*);
 
-ColumnByIdxRefSet get_idx_ref_inputs(const RelAlgNode*);
+ColumnRefSet get_ref_inputs(const RelAlgNode*);
 
 #endif  // QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H

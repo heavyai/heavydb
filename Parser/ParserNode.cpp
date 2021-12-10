@@ -750,7 +750,7 @@ std::shared_ptr<Analyzer::Expr> ExistsExpr::analyze(
   return nullptr;
 }
 
-std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(
+std::shared_ptr<Analyzer::Expr> ColumnRefExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
@@ -1208,10 +1208,10 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
     for (auto& p : select_clause_) {
       const Parser::Expr* select_expr = p->get_select_expr();
       // look for the case of range_var.*
-      if (typeid(*select_expr) == typeid(ColumnRef) &&
-          dynamic_cast<const ColumnRef*>(select_expr)->get_column() == nullptr) {
+      if (typeid(*select_expr) == typeid(ColumnRefExpr) &&
+          dynamic_cast<const ColumnRefExpr*>(select_expr)->get_column() == nullptr) {
         const std::string* range_var_name =
-            dynamic_cast<const ColumnRef*>(select_expr)->get_table();
+            dynamic_cast<const ColumnRefExpr*>(select_expr)->get_table();
         int rte_idx = query.get_rte_idx(*range_var_name);
         if (rte_idx < 0) {
           throw std::runtime_error("invalid range variable name: " + *range_var_name);
@@ -1396,7 +1396,7 @@ std::string TableRef::to_string() const {
   return str;
 }
 
-std::string ColumnRef::to_string() const {
+std::string ColumnRefExpr::to_string() const {
   std::string str;
   if (table_ == nullptr) {
     str = *column_;

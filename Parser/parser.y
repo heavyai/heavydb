@@ -383,7 +383,7 @@ ordering_spec:
 		INTNUM opt_asc_desc opt_null_order
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new OrderSpec($<intval>1, nullptr, $<boolval>2, $<boolval>3)); }
 	|	column_ref opt_asc_desc opt_null_order
-	{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new OrderSpec(0, dynamic_cast<ColumnRef*>(($<nodeval>1)->release()), $<boolval>2, $<boolval>3)); }
+	{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new OrderSpec(0, dynamic_cast<ColumnRefExpr*>(($<nodeval>1)->release()), $<boolval>2, $<boolval>3)); }
 	;
 
 opt_asc_desc:
@@ -926,10 +926,10 @@ privileges_target:
 
 
 column_ref:
-		NAME { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ColumnRef(($<stringval>1)->release())); }
-	|	NAME '.' NAME	{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ColumnRef(($<stringval>1)->release(), ($<stringval>3)->release())); }
-	| NAME '.' '*' { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ColumnRef(($<stringval>1)->release(), nullptr)); }
-	/* |	NAME '.' NAME '.' NAME { $$ = new ColumnRef(($<stringval>1)->release(), ($<stringval>3)->release(), ($<stringval>5)->release()); } */
+		NAME { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ColumnRefExpr(($<stringval>1)->release())); }
+	|	NAME '.' NAME	{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ColumnRefExpr(($<stringval>1)->release(), ($<stringval>3)->release())); }
+	| NAME '.' '*' { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new ColumnRefExpr(($<stringval>1)->release(), nullptr)); }
+	/* |	NAME '.' NAME '.' NAME { $$ = new ColumnRefExpr(($<stringval>1)->release(), ($<stringval>3)->release(), ($<stringval>5)->release()); } */
 	;
 
 non_neg_int: INTNUM

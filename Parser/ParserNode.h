@@ -620,13 +620,13 @@ class ExistsExpr : public Expr {
 };
 
 /*
- * @type ColumnRef
+ * @type ColumnRefExpr
  * @brief expression for a column reference
  */
-class ColumnRef : public Expr {
+class ColumnRefExpr : public Expr {
  public:
-  explicit ColumnRef(std::string* n1) : table_(nullptr), column_(n1) {}
-  ColumnRef(std::string* n1, std::string* n2) : table_(n1), column_(n2) {}
+  explicit ColumnRefExpr(std::string* n1) : table_(nullptr), column_(n1) {}
+  ColumnRefExpr(std::string* n1, std::string* n2) : table_(n1), column_(n2) {}
   const std::string* get_table() const { return table_.get(); }
   const std::string* get_column() const { return column_.get(); }
   std::shared_ptr<Analyzer::Expr> analyze(
@@ -1783,16 +1783,16 @@ class QuerySpec : public QueryExpr {
  */
 class OrderSpec : public Node {
  public:
-  OrderSpec(int n, ColumnRef* c, bool d, bool f)
+  OrderSpec(int n, ColumnRefExpr* c, bool d, bool f)
       : colno_(n), column_(c), is_desc_(d), nulls_first_(f) {}
   int get_colno() const { return colno_; }
-  const ColumnRef* get_column() const { return column_.get(); }
+  const ColumnRefExpr* get_column() const { return column_.get(); }
   bool get_is_desc() const { return is_desc_; }
   bool get_nulls_first() const { return nulls_first_; }
 
  private:
   int colno_; /* 0 means use column name */
-  std::unique_ptr<ColumnRef> column_;
+  std::unique_ptr<ColumnRefExpr> column_;
   bool is_desc_;
   bool nulls_first_;
 };

@@ -232,7 +232,7 @@ void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   }
 }
 
-void ForeignStorageMgr::clear_system_table_cache(const ColumnByIdxRefSet& input_cols,
+void ForeignStorageMgr::clear_system_table_cache(const ColumnRefSet& input_cols,
                                                  const CompilationOptions& co) {
   std::unordered_map<int32_t, std::unordered_set<int32_t>> table_ids_by_db_id;
   for (const auto& col : input_cols) {
@@ -259,17 +259,17 @@ void ForeignStorageMgr::clear_system_table_cache(const ColumnByIdxRefSet& input_
   }
 }
 
-void ForeignStorageMgr::set_parallelism_hints(const ColumnByIdxRefSet& input_cols) {
+void ForeignStorageMgr::set_parallelism_hints(const ColumnRefSet& input_cols) {
   std::map<ChunkKey, std::set<ParallelismHint>> parallelism_hints_per_table;
   for (const auto& col : input_cols) {
     int db_id = col.db_id;
     int table_id = col.table_id;
+    int col_id = col.column_id;
     auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
 
     auto table = catalog->getMetadataForTable(table_id, false);
     CHECK(table && table->storageType == StorageType::FOREIGN_TABLE);
     if (!table->is_system_table) {
-      int col_id = catalog->getColumnIdBySpi(table_id, col.column_idx + 1);
       const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
       auto foreign_table = catalog->getForeignTable(table_id);
       for (const auto& fragment :
@@ -291,16 +291,16 @@ void ForeignStorageMgr::set_parallelism_hints(const ColumnByIdxRefSet& input_col
   }
 }
 
-void ForeignStorageMgr::prepare_string_dictionaries(const ColumnByIdxRefSet& input_cols) {
+void ForeignStorageMgr::prepare_string_dictionaries(const ColumnRefSet& input_cols) {
   for (const auto& col : input_cols) {
     int db_id = col.db_id;
     int table_id = col.table_id;
+    int col_id = col.column_id;
     auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
 
     auto table = catalog->getMetadataForTable(table_id, false);
     CHECK(table && table->storageType == StorageType::FOREIGN_TABLE);
 
-    int col_id = catalog->getColumnIdBySpi(table_id, col.column_idx + 1);
     const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
     auto foreign_table = catalog->getForeignTable(table_id);
     if (col_desc->columnType.is_dict_encoded_type()) {
@@ -328,7 +328,7 @@ void ForeignStorageMgr::prepare_string_dictionaries(const ColumnByIdxRefSet& inp
   }
 }
 
-void ForeignStorageMgr::prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+void ForeignStorageMgr::prepareTablesForExecution(const ColumnRefSet& input_cols,
                                                   const CompilationOptions& co,
                                                   const ExecutionOptions& eo,
                                                   ExecutionPhase phase) {

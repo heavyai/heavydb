@@ -581,7 +581,7 @@ size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   return gfm->getTableEpoch(db_id, tb_id);
 }
 
-void DataMgr::prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+void DataMgr::prepareTablesForExecution(const ColumnRefSet& input_cols,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo,
                                         ExecutionPhase phase) const {

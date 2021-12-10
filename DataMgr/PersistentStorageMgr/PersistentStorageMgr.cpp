@@ -155,12 +155,12 @@ void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table
   getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
 }
 
-void PersistentStorageMgr::prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+void PersistentStorageMgr::prepareTablesForExecution(const ColumnRefSet& input_cols,
                                                      const CompilationOptions& co,
                                                      const ExecutionOptions& eo,
                                                      ExecutionPhase phase) {
-  ColumnByIdxRefSet gfs_input_cols;
-  ColumnByIdxRefSet foreign_input_cols;
+  ColumnRefSet gfs_input_cols;
+  ColumnRefSet foreign_input_cols;
   for (auto& col : input_cols) {
     if (isForeignStorage({col.db_id, col.table_id})) {
       foreign_input_cols.insert(col);

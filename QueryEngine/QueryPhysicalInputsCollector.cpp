@@ -190,12 +190,12 @@ class RexPhysicalInputsVisitor
   }
 };
 
-class RexIdxInputsVisitor
-    : public RexInputVisitorBase<RexIdxInputsVisitor, ColumnByIdxRefSet> {
+class RexRefInputsVisitor
+    : public RexInputVisitorBase<RexRefInputsVisitor, ColumnRefSet> {
  public:
-  RexIdxInputsVisitor() {}
+  RexRefInputsVisitor() {}
 
-  ColumnByIdxRefSet visitInput(const RexInput* input) const override {
+  ColumnRefSet visitInput(const RexInput* input) const override {
     const auto source_ra = input->getSourceNode();
     const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
     if (!scan_ra) {
@@ -205,14 +205,14 @@ class RexIdxInputsVisitor
         CHECK_LT(input->getIndex(), node_inputs.size());
         return visitInput(&node_inputs[input->getIndex()]);
       }
-      return ColumnByIdxRefSet{};
+      return ColumnRefSet{};
     }
 
     const auto scan_td = scan_ra->getTableDescriptor();
     CHECK(scan_td);
     const int db_id = scan_ra->getDatabaseId();
-    const int col_id = input->getIndex();
     const int table_id = scan_td->tableId;
+    const int col_id = scan_ra->getColumnIdBySpi(input->getIndex() + 1);
     CHECK_GT(table_id, 0);
     return {{db_id, table_id, col_id}};
   }
@@ -244,8 +244,8 @@ std::unordered_set<InputColDescriptor> get_physical_inputs(const RelAlgNode* ra)
   return phys_inputs_visitor.visit(ra);
 }
 
-ColumnByIdxRefSet get_idx_ref_inputs(const RelAlgNode* ra) {
-  RelAlgPhysicalInputsVisitor<RexIdxInputsVisitor, ColumnByIdxRefSet> idx_inputs_visitor;
+ColumnRefSet get_ref_inputs(const RelAlgNode* ra) {
+  RelAlgPhysicalInputsVisitor<RexRefInputsVisitor, ColumnRefSet> idx_inputs_visitor;
   return idx_inputs_visitor.visit(ra);
 }
 

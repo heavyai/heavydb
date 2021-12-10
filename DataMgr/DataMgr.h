@@ -212,7 +212,7 @@ class DataMgr {
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
-  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+  void prepareTablesForExecution(const ColumnRefSet& input_cols,
                                  const CompilationOptions& co,
                                  const ExecutionOptions& eo,
                                  ExecutionPhase phase) const;

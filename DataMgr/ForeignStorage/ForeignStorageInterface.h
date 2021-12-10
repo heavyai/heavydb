@@ -208,7 +208,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     UNREACHABLE();
   }
 
-  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+  void prepareTablesForExecution(const ColumnRefSet& input_cols,
                                  const CompilationOptions& co,
                                  const ExecutionOptions& eo,
                                  ExecutionPhase phase) override {

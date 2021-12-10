@@ -190,7 +190,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                     const int32_t tb_id);  // A locked public wrapper for deleteFileMgr,
                                            // for now for unit testing
 
-  void prepareTablesForExecution(const ColumnByIdxRefSet& input_cols,
+  void prepareTablesForExecution(const ColumnRefSet& input_cols,
                                  const CompilationOptions& co,
                                  const ExecutionOptions& eo,
                                  ExecutionPhase phase) override {}

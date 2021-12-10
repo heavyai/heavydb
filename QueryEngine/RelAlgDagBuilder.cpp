@@ -2288,9 +2288,8 @@ class RelAlgDispatcher {
       auto cd = cat_.getMetadataForColumn(td->tableId, col_name);
       infos.emplace_back(cat_.getDatabaseId(),
                          td->tableId,
-                         infos.size(),
-                         col_name,
                          cd->columnId,
+                         col_name,
                          cd->columnType,
                          cd->isVirtualCol);
     }
@@ -2416,11 +2415,6 @@ class RelAlgDispatcher {
     if (op == "UPDATE") {
       auto all_col_desc =
           cat_.getAllColumnMetadataForTable(table_descriptor->tableId, true, true, false);
-      std::unordered_map<std::string, int> name_to_idx;
-      int idx = 0;
-      for (auto cd : all_col_desc) {
-        name_to_idx[cd->columnName] = idx++;
-      }
       const auto& update_columns = field(logical_modify_ra, "updateColumnList");
       CHECK(update_columns.IsArray());
 
@@ -2430,14 +2424,13 @@ class RelAlgDispatcher {
         auto name = column_arr_it->GetString();
         ColumnInfo info(cat_.getDatabaseId(),
                         table_descriptor->tableId,
-                        name_to_idx[name],
-                        name,
                         -1,
+                        name,
                         SQLTypeInfo(kBIGINT, false),
                         false);
         auto cd = cat_.getMetadataForColumn(table_descriptor->tableId, name);
         if (cd) {
-          info.id = cd->columnId;
+          info.column_id = cd->columnId;
           info.type = cd->columnType;
           info.is_rowid = cd->isVirtualCol;
         } else {

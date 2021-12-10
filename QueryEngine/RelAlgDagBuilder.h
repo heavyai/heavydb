@@ -876,7 +876,7 @@ class RelScan : public RelAlgNode {
     }
 
     CHECK_LT(col_idx, column_infos_.size());
-    return column_infos_[col_idx].id + geo_idx;
+    return column_infos_[col_idx].column_id + geo_idx;
   }
 
   SQLTypeInfo getColumnTypeBySpi(int spi) const {
