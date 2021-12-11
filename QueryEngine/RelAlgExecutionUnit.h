@@ -62,9 +62,23 @@ using QueryPlan = std::string;
 using JoinColumnsInfo = std::string;
 // hashed value of QueryPlanNodeIds
 using QueryPlanHash = size_t;
-// a map btw. a join column and its access path, i.e., a query plan DAG to project B.b
-// here this join column is used to build a hashtable
-using HashTableBuildDag = std::pair<JoinColumnsInfo, QueryPlan>;
+// hold query plan dag and column info of join columns
+// used to detect a correct cached hashtable
+struct HashTableBuildDag {
+ public:
+  HashTableBuildDag(const JoinColumnsInfo& in_inner_cols_info,
+                    const JoinColumnsInfo& in_outer_cols_info,
+                    const QueryPlan& in_inner_cols_access_path,
+                    const QueryPlan& in_outer_cols_access_path)
+      : inner_cols_info(in_inner_cols_info)
+      , outer_cols_info(in_outer_cols_info)
+      , inner_cols_access_path(in_inner_cols_access_path)
+      , outer_cols_access_path(in_outer_cols_access_path) {}
+  JoinColumnsInfo inner_cols_info;
+  JoinColumnsInfo outer_cols_info;
+  QueryPlan inner_cols_access_path;
+  QueryPlan outer_cols_access_path;
+};
 // A map btw. join qual's column info and its corresponding hashtable access path as query
 // plan DAG i.e., A.a = B.b and build hashtable on B.b? <(A.a = B.b) --> query plan DAG of
 // projecting B.b> here, this two-level mapping (join qual -> inner join col -> hashtable

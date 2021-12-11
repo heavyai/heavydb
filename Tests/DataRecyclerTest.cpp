@@ -23,6 +23,7 @@
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
+#include "QueryEngine/Visitors/SQLOperatorDetector.h"
 #include "QueryRunner/QueryRunner.h"
 
 #include <gtest/gtest.h>
@@ -30,12 +31,14 @@
 
 #include <exception>
 #include <future>
+#include <random>
 #include <stdexcept>
 
 extern bool g_is_test_env;
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern bool g_enable_hashjoin_many_to_many;
+extern bool g_from_table_reordering;
 
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
@@ -53,6 +56,13 @@ bool skip_tests(const ExecutorDeviceType device_type) {
   return device_type == ExecutorDeviceType::GPU;
 #endif
 }
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
 
 namespace {
 
@@ -1058,6 +1068,171 @@ TEST(DataRecycler, Empty_Hashtable) {
         dt);
     clearCaches(dt);
   }
+}
+
+TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
+  run_ddl_statement("DROP TABLE IF EXISTS TT1;");
+  run_ddl_statement("DROP TABLE IF EXISTS TT2;");
+  run_ddl_statement("CREATE TABLE TT1 (c1 TEXT ENCODING DICT(32), id1 INT);");
+  run_ddl_statement("CREATE TABLE TT2 (c2 TEXT ENCODING DICT(32), id2 INT);");
+  auto data_mgr = &QR::get()->getCatalog()->getDataMgr();
+  auto executor =
+      Executor::getExecutor(
+          Executor::UNITARY_EXECUTOR_ID, data_mgr, data_mgr->getBufferProvider())
+          .get();
+  auto clear_caches = [&executor, data_mgr](ExecutorDeviceType dt) {
+    auto memory_level =
+        dt == ExecutorDeviceType::CPU ? MemoryLevel::CPU_LEVEL : MemoryLevel::GPU_LEVEL;
+    executor->clearMemory(memory_level, data_mgr);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+
+  auto data_loader = [](const std::string& table_name, int num_rows) {
+    for (int i = 1; i <= num_rows; ++i) {
+      auto val = ::toString(i);
+      auto insert_stmt = "INSERT INTO " + table_name + " VALUES (" + val + ", \'" + val +
+                         "\'"
+                         ");";
+      QR::get()->runSQL(insert_stmt, ExecutorDeviceType::CPU);
+    }
+  };
+
+  data_loader("TT1", 10);
+  data_loader("TT2", 20);
+
+  std::string q1a{"SELECT count(1) FROM TT1 WHERE c1 IN (SELECT c2 FROM TT2);"};
+  std::string q1b{
+      "SELECT count(1) FROM TT1, (SELECT c2 FROM TT2 GROUP BY 1) T2 WHERE c1 = c2;"};
+  auto q1 = std::make_pair(q1a, q1b);
+
+  std::string q2a{
+      "SELECT count(1) FROM TT1 WHERE c1 IN (SELECT c2 FROM TT2 WHERE id2 < 15);"};
+  std::string q2b{
+      "SELECT count(1) FROM TT1, (SELECT c2 FROM TT2 WHERE id2 < 15  GROUP BY 1) T2 "
+      "WHERE c1 = c2;"};
+  auto q2 = std::make_pair(q2a, q2b);
+
+  std::string q3a{
+      "SELECT count(1) FROM TT1 WHERE c1 IN (SELECT c2 FROM TT2 WHERE id2 < 5);"};
+  std::string q3b{
+      "SELECT count(1) FROM TT1, (SELECT c2 FROM TT2 WHERE id2 < 5  GROUP BY 1) T2 WHERE "
+      "c1 = c2;"};
+  auto q3 = std::make_pair(q3a, q3b);
+
+  std::string q4a{"SELECT count(1) FROM TT2 WHERE c2 IN (SELECT c1 FROM TT1);"};
+  std::string q4b{
+      "SELECT count(1) FROM TT2, (SELECT c1 FROM TT1  GROUP BY 1) T1 WHERE c1 = c2;"};
+  auto q4 = std::make_pair(q4a, q4b);
+
+  std::string q5a{
+      "SELECT count(1) FROM TT2 WHERE c2 IN (SELECT c1 FROM TT1 WHERE id1 < 6);"};
+  std::string q5b{
+      "SELECT count(1) FROM TT2, (SELECT c1 FROM TT1 WHERE id1 < 6  GROUP BY 1) T1 WHERE "
+      "c1 = c2;"};
+  auto q5 = std::make_pair(q5a, q5b);
+
+  std::string q6a{
+      "SELECT count(1) FROM TT2 WHERE c2 IN (SELECT c1 FROM TT1 WHERE id1 < 3);"};
+  std::string q6b{
+      "SELECT count(1) FROM TT2, (SELECT c1 FROM TT1 WHERE id1 < 3  GROUP BY 1) T1 WHERE "
+      "c1 = c2;"};
+  auto q6 = std::make_pair(q6a, q6b);
+
+  std::string q7a{"SELECT count(1) FROM TT2, TT1 WHERE c2 = c1;"};
+  std::string q7b{"SELECT count(1) FROM TT1, TT2 WHERE c1 = c2;"};
+  auto q7 = std::make_pair(q7a, q7b);
+
+  std::string q8a{"SELECT count(1) FROM TT2, TT1 WHERE c2 = c1 AND id1 < 6;"};
+  std::string q8b{"SELECT count(1) FROM TT1, TT2 WHERE c1 = c2 AND id2 < 15;"};
+  auto q8 = std::make_pair(q8a, q8b);
+
+  std::string q9a{"SELECT count(1) FROM TT2, TT1 WHERE c2 = c1 AND id1 < 3;"};
+  std::string q9b{"SELECT count(1) FROM TT1, TT2 WHERE c1 = c2 AND id2 < 5;"};
+  auto q9 = std::make_pair(q9a, q9b);
+
+  auto case1 = std::make_pair(q1a, q7a);
+  auto case2 = std::make_pair(q1b, q7a);
+  auto case3 = std::make_pair(q1a, q7b);
+  auto case4 = std::make_pair(q1b, q7b);
+
+  auto check_query = [](const std::string& query, bool expected) {
+    auto root_node = QR::get()->getRootNodeFromParsedQuery(query);
+    auto has_in_expr = SQLOperatorDetector::detect(root_node.get(), SQLOps::kIN);
+    EXPECT_EQ(has_in_expr, expected);
+  };
+
+  auto perform_test = [&clear_caches, &check_query](
+                          const auto queries, size_t expected_num_cached_hashtable) {
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      QR::get()->runSQL(queries.first, dt);
+      QR::get()->runSQL(queries.second, dt);
+      check_query(queries.first, false);
+      check_query(queries.second, false);
+      EXPECT_EQ(expected_num_cached_hashtable,
+                QR::get()->getNumberOfCachedPerfectHashTables());
+      clear_caches(ExecutorDeviceType::CPU);
+    }
+  };
+
+  auto execute_random_query_test = [&clear_caches](auto& queries,
+                                                   size_t expected_num_cached_hashtable) {
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(queries.begin(), queries.end(), g);
+    for (const auto& query : queries) {
+      QR::get()->runSQL(query, ExecutorDeviceType::CPU);
+    }
+    EXPECT_EQ(QR::get()->getNumberOfCachedPerfectHashTables(),
+              expected_num_cached_hashtable);
+    clear_caches(ExecutorDeviceType::CPU);
+  };
+
+  std::vector<std::string> queries_case1 = {
+      q1a, q1b, q2a, q2b, q3a, q3b, q4a, q4b, q5a, q5b, q6a, q6b};
+  std::vector<std::string> queries_case2 = {q7a, q7b, q8a, q8b, q9a, q9b};
+
+  ScopeGuard reset = [orig = g_from_table_reordering] { g_from_table_reordering = orig; };
+
+  // 1. disable from-table-reordering
+  // this means the same join query with different table listing order in FROM clause
+  // affects the cache key computation
+  // for table involving subqueries, we expect explicit subquery, e.g., SELECT ... FROM
+  // ..., (SELECT ...) and implicit subquery (per query planner), e.g., SELECT ... FROM
+  // ... WHERE ... IN (SELECT ...) have different cache key even if their query semantic
+  // is the same since their plan is different, e.g., decorrelation per query planner adds
+  // de-duplication logic
+  g_from_table_reordering = false;
+  clear_caches(ExecutorDeviceType::CPU);
+  for (const auto& test_case : {q1, q2, q3, q4, q5, q6}) {
+    perform_test(test_case, static_cast<size_t>(1));
+  }
+  for (const auto& test_case : {case1, case2, case3, case4}) {
+    perform_test(test_case, static_cast<size_t>(2));
+  }
+  for (const auto& test_case : {q7, q8, q9}) {
+    perform_test(test_case, static_cast<size_t>(2));
+  }
+  execute_random_query_test(queries_case1, 6);
+  execute_random_query_test(queries_case2, 2);
+
+  // 2. enable from-table-reordering
+  // if the table cardinality and a join qual are the same, we have the same cache key
+  // regardless of table listing order in FROM clause
+  //
+  g_from_table_reordering = true;
+  clear_caches(ExecutorDeviceType::CPU);
+  for (const auto& test_case : {q1, q2, q3, q4, q5, q6}) {
+    perform_test(test_case, static_cast<size_t>(1));
+  }
+  for (const auto& test_case : {case1, case2, case3, case4}) {
+    perform_test(test_case, static_cast<size_t>(2));
+  }
+  for (const auto& test_case : {q7, q8, q9}) {
+    perform_test(test_case, static_cast<size_t>(1));
+  }
+  execute_random_query_test(queries_case1, 6);
+  execute_random_query_test(queries_case2, 1);
 }
 
 int main(int argc, char* argv[]) {

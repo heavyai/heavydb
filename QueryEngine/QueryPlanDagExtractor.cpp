@@ -297,22 +297,30 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
 
   if (!rel_trans_join->isNestedLoopQual()) {
     std::ostringstream oss;
+    std::vector<std::string> join_cols_info;
     auto inner_join_cols = rel_trans_join->getJoinCols(true);
-    oss << global_dag_.translateColVarsToInfoString(inner_join_cols, false);
-    auto hash_table_cols_info = oss.str();
-    oss << "|";
+    auto inner_join_col_info =
+        global_dag_.translateColVarsToInfoString(inner_join_cols, false);
+    join_cols_info.push_back(inner_join_col_info);
     auto outer_join_cols = rel_trans_join->getJoinCols(false);
-    oss << global_dag_.translateColVarsToInfoString(outer_join_cols, false);
-    auto join_qual_info = oss.str();
+    auto outer_join_col_info =
+        global_dag_.translateColVarsToInfoString(outer_join_cols, false);
+    join_cols_info.push_back(outer_join_col_info);
+    auto join_qual_info = boost::join(join_cols_info, "|");
     // hash table join cols info | hash table build plan dag (hashtable identifier or
     // hashtable access path)
     auto it = hash_table_query_plan_dag_.find(join_qual_info);
     if (it == hash_table_query_plan_dag_.end()) {
       VLOG(2) << "Add hashtable access path"
-              << ", join col info: " << hash_table_cols_info
-              << ", access path: " << hash_table_identfier << "\n";
-      hash_table_query_plan_dag_.emplace(
-          join_qual_info, std::make_pair(hash_table_cols_info, hash_table_identfier));
+              << ", inner join col info: " << inner_join_col_info
+              << " (access path: " << hash_table_identfier << ")"
+              << ", outer join col info: " << outer_join_col_info
+              << " (access path: " << outer_table_identifier << ")";
+      hash_table_query_plan_dag_.emplace(join_qual_info,
+                                         HashTableBuildDag(inner_join_col_info,
+                                                           outer_join_col_info,
+                                                           hash_table_identfier,
+                                                           outer_table_identifier));
     }
   } else {
     VLOG(2) << "Add loop join access path, for LHS: " << outer_table_identifier
