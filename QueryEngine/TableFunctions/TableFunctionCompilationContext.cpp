@@ -217,7 +217,7 @@ llvm::Value* alloc_column_list(std::string col_list_name,
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     const TableFunctionExecutionUnit& exe_unit,
     const CompilationOptions& co,
-    bool emit_only_require_check) {
+    bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
 
   auto cgen_state = executor_->getCgenStatePtr();
@@ -229,13 +229,13 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
 
   generateEntryPoint(exe_unit,
                      /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU,
-                     emit_only_require_check);
+                     emit_only_preflight_fn);
 
   if (co.device_type == ExecutorDeviceType::GPU) {
-    CHECK(!emit_only_require_check);
+    CHECK(!emit_only_preflight_fn);
     generateGpuKernel();
   }
-  auto result = finalize(co, emit_only_require_check);
+  auto result = finalize(co, emit_only_preflight_fn);
   module.release();
   cgen_state->module_ = nullptr;
   return result;
@@ -261,20 +261,20 @@ void TableFunctionCompilationContext::generateTableFunctionCall(
     const std::vector<llvm::Value*>& func_args,
     llvm::BasicBlock* bb_exit,
     llvm::Value* output_row_count_ptr,
-    bool emit_only_require_check) {
+    bool emit_only_preflight_fn) {
   auto cgen_state = executor_->getCgenStatePtr();
   // Emit llvm IR code to call the table function
   llvm::LLVMContext& ctx = cgen_state->context_;
   llvm::IRBuilder<>* ir_builder = &cgen_state->ir_builder_;
 
   std::string func_name =
-      (emit_only_require_check ? exe_unit.table_func.getRequireCheckFnName()
-                               : exe_unit.table_func.getName(false, true));
+      (emit_only_preflight_fn ? exe_unit.table_func.getPreFlightFnName()
+                              : exe_unit.table_func.getName(false, true));
   llvm::Value* table_func_return =
       cgen_state->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
 
-  table_func_return->setName(emit_only_require_check ? "require_check_func_ret"
-                                                     : "table_func_ret");
+  table_func_return->setName(emit_only_preflight_fn ? "preflight_check_func_ret"
+                                                    : "table_func_ret");
 
   // If table_func_return is non-negative then store the value in
   // output_row_count and return zero. Otherwise, return
@@ -300,7 +300,7 @@ void TableFunctionCompilationContext::generateTableFunctionCall(
 void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu,
-    bool emit_only_require_check) {
+    bool emit_only_preflight_fn) {
   CHECK(entry_point_func_);
   CHECK_EQ(entry_point_func_->arg_size(), 5);
   auto arg_it = entry_point_func_->arg_begin();
@@ -428,7 +428,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
         output_row_count_ptr,
         ctx,
         cgen_state->ir_builder_);
-    if (!is_gpu) {
+    if (!is_gpu && !emit_only_preflight_fn) {
       cgen_state->emitExternalCall(
           "TableFunctionManager_register_output_column",
           llvm::Type::getVoidTy(ctx),
@@ -439,7 +439,9 @@ void TableFunctionCompilationContext::generateEntryPoint(
 
   // output column members must be set before loading column when
   // column instances are passed by value
-  if (exe_unit.table_func.hasOutputSizeKnownPreLaunch() && !is_gpu) {
+  if ((exe_unit.table_func.hasOutputSizeKnownPreLaunch() ||
+       exe_unit.table_func.hasPreFlightOutputSizer()) &&
+      !is_gpu && !emit_only_preflight_fn) {
     cgen_state->emitExternalCall(
         "TableFunctionManager_set_output_row_size",
         llvm::Type::getVoidTy(ctx),
@@ -452,7 +454,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   }
 
   generateTableFunctionCall(
-      exe_unit, func_args, bb_exit, output_row_count_ptr, emit_only_require_check);
+      exe_unit, func_args, bb_exit, output_row_count_ptr, emit_only_preflight_fn);
 
   // std::cout << "=================================" << std::endl;
   // entry_point_func_->print(llvm::outs());
@@ -503,7 +505,7 @@ void TableFunctionCompilationContext::generateGpuKernel() {
 
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     const CompilationOptions& co,
-    bool emit_only_require_check) {
+    bool emit_only_preflight_fn) {
   /*
     TODO 1: eliminate need for OverrideFromSrc
     TODO 2: detect and link only the udf's that are needed
@@ -524,8 +526,8 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
 
   // Add code to cache?
 
-  LOG(IR) << (emit_only_require_check ? "Require Check Function Entry Point IR\n"
-                                      : "Table Function Entry Point IR\n")
+  LOG(IR) << (emit_only_preflight_fn ? "Pre Flight Function Entry Point IR\n"
+                                     : "Table Function Entry Point IR\n")
           << serialize_llvm_object(entry_point_func_);
   std::shared_ptr<CompilationContext> code;
   if (co.device_type == ExecutorDeviceType::GPU) {

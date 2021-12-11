@@ -37,22 +37,22 @@ class TableFunctionCompilationContext {
 
   std::shared_ptr<CompilationContext> compile(const TableFunctionExecutionUnit& exe_unit,
                                               const CompilationOptions& co,
-                                              bool emit_only_require_check);
+                                              bool emit_only_preflight_fn);
 
  private:
   void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit,
                           bool is_gpu,
-                          bool emit_only_require_check);
+                          bool emit_only_preflight_fn);
   void generateTableFunctionCall(const TableFunctionExecutionUnit& exe_unit,
                                  const std::vector<llvm::Value*>& func_args,
                                  llvm::BasicBlock* bb_exit,
                                  llvm::Value* output_row_count_ptr,
-                                 bool emit_only_require_check);
+                                 bool emit_only_preflight_fn);
   void generateGpuKernel();
   bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
 
   std::shared_ptr<CompilationContext> finalize(const CompilationOptions& co,
-                                               bool emit_only_require_check);
+                                               bool emit_only_preflight_fn);
 
   llvm::Function* entry_point_func_;
   llvm::Function* kernel_func_;

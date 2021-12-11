@@ -17,6 +17,15 @@
   UDTF: foo(Column<int32>, Constant<5>) -> Column<int32> $=>$
         foo(ColumnInt32, kConstant<5>) -> ColumnInt32
 
+  UDTF: foo(Column<int32>, int i, int j) -> Column<int32> | output_row_size="i * j" $=>$
+        foo(ColumnInt32, Int32 | name=i, Int32 | name=j) -> ColumnInt32 | kPreFlightParameter="i * j"
+
+  UDTF: foo(Column<int32>, int i, int j) -> Column<int32> | output_row_size=5 $=>$
+        foo(ColumnInt32, Int32 | name=i, Int32 | name=j) -> ColumnInt32 | kPreFlightParameter=5
+
+  UDTF: foo(Column<int32>, int i, int j) -> Column<int32> | output_row_size=i $=>$
+        foo(ColumnInt32, Int32 | name=i, Int32 | name=j) -> ColumnInt32 | kPreFlightParameter=i
+
   UDTF: foo(Cursor<Column<int32>>) -> Column<int32> $=>$
         foo(Cursor<ColumnInt32> | fields=[field0]) -> ColumnInt32
 

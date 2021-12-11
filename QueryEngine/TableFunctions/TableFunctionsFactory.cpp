@@ -155,7 +155,10 @@ int32_t TableFunction::countScalarArgs() const {
   return scalar_args;
 }
 
-bool TableFunction::containsRequireFnCheck() const {
+bool TableFunction::containsPreFlightFn() const {
+  if (hasPreFlightOutputSizer()) {
+    return true;
+  }
   // workaround for default args
   for (size_t idx = 0; idx < std::min(input_args_.size(), annotations_.size()); idx++) {
     const auto& ann = getInputAnnotation(idx);
@@ -415,9 +418,9 @@ std::string TableFunction::getName(const bool drop_suffix, const bool lower) con
   return result;
 }
 
-std::string TableFunction::getRequireCheckFnName() const {
-  // gets the name of the require check function associated with this table function
-  return getName(false, true) + REQUIRE_CHECK_SUFFIX;
+std::string TableFunction::getPreFlightFnName() const {
+  // gets the name of the pre flight function associated with this table function
+  return getName(false, true) + PREFLIGHT_SUFFIX;
 }
 
 std::vector<TableFunction> TableFunctionsFactory::get_table_funcs(const std::string& name,

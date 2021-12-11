@@ -1741,7 +1741,7 @@ ResultSetPtr Executor::executeTableFunction(
   ColumnFetcher column_fetcher(this, column_cache);
   TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
 
-  if (exe_unit.table_func.containsRequireFnCheck()) {
+  if (exe_unit.table_func.containsPreFlightFn()) {
     std::shared_ptr<CompilationContext> compilation_context;
     {
       auto clock_begin = timer_start();
@@ -1752,7 +1752,7 @@ ResultSetPtr Executor::executeTableFunction(
       compilation_context =
           tf_compilation_context.compile(exe_unit,
                                          CompilationOptions::makeCpuOnly(co),
-                                         true /* emit_only_require_check*/);
+                                         true /* emit_only_preflight_fn*/);
     }
     exe_context.execute(exe_unit,
                         table_infos,
@@ -1772,7 +1772,7 @@ ResultSetPtr Executor::executeTableFunction(
     nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
     TableFunctionCompilationContext tf_compilation_context(this);
     compilation_context =
-        tf_compilation_context.compile(exe_unit, co, false /* emit_only_require_check */);
+        tf_compilation_context.compile(exe_unit, co, false /* emit_only_preflight_fn */);
   }
 
   return exe_context.execute(exe_unit,

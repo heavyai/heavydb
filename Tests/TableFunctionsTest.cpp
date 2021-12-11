@@ -422,6 +422,34 @@ TEST_F(TableFunctions, BasicProjection) {
       }
     }
 
+    // Test for pre-flight sizer (QE-179)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_test_preflight_sizer(cursor(SELECT x from tf_test), "
+          "0, 2));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      std::vector<int64_t> expected_result_set{123, 456};
+      for (size_t i = 0; i < 2; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_test_preflight_sizer_const(cursor(SELECT x from "
+          "tf_test)));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      std::vector<int64_t> expected_result_set{789, 321};
+      for (size_t i = 0; i < 2; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
+
     // Tests various invalid returns from a table function:
     if (dt == ExecutorDeviceType::CPU) {
       const auto rows = run_multiple_agg(
@@ -1051,6 +1079,13 @@ TEST_F(TableFunctions, ThrowingTests) {
                                     " FROM tf_test), 6));",
                                     dt),
                    TableFunctionError);
+    }
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_test_preflight_sizer(cursor(SELECT x"
+                           " FROM tf_test), -2, -3));",
+                           dt),
+          TableFunctionError);
     }
     {
       const auto rows = run_multiple_agg(

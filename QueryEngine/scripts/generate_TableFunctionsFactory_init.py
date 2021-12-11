@@ -77,7 +77,7 @@ else:
 # fmt: off
 separator = '$=>$'
 
-Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations', 'function_annotations'])
+Signature = namedtuple('Signature', ['name', 'inputs', 'outputs', 'input_annotations', 'output_annotations', 'function_annotations', 'sizer'])
 
 ExtArgumentTypes = ''' Int8, Int16, Int32, Int64, Float, Double, Void, PInt8, PInt16,
 PInt32, PInt64, PFloat, PDouble, PBool, Bool, ArrayInt8, ArrayInt16,
@@ -89,7 +89,7 @@ ColumnListInt8, ColumnListInt16, ColumnListInt32, ColumnListInt64,
 ColumnListFloat, ColumnListDouble, ColumnListBool, ColumnListTextEncodingDict'''.strip().replace(' ', '').replace('\n', '').split(',')
 
 OutputBufferSizeTypes = '''
-kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableFunctionSpecifiedParameter
+kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableFunctionSpecifiedParameter, kPreFlightParameter
 '''.strip().replace(' ', '').split(',')
 
 SupportedAnnotations = '''
@@ -103,6 +103,7 @@ filter_table_function_transpose
 
 translate_map = dict(
     Constant='kConstant',
+    PreFlight='kPreFlightParameter',
     ConstantParameter='kUserSpecifiedConstantParameter',
     RowMultiplier='kUserSpecifiedRowMultiplier',
     UserSpecifiedConstantParameter='kUserSpecifiedConstantParameter',
@@ -249,11 +250,18 @@ class Bracket:
     def is_row_multiplier(self):
         return self.name.rsplit("::", 1)[-1] == 'kUserSpecifiedRowMultiplier'
 
+    def is_arg_sizer(self):
+        return self.name.rsplit("::", 1)[-1] == 'kPreFlightParameter'
+
     def is_user_specified(self):
         # Return True if given argument cannot specified by user
         if self.is_output_buffer_sizer():
-            return self.name.rsplit("::", 1)[-1] not in ('kConstant', 'kTableFunctionSpecifiedParameter')
+            return self.name.rsplit("::", 1)[-1] not in ('kConstant', 'kTableFunctionSpecifiedParameter', 'kPreFlightParameter')
         return True
+
+    def format_sizer(self):
+        val = 0 if self.is_arg_sizer() else self.args[0]
+        return 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}' % (self.name, val)
 
     def get_cpp_type(self):
         name = self.name.rsplit("::", 1)[-1]
@@ -338,7 +346,7 @@ def find_comma(line):
 def line_is_incomplete(line):
     # TODO: try to parse the line to be certain about completeness.
     # `$=>$' is used to separate the UDTF signature and the expected result
-    return line.endswith(',') or line.endswith('->') or line.endswith(separator)
+    return line.endswith(',') or line.endswith('->') or line.endswith(separator) or line.endswith('|')
 
 
 def is_identifier_cursor(identifier):
@@ -647,13 +655,14 @@ class AstPrinter(AstVisitor):
         inputs = ", ".join([arg.accept(self) for arg in udtf_node.inputs])
         outputs = ", ".join([arg.accept(self) for arg in udtf_node.outputs])
         annotations = "| ".join([annot.accept(self) for annot in udtf_node.annotations])
+        sizer = " | " + udtf_node.sizer.accept(self) if udtf_node.sizer else ""
         if annotations:
             annotations = ' | ' + annotations
         if udtf_node.templates:
             templates = ", ".join([t.accept(self) for t in udtf_node.templates])
-            return "%s(%s)%s -> %s, %s" % (name, inputs, annotations, outputs, templates)
+            return "%s(%s)%s -> %s, %s%s" % (name, inputs, annotations, outputs, templates, sizer)
         else:
-            return "%s(%s)%s -> %s" % (name, inputs, annotations, outputs)
+            return "%s(%s)%s -> %s%s" % (name, inputs, annotations, outputs, sizer)
 
     def visit_template_node(self, template_node):
         # T=[T1, T2, ..., TN]
@@ -736,7 +745,7 @@ class TemplateTransformer(AstTransformer):
             self.mapping_dict = product
             inputs = [input_arg.accept(self) for input_arg in udtf_node.inputs]
             outputs = [output_arg.accept(self) for output_arg in udtf_node.outputs]
-            udtfs.append(UdtfNode(name, inputs, outputs, udtf_node.annotations, None, udtf_node.line))
+            udtfs.append(UdtfNode(name, inputs, outputs, udtf_node.annotations, None, udtf_node.sizer, udtf_node.line))
             self.mapping_dict = {}
 
         if len(udtfs) == 1:
@@ -847,6 +856,7 @@ class SignatureTransformer(AstTransformer):
         outputs = []
         output_annotations = []
         function_annotations = []
+        sizer = udtf_node.sizer
 
         for i in udtf_node.inputs:
             decl = i.accept(self)
@@ -862,7 +872,7 @@ class SignatureTransformer(AstTransformer):
             annot = annot.accept(self)
             function_annotations.append(annot)
 
-        return Signature(name, inputs, outputs, input_annotations, output_annotations, function_annotations)
+        return Signature(name, inputs, outputs, input_annotations, output_annotations, function_annotations, sizer)
 
     def visit_arg_node(self, arg_node):
         t = arg_node.type.accept(self)
@@ -928,7 +938,7 @@ class IterableNode(Iterable):
 
 class UdtfNode(Node, IterableNode):
 
-    def __init__(self, name, inputs, outputs, annotations, templates, line):
+    def __init__(self, name, inputs, outputs, annotations, templates, sizer, line):
         """
         Parameters
         ----------
@@ -937,6 +947,7 @@ class UdtfNode(Node, IterableNode):
         outputs : list[ArgNode]
         annotations : Optional[List[AnnotationNode]]
         templates : Optional[list[TemplateNode]]
+        sizer : Optional[str]
         line: str
         """
         self.name = name
@@ -944,6 +955,7 @@ class UdtfNode(Node, IterableNode):
         self.outputs = outputs
         self.annotations = annotations
         self.templates = templates
+        self.sizer = sizer
         self.line = line
 
     def accept(self, visitor):
@@ -954,17 +966,18 @@ class UdtfNode(Node, IterableNode):
         inputs = [str(i) for i in self.inputs]
         outputs = [str(o) for o in self.outputs]
         annotations = [str(a) for a in self.annotations]
+        sizer = "| %s" % str(self.sizer) if self.sizer else ""
         if self.templates:
             templates = [str(t) for t in self.templates]
             if annotations:
-                return "UDTF: %s (%s) | %s -> %s, %s" % (name, inputs, annotations, outputs, templates)
+                return "UDTF: %s (%s) | %s -> %s, %s %s" % (name, inputs, annotations, outputs, templates, sizer)
             else:
-                return "UDTF: %s (%s) -> %s, %s" % (name, inputs, outputs, templates)
+                return "UDTF: %s (%s) -> %s, %s %s" % (name, inputs, outputs, templates, sizer)
         else:
             if annotations:
-                return "UDTF: %s (%s) | %s -> %s" % (name, inputs, annotations, outputs)
+                return "UDTF: %s (%s) | %s -> %s %s" % (name, inputs, annotations, outputs, sizer)
             else:
-                return "UDTF: %s (%s) -> %s" % (name, inputs, outputs)
+                return "UDTF: %s (%s) -> %s %s" % (name, inputs, outputs, sizer)
 
     def __iter__(self):
         for i in self.inputs:
@@ -1219,10 +1232,13 @@ class Parser:
         curr_token = self.current_token()
         return curr_token.type == expected_type
 
+    def lookahead(self):
+        return self._tokens[self._curr + 1]
+
     def parse_udtf(self):
         """fmt: off
 
-        udtf: IDENTIFIER "(" (args)? ")" ("|" annotation)* "->" args ("," templates)?
+        udtf: IDENTIFIER "(" (args)? ")" ("|" annotation)* "->" args ("," templates)? ("|" "output_row_size" "=" primitive)?
 
         fmt: on
         """
@@ -1244,6 +1260,16 @@ class Parser:
             self.consume(Token.COMMA)
             templates = self.parse_templates()
 
+        sizer = None
+        if not self.is_at_end() and self.match(Token.VBAR):
+            self.consume(Token.VBAR)
+            idtn = self.parse_identifier()
+            assert idtn == "output_row_size"
+            self.consume(Token.EQUAL)
+            node = self.parse_primitive()
+            key = "kPreFlightParameter"
+            sizer = AnnotationNode(key, value=node.type)
+
         # set arg_pos
         i = 0
         for arg in input_args:
@@ -1255,7 +1281,7 @@ class Parser:
             arg.arg_pos = i
             arg.kind = "output"
 
-        return UdtfNode(name, input_args, output_args, annotations, templates, self.line)
+        return UdtfNode(name, input_args, output_args, annotations, templates, sizer, self.line)
 
     def parse_args(self):
         """fmt: off
@@ -1295,6 +1321,9 @@ class Parser:
             annotations.append(AnnotationNode('name', name))
 
         while not self.is_at_end() and self.match(Token.VBAR):
+            ahead = self.lookahead()
+            if ahead.type == Token.IDENTIFIER and ahead.lexeme == 'output_row_size':
+                break
             self.consume(Token.VBAR)
             annotations.append(self.parse_annotation())
 
@@ -1348,6 +1377,7 @@ class Parser:
 
         primitive: IDENTIFIER
                  | NUMBER
+                 | STRING
 
         fmt: on
         """
@@ -1355,6 +1385,8 @@ class Parser:
             lexeme = self.parse_identifier()
         elif self.match(Token.NUMBER):
             lexeme = self.parse_number()
+        elif self.match(Token.STRING):
+            lexeme = self.parse_string()
         else:
             raise self.raise_parser_error()
         return PrimitiveNode(lexeme)
@@ -1461,7 +1493,7 @@ class Parser:
     def parse(self):
         """fmt: off
 
-        udtf: IDENTIFIER "(" (args)? ")" ("|" annotation)* "->" args ("," templates)?
+        udtf: IDENTIFIER "(" (args)? ")" ("|" annotation)* "->" args ("," templates)? ("|" "output_row_size" "=" primitive)?
 
         args: arg ("," arg)*
 
@@ -1475,6 +1507,7 @@ class Parser:
 
         primitive: IDENTIFIER
                  | NUMBER
+                 | STRING
 
         annotation: IDENTIFIER "=" IDENTIFIER ("<" NUMBER ("," NUMBER) ">")?
                   | IDENTIFIER "=" "[" PRIMITIVE? ("," PRIMITIVE)* "]"
@@ -1593,7 +1626,7 @@ def build_template_function_call(caller, callee, input_types, output_types, uses
     return template
 
 
-def build_require_check_function(fn_name, input_types, output_types, input_annotations, uses_manager):
+def build_preflight_function(fn_name, sizer, input_types, output_types, input_annotations, uses_manager):
 
     def format_error_msg(err_msg, uses_manager):
         if uses_manager:
@@ -1622,7 +1655,7 @@ def build_require_check_function(fn_name, input_types, output_types, input_annot
 
     args = ', '.join(input_cpp_args + output_cpp_args)
     fn = "EXTENSION_NOINLINE int32_t\n"
-    fn += "%s(%s) {\n" % (fn_name.lower() + "__require_check", args)
+    fn += "%s(%s) {\n" % (fn_name.lower() + "__preflight", args)
 
     for idx, _ in enumerate(input_annotations):
         ann = input_annotations[idx]
@@ -1634,13 +1667,27 @@ def build_require_check_function(fn_name, input_types, output_types, input_annot
                 fn += format_error_msg(err_msg, uses_manager)
                 fn += "  }\n"
 
-    fn += "  return 0;\n"
+    if sizer.is_arg_sizer():
+        precomputed_nrows = str(sizer.args[0])
+        if '"' in precomputed_nrows:
+            precomputed_nrows = precomputed_nrows[1:-1]
+        # check to see if the precomputed number of rows > 0
+        err_msg = '"Output size expression `%s` evaluated in a negative value."' % (precomputed_nrows)
+        fn += "  auto _output_size = %s;\n" % (precomputed_nrows)
+        fn += "  if (_output_size < 0) {\n"
+        fn += format_error_msg(err_msg, uses_manager)
+        fn += "  }\n"
+        fn += "  return _output_size;\n"
+    else:
+        fn += "  return 0;\n"
     fn += "}\n\n"
 
     return fn
 
 
-def contains_require_check(sig):
+def must_emit_preflight_function(sig, sizer):
+    if sizer.is_arg_sizer():
+        return True
     for arg_annotations in sig.input_annotations:
         d = dict(arg_annotations)
         if 'require' in d.keys():
@@ -1707,7 +1754,12 @@ def parse_annotations(input_files):
             sql_types_ = []
             input_types_ = []
             input_annotations = []
+
             sizer = None
+            if sig.sizer is not None:
+                expr = sig.sizer.value
+                sizer = Bracket('kPreFlightParameter', (expr,))
+
             uses_manager = False
             for i, (t, annot) in enumerate(zip(sig.inputs, sig.input_annotations)):
                 if t.is_output_buffer_sizer():
@@ -1717,7 +1769,7 @@ def parse_annotations(input_files):
                         input_annotations.append(annot)
                     assert sizer is None  # exactly one sizer argument is allowed
                     assert len(t.args) == 1, t
-                    sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}' % (t.name, t.args[0])
+                    sizer = t
                 elif t.name == 'Cursor':
                     for t_ in t.args:
                         input_types_.append(t_)
@@ -1739,7 +1791,7 @@ def parse_annotations(input_files):
             if sizer is None:
                 name = 'kTableFunctionSpecifiedParameter'
                 idx = 1  # this sizer is not actually materialized in the UDTF
-                sizer = 'TableFunctionOutputRowSizer{OutputBufferSizeType::%s, %s}' % (name, idx)
+                sizer = Bracket(name, (idx,))
 
             assert sizer is not None
             ns_output_types = tuple([a.apply_namespace(ns='ExtArgumentType') for a in sig.outputs])
@@ -1761,9 +1813,9 @@ def parse_annotations(input_files):
             # while sig.input_types contains all arguments of the
             # implementation of an UDTF.
 
-            if contains_require_check(sig):
+            if must_emit_preflight_function(sig, sizer):
                 fn_name = '%s_%s' % (sig.name, str(counter)) if is_template_function(sig) else sig.name
-                check_fn = build_require_check_function(fn_name, input_types_, sig.outputs, input_annotations, uses_manager)
+                check_fn = build_preflight_function(fn_name, sizer, input_types_, sig.outputs, input_annotations, uses_manager)
                 cond_fns.append(check_fn)
 
             if is_template_function(sig):
@@ -1778,12 +1830,12 @@ def parse_annotations(input_files):
                     gpu_template_functions.append(t)
                     gpu_function_address_expressions.append(address_expression)
                 add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
-                       % (name, sizer, input_types, output_types, sql_types, annotations))
+                       % (name, sizer.format_sizer(), input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
 
             else:
                 add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
-                       % (sig.name, sizer, input_types, output_types, sql_types, annotations))
+                       % (sig.name, sizer.format_sizer(), input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
                 address_expression = ('avoid_opt_address(reinterpret_cast<void*>(%s))' % sig.name)
 

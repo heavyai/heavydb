@@ -107,7 +107,7 @@ TEST_F(SystemTFs, Mandelbrot) {
             ", "
             "128 "
             "/* height */, -2.5 /* min_x */, 1.0 /* max_x */, -1.0 /* min_y */, 1.0 /* "
-            "max_y */, 256 /* max_iterations */, 16384 /* output_size */));",
+            "max_y */, 256 /* max_iterations */));",
             dt);
         ASSERT_EQ(rows->rowCount(), size_t(1));
         ASSERT_EQ(rows->colCount(), size_t(3));

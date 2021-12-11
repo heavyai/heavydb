@@ -589,6 +589,8 @@ inline table_functions::OutputBufferSizeType from_thrift(
       return table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier;
     case TOutputBufferSizeType::kTableFunctionSpecifiedParameter:
       return table_functions::OutputBufferSizeType::kTableFunctionSpecifiedParameter;
+    case TOutputBufferSizeType::kPreFlightParameter:
+      return table_functions::OutputBufferSizeType::kPreFlightParameter;
   }
   UNREACHABLE();
   return table_functions::OutputBufferSizeType{};
@@ -605,6 +607,8 @@ inline TOutputBufferSizeType::type to_thrift(
       return TOutputBufferSizeType::kUserSpecifiedRowMultiplier;
     case table_functions::OutputBufferSizeType::kTableFunctionSpecifiedParameter:
       return TOutputBufferSizeType::kTableFunctionSpecifiedParameter;
+    case table_functions::OutputBufferSizeType::kPreFlightParameter:
+      return TOutputBufferSizeType::kPreFlightParameter;
   }
   UNREACHABLE();
   return TOutputBufferSizeType::type{};

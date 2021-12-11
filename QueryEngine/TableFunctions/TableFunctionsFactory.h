@@ -26,7 +26,7 @@
 
 #define DEFAULT_ROW_MULTIPLIER_SUFFIX "__default_RowMultiplier_"
 #define DEFAULT_ROW_MULTIPLIER_VALUE 1
-#define REQUIRE_CHECK_SUFFIX "__require_check"
+#define PREFLIGHT_SUFFIX "__preflight"
 
 /*
 
@@ -116,6 +116,8 @@ struct TableFunctionOutputRowSizer {
         return "kConstant[" + std::to_string(val) + "]";
       case OutputBufferSizeType::kTableFunctionSpecifiedParameter:
         return "kTableFunctionSpecifiedParameter[" + std::to_string(val) + "]";
+      case OutputBufferSizeType::kPreFlightParameter:
+        return "kPreFlightParameter[" + std::to_string(val) + "]";
     }
     return "";
   }
@@ -180,6 +182,10 @@ class TableFunction {
     return output_sizer_.type == OutputBufferSizeType::kConstant;
   }
 
+  bool hasPreFlightOutputSizer() const {
+    return output_sizer_.type == OutputBufferSizeType::kPreFlightParameter;
+  }
+
   bool hasUserSpecifiedOutputSizeConstant() const {
     return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter;
   }
@@ -200,13 +206,15 @@ class TableFunction {
 
   bool hasNonUserSpecifiedOutputSize() const {
     return output_sizer_.type == OutputBufferSizeType::kConstant ||
-           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
+           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter ||
+           output_sizer_.type == OutputBufferSizeType::kPreFlightParameter;
   }
 
   bool hasOutputSizeIndependentOfInputSize() const {
     return output_sizer_.type == OutputBufferSizeType::kConstant ||
            output_sizer_.type == OutputBufferSizeType::kUserSpecifiedConstantParameter ||
-           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter;
+           output_sizer_.type == OutputBufferSizeType::kTableFunctionSpecifiedParameter ||
+           output_sizer_.type == OutputBufferSizeType::kPreFlightParameter;
   }
 
   bool hasOutputSizeKnownPreLaunch() const {
@@ -223,8 +231,8 @@ class TableFunction {
 
   size_t getOutputRowSizeParameter() const { return output_sizer_.val; }
 
-  bool containsRequireFnCheck() const;
-  std::string getRequireCheckFnName() const;
+  bool containsPreFlightFn() const;
+  std::string getPreFlightFnName() const;
 
   const std::map<std::string, std::string>& getAnnotation(const size_t idx) const;
   const std::map<std::string, std::string>& getInputAnnotation(

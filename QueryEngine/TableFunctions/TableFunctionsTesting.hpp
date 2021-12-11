@@ -1657,3 +1657,26 @@ EXTENSION_NOINLINE int32_t ct_test_nullable(const Column<int32_t>& input,
   }
   return input.size();
 }
+
+// clang-format off
+/*
+  UDTF: ct_test_preflight_sizer(Column<int32_t> col, int i, int j) -> Column<int32_t> | output_row_size="i + j"
+  UDTF: ct_test_preflight_sizer_const(Column<int32_t> col) -> Column<int32_t> | output_row_size=2
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_test_preflight_sizer(const Column<int32_t>& input,
+                                                   const int32_t i,
+                                                   const int32_t j,
+                                                   Column<int32_t>& out) {
+  out[0] = 123;
+  out[1] = 456;
+  return out.size();
+}
+
+EXTENSION_NOINLINE int32_t ct_test_preflight_sizer_const(const Column<int32_t>& input,
+                                                         Column<int32_t>& out) {
+  out[0] = 789;
+  out[1] = 321;
+  return out.size();
+}

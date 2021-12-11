@@ -92,7 +92,8 @@ size_t get_output_row_count(const TableFunctionExecutionUnit& exe_unit,
   size_t allocated_output_row_count = 0;
   switch (exe_unit.table_func.getOutputRowSizeType()) {
     case table_functions::OutputBufferSizeType::kConstant:
-    case table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter: {
+    case table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter:
+    case table_functions::OutputBufferSizeType::kPreFlightParameter: {
       allocated_output_row_count = exe_unit.output_buffer_size_param;
       break;
     }
@@ -268,7 +269,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     CHECK(input_num_rows);
   }
   if (is_pre_launch_udtf) {
-    CHECK(exe_unit.table_func.containsRequireFnCheck());
+    CHECK(exe_unit.table_func.containsPreFlightFn());
     launchPreCodeOnCpu(
         exe_unit,
         std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context),
@@ -324,13 +325,6 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
       row_set_mem_owner_,
       /*is_singleton=*/!exe_unit.table_func.usesManager());
 
-  if (exe_unit.table_func.hasOutputSizeKnownPreLaunch()) {
-    // allocate output buffers because the size is known up front, from
-    // user specified parameters (and table size in the case of a user
-    // specified row multiplier)
-    output_row_count = get_output_row_count(exe_unit, elem_count);
-  }
-
   // setup the inputs
   // We can have an empty col_buf_ptrs vector if there are no arguments to the function
   const auto byte_stream_ptr = !col_buf_ptrs.empty()
@@ -353,11 +347,15 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
       nullptr,
       &output_row_count);
 
+  if (exe_unit.table_func.hasPreFlightOutputSizer()) {
+    exe_unit.output_buffer_size_param = output_row_count;
+  }
+
   if (err == TableFunctionErrorCode::GenericError) {
-    throw UserTableFunctionError("Error executing table function require check: " +
+    throw UserTableFunctionError("Error executing table function pre flight check: " +
                                  std::string(mgr->get_error_message()));
   } else if (err) {
-    throw UserTableFunctionError("Error executing table function require check: " +
+    throw UserTableFunctionError("Error executing table function pre flight check: " +
                                  std::to_string(err));
   }
 }
@@ -387,6 +385,8 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     // user specified parameters (and table size in the case of a user
     // specified row multiplier)
     output_row_count = get_output_row_count(exe_unit, elem_count);
+  } else if (exe_unit.table_func.hasPreFlightOutputSizer()) {
+    output_row_count = exe_unit.output_buffer_size_param;
   }
 
   // setup the inputs

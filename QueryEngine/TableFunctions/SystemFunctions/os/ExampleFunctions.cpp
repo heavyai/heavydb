@@ -183,7 +183,6 @@ TEMPLATE_NOINLINE
                                    const T y_min,
                                    const T y_max,
                                    const int32_t max_iterations,
-                                   const int32_t output_size,
                                    Column<T>& output_x,
                                    Column<T>& output_y,
                                    Column<int32_t>& output_num_iterations) {
@@ -214,7 +213,7 @@ TEMPLATE_NOINLINE
     output_y[output_pixel] = cy;
     output_num_iterations[output_pixel] = num_iterations;
   }
-  return output_size;
+  return output_x.size();
 }
 #endif  // #ifndef __CUDACC__
 
@@ -297,7 +296,6 @@ int32_t tf_mandelbrot_cuda__gpu_(const int32_t x_pixels,
                                  const double y_min,
                                  const double y_max,
                                  const int32_t max_iterations,
-                                 const int32_t output_size,
                                  Column<double>& output_x,
                                  Column<double>& output_y,
                                  Column<int32_t>& output_num_iterations) {
@@ -308,7 +306,6 @@ int32_t tf_mandelbrot_cuda__gpu_(const int32_t x_pixels,
                                                     y_min,
                                                     y_max,
                                                     max_iterations,
-                                                    output_size,
                                                     output_x,
                                                     output_y,
                                                     output_num_iterations);
@@ -327,7 +324,6 @@ int32_t tf_mandelbrot_cuda_float__gpu_(const int32_t x_pixels,
                                        const float y_min,
                                        const float y_max,
                                        const int32_t max_iterations,
-                                       const int32_t output_size,
                                        Column<float>& output_x,
                                        Column<float>& output_y,
                                        Column<int32_t>& output_num_iterations) {
@@ -338,7 +334,6 @@ int32_t tf_mandelbrot_cuda_float__gpu_(const int32_t x_pixels,
                                                     y_min,
                                                     y_max,
                                                     max_iterations,
-                                                    output_size,
                                                     output_x,
                                                     output_y,
                                                     output_num_iterations);
