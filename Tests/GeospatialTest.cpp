@@ -2808,7 +2808,10 @@ TEST(GeoSpatial, UTMTransform) {
   }
 }
 
-TEST(GeoSpatial, UTMTransformCoords) {
+// Disabled because:
+//  * CPU throws an exception, GPU returns NaN,
+//    and distributed and render modes get these confused.
+TEST(GeoSpatial, DISABLED_UTMTransformCoords) {
   constexpr double eps = 1e-10;
   // Length of 1-degree arc along equator centered at longitude=3 according to UTM.
   constexpr double one_degree_in_meters = 111276.3876347362;

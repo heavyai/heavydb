@@ -152,12 +152,14 @@ DEVICE ALWAYS_INLINE Point2D transform_point(const Point2D point,
   } else if (isr == 4326) {
     if (osr == 900913) {
       return conv_4326_900913<C>(point);  // WGS 84 --> Web Mercator
+#ifdef ENABLE_UTM_TRANSFORM
     } else if (is_utm_srid(osr)) {
       return conv_4326_utm<C>(point, osr);  // WGS 84 --> UTM
     }
   } else if (is_utm_srid(isr)) {
     if (osr == 4326) {
       return conv_utm_4326<C>(point, osr);  // UTM --> WGS 84
+#endif
     }
   }
 #ifdef __CUDACC__
@@ -170,7 +172,11 @@ DEVICE ALWAYS_INLINE Point2D transform_point(const Point2D point,
 
 // Return false iff osr(x) depends only on isr(x), and same with y.
 DEVICE ALWAYS_INLINE bool x_and_y_are_dependent(const int32_t isr, const int32_t osr) {
+#ifdef ENABLE_UTM_TRANSFORM
   return isr != osr && (is_utm_srid(isr) || is_utm_srid(osr));
+#else
+  return false;
+#endif
 }
 
 // Point2D accessor handling on-the-fly decompression and transforms.

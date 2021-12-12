@@ -133,6 +133,12 @@ if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
 endif()
 
+# Disable by default until a more satisfactory resolution to QE-215 is found.
+option(ENABLE_UTM_TRANSFORM "Enable ST_TRANSFORM() with UTM Support" OFF )
+if(ENABLE_UTM_TRANSFORM )
+  add_definitions("-DENABLE_UTM_TRANSFORM")
+endif()
+
 option(ENABLE_L0 "Enable level zero support" OFF)
 if(ENABLE_L0)
   find_package(LevelZero REQUIRED COMPONENTS ${LevelZero_COMPONENTS})
