@@ -75,37 +75,27 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   // function arguments. Otherwise, the geo column reference will be translated into
   // physical columns as required. Bounds column will be added if present and requested.
   if (expand_geo_col) {
+    CHECK(scan_source);
     for (auto i = 0; i < ti.get_physical_coord_cols(); i++) {
-      const auto pcd = cat_.getMetadataForColumnBySpi(
-          table_id, SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), i + 1));
-      CHECK(pcd && !pcd->isVirtualCol);
-      auto pcol_ti = pcd->columnType;
-      args.push_back(std::make_shared<Analyzer::ColumnVar>(
-          pcol_ti, table_id, pcd->columnId, rte_idx));
+      auto col_info = scan_source->getColumnInfoBySpi(
+          SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(), i + 1));
+      args.push_back(std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx));
     }
   } else {
     args.push_back(
         std::make_shared<Analyzer::ColumnVar>(ti, table_id, column_id, rte_idx));
   }
   if (with_bounds && ti.has_bounds()) {
-    const auto bounds_cd = cat_.getMetadataForColumnBySpi(
-        table_id,
-        SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
-                                  ti.get_physical_coord_cols() + 1));
-    CHECK(bounds_cd && !bounds_cd->isVirtualCol);
-    auto bounds_ti = bounds_cd->columnType;
-    args.push_back(std::make_shared<Analyzer::ColumnVar>(
-        bounds_ti, table_id, bounds_cd->columnId, rte_idx));
+    CHECK(scan_source);
+    auto col_info = scan_source->getColumnInfoBySpi(SPIMAP_GEO_PHYSICAL_INPUT(
+        rex_input->getIndex(), ti.get_physical_coord_cols() + 1));
+    args.push_back(std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx));
   }
   if (with_render_group && ti.has_render_group()) {
-    const auto render_group_cd = cat_.getMetadataForColumnBySpi(
-        table_id,
-        SPIMAP_GEO_PHYSICAL_INPUT(rex_input->getIndex(),
-                                  ti.get_physical_coord_cols() + 2));
-    CHECK(render_group_cd && !render_group_cd->isVirtualCol);
-    auto render_group_ti = render_group_cd->columnType;
-    args.push_back(std::make_shared<Analyzer::ColumnVar>(
-        render_group_ti, table_id, render_group_cd->columnId, rte_idx));
+    CHECK(scan_source);
+    auto col_info = scan_source->getColumnInfoBySpi(SPIMAP_GEO_PHYSICAL_INPUT(
+        rex_input->getIndex(), ti.get_physical_coord_cols() + 2));
+    args.push_back(std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx));
   }
   return args;
 }

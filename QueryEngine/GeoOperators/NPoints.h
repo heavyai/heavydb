@@ -17,6 +17,7 @@
 #pragma once
 
 #include "QueryEngine/GeoOperators/Codegen.h"
+#include "Shared/sqltypes_geo.h"
 
 namespace spatial_type {
 
@@ -46,15 +47,10 @@ class NPoints : public Codegen {
 
     // create a new operand which is just the coords and codegen it
     const auto coords_column_id = col_var->get_column_id() + 1;  // + 1 for coords
-    auto coords_cd =
-        get_column_descriptor(coords_column_id, col_var->get_table_id(), *cat_);
-    CHECK(coords_cd);
-    CHECK(!coords_cd->isVirtualCol);
+    auto ti = get_geo_physical_col_type(col_var->get_type_info(), 0);
 
-    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(coords_cd->columnType,
-                                                           col_var->get_table_id(),
-                                                           coords_column_id,
-                                                           col_var->get_rte_idx());
+    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
+        ti, col_var->get_table_id(), coords_column_id, col_var->get_rte_idx());
     return operand_owned_.get();
   }
 

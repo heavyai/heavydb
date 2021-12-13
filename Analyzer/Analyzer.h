@@ -191,6 +191,10 @@ class ColumnVar : public Expr {
  public:
   ColumnVar(ColumnInfoPtr col_info, int nest_level)
       : Expr(col_info->type), rte_idx(nest_level), col_info_(std::move(col_info)) {}
+  ColumnVar(const SQLTypeInfo& ti)
+      : Expr(ti)
+      , rte_idx(-1)
+      , col_info_(std::make_shared<ColumnInfo>(-1, 0, 0, "", ti, false)) {}
   ColumnVar(const SQLTypeInfo& ti,
             int table_id,
             int col_id,
@@ -291,8 +295,7 @@ class Var : public ColumnVar {
       : ColumnVar(ti, r, c, i, is_virtual), which_row(o), varno(v) {}
   Var(ColumnInfoPtr col_info, int i, WhichRow o, int v)
       : ColumnVar(col_info, i), which_row(o), varno(v) {}
-  Var(const SQLTypeInfo& ti, WhichRow o, int v)
-      : ColumnVar(ti, 0, 0, -1, false), which_row(o), varno(v) {}
+  Var(const SQLTypeInfo& ti, WhichRow o, int v) : ColumnVar(ti), which_row(o), varno(v) {}
   WhichRow get_which_row() const { return which_row; }
   void set_which_row(WhichRow r) { which_row = r; }
   int get_varno() const { return varno; }
@@ -1881,15 +1884,17 @@ class GeoColumnVar : public ColumnVar {
       : ColumnVar(ti, table_id, column_id, range_table_index, is_virtual)
       , with_bounds_(with_bounds)
       , with_render_group_(with_render_group) {}
-
+  GeoColumnVar(const ColumnInfoPtr col_info,
+               const int range_table_index,
+               const bool with_bounds,
+               const bool with_render_group)
+      : ColumnVar(col_info, range_table_index)
+      , with_bounds_(with_bounds)
+      , with_render_group_(with_render_group) {}
   GeoColumnVar(const Analyzer::ColumnVar* column_var,
                const bool with_bounds,
                const bool with_render_group)
-      : ColumnVar(column_var->get_type_info(),
-                  column_var->get_table_id(),
-                  column_var->get_column_id(),
-                  column_var->get_rte_idx(),
-                  column_var->is_virtual())
+      : ColumnVar(column_var->get_column_info(), column_var->get_rte_idx())
       , with_bounds_(with_bounds)
       , with_render_group_(with_render_group) {}
 
@@ -2002,13 +2007,11 @@ class GeoTransformOperator : public GeoOperator {
 inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,
                                               const Analyzer::Var::WhichRow which_row,
                                               const int varno) {
-  const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
-  const int table_id = col_expr ? col_expr->get_table_id() : 0;
-  const int column_id = col_expr ? col_expr->get_column_id() : 0;
-  const int rte_idx = col_expr ? col_expr->get_rte_idx() : -1;
-  const bool is_virtual = col_expr ? col_expr->is_virtual() : false;
-  return makeExpr<Analyzer::Var>(
-      expr->get_type_info(), table_id, column_id, rte_idx, is_virtual, which_row, varno);
+  if (const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
+    return makeExpr<Analyzer::Var>(
+        col_expr->get_column_info(), col_expr->get_rte_idx(), which_row, varno);
+  }
+  return makeExpr<Analyzer::Var>(expr->get_type_info(), which_row, varno);
 }
 
 // Returns true iff the two expression lists are equal (same size and each element are

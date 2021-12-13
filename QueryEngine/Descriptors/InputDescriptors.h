@@ -92,6 +92,8 @@ class InputColDescriptor {
 
   bool isVirtual() const { return col_info_->is_rowid; }
 
+  ColumnInfoPtr getColInfo() const { return col_info_; }
+
   virtual ~InputColDescriptor() {}
 
   std::string toString() const {

@@ -2515,8 +2515,7 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const FragmentsList& selected_fragments) const {
   const auto& input_descs = ra_exe_unit.input_descs;
   const int nest_level = inner_col_desc.getNestLevel();
-  if (nest_level < 1 ||
-      inner_col_desc.getSourceType() != InputSourceType::TABLE ||
+  if (nest_level < 1 || inner_col_desc.getSourceType() != InputSourceType::TABLE ||
       ra_exe_unit.join_quals.empty() || input_descs.size() < 2 ||
       (ra_exe_unit.join_quals.empty() &&
        plan_state_->isLazyFetchColumn(inner_col_desc))) {
@@ -2709,8 +2708,7 @@ FetchResult Executor::fetchUnionChunks(
       selected_table_id ==
       (*std::next(ra_exe_unit.input_col_descs.begin()))->getTableId();
   if (!input_col_descs_index) {
-    CHECK_EQ(selected_table_id,
-             ra_exe_unit.input_col_descs.front()->getTableId());
+    CHECK_EQ(selected_table_id, ra_exe_unit.input_col_descs.front()->getTableId());
   }
   VLOG(2) << "selected_fragments.size()=" << selected_fragments.size()
           << " selected_table_id=" << selected_table_id
@@ -3870,11 +3868,8 @@ AggregatedColRange Executor::computeColRangesCache(
   }
   for (const auto& col_desc : col_descs) {
     if (ExpressionRange::typeSupportsRange(col_desc.getType())) {
-      const auto col_var = boost::make_unique<Analyzer::ColumnVar>(col_desc.getType(),
-                                                                   col_desc.getTableId(),
-                                                                   col_desc.getColId(),
-                                                                   0,
-                                                                   col_desc.isVirtual());
+      const auto col_var =
+          boost::make_unique<Analyzer::ColumnVar>(col_desc.getColInfo(), 0);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
       agg_col_range_cache.setColRange({col_desc.getColId(), col_desc.getTableId()},
                                       col_range);

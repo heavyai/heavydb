@@ -56,14 +56,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
   const auto catalog = executor()->getCatalog();
   CHECK(catalog);
 
-  auto generate_column_lvs = [this, catalog, geo_col_var, &co](const int column_id) {
-    auto cd = get_column_descriptor(column_id, geo_col_var->get_table_id(), *catalog);
-    CHECK(cd);
-    CHECK(!cd->isVirtualCol);
-    const auto col_var = Analyzer::ColumnVar(cd->columnType,
-                                             geo_col_var->get_table_id(),
-                                             column_id,
-                                             geo_col_var->get_rte_idx());
+  auto generate_column_lvs = [this, catalog, geo_col_var, &co](const int idx) {
+    auto ti = get_geo_physical_col_type(geo_col_var->get_type_info(), idx);
+    auto column_id = geo_col_var->get_column_id() + 1 + idx;
+    const auto col_var = Analyzer::ColumnVar(
+        ti, geo_col_var->get_table_id(), column_id, geo_col_var->get_rte_idx());
     const auto lv_vec = codegen(&col_var, /*fetch_columns=*/true, co);
     CHECK_EQ(lv_vec.size(), size_t(1));  // ptr
     return lv_vec;
@@ -78,8 +75,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
       std::vector<llvm::Value*> geo_lvs;
       // iterate over physical columns
       for (int i = 0; i < ti.get_physical_coord_cols(); i++) {
-        const auto column_id = geo_col_var->get_column_id() + 1 + i;
-        const auto lvs = generate_column_lvs(column_id);
+        const auto lvs = generate_column_lvs(i);
         CHECK_EQ(lvs.size(), size_t(1));  // expecting ptr for each column
         geo_lvs.insert(geo_lvs.end(), lvs.begin(), lvs.end());
       }

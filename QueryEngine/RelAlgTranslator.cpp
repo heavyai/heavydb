@@ -396,26 +396,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     // We're at leaf (scan) level and not supposed to have input metadata,
     // the name and type information come directly from the catalog.
     CHECK(in_metainfo.empty());
-    const auto table_desc = scan_source->getTableDescriptor();
-    const auto cd =
-        cat_.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
-    CHECK(cd);
-    auto col_ti = cd->columnType;
+    auto col_info = scan_source->getColumnInfoBySpi(rex_input->getIndex() + 1);
+    auto& col_ti = col_info->type;
     if (col_ti.is_string()) {
       col_ti.set_type(kTEXT);
     }
-    if (cd->isVirtualCol) {
+    if (col_info->is_rowid) {
       // TODO(alex): remove at some point, we only need this fixup for backwards
       // compatibility with old imported data
-      CHECK_EQ("rowid", cd->columnName);
       col_ti.set_size(8);
     }
     CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
     if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
       col_ti.set_notnull(false);
     }
-    return std::make_shared<Analyzer::ColumnVar>(
-        col_ti, table_desc->tableId, cd->columnId, rte_idx, cd->isVirtualCol);
+    return std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx);
   }
   CHECK(!in_metainfo.empty()) << "for " << source->toString();
   CHECK_GE(rte_idx, 0);
