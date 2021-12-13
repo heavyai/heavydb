@@ -445,6 +445,13 @@ TEST_F(AlterTableSetMaxRowsTest, NegativeMaxRows) {
                       {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}});
 }
 
+TEST_F(AlterTableSetMaxRowsTest, EmptyTable) {
+  sql("create table test_table (i integer);");
+  sql("alter table test_table set max_rows = 10;");
+  assertMaxRows(10);
+  sqlAndCompareResult("select * from test_table;", {});
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

@@ -207,7 +207,8 @@ void InsertOrderFragmenter::dropFragmentsToSizeNoInsertLock(const size_t max_row
   // b/c depends on insertLock around numTuples_
 
   // don't ever drop the only fragment!
-  if (numTuples_ == fragmentInfoVec_.back()->getPhysicalNumTuples()) {
+  if (fragmentInfoVec_.empty() ||
+      numTuples_ == fragmentInfoVec_.back()->getPhysicalNumTuples()) {
     return;
   }
 
