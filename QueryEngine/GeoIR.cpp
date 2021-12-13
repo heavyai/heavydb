@@ -53,10 +53,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoColumnVar(
     const Analyzer::GeoColumnVar* geo_col_var,
     const bool fetch_columns,
     const CompilationOptions& co) {
-  const auto catalog = executor()->getCatalog();
-  CHECK(catalog);
-
-  auto generate_column_lvs = [this, catalog, geo_col_var, &co](const int idx) {
+  auto generate_column_lvs = [this, geo_col_var, &co](const int idx) {
     auto ti = get_geo_physical_col_type(geo_col_var->get_type_info(), idx);
     auto column_id = geo_col_var->get_column_id() + 1 + idx;
     const auto col_var = Analyzer::ColumnVar(
