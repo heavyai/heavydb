@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDParser::ExpressionListedInSelectClauseChecker
+===================================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDParser::ExpressionListedInSelectClauseChecker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

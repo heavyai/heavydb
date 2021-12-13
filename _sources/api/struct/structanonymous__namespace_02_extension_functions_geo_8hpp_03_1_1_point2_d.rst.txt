@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ExtensionFunctionsGeo.hpp}::Point2D
+==============================================================
+
+.. doxygenstruct:: anonymous_namespace{ExtensionFunctionsGeo.hpp}::Point2D
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

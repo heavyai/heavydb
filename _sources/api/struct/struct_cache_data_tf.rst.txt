@@ -1,0 +1,9 @@
+Struct CacheDataTf
+==================
+
+.. doxygenstruct:: CacheDataTf
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

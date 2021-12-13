@@ -1,0 +1,9 @@
+Struct HashTableBuildDag
+========================
+
+.. doxygenstruct:: HashTableBuildDag
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

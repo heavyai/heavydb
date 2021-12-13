@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ExtensionFunctionsGeo.hpp}::CoordData
+================================================================
+
+.. doxygenstruct:: anonymous_namespace{ExtensionFunctionsGeo.hpp}::CoordData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

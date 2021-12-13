@@ -1,0 +1,9 @@
+Class DataCache
+===============
+
+.. doxygenclass:: DataCache
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

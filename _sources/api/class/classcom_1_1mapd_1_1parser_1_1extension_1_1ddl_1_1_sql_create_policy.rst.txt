@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlCreatePolicy
+========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlCreatePolicy
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
