@@ -368,12 +368,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
     auto col_to_update_var =
         std::dynamic_pointer_cast<Analyzer::ColumnVar>(column_to_update);
     CHECK(col_to_update_var);
-    auto col_to_update_desc =
-        std::make_shared<const InputColDescriptor>(col_to_update_var->get_column_id(),
-                                                   col_to_update_var->get_table_id(),
-                                                   col_to_update_var->get_rte_idx(),
-                                                   col_to_update_var->get_type_info(),
-                                                   col_to_update_var->is_virtual());
+    auto col_to_update_desc = std::make_shared<const InputColDescriptor>(
+        col_to_update_var->get_column_info(), col_to_update_var->get_rte_idx());
     auto existing_col_desc_it = std::find_if(
         input_col_descs.begin(),
         input_col_descs.end(),
@@ -478,20 +474,14 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
           return in->getColId() == delete_column->get_column_id();
         });
     CHECK(delete_col_desc_it == input_col_descs.end());
-    auto delete_col_desc =
-        std::make_shared<const InputColDescriptor>(delete_column->get_column_id(),
-                                                   delete_column->get_table_id(),
-                                                   delete_column->get_rte_idx(),
-                                                   delete_column->get_type_info());
+    auto delete_col_desc = std::make_shared<const InputColDescriptor>(
+        delete_column->get_column_info(), delete_column->get_rte_idx());
     input_col_descs.push_back(delete_col_desc);
     target_exprs_owned_.emplace_back(case_expr);
   } else {
     // no filters, simply project the deleted=true column value for all rows
-    auto delete_col_desc =
-        std::make_shared<const InputColDescriptor>(delete_column->get_column_id(),
-                                                   delete_column->get_table_id(),
-                                                   delete_column->get_rte_idx(),
-                                                   delete_column->get_type_info());
+    auto delete_col_desc = std::make_shared<const InputColDescriptor>(
+        delete_column->get_column_info(), delete_column->get_rte_idx());
     input_col_descs.push_back(delete_col_desc);
     target_exprs_owned_.emplace_back(deleted_constant);
   }

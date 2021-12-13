@@ -1128,15 +1128,19 @@ void collect_used_input_desc(
     const auto col_id = used_input->getIndex();
     auto it = input_to_nest_level.find(input_ra);
     if (it != input_to_nest_level.end()) {
-      const int input_desc = it->second;
+      const int nest_level = it->second;
       auto scan = dynamic_cast<const RelScan*>(input_ra);
-      input_col_descs_unique.insert(std::make_shared<const InputColDescriptor>(
-          scan ? cat.getColumnIdBySpi(table_id, col_id + 1) : col_id,
-          table_id,
-          input_desc,
-          scan ? scan->getColumnTypeBySpi(col_id + 1)
-               : input_ra->getOutputMetainfo()[col_id].get_type_info(),
-          scan ? scan->isVirtualColBySpi(col_id + 1) : false));
+      ColumnInfoPtr col_info =
+          scan ? scan->getColumnInfoBySpi(col_id + 1)
+               : std::make_shared<ColumnInfo>(
+                     -1,
+                     table_id,
+                     col_id,
+                     "",
+                     input_ra->getOutputMetainfo()[col_id].get_type_info(),
+                     false);
+      input_col_descs_unique.insert(
+          std::make_shared<const InputColDescriptor>(col_info, nest_level));
     } else if (!dynamic_cast<const RelLogicalUnion*>(ra_node)) {
       throw std::runtime_error("Bushy joins not supported");
     }
@@ -1185,17 +1189,14 @@ get_input_desc_impl(const RA* ra_node,
   std::vector<std::shared_ptr<const InputColDescriptor>> input_col_descs(
       input_col_descs_unique.begin(), input_col_descs_unique.end());
 
-  std::sort(input_col_descs.begin(),
-            input_col_descs.end(),
-            [](std::shared_ptr<const InputColDescriptor> const& lhs,
-               std::shared_ptr<const InputColDescriptor> const& rhs) {
-              return std::make_tuple(lhs->getScanDesc().getNestLevel(),
-                                     lhs->getColId(),
-                                     lhs->getScanDesc().getTableId()) <
-                     std::make_tuple(rhs->getScanDesc().getNestLevel(),
-                                     rhs->getColId(),
-                                     rhs->getScanDesc().getTableId());
-            });
+  std::sort(
+      input_col_descs.begin(),
+      input_col_descs.end(),
+      [](std::shared_ptr<const InputColDescriptor> const& lhs,
+         std::shared_ptr<const InputColDescriptor> const& rhs) {
+        return std::make_tuple(lhs->getNestLevel(), lhs->getColId(), lhs->getTableId()) <
+               std::make_tuple(rhs->getNestLevel(), rhs->getColId(), rhs->getTableId());
+      });
   return {input_descs,
           std::list<std::shared_ptr<const InputColDescriptor>>(input_col_descs.begin(),
                                                                input_col_descs.end())};
@@ -1330,7 +1331,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources_for_update
           cast_to_column_type(translator.translateScalarRex(scalar_rex),
                               tableId,
                               cat,
-                              colInfos[i - starting_projection_column_idx].name);
+                              colInfos[i - starting_projection_column_idx]->name);
     } else {
       translated_expr = translator.translateScalarRex(scalar_rex);
     }
@@ -1598,7 +1599,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
             "Multi-column update is not yet supported for temporary tables.");
       }
 
-      auto cd = cat_.getMetadataForColumn(td->tableId, update_columns.front().name);
+      auto cd = cat_.getMetadataForColumn(td->tableId, update_columns.front()->name);
       CHECK(cd);
       CHECK(!cd->isVirtualCol);
       auto projected_column_to_update =
@@ -4167,8 +4168,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
   }
   VLOG(3) << "logical_union->getOutputMetainfo()="
           << shared::printContainer(logical_union->getOutputMetainfo())
-          << " rewritten_exe_unit.input_col_descs.front()->getScanDesc().getTableId()="
-          << rewritten_exe_unit.input_col_descs.front()->getScanDesc().getTableId();
+          << " rewritten_exe_unit.input_col_descs.front()->getTableId()="
+          << rewritten_exe_unit.input_col_descs.front()->getTableId();
 
   return {rewritten_exe_unit,
           logical_union,

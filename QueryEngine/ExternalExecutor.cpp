@@ -349,7 +349,7 @@ std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
   std::map<size_t, TargetMetaInfo> schema_map;
   const auto catalog = plan_state->executor_->getCatalog();
   for (const auto& kv : plan_state->global_to_local_col_ids_) {
-    const int table_id = kv.first.getScanDesc().getTableId();
+    const int table_id = kv.first.getTableId();
     const int column_id = kv.first.getColId();
     SQLTypeInfo column_type;
     if (table_id < 0) {

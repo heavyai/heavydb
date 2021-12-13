@@ -68,51 +68,45 @@ struct hash<InputDescriptor> {
 
 class InputColDescriptor {
  public:
-  InputColDescriptor(const int col_id,
-                     const int table_id,
-                     const int nest_level,
-                     SQLTypeInfo type,
-                     const bool is_virtual = false)
-      : col_id_(col_id)
-      , type_(type)
-      , is_virtual_(is_virtual)
-      , input_desc_(table_id, nest_level) {}
+  InputColDescriptor(ColumnInfoPtr col_info, int nest_level)
+      : col_info_(std::move(col_info)), nest_level_(nest_level) {}
 
   bool operator==(const InputColDescriptor& that) const {
-    return col_id_ == that.col_id_ && is_virtual_ == that.is_virtual_ &&
-           input_desc_ == that.input_desc_;
+    return getColId() == that.getColId() && getTableId() == that.getTableId() &&
+           getNestLevel() == that.getNestLevel();
   }
 
-  int getColId() const { return col_id_; }
+  int getColId() const { return col_info_->column_id; }
 
-  int getTableId() const { return input_desc_.getTableId(); }
+  int getTableId() const { return col_info_->table_id; }
 
-  int getNestLevel() const { return input_desc_.getNestLevel(); }
+  int getNestLevel() const { return nest_level_; }
 
-  const InputDescriptor& getScanDesc() const { return input_desc_; }
+  InputDescriptor getScanDesc() const { return {col_info_->table_id, nest_level_}; }
 
-  const SQLTypeInfo& getType() const { return type_; }
+  InputSourceType getSourceType() const {
+    return col_info_->table_id > 0 ? InputSourceType::TABLE : InputSourceType::RESULT;
+  }
 
-  bool isVirtual() const { return is_virtual_; }
+  const SQLTypeInfo& getType() const { return col_info_->type; }
+
+  bool isVirtual() const { return col_info_->is_rowid; }
 
   virtual ~InputColDescriptor() {}
 
   std::string toString() const {
-    return ::typeName(this) + "(col_id=" + std::to_string(col_id_) +
-           (is_virtual_ ? "[virt]" : "") + ", input_desc=" + ::toString(input_desc_) +
-           ")";
+    return ::typeName(this) + "(table_id=" + std::to_string(getTableId()) +
+           ", nest_level=" + std::to_string(getNestLevel()) +
+           "col_id=" + std::to_string(getColId()) + (isVirtual() ? "[virt])" : ")");
   }
 
  private:
-  const int col_id_;
-  SQLTypeInfo type_;
-  const bool is_virtual_;
-  const InputDescriptor input_desc_;
+  ColumnInfoPtr col_info_;
+  int nest_level_;
 };
 
 inline std::ostream& operator<<(std::ostream& os, InputColDescriptor const& icd) {
-  return os << "InputColDescriptor(col_id(" << icd.getColId() << ")," << icd.getScanDesc()
-            << ')';
+  return os << icd.toString();
 }
 
 // For printing RelAlgExecutionUnit::input_col_descs

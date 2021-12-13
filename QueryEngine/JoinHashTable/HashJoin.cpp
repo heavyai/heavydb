@@ -447,11 +447,8 @@ void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* e
 
   std::unordered_set<InputColDescriptor> col_descs;
   for (auto cv : cvs) {
-    col_descs.emplace(InputColDescriptor{cv->get_column_id(),
-                                         cv->get_table_id(),
-                                         cv->get_rte_idx(),
-                                         cv->get_type_info(),
-                                         cv->is_virtual()});
+    col_descs.emplace(InputColDescriptor{cv->get_column_info(),
+                                         cv->get_rte_idx()});
   }
 
   executor->setupCaching(col_descs, phys_table_ids);

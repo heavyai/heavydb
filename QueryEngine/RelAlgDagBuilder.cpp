@@ -2282,18 +2282,19 @@ class RelAlgDispatcher {
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(cat_, scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
-    std::vector<ColumnInfo> infos;
+    std::vector<ColumnInfoPtr> infos;
     infos.reserve(field_names.size());
     for (auto& col_name : field_names) {
       auto cd = cat_.getMetadataForColumn(td->tableId, col_name);
-      infos.emplace_back(cat_.getDatabaseId(),
-                         td->tableId,
-                         cd->columnId,
-                         col_name,
-                         cd->columnType,
-                         cd->isVirtualCol);
+      infos.emplace_back(std::make_shared<ColumnInfo>(cat_.getDatabaseId(),
+                                                      td->tableId,
+                                                      cd->columnId,
+                                                      col_name,
+                                                      cd->columnType,
+                                                      cd->isVirtualCol));
     }
-    auto scan_node = std::make_shared<RelScan>(cat_.getCurrentDB().dbId, td, infos);
+    auto scan_node =
+        std::make_shared<RelScan>(cat_.getCurrentDB().dbId, td, std::move(infos));
     if (scan_ra.HasMember("hints")) {
       getRelAlgHints(scan_ra, scan_node);
     }
@@ -2422,17 +2423,17 @@ class RelAlgDispatcher {
            column_arr_it != update_columns.End();
            ++column_arr_it) {
         auto name = column_arr_it->GetString();
-        ColumnInfo info(cat_.getDatabaseId(),
-                        table_descriptor->tableId,
-                        -1,
-                        name,
-                        SQLTypeInfo(kBIGINT, false),
-                        false);
+        ColumnInfoPtr info = std::make_shared<ColumnInfo>(cat_.getDatabaseId(),
+                                                          table_descriptor->tableId,
+                                                          -1,
+                                                          name,
+                                                          SQLTypeInfo(kBIGINT, false),
+                                                          false);
         auto cd = cat_.getMetadataForColumn(table_descriptor->tableId, name);
         if (cd) {
-          info.column_id = cd->columnId;
-          info.type = cd->columnType;
-          info.is_rowid = cd->isVirtualCol;
+          info->column_id = cd->columnId;
+          info->type = cd->columnType;
+          info->is_rowid = cd->isVirtualCol;
         } else {
           CHECK_EQ(std::string(name), "EXPR$DELETE_OFFSET_IN_FRAGMENT");
         }

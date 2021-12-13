@@ -111,7 +111,7 @@ class StorageIOFacility {
   using DeleteVictimOffsetList = std::vector<uint64_t>;
   using UpdateTargetOffsetList = std::vector<uint64_t>;
   using UpdateTargetTypeList = std::vector<TargetMetaInfo>;
-  using UpdateTargetColumnInfoList = std::vector<ColumnInfo>;
+  using UpdateTargetColumnInfoList = std::vector<ColumnInfoPtr>;
 
   using TransactionLog =
       Fragmenter_Namespace::InsertOrderFragmenter::ModifyTransactionTracker;
@@ -204,7 +204,7 @@ class StorageIOFacility {
         std::vector<TargetMetaInfo> sourceMetaInfos;
 
         for (size_t idx = 0; idx < update_parameters.getUpdateColumns().size(); idx++) {
-          auto& column_name = update_parameters.getUpdateColumns()[idx].name;
+          auto& column_name = update_parameters.getUpdateColumns()[idx]->name;
           auto target_column =
               catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
           columnDescriptors.push_back(target_column);
@@ -251,7 +251,7 @@ class StorageIOFacility {
         const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(td);
         const auto cd = catalog_.getMetadataForColumn(
-            td->tableId, update_parameters.getUpdateColumns().front().name);
+            td->tableId, update_parameters.getUpdateColumns().front()->name);
         CHECK(cd);
         auto chunk_metadata =
             fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
@@ -419,7 +419,7 @@ class StorageIOFacility {
           const auto fragmenter = table_descriptor->fragmenter;
           CHECK(fragmenter);
           auto const* target_column = catalog_.getMetadataForColumn(
-              table_id, update_parameters.getUpdateColumns()[column_index].name);
+              table_id, update_parameters.getUpdateColumns()[column_index]->name);
           auto update_stats =
               fragmenter->updateColumn(&catalog_,
                                        table_descriptor,

@@ -42,7 +42,7 @@
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
 
-using ColumnInfoList = std::vector<ColumnInfo>;
+using ColumnInfoList = std::vector<ColumnInfoPtr>;
 
 class Rex {
  public:
@@ -836,10 +836,10 @@ class RelScan : public RelAlgNode {
  public:
   RelScan(int32_t db_id,
           const TableDescriptor* td,
-          const std::vector<ColumnInfo>& column_infos)
+          std::vector<ColumnInfoPtr> column_infos)
       : db_id_(db_id)
       , td_(td)
-      , column_infos_(column_infos)
+      , column_infos_(std::move(column_infos))
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {}
 
@@ -851,7 +851,7 @@ class RelScan : public RelAlgNode {
 
   const size_t getNumShards() const { return td_->nShards; }
 
-  const std::string& getFieldName(const size_t i) const { return column_infos_[i].name; }
+  const std::string& getFieldName(const size_t i) const { return column_infos_[i]->name; }
 
   int32_t getDatabaseId() const { return db_id_; }
 
@@ -862,7 +862,7 @@ class RelScan : public RelAlgNode {
     }
 
     CHECK_LE(spi, column_infos_.size());
-    return column_infos_[spi - 1].is_rowid;
+    return column_infos_[spi - 1]->is_rowid;
   }
 
   int getColumnIdBySpi(int spi) const {
@@ -876,7 +876,7 @@ class RelScan : public RelAlgNode {
     }
 
     CHECK_LT(col_idx, column_infos_.size());
-    return column_infos_[col_idx].column_id + geo_idx;
+    return column_infos_[col_idx]->column_id + geo_idx;
   }
 
   SQLTypeInfo getColumnTypeBySpi(int spi) const {
@@ -891,19 +891,32 @@ class RelScan : public RelAlgNode {
 
     // Physical geo column case.
     if (geo_idx > 0) {
-      CHECK(column_infos_[col_idx].type.is_geometry());
-      return get_geo_physical_col_type(column_infos_[col_idx].type, geo_idx - 1);
+      CHECK(column_infos_[col_idx]->type.is_geometry());
+      return get_geo_physical_col_type(column_infos_[col_idx]->type, geo_idx - 1);
     }
 
     CHECK_LT(col_idx, column_infos_.size());
-    return column_infos_[col_idx].type;
+    return column_infos_[col_idx]->type;
+  }
+
+  ColumnInfoPtr getColumnInfoBySpi(int spi) const {
+    if (spi >= SPIMAP_MAGIC1) {
+      return std::make_shared<ColumnInfo>(db_id_,
+                                          td_->tableId,
+                                          getColumnIdBySpi(spi),
+                                          "",
+                                          getColumnTypeBySpi(spi),
+                                          isVirtualColBySpi(spi));
+    }
+
+    return column_infos_[spi - 1];
   }
 
   std::string toString() const override {
     std::vector<std::string_view> field_names;
     field_names.reserve(column_infos_.size());
     for (auto& info : column_infos_) {
-      field_names.emplace_back(info.name);
+      field_names.emplace_back(info->name);
     }
     return cat(::typeName(this), "(", td_->tableName, ", ", ::toString(field_names), ")");
   }
@@ -914,7 +927,7 @@ class RelScan : public RelAlgNode {
       boost::hash_combine(*hash_, td_->tableId);
       boost::hash_combine(*hash_, td_->tableName);
       for (auto& info : column_infos_) {
-        boost::hash_combine(*hash_, info.name);
+        boost::hash_combine(*hash_, info->name);
       }
     }
     return *hash_;
@@ -953,7 +966,7 @@ class RelScan : public RelAlgNode {
  private:
   const int32_t db_id_;
   const TableDescriptor* td_;
-  const std::vector<ColumnInfo> column_infos_;
+  const std::vector<ColumnInfoPtr> column_infos_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
 };
@@ -1781,7 +1794,7 @@ class RelModify : public RelAlgNode {
  public:
   enum class ModifyOperation { Insert, Delete, Update };
   using RelAlgNodeInputPtr = std::shared_ptr<const RelAlgNode>;
-  using TargetColumnList = std::vector<ColumnInfo>;
+  using TargetColumnList = std::vector<ColumnInfoPtr>;
 
   static std::string yieldModifyOperationString(ModifyOperation const op) {
     switch (op) {
@@ -1917,16 +1930,16 @@ class RelModify : public RelAlgNode {
           const auto shard_cd =
               catalog_.getShardColumnMetadataForTable(table_descriptor_);
           CHECK(shard_cd);
-          if ((column_info.name == shard_cd->columnName)) {
+          if ((column_info->name == shard_cd->columnName)) {
             throw std::runtime_error("UPDATE of a shard key is currently unsupported.");
           }
         }
 
         // Check for valid types
-        if (column_info.type.is_varlen()) {
+        if (column_info->type.is_varlen()) {
           varlen_update_required = true;
         }
-        if (column_info.type.is_geometry()) {
+        if (column_info->type.is_geometry()) {
           throw std::runtime_error("UPDATE of a geo column is unsupported.");
         }
       }
@@ -2367,9 +2380,5 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node);
 std::string tree_string(const RelAlgNode*, const size_t depth = 0);
 
 inline InputColDescriptor column_var_to_descriptor(const Analyzer::ColumnVar* var) {
-  return InputColDescriptor(var->get_column_id(),
-                            var->get_table_id(),
-                            var->get_rte_idx(),
-                            var->get_type_info(),
-                            var->is_virtual());
+  return InputColDescriptor(var->get_column_info(), var->get_rte_idx());
 }

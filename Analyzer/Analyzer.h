@@ -24,6 +24,7 @@
 
 #include "Geospatial/Types.h"
 #include "Logger/Logger.h"
+#include "Shared/InputRef.h"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 
@@ -75,7 +76,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual ~Expr() {}
   std::shared_ptr<Analyzer::Expr> get_shared_ptr() { return shared_from_this(); }
   const SQLTypeInfo& get_type_info() const { return type_info; }
-  void set_type_info(const SQLTypeInfo& ti) { type_info = ti; }
+  virtual void set_type_info(const SQLTypeInfo& ti) { type_info = ti; }
   bool get_contains_agg() const { return contains_agg; }
   void set_contains_agg(bool a) { contains_agg = a; }
   virtual std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info);
@@ -188,15 +189,35 @@ using ExpressionPtrVector = std::vector<ExpressionPtr>;
  */
 class ColumnVar : public Expr {
  public:
-  // TODO (ienkovich): can we use a special column id to mark virtual rowid columns?
-  ColumnVar(const SQLTypeInfo& ti, int r, int c, int i, bool is_virtual = false)
-      : Expr(ti), table_id(r), column_id(c), rte_idx(i), is_virtual_(is_virtual) {}
-  int get_table_id() const { return table_id; }
-  int get_column_id() const { return column_id; }
+  ColumnVar(ColumnInfoPtr col_info, int nest_level)
+      : Expr(col_info->type), rte_idx(nest_level), col_info_(std::move(col_info)) {}
+  ColumnVar(const SQLTypeInfo& ti,
+            int table_id,
+            int col_id,
+            int nest_level,
+            bool is_virtual = false)
+      : Expr(ti)
+      , rte_idx(nest_level)
+      , col_info_(
+            std::make_shared<ColumnInfo>(-1, table_id, col_id, "", ti, is_virtual)) {}
+  int get_table_id() const { return col_info_->table_id; }
+  int get_column_id() const { return col_info_->column_id; }
   int get_rte_idx() const { return rte_idx; }
-  bool is_virtual() const { return is_virtual_; }
+  ColumnInfoPtr get_column_info() const { return col_info_; }
+  bool is_virtual() const { return col_info_->is_rowid; }
   EncodingType get_compression() const { return type_info.get_compression(); }
   int get_comp_param() const { return type_info.get_comp_param(); }
+  void set_type_info(const SQLTypeInfo& ti) override {
+    if (type_info != ti) {
+      col_info_ = std::make_shared<ColumnInfo>(col_info_->db_id,
+                                               col_info_->table_id,
+                                               col_info_->column_id,
+                                               col_info_->name,
+                                               ti,
+                                               col_info_->is_rowid);
+      type_info = ti;
+    }
+  }
   void check_group_by(
       const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const override;
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
@@ -227,10 +248,8 @@ class ColumnVar : public Expr {
   std::string toString() const override;
 
  protected:
-  int table_id;   // the global table id
-  int column_id;  // the column id
-  int rte_idx;    // 0-based range table index, used for table ordering in multi-joins
-  bool is_virtual_;
+  int rte_idx;  // 0-based range table index, used for table ordering in multi-joins
+  ColumnInfoPtr col_info_;
 };
 
 /*
@@ -270,6 +289,8 @@ class Var : public ColumnVar {
   enum WhichRow { kINPUT_OUTER, kINPUT_INNER, kOUTPUT, kGROUPBY };
   Var(const SQLTypeInfo& ti, int r, int c, int i, bool is_virtual, WhichRow o, int v)
       : ColumnVar(ti, r, c, i, is_virtual), which_row(o), varno(v) {}
+  Var(ColumnInfoPtr col_info, int i, WhichRow o, int v)
+      : ColumnVar(col_info, i), which_row(o), varno(v) {}
   Var(const SQLTypeInfo& ti, WhichRow o, int v)
       : ColumnVar(ti, 0, 0, -1, false), which_row(o), varno(v) {}
   WhichRow get_which_row() const { return which_row; }

@@ -179,14 +179,9 @@ class RexPhysicalInputsVisitor
       return InputColDescriptorSet{};
     }
 
-    const auto scan_td = scan_ra->getTableDescriptor();
-    CHECK(scan_td);
-    const int col_id = scan_ra->getColumnIdBySpi(input->getIndex() + 1);
-    const int table_id = scan_td->tableId;
-    SQLTypeInfo col_ti = scan_ra->getColumnTypeBySpi(input->getIndex() + 1);
-    bool is_virtual = scan_ra->isVirtualColBySpi(input->getIndex() + 1);
-    CHECK_GT(table_id, 0);
-    return {{col_id, table_id, 0, col_ti, is_virtual}};
+    auto col_info = scan_ra->getColumnInfoBySpi(input->getIndex() + 1);
+    CHECK_GT(col_info->table_id, 0);
+    return {{col_info, 0}};
   }
 };
 

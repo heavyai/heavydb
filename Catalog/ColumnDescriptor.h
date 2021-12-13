@@ -20,6 +20,7 @@
 #include <cassert>
 #include <optional>
 #include <string>
+#include "../Shared/InputRef.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/toString.h"
 
@@ -94,6 +95,11 @@ struct ColumnDescriptor {
     } else {
       return default_value.value();
     }
+  }
+
+  ColumnInfoPtr makeInfo(int db_id = -1) const {
+    return std::make_shared<ColumnInfo>(
+        db_id, tableId, columnId, columnName, columnType, isVirtualCol);
   }
 };
 

@@ -46,8 +46,8 @@ struct PlanState {
 
   struct CompareInputColDescId {
     bool operator()(const InputColDescriptor& lhs, const InputColDescriptor& rhs) const {
-      return std::make_pair(lhs.getScanDesc().getTableId(), lhs.getColId()) <
-             std::make_pair(rhs.getScanDesc().getTableId(), rhs.getColId());
+      return std::make_pair(lhs.getTableId(), lhs.getColId()) <
+             std::make_pair(rhs.getTableId(), rhs.getColId());
     }
   };
 
@@ -87,9 +87,9 @@ struct PlanState {
 
   bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
     Analyzer::ColumnVar column(col_desc.getType(),
-                               col_desc.getScanDesc().getTableId(),
+                               col_desc.getTableId(),
                                col_desc.getColId(),
-                               col_desc.getScanDesc().getNestLevel(),
+                               col_desc.getNestLevel(),
                                col_desc.isVirtual());
     return isLazyFetchColumn(&column);
   }

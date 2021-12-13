@@ -62,11 +62,7 @@ void PlanState::allocateLocalColumnIds(
 int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
                                 const bool fetch_column) {
   CHECK(col_var);
-  const int table_id = col_var->get_table_id();
-  int global_col_id = col_var->get_column_id();
-  const int scan_idx = col_var->get_rte_idx();
-  InputColDescriptor scan_col_desc(
-      global_col_id, table_id, scan_idx, col_var->get_type_info(), col_var->is_virtual());
+  InputColDescriptor scan_col_desc(col_var->get_column_info(), col_var->get_rte_idx());
   const auto it = global_to_local_col_ids_.find(scan_col_desc);
   CHECK(it != global_to_local_col_ids_.end()) << "Expected to find " << scan_col_desc;
   if (fetch_column) {

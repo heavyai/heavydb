@@ -58,7 +58,7 @@ Query::~Query() {
 }
 
 std::shared_ptr<Analyzer::Expr> ColumnVar::deep_copy() const {
-  return makeExpr<ColumnVar>(type_info, table_id, column_id, rte_idx, is_virtual_);
+  return makeExpr<ColumnVar>(col_info_, rte_idx);
 }
 
 void ExpressionTuple::collect_rte_idx(std::set<int>& rte_idx_set) const {
@@ -79,8 +79,7 @@ std::shared_ptr<Analyzer::Expr> ExpressionTuple::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> Var::deep_copy() const {
-  return makeExpr<Var>(
-      type_info, table_id, column_id, rte_idx, is_virtual_, which_row, varno);
+  return makeExpr<Var>(col_info_, rte_idx, which_row, varno);
 }
 
 std::shared_ptr<Analyzer::Expr> Constant::deep_copy() const {
@@ -1412,7 +1411,8 @@ void ColumnVar::check_group_by(
   if (!groupby.empty()) {
     for (auto e : groupby) {
       auto c = std::dynamic_pointer_cast<ColumnVar>(e);
-      if (c && table_id == c->get_table_id() && column_id == c->get_column_id()) {
+      if (c && get_table_id() == c->get_table_id() &&
+          get_column_id() == c->get_column_id()) {
         return;
       }
     }
@@ -1832,7 +1832,8 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(
     const Expr* e = tle->get_expr();
     const ColumnVar* colvar = dynamic_cast<const ColumnVar*>(e);
     if (colvar != nullptr) {
-      if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id()) {
+      if (get_table_id() == colvar->get_table_id() &&
+          get_column_id() == colvar->get_column_id()) {
         return colvar->deep_copy();
       }
     }
@@ -1851,14 +1852,10 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(
           "Internal Error: targetlist in rewrite_with_child_targetlist is not all "
           "columns.");
     }
-    if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id()) {
-      return makeExpr<Var>(colvar->get_type_info(),
-                           colvar->get_table_id(),
-                           colvar->get_column_id(),
-                           colvar->get_rte_idx(),
-                           colvar->is_virtual(),
-                           Var::kINPUT_OUTER,
-                           varno);
+    if (get_table_id() == colvar->get_table_id() &&
+        get_column_id() == colvar->get_column_id()) {
+      return makeExpr<Var>(
+          colvar->get_column_info(), colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
     }
     varno++;
   }
@@ -1877,14 +1874,10 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(
             "Internal Error: targetlist in rewrite_agg_to_var is not all columns and "
             "aggregates.");
       }
-      if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id()) {
-        return makeExpr<Var>(colvar->get_type_info(),
-                             colvar->get_table_id(),
-                             colvar->get_column_id(),
-                             colvar->get_rte_idx(),
-                             colvar->is_virtual(),
-                             Var::kINPUT_OUTER,
-                             varno);
+      if (get_table_id() == colvar->get_table_id() &&
+          get_column_id() == colvar->get_column_id()) {
+        return makeExpr<Var>(
+            colvar->get_column_info(), colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
       }
     }
     varno++;
@@ -2108,7 +2101,8 @@ bool ColumnVar::operator==(const Expr& rhs) const {
   }
   const ColumnVar& rhs_cv = dynamic_cast<const ColumnVar&>(rhs);
   if (rte_idx != -1) {
-    return (table_id == rhs_cv.get_table_id()) && (column_id == rhs_cv.get_column_id()) &&
+    return (get_table_id() == rhs_cv.get_table_id()) &&
+           (get_column_id() == rhs_cv.get_column_id()) &&
            (rte_idx == rhs_cv.get_rte_idx());
   }
   const Var* v = dynamic_cast<const Var*>(this);
@@ -2505,9 +2499,10 @@ bool GeoBinOper::operator==(const Expr& rhs) const {
 }
 
 std::string ColumnVar::toString() const {
-  return "(ColumnVar table: " + std::to_string(table_id) +
-         " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
-         " " + get_type_info().get_type_name() + ") ";
+  return "(ColumnVar table: " + std::to_string(get_table_id()) +
+         " column: " + std::to_string(get_column_id()) +
+         " rte: " + std::to_string(rte_idx) + " " + get_type_info().get_type_name() +
+         ") ";
 }
 
 std::string ExpressionTuple::toString() const {
@@ -2520,10 +2515,10 @@ std::string ExpressionTuple::toString() const {
 }
 
 std::string Var::toString() const {
-  return "(Var table: " + std::to_string(table_id) +
-         " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
-         " which_row: " + std::to_string(which_row) + " varno: " + std::to_string(varno) +
-         ") ";
+  return "(Var table: " + std::to_string(get_table_id()) +
+         " column: " + std::to_string(get_column_id()) +
+         " rte: " + std::to_string(rte_idx) + " which_row: " + std::to_string(which_row) +
+         " varno: " + std::to_string(varno) + ") ";
 }
 
 std::string Constant::toString() const {

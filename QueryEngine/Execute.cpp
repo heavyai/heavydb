@@ -312,7 +312,7 @@ size_t Executor::getNumBytesForFetchedRow(const std::set<int>& table_ids_to_fetc
     return 0;
   }
   for (const auto& fetched_col : plan_state_->columns_to_fetch_) {
-    int table_id = fetched_col.getScanDesc().getTableId();
+    int table_id = fetched_col.getTableId();
     if (table_ids_to_fetch.count(table_id) == 0) {
       continue;
     }
@@ -1294,9 +1294,8 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
   // instead of ra_exec_unit description if possible
   std::ostringstream os;
   for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
-    const auto& scan_desc = input_col_desc->getScanDesc();
-    os << scan_desc.getTableId() << "," << input_col_desc->getColId() << ","
-       << scan_desc.getNestLevel();
+    os << input_col_desc->getTableId() << "," << input_col_desc->getColId() << ","
+       << input_col_desc->getNestLevel();
   }
   if (!ra_exe_unit.simple_quals.empty()) {
     for (const auto& qual : ra_exe_unit.simple_quals) {
@@ -1346,9 +1345,8 @@ std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_uni
   os << "\n\tExtracted Query Plan Dag: " << query_plan_dag;
   os << "\n\tTable/Col/Levels: ";
   for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
-    const auto& scan_desc = input_col_desc->getScanDesc();
-    os << "(" << scan_desc.getTableId() << ", " << input_col_desc->getColId() << ", "
-       << scan_desc.getNestLevel() << ") ";
+    os << "(" << input_col_desc->getTableId() << ", " << input_col_desc->getColId()
+       << ", " << input_col_desc->getNestLevel() << ") ";
   }
   if (!ra_exe_unit.simple_quals.empty()) {
     os << "\n\tSimple Quals: "
@@ -2516,15 +2514,15 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
                                      const RelAlgExecutionUnit& ra_exe_unit,
                                      const FragmentsList& selected_fragments) const {
   const auto& input_descs = ra_exe_unit.input_descs;
-  const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
+  const int nest_level = inner_col_desc.getNestLevel();
   if (nest_level < 1 ||
-      inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
+      inner_col_desc.getSourceType() != InputSourceType::TABLE ||
       ra_exe_unit.join_quals.empty() || input_descs.size() < 2 ||
       (ra_exe_unit.join_quals.empty() &&
        plan_state_->isLazyFetchColumn(inner_col_desc))) {
     return false;
   }
-  const int table_id = inner_col_desc.getScanDesc().getTableId();
+  const int table_id = inner_col_desc.getTableId();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
@@ -2536,8 +2534,8 @@ bool Executor::needLinearizeAllFragments(
     const RelAlgExecutionUnit& ra_exe_unit,
     const FragmentsList& selected_fragments,
     const Data_Namespace::MemoryLevel memory_level) const {
-  const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
-  const int table_id = inner_col_desc.getScanDesc().getTableId();
+  const int nest_level = inner_col_desc.getNestLevel();
+  const int table_id = inner_col_desc.getTableId();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_id, selected_fragments[nest_level].table_id);
   const auto& fragments = selected_fragments[nest_level].fragment_ids;
@@ -2604,7 +2602,7 @@ FetchResult Executor::fetchChunks(
       if (col_id->isVirtual()) {
         continue;
       }
-      const int table_id = col_id->getScanDesc().getTableId();
+      const int table_id = col_id->getTableId();
       const auto fragments_it = all_tables_fragments.find(table_id);
       CHECK(fragments_it != all_tables_fragments.end());
       const auto fragments = fragments_it->second;
@@ -2709,10 +2707,10 @@ FetchResult Executor::fetchUnionChunks(
   }
   bool const input_col_descs_index =
       selected_table_id ==
-      (*std::next(ra_exe_unit.input_col_descs.begin()))->getScanDesc().getTableId();
+      (*std::next(ra_exe_unit.input_col_descs.begin()))->getTableId();
   if (!input_col_descs_index) {
     CHECK_EQ(selected_table_id,
-             ra_exe_unit.input_col_descs.front()->getScanDesc().getTableId());
+             ra_exe_unit.input_col_descs.front()->getTableId());
   }
   VLOG(2) << "selected_fragments.size()=" << selected_fragments.size()
           << " selected_table_id=" << selected_table_id
@@ -2727,7 +2725,7 @@ FetchResult Executor::fetchUnionChunks(
   std::unordered_map<TableId, std::list<std::shared_ptr<const InputColDescriptor>>>
       table_id_to_input_col_descs;
   for (auto const& input_col_desc : ra_exe_unit.input_col_descs) {
-    TableId const table_id = input_col_desc->getScanDesc().getTableId();
+    TableId const table_id = input_col_desc->getTableId();
     table_id_to_input_col_descs[table_id].push_back(input_col_desc);
   }
   for (auto const& pair : table_id_to_input_col_descs) {
@@ -2760,7 +2758,7 @@ FetchResult Executor::fetchUnionChunks(
           plan_state_->global_to_local_col_ids_.size());
       for (const auto& col_id : pair.second) {
         CHECK(col_id);
-        const int table_id = col_id->getScanDesc().getTableId();
+        const int table_id = col_id->getTableId();
         CHECK_EQ(table_id, pair.first);
         if (col_id->isVirtual()) {
           continue;
@@ -2873,9 +2871,8 @@ void Executor::buildSelectedFragsMapping(
         getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
-      const auto& input_desc = col_id->getScanDesc();
-      if (input_desc.getTableId() != table_id ||
-          input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
+      if (col_id->getTableId() != table_id ||
+          col_id->getNestLevel() != static_cast<int>(scan_idx)) {
         continue;
       }
       auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
@@ -2910,9 +2907,8 @@ void Executor::buildSelectedFragsMappingForUnion(
         {size_t(1)});  // TODO
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
-      const auto& input_desc = col_id->getScanDesc();
-      if (input_desc.getTableId() != table_id ||
-          input_desc.getNestLevel() != static_cast<int>(scan_idx)) {
+      if (col_id->getTableId() != table_id ||
+          col_id->getNestLevel() != static_cast<int>(scan_idx)) {
         continue;
       }
       auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
@@ -3250,7 +3246,7 @@ int32_t Executor::executePlanWithGroupBy(
     // Filter ra_exe_unit_copy.input_col_descs.
     ra_exe_unit_copy.input_col_descs.remove_if(
         [outer_table_id](auto const& input_col_desc) {
-          return input_col_desc->getScanDesc().getTableId() != outer_table_id;
+          return input_col_desc->getTableId() != outer_table_id;
         });
     query_exe_context->query_mem_desc_.setEntryCount(ra_exe_unit_copy.scan_limit);
   }
@@ -3575,8 +3571,8 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
     bool found = false;
     for (const auto& input_col : ra_exe_unit_with_deleted.input_col_descs) {
       if (input_col.get()->getColId() == deleted_cd->columnId &&
-          input_col.get()->getScanDesc().getTableId() == deleted_cd->tableId &&
-          input_col.get()->getScanDesc().getNestLevel() == input_table.getNestLevel()) {
+          input_col.get()->getTableId() == deleted_cd->tableId &&
+          input_col.get()->getNestLevel() == input_table.getNestLevel()) {
         found = true;
         add_deleted_col_to_map(deleted_cols_map, deleted_cd);
         break;
@@ -3585,10 +3581,7 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
     if (!found) {
       // add deleted column
       ra_exe_unit_with_deleted.input_col_descs.emplace_back(
-          new InputColDescriptor(deleted_cd->columnId,
-                                 deleted_cd->tableId,
-                                 input_table.getNestLevel(),
-                                 deleted_cd->columnType));
+          new InputColDescriptor(deleted_cd->makeInfo(), input_table.getNestLevel()));
       add_deleted_col_to_map(deleted_cols_map, deleted_cd);
     }
   }

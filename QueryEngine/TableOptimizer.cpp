@@ -218,7 +218,7 @@ DeletedColumnStats TableOptimizer::getDeletedColumnStats(
   CHECK(!cd->isVirtualCol);
 
   const auto input_col_desc =
-      std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0, cd->columnType);
+      std::make_shared<const InputColDescriptor>(cd->makeInfo(), 0);
   const auto col_expr =
       makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
   const auto count_expr =
@@ -316,10 +316,9 @@ void TableOptimizer::recomputeColumnMetadata(
 
   CHECK(!cd->isVirtualCol);
   const auto column_id = cd->columnId;
-  const auto input_col_desc =
-      std::make_shared<const InputColDescriptor>(column_id, td->tableId, 0, ti);
-  const auto col_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
+  auto column_info = cd->makeInfo();
+  const auto input_col_desc = std::make_shared<const InputColDescriptor>(column_info, 0);
+  const auto col_expr = makeExpr<Analyzer::ColumnVar>(column_info, 0);
   auto max_expr =
       makeExpr<Analyzer::AggExpr>(cd->columnType, kMAX, col_expr, false, nullptr);
   auto min_expr =

@@ -35,11 +35,7 @@ class CollectInputColumnsVisitor
     : public ScalarExprVisitor<std::unordered_set<InputColDescriptor>> {
   std::unordered_set<InputColDescriptor> visitColumnVar(
       const Analyzer::ColumnVar* col_var) const override {
-    return {InputColDescriptor(col_var->get_column_id(),
-                               col_var->get_table_id(),
-                               0,
-                               col_var->get_type_info(),
-                               col_var->is_virtual())};
+    return {InputColDescriptor(col_var->get_column_info(), 0)};
   }
 
  public:
