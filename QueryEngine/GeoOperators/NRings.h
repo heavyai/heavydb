@@ -17,14 +17,13 @@
 #pragma once
 
 #include "QueryEngine/GeoOperators/Codegen.h"
+#include "Shared/sqltypes_geo.h"
 
 namespace spatial_type {
 
 class NRings : public Codegen {
  public:
-  NRings(const Analyzer::GeoOperator* geo_operator,
-         const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {}
+  NRings(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {}
 
   size_t size() const final { return 1; }
 
@@ -46,15 +45,10 @@ class NRings : public Codegen {
 
     // create a new operand which is just the ring sizes and codegen it
     const auto ring_sizes_column_id = col_var->get_column_id() + 2;  // + 2 for ring sizes
-    auto ring_sizes_cd =
-        get_column_descriptor(ring_sizes_column_id, col_var->get_table_id(), *cat_);
-    CHECK(ring_sizes_cd);
-    CHECK(!ring_sizes_cd->isVirtualCol);
+    auto ti = get_geo_physical_col_type(col_var->get_type_info(), 1);
 
-    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(ring_sizes_cd->columnType,
-                                                           col_var->get_table_id(),
-                                                           ring_sizes_column_id,
-                                                           col_var->get_rte_idx());
+    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
+        ti, col_var->get_table_id(), ring_sizes_column_id, col_var->get_rte_idx());
     return operand_owned_.get();
   }
 

@@ -19,29 +19,28 @@
 
 namespace spatial_type {
 
-std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator,
-                                       const Catalog_Namespace::Catalog* catalog) {
+std::unique_ptr<Codegen> Codegen::init(const Analyzer::GeoOperator* geo_operator) {
   const auto operator_name = geo_operator->getName();
   if (operator_name == "ST_NRings") {
-    return std::make_unique<NRings>(geo_operator, catalog);
+    return std::make_unique<NRings>(geo_operator);
   } else if (operator_name == "ST_NPoints") {
-    return std::make_unique<NPoints>(geo_operator, catalog);
+    return std::make_unique<NPoints>(geo_operator);
   } else if (operator_name == "ST_PointN") {
-    return std::make_unique<PointN>(geo_operator, catalog);
+    return std::make_unique<PointN>(geo_operator);
   } else if (operator_name == "ST_StartPoint" || operator_name == "ST_EndPoint") {
-    return std::make_unique<StartEndPoint>(geo_operator, catalog);
+    return std::make_unique<StartEndPoint>(geo_operator);
   } else if (operator_name == "ST_X" || operator_name == "ST_Y") {
-    return std::make_unique<PointAccessors>(geo_operator, catalog);
+    return std::make_unique<PointAccessors>(geo_operator);
   } else if (operator_name == "ST_Point") {
-    return std::make_unique<PointConstructor>(geo_operator, catalog);
+    return std::make_unique<PointConstructor>(geo_operator);
   } else if (operator_name == "ST_Transform") {
-    return std::make_unique<Transform>(geo_operator, catalog);
+    return std::make_unique<Transform>(geo_operator);
   } else if (operator_name == "ST_Perimeter" || operator_name == "ST_Area") {
-    return std::make_unique<AreaPerimeter>(geo_operator, catalog);
+    return std::make_unique<AreaPerimeter>(geo_operator);
   } else if (operator_name == "ST_Centroid") {
-    return std::make_unique<Centroid>(geo_operator, catalog);
+    return std::make_unique<Centroid>(geo_operator);
   } else if (operator_name == "ST_Distance" || operator_name == "ST_MaxDistance") {
-    return std::make_unique<Distance>(geo_operator, catalog);
+    return std::make_unique<Distance>(geo_operator);
   }
   UNREACHABLE();
   return nullptr;

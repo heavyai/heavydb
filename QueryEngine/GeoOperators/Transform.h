@@ -22,9 +22,8 @@ namespace spatial_type {
 // ST_Transform
 class Transform : public Codegen {
  public:
-  Transform(const Analyzer::GeoOperator* geo_operator,
-            const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog)
+  Transform(const Analyzer::GeoOperator* geo_operator)
+      : Codegen(geo_operator)
       , transform_operator_(
             dynamic_cast<const Analyzer::GeoTransformOperator*>(geo_operator)) {
     CHECK_EQ(operator_->size(), size_t(1));  // geo input expr

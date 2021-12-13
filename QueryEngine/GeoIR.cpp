@@ -137,10 +137,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoOperator(
     }
   }
 
-  const auto catalog = executor()->getCatalog();
-  CHECK(catalog);
-
-  auto op_codegen = spatial_type::Codegen::init(geo_operator, catalog);
+  auto op_codegen = spatial_type::Codegen::init(geo_operator);
   CHECK(op_codegen);
 
   std::vector<llvm::Value*> load_lvs;

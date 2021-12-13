@@ -22,9 +22,7 @@ namespace spatial_type {
 
 class Distance : public Codegen {
  public:
-  Distance(const Analyzer::GeoOperator* geo_operator,
-           const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {
+  Distance(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {
     CHECK_EQ(operator_->size(), size_t(2));
     const auto& ti = operator_->get_type_info();
     is_nullable_ = !ti.get_notnull();

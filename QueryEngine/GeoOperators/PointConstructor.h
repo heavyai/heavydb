@@ -25,9 +25,7 @@ namespace spatial_type {
 // ST_Point
 class PointConstructor : public Codegen {
  public:
-  PointConstructor(const Analyzer::GeoOperator* geo_operator,
-                   const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {
+  PointConstructor(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {
     CHECK_EQ(operator_->size(), size_t(2));
     const auto& ti = geo_operator->get_type_info();
     if (ti.get_notnull()) {

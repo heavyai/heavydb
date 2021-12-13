@@ -23,9 +23,8 @@ namespace spatial_type {
 
 class NPoints : public Codegen {
  public:
-  NPoints(const Analyzer::GeoOperator* geo_operator,
-          const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {}
+  NPoints(const Analyzer::GeoOperator* geo_operator)
+      : Codegen(geo_operator) {}
 
   size_t size() const final { return 1; }
 

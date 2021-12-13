@@ -23,9 +23,8 @@ namespace spatial_type {
 // ST_X and ST_Y
 class PointAccessors : public Codegen {
  public:
-  PointAccessors(const Analyzer::GeoOperator* geo_operator,
-                 const Catalog_Namespace::Catalog* catalog)
-      : Codegen(geo_operator, catalog) {
+  PointAccessors(const Analyzer::GeoOperator* geo_operator)
+      : Codegen(geo_operator) {
     CHECK_EQ(operator_->size(), size_t(1));
   }
 
