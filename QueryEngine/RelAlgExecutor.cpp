@@ -443,7 +443,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     check_sort_node_source_constraint(sort);
     const auto source_work_unit = createSortInputWorkUnit(sort, eo);
     shard_count = GroupByAndAggregate::shard_count_for_top_groups(
-        source_work_unit.exe_unit, *executor_->getCatalog());
+        source_work_unit.exe_unit, *schema_provider_);
     if (!shard_count) {
       // No point in sorting on the leaf, only execute the input to the sort node.
       CHECK_EQ(size_t(1), sort->inputCount());

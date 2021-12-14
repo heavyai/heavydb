@@ -1161,13 +1161,14 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
   }
 }
 
-std::string get_table_name(const InputDescriptor& input_desc,
-                           const Catalog_Namespace::Catalog& cat) {
+std::string get_table_name(int db_id,
+                           const InputDescriptor& input_desc,
+                           const SchemaProvider& schema_provider) {
   const auto source_type = input_desc.getSourceType();
   if (source_type == InputSourceType::TABLE) {
-    const auto td = cat.getMetadataForTable(input_desc.getTableId());
-    CHECK(td);
-    return td->tableName;
+    const auto tinfo = schema_provider.getTableInfo(db_id, input_desc.getTableId());
+    CHECK(tinfo);
+    return tinfo->name;
   } else {
     return "$TEMPORARY_TABLE" + std::to_string(-input_desc.getTableId());
   }
@@ -1183,7 +1184,8 @@ inline size_t getDeviceBasedScanLimit(const ExecutorDeviceType device_type,
 
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
                            const std::vector<InputTableInfo>& table_infos,
-                           const Catalog_Namespace::Catalog& cat,
+                           const int db_id,
+                           const SchemaProvider& schema_provider,
                            const ExecutorDeviceType device_type,
                            const int device_count) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1208,7 +1210,7 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {
-      table_names.push_back(get_table_name(input_desc, cat));
+      table_names.push_back(get_table_name(db_id, input_desc, schema_provider));
     }
     if (!ra_exe_unit.scan_limit) {
       throw WatchdogException(
@@ -1983,10 +1985,10 @@ ResultSetPtr Executor::collectAllDeviceResults(
       throw SpeculativeTopNFailed("Failed during multi-device reduction.");
     }
   }
-  const auto shard_count =
-      device_type == ExecutorDeviceType::GPU
-          ? GroupByAndAggregate::shard_count_for_top_groups(ra_exe_unit, *catalog_)
-          : 0;
+  const auto shard_count = device_type == ExecutorDeviceType::GPU
+                               ? GroupByAndAggregate::shard_count_for_top_groups(
+                                     ra_exe_unit, *schema_provider_)
+                               : 0;
 
   if (shard_count && !result_per_device.empty()) {
     return collectAllDeviceShardedTopResults(shared_context, ra_exe_unit);
@@ -2197,7 +2199,8 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                              g_inner_join_fragment_skipping,
                                              this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
-    checkWorkUnitWatchdog(ra_exe_unit, table_infos, *catalog_, device_type, device_count);
+    checkWorkUnitWatchdog(
+        ra_exe_unit, table_infos, db_id_, *schema_provider_, device_type, device_count);
   }
 
   if (use_multifrag_kernel) {

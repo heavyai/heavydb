@@ -204,6 +204,7 @@ class ColumnVar : public Expr {
       , rte_idx(nest_level)
       , col_info_(
             std::make_shared<ColumnInfo>(-1, table_id, col_id, "", ti, is_virtual)) {}
+  int get_db_id() const { return col_info_->db_id; }
   int get_table_id() const { return col_info_->table_id; }
   int get_column_id() const { return col_info_->column_id; }
   int get_rte_idx() const { return rte_idx; }

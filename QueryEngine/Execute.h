@@ -441,6 +441,7 @@ class Executor {
   const Catalog_Namespace::Catalog* getCatalog() const;
   void setCatalog(const Catalog_Namespace::Catalog* catalog);
 
+  const SchemaProvider* getSchemaProvider() { return schema_provider_; }
   void setSchemaProvider(const SchemaProvider* provider) { schema_provider_ = provider; }
 
   int getDatabaseId() const { return db_id_; }

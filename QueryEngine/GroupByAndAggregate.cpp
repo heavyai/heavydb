@@ -674,7 +674,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     const bool output_columnar_hint) {
   const auto shard_count =
       device_type_ == ExecutorDeviceType::GPU
-          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog())
+          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getSchemaProvider())
           : 0;
   bool sort_on_gpu_hint =
       device_type_ == ExecutorDeviceType::GPU && allow_multifrag &&
@@ -730,7 +730,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   const auto shard_count =
       device_type_ == ExecutorDeviceType::GPU
-          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getCatalog())
+          ? shard_count_for_top_groups(ra_exe_unit_, *executor_->getSchemaProvider())
           : 0;
 
   const auto col_range_info =
@@ -1963,7 +1963,7 @@ void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
 
 size_t GroupByAndAggregate::shard_count_for_top_groups(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const Catalog_Namespace::Catalog& catalog) {
+    const SchemaProvider& schema_provider) {
   if (ra_exe_unit.sort_info.order_entries.size() != 1 || !ra_exe_unit.sort_info.limit) {
     return 0;
   }
@@ -1976,9 +1976,10 @@ size_t GroupByAndAggregate::shard_count_for_top_groups(
     if (grouped_col_expr->get_table_id() <= 0) {
       return 0;
     }
-    const auto td = catalog.getMetadataForTable(grouped_col_expr->get_table_id());
-    if (td->shardedColumnId == grouped_col_expr->get_column_id()) {
-      return td->nShards;
+    const auto tinfo = schema_provider.getTableInfo(grouped_col_expr->get_db_id(),
+                                                    grouped_col_expr->get_table_id());
+    if (tinfo->sharded_column_id == grouped_col_expr->get_column_id()) {
+      return tinfo->shards;
     }
   }
   return 0;

@@ -31,6 +31,7 @@
 
 #include "../Shared/sqltypes.h"
 #include "Logger/Logger.h"
+#include "SchemaMgr/SchemaProvider.h"
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -76,7 +77,7 @@ class GroupByAndAggregate {
                const GpuSharedMemoryContext& gpu_smem_context);
 
   static size_t shard_count_for_top_groups(const RelAlgExecutionUnit& ra_exe_unit,
-                                           const Catalog_Namespace::Catalog& catalog);
+                                           const SchemaProvider& schema_provider);
 
  private:
   bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
