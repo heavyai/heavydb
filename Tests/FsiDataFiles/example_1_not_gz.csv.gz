@@ -1,0 +1,4 @@
+text,array
+a,{1, 1, 1}
+aa,{'NA', 2, 2}
+aaa,{3, 'NA', 3}

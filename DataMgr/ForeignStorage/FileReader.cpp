@@ -19,6 +19,7 @@
 #include "ForeignStorageException.h"
 #include "FsiJsonUtils.h"
 #include "Shared/file_path_util.h"
+#include "Shared/file_type.h"
 #include "Shared/misc.h"
 
 namespace foreign_storage {
@@ -601,21 +602,13 @@ LocalMultiFileReader::LocalMultiFileReader(
   }
 }
 
-namespace {
-bool is_compressed_file(const std::string& location) {
-  const std::vector<std::string> compressed_exts = {
-      ".zip", ".gz", ".tar", ".rar", ".bz2", ".7z", ".tgz"};
-  return shared::contains(compressed_exts, boost::filesystem::extension(location));
-}
-}  // namespace
-
 LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
                                            const import_export::CopyParams& copy_params,
                                            const rapidjson::Value& value)
     : MultiFileReader(file_path, copy_params, value) {
   // Constructs file from files_metadata
   for (size_t index = 0; index < file_locations_.size(); index++) {
-    if (is_compressed_file(file_locations_[index])) {
+    if (shared::is_compressed_file_extension(file_locations_[index])) {
       files_.emplace_back(std::make_unique<CompressedFileReader>(
           file_locations_[index],
           copy_params_,
@@ -630,7 +623,7 @@ LocalMultiFileReader::LocalMultiFileReader(const std::string& file_path,
 }
 
 void LocalMultiFileReader::insertFile(std::string location) {
-  if (is_compressed_file(location)) {
+  if (shared::is_compressed_file_extension(location)) {
     files_.emplace_back(std::make_unique<CompressedFileReader>(location, copy_params_));
   } else {
     files_.emplace_back(std::make_unique<SingleTextFileReader>(location, copy_params_));

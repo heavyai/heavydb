@@ -67,4 +67,19 @@ inline void throw_file_not_found_error(const std::string& file_path) {
   throw ForeignStorageException{"File or directory \"" + file_path +
                                 "\" does not exist."};
 }
+
+inline void throw_s3_compressed_mime_type(const std::string& file_path,
+                                          const std::string& mime_type) {
+  throw ForeignStorageException{
+      "File \"" + file_path + "\" has mime type \"" + mime_type +
+      "\", compressed file formats are not supported by S3 Foreign Tables."};
+}
+
+inline void throw_s3_compressed_extension(const std::string& file_path,
+                                          const std::string& ext_type) {
+  throw ForeignStorageException{
+      "File \"" + file_path + "\" has extension type \"" + ext_type +
+      "\", compressed file formats are not supported by S3 Foreign Tables."};
+}
+
 }  // namespace foreign_storage

@@ -51,4 +51,4 @@ dest_state TEXT ENCODING DICT(8),
 dest_country TEXT ENCODING DICT(8),
 dest_lat FLOAT,
 dest_lon FLOAT
-) SERVER benchmark_s3_csv WITH ( file_path = '##FILE##', header = 'false')
+) SERVER benchmark_s3_csv WITH ( file_path = '##FILE##', header = 'false', regex_path_filter = '.*\.csv' )

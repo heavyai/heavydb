@@ -52,4 +52,4 @@ CREATE FOREIGN TABLE ##TAB## (
     dropoff_ntacode         TEXT  ENCODING DICT,
     dropoff_ntaname         TEXT ENCODING DICT,
     dropoff_puma            TEXT  ENCODING DICT
-) SERVER benchmark_s3_csv WITH ( file_path = '##FILE##', header = 'false' )
+) SERVER benchmark_s3_csv WITH ( file_path = '##FILE##', header = 'false', regex_path_filter = '.*\.csv' )
