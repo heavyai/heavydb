@@ -24,7 +24,7 @@
 
 #include "Geospatial/Types.h"
 #include "Logger/Logger.h"
-#include "Shared/InputRef.h"
+#include "SchemaMgr/ColumnInfo.h"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 

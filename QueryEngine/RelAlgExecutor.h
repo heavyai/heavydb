@@ -24,6 +24,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/RelAlgDagBuilder.h"
+#include "QueryEngine/RelAlgSchemaProvider.h"
 #include "QueryEngine/SpeculativeTopN.h"
 #include "QueryEngine/StreamingTopN.h"
 #include "Shared/scope.h"
@@ -67,6 +68,8 @@ class RelAlgExecutor : private StorageIOFacility {
       , executor_(executor)
       , cat_(cat)
       , query_dag_(std::make_unique<RelAlgDagBuilder>(query_ra, cat_, nullptr))
+      , schema_provider_(
+            std::make_unique<RelAlgSchemaProvider>(query_dag_->getRootNode()))
       , query_state_(std::move(query_state))
       , now_(0)
       , queue_time_ms_(0) {}
@@ -79,6 +82,8 @@ class RelAlgExecutor : private StorageIOFacility {
       , executor_(executor)
       , cat_(cat)
       , query_dag_(std::move(query_dag))
+      , schema_provider_(
+            std::make_unique<RelAlgSchemaProvider>(query_dag_->getRootNode()))
       , query_state_(std::move(query_state))
       , now_(0)
       , queue_time_ms_(0) {}
@@ -385,6 +390,7 @@ class RelAlgExecutor : private StorageIOFacility {
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   std::unique_ptr<RelAlgDagBuilder> query_dag_;
+  std::unique_ptr<RelAlgSchemaProvider> schema_provider_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;

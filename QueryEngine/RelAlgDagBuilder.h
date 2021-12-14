@@ -37,7 +37,8 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TypePunning.h"
 #include "QueryHint.h"
-#include "Shared/InputRef.h"
+#include "SchemaMgr/ColumnInfo.h"
+#include "SchemaMgr/TableInfo.h"
 #include "Shared/sqltypes_geo.h"
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
@@ -841,11 +842,16 @@ class RelScan : public RelAlgNode {
       , td_(td)
       , column_infos_(std::move(column_infos))
       , hint_applied_(false)
-      , hints_(std::make_unique<Hints>()) {}
+      , hints_(std::make_unique<Hints>()) {
+    table_info_ = std::make_shared<TableInfo>(
+        db_id, td->tableId, td->tableName, td->nShards, td->shardedColumnId);
+  }
 
   size_t size() const override { return column_infos_.size(); }
 
   const TableDescriptor* getTableDescriptor() const { return td_; }
+
+  TableInfoPtr getTableInfo() const { return table_info_; }
 
   const size_t getNumFragments() const { return td_->fragmenter->getNumFragments(); }
 
@@ -966,6 +972,7 @@ class RelScan : public RelAlgNode {
  private:
   const int32_t db_id_;
   const TableDescriptor* td_;
+  TableInfoPtr table_info_;
   const std::vector<ColumnInfoPtr> column_infos_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;

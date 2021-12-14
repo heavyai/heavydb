@@ -29,7 +29,7 @@
 #include "BufferMgr/BufferMgr.h"
 #include "MemoryLevel.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
-#include "Shared/InputRef.h"
+#include "SchemaMgr/ColumnInfo.h"
 
 #include <iomanip>
 #include <iostream>

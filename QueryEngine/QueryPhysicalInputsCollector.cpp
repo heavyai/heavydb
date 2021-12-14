@@ -20,7 +20,7 @@
 #include "RelAlgVisitor.h"
 #include "RexVisitor.h"
 
-#include "Shared/InputRef.h"
+#include "SchemaMgr/ColumnInfo.h"
 
 namespace {
 
@@ -231,6 +231,26 @@ class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set
   }
 };
 
+class RelAlgPhysicalTableInfosVisitor : public RelAlgVisitor<TableInfoMap> {
+ public:
+  RelAlgPhysicalTableInfosVisitor() {}
+
+  TableInfoMap visitScan(const RelScan* scan) const override {
+    TableInfoMap res;
+    auto info = scan->getTableInfo();
+    res.insert(std::make_pair(TableRef(info->db_id, info->table_id), info));
+    return res;
+  }
+
+ protected:
+  TableInfoMap aggregateResult(const TableInfoMap& aggregate,
+                               const TableInfoMap& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
 }  // namespace
 
 std::unordered_set<InputColDescriptor> get_physical_inputs(const RelAlgNode* ra) {
@@ -247,6 +267,11 @@ ColumnRefSet get_ref_inputs(const RelAlgNode* ra) {
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {
   RelAlgPhysicalTableInputsVisitor phys_table_inputs_visitor;
   return phys_table_inputs_visitor.visit(ra);
+}
+
+TableInfoMap get_physical_table_infos(const RelAlgNode* ra) {
+  RelAlgPhysicalTableInfosVisitor visitor;
+  return visitor.visit(ra);
 }
 
 std::ostream& operator<<(std::ostream& os, PhysicalInput const& physical_input) {

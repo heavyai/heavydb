@@ -24,7 +24,7 @@
 #include <boost/preprocessor.hpp>
 #include "../Shared/types.h"
 #include "AbstractBuffer.h"
-#include "Shared/InputRef.h"
+#include "SchemaMgr/ColumnInfo.h"
 // TODO: move this header to some other place.
 #include "QueryEngine/CompilationOptions.h"
 

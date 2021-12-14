@@ -716,13 +716,13 @@ class CaseExpr : public Expr {
 };
 
 /*
- * @type TableRef
+ * @type TableRefNode
  * @brief table reference in FROM clause
  */
-class TableRef : public Node {
+class TableRefNode : public Node {
  public:
-  explicit TableRef(std::string* t) : table_name_(t), range_var_(nullptr) {}
-  TableRef(std::string* t, std::string* r) : table_name_(t), range_var_(r) {}
+  explicit TableRefNode(std::string* t) : table_name_(t), range_var_(nullptr) {}
+  TableRefNode(std::string* t, std::string* r) : table_name_(t), range_var_(r) {}
   const std::string* get_table_name() const { return table_name_.get(); }
   const std::string* get_range_var() const { return range_var_.get(); }
   std::string to_string() const;
@@ -1719,7 +1719,7 @@ class QuerySpec : public QueryExpr {
  public:
   QuerySpec(bool d,
             std::list<SelectEntry*>* s,
-            std::list<TableRef*>* f,
+            std::list<TableRefNode*>* f,
             Expr* w,
             std::list<Expr*>* g,
             Expr* h)
@@ -1746,7 +1746,7 @@ class QuerySpec : public QueryExpr {
   const std::list<std::unique_ptr<SelectEntry>>& get_select_clause() const {
     return select_clause_;
   }
-  const std::list<std::unique_ptr<TableRef>>& get_from_clause() const {
+  const std::list<std::unique_ptr<TableRefNode>>& get_from_clause() const {
     return from_clause_;
   }
   const Expr* get_where_clause() const { return where_clause_.get(); }
@@ -1761,7 +1761,7 @@ class QuerySpec : public QueryExpr {
  private:
   bool is_distinct_;
   std::list<std::unique_ptr<SelectEntry>> select_clause_; /* nullptr means SELECT * */
-  std::list<std::unique_ptr<TableRef>> from_clause_;
+  std::list<std::unique_ptr<TableRefNode>> from_clause_;
   std::unique_ptr<Expr> where_clause_;
   std::list<std::unique_ptr<Expr>> groupby_clause_;
   std::unique_ptr<Expr> having_clause_;

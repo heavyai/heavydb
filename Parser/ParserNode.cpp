@@ -1388,7 +1388,7 @@ std::string SelectEntry::to_string() const {
   return str;
 }
 
-std::string TableRef::to_string() const {
+std::string TableRefNode::to_string() const {
   std::string str = *table_name_;
   if (range_var_ != nullptr) {
     str += " " + *range_var_;

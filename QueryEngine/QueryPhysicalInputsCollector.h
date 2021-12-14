@@ -26,7 +26,8 @@
 #define QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H
 
 #include "QueryEngine/Descriptors/InputDescriptors.h"
-#include "Shared/InputRef.h"
+#include "SchemaMgr/ColumnInfo.h"
+#include "SchemaMgr/TableInfo.h"
 
 #include <ostream>
 #include <unordered_set>
@@ -57,6 +58,7 @@ struct hash<PhysicalInput> {
 
 std::unordered_set<InputColDescriptor> get_physical_inputs(const RelAlgNode*);
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode*);
+TableInfoMap get_physical_table_infos(const RelAlgNode*);
 
 ColumnRefSet get_ref_inputs(const RelAlgNode*);
 

@@ -505,7 +505,7 @@ query_spec:
 		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_,
                                            new QuerySpec($<boolval>2,
                                                          reinterpret_cast<std::list<SelectEntry*>*>(($<listval>3)->release()),
-                                                         reinterpret_cast<std::list<TableRef*>*>(($<listval>4)->release()),
+                                                         reinterpret_cast<std::list<TableRefNode*>*>(($<listval>4)->release()),
                                                          dynamic_cast<Expr*>(($<nodeval>5)->release()),
                                                          reinterpret_cast<std::list<Expr*>*>(($<listval>6)->release()),
                                                          dynamic_cast<Expr*>(($<nodeval>7)->release())));
@@ -531,8 +531,8 @@ table_ref_commalist:
 	;
 
 table_ref:
-		table { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new TableRef(($<stringval>1)->release())); }
-	|	table range_variable { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new TableRef(($<stringval>1)->release(), ($<stringval>2)->release())); }
+		table { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new TableRefNode(($<stringval>1)->release())); }
+	|	table range_variable { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new TableRefNode(($<stringval>1)->release(), ($<stringval>2)->release())); }
 	;
 
 where_clause:
@@ -834,7 +834,7 @@ table:
 		}
 		$<stringval>$ = $<stringval>1;
 	}
-	/* |	NAME '.' NAME { $$ = new TableRef(($<stringval>1)->release(), ($<stringval>3)->release()); } */
+	/* |	NAME '.' NAME { $$ = new TableRefNode(($<stringval>1)->release(), ($<stringval>3)->release()); } */
     | 	QUOTED_IDENTIFIER { $<stringval>$ = $<stringval>1; }
 	;
 

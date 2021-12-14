@@ -20,7 +20,7 @@
 #include <cassert>
 #include <optional>
 #include <string>
-#include "../Shared/InputRef.h"
+#include "../SchemaMgr/ColumnInfo.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/toString.h"
 

@@ -1,6 +1,4 @@
 /*
- * Copyright 2021 OmniSci, Inc.
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -16,12 +14,11 @@
 
 #pragma once
 
-#include "sqltypes.h"
+#include "Shared/sqltypes.h"
 
 #include <memory>
 #include <unordered_set>
 
-// References table column using 0-based positional index.
 struct ColumnRef {
   ColumnRef(int db_id_, int table_id_, int column_id_)
       : db_id(db_id_), table_id(table_id_), column_id(column_id_) {}
@@ -56,6 +53,7 @@ struct ColumnInfo : public ColumnRef {
 };
 
 using ColumnInfoPtr = std::shared_ptr<ColumnInfo>;
+using ColumnInfoMap = std::unordered_map<ColumnRef, ColumnInfoPtr>;
 
 namespace std {
 

@@ -110,6 +110,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
+  executor_->setSchemaProvider(schema_provider_.get());
   executor_->setupCaching(col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
@@ -127,6 +128,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->setCatalog(&cat_);
+  executor_->setSchemaProvider(schema_provider_.get());
   executor_->temporary_tables_ = &temporary_tables_;
 
   WindowProjectNodeContext::reset(executor_);
@@ -294,6 +296,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
+  executor_->setSchemaProvider(schema_provider_.get());
   executor_->setupCaching(col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
@@ -523,6 +526,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   executor_->setCatalog(&cat_);
+  executor_->setSchemaProvider(schema_provider_.get());
   executor_->temporary_tables_ = &temporary_tables_;
 
   time(&now_);
@@ -605,6 +609,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
   executor_->setCatalog(&cat_);
+  executor_->setSchemaProvider(schema_provider_.get());
   executor_->temporary_tables_ = &temporary_tables_;
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   time(&now_);

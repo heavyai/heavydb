@@ -63,6 +63,7 @@
 
 #include "DataMgr/Chunk/Chunk.h"
 #include "Logger/Logger.h"
+#include "SchemaMgr/SchemaProvider.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/funcannotations.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -439,6 +440,8 @@ class Executor {
 
   const Catalog_Namespace::Catalog* getCatalog() const;
   void setCatalog(const Catalog_Namespace::Catalog* catalog);
+
+  void setSchemaProvider(const SchemaProvider* provider) { schema_provider_ = provider; }
 
   int getDatabaseId() const { return db_id_; }
 
@@ -1092,6 +1095,7 @@ class Executor {
 
   const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
+  const SchemaProvider* schema_provider_;
   int db_id_ = -1;
   Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
