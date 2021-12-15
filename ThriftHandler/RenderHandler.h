@@ -54,6 +54,7 @@ class RenderHandler {
                          const bool enable_auto_clear_render_mem,
                          const int render_oom_retry_threshold,
                          const bool renderer_use_vulkan_driver,
+                         const bool renderer_use_ppll_polys,
                          const bool renderer_prefer_igpu,
                          const uint32_t renderer_vulkan_timeout_ms,
                          const SystemParameters system_parameters);

@@ -169,6 +169,7 @@ class DBHandler : public OmniSciIf {
             const bool allow_loop_joins,
             const bool enable_rendering,
             const bool renderer_use_vulkan_driver,
+            const bool renderer_use_ppll_polys,
             const bool renderer_prefer_igpu,
             const unsigned renderer_vulkan_timeout_ms,
             const bool enable_auto_clear_render_mem,
@@ -933,6 +934,7 @@ class DBHandler : public OmniSciIf {
 
   const bool enable_rendering_;
   const bool renderer_use_vulkan_driver_;
+  const bool renderer_use_ppll_polys_;
   const bool renderer_prefer_igpu_;
   const unsigned renderer_vulkan_timeout_;
   const bool enable_auto_clear_render_mem_;

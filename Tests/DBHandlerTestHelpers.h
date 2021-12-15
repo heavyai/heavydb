@@ -227,6 +227,7 @@ class DBHandlerTestFixture : public testing::Test {
       const bool allow_loop_joins{false};
       const bool enable_rendering{false};
       const bool renderer_use_vulkan_driver{false};
+      const bool renderer_use_ppll_polys{false};
       const bool renderer_prefer_igpu{false};
       const unsigned renderer_vulkan_timeout_ms{300000};
       const bool enable_auto_clear_render_mem{false};
@@ -261,6 +262,7 @@ class DBHandlerTestFixture : public testing::Test {
                                                 allow_loop_joins,
                                                 enable_rendering,
                                                 renderer_use_vulkan_driver,
+                                                renderer_use_ppll_polys,
                                                 renderer_prefer_igpu,
                                                 renderer_vulkan_timeout_ms,
                                                 enable_auto_clear_render_mem,
