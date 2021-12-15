@@ -100,7 +100,8 @@ static void start_calcite_server_as_daemon(const int db_port,
   std::string ConfigFileP = "-c";
   std::string KeyStoreP = "-Y";
   std::string KeyStorePasswdP = "-Z";
-  std::string logDirectory = "-DMAPD_LOG_DIR=" + data_dir;
+  // FIXME: this path should be getting pulled from logger rather than hardcoded
+  std::string logDirectory = "-DMAPD_LOG_DIR=" + data_dir + "/mapd_log/";
   std::string userDefinedFunctionsP = "";
   std::string userDefinedFunctionsD = "";
 
