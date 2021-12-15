@@ -26,7 +26,6 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,13 +147,12 @@ public class CalciteServerCaller {
     // Add logging to our log files directories
     Properties p = new Properties();
     try {
-      p.load(getClass().getResourceAsStream("/log4j.properties"));
+      p.load(getClass().getResourceAsStream("/log4j2.properties"));
     } catch (IOException ex) {
       MAPDLOGGER.error(
               "Could not load log4j property file from resources " + ex.getMessage());
     }
     p.put("log.dir", dataDir); // overwrite "log.dir"
-    PropertyConfigurator.configure(p);
 
     try {
       Properties properties = null;
