@@ -4806,9 +4806,11 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
   raster_importer.detect(
       file_name,
       copy_params.raster_import_bands,
+      copy_params.raster_import_dimensions,
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
-      copy_params.raster_point_compute_angle);
+      copy_params.raster_point_compute_angle,
+      false);
 
   // prepare to capture column descriptors
   std::list<ColumnDescriptor> cds;
@@ -5434,9 +5436,11 @@ ImportStatus Importer::importGDALRaster(
   raster_importer.detect(
       file_path,
       copy_params.raster_import_bands,
+      copy_params.raster_import_dimensions,
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
-      copy_params.raster_point_compute_angle);
+      copy_params.raster_point_compute_angle,
+      true);
 
   // get the table columns
   auto const& column_descs = loader->get_column_descs();

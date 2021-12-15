@@ -216,6 +216,7 @@ struct TCopyParams {
   29: i32 raster_scanlines_per_thread;
   30: TRasterPointTransform raster_point_transform=TRasterPointTransform.AUTO;
   31: bool raster_point_compute_angle=false;
+  32: string raster_import_dimensions;
 }
 
 struct TCreateParams {

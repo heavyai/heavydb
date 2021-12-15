@@ -85,6 +85,7 @@ struct CopyParams {
   int32_t raster_scanlines_per_thread;
   RasterPointTransform raster_point_transform;
   bool raster_point_compute_angle;
+  std::string raster_import_dimensions;
 
   CopyParams()
       : delimiter(',')

@@ -5031,6 +5031,18 @@ void CopyTableStmt::execute(
         } else {
           throw std::runtime_error("Invalid value for 'raster_import_bands' option");
         }
+      } else if (boost::iequals(*p->get_name(), "raster_import_dimensions")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'raster_import_dimensions' option must be a string");
+        }
+        const std::string* raster_import_dimensions = str_literal->get_stringval();
+        if (raster_import_dimensions) {
+          copy_params.raster_import_dimensions = *raster_import_dimensions;
+        } else {
+          throw std::runtime_error("Invalid value for 'raster_import_dimensions' option");
+        }
       } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());

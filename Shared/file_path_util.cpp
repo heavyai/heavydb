@@ -55,12 +55,13 @@ void validate_sort_options(const std::optional<std::string>& sort_by,
 
 namespace {
 
-std::vector<std::string> glob_local_recursive_files(const std::string& file_path) {
+std::vector<std::string> glob_local_recursive_files(const std::string& file_path,
+                                                    const bool recurse) {
   std::vector<std::string> file_paths;
 
   if (boost::filesystem::is_regular_file(file_path)) {
     file_paths.emplace_back(file_path);
-  } else if (boost::filesystem::is_directory(file_path)) {
+  } else if (recurse && boost::filesystem::is_directory(file_path)) {
     for (boost::filesystem::recursive_directory_iterator
              it(file_path, boost::filesystem::symlink_option::recurse),
          eit;
@@ -74,8 +75,8 @@ std::vector<std::string> glob_local_recursive_files(const std::string& file_path
   } else {
     auto glob_results = omnisci::glob(file_path);
     for (const auto& path : glob_results) {
-      if (boost::filesystem::is_directory(path)) {
-        auto expanded_paths = glob_local_recursive_files(path);
+      if (recurse && boost::filesystem::is_directory(path)) {
+        auto expanded_paths = glob_local_recursive_files(path, true);
         file_paths.insert(file_paths.end(), expanded_paths.begin(), expanded_paths.end());
       } else {
         file_paths.emplace_back(path);
@@ -109,8 +110,9 @@ std::vector<std::string> local_glob_filter_sort_files(
     const std::string& file_path,
     const std::optional<std::string>& filter_regex,
     const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex) {
-  auto result_files = glob_local_recursive_files(file_path);
+    const std::optional<std::string>& sort_regex,
+    const bool recurse) {
+  auto result_files = glob_local_recursive_files(file_path, recurse);
   if (filter_regex.has_value()) {
     result_files = regex_file_filter(filter_regex.value(), result_files);
   }

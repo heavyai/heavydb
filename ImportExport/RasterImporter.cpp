@@ -214,9 +214,11 @@ double conv_4326_900913_y(const double y) {
 
 void RasterImporter::detect(const std::string& file_name,
                             const std::string& specified_band_names,
+                            const std::string& specified_band_dimensions,
                             const PointType point_type,
                             const PointTransform point_transform,
-                            const bool point_compute_angle) {
+                            const bool point_compute_angle,
+                            const bool throw_on_error) {
   // open base file to check for subdatasources
   bool has_spatial_reference{false};
   {
@@ -225,20 +227,14 @@ void RasterImporter::detect(const std::string& file_name,
     Geospatial::GDAL::DataSourceUqPtr datasource = Geospatial::GDAL::openDataSource(
         file_name, import_export::SourceType::kRasterFile);
     if (datasource == nullptr) {
-      throw std::runtime_error("RasterImporter: Unable to open raster file " + file_name);
+      throw std::runtime_error("Raster Importer: Unable to open raster file " +
+                               file_name);
     }
 
 #if DEBUG_RASTER_IMPORT
     // log all its metadata
     Geospatial::GDAL::logMetadata(datasource);
 #endif
-
-    // if it's an OME TIFF, extract "band" names for each datasource from the XML blob
-    auto const tifftag_imagedescription = Geospatial::GDAL::getMetadataString(
-        datasource->GetMetadata(), "TIFFTAG_IMAGEDESCRIPTION");
-    if (tifftag_imagedescription.length()) {
-      ome_tiff_band_names_ = get_ome_tiff_band_names(tifftag_imagedescription);
-    }
 
     // get and add subdatasource datasource names
     auto const subdatasources =
@@ -256,6 +252,9 @@ void RasterImporter::detect(const std::string& file_name,
 
     // note if it has a spatial reference
     has_spatial_reference = (datasource->GetSpatialRef() != nullptr);
+
+    // fetch
+    getRawBandNamesForFormat(datasource);
   }
 
   // if we didn't find any subdatasources, just use the base file
@@ -284,27 +283,30 @@ void RasterImporter::detect(const std::string& file_name,
     point_type_ = point_type;
   }
 
+  std::set<std::pair<int, int>> found_dimensions;
+
   // lambda to process a datasource
   auto process_datasource = [&](const Geospatial::GDAL::DataSourceUqPtr& datasource,
                                 const uint32_t datasource_idx) {
     auto raster_count = datasource->GetRasterCount();
     if (raster_count == 0) {
-      throw std::runtime_error("RasterImporter: Raster file " + file_name +
+      throw std::runtime_error("Raster Importer: Raster file " + file_name +
                                " has no rasters");
     }
 
     // for each band (1-based index)
     for (int i = 1; i <= raster_count; i++) {
-      auto band = datasource->GetRasterBand(i);
-      CHECK(band);
-
-      // get band name (does all file-specific logic and de-duplication)
-      auto band_name = getBandName(band, i);
+      // get band name
+      auto band_name = getBandName(datasource_idx, i);
 
       // if there are specified band names, and this isn't one of them, skip
       if (!shouldImportBandWithName(band_name)) {
         continue;
       }
+
+      // get the band
+      auto band = datasource->GetRasterBand(i);
+      CHECK(band);
 
       // get band dimensions
       auto const band_width = band->GetXSize();
@@ -312,20 +314,17 @@ void RasterImporter::detect(const std::string& file_name,
       int block_size_x, block_size_y;
       band->GetBlockSize(&block_size_x, &block_size_y);
 
-      LOG_IF(INFO, DEBUG_RASTER_IMPORT)
-          << "Band: " << i << "[" << band_width << ", " << band_height << "]: "
-          << "Block Size: [" << block_size_x << ", " << block_size_y << "]";
+      // report
+      LOG(INFO) << "Raster Importer: Found Band '" << band_name << "', with dimensions "
+                << band_width << "x" << band_height;
 
-      // validate dimensions
-      if (bands_width_ < 0) {
-        bands_width_ = band_width;
-        bands_height_ = band_height;
-      } else if (band_width != bands_width_ || band_height != bands_height_) {
-        throw std::runtime_error(
-            "RasterImporter: Raster file '" + file_name +
-            "' datasource/band dimensions are inconsistent. This file "
-            "cannot be imported into a single table.");
+      // if there are specified band dimensions, and this band doesn't match, skip
+      if (!shouldImportBandWithDimensions(band_width, band_height)) {
+        continue;
       }
+
+      // add to found dimensions
+      found_dimensions.insert({band_width, band_height});
 
       // get SQL type
       auto sql_type = gdal_data_type_to_sql_type(band->GetRasterDataType());
@@ -360,24 +359,73 @@ void RasterImporter::detect(const std::string& file_name,
     }
   };
 
-  // initialize naming
-  initializeNaming(specified_band_names);
+  // initialize filtering
+  initializeFiltering(specified_band_names, specified_band_dimensions);
 
   // process datasources
   uint32_t datasource_idx{0u};
+  std::vector<std::string> valid_datasource_names;
   for (auto const& datasource_name : datasource_names_) {
     // open it
     Geospatial::GDAL::DataSourceUqPtr datasource_handle =
         Geospatial::GDAL::openDataSource(datasource_name,
                                          import_export::SourceType::kRasterFile);
+
+    // did it open?
     if (datasource_handle == nullptr) {
-      throw std::runtime_error("RasterImporter: Failed to open file/datasource '" +
-                               datasource_name + "'");
+      continue;
+    } else {
+      valid_datasource_names.push_back(datasource_name);
     }
 
     // process it
     process_datasource(datasource_handle, datasource_idx++);
   }
+
+  // check dimensions
+  if (found_dimensions.size() > 1u) {
+    // report
+    LOG(WARNING) << "Raster Importer: Dimensions found as follows:";
+    for (auto const& dimension : found_dimensions) {
+      LOG(WARNING) << "Raster Importer:   " << dimension.first << "x" << dimension.second;
+    }
+    if (throw_on_error) {
+      throw std::runtime_error("Raster Importer: Raster file '" + file_name +
+                               "' datasource/band dimensions are inconsistent. This file "
+                               "cannot be imported into a single table.");
+    } else {
+      LOG(WARNING) << "Raster Importer: Raster file '" << file_name
+                   << "' datasource/band dimensions are inconsistent. This file "
+                      "cannot be imported into a single table.";
+    }
+  } else if (found_dimensions.size() == 1u) {
+    bands_width_ = found_dimensions.begin()->first;
+    bands_height_ = found_dimensions.begin()->second;
+    LOG(INFO) << "Raster Importer: Importing dimension " << bands_width_ << "x"
+              << bands_height_;
+  }
+
+  // report if we found nothing
+  if (import_band_infos_.size() == 0 || found_dimensions.size() == 0u) {
+    if (throw_on_error) {
+      throw std::runtime_error("Raster Importer: Raster file " + file_name +
+                               " has no importable bands");
+    } else {
+      LOG(ERROR) << "Raster Importer: Raster file " << file_name
+                 << " has no importable bands";
+    }
+  }
+
+  // report any invalid datasources and keep only the valid ones
+  // the datasource indices stored in the infos will match the valid ones
+  auto const failed_datasource_count =
+      datasource_names_.size() - valid_datasource_names.size();
+  if (failed_datasource_count) {
+    LOG(WARNING) << "Raster Importer: Failed to open " << failed_datasource_count
+                 << " out of " << std::to_string(datasource_names_.size())
+                 << " datasources";
+  }
+  datasource_names_ = valid_datasource_names;
 
   // fail if any specified import band names were not found
   checkSpecifiedBandNamesFound();
@@ -413,7 +461,7 @@ void RasterImporter::detect(const std::string& file_name,
       (bands_width_ > std::numeric_limits<int16_t>::max() ||
        bands_height_ > std::numeric_limits<int16_t>::max())) {
     throw std::runtime_error(
-        "RasterImporter: Raster file '" + file_name +
+        "Raster Importer: Raster file '" + file_name +
         "' has band dimensions too large for 'SMALLINT' raster_point_type (" +
         std::to_string(bands_width_) + "x" + std::to_string(bands_height_) + ")");
   }
@@ -439,7 +487,7 @@ void RasterImporter::import(const uint32_t max_threads) {
       auto datasource_handle = Geospatial::GDAL::openDataSource(
           datasource_name, import_export::SourceType::kRasterFile);
       if (datasource_handle == nullptr) {
-        throw std::runtime_error("RasterImporter: Unable to open raster file " +
+        throw std::runtime_error("Raster Importer: Unable to open raster file " +
                                  datasource_name);
       }
       datasource_thread_handles.emplace_back(std::move(datasource_handle));
@@ -665,7 +713,94 @@ void RasterImporter::getRawPixels(const uint32_t thread_idx,
 // private
 //
 
-void RasterImporter::initializeNaming(const std::string& specified_band_names) {
+void RasterImporter::getRawBandNamesForFormat(
+    const Geospatial::GDAL::DataSourceUqPtr& datasource) {
+  // get the name of the driver that GDAL picked to open the file
+  std::string driver_name = datasource->GetDriverName();
+
+  LOG(INFO) << "Raster Importer: Using Raster Driver '" << driver_name << "'";
+
+  // logic is different for each format
+  if (driver_name == "GTiff") {
+    //
+    // TIFF
+    // Could be an OME TIFF or a GeoTIFF
+    //
+    auto const tifftag_imagedescription = Geospatial::GDAL::getMetadataString(
+        datasource->GetMetadata(), "TIFFTAG_IMAGEDESCRIPTION");
+    if (tifftag_imagedescription.length()) {
+      //
+      // OME TIFF
+      // one datasource per band
+      // names are in a JSON blob
+      //
+      auto const names = get_ome_tiff_band_names(tifftag_imagedescription);
+      for (auto const& name : names) {
+        raw_band_names_.push_back({name});
+      }
+    } else {
+      //
+      // Some other GeoTIFF variant
+      // single datasource
+      // names in band descriptions?
+      //
+      std::vector<std::string> names;
+      auto const raster_count = datasource->GetRasterCount();
+      for (int i = 1; i <= raster_count; i++) {
+        auto* band = datasource->GetRasterBand(i);
+        CHECK(band);
+        auto const* description = band->GetDescription();
+        if (!description || strlen(description) == 0) {
+          raw_band_names_.clear();
+          return;
+        }
+        names.push_back(description);
+      }
+      raw_band_names_.emplace_back(std::move(names));
+    }
+  } else if (driver_name == "netCDF" || driver_name == "Zarr") {
+    //
+    // for these formats the band names are in the datasource names
+    // that we already obtained, of the format:
+    // <FORMAT>:"<filename>":<bandname>
+    // one band per datasource
+    //
+    for (auto const& datasource_name : datasource_names_) {
+      std::vector<std::string> tokens;
+      boost::split(tokens, datasource_name, boost::is_any_of(":"));
+      if (tokens.size() < 3 || tokens[2].length() == 0u) {
+        LOG(WARNING) << "Raster Importer: Failed to parse band name from datasource name";
+        raw_band_names_.clear();
+        return;
+      }
+      raw_band_names_.push_back({tokens[2]});
+    }
+  } else if (driver_name == "GRIB") {
+    //
+    // GRIB/GRIB2
+    // one datasource
+    // names are in the per-band metadata
+    //
+    std::vector<std::string> names;
+    auto const raster_count = datasource->GetRasterCount();
+    for (int i = 1; i <= raster_count; i++) {
+      auto* band = datasource->GetRasterBand(i);
+      CHECK(band);
+      auto const grib_comment =
+          Geospatial::GDAL::getMetadataString(band->GetMetadata(), "GRIB_COMMENT");
+      if (grib_comment.length() == 0) {
+        LOG(WARNING) << "Raster Importer: Failed to parse band name from GRIB_COMMENT";
+        raw_band_names_.clear();
+        return;
+      }
+      names.push_back(grib_comment);
+    }
+    raw_band_names_.emplace_back(std::move(names));
+  }
+}
+
+void RasterImporter::initializeFiltering(const std::string& specified_band_names,
+                                         const std::string& specified_band_dimensions) {
   // specified names?
   if (specified_band_names.length()) {
     // tokenize names
@@ -697,7 +832,33 @@ void RasterImporter::initializeNaming(const std::string& specified_band_names) {
     column_name_repeats_map_.emplace(name_and_sql_type.first, 1);
   }
 
-  ome_tiff_band_name_idx_ = 0u;
+  // specified band dimensions?
+  if (specified_band_dimensions.length()) {
+    // tokenize dimension values
+    std::vector<std::string> values;
+    boost::split(values, specified_band_dimensions, boost::is_any_of(",x "));
+    if (values.size() != 2u) {
+      throw std::invalid_argument("failed to parse width/height values from '" +
+                                  specified_band_dimensions + "'");
+    }
+    try {
+      size_t num_chars_w{0u}, num_chars_h{0u};
+      specified_band_width_ = std::stoi(values[0], &num_chars_w);
+      specified_band_height_ = std::stoi(values[1], &num_chars_h);
+      if (num_chars_w == 0u || num_chars_h == 0u) {
+        throw std::invalid_argument("empty width/height value");
+      }
+      if (specified_band_width_ < 0 || specified_band_height_ < 0) {
+        throw std::invalid_argument("negative width/height value");
+      }
+    } catch (std::invalid_argument& e) {
+      throw std::runtime_error("Raster Importer: Invalid specified dimensions (" +
+                               std::string(e.what()) + ")");
+    } catch (std::out_of_range& e) {
+      throw std::runtime_error("Raster Importer: Out-of-range specified dimensions (" +
+                               std::string(e.what()) + ")");
+    }
+  }
 }
 
 bool RasterImporter::shouldImportBandWithName(const std::string& name) {
@@ -714,25 +875,34 @@ bool RasterImporter::shouldImportBandWithName(const std::string& name) {
   return false;
 }
 
-std::string RasterImporter::getBandName(GDALRasterBand* band, const int band_idx) {
+bool RasterImporter::shouldImportBandWithDimensions(const int width, const int height) {
+  // if no specified dimensions, import everything
+  if (specified_band_width_ < 0 && specified_band_height_ < 0) {
+    return true;
+  }
+  // import only if dimensions match
+  return (width == specified_band_width_) && (height == specified_band_height_);
+}
+
+std::string RasterImporter::getBandName(const uint32_t datasource_idx,
+                                        const int band_idx) {
   std::string band_name;
 
   // format-specific name fetching
-  if (ome_tiff_band_names_.size()) {
-    // try OME TIFF naming
-    if (ome_tiff_band_name_idx_ < ome_tiff_band_names_.size()) {
-      band_name = ome_tiff_band_names_[ome_tiff_band_name_idx_++];
+  if (datasource_idx < raw_band_names_.size()) {
+    if (band_idx > 0 &&
+        band_idx <= static_cast<int>(raw_band_names_[datasource_idx].size())) {
+      band_name = raw_band_names_[datasource_idx][band_idx - 1];
     }
-  } else {
-    // try GRIB naming
-    band_name = Geospatial::GDAL::getMetadataString(band->GetMetadata(), "GRIB_COMMENT");
-  }
-  if (band_name.length() == 0) {
-    // default name
-    band_name = "band" + std::to_string(band_idx);
   }
 
-  // add incrementing suffix if not unique
+  // if we didn't get a format-specific name, use a default name
+  if (band_name.length() == 0) {
+    band_name =
+        "band_" + std::to_string(datasource_idx + 1) + "_" + std::to_string(band_idx);
+  }
+
+  // additional suffix if not unique
   auto itr = column_name_repeats_map_.find(band_name);
   if (itr != column_name_repeats_map_.end()) {
     auto const suffix = ++(itr->second);

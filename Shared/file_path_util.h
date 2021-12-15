@@ -98,7 +98,8 @@ std::vector<std::string> local_glob_filter_sort_files(
     const std::string& file_path,
     const std::optional<std::string>& filter_regex,
     const std::optional<std::string>& sort_by,
-    const std::optional<std::string>& sort_regex);
+    const std::optional<std::string>& sort_regex,
+    const bool recurse = true);
 
 #ifdef HAVE_AWS_S3
 std::vector<arrow::fs::FileInfo> arrow_fs_filter_sort_files(

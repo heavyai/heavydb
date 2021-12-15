@@ -3494,6 +3494,8 @@ TEST_F(ExportTest, Array_Null_Handling_NullField) {
 static constexpr const char* kPNG = "beach.png";
 static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.tif";
 static constexpr const char* kGRIB = "hrrr.t00z.wrfsubhf00_small.grib2";
+static constexpr const char* kZARRArchive = "small.zarr.tgz";
+static constexpr const char* kZARRFile = "small.zarr";
 
 // RasterImporter Class Tests
 
@@ -3506,8 +3508,19 @@ class RasterImporterTest : public DBHandlerTestFixture {
 
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
+  void deletePropertiesFile() {
+    auto properties_file_name =
+        boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" +
+                                     std::string(kZARRArchive) + ".properties")
+            .string();
+    if (boost::filesystem::exists(properties_file_name)) {
+      boost::filesystem::remove(properties_file_name);
+    }
+  }
+
   void doDetect(const std::string& file_name,
                 const std::string& import_bands,
+                const std::string& import_dimensions,
                 const import_export::RasterImporter::PointType point_type,
                 const import_export::RasterImporter::PointTransform point_transform,
                 const bool point_compute_angle) {
@@ -3515,13 +3528,23 @@ class RasterImporterTest : public DBHandlerTestFixture {
     Geospatial::GDAL::init();
 
     // get absolute filename
-    auto const abs_file_name =
+    auto abs_file_name =
         boost::filesystem::canonical("../../Tests/Import/datafiles/raster/" + file_name)
             .string();
 
+    // special case ZARR
+    if (file_name == kZARRArchive) {
+      abs_file_name = "/vsitar/" + abs_file_name + "/" + kZARRFile;
+    }
+
     // run a detect
-    raster_importer_->detect(
-        abs_file_name, import_bands, point_type, point_transform, point_compute_angle);
+    raster_importer_->detect(abs_file_name,
+                             import_bands,
+                             import_dimensions,
+                             point_type,
+                             point_transform,
+                             point_compute_angle,
+                             true);
 
 #if DEBUG_RASTER_TESTS
     auto const& band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
@@ -3539,6 +3562,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
 
   void runDetectTest(const std::string& file_name,
                      const std::string& import_bands,
+                     const std::string& import_dimensions,
                      const import_export::RasterImporter::NamesAndSQLTypes&
                          expected_band_names_and_sql_types,
                      const int expected_width,
@@ -3546,6 +3570,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
     // detect phase
     doDetect(file_name,
              import_bands,
+             import_dimensions,
              import_export::RasterImporter::PointType::kNone,
              import_export::RasterImporter::PointTransform::kNone,
              false);
@@ -3572,7 +3597,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
       const double expected_proj_x,
       const double expected_proj_y) {
     // detect phase
-    doDetect(file_name, "", point_type, point_transform, false);
+    doDetect(file_name, "", "", point_type, point_transform, false);
 
     // import phase
     static constexpr int max_threads{1};
@@ -3603,6 +3628,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
     // detect phase
     doDetect(file_name,
              single_band_name,
+             "",
              import_export::RasterImporter::PointType::kNone,
              import_export::RasterImporter::PointTransform::kNone,
              false);
@@ -3665,7 +3691,7 @@ class RasterImporterTest : public DBHandlerTestFixture {
   void runEnumsTest(const std::string& file_name,
                     const import_export::RasterImporter::PointType point_type,
                     const import_export::RasterImporter::PointTransform point_transform) {
-    doDetect(file_name, "", point_type, point_transform, false);
+    doDetect(file_name, "", "", point_type, point_transform, false);
   }
 
   using TY = import_export::RasterImporter::PointType;
@@ -3677,17 +3703,18 @@ class RasterImporterTest : public DBHandlerTestFixture {
 
 TEST_F(RasterImporterTest, PNGDetectTest) {
   SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(
-      runDetectTest(kPNG,
-                    "",
-                    {{"band1", kSMALLINT}, {"band2", kSMALLINT}, {"band3", kSMALLINT}},
-                    320,
-                    225));
+  ASSERT_NO_THROW(runDetectTest(
+      kPNG,
+      "",
+      "",
+      {{"band_1_1", kSMALLINT}, {"band_1_2", kSMALLINT}, {"band_1_3", kSMALLINT}},
+      320,
+      225));
 }
 
 TEST_F(RasterImporterTest, GeoTIFFDetectTest) {
   SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(runDetectTest(kGeoTIFF, "", {{"band1", kFLOAT}}, 200, 200));
+  ASSERT_NO_THROW(runDetectTest(kGeoTIFF, "", "", {{"band_1_1", kFLOAT}}, 200, 200));
 }
 
 TEST_F(RasterImporterTest, GRIB2DetectTest) {
@@ -3695,9 +3722,23 @@ TEST_F(RasterImporterTest, GRIB2DetectTest) {
   ASSERT_NO_THROW(runDetectTest(
       kGRIB,
       "MaximumCompositeradarreflectivitydB,EchoTopm",
+      "",
       {{"MaximumCompositeradarreflectivitydB", kDOUBLE}, {"EchoTopm", kDOUBLE}},
       20,
       20));
+}
+
+TEST_F(RasterImporterTest, DISABLED_ZARRDetectTest) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ASSERT_NO_THROW(runDetectTest(
+      kZARRArchive, "", "1799x1", {{"projection_x_coordinate", kDOUBLE}}, 1799, 1));
+  deletePropertiesFile();
+}
+
+TEST_F(RasterImporterTest, DISABLED_ZARRDetectFailTest) {
+  SKIP_ALL_ON_AGGREGATOR();
+  EXPECT_THROW(runDetectTest(kZARRArchive, "", "", {}, 0, 0), std::runtime_error);
+  deletePropertiesFile();
 }
 
 TEST_F(RasterImporterTest, PNGProjectionTest) {
@@ -3718,12 +3759,12 @@ TEST_F(RasterImporterTest, GeoTIFFProjectionTest) {
 
 TEST_F(RasterImporterTest, PNGValueTest) {
   SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(runValueTest(kPNG, "band1", 100, 100, kSMALLINT, 124));
+  ASSERT_NO_THROW(runValueTest(kPNG, "band_1_1", 100, 100, kSMALLINT, 124));
 }
 
 TEST_F(RasterImporterTest, GeoTIFFValueTest) {
   SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(runValueTest(kGeoTIFF, "band1", 50, 50, kFLOAT, 287.12179565429688));
+  ASSERT_NO_THROW(runValueTest(kGeoTIFF, "band_1_1", 50, 50, kFLOAT, 287.12179565429688));
 }
 
 TEST_F(RasterImporterTest, GRIB2ValueTest) {
@@ -3839,16 +3880,16 @@ TEST_F(RasterImportTest, ImportPNGTest) {
   ASSERT_NO_THROW(
       importTestCommon(kPNG,
                        "",
-                       "SELECT max(raster_x), max(raster_y), max(band1) FROM raster;",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
                        {{319L, 224L, 243L}}));
 }
 
 TEST_F(RasterImportTest, ImportGeoTIFFTest) {
-  ASSERT_NO_THROW(
-      importTestCommon(kGeoTIFF,
-                       "",
-                       "SELECT max(raster_lon), max(raster_lat), max(band1) FROM raster;",
-                       {{-83.222766892364277, 39.818764365787992, 287.54092407226562}}));
+  ASSERT_NO_THROW(importTestCommon(
+      kGeoTIFF,
+      "",
+      "SELECT max(raster_lon), max(raster_lat), max(band_1_1) FROM raster;",
+      {{-83.222766892364277, 39.818764365787992, 287.54092407226562}}));
 }
 
 TEST_F(RasterImportTest, ImportGRIBTest) {

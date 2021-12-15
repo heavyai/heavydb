@@ -3731,6 +3731,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
       CHECK(false);
   }
   copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
+  copy_params.raster_import_dimensions = cp.raster_import_dimensions;
   return copy_params;
 }
 
@@ -3849,6 +3850,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
       CHECK(false);
   }
   copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
+  copy_params.raster_import_dimensions = cp.raster_import_dimensions;
   return copy_params;
 }
 
@@ -5021,9 +5023,9 @@ void DBHandler::import_geo_table(const TSessionId& session,
                                  const TCreateParams& create_params) {
   std::vector<std::string> file_names;
   try {
-    // find matching local files
+    // find matching local files (no recursion into directories)
     file_names = shared::local_glob_filter_sort_files(
-        file_name, std::nullopt, std::nullopt, std::nullopt);
+        file_name, std::nullopt, std::nullopt, std::nullopt, false);
   } catch (const shared::FileNotFoundException& e) {
     // no files match, just try the original filename, might be remote
     file_names.push_back(file_name);

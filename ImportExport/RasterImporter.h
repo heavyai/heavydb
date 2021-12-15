@@ -46,9 +46,11 @@ class RasterImporter {
 
   void detect(const std::string& file_name,
               const std::string& specified_band_names,
+              const std::string& specified_band_dimensions,
               const PointType point_type,
               const PointTransform point_transform,
-              const bool point_compute_angle);
+              const bool point_compute_angle,
+              const bool throw_on_error);
 
   void import(const uint32_t max_threads);
 
@@ -84,25 +86,29 @@ class RasterImporter {
   };
 
   std::vector<std::string> datasource_names_;
-  std::vector<std::string> ome_tiff_band_names_;
+  std::vector<std::vector<std::string>> raw_band_names_;
   std::map<std::string, bool> specified_band_names_map_;
   std::map<std::string, int> column_name_repeats_map_;
   std::vector<ImportBandInfo> import_band_infos_;
   std::array<double, 6> affine_transform_matrix_;
   std::vector<std::vector<Geospatial::GDAL::DataSourceUqPtr>> datasource_handles_;
+  int specified_band_width_{-1};
+  int specified_band_height_{-1};
 
   int bands_width_{-1};
   int bands_height_{-1};
-  uint32_t ome_tiff_band_name_idx_{0u};
   PointType point_type_{PointType::kNone};
   PointTransform point_transform_{PointTransform::kNone};
   std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>
       coordinate_transformations_;
   bool point_compute_angle_{false};
 
-  void initializeNaming(const std::string& specified_band_names);
+  void getRawBandNamesForFormat(const Geospatial::GDAL::DataSourceUqPtr& datasource);
+  void initializeFiltering(const std::string& specified_band_names,
+                           const std::string& specified_band_dimensions);
   bool shouldImportBandWithName(const std::string& name);
-  std::string getBandName(GDALRasterBand* band, const int band_idx);
+  bool shouldImportBandWithDimensions(const int width, const int height);
+  std::string getBandName(const uint32_t datasource_idx, const int band_idx);
   void checkSpecifiedBandNamesFound() const;
 };
 
