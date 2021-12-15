@@ -203,10 +203,8 @@ class RexRefInputsVisitor
       return ColumnRefSet{};
     }
 
-    const auto scan_td = scan_ra->getTableDescriptor();
-    CHECK(scan_td);
     const int db_id = scan_ra->getDatabaseId();
-    const int table_id = scan_td->tableId;
+    const int table_id = scan_ra->getTableId();
     const int col_id = scan_ra->getColumnIdBySpi(input->getIndex() + 1);
     CHECK_GT(table_id, 0);
     return {{db_id, table_id, col_id}};
@@ -218,7 +216,7 @@ class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set
   RelAlgPhysicalTableInputsVisitor() {}
 
   std::unordered_set<int> visitScan(const RelScan* scan) const override {
-    return {scan->getTableDescriptor()->tableId};
+    return {scan->getTableId()};
   }
 
  protected:

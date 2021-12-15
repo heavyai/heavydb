@@ -44,14 +44,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     // the name and type information come directly from the catalog.
     CHECK(in_metainfo.empty());
 
-    const auto td = scan_source->getTableDescriptor();
-    table_id = td->tableId;
-
-    const auto gcd = cat_.getMetadataForColumnBySpi(table_id, rex_input->getIndex() + 1);
-    CHECK(gcd);
-    CHECK(!gcd->isVirtualCol);
-    ti = gcd->columnType;
-    column_id = gcd->columnId;
+    table_id = scan_source->getTableId();
+    ti = scan_source->getColumnTypeBySpi(rex_input->getIndex() + 1);
+    column_id = scan_source->getColumnIdBySpi(rex_input->getIndex() + 1);
   } else {
     // Likely backed by a temp table. Read the table ID from the source node and negate it
     // (see RelAlgTranslator::translateInput)

@@ -22,6 +22,7 @@
 
 #include "DataMgr/MemoryLevel.h"
 #include "Fragmenter/AbstractFragmenter.h"
+#include "SchemaMgr/TableInfo.h"
 #include "Shared/sqldefs.h"
 
 /**
@@ -98,6 +99,18 @@ struct TableDescriptor {
 
   inline bool isTemporaryTable() const {
     return persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
+  }
+
+  TableInfoPtr makeInfo(int db_id = -1) const {
+    CHECK(fragmenter);
+    return std::make_shared<TableInfo>(db_id,
+                                       tableId,
+                                       tableName,
+                                       isView,
+                                       nShards,
+                                       shardedColumnId,
+                                       storageType,
+                                       fragmenter->getNumFragments());
   }
 };
 

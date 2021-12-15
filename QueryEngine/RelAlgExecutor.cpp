@@ -882,14 +882,13 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
     CHECK(input_ra);
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
     if (scan_ra) {
-      const auto td = scan_ra->getTableDescriptor();
-      if (td) {
+      if (scan_ra->getTableId() > 0) {
         const auto col_id = rex_input->getIndex();
-        const auto cd = cat_.getMetadataForColumnBySpi(td->tableId, col_id + 1);
-        if (cd && cd->columnType.get_physical_cols() > 0) {
-          CHECK(IS_GEO(cd->columnType.get_type()));
+        const auto info = scan_ra->getColumnInfoBySpi(col_id + 1);
+        if (info->type.get_physical_cols() > 0) {
+          CHECK(IS_GEO(info->type.get_type()));
           std::unordered_set<const RexInput*> synthesized_physical_inputs;
-          for (auto i = 0; i < cd->columnType.get_physical_cols(); i++) {
+          for (auto i = 0; i < info->type.get_physical_cols(); i++) {
             auto physical_input =
                 new RexInput(scan_ra, SPIMAP_GEO_PHYSICAL_INPUT(col_id, i));
             synthesized_physical_inputs_owned.emplace_back(physical_input);
@@ -1046,9 +1045,7 @@ get_used_inputs(const RelLogicalUnion* logical_union, const Catalog_Namespace::C
 int table_id_from_ra(const RelAlgNode* ra_node) {
   const auto scan_ra = dynamic_cast<const RelScan*>(ra_node);
   if (scan_ra) {
-    const auto td = scan_ra->getTableDescriptor();
-    CHECK(td);
-    return td->tableId;
+    return scan_ra->getTableId();
   }
   return -ra_node->getId();
 }

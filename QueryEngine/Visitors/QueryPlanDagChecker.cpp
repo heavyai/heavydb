@@ -87,7 +87,7 @@ void QueryPlanDagChecker::visit(const RelLogicalUnion* rel_alg_node) {
 }
 
 void QueryPlanDagChecker::visit(const RelScan* rel_alg_node) {
-  if (rel_alg_node->getTableDescriptor()->storageType == StorageType::FOREIGN_TABLE) {
+  if (rel_alg_node->getTableInfo()->storage_type == StorageType::FOREIGN_TABLE) {
     detectNotSupportedNode();
     return;
   }

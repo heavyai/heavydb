@@ -835,31 +835,25 @@ class RelAlgNode {
 
 class RelScan : public RelAlgNode {
  public:
-  RelScan(int32_t db_id,
-          const TableDescriptor* td,
-          std::vector<ColumnInfoPtr> column_infos)
-      : db_id_(db_id)
-      , td_(td)
+  RelScan(TableInfoPtr tinfo, std::vector<ColumnInfoPtr> column_infos)
+      : table_info_(std::move(tinfo))
       , column_infos_(std::move(column_infos))
       , hint_applied_(false)
-      , hints_(std::make_unique<Hints>()) {
-    table_info_ = std::make_shared<TableInfo>(
-        db_id, td->tableId, td->tableName, td->nShards, td->shardedColumnId);
-  }
+      , hints_(std::make_unique<Hints>()) {}
 
   size_t size() const override { return column_infos_.size(); }
 
-  const TableDescriptor* getTableDescriptor() const { return td_; }
-
   TableInfoPtr getTableInfo() const { return table_info_; }
 
-  const size_t getNumFragments() const { return td_->fragmenter->getNumFragments(); }
+  const size_t getNumFragments() const { return table_info_->fragments; }
 
-  const size_t getNumShards() const { return td_->nShards; }
+  const size_t getNumShards() const { return table_info_->shards; }
 
   const std::string& getFieldName(const size_t i) const { return column_infos_[i]->name; }
 
-  int32_t getDatabaseId() const { return db_id_; }
+  int32_t getDatabaseId() const { return table_info_->db_id; }
+
+  int32_t getTableId() const { return table_info_->table_id; }
 
   bool isVirtualColBySpi(int spi) const {
     // GEO column is never virtual.
@@ -907,8 +901,8 @@ class RelScan : public RelAlgNode {
 
   ColumnInfoPtr getColumnInfoBySpi(int spi) const {
     if (spi >= SPIMAP_MAGIC1) {
-      return std::make_shared<ColumnInfo>(db_id_,
-                                          td_->tableId,
+      return std::make_shared<ColumnInfo>(table_info_->db_id,
+                                          table_info_->table_id,
                                           getColumnIdBySpi(spi),
                                           "",
                                           getColumnTypeBySpi(spi),
@@ -924,14 +918,15 @@ class RelScan : public RelAlgNode {
     for (auto& info : column_infos_) {
       field_names.emplace_back(info->name);
     }
-    return cat(::typeName(this), "(", td_->tableName, ", ", ::toString(field_names), ")");
+    return cat(
+        ::typeName(this), "(", table_info_->name, ", ", ::toString(field_names), ")");
   }
 
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RelScan).hash_code();
-      boost::hash_combine(*hash_, td_->tableId);
-      boost::hash_combine(*hash_, td_->tableName);
+      boost::hash_combine(*hash_, table_info_->table_id);
+      boost::hash_combine(*hash_, table_info_->name);
       for (auto& info : column_infos_) {
         boost::hash_combine(*hash_, info->name);
       }
@@ -970,8 +965,6 @@ class RelScan : public RelAlgNode {
   Hints* getDeliveredHints() { return hints_.get(); }
 
  private:
-  const int32_t db_id_;
-  const TableDescriptor* td_;
   TableInfoPtr table_info_;
   const std::vector<ColumnInfoPtr> column_infos_;
   bool hint_applied_;

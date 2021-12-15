@@ -330,7 +330,7 @@ int get_input_idx(const RelLeftDeepInnerJoin* rel_left_deep_join, int const tbl_
   for (size_t input_idx = 0; input_idx < rel_left_deep_join->inputCount(); ++input_idx) {
     auto const input_node = rel_left_deep_join->getInput(input_idx);
     auto const scan_node = dynamic_cast<const RelScan*>(input_node);
-    int const target_table_id = scan_node ? scan_node->getTableDescriptor()->tableId
+    int const target_table_id = scan_node ? scan_node->getTableId()
                                           : -1 * input_node->getId();  // temporary table
     if (target_table_id == tbl_id) {
       return input_idx;

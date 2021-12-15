@@ -2286,15 +2286,10 @@ class RelAlgDispatcher {
     infos.reserve(field_names.size());
     for (auto& col_name : field_names) {
       auto cd = cat_.getMetadataForColumn(td->tableId, col_name);
-      infos.emplace_back(std::make_shared<ColumnInfo>(cat_.getDatabaseId(),
-                                                      td->tableId,
-                                                      cd->columnId,
-                                                      col_name,
-                                                      cd->columnType,
-                                                      cd->isVirtualCol));
+      infos.emplace_back(cd->makeInfo(cat_.getDatabaseId()));
     }
     auto scan_node =
-        std::make_shared<RelScan>(cat_.getCurrentDB().dbId, td, std::move(infos));
+        std::make_shared<RelScan>(td->makeInfo(cat_.getDatabaseId()), std::move(infos));
     if (scan_ra.HasMember("hints")) {
       getRelAlgHints(scan_ra, scan_node);
     }
@@ -2838,7 +2833,7 @@ std::string RexInput::toString() const {
   const auto scan_node = dynamic_cast<const RelScan*>(node_);
   if (scan_node) {
     auto field_name = scan_node->getFieldName(getIndex());
-    auto table_name = scan_node->getTableDescriptor()->tableName;
+    auto table_name = scan_node->getTableInfo()->name;
     return ::typeName(this) + "(" + table_name + "." + field_name + ")";
   }
   return cat(::typeName(this),
