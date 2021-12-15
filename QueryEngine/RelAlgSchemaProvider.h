@@ -22,16 +22,27 @@ class RelAlgSchemaProvider : public SchemaProvider {
  public:
   RelAlgSchemaProvider(const RelAlgNode& root);
 
-  int getId() const { return -1; }
+  int getId() const override { return -1; }
+  std::string_view getName() const override { return "__RelAlgSchema__"; }
 
   std::vector<int> listDatabases() const override;
-  TableInfoMap listTables(int db_id) const override;
-  ColumnInfoMap listColumns(int db_id, int table_id) const override;
+  TableInfoList listTables(int db_id) const override;
+  ColumnInfoList listColumns(int db_id, int table_id) const override;
 
   TableInfoPtr getTableInfo(int db_id, int table_id) const override;
+  TableInfoPtr getTableInfo(int db_id, const std::string& table_name) const override;
+
   ColumnInfoPtr getColumnInfo(int db_id, int table_id, int col_id) const override;
+  ColumnInfoPtr getColumnInfo(int db_id,
+                              int table_id,
+                              const std::string& col_name) const override;
 
  private:
+  using TableByNameMap = std::unordered_map<std::string, TableInfoPtr>;
+  using ColumnByNameMap = std::unordered_map<std::string, ColumnInfoPtr>;
+
   TableInfoMap table_infos_;
+  std::unordered_map<int, TableByNameMap> table_index_by_name_;
   ColumnInfoMap column_infos_;
+  std::unordered_map<TableRef, ColumnByNameMap> column_index_by_name_;
 };

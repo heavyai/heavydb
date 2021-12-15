@@ -22,18 +22,33 @@ class SchemaProvider {
   virtual ~SchemaProvider() = default;
 
   virtual int getId() const = 0;
+  virtual std::string_view getName() const = 0;
 
   virtual std::vector<int> listDatabases() const = 0;
-  virtual TableInfoMap listTables(int db_id) const = 0;
-  virtual ColumnInfoMap listColumns(int db_id, int table_id) const = 0;
+
+  virtual TableInfoList listTables(int db_id) const = 0;
+
+  virtual ColumnInfoList listColumns(int db_id, int table_id) const = 0;
+
+  ColumnInfoList listColumns(const TableRef& ref) const {
+    return listColumns(ref.db_id, ref.table_id);
+  }
 
   virtual TableInfoPtr getTableInfo(int db_id, int table_id) const = 0;
-  TableInfoPtr getTableInfo(const TableRef ref) const {
+  virtual TableInfoPtr getTableInfo(int db_id, const std::string& table_name) const = 0;
+
+  TableInfoPtr getTableInfo(const TableRef& ref) const {
     return getTableInfo(ref.db_id, ref.table_id);
   }
 
   virtual ColumnInfoPtr getColumnInfo(int db_id, int table_id, int col_id) const = 0;
+  virtual ColumnInfoPtr getColumnInfo(int db_id,
+                                      int table_id,
+                                      const std::string& col_name) const = 0;
+
   ColumnInfoPtr getColumnInfo(const ColumnRef& ref) {
     return getColumnInfo(ref.db_id, ref.table_id, ref.column_id);
   }
 };
+
+using SchemaProviderPtr = std::shared_ptr<SchemaProvider>;

@@ -53,6 +53,7 @@ struct ColumnInfo : public ColumnRef {
 };
 
 using ColumnInfoPtr = std::shared_ptr<ColumnInfo>;
+using ColumnInfoList = std::vector<ColumnInfoPtr>;
 using ColumnInfoMap = std::unordered_map<ColumnRef, ColumnInfoPtr>;
 
 namespace std {

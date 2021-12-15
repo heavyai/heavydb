@@ -16,12 +16,19 @@
 
 RelAlgSchemaProvider::RelAlgSchemaProvider(const RelAlgNode& root) {
   table_infos_ = get_physical_table_infos(&root);
+  for (auto& pr : table_infos_) {
+    CHECK_EQ(table_index_by_name_[pr.first.db_id].count(pr.second->name), 0);
+    table_index_by_name_[pr.first.db_id][pr.second->name] = pr.second;
+  }
 
   auto col_descs = get_physical_inputs(&root);
   for (auto& col_desc : col_descs) {
     auto info = col_desc.getColInfo();
-    column_infos_.insert(
-        std::make_pair(ColumnRef(info->db_id, info->table_id, info->column_id), info));
+    column_infos_[{info->db_id, info->table_id, info->column_id}] = info;
+
+    TableRef table_ref{info->db_id, info->table_id};
+    CHECK_EQ(column_index_by_name_[table_ref].count(info->name), 0);
+    column_index_by_name_[table_ref][info->name] = info;
   }
 }
 
@@ -29,11 +36,12 @@ std::vector<int> RelAlgSchemaProvider::listDatabases() const {
   UNREACHABLE();
 }
 
-TableInfoMap RelAlgSchemaProvider::listTables(int db_id) const {
+TableInfoList RelAlgSchemaProvider::listTables(int db_id) const {
   UNREACHABLE();
 }
 
-ColumnInfoMap RelAlgSchemaProvider::listColumns(int db_id, int table_id) const {
+ColumnInfoList RelAlgSchemaProvider::listColumns(int db_id,
+                                                             int table_id) const {
   UNREACHABLE();
 }
 
@@ -45,12 +53,37 @@ TableInfoPtr RelAlgSchemaProvider::getTableInfo(int db_id, int table_id) const {
   return nullptr;
 }
 
+TableInfoPtr RelAlgSchemaProvider::getTableInfo(int db_id,
+                                                const std::string& table_name) const {
+  auto db_it = table_index_by_name_.find(db_id);
+  if (db_it != table_index_by_name_.end()) {
+    auto table_it = db_it->second.find(table_name);
+    if (table_it != db_it->second.end()) {
+      return table_it->second;
+    }
+  }
+  return nullptr;
+}
+
 ColumnInfoPtr RelAlgSchemaProvider::getColumnInfo(int db_id,
                                                   int table_id,
                                                   int col_id) const {
   auto it = column_infos_.find({db_id, table_id, col_id});
   if (it != column_infos_.end()) {
     return it->second;
+  }
+  return nullptr;
+}
+
+ColumnInfoPtr RelAlgSchemaProvider::getColumnInfo(int db_id,
+                                                  int table_id,
+                                                  const std::string& column_name) const {
+  auto table_it = column_index_by_name_.find({db_id, table_id});
+  if (table_it != column_index_by_name_.end()) {
+    auto col_it = table_it->second.find(column_name);
+    if (col_it != table_it->second.end()) {
+      return col_it->second;
+    }
   }
   return nullptr;
 }

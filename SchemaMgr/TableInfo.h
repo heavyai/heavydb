@@ -49,6 +49,7 @@ struct TableInfo : public TableRef {
 };
 
 using TableInfoPtr = std::shared_ptr<TableInfo>;
+using TableInfoList = std::vector<TableInfoPtr>;
 using TableInfoMap = std::unordered_map<TableRef, TableInfoPtr>;
 
 namespace std {
