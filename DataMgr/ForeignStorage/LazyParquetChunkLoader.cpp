@@ -775,7 +775,7 @@ std::shared_ptr<ParquetEncoder> create_parquet_geospatial_encoder(
   for (auto chunks_iter = chunks.begin(); chunks_iter != chunks.end(); ++chunks_iter) {
     chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
     auto& chunk_metadata_ptr = chunk_metadata.back();
-    chunk_metadata_ptr->sqlType = chunks_iter->getColumnDesc()->columnType;
+    chunk_metadata_ptr->sqlType = chunks_iter->getColumnType();
   }
   return std::make_shared<ParquetGeospatialEncoder>(
       parquet_column, chunks, chunk_metadata);
@@ -1613,13 +1613,15 @@ LazyParquetChunkLoader::LazyParquetChunkLoader(
     : file_system_(file_system), file_reader_cache_(file_map) {}
 
 std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
+    const Catalog_Namespace::Catalog* catalog,
     const std::vector<RowGroupInterval>& row_group_intervals,
     const int parquet_column_index,
     std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary) {
   CHECK(!chunks.empty());
   auto const& chunk = *chunks.begin();
-  auto column_descriptor = chunk.getColumnDesc();
+  auto column_descriptor =
+      catalog->getMetadataForColumn(chunk.getTableId(), chunk.getColumnId());
   auto buffer = chunk.getBuffer();
   CHECK(buffer);
 

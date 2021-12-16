@@ -274,7 +274,7 @@ void ForeignStorageMgr::set_parallelism_hints(const ColumnRefSet& input_cols) {
       auto foreign_table = catalog->getForeignTable(table_id);
       for (const auto& fragment :
            foreign_table->fragmenter->getFragmentsForQuery().fragments) {
-        Chunk_NS::Chunk chunk{col_desc};
+        Chunk_NS::Chunk chunk{col_desc->makeInfo(catalog->getDatabaseId())};
         ChunkKey chunk_key = {
             catalog->getDatabaseId(), table_id, col_id, fragment.fragmentId};
         // do not include chunk hints that are in CPU memory
@@ -315,7 +315,7 @@ void ForeignStorageMgr::prepare_string_dictionaries(const ColumnRefSet& input_co
           // When this goes out of scope it will stay in CPU cache but become
           // evictable
           std::shared_ptr<Chunk_NS::Chunk> chunk =
-              Chunk_NS::Chunk::getChunk(col_desc,
+              Chunk_NS::Chunk::getChunk(col_desc->makeInfo(catalog->getDatabaseId()),
                                         &(catalog->getDataMgr()),
                                         chunk_key,
                                         Data_Namespace::CPU_LEVEL,

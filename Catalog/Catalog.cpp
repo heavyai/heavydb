@@ -1442,7 +1442,9 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     vector<Chunk> chunkVec;
     list<const ColumnDescriptor*> columnDescs;
     getAllColumnMetadataForTableImpl(td, columnDescs, true, false, true);
-    Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
+    for (auto& cd : columnDescs) {
+      chunkVec.emplace_back(cd->makeInfo(currentDB_.dbId));
+    }
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
     if (td->sortedColumnId > 0) {
       td->fragmenter = std::make_shared<SortedOrderFragmenter>(chunkKeyPrefix,

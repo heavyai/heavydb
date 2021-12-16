@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 
+#include "Catalog/ColumnDescriptor.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/TieredCpuBufferMgr.h"
@@ -96,7 +97,7 @@ class DataMgrTest : public testing::Test {
     auto cd =
         std::make_unique<ColumnDescriptor>(key[1], key[2], "temp", SQLTypeInfo{kTINYINT});
     return Chunk_NS::Chunk::getChunk(
-        cd.get(), data_mgr_.get(), key, MemoryLevel::CPU_LEVEL, 0, 4, 4);
+        cd->makeInfo(), data_mgr_.get(), key, MemoryLevel::CPU_LEVEL, 0, 4, 4);
   }
 
  protected:

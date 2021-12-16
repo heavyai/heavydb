@@ -126,17 +126,16 @@ void ParquetImportBatchResult::populateInsertData(
   insert_data_ = Fragmenter_Namespace::InsertData{};
   size_t num_rows = chunks.begin()->second.getBuffer()->getEncoder()->getNumElems();
   for (const auto& [column_id, chunk] : chunks) {
-    auto column_descriptor = chunk.getColumnDesc();
+    auto& col_ti = chunk.getColumnType();
     CHECK(chunk.getBuffer()->getEncoder()->getNumElems() == num_rows);
     insert_data_->columnIds.emplace_back(column_id);
     auto buffer = chunk.getBuffer();
     DataBlockPtr block_ptr;
-    if (column_descriptor->columnType.is_array()) {
+    if (col_ti.is_array()) {
       auto array_buffer = dynamic_cast<TypedParquetStorageBuffer<ArrayDatum>*>(buffer);
       block_ptr.arraysPtr = array_buffer->getBufferPtr();
-    } else if ((column_descriptor->columnType.is_string() &&
-                !column_descriptor->columnType.is_dict_encoded_string()) ||
-               column_descriptor->columnType.is_geometry()) {
+    } else if ((col_ti.is_string() && !col_ti.is_dict_encoded_string()) ||
+               col_ti.is_geometry()) {
       auto string_buffer = dynamic_cast<TypedParquetStorageBuffer<std::string>*>(buffer);
       block_ptr.stringsPtr = string_buffer->getBufferPtr();
     } else {
@@ -170,7 +169,7 @@ ParquetImportBatchResult::getChunksAndDictionaries() const {
       string_dictionaries[column_descriptor->columnId] = string_dictionary;
     }
 
-    Chunk_NS::Chunk chunk{column_descriptor};
+    Chunk_NS::Chunk chunk{column_descriptor->makeInfo(db_id_)};
     chunk.setBuffer(import_buffers_.at(column_descriptor->columnId).get());
     if (column_descriptor->columnType.is_varlen_indeed()) {
       chunk.setIndexBuffer(nullptr);  // index buffers are unused
@@ -292,7 +291,7 @@ std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImport
   if (!string_dictionaries_per_column_.size()) {
     for (const auto& [column_id, dict] : string_dictionaries) {
       string_dictionaries_per_column_.push_back(
-          {chunks[column_id].getColumnDesc(), dict});
+          {schema_->getColumnDescriptor(chunks[column_id].getColumnId()), dict});
     }
   }
 

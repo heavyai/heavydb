@@ -438,7 +438,7 @@ void initialize_chunks(std::map<ChunkKey, Chunk_NS::Chunk>& chunks,
     if (is_varlen_index_key(chunk_key)) {
       continue;
     }
-    chunks[chunk_key] = Chunk_NS::Chunk{column};
+    chunks[chunk_key] = Chunk_NS::Chunk{column->makeInfo(chunk_key[CHUNK_KEY_DB_IDX])};
     if (column->columnType.is_varlen_indeed()) {
       CHECK(is_varlen_data_key(chunk_key));
       size_t index_offset_size{0};
@@ -532,7 +532,7 @@ void InternalCatalogDataWrapper::populateChunkBuffers(
         column_id_to_data_blocks_map.find(chunk_key[CHUNK_KEY_COLUMN_IDX]);
     CHECK(data_block_entry != column_id_to_data_blocks_map.end());
     chunk.appendData(data_block_entry->second, row_count_, 0);
-    auto cd = chunk.getColumnDesc();
+    auto cd = catalog->getMetadataForColumn(chunk.getTableId(), chunk.getColumnId());
     if (!cd->columnType.is_varlen_indeed()) {
       CHECK(foreign_table_->fragmenter);
       auto metadata = chunk.getBuffer()->getEncoder()->getMetadata(cd->columnType);

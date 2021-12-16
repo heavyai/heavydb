@@ -81,9 +81,9 @@ InsertOrderFragmenter::InsertOrderFragmenter(
   // find row id column if it is non virtual
 
   for (auto colIt = chunkVec.begin(); colIt != chunkVec.end(); ++colIt) {
-    int columnId = colIt->getColumnDesc()->columnId;
+    int columnId = colIt->getColumnId();
     columnMap_[columnId] = *colIt;
-    if (colIt->getColumnDesc()->columnName == "rowid") {
+    if (colIt->getColumnName() == "rowid") {
       hasMaterializedRowId_ = true;
       rowIdColId_ = columnId;
     }
@@ -185,7 +185,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
   size_t maxFixedColSize = 0;
 
   for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
-    auto size = colIt->second.getColumnDesc()->columnType.get_size();
+    auto size = colIt->second.getColumnType().get_size();
     if (size == -1) {  // variable length
       varLenColInfo_.insert(std::make_pair(colIt->first, 0));
       size = 8;  // b/c we use this for string and array indices - gross to have magic
@@ -307,7 +307,7 @@ void InsertOrderFragmenter::updateChunkStats(
                          physicalTableId_,
                          column_id,
                          fragment->fragmentId};
-      auto chunk = Chunk_NS::Chunk::getChunk(cd,
+      auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_->getDatabaseId()),
                                              &catalog_->getDataMgr(),
                                              chunk_key,
                                              memory_level.value_or(defaultInsertLevel_),
@@ -441,7 +441,8 @@ void InsertOrderFragmenter::addColumns(const InsertData& insertDataStruct) {
     CHECK(columnMap_.end() == columnMap_.find(columnId));
     const auto columnDesc = catalog_->getMetadataForColumn(physicalTableId_, columnId);
     CHECK(columnDesc);
-    columnMap_.emplace(columnId, Chunk_NS::Chunk(columnDesc));
+    columnMap_.emplace(columnId,
+                       Chunk_NS::Chunk(columnDesc->makeInfo(catalog_->getDatabaseId())));
   }
   try {
     for (auto const& fragmentInfo : fragmentInfoVec_) {
@@ -571,11 +572,11 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
   // populate deleted system column if it should exist, as it will not come from client
   std::unique_ptr<int8_t[]> data_for_deleted_column;
   for (const auto& cit : columnMap_) {
-    if (cit.second.getColumnDesc()->isDeletedCol) {
+    if (cit.second.getColumnInfo()->is_delete) {
       data_for_deleted_column.reset(new int8_t[insert_data.numRows]);
       memset(data_for_deleted_column.get(), 0, insert_data.numRows);
       insert_data.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
-      insert_data.columnIds.push_back(cit.second.getColumnDesc()->columnId);
+      insert_data.columnIds.push_back(cit.second.getColumnId());
       insert_data.is_default.push_back(false);
       break;
     }
@@ -728,7 +729,7 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
        colMapIt != columnMap_.end();
        ++colMapIt) {
     ChunkKey chunkKey = chunkKeyPrefix_;
-    chunkKey.push_back(colMapIt->second.getColumnDesc()->columnId);
+    chunkKey.push_back(colMapIt->second.getColumnId());
     chunkKey.push_back(maxFragmentId_);
     colMapIt->second.createChunkBuffer(
         dataMgr_,

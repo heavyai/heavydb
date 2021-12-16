@@ -210,7 +210,7 @@ class AbstractFragmenter {
                             const Data_Namespace::MemoryLevel memory_level,
                             UpdelRoll& updel_roll) = 0;
 
-  virtual void updateColumnMetadata(const ColumnDescriptor* cd,
+  virtual void updateColumnMetadata(ColumnInfoPtr col_info,
                                     FragmentInfo& fragment,
                                     std::shared_ptr<Chunk_NS::Chunk> chunk,
                                     const UpdateValuesStats& update_values_stats,

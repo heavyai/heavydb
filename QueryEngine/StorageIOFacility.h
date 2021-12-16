@@ -80,13 +80,13 @@ bool should_recompute_metadata(
 
   auto chunk_metadata = std::make_shared<ChunkMetadata>();
   update_stats->chunk->getBuffer()->getEncoder()->getMetadata(chunk_metadata);
-  auto cd = update_stats.value().chunk->getColumnDesc();
-  if (cd->columnType.is_fp()) {
+  auto& col_ti = update_stats.value().chunk->getColumnType();
+  if (col_ti.is_fp()) {
     double min, max;
-    if (cd->columnType.get_type() == kDOUBLE) {
+    if (col_ti.get_type() == kDOUBLE) {
       min = chunk_metadata->chunkStats.min.doubleval;
       max = chunk_metadata->chunkStats.max.doubleval;
-    } else if (cd->columnType.get_type() == kFLOAT) {
+    } else if (col_ti.get_type() == kFLOAT) {
       min = chunk_metadata->chunkStats.min.floatval;
       max = chunk_metadata->chunkStats.max.floatval;
     } else {
@@ -96,8 +96,8 @@ bool should_recompute_metadata(
     }
     return is_chunk_min_max_updated(update_stats.value(), min, max);
   } else {
-    auto min = extract_min_stat(chunk_metadata->chunkStats, cd->columnType);
-    auto max = extract_max_stat(chunk_metadata->chunkStats, cd->columnType);
+    auto min = extract_min_stat(chunk_metadata->chunkStats, col_ti);
+    auto max = extract_max_stat(chunk_metadata->chunkStats, col_ti);
     return is_chunk_min_max_updated(update_stats.value(), min, max);
   }
 }
@@ -260,7 +260,7 @@ class StorageIOFacility {
                            td->tableId,
                            cd->columnId,
                            fragment_info.fragmentId};
-        auto chunk = Chunk_NS::Chunk::getChunk(cd,
+        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_.getDatabaseId()),
                                                &catalog_.getDataMgr(),
                                                chunk_key,
                                                Data_Namespace::MemoryLevel::CPU_LEVEL,
@@ -473,7 +473,7 @@ class StorageIOFacility {
                            td->tableId,
                            cd->columnId,
                            fragment_info.fragmentId};
-        auto chunk = Chunk_NS::Chunk::getChunk(cd,
+        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_.getDatabaseId()),
                                                &catalog_.getDataMgr(),
                                                chunk_key,
                                                Data_Namespace::MemoryLevel::CPU_LEVEL,

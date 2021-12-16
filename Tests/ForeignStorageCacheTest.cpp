@@ -64,7 +64,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
       cd = std::make_unique<ColumnDescriptor>();
       cd->columnType = type;
       test_buf = std::make_unique<TestBuffer>(type);
-      chunk = std::make_unique<Chunk_NS::Chunk>(test_buf.get(), nullptr, cd.get());
+      chunk = std::make_unique<Chunk_NS::Chunk>(test_buf.get(), nullptr, cd->makeInfo());
       data_block = std::make_unique<DataBlockPtr>();
       data_vec = std::make_unique<std::vector<T>>(data);
       data_block->numbersPtr = reinterpret_cast<int8_t*>(data_vec->data());

@@ -458,7 +458,7 @@ void TableOptimizer::vacuumFragments(const TableDescriptor* td,
       updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
       updel_roll.table_descriptor = td;
       CHECK_EQ(cd->columnId, chunk_key[CHUNK_KEY_COLUMN_IDX]);
-      const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+      const auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(cat_.getDatabaseId()),
                                                    &cat_.getDataMgr(),
                                                    chunk_key,
                                                    updel_roll.memoryLevel,

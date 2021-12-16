@@ -53,7 +53,7 @@ void scan_chunk(const std::shared_ptr<ChunkMetadata>& chunk_metadata,
   ChunkIter cit = chunk.begin_iterator(chunk_metadata, 0, 1);
   VarlenDatum vd;
   bool is_end;
-  const ColumnDescriptor* cd = chunk.getColumnDesc();
+  auto& col_ti = chunk.getColumnType();
   std::hash<std::string> string_hash;
   int nth = 0;
   while (true) {
@@ -69,7 +69,7 @@ void scan_chunk(const std::shared_ptr<ChunkMetadata>& chunk_metadata,
         break;
       }
     }
-    switch (cd->columnType.get_type()) {
+    switch (col_ti.get_type()) {
       case kSMALLINT:
         boost::hash_combine(hash, *(int16_t*)vd.pointer);
         break;
@@ -90,7 +90,7 @@ void scan_chunk(const std::shared_ptr<ChunkMetadata>& chunk_metadata,
       case kVARCHAR:
       case kCHAR:
       case kTEXT:
-        if (cd->columnType.get_compression() == kENCODING_NONE) {
+        if (col_ti.get_compression() == kENCODING_NONE) {
           // cout << "read string: " << string((char*)vd.pointer, vd.length) << endl;
           boost::hash_combine(hash, string_hash(string((char*)vd.pointer, vd.length)));
         }
@@ -123,7 +123,7 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
       total_bytes += chunk_meta_it->second->numBytes;
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
-            Chunk::getChunk(cd,
+            Chunk::getChunk(cd->makeInfo(cat.getDatabaseId()),
                             &cat.getDataMgr(),
                             chunk_key,
                             CPU_LEVEL,
@@ -161,7 +161,7 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name,
       total_bytes += chunk_meta_it->second->numBytes;
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
-            Chunk::getChunk(cd,
+            Chunk::getChunk(cd->makeInfo(cat.getDatabaseId()),
                             &cat.getDataMgr(),
                             chunk_key,
                             CPU_LEVEL,

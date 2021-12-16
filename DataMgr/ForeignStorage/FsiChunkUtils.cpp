@@ -66,7 +66,7 @@ void init_chunk_for_column(
   CHECK(chunk_metadata_map.find(data_chunk_key) != chunk_metadata_map.end());
   data_buffer->reserve(chunk_metadata_map.at(data_chunk_key)->numBytes);
 
-  chunk.setColumnDesc(column);
+  chunk.setColumnInfo(column->makeInfo(chunk_key[CHUNK_KEY_DB_IDX]));
   chunk.setBuffer(data_buffer);
   chunk.setIndexBuffer(index_buffer);
   chunk.initEncoder();

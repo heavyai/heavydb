@@ -98,7 +98,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
                        hash_col.get_column_id(),
                        fragment.fragmentId};
     const auto chunk = Chunk_NS::Chunk::getChunk(
-        cd,
+        cd->makeInfo(catalog.getDatabaseId()),
         &catalog.getDataMgr(),
         chunk_key,
         effective_mem_lvl,
@@ -252,7 +252,7 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
       varlen_chunk_lock.reset(new std::lock_guard<std::mutex>(varlen_chunk_fetch_mutex_));
     }
     chunk = Chunk_NS::Chunk::getChunk(
-        cd,
+        cd->makeInfo(cat.getDatabaseId()),
         &cat.getDataMgr(),
         chunk_key,
         memory_level,
@@ -446,7 +446,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
       CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
       ChunkKey chunk_key{
           cat.getCurrentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
-      chunk = Chunk_NS::Chunk::getChunk(cd,
+      chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(cat.getDatabaseId()),
                                         &cat.getDataMgr(),
                                         chunk_key,
                                         Data_Namespace::CPU_LEVEL,
@@ -460,8 +460,8 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
       total_num_tuples += fragment.getNumTuples();
       total_data_buf_size += chunk->getBuffer()->size();
       std::ostringstream oss;
-      oss << "Load chunk for col_name: " << chunk->getColumnDesc()->columnName
-          << ", col_id: " << chunk->getColumnDesc()->columnId << ", Frag-" << frag_id
+      oss << "Load chunk for col_name: " << chunk->getColumnName()
+          << ", col_id: " << chunk->getColumnId() << ", Frag-" << frag_id
           << ", numTuples: " << fragment.getNumTuples()
           << ", data_size: " << chunk->getBuffer()->size();
       if (chunk->getIndexBuf()) {
@@ -554,8 +554,8 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
   auto merged_index_buffer = res.second;
 
   // prepare ChunkIter for the linearized chunk
-  auto merged_chunk =
-      std::make_shared<Chunk_NS::Chunk>(merged_data_buffer, merged_index_buffer, cd);
+  auto merged_chunk = std::make_shared<Chunk_NS::Chunk>(
+      merged_data_buffer, merged_index_buffer, cd->makeInfo(cat.getDatabaseId()));
   // to prepare chunk_iter for the merged chunk, we pass one of local chunk iter
   // to fill necessary metadata that is a common for all merged chunks
   auto merged_chunk_iter = prepareChunkIter(merged_data_buffer,

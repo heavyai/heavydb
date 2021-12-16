@@ -123,7 +123,7 @@ void ParquetDataWrapper::initializeChunkBuffers(
     const ChunkToBufferMap& required_buffers,
     const bool reserve_buffers_and_set_stats) {
   for (const auto column : getColumnsToInitialize(column_interval)) {
-    Chunk_NS::Chunk chunk{column};
+    Chunk_NS::Chunk chunk{column->makeInfo(db_id_)};
     ChunkKey data_chunk_key;
     if (column->columnType.is_varlen_indeed()) {
       data_chunk_key = {
@@ -390,7 +390,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   for (int column_id = column_interval.start; column_id <= column_interval.end;
        ++column_id) {
     auto column_descriptor = schema_->getColumnDescriptor(column_id);
-    Chunk_NS::Chunk chunk{column_descriptor};
+    Chunk_NS::Chunk chunk{column_descriptor->makeInfo(db_id_)};
     if (column_descriptor->columnType.is_varlen_indeed()) {
       ChunkKey data_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 1};
@@ -409,8 +409,11 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   }
 
   LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
-  auto metadata = chunk_loader.loadChunk(
-      row_group_intervals, parquet_column_index, chunks, string_dictionary);
+  auto metadata = chunk_loader.loadChunk(catalog.get(),
+                                         row_group_intervals,
+                                         parquet_column_index,
+                                         chunks,
+                                         string_dictionary);
   auto fragmenter = foreign_table_->fragmenter;
 
   auto metadata_iter = metadata.begin();

@@ -66,6 +66,7 @@ class LazyParquetChunkLoader {
    * shared pointers returned will correspond directly to the list `chunks`.
    */
   std::list<std::unique_ptr<ChunkMetadata>> loadChunk(
+      const Catalog_Namespace::Catalog* catalog,
       const std::vector<RowGroupInterval>& row_group_intervals,
       const int parquet_column_index,
       std::list<Chunk_NS::Chunk>& chunks,

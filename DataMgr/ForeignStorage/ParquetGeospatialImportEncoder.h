@@ -45,9 +45,9 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
       , ring_sizes_column_buffer_(nullptr)
       , poly_rings_column_buffer_(nullptr)
       , render_group_column_buffer_(nullptr) {
-    CHECK(geo_column_descriptor_->columnType.is_geometry());
+    CHECK(geo_column_info_->type.is_geometry());
 
-    const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
+    const auto geo_column_type = geo_column_info_->type.get_type();
 
     base_column_buffer_ = dynamic_cast<TypedParquetStorageBuffer<std::string>*>(
         chunks.begin()->getBuffer());

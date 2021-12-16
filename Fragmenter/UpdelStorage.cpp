@@ -84,7 +84,7 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
         CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
         ChunkKey chunk_key{
             catalog->getCurrentDB().dbId, td->tableId, cid, fragment.fragmentId};
-        auto chunk = Chunk_NS::Chunk::getChunk(cd,
+        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(),
                                                &catalog->getDataMgr(),
                                                chunk_key,
                                                memory_level,
@@ -115,11 +115,11 @@ struct ScalarChunkConverter : public ChunkToInsertDataConverter {
 
   const Chunk_NS::Chunk* chunk_;
   ColumnDataPtr column_data_;
-  const ColumnDescriptor* column_descriptor_;
+  ColumnInfoPtr column_info_;
   const BUFFER_DATA_TYPE* data_buffer_addr_;
 
   ScalarChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
-      : chunk_(chunk), column_descriptor_(chunk->getColumnDesc()) {
+      : chunk_(chunk), column_info_(chunk->getColumnInfo()) {
     column_data_ = ColumnDataPtr(reinterpret_cast<INSERT_DATA_TYPE*>(
         checked_malloc(num_rows * sizeof(INSERT_DATA_TYPE))));
     data_buffer_addr_ = (BUFFER_DATA_TYPE*)chunk->getBuffer()->getMemoryPtr();
@@ -137,23 +137,23 @@ struct ScalarChunkConverter : public ChunkToInsertDataConverter {
     DataBlockPtr dataBlock;
     dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
     insertData.data.push_back(dataBlock);
-    insertData.columnIds.push_back(column_descriptor_->columnId);
+    insertData.columnIds.push_back(column_info_->column_id);
   }
 };
 
 struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
   const Chunk_NS::Chunk* chunk_;
-  const ColumnDescriptor* column_descriptor_;
+  ColumnInfoPtr column_info_;
 
   std::unique_ptr<std::vector<ArrayDatum>> column_data_;
   int8_t* data_buffer_addr_;
   size_t fixed_array_length_;
 
   FixedLenArrayChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
-      : chunk_(chunk), column_descriptor_(chunk->getColumnDesc()) {
+      : chunk_(chunk), column_info_(chunk->getColumnInfo()) {
     column_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
     data_buffer_addr_ = chunk->getBuffer()->getMemoryPtr();
-    fixed_array_length_ = chunk->getColumnDesc()->columnType.get_size();
+    fixed_array_length_ = chunk->getColumnType().get_size();
   }
 
   ~FixedLenArrayChunkConverter() override {}
@@ -161,8 +161,8 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
   void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
     auto src_value_ptr = data_buffer_addr_ + (indexInFragment * fixed_array_length_);
 
-    bool is_null = FixedLengthArrayNoneEncoder::is_null(column_descriptor_->columnType,
-                                                        src_value_ptr);
+    bool is_null =
+        FixedLengthArrayNoneEncoder::is_null(column_info_->type, src_value_ptr);
 
     (*column_data_)[row] = ArrayDatum(
         fixed_array_length_, (int8_t*)src_value_ptr, is_null, DoNothingDeleter());
@@ -172,7 +172,7 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
     DataBlockPtr dataBlock;
     dataBlock.arraysPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
-    insertData.columnIds.push_back(column_descriptor_->columnId);
+    insertData.columnIds.push_back(column_info_->column_id);
   }
 };
 
@@ -200,14 +200,14 @@ struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
 
 struct StringChunkConverter : public ChunkToInsertDataConverter {
   const Chunk_NS::Chunk* chunk_;
-  const ColumnDescriptor* column_descriptor_;
+  ColumnInfoPtr column_info_;
 
   std::unique_ptr<std::vector<std::string>> column_data_;
   const int8_t* data_buffer_addr_;
   const StringOffsetT* index_buffer_addr_;
 
   StringChunkConverter(size_t num_rows, const Chunk_NS::Chunk* chunk)
-      : chunk_(chunk), column_descriptor_(chunk->getColumnDesc()) {
+      : chunk_(chunk), column_info_(chunk->getColumnInfo()) {
     column_data_ = std::make_unique<std::vector<std::string>>(num_rows);
     data_buffer_addr_ = chunk->getBuffer()->getMemoryPtr();
     index_buffer_addr_ =
@@ -228,7 +228,7 @@ struct StringChunkConverter : public ChunkToInsertDataConverter {
     DataBlockPtr dataBlock;
     dataBlock.stringsPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
-    insertData.columnIds.push_back(column_descriptor_->columnId);
+    insertData.columnIds.push_back(column_info_->column_id);
   }
 };
 
@@ -238,11 +238,11 @@ struct DateChunkConverter : public ChunkToInsertDataConverter {
 
   const Chunk_NS::Chunk* chunk_;
   ColumnDataPtr column_data_;
-  const ColumnDescriptor* column_descriptor_;
+  ColumnInfoPtr column_info_;
   const BUFFER_DATA_TYPE* data_buffer_addr_;
 
   DateChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
-      : chunk_(chunk), column_descriptor_(chunk->getColumnDesc()) {
+      : chunk_(chunk), column_info_(chunk->getColumnInfo()) {
     column_data_ = ColumnDataPtr(
         reinterpret_cast<int64_t*>(checked_malloc(num_rows * sizeof(int64_t))));
     data_buffer_addr_ = (BUFFER_DATA_TYPE*)chunk->getBuffer()->getMemoryPtr();
@@ -260,7 +260,7 @@ struct DateChunkConverter : public ChunkToInsertDataConverter {
     DataBlockPtr dataBlock;
     dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
     insertData.data.push_back(dataBlock);
-    insertData.columnIds.push_back(column_descriptor_->columnId);
+    insertData.columnIds.push_back(column_info_->column_id);
   }
 };
 
@@ -301,10 +301,10 @@ void InsertOrderFragmenter::updateColumns(
   std::shared_ptr<Chunk_NS::Chunk> deletedChunk;
   for (size_t indexOfChunk = 0; indexOfChunk < chunks.size(); indexOfChunk++) {
     auto chunk = chunks[indexOfChunk];
-    const auto chunk_cd = chunk->getColumnDesc();
+    const auto chunk_info = chunk->getColumnInfo();
 
-    if (chunk_cd->isDeletedCol) {
-      indexOfDeletedColumn = chunk_cd->columnId;
+    if (chunk_info->is_delete) {
+      indexOfDeletedColumn = chunk_info->column_id;
       deletedChunk = chunk;
       continue;
     }
@@ -312,7 +312,7 @@ void InsertOrderFragmenter::updateColumns(
     auto targetColumnIt = std::find_if(columnDescriptors.begin(),
                                        columnDescriptors.end(),
                                        [=](const ColumnDescriptor* cd) -> bool {
-                                         return cd->columnId == chunk_cd->columnId;
+                                         return cd->columnId == chunk_info->column_id;
                                        });
 
     if (targetColumnIt != columnDescriptors.end()) {
@@ -359,15 +359,15 @@ void InsertOrderFragmenter::updateColumns(
         }
       }
     } else {
-      if (chunk_cd->columnType.is_varlen() || chunk_cd->columnType.is_fixlen_array()) {
+      if (chunk_info->type.is_varlen() || chunk_info->type.is_fixlen_array()) {
         std::unique_ptr<ChunkToInsertDataConverter> converter;
 
-        if (chunk_cd->columnType.is_fixlen_array()) {
+        if (chunk_info->type.is_fixlen_array()) {
           converter =
               std::make_unique<FixedLenArrayChunkConverter>(num_rows, chunk.get());
-        } else if (chunk_cd->columnType.is_string()) {
+        } else if (chunk_info->type.is_string()) {
           converter = std::make_unique<StringChunkConverter>(num_rows, chunk.get());
-        } else if (chunk_cd->columnType.is_geometry()) {
+        } else if (chunk_info->type.is_geometry()) {
           // the logical geo column is a string column
           converter = std::make_unique<StringChunkConverter>(num_rows, chunk.get());
         } else {
@@ -376,7 +376,7 @@ void InsertOrderFragmenter::updateColumns(
 
         chunkConverters.push_back(std::move(converter));
 
-      } else if (chunk_cd->columnType.is_date_in_days()) {
+      } else if (chunk_info->type.is_date_in_days()) {
         /* Q: Why do we need this?
            A: In variable length updates path we move the chunk content of column
            without decoding. Since it again passes through DateDaysEncoder
@@ -385,7 +385,7 @@ void InsertOrderFragmenter::updateColumns(
            seconds which then ultimately encoded in days in DateDaysEncoder.
         */
         std::unique_ptr<ChunkToInsertDataConverter> converter;
-        const size_t physical_size = chunk_cd->columnType.get_size();
+        const size_t physical_size = chunk_info->type.get_size();
         if (physical_size == 2) {
           converter =
               std::make_unique<DateChunkConverter<int16_t>>(num_rows, chunk.get());
@@ -398,9 +398,9 @@ void InsertOrderFragmenter::updateColumns(
         chunkConverters.push_back(std::move(converter));
       } else {
         std::unique_ptr<ChunkToInsertDataConverter> converter;
-        SQLTypeInfo logical_type = get_logical_type_info(chunk_cd->columnType);
+        SQLTypeInfo logical_type = get_logical_type_info(chunk_info->type);
         int logical_size = logical_type.get_size();
-        int physical_size = chunk_cd->columnType.get_size();
+        int physical_size = chunk_info->type.get_size();
 
         if (logical_type.is_string()) {
           // for dicts -> logical = physical
@@ -418,7 +418,7 @@ void InsertOrderFragmenter::updateColumns(
             converter = std::make_unique<ScalarChunkConverter<int32_t, int32_t>>(
                 num_rows, chunk.get());
           }
-        } else if (2 == chunk_cd->columnType.get_size()) {
+        } else if (2 == chunk_info->type.get_size()) {
           if (8 == logical_size) {
             converter = std::make_unique<ScalarChunkConverter<int16_t, int64_t>>(
                 num_rows, chunk.get());
@@ -429,7 +429,7 @@ void InsertOrderFragmenter::updateColumns(
             converter = std::make_unique<ScalarChunkConverter<int16_t, int16_t>>(
                 num_rows, chunk.get());
           }
-        } else if (1 == chunk_cd->columnType.get_size()) {
+        } else if (1 == chunk_info->type.get_size()) {
           if (8 == logical_size) {
             converter = std::make_unique<ScalarChunkConverter<int8_t, int64_t>>(
                 num_rows, chunk.get());
@@ -658,7 +658,7 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
   CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
   ChunkKey chunk_key{
       catalog->getCurrentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
-  auto chunk = Chunk_NS::Chunk::getChunk(cd,
+  auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog->getDatabaseId()),
                                          &catalog->getDataMgr(),
                                          chunk_key,
                                          Data_Namespace::CPU_LEVEL,
@@ -910,8 +910,12 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
   }
 
   CHECK_GT(fragment.shadowNumTuples, size_t(0));
-  updateColumnMetadata(
-      cd, fragment, chunk, update_stats.new_values_stats, cd->columnType, updel_roll);
+  updateColumnMetadata(cd->makeInfo(catalog->getDatabaseId()),
+                       fragment,
+                       chunk,
+                       update_stats.new_values_stats,
+                       cd->columnType,
+                       updel_roll);
   update_stats.updated_rows_count = nrow;
   update_stats.fragment_rows_count = fragment.shadowNumTuples;
   update_stats.chunk = chunk;
@@ -919,7 +923,7 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
 }
 
 void InsertOrderFragmenter::updateColumnMetadata(
-    const ColumnDescriptor* cd,
+    ColumnInfoPtr col_info,
     FragmentInfo& fragment,
     std::shared_ptr<Chunk_NS::Chunk> chunk,
     const UpdateValuesStats& new_values_stats,
@@ -927,7 +931,7 @@ void InsertOrderFragmenter::updateColumnMetadata(
     UpdelRoll& updel_roll) {
   mapd_unique_lock<mapd_shared_mutex> write_lock(fragmentInfoMutex_);
   auto buffer = chunk->getBuffer();
-  const auto& lhs_type = cd->columnType;
+  const auto& lhs_type = col_info->type;
 
   auto encoder = buffer->getEncoder();
   auto update_stats = [&encoder](auto min, auto max, auto has_null) {
@@ -961,9 +965,9 @@ void InsertOrderFragmenter::updateColumnMetadata(
                  new_values_stats.max_int64t,
                  new_values_stats.has_null);
   }
-  auto td = updel_roll.catalog->getMetadataForTable(cd->tableId);
+  auto td = updel_roll.catalog->getMetadataForTable(col_info->table_id);
   auto chunk_metadata =
-      updel_roll.getChunkMetadata({td, &fragment}, cd->columnId, fragment);
+      updel_roll.getChunkMetadata({td, &fragment}, col_info->column_id, fragment);
   buffer->getEncoder()->getMetadata(chunk_metadata);
 }
 
@@ -993,7 +997,7 @@ auto InsertOrderFragmenter::getChunksForAllColumns(
         CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
         ChunkKey chunk_key{
             catalog_->getCurrentDB().dbId, td->tableId, col_id, fragment.fragmentId};
-        auto chunk = Chunk_NS::Chunk::getChunk(cd,
+        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_->getDatabaseId()),
                                                &catalog_->getDataMgr(),
                                                chunk_key,
                                                memory_level,
@@ -1061,11 +1065,10 @@ static void set_chunk_metadata(const Catalog_Namespace::Catalog* catalog,
                                const std::shared_ptr<Chunk_NS::Chunk>& chunk,
                                const size_t nrows_to_keep,
                                UpdelRoll& updel_roll) {
-  auto cd = chunk->getColumnDesc();
-  auto td = catalog->getMetadataForTable(cd->tableId);
+  auto td = catalog->getMetadataForTable(chunk->getTableId());
   auto data_buffer = chunk->getBuffer();
   auto chunkMetadata =
-      updel_roll.getChunkMetadata({td, &fragment}, cd->columnId, fragment);
+      updel_roll.getChunkMetadata({td, &fragment}, chunk->getColumnId(), fragment);
   chunkMetadata->numElements = nrows_to_keep;
   chunkMetadata->numBytes = data_buffer->size();
   updel_roll.addDirtyChunk(chunk, fragment.fragmentId);
@@ -1075,8 +1078,7 @@ auto InsertOrderFragmenter::vacuum_fixlen_rows(
     const FragmentInfo& fragment,
     const std::shared_ptr<Chunk_NS::Chunk>& chunk,
     const std::vector<uint64_t>& frag_offsets) {
-  const auto cd = chunk->getColumnDesc();
-  const auto& col_type = cd->columnType;
+  const auto& col_type = chunk->getColumnType();
   auto data_buffer = chunk->getBuffer();
   auto data_addr = data_buffer->getMemoryPtr();
   auto element_size =
@@ -1189,7 +1191,7 @@ auto InsertOrderFragmenter::vacuum_varlen_rows(
     const FragmentInfo& fragment,
     const std::shared_ptr<Chunk_NS::Chunk>& chunk,
     const std::vector<uint64_t>& frag_offsets) {
-  auto is_varlen_array = chunk->getColumnDesc()->columnType.is_varlen_array();
+  auto is_varlen_array = chunk->getColumnType().is_varlen_array();
   auto data_buffer = chunk->getBuffer();
   CHECK(data_buffer);
   auto index_buffer = chunk->getIndexBuf();
@@ -1206,7 +1208,7 @@ auto InsertOrderFragmenter::vacuum_varlen_rows(
       get_null_padding(is_varlen_array, frag_offsets, index_array, nrows_in_fragment);
   size_t nbytes_var_data_to_keep = null_padding;
   auto null_array_indexes = get_var_len_null_array_indexes(
-      chunk->getColumnDesc()->columnType, frag_offsets, index_array, nrows_in_fragment);
+      chunk->getColumnType(), frag_offsets, index_array, nrows_in_fragment);
   auto nrows_to_vacuum = frag_offsets.size();
   for (size_t irow = 0; irow <= nrows_to_vacuum; irow++) {
     auto is_last_one = irow == nrows_to_vacuum;
@@ -1289,8 +1291,7 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
 
   for (size_t ci = 0; ci < chunks.size(); ++ci) {
     auto chunk = chunks[ci];
-    const auto cd = chunk->getColumnDesc();
-    const auto& col_type = cd->columnType;
+    const auto& col_type = chunk->getColumnType();
     auto data_buffer = chunk->getBuffer();
     auto index_buffer = chunk->getIndexBuf();
     auto data_addr = data_buffer->getMemoryPtr();
@@ -1373,21 +1374,21 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
   updel_roll.setNumTuple({td, &fragment}, nrows_to_keep);
   for (size_t ci = 0; ci < chunks.size(); ++ci) {
     auto chunk = chunks[ci];
-    auto cd = chunk->getColumnDesc();
-    if (!cd->columnType.is_fixlen_array()) {
+    auto ti = chunk->getColumnType();
+    if (!ti.is_fixlen_array()) {
       // For DATE_IN_DAYS encoded columns, data is stored in days but the metadata is
       // stored in seconds. Do the metadata conversion here before updating the chunk
       // stats.
-      if (cd->columnType.is_date_in_days()) {
+      if (ti.is_date_in_days()) {
         auto& stats = update_stats_per_thread[ci].new_values_stats;
         stats.min_int64t = DateConverters::get_epoch_seconds_from_days(stats.min_int64t);
         stats.max_int64t = DateConverters::get_epoch_seconds_from_days(stats.max_int64t);
       }
-      updateColumnMetadata(cd,
+      updateColumnMetadata(chunk->getColumnInfo(),
                            fragment,
                            chunk,
                            update_stats_per_thread[ci].new_values_stats,
-                           cd->columnType,
+                           ti,
                            updel_roll);
     }
   }
@@ -1483,10 +1484,8 @@ void UpdelRoll::addDirtyChunk(std::shared_ptr<Chunk_NS::Chunk> chunk,
                               int32_t fragment_id) {
   mapd_unique_lock<mapd_shared_mutex> lock(chunk_update_tracker_mutex);
   CHECK(catalog);
-  ChunkKey chunk_key{catalog->getDatabaseId(),
-                     chunk->getColumnDesc()->tableId,
-                     chunk->getColumnDesc()->columnId,
-                     fragment_id};
+  ChunkKey chunk_key{
+      catalog->getDatabaseId(), chunk->getTableId(), chunk->getColumnId(), fragment_id};
   dirty_chunks[chunk_key] = chunk;
 }
 

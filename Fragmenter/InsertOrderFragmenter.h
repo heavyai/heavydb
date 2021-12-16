@@ -152,7 +152,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                     const Data_Namespace::MemoryLevel memory_level,
                     UpdelRoll& updel_roll) override;
 
-  void updateColumnMetadata(const ColumnDescriptor* cd,
+  void updateColumnMetadata(ColumnInfoPtr col_info,
                             FragmentInfo& fragment,
                             std::shared_ptr<Chunk_NS::Chunk> chunk,
                             const UpdateValuesStats& update_values_stats,

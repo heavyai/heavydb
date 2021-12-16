@@ -463,7 +463,8 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
                           2};
     // Create actual data chunks to prepopulate cache
     if (cached_chunks.find(chunk_key) == cached_chunks.end()) {
-      cached_chunks[chunk_key] = Chunk_NS::Chunk{column};
+      cached_chunks[chunk_key] =
+          Chunk_NS::Chunk{column->makeInfo(chunk_key[CHUNK_KEY_DB_IDX])};
       cached_chunks[chunk_key].setBuffer(
           cache->getChunkBufferForPrecaching(chunk_key, is_first_block));
       if (column->columnType.is_varlen_indeed()) {
