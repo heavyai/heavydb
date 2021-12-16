@@ -17,6 +17,7 @@
 #ifndef QUERYENGINE_RELALGEXECUTOR_H
 #define QUERYENGINE_RELALGEXECUTOR_H
 
+#include "Catalog/CatalogSchemaProvider.h"
 #include "Distributed/AggregatedResult.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/Execute.h"
@@ -67,7 +68,11 @@ class RelAlgExecutor : private StorageIOFacility {
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
-      , query_dag_(std::make_unique<RelAlgDagBuilder>(query_ra, cat_, nullptr))
+      , query_dag_(std::make_unique<RelAlgDagBuilder>(
+            query_ra,
+            &cat_,
+            std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat),
+            nullptr))
       , schema_provider_(
             std::make_unique<RelAlgSchemaProvider>(query_dag_->getRootNode()))
       , query_state_(std::move(query_state))

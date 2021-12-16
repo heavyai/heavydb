@@ -1,6 +1,8 @@
 set(catalog_source_files
     Catalog.cpp
     Catalog.h
+    CatalogSchemaProvider.cpp
+    CatalogSchemaProvider.h
     DBObject.cpp
     Grantee.cpp
     Grantee.h

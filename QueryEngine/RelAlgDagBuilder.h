@@ -38,12 +38,11 @@
 #include "QueryEngine/TypePunning.h"
 #include "QueryHint.h"
 #include "SchemaMgr/ColumnInfo.h"
+#include "SchemaMgr/SchemaProvider.h"
 #include "SchemaMgr/TableInfo.h"
 #include "Shared/sqltypes_geo.h"
 #include "Shared/toString.h"
 #include "Utils/FsiUtils.h"
-
-using ColumnInfoList = std::vector<ColumnInfoPtr>;
 
 class Rex {
  public:
@@ -2188,7 +2187,8 @@ class RelAlgDagBuilder : public boost::noncopyable {
    * @param render_opts Additional build options for render queries.
    */
   RelAlgDagBuilder(const std::string& query_ra,
-                   const Catalog_Namespace::Catalog& cat,
+                   const Catalog_Namespace::Catalog* cat,
+                   SchemaProviderPtr schema_provider,
                    const RenderInfo* render_info);
 
   /**
@@ -2202,8 +2202,14 @@ class RelAlgDagBuilder : public boost::noncopyable {
    */
   RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                    const rapidjson::Value& query_ast,
-                   const Catalog_Namespace::Catalog& cat,
+                   const Catalog_Namespace::Catalog* cat,
+                   SchemaProviderPtr schema_provider,
                    const RenderInfo* render_opts);
+
+  RelAlgDagBuilder(const std::string& query_ra,
+                   int db_id,
+                   SchemaProviderPtr schema_provider,
+                   const RenderInfo* render_info);
 
   void eachNode(std::function<void(RelAlgNode const*)> const&) const;
 
@@ -2366,7 +2372,9 @@ class RelAlgDagBuilder : public boost::noncopyable {
  private:
   void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
 
-  const Catalog_Namespace::Catalog& cat_;
+  const Catalog_Namespace::Catalog* cat_;
+  int db_id_;
+  SchemaProviderPtr schema_provider_;
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   const RenderInfo* render_info_;

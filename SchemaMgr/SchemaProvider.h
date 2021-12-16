@@ -37,8 +37,8 @@ class SchemaProvider {
   virtual TableInfoPtr getTableInfo(int db_id, int table_id) const = 0;
   virtual TableInfoPtr getTableInfo(int db_id, const std::string& table_name) const = 0;
 
-  TableInfoPtr getTableInfo(const TableRef& ref) const {
-    return getTableInfo(ref.db_id, ref.table_id);
+  TableInfoPtr getTableInfo(const TableRef& tref) const {
+    return getTableInfo(tref.db_id, tref.table_id);
   }
 
   virtual ColumnInfoPtr getColumnInfo(int db_id, int table_id, int col_id) const = 0;
@@ -46,8 +46,16 @@ class SchemaProvider {
                                       int table_id,
                                       const std::string& col_name) const = 0;
 
-  ColumnInfoPtr getColumnInfo(const ColumnRef& ref) {
-    return getColumnInfo(ref.db_id, ref.table_id, ref.column_id);
+  ColumnInfoPtr getColumnInfo(const TableRef& tref, int col_id) {
+    return getColumnInfo(tref.db_id, tref.table_id, col_id);
+  }
+
+  ColumnInfoPtr getColumnInfo(const TableRef& tref, const std::string& col_name) {
+    return getColumnInfo(tref.db_id, tref.table_id, col_name);
+  }
+
+  ColumnInfoPtr getColumnInfo(const ColumnRef& cref) {
+    return getColumnInfo(cref.db_id, cref.table_id, cref.column_id);
   }
 };
 
