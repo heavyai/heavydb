@@ -8,6 +8,7 @@ import org.junit.Test;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Properties;
 
@@ -512,9 +513,62 @@ public class OmniSciDatabaseMetaDataTest {
    * @Test public void getProcedureTerm() { }
    *
    * @Test public void getCatalogTerm() { }
-   *
-   * @Test public void getTables() { }
-   *
+   */
+
+  private ArrayList<String> getTablesFromResultSet(ResultSet rs) throws SQLException {
+    ArrayList<String> sorted_tables = new ArrayList<String>();
+    int column_count = rs.getMetaData().getColumnCount();
+    while (rs.next()) {
+      for (int i = 1; i <= column_count; i++) {
+        if (rs.getMetaData().getColumnName(i) == "TABLE_NAME") {
+          sorted_tables.add(rs.getString(i));
+        }
+      }
+    }
+    Collections.sort(sorted_tables);
+    return sorted_tables;
+  }
+
+  @Test
+  public void getTables() throws Exception {
+    ArrayList<String> omni_sci2_tables = new ArrayList<String>() {
+      {
+        add("test_base_table1");
+        add("test_base_table2");
+        add("test_base_table3");
+      }
+    };
+    ArrayList<String> system_tables = new ArrayList<String>() {
+      {
+        add("dashboards");
+        add("databases");
+        add("memory_details");
+        add("memory_summary");
+        add("permissions");
+        add("role_assignments");
+        add("roles");
+        add("storage_details");
+        add("tables");
+        add("users");
+      }
+    };
+
+    set_omnisci();
+    ResultSet omni_sci2_tables_result_set =
+            m_super_conn.getMetaData().getTables("omni_sci2", null, null, null);
+    ArrayList<String> actual_omni_sci2_tables =
+            getTablesFromResultSet(omni_sci2_tables_result_set);
+    assertEquals(omni_sci2_tables, actual_omni_sci2_tables);
+
+    ResultSet system_tables_result_set =
+            m_super_conn.getMetaData().getTables("information_schema", null, null, null);
+    ArrayList<String> actual_system_tables =
+            getTablesFromResultSet(system_tables_result_set);
+    assertTrue(actual_system_tables.containsAll(system_tables));
+    drop_setup();
+  }
+
+  /*
    * @Test public void getSchemas() { }
    *
    * @Test public void getCatalogs() { }

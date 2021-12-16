@@ -860,9 +860,9 @@ SQLException - if a database access error occurs
 
     List<String> tables;
     try {
-      tables = con.client.get_tables(con.session);
+      tables = con.client.get_tables_for_database(con.session, catalog);
     } catch (TException ex) {
-      throw new SQLException("get_tables failed " + ex.toString());
+      throw new SQLException("get_tables_for_database failed " + ex.toString());
     }
 
     List<String> views;
@@ -1163,64 +1163,67 @@ each row is a column description Throws: SQLException - if a database access err
     // Now add some actual details for table name
     List<String> tables;
     try {
-      tables = con.client.get_tables(con.session);
+      tables = con.client.get_tables_for_database(con.session, catalog);
+    } catch (TException ex) {
+      throw new SQLException("get_tables_for_database failed " + ex.toString());
+    }
 
-      for (String tableName : tables) {
-        // check if the table matches the input pattern
-        if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
-          // grab meta data for table
-          TTableDetails tableDetails =
-                  con.client.get_table_details(con.session, tableName);
+    for (String tableName : tables) {
+      // check if the table matches the input pattern
+      if (tableNamePattern == null || tableNamePattern.equals(tableName)) {
+        // grab meta data for table
+        TTableDetails tableDetails;
+        try {
+          tableDetails = con.client.get_table_details(con.session, tableName);
+        } catch (TException ex) {
+          throw new SQLException("get_table_details failed " + ex.toString());
+        }
 
-          int ordinal = 0;
-          // iterate through the columns
-          for (TColumnType value : tableDetails.row_desc) {
-            ordinal++;
-            if (columnNamePattern == null
-                    || value.col_name.matches(modifiedColumnPattern)) {
-              dataMap.get("TABLE_CAT").setNull(true);
-              dataMap.get("TABLE_SCHEM").setNull(true);
-              dataMap.get("TABLE_NAME").add(tableName);
-              dataMap.get("COLUMN_NAME").add(value.col_name);
-              dataMap.get("DATA_TYPE").add(OmniSciType.toJava(value.col_type.type));
-              dataMap.get("TYPE_NAME")
-                      .add((value.col_type.type.name()
-                              + (value.col_type.is_array ? "[]" : "")));
-              if (value.col_type.type == TDatumType.DECIMAL) {
-                dataMap.get("COLUMN_SIZE").add(value.col_type.precision);
-              } else {
-                dataMap.get("COLUMN_SIZE").add(100);
-              }
-              dataMap.get("BUFFER_LENGTH").setNull(true);
-              if (value.col_type.type == TDatumType.DECIMAL) {
-                dataMap.get("DECIMAL_DIGITS").add(value.col_type.scale);
-              } else {
-                dataMap.get("DECIMAL_DIGITS").setNull(true);
-              }
-              dataMap.get("NUM_PREC_RADIX").add(10);
-              dataMap.get("NULLABLE")
-                      .add(value.col_type.nullable ? DatabaseMetaData.columnNullable
-                                                   : DatabaseMetaData.columnNoNulls);
-              dataMap.get("REMARKS").add(" ");
-              dataMap.get("COLUMN_DEF").setNull(true);
-              dataMap.get("SQL_DATA_TYPE").add(0);
-              dataMap.get("SQL_DATETIME_SUB").setNull(true);
-              dataMap.get("CHAR_OCTET_LENGTH").add(0);
-              dataMap.get("ORDINAL_POSITION").add(ordinal);
-              dataMap.get("IS_NULLABLE").add(value.col_type.nullable ? "YES" : "NO");
-              dataMap.get("SCOPE_CATALOG").setNull(true);
-              dataMap.get("SCOPE_SCHEMA").setNull(true);
-              dataMap.get("SCOPE_TABLE").setNull(true);
-              dataMap.get("SOURCE_DATA_TYPE")
-                      .add(OmniSciType.toJava(value.col_type.type));
-              dataMap.get("IS_AUTOINCREMENT").add("NO");
-              dataMap.get("IS_GENERATEDCOLUMN").add("NO");
+        int ordinal = 0;
+        // iterate through the columns
+        for (TColumnType value : tableDetails.row_desc) {
+          ordinal++;
+          if (columnNamePattern == null
+                  || value.col_name.matches(modifiedColumnPattern)) {
+            dataMap.get("TABLE_CAT").setNull(true);
+            dataMap.get("TABLE_SCHEM").setNull(true);
+            dataMap.get("TABLE_NAME").add(tableName);
+            dataMap.get("COLUMN_NAME").add(value.col_name);
+            dataMap.get("DATA_TYPE").add(OmniSciType.toJava(value.col_type.type));
+            dataMap.get("TYPE_NAME")
+                    .add((value.col_type.type.name()
+                            + (value.col_type.is_array ? "[]" : "")));
+            if (value.col_type.type == TDatumType.DECIMAL) {
+              dataMap.get("COLUMN_SIZE").add(value.col_type.precision);
+            } else {
+              dataMap.get("COLUMN_SIZE").add(100);
             }
+            dataMap.get("BUFFER_LENGTH").setNull(true);
+            if (value.col_type.type == TDatumType.DECIMAL) {
+              dataMap.get("DECIMAL_DIGITS").add(value.col_type.scale);
+            } else {
+              dataMap.get("DECIMAL_DIGITS").setNull(true);
+            }
+            dataMap.get("NUM_PREC_RADIX").add(10);
+            dataMap.get("NULLABLE")
+                    .add(value.col_type.nullable ? DatabaseMetaData.columnNullable
+                                                 : DatabaseMetaData.columnNoNulls);
+            dataMap.get("REMARKS").add(" ");
+            dataMap.get("COLUMN_DEF").setNull(true);
+            dataMap.get("SQL_DATA_TYPE").add(0);
+            dataMap.get("SQL_DATETIME_SUB").setNull(true);
+            dataMap.get("CHAR_OCTET_LENGTH").add(0);
+            dataMap.get("ORDINAL_POSITION").add(ordinal);
+            dataMap.get("IS_NULLABLE").add(value.col_type.nullable ? "YES" : "NO");
+            dataMap.get("SCOPE_CATALOG").setNull(true);
+            dataMap.get("SCOPE_SCHEMA").setNull(true);
+            dataMap.get("SCOPE_TABLE").setNull(true);
+            dataMap.get("SOURCE_DATA_TYPE").add(OmniSciType.toJava(value.col_type.type));
+            dataMap.get("IS_AUTOINCREMENT").add("NO");
+            dataMap.get("IS_GENERATEDCOLUMN").add("NO");
           }
         }
       }
-    } catch (TException ex) {
-      throw new SQLException("get_tables failed " + ex.toString());
     }
 
     List<TColumn> columnsList = new ArrayList(columns.length);
