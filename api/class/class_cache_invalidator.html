@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2194,6 +2196,11 @@
 <span id="_CPPv3N16CacheInvalidator16invalidateCachesEv"></span><span id="_CPPv2N16CacheInvalidator16invalidateCachesEv"></span><span id="CacheInvalidator::invalidateCaches"></span><span class="target" id="class_cache_invalidator_1ae1148064dfe4bc44c34bbc7b69880dd5"></span><em class="property">static</em> void <code class="sig-name descname">invalidateCaches</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16CacheInvalidator16invalidateCachesEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N16CacheInvalidator23invalidateCachesByTableE6size_t">
+<span id="_CPPv3N16CacheInvalidator23invalidateCachesByTableE6size_t"></span><span id="_CPPv2N16CacheInvalidator23invalidateCachesByTableE6size_t"></span><span id="CacheInvalidator::invalidateCachesByTable__s"></span><span class="target" id="class_cache_invalidator_1a7b2e7315001d2d196c9d55fa7e950d46"></span><em class="property">static</em> void <code class="sig-name descname">invalidateCachesByTable</code><span class="sig-paren">(</span>size_t <em>table_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16CacheInvalidator23invalidateCachesByTableE6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
@@ -2205,19 +2212,6 @@
 <dl class="function">
 <dt id="_CPPv4N16CacheInvalidatorD0Ev">
 <span id="_CPPv3N16CacheInvalidatorD0Ev"></span><span id="_CPPv2N16CacheInvalidatorD0Ev"></span><span id="CacheInvalidator::~CacheInvalidator"></span><span class="target" id="class_cache_invalidator_1aef7a73f13475840c24502b3704afa761"></span><code class="sig-name descname">~CacheInvalidator</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16CacheInvalidatorD0Ev" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-</div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric">Private Static Functions</p>
-<dl class="function">
-<dt id="_CPPv4I0EN16CacheInvalidator23internalInvalidateCacheEvv">
-<span id="_CPPv3I0EN16CacheInvalidator23internalInvalidateCacheEv"></span><span id="_CPPv2I0EN16CacheInvalidator23internalInvalidateCacheEv"></span><span class="target" id="class_cache_invalidator_1a0aeab41d8cf0290a9a03c72e398f400a"></span>template&lt;typename <code class="sig-name descname">CACHE_HOLDING_TYPE</code>&gt;<br /><em class="property">static</em> void <code class="sig-name descname">internalInvalidateCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN16CacheInvalidator23internalInvalidateCacheEvv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I00DpEN16CacheInvalidator23internalInvalidateCacheEvv">
-<span id="_CPPv3I00DpEN16CacheInvalidator23internalInvalidateCacheEv"></span><span id="_CPPv2I00DpEN16CacheInvalidator23internalInvalidateCacheEv"></span><span class="target" id="class_cache_invalidator_1a080b50505483437dd8cc6ffd59fdc288"></span>template&lt;typename <code class="sig-name descname">FIRST_CACHE_HOLDING_TYPE</code>, typename <code class="sig-name descname">SECOND_CACHE_HOLDING_TYPE</code>, typename ...<code class="sig-name descname">REMAINING_CACHE_HOLDING_TYPES</code>&gt;<br /><em class="property">static</em> void <code class="sig-name descname">internalInvalidateCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I00DpEN16CacheInvalidator23internalInvalidateCacheEvv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

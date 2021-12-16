@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2326,21 +2328,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner25getCachedPerfectHashTableE9QueryPlan">
-<span id="_CPPv3N11QueryRunner11QueryRunner25getCachedPerfectHashTableE9QueryPlan"></span><span id="_CPPv2N11QueryRunner11QueryRunner25getCachedPerfectHashTableE9QueryPlan"></span><span id="QueryRunner::QueryRunner::getCachedPerfectHashTable__QueryPlan"></span><span class="target" id="class_query_runner_1_1_query_runner_1ac6a0d10314728f2bc6d4770c959fd6c5"></span><em class="property">const</em> int32_t *<code class="sig-name descname">getCachedPerfectHashTable</code><span class="sig-paren">(</span>QueryPlan <em>plan_dag</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner25getCachedPerfectHashTableE9QueryPlan" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner26getCachedBaselineHashTableE9QueryPlan">
-<span id="_CPPv3N11QueryRunner11QueryRunner26getCachedBaselineHashTableE9QueryPlan"></span><span id="_CPPv2N11QueryRunner11QueryRunner26getCachedBaselineHashTableE9QueryPlan"></span><span id="QueryRunner::QueryRunner::getCachedBaselineHashTable__QueryPlan"></span><span class="target" id="class_query_runner_1_1_query_runner_1a9054ff50ac6faeea948aa81fc9fc27ec"></span><em class="property">const</em> int8_t *<code class="sig-name descname">getCachedBaselineHashTable</code><span class="sig-paren">(</span>QueryPlan <em>plan_dag</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner26getCachedBaselineHashTableE9QueryPlan" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner34getEntryCntCachedBaselineHashTableE9QueryPlan">
-<span id="_CPPv3N11QueryRunner11QueryRunner34getEntryCntCachedBaselineHashTableE9QueryPlan"></span><span id="_CPPv2N11QueryRunner11QueryRunner34getEntryCntCachedBaselineHashTableE9QueryPlan"></span><span id="QueryRunner::QueryRunner::getEntryCntCachedBaselineHashTable__QueryPlan"></span><span class="target" id="class_query_runner_1_1_query_runner_1adce7d3084da01e40a7eff53965cb1a0d"></span>size_t <code class="sig-name descname">getEntryCntCachedBaselineHashTable</code><span class="sig-paren">(</span>QueryPlan <em>plan_dag</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner34getEntryCntCachedBaselineHashTableE9QueryPlan" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N11QueryRunner11QueryRunner33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier">
 <span id="_CPPv3N11QueryRunner11QueryRunner33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2N11QueryRunner11QueryRunner33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier"></span><span id="QueryRunner::QueryRunner::getCachedHashtableWithoutCacheKey__std::set:s:R.CacheItemType.DeviceIdentifier"></span><span class="target" id="class_query_runner_1_1_query_runner_1a46b84c0c1100551a497d04c4af152797"></span>std::tuple&lt;QueryPlanHash, std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt;, std::optional&lt;<a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a>&gt;&gt; <code class="sig-name descname">getCachedHashtableWithoutCacheKey</code><span class="sig-paren">(</span>std::set&lt;size_t&gt; &amp;<em>visited</em>, CacheItemType <em>hash_table_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2351,28 +2338,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner34getNumberOfCachedPerfectHashTablesEv">
-<span id="_CPPv3N11QueryRunner11QueryRunner34getNumberOfCachedPerfectHashTablesEv"></span><span id="_CPPv2N11QueryRunner11QueryRunner34getNumberOfCachedPerfectHashTablesEv"></span><span id="QueryRunner::QueryRunner::getNumberOfCachedPerfectHashTables"></span><span class="target" id="class_query_runner_1_1_query_runner_1ab743c84b1cb61dc5dffc7db1df7daeb8"></span>size_t <code class="sig-name descname">getNumberOfCachedPerfectHashTables</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner34getNumberOfCachedPerfectHashTablesEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner39getNumberOfCachedBaselineJoinHashTablesEv">
-<span id="_CPPv3N11QueryRunner11QueryRunner39getNumberOfCachedBaselineJoinHashTablesEv"></span><span id="_CPPv2N11QueryRunner11QueryRunner39getNumberOfCachedBaselineJoinHashTablesEv"></span><span id="QueryRunner::QueryRunner::getNumberOfCachedBaselineJoinHashTables"></span><span class="target" id="class_query_runner_1_1_query_runner_1ae08517b5f329ee3fcfbb57d90080c285"></span>size_t <code class="sig-name descname">getNumberOfCachedBaselineJoinHashTables</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner39getNumberOfCachedBaselineJoinHashTablesEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner50getNumberOfCachedOverlapsHashTablesAndTuningParamsEv">
-<span id="_CPPv3N11QueryRunner11QueryRunner50getNumberOfCachedOverlapsHashTablesAndTuningParamsEv"></span><span id="_CPPv2N11QueryRunner11QueryRunner50getNumberOfCachedOverlapsHashTablesAndTuningParamsEv"></span><span id="QueryRunner::QueryRunner::getNumberOfCachedOverlapsHashTablesAndTuningParams"></span><span class="target" id="class_query_runner_1_1_query_runner_1a19367e44692a5a252c910de526f21e71"></span>size_t <code class="sig-name descname">getNumberOfCachedOverlapsHashTablesAndTuningParams</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner50getNumberOfCachedOverlapsHashTablesAndTuningParamsEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner35getNumberOfCachedOverlapsHashTablesEv">
-<span id="_CPPv3N11QueryRunner11QueryRunner35getNumberOfCachedOverlapsHashTablesEv"></span><span id="_CPPv2N11QueryRunner11QueryRunner35getNumberOfCachedOverlapsHashTablesEv"></span><span id="QueryRunner::QueryRunner::getNumberOfCachedOverlapsHashTables"></span><span class="target" id="class_query_runner_1_1_query_runner_1afc652facd89ce4f5a74a39155b314108"></span>size_t <code class="sig-name descname">getNumberOfCachedOverlapsHashTables</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner35getNumberOfCachedOverlapsHashTablesEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N11QueryRunner11QueryRunner46getNumberOfCachedOverlapsHashTableTuringParamsEv">
-<span id="_CPPv3N11QueryRunner11QueryRunner46getNumberOfCachedOverlapsHashTableTuringParamsEv"></span><span id="_CPPv2N11QueryRunner11QueryRunner46getNumberOfCachedOverlapsHashTableTuringParamsEv"></span><span id="QueryRunner::QueryRunner::getNumberOfCachedOverlapsHashTableTuringParams"></span><span class="target" id="class_query_runner_1_1_query_runner_1a819eaac59a3b2346e90986eeda3066a8"></span>size_t <code class="sig-name descname">getNumberOfCachedOverlapsHashTableTuringParams</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11QueryRunner11QueryRunner46getNumberOfCachedOverlapsHashTableTuringParamsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK11QueryRunner11QueryRunner21getNumberOfCachedItemE15CacheItemStatus13CacheItemTypeb">
+<span id="_CPPv3NK11QueryRunner11QueryRunner21getNumberOfCachedItemE15CacheItemStatus13CacheItemTypeb"></span><span id="_CPPv2NK11QueryRunner11QueryRunner21getNumberOfCachedItemE15CacheItemStatus13CacheItemTypeb"></span><span id="QueryRunner::QueryRunner::getNumberOfCachedItem__CacheItemStatus.CacheItemType.bC"></span><span class="target" id="class_query_runner_1_1_query_runner_1a72c3b61883b867bae8b1fed463b8a768"></span>size_t <code class="sig-name descname">getNumberOfCachedItem</code><span class="sig-paren">(</span>CacheItemStatus <em>item_status</em>, CacheItemType <em>hash_table_type</em>, bool <em>with_overlaps_tuning_param</em> = false<span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK11QueryRunner11QueryRunner21getNumberOfCachedItemE15CacheItemStatus13CacheItemTypeb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

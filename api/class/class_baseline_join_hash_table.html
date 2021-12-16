@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2274,8 +2276,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21BaselineJoinHashTable19getCacheInvalidatorEv">
-<span id="_CPPv3N21BaselineJoinHashTable19getCacheInvalidatorEv"></span><span id="_CPPv2N21BaselineJoinHashTable19getCacheInvalidatorEv"></span><span id="BaselineJoinHashTable::getCacheInvalidator"></span><span class="target" id="class_baseline_join_hash_table_1aed0bd068f6639560a8359780db107de7"></span><em class="property">static</em> auto <code class="sig-name descname">getCacheInvalidator</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable19getCacheInvalidatorEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21BaselineJoinHashTable15invalidateCacheEv">
+<span id="_CPPv3N21BaselineJoinHashTable15invalidateCacheEv"></span><span id="_CPPv2N21BaselineJoinHashTable15invalidateCacheEv"></span><span id="BaselineJoinHashTable::invalidateCache"></span><span class="target" id="class_baseline_join_hash_table_1a225a99b407a300f8bbdce92f2e84e347"></span><em class="property">static</em> void <code class="sig-name descname">invalidateCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable15invalidateCacheEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21BaselineJoinHashTable21markCachedItemAsDirtyE6size_t">
+<span id="_CPPv3N21BaselineJoinHashTable21markCachedItemAsDirtyE6size_t"></span><span id="_CPPv2N21BaselineJoinHashTable21markCachedItemAsDirtyE6size_t"></span><span id="BaselineJoinHashTable::markCachedItemAsDirty__s"></span><span class="target" id="class_baseline_join_hash_table_1a9caf5af5c09fd59181037a8edc04314f"></span><em class="property">static</em> void <code class="sig-name descname">markCachedItemAsDirty</code><span class="sig-paren">(</span>size_t <em>table_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable21markCachedItemAsDirtyE6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2292,8 +2299,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Protected Functions</p>
 <dl class="function">
-<dt id="_CPPv4N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap">
-<span id="_CPPv3N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap"></span><span id="_CPPv2N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap"></span><span id="BaselineJoinHashTable::BaselineJoinHashTable__std::shared_ptr:Analyzer::BinOper:C.JoinTypeC.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.ColumnCacheMapR.ExecutorP.std::vector:InnerOuter:CR.iC.QueryPlanHash.HashtableCacheMetaInfo.TableIdToNodeMapCR"></span><span class="target" id="class_baseline_join_hash_table_1a67d2eb1f99a66b53a5a164418a8e49b5"></span><code class="sig-name descname">BaselineJoinHashTable</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em>, <em class="property">const</em> int <em>device_count</em>, QueryPlanHash <em>hashtable_cache_key</em>, <a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a> <em>hashtable_cache_meta_info</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap">
+<span id="_CPPv3N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap"></span><span id="_CPPv2N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap"></span><span id="BaselineJoinHashTable::BaselineJoinHashTable__std::shared_ptr:Analyzer::BinOper:C.JoinTypeC.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.ColumnCacheMapR.ExecutorP.std::vector:InnerOuter:CR.iC.HashtableAccessPathInfo.TableIdToNodeMapCR"></span><span class="target" id="class_baseline_join_hash_table_1a216152d9342f6e343d5ed7c0c4a9580e"></span><code class="sig-name descname">BaselineJoinHashTable</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em>, <em class="property">const</em> int <em>device_count</em>, <a class="reference internal" href="../struct/struct_hashtable_access_path_info.html#_CPPv423HashtableAccessPathInfo" title="HashtableAccessPathInfo">HashtableAccessPathInfo</a> <em>hashtable_access_path_info</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable21BaselineJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2450,11 +2457,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N21BaselineJoinHashTable21table_id_to_node_map_E">
-<span id="_CPPv3N21BaselineJoinHashTable21table_id_to_node_map_E"></span><span id="_CPPv2N21BaselineJoinHashTable21table_id_to_node_map_E"></span><span id="BaselineJoinHashTable::table_id_to_node_map___TableIdToNodeMapC"></span><span class="target" id="class_baseline_join_hash_table_1a6fe174aae532797ac0636d111f08039d"></span><em class="property">const</em> TableIdToNodeMap <code class="sig-name descname">table_id_to_node_map_</code><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable21table_id_to_node_map_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N21BaselineJoinHashTable20hashtable_cache_key_E">
 <span id="_CPPv3N21BaselineJoinHashTable20hashtable_cache_key_E"></span><span id="_CPPv2N21BaselineJoinHashTable20hashtable_cache_key_E"></span><span id="BaselineJoinHashTable::hashtable_cache_key___QueryPlanHash"></span><span class="target" id="class_baseline_join_hash_table_1aecbadddb3ffaba5b8227a92e6ab26380"></span>QueryPlanHash <code class="sig-name descname">hashtable_cache_key_</code><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable20hashtable_cache_key_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2462,6 +2464,16 @@
 <dl class="member">
 <dt id="_CPPv4N21BaselineJoinHashTable26hashtable_cache_meta_info_E">
 <span id="_CPPv3N21BaselineJoinHashTable26hashtable_cache_meta_info_E"></span><span id="_CPPv2N21BaselineJoinHashTable26hashtable_cache_meta_info_E"></span><span id="BaselineJoinHashTable::hashtable_cache_meta_info___HashtableCacheMetaInfo"></span><span class="target" id="class_baseline_join_hash_table_1aa362631930126b10ae87d511c380e9eb"></span><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a> <code class="sig-name descname">hashtable_cache_meta_info_</code><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable26hashtable_cache_meta_info_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21BaselineJoinHashTable11table_keys_E">
+<span id="_CPPv3N21BaselineJoinHashTable11table_keys_E"></span><span id="_CPPv2N21BaselineJoinHashTable11table_keys_E"></span><span id="BaselineJoinHashTable::table_keys___std::unordered_set:s:"></span><span class="target" id="class_baseline_join_hash_table_1a240329a5ca3ea3423393db1d7e872b12"></span>std::unordered_set&lt;size_t&gt; <code class="sig-name descname">table_keys_</code><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable11table_keys_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21BaselineJoinHashTable21table_id_to_node_map_E">
+<span id="_CPPv3N21BaselineJoinHashTable21table_id_to_node_map_E"></span><span id="_CPPv2N21BaselineJoinHashTable21table_id_to_node_map_E"></span><span id="BaselineJoinHashTable::table_id_to_node_map___TableIdToNodeMapC"></span><span class="target" id="class_baseline_join_hash_table_1a6fe174aae532797ac0636d111f08039d"></span><em class="property">const</em> TableIdToNodeMap <code class="sig-name descname">table_id_to_node_map_</code><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable21table_id_to_node_map_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

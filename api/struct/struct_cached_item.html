@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2194,6 +2196,16 @@
 <span id="_CPPv3N10CachedItem10CachedItemE13QueryPlanHash16CACHED_ITEM_TYPENSt10shared_ptrI15CacheItemMetricEENSt8optionalI14META_INFO_TYPEEE"></span><span id="_CPPv2N10CachedItem10CachedItemE13QueryPlanHash16CACHED_ITEM_TYPENSt10shared_ptrI15CacheItemMetricEENSt8optionalI14META_INFO_TYPEEE"></span><span id="CachedItem::CachedItem__QueryPlanHash.CACHED_ITEM_TYPE.std::shared_ptr:CacheItemMetric:.std::optional:META_INFO_TYPE:"></span><span class="target" id="struct_cached_item_1a9e60b7210844c392096d41a744575cb2"></span><code class="sig-name descname">CachedItem</code><span class="sig-paren">(</span>QueryPlanHash <em>hashed_plan</em>, CACHED_ITEM_TYPE <em>item</em>, std::shared_ptr&lt;<a class="reference internal" href="../class/class_cache_item_metric.html#_CPPv415CacheItemMetric" title="CacheItemMetric">CacheItemMetric</a>&gt; <em>item_metric_ptr</em>, std::optional&lt;META_INFO_TYPE&gt; <em>metadata</em> = std::nullopt<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N10CachedItem10CachedItemE13QueryPlanHash16CACHED_ITEM_TYPENSt10shared_ptrI15CacheItemMetricEENSt8optionalI14META_INFO_TYPEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N10CachedItem8setDirtyEv">
+<span id="_CPPv3N10CachedItem8setDirtyEv"></span><span id="_CPPv2N10CachedItem8setDirtyEv"></span><span id="CachedItem::setDirty"></span><span class="target" id="struct_cached_item_1a4f964c7d7afcb6caeaba6ff81865d0b4"></span>void <code class="sig-name descname">setDirty</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N10CachedItem8setDirtyEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK10CachedItem7isDirtyEv">
+<span id="_CPPv3NK10CachedItem7isDirtyEv"></span><span id="_CPPv2NK10CachedItem7isDirtyEv"></span><span id="CachedItem::isDirtyC"></span><span class="target" id="struct_cached_item_1a4337090784b5d17d2e9cd3d6bb63ab6d"></span>bool <code class="sig-name descname">isDirty</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK10CachedItem7isDirtyEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
@@ -2215,6 +2227,11 @@
 <dl class="member">
 <dt id="_CPPv4N10CachedItem9meta_infoE">
 <span id="_CPPv3N10CachedItem9meta_infoE"></span><span id="_CPPv2N10CachedItem9meta_infoE"></span><span id="CachedItem::meta_info__std::optional:META_INFO_TYPE:"></span><span class="target" id="struct_cached_item_1afc84ec1010422887c332954c8cf8f91e"></span>std::optional&lt;META_INFO_TYPE&gt; <code class="sig-name descname">meta_info</code><a class="headerlink" href="#_CPPv4N10CachedItem9meta_infoE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N10CachedItem5dirtyE">
+<span id="_CPPv3N10CachedItem5dirtyE"></span><span id="_CPPv2N10CachedItem5dirtyE"></span><span id="CachedItem::dirty__b"></span><span class="target" id="struct_cached_item_1a4b9c3d4c251bcbb0c88d8580b3552283"></span>bool <code class="sig-name descname">dirty</code><a class="headerlink" href="#_CPPv4N10CachedItem5dirtyE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

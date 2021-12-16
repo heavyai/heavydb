@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2279,8 +2281,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N20PerfectJoinHashTable19getCacheInvalidatorEv">
-<span id="_CPPv3N20PerfectJoinHashTable19getCacheInvalidatorEv"></span><span id="_CPPv2N20PerfectJoinHashTable19getCacheInvalidatorEv"></span><span id="PerfectJoinHashTable::getCacheInvalidator"></span><span class="target" id="class_perfect_join_hash_table_1a86132c412f4459fad20f73f30dde394e"></span><em class="property">static</em> auto <code class="sig-name descname">getCacheInvalidator</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable19getCacheInvalidatorEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N20PerfectJoinHashTable15invalidateCacheEv">
+<span id="_CPPv3N20PerfectJoinHashTable15invalidateCacheEv"></span><span id="_CPPv2N20PerfectJoinHashTable15invalidateCacheEv"></span><span id="PerfectJoinHashTable::invalidateCache"></span><span class="target" id="class_perfect_join_hash_table_1a6db0d07c749a700c83c9b07545fa6f8a"></span><em class="property">static</em> void <code class="sig-name descname">invalidateCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable15invalidateCacheEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N20PerfectJoinHashTable21markCachedItemAsDirtyE6size_t">
+<span id="_CPPv3N20PerfectJoinHashTable21markCachedItemAsDirtyE6size_t"></span><span id="_CPPv2N20PerfectJoinHashTable21markCachedItemAsDirtyE6size_t"></span><span id="PerfectJoinHashTable::markCachedItemAsDirty__s"></span><span class="target" id="class_perfect_join_hash_table_1aed778cb1219296ee94473f152f596102"></span><em class="property">static</em> void <code class="sig-name descname">markCachedItemAsDirty</code><span class="sig-paren">(</span>size_t <em>table_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable21markCachedItemAsDirtyE6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2307,8 +2314,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap">
-<span id="_CPPv3N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap"></span><span id="_CPPv2N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap"></span><span id="PerfectJoinHashTable::PerfectJoinHashTable__std::shared_ptr:Analyzer::BinOper:C.Analyzer::ColumnVarCP.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.JoinTypeC.HashTypeC.ExpressionRangeCR.ColumnCacheMapR.ExecutorP.iC.QueryPlanHash.HashtableCacheMetaInfo.TableIdToNodeMapCR"></span><span class="target" id="class_perfect_join_hash_table_1ae63d05dc7f6b54476cf7f981c5061935"></span><code class="sig-name descname">PerfectJoinHashTable</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>qual_bin_oper</em>, <em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_column_var.html#_CPPv4N8Analyzer9ColumnVarE" title="Analyzer::ColumnVar">ColumnVar</a> *<em>col_var</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> HashType <em>preferred_hash_type</em>, <em class="property">const</em> <a class="reference internal" href="class_expression_range.html#_CPPv415ExpressionRange" title="ExpressionRange">ExpressionRange</a> &amp;<em>col_range</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> int <em>device_count</em>, QueryPlanHash <em>hashtable_cache_key</em>, <a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a> <em>hashtable_cache_meta_info</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi13QueryPlanHash22HashtableCacheMetaInfoRK16TableIdToNodeMap" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi23HashtableAccessPathInfoRK16TableIdToNodeMap">
+<span id="_CPPv3N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi23HashtableAccessPathInfoRK16TableIdToNodeMap"></span><span id="_CPPv2N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi23HashtableAccessPathInfoRK16TableIdToNodeMap"></span><span id="PerfectJoinHashTable::PerfectJoinHashTable__std::shared_ptr:Analyzer::BinOper:C.Analyzer::ColumnVarCP.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.JoinTypeC.HashTypeC.ExpressionRangeCR.ColumnCacheMapR.ExecutorP.iC.HashtableAccessPathInfo.TableIdToNodeMapCR"></span><span class="target" id="class_perfect_join_hash_table_1ad2647abdb37d76fbc5a3b8d670640b51"></span><code class="sig-name descname">PerfectJoinHashTable</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>qual_bin_oper</em>, <em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_column_var.html#_CPPv4N8Analyzer9ColumnVarE" title="Analyzer::ColumnVar">ColumnVar</a> *<em>col_var</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> HashType <em>preferred_hash_type</em>, <em class="property">const</em> <a class="reference internal" href="class_expression_range.html#_CPPv415ExpressionRange" title="ExpressionRange">ExpressionRange</a> &amp;<em>col_range</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> int <em>device_count</em>, <a class="reference internal" href="../struct/struct_hashtable_access_path_info.html#_CPPv423HashtableAccessPathInfo" title="HashtableAccessPathInfo">HashtableAccessPathInfo</a> <em>hashtable_access_path_info</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable20PerfectJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEPKN8Analyzer9ColumnVarERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeRK15ExpressionRangeR14ColumnCacheMapP8ExecutorKi23HashtableAccessPathInfoRK16TableIdToNodeMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2435,11 +2442,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N20PerfectJoinHashTable21table_id_to_node_map_E">
-<span id="_CPPv3N20PerfectJoinHashTable21table_id_to_node_map_E"></span><span id="_CPPv2N20PerfectJoinHashTable21table_id_to_node_map_E"></span><span id="PerfectJoinHashTable::table_id_to_node_map___TableIdToNodeMapC"></span><span class="target" id="class_perfect_join_hash_table_1a21ade948ec2ff18cbb92a7a43165b216"></span><em class="property">const</em> TableIdToNodeMap <code class="sig-name descname">table_id_to_node_map_</code><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable21table_id_to_node_map_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N20PerfectJoinHashTable20hashtable_cache_key_E">
 <span id="_CPPv3N20PerfectJoinHashTable20hashtable_cache_key_E"></span><span id="_CPPv2N20PerfectJoinHashTable20hashtable_cache_key_E"></span><span id="PerfectJoinHashTable::hashtable_cache_key___QueryPlanHash"></span><span class="target" id="class_perfect_join_hash_table_1af3d9ec7c53e65f53242f47d621140794"></span>QueryPlanHash <code class="sig-name descname">hashtable_cache_key_</code><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable20hashtable_cache_key_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2447,6 +2449,16 @@
 <dl class="member">
 <dt id="_CPPv4N20PerfectJoinHashTable26hashtable_cache_meta_info_E">
 <span id="_CPPv3N20PerfectJoinHashTable26hashtable_cache_meta_info_E"></span><span id="_CPPv2N20PerfectJoinHashTable26hashtable_cache_meta_info_E"></span><span id="PerfectJoinHashTable::hashtable_cache_meta_info___HashtableCacheMetaInfo"></span><span class="target" id="class_perfect_join_hash_table_1ac61fdd9996ad1b76a5cbf8e607c1f4b9"></span><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a> <code class="sig-name descname">hashtable_cache_meta_info_</code><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable26hashtable_cache_meta_info_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N20PerfectJoinHashTable11table_keys_E">
+<span id="_CPPv3N20PerfectJoinHashTable11table_keys_E"></span><span id="_CPPv2N20PerfectJoinHashTable11table_keys_E"></span><span id="PerfectJoinHashTable::table_keys___std::unordered_set:s:"></span><span class="target" id="class_perfect_join_hash_table_1ab72425e317a416a6c312c3cf6b868c52"></span>std::unordered_set&lt;size_t&gt; <code class="sig-name descname">table_keys_</code><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable11table_keys_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N20PerfectJoinHashTable21table_id_to_node_map_E">
+<span id="_CPPv3N20PerfectJoinHashTable21table_id_to_node_map_E"></span><span id="_CPPv2N20PerfectJoinHashTable21table_id_to_node_map_E"></span><span id="PerfectJoinHashTable::table_id_to_node_map___TableIdToNodeMapC"></span><span class="target" id="class_perfect_join_hash_table_1a21ade948ec2ff18cbb92a7a43165b216"></span><em class="property">const</em> TableIdToNodeMap <code class="sig-name descname">table_id_to_node_map_</code><a class="headerlink" href="#_CPPv4N20PerfectJoinHashTable21table_id_to_node_map_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

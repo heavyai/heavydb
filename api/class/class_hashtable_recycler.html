@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2210,6 +2212,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N17HashtableRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier">
+<span id="_CPPv3N17HashtableRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2N17HashtableRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier"></span><span id="HashtableRecycler::markCachedItemAsDirty__s.std::unordered_set:QueryPlanHash:R.CacheItemType.DeviceIdentifier"></span><span class="target" id="class_hashtable_recycler_1aebb5b2d9e106338d025442b6b1cdedd6"></span>void <code class="sig-name descname">markCachedItemAsDirty</code><span class="sig-paren">(</span>size_t <em>table_key</em>, std::unordered_set&lt;QueryPlanHash&gt; &amp;<em>key_set</em>, CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK17HashtableRecycler8toStringEv">
 <span id="_CPPv3NK17HashtableRecycler8toStringEv"></span><span id="_CPPv2NK17HashtableRecycler8toStringEv"></span><span id="HashtableRecycler::toStringC"></span><span class="target" id="class_hashtable_recycler_1addf90e3fa348d213134a3bfe708a890e"></span>std::string <code class="sig-name descname">toString</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17HashtableRecycler8toStringEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2222,6 +2229,21 @@
 <dl class="function">
 <dt id="_CPPv4N17HashtableRecycler33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier">
 <span id="_CPPv3N17HashtableRecycler33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2N17HashtableRecycler33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier"></span><span id="HashtableRecycler::getCachedHashtableWithoutCacheKey__std::set:s:R.CacheItemType.DeviceIdentifier"></span><span class="target" id="class_hashtable_recycler_1a1cf6faba3690bc1ecb0699fea40ce3f6"></span>std::tuple&lt;QueryPlanHash, std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt;, std::optional&lt;<a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a>&gt;&gt; <code class="sig-name descname">getCachedHashtableWithoutCacheKey</code><span class="sig-paren">(</span>std::set&lt;size_t&gt; &amp;<em>visited</em>, CacheItemType <em>hash_table_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17HashtableRecycler27addQueryPlanDagForTableKeysE6size_tRKNSt13unordered_setI6size_tEE">
+<span id="_CPPv3N17HashtableRecycler27addQueryPlanDagForTableKeysE6size_tRKNSt13unordered_setI6size_tEE"></span><span id="_CPPv2N17HashtableRecycler27addQueryPlanDagForTableKeysE6size_tRKNSt13unordered_setI6size_tEE"></span><span id="HashtableRecycler::addQueryPlanDagForTableKeys__s.std::unordered_set:s:CR"></span><span class="target" id="class_hashtable_recycler_1a703f537311031a6b8ddf82ef2c046c80"></span>void <code class="sig-name descname">addQueryPlanDagForTableKeys</code><span class="sig-paren">(</span>size_t <em>hashed_query_plan_dag</em>, <em class="property">const</em> std::unordered_set&lt;size_t&gt; &amp;<em>table_keys</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler27addQueryPlanDagForTableKeysE6size_tRKNSt13unordered_setI6size_tEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK17HashtableRecycler34getMappedQueryPlanDagsWithTableKeyE6size_t">
+<span id="_CPPv3NK17HashtableRecycler34getMappedQueryPlanDagsWithTableKeyE6size_t"></span><span id="_CPPv2NK17HashtableRecycler34getMappedQueryPlanDagsWithTableKeyE6size_t"></span><span id="HashtableRecycler::getMappedQueryPlanDagsWithTableKey__sC"></span><span class="target" id="class_hashtable_recycler_1aeb83314ad5c7320613fd567477b0d8a6"></span>std::optional&lt;std::unordered_set&lt;size_t&gt;&gt; <code class="sig-name descname">getMappedQueryPlanDagsWithTableKey</code><span class="sig-paren">(</span>size_t <em>table_key</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17HashtableRecycler34getMappedQueryPlanDagsWithTableKeyE6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17HashtableRecycler37removeTableKeyInfoFromQueryPlanDagMapE6size_t">
+<span id="_CPPv3N17HashtableRecycler37removeTableKeyInfoFromQueryPlanDagMapE6size_t"></span><span id="_CPPv2N17HashtableRecycler37removeTableKeyInfoFromQueryPlanDagMapE6size_t"></span><span id="HashtableRecycler::removeTableKeyInfoFromQueryPlanDagMap__s"></span><span class="target" id="class_hashtable_recycler_1a209f8518247e9da8cd11caa64011ee5c"></span>void <code class="sig-name descname">removeTableKeyInfoFromQueryPlanDagMap</code><span class="sig-paren">(</span>size_t <em>table_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler37removeTableKeyInfoFromQueryPlanDagMapE6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2239,20 +2261,15 @@
 
 <dl class="member">
 <dt>
-<span class="target" id="class_hashtable_recycler_1a14c1b16d8c5bf820b12af3b52fc409f7"></span><code class="sig-name descname">HashtableRecycler::num_gpus{}  std::shared_ptr&lt;HashTable&gt; getItemFromCache(QueryPlanHash key,CacheItemType item_type,DeviceIdentifier device_identifier,      std::optional&lt;HashtableCacheMetaInfo&gt; meta_info = std::nullopt) const override</code></dt>
+<span class="target" id="class_hashtable_recycler_1a14c1b16d8c5bf820b12af3b52fc409f7"></span><code class="sig-name descname">HashtableRecycler::num_gpus{}  std::shared_ptr&lt;HashTable&gt; getItemFromCache(QueryPlanHash key,CacheItemType item_type,DeviceIdentifier device_identifier,      std::optional&lt;HashtableCacheMetaInfo&gt; meta_info = std::nullopt) override</code></dt>
 <dd></dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N17HashtableRecycler20getHashtableCacheKeyERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor">
-<span id="_CPPv3N17HashtableRecycler20getHashtableCacheKeyERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor"></span><span id="_CPPv2N17HashtableRecycler20getHashtableCacheKeyERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor"></span><span id="HashtableRecycler::getHashtableCacheKey__std::vector:InnerOuter:CR.SQLOpsC.JoinTypeC.HashTableBuildDagMapCR.ExecutorP"></span><span class="target" id="class_hashtable_recycler_1ac5cc00c3ddb5a17126290e8090597ad9"></span>std::pair&lt;QueryPlanHash, <a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a>&gt; <code class="sig-name descname">getHashtableCacheKey</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em>, <em class="property">const</em> SQLOps <em>op_type</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> HashTableBuildDagMap &amp;<em>hashtable_build_dag_map</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler20getHashtableCacheKeyERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N17HashtableRecycler21getHashtableKeyStringERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor">
-<span id="_CPPv3N17HashtableRecycler21getHashtableKeyStringERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor"></span><span id="_CPPv2N17HashtableRecycler21getHashtableKeyStringERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor"></span><span id="HashtableRecycler::getHashtableKeyString__std::vector:InnerOuter:CR.SQLOpsC.JoinTypeC.HashTableBuildDagMapCR.ExecutorP"></span><span class="target" id="class_hashtable_recycler_1a21b930f14afc2cfa69ffdd88e610d058"></span>std::pair&lt;QueryPlan, <a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a>&gt; <code class="sig-name descname">getHashtableKeyString</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em>, <em class="property">const</em> SQLOps <em>op_type</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> HashTableBuildDagMap &amp;<em>hashtable_build_dag_map</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler21getHashtableKeyStringERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17HashtableRecycler26getHashtableAccessPathInfoERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor">
+<span id="_CPPv3N17HashtableRecycler26getHashtableAccessPathInfoERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor"></span><span id="_CPPv2N17HashtableRecycler26getHashtableAccessPathInfoERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor"></span><span id="HashtableRecycler::getHashtableAccessPathInfo__std::vector:InnerOuter:CR.SQLOpsC.JoinTypeC.HashTableBuildDagMapCR.ExecutorP"></span><span class="target" id="class_hashtable_recycler_1ac691685563b3e9c551c85c4a91ecd461"></span><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html#_CPPv423HashtableAccessPathInfo" title="HashtableAccessPathInfo">HashtableAccessPathInfo</a> <code class="sig-name descname">getHashtableAccessPathInfo</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em>, <em class="property">const</em> SQLOps <em>op_type</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> HashTableBuildDagMap &amp;<em>hashtable_build_dag_map</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler26getHashtableAccessPathInfoERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2281,6 +2298,14 @@
 <dl class="function">
 <dt id="_CPPv4N17HashtableRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE">
 <span id="_CPPv3N17HashtableRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE"></span><span id="_CPPv2N17HashtableRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE"></span><span id="HashtableRecycler::cleanupCacheForInsertion__CacheItemType.DeviceIdentifier.s.std::lock_guard:std::mutex:R.std::optional:HashtableCacheMetaInfo:"></span><span class="target" id="class_hashtable_recycler_1a1d240cea031bf47218d1e4ea344a47b5"></span>void <code class="sig-name descname">cleanupCacheForInsertion</code><span class="sig-paren">(</span>CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em>, size_t <em>required_size</em>, std::lock_guard&lt;std::mutex&gt; &amp;<em>lock</em>, std::optional&lt;<a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a>&gt; <em>meta_info</em> = std::nullopt<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashtableRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Members</p>
+<dl class="member">
+<dt id="_CPPv4N17HashtableRecycler32table_key_to_query_plan_dag_map_E">
+<span id="_CPPv3N17HashtableRecycler32table_key_to_query_plan_dag_map_E"></span><span id="_CPPv2N17HashtableRecycler32table_key_to_query_plan_dag_map_E"></span><span id="HashtableRecycler::table_key_to_query_plan_dag_map___std::unordered_map:s.std::unordered_set:s::"></span><span class="target" id="class_hashtable_recycler_1a13e21e69f49aca5cc288e167ab023607"></span>std::unordered_map&lt;size_t, std::unordered_set&lt;size_t&gt;&gt; <code class="sig-name descname">table_key_to_query_plan_dag_map_</code><a class="headerlink" href="#_CPPv4N17HashtableRecycler32table_key_to_query_plan_dag_map_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

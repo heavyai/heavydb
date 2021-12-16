@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2223,8 +2225,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE">
-<span id="_CPPv3NK12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE"></span><span id="_CPPv2NK12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE"></span><span id="DataRecycler::getItemFromCache__QueryPlanHash.CacheItemType.DeviceIdentifier.std::optional:META_INFO_TYPE:C"></span><span class="target" id="class_data_recycler_1aaf961679c776d3221828004a75ecd4b2"></span><em class="property">virtual</em> CACHED_ITEM_TYPE <code class="sig-name descname">getItemFromCache</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em>, std::optional&lt;META_INFO_TYPE&gt; <em>meta_info</em> = std::nullopt<span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE">
+<span id="_CPPv3N12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE"></span><span id="_CPPv2N12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE"></span><span id="DataRecycler::getItemFromCache__QueryPlanHash.CacheItemType.DeviceIdentifier.std::optional:META_INFO_TYPE:"></span><span class="target" id="class_data_recycler_1ada222ce870e6a9b912d3bc22ea50a15f"></span><em class="property">virtual</em> CACHED_ITEM_TYPE <code class="sig-name descname">getItemFromCache</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em>, std::optional&lt;META_INFO_TYPE&gt; <em>meta_info</em> = std::nullopt<span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N12DataRecycler16getItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierNSt8optionalI14META_INFO_TYPEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2243,6 +2245,21 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N12DataRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier">
+<span id="_CPPv3N12DataRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2N12DataRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier"></span><span id="DataRecycler::markCachedItemAsDirty__s.std::unordered_set:QueryPlanHash:R.CacheItemType.DeviceIdentifier"></span><span class="target" id="class_data_recycler_1a10c7c400ba3bb5efd68f2248d625a8de"></span><em class="property">virtual</em> void <code class="sig-name descname">markCachedItemAsDirty</code><span class="sig-paren">(</span>size_t <em>table_key</em>, std::unordered_set&lt;QueryPlanHash&gt; &amp;<em>key_set</em>, CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N12DataRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK12DataRecycler25markCachedItemAsDirtyImplE13QueryPlanHashR19CachedItemContainer">
+<span id="_CPPv3NK12DataRecycler25markCachedItemAsDirtyImplE13QueryPlanHashR19CachedItemContainer"></span><span id="_CPPv2NK12DataRecycler25markCachedItemAsDirtyImplE13QueryPlanHashR19CachedItemContainer"></span><span id="DataRecycler::markCachedItemAsDirtyImpl__QueryPlanHash.CachedItemContainerRC"></span><span class="target" id="class_data_recycler_1a506fc41ea0bfb45e68a52a26604442a4"></span>void <code class="sig-name descname">markCachedItemAsDirtyImpl</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CachedItemContainer &amp;<em>m</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK12DataRecycler25markCachedItemAsDirtyImplE13QueryPlanHashR19CachedItemContainer" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK12DataRecycler17isCachedItemDirtyE13QueryPlanHashR19CachedItemContainer">
+<span id="_CPPv3NK12DataRecycler17isCachedItemDirtyE13QueryPlanHashR19CachedItemContainer"></span><span id="_CPPv2NK12DataRecycler17isCachedItemDirtyE13QueryPlanHashR19CachedItemContainer"></span><span id="DataRecycler::isCachedItemDirty__QueryPlanHash.CachedItemContainerRC"></span><span class="target" id="class_data_recycler_1aa6a3c413d6e6caa9cb1b399d827af601"></span>bool <code class="sig-name descname">isCachedItemDirty</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CachedItemContainer &amp;<em>m</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK12DataRecycler17isCachedItemDirtyE13QueryPlanHashR19CachedItemContainer" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK12DataRecycler8toStringEv">
 <span id="_CPPv3NK12DataRecycler8toStringEv"></span><span id="_CPPv2NK12DataRecycler8toStringEv"></span><span id="DataRecycler::toStringC"></span><span class="target" id="class_data_recycler_1a3a846397e25cf546a4cda051c5e75cb6"></span><em class="property">virtual</em> std::string <code class="sig-name descname">toString</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em> = 0<a class="headerlink" href="#_CPPv4NK12DataRecycler8toStringEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2253,13 +2270,23 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK12DataRecycler13getCachedItemE13QueryPlanHashR19CachedItemContainer">
-<span id="_CPPv3NK12DataRecycler13getCachedItemE13QueryPlanHashR19CachedItemContainer"></span><span id="_CPPv2NK12DataRecycler13getCachedItemE13QueryPlanHashR19CachedItemContainer"></span><span id="DataRecycler::getCachedItem__QueryPlanHash.CachedItemContainerRC"></span><span class="target" id="class_data_recycler_1a53d54c9f76df8d28f166e169c3349d85"></span>std::optional&lt;CachedItem&lt;CACHED_ITEM_TYPE, META_INFO_TYPE&gt;&gt; <code class="sig-name descname">getCachedItem</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CachedItemContainer &amp;<em>m</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK12DataRecycler13getCachedItemE13QueryPlanHashR19CachedItemContainer" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N12DataRecycler39getCachedItemWithoutConsideringMetaInfoE13QueryPlanHash13CacheItemType16DeviceIdentifierR19CachedItemContainerRNSt10lock_guardINSt5mutexEEE">
+<span id="_CPPv3N12DataRecycler39getCachedItemWithoutConsideringMetaInfoE13QueryPlanHash13CacheItemType16DeviceIdentifierR19CachedItemContainerRNSt10lock_guardINSt5mutexEEE"></span><span id="_CPPv2N12DataRecycler39getCachedItemWithoutConsideringMetaInfoE13QueryPlanHash13CacheItemType16DeviceIdentifierR19CachedItemContainerRNSt10lock_guardINSt5mutexEEE"></span><span id="DataRecycler::getCachedItemWithoutConsideringMetaInfo__QueryPlanHash.CacheItemType.DeviceIdentifier.CachedItemContainerR.std::lock_guard:std::mutex:R"></span><span class="target" id="class_data_recycler_1ad5a495a73fb0c28791686378f075de14"></span>std::optional&lt;CachedItem&lt;CACHED_ITEM_TYPE, META_INFO_TYPE&gt;&gt; <code class="sig-name descname">getCachedItemWithoutConsideringMetaInfo</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em>, CachedItemContainer &amp;<em>m</em>, std::lock_guard&lt;std::mutex&gt; &amp;<em>lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N12DataRecycler39getCachedItemWithoutConsideringMetaInfoE13QueryPlanHash13CacheItemType16DeviceIdentifierR19CachedItemContainerRNSt10lock_guardINSt5mutexEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4NK12DataRecycler24getCurrentNumCachedItemsE13CacheItemType16DeviceIdentifier">
 <span id="_CPPv3NK12DataRecycler24getCurrentNumCachedItemsE13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2NK12DataRecycler24getCurrentNumCachedItemsE13CacheItemType16DeviceIdentifier"></span><span id="DataRecycler::getCurrentNumCachedItems__CacheItemType.DeviceIdentifierC"></span><span class="target" id="class_data_recycler_1adca220a9d3f64d135df8542c6e8f1478"></span>size_t <code class="sig-name descname">getCurrentNumCachedItems</code><span class="sig-paren">(</span>CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK12DataRecycler24getCurrentNumCachedItemsE13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK12DataRecycler29getCurrentNumDirtyCachedItemsE13CacheItemType16DeviceIdentifier">
+<span id="_CPPv3NK12DataRecycler29getCurrentNumDirtyCachedItemsE13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2NK12DataRecycler29getCurrentNumDirtyCachedItemsE13CacheItemType16DeviceIdentifier"></span><span id="DataRecycler::getCurrentNumDirtyCachedItems__CacheItemType.DeviceIdentifierC"></span><span class="target" id="class_data_recycler_1acf2b3f07e0360aaa6f994d11f8375995"></span>size_t <code class="sig-name descname">getCurrentNumDirtyCachedItems</code><span class="sig-paren">(</span>CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK12DataRecycler29getCurrentNumDirtyCachedItemsE13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK12DataRecycler29getCurrentNumCleanCachedItemsE13CacheItemType16DeviceIdentifier">
+<span id="_CPPv3NK12DataRecycler29getCurrentNumCleanCachedItemsE13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2NK12DataRecycler29getCurrentNumCleanCachedItemsE13CacheItemType16DeviceIdentifier"></span><span id="DataRecycler::getCurrentNumCleanCachedItems__CacheItemType.DeviceIdentifierC"></span><span class="target" id="class_data_recycler_1ab3c83c5072667abc7dc8e77ace190959"></span>size_t <code class="sig-name descname">getCurrentNumCleanCachedItems</code><span class="sig-paren">(</span>CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK12DataRecycler29getCurrentNumCleanCachedItemsE13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2280,11 +2307,6 @@
 <dl class="function">
 <dt id="_CPPv4N12DataRecycler19setMaxCacheItemSizeE13CacheItemType6size_t">
 <span id="_CPPv3N12DataRecycler19setMaxCacheItemSizeE13CacheItemType6size_t"></span><span id="_CPPv2N12DataRecycler19setMaxCacheItemSizeE13CacheItemType6size_t"></span><span id="DataRecycler::setMaxCacheItemSize__CacheItemType.s"></span><span class="target" id="class_data_recycler_1ac7ecc1236050245616890e9589579eaa"></span>void <code class="sig-name descname">setMaxCacheItemSize</code><span class="sig-paren">(</span>CacheItemType <em>item_type</em>, size_t <em>new_max_cache_item_size</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N12DataRecycler19setMaxCacheItemSizeE13CacheItemType6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N12DataRecycler19getCacheInvalidatorEv">
-<span id="_CPPv3N12DataRecycler19getCacheInvalidatorEv"></span><span id="_CPPv2N12DataRecycler19getCacheInvalidatorEv"></span><span id="DataRecycler::getCacheInvalidator"></span><span class="target" id="class_data_recycler_1af44942942964462d5910b9008081242d"></span>std::function&lt;void<span class="sig-paren">(</span><span class="sig-paren">)</span>&gt; <code class="sig-name descname">getCacheInvalidator</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N12DataRecycler19getCacheInvalidatorEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

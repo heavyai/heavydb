@@ -1,0 +1,9 @@
+Struct HashtableAccessPathInfo
+==============================
+
+.. doxygenstruct:: HashtableAccessPathInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

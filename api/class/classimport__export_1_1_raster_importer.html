@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2290,8 +2292,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKb">
-<span id="_CPPv3N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKb"></span><span id="_CPPv2N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKb"></span><span id="import_export::RasterImporter::detect__ssCR.ssCR.PointTypeC.PointTransformC.bC"></span><span class="target" id="classimport__export_1_1_raster_importer_1a720b94c6f765541ef0861fe4b936c0c5"></span>void <code class="sig-name descname">detect</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_name</em>, <em class="property">const</em> std::string &amp;<em>specified_band_names</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13import_export14RasterImporter9PointTypeE" title="import_export::RasterImporter::PointType">PointType</a> <em>point_type</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13import_export14RasterImporter14PointTransformE" title="import_export::RasterImporter::PointTransform">PointTransform</a> <em>point_transform</em>, <em class="property">const</em> bool <em>point_compute_angle</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKbKb">
+<span id="_CPPv3N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKbKb"></span><span id="_CPPv2N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKbKb"></span><span id="import_export::RasterImporter::detect__ssCR.ssCR.ssCR.PointTypeC.PointTransformC.bC.bC"></span><span class="target" id="classimport__export_1_1_raster_importer_1a7d76c6d255e81b051630eddb2a0a0122"></span>void <code class="sig-name descname">detect</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_name</em>, <em class="property">const</em> std::string &amp;<em>specified_band_names</em>, <em class="property">const</em> std::string &amp;<em>specified_band_dimensions</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13import_export14RasterImporter9PointTypeE" title="import_export::RasterImporter::PointType">PointType</a> <em>point_type</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv4N13import_export14RasterImporter14PointTransformE" title="import_export::RasterImporter::PointTransform">PointTransform</a> <em>point_transform</em>, <em class="property">const</em> bool <em>point_compute_angle</em>, <em class="property">const</em> bool <em>throw_on_error</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter6detectERKNSt6stringERKNSt6stringERKNSt6stringEK9PointTypeK14PointTransformKbKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2348,8 +2350,13 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
-<dt id="_CPPv4N13import_export14RasterImporter16initializeNamingERKNSt6stringE">
-<span id="_CPPv3N13import_export14RasterImporter16initializeNamingERKNSt6stringE"></span><span id="_CPPv2N13import_export14RasterImporter16initializeNamingERKNSt6stringE"></span><span id="import_export::RasterImporter::initializeNaming__ssCR"></span><span class="target" id="classimport__export_1_1_raster_importer_1afa3d2fe61930ae771421ea2fec27e270"></span>void <code class="sig-name descname">initializeNaming</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>specified_band_names</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter16initializeNamingERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export14RasterImporter24getRawBandNamesForFormatERKN10Geospatial4GDAL15DataSourceUqPtrE">
+<span id="_CPPv3N13import_export14RasterImporter24getRawBandNamesForFormatERKN10Geospatial4GDAL15DataSourceUqPtrE"></span><span id="_CPPv2N13import_export14RasterImporter24getRawBandNamesForFormatERKN10Geospatial4GDAL15DataSourceUqPtrE"></span><span id="import_export::RasterImporter::getRawBandNamesForFormat__Geospatial::GDAL::DataSourceUqPtrCR"></span><span class="target" id="classimport__export_1_1_raster_importer_1a199b5122fb4fcd535421c903ddeb8046"></span>void <code class="sig-name descname">getRawBandNamesForFormat</code><span class="sig-paren">(</span><em class="property">const</em> Geospatial::<a class="reference internal" href="class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDALE" title="Geospatial::GDAL">GDAL</a>::<a class="reference internal" href="class_geospatial_1_1_g_d_a_l.html#_CPPv4N10Geospatial4GDAL15DataSourceUqPtrE" title="Geospatial::GDAL::DataSourceUqPtr">DataSourceUqPtr</a> &amp;<em>datasource</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter24getRawBandNamesForFormatERKN10Geospatial4GDAL15DataSourceUqPtrE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N13import_export14RasterImporter19initializeFilteringERKNSt6stringERKNSt6stringE">
+<span id="_CPPv3N13import_export14RasterImporter19initializeFilteringERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N13import_export14RasterImporter19initializeFilteringERKNSt6stringERKNSt6stringE"></span><span id="import_export::RasterImporter::initializeFiltering__ssCR.ssCR"></span><span class="target" id="classimport__export_1_1_raster_importer_1a0d9d0d8b06be007eec223063963fee8b"></span>void <code class="sig-name descname">initializeFiltering</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>specified_band_names</em>, <em class="property">const</em> std::string &amp;<em>specified_band_dimensions</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter19initializeFilteringERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2358,8 +2365,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N13import_export14RasterImporter11getBandNameEP14GDALRasterBandKi">
-<span id="_CPPv3N13import_export14RasterImporter11getBandNameEP14GDALRasterBandKi"></span><span id="_CPPv2N13import_export14RasterImporter11getBandNameEP14GDALRasterBandKi"></span><span id="import_export::RasterImporter::getBandName__GDALRasterBandP.iC"></span><span class="target" id="classimport__export_1_1_raster_importer_1a83715a5d48955cca28c87fa5eafd2223"></span>std::string <code class="sig-name descname">getBandName</code><span class="sig-paren">(</span>GDALRasterBand *<em>band</em>, <em class="property">const</em> int <em>band_idx</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter11getBandNameEP14GDALRasterBandKi" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export14RasterImporter30shouldImportBandWithDimensionsEKiKi">
+<span id="_CPPv3N13import_export14RasterImporter30shouldImportBandWithDimensionsEKiKi"></span><span id="_CPPv2N13import_export14RasterImporter30shouldImportBandWithDimensionsEKiKi"></span><span id="import_export::RasterImporter::shouldImportBandWithDimensions__iC.iC"></span><span class="target" id="classimport__export_1_1_raster_importer_1a5015b294250926515050bf4f6c39c66d"></span>bool <code class="sig-name descname">shouldImportBandWithDimensions</code><span class="sig-paren">(</span><em class="property">const</em> int <em>width</em>, <em class="property">const</em> int <em>height</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter30shouldImportBandWithDimensionsEKiKi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N13import_export14RasterImporter11getBandNameEK8uint32_tKi">
+<span id="_CPPv3N13import_export14RasterImporter11getBandNameEK8uint32_tKi"></span><span id="_CPPv2N13import_export14RasterImporter11getBandNameEK8uint32_tKi"></span><span id="import_export::RasterImporter::getBandName__uint32_tC.iC"></span><span class="target" id="classimport__export_1_1_raster_importer_1a61d855563e66bf5e3b076e7f281de2d9"></span>std::string <code class="sig-name descname">getBandName</code><span class="sig-paren">(</span><em class="property">const</em> uint32_t <em>datasource_idx</em>, <em class="property">const</em> int <em>band_idx</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter11getBandNameEK8uint32_tKi" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2376,8 +2388,8 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N13import_export14RasterImporter20ome_tiff_band_names_E">
-<span id="_CPPv3N13import_export14RasterImporter20ome_tiff_band_names_E"></span><span id="_CPPv2N13import_export14RasterImporter20ome_tiff_band_names_E"></span><span id="import_export::RasterImporter::ome_tiff_band_names___std::vector:ss:"></span><span class="target" id="classimport__export_1_1_raster_importer_1a993ccec12186bcc1ea9b92d5e22be999"></span>std::vector&lt;std::string&gt; <code class="sig-name descname">ome_tiff_band_names_</code><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter20ome_tiff_band_names_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13import_export14RasterImporter15raw_band_names_E">
+<span id="_CPPv3N13import_export14RasterImporter15raw_band_names_E"></span><span id="_CPPv2N13import_export14RasterImporter15raw_band_names_E"></span><span id="import_export::RasterImporter::raw_band_names___std::vector:std::vector:ss::"></span><span class="target" id="classimport__export_1_1_raster_importer_1a4ff51a24c6bd4f281ab672710476ffe7"></span>std::vector&lt;std::vector&lt;std::string&gt;&gt; <code class="sig-name descname">raw_band_names_</code><a class="headerlink" href="#_CPPv4N13import_export14RasterImporter15raw_band_names_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -2406,6 +2418,16 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N13import_export14RasterImporter21specified_band_width_E">
+<span id="_CPPv3N13import_export14RasterImporter21specified_band_width_E"></span><span id="_CPPv2N13import_export14RasterImporter21specified_band_width_E"></span><span id="import_export::RasterImporter::specified_band_width___i"></span><span class="target" id="classimport__export_1_1_raster_importer_1a3399c742e5ae41e737dc28cb9b08a5ed"></span>int <code class="sig-name descname">specified_band_width_</code> = {-1}<a class="headerlink" href="#_CPPv4N13import_export14RasterImporter21specified_band_width_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N13import_export14RasterImporter22specified_band_height_E">
+<span id="_CPPv3N13import_export14RasterImporter22specified_band_height_E"></span><span id="_CPPv2N13import_export14RasterImporter22specified_band_height_E"></span><span id="import_export::RasterImporter::specified_band_height___i"></span><span class="target" id="classimport__export_1_1_raster_importer_1af70e5499fc70f0255f5f2f5ef2c69403"></span>int <code class="sig-name descname">specified_band_height_</code> = {-1}<a class="headerlink" href="#_CPPv4N13import_export14RasterImporter22specified_band_height_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt id="_CPPv4N13import_export14RasterImporter12bands_width_E">
 <span id="_CPPv3N13import_export14RasterImporter12bands_width_E"></span><span id="_CPPv2N13import_export14RasterImporter12bands_width_E"></span><span id="import_export::RasterImporter::bands_width___i"></span><span class="target" id="classimport__export_1_1_raster_importer_1a62c85225ecc4b1d1b6c0c80b7a84c5e5"></span>int <code class="sig-name descname">bands_width_</code> = {-1}<a class="headerlink" href="#_CPPv4N13import_export14RasterImporter12bands_width_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2413,11 +2435,6 @@
 <dl class="member">
 <dt id="_CPPv4N13import_export14RasterImporter13bands_height_E">
 <span id="_CPPv3N13import_export14RasterImporter13bands_height_E"></span><span id="_CPPv2N13import_export14RasterImporter13bands_height_E"></span><span id="import_export::RasterImporter::bands_height___i"></span><span class="target" id="classimport__export_1_1_raster_importer_1ad9eb700db37828d36f23ef08589ca2b4"></span>int <code class="sig-name descname">bands_height_</code> = {-1}<a class="headerlink" href="#_CPPv4N13import_export14RasterImporter13bands_height_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
-<dt id="_CPPv4N13import_export14RasterImporter23ome_tiff_band_name_idx_E">
-<span id="_CPPv3N13import_export14RasterImporter23ome_tiff_band_name_idx_E"></span><span id="_CPPv2N13import_export14RasterImporter23ome_tiff_band_name_idx_E"></span><span id="import_export::RasterImporter::ome_tiff_band_name_idx___uint32_t"></span><span class="target" id="classimport__export_1_1_raster_importer_1a1062275df13146dfc6092ed0609921bb"></span>uint32_t <code class="sig-name descname">ome_tiff_band_name_idx_</code> = {0u}<a class="headerlink" href="#_CPPv4N13import_export14RasterImporter23ome_tiff_band_name_idx_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

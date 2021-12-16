@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Struct HashtableCacheMetaInfo" href="struct_hashtable_cache_meta_info.html" />
+    <link rel="next" title="Struct HashtableAccessPathInfo" href="struct_hashtable_access_path_info.html" />
     <link rel="prev" title="Struct HashJoinMatchingSet" href="struct_hash_join_matching_set.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2190,8 +2192,8 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlan">
-<span id="_CPPv3N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlan"></span><span id="_CPPv2N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlan"></span><span id="HashTableBuildDag::HashTableBuildDag__JoinColumnsInfoCR.JoinColumnsInfoCR.QueryPlanCR.QueryPlanCR"></span><span class="target" id="struct_hash_table_build_dag_1a8a10ce7e217917d906f60aa98aa4f388"></span><code class="sig-name descname">HashTableBuildDag</code><span class="sig-paren">(</span><em class="property">const</em> JoinColumnsInfo &amp;<em>in_inner_cols_info</em>, <em class="property">const</em> JoinColumnsInfo &amp;<em>in_outer_cols_info</em>, <em class="property">const</em> QueryPlan &amp;<em>in_inner_cols_access_path</em>, <em class="property">const</em> QueryPlan &amp;<em>in_outer_cols_access_path</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlan" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlanRRNSt13unordered_setI6size_tEE">
+<span id="_CPPv3N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlanRRNSt13unordered_setI6size_tEE"></span><span id="_CPPv2N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlanRRNSt13unordered_setI6size_tEE"></span><span id="HashTableBuildDag::HashTableBuildDag__JoinColumnsInfoCR.JoinColumnsInfoCR.QueryPlanCR.QueryPlanCR.std::unordered_set:s:RR"></span><span class="target" id="struct_hash_table_build_dag_1a51872923a99ff539e46205886dc3908b"></span><code class="sig-name descname">HashTableBuildDag</code><span class="sig-paren">(</span><em class="property">const</em> JoinColumnsInfo &amp;<em>in_inner_cols_info</em>, <em class="property">const</em> JoinColumnsInfo &amp;<em>in_outer_cols_info</em>, <em class="property">const</em> QueryPlan &amp;<em>in_inner_cols_access_path</em>, <em class="property">const</em> QueryPlan &amp;<em>in_outer_cols_access_path</em>, std::unordered_set&lt;size_t&gt; &amp;&amp;<em>inputTableKeys</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17HashTableBuildDag17HashTableBuildDagERK15JoinColumnsInfoRK15JoinColumnsInfoRK9QueryPlanRK9QueryPlanRRNSt13unordered_setI6size_tEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2217,6 +2219,11 @@
 <span id="_CPPv3N17HashTableBuildDag22outer_cols_access_pathE"></span><span id="_CPPv2N17HashTableBuildDag22outer_cols_access_pathE"></span><span id="HashTableBuildDag::outer_cols_access_path__QueryPlan"></span><span class="target" id="struct_hash_table_build_dag_1af1e211b4f3e18ba81f6d9e2521bbfaa9"></span>QueryPlan <code class="sig-name descname">outer_cols_access_path</code><a class="headerlink" href="#_CPPv4N17HashTableBuildDag22outer_cols_access_pathE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="member">
+<dt id="_CPPv4N17HashTableBuildDag14inputTableKeysE">
+<span id="_CPPv3N17HashTableBuildDag14inputTableKeysE"></span><span id="_CPPv2N17HashTableBuildDag14inputTableKeysE"></span><span id="HashTableBuildDag::inputTableKeys__std::unordered_set:s:"></span><span class="target" id="struct_hash_table_build_dag_1ae8dea5203d28fef128a58ddd8199403d"></span>std::unordered_set&lt;size_t&gt; <code class="sig-name descname">inputTableKeys</code><a class="headerlink" href="#_CPPv4N17HashTableBuildDag14inputTableKeysE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 </dd></dl>
 
@@ -2230,7 +2237,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="struct_hashtable_cache_meta_info.html" class="btn btn-neutral float-right" title="Struct HashtableCacheMetaInfo" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="struct_hashtable_access_path_info.html" class="btn btn-neutral float-right" title="Struct HashtableAccessPathInfo" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="struct_hash_join_matching_set.html" class="btn btn-neutral float-left" title="Struct HashJoinMatchingSet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

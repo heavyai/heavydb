@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 13e2f74
+                6.0.0dev 2ff40b9
               </div>
             
           
@@ -747,6 +747,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_code_generator.html">Class ScalarCodeGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_to_sql.html">Class ScalarExprToSql</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scalar_expr_visitor.html">Class ScalarExprVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_scan_node_table_key_collector.html">Class ScanNodeTableKeyCollector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_scope_guard.html">Class ScopeGuard</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_shared_kernel_context.html">Class SharedKernelContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_show_databases_command.html">Class ShowDatabasesCommand</a></li>
@@ -1822,6 +1823,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hit_test_types.html">Struct HitTestTypes</a></li>
@@ -2191,8 +2193,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi9QueryPlan22HashtableCacheMetaInfoRK16TableIdToNodeMap">
-<span id="_CPPv3N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi9QueryPlan22HashtableCacheMetaInfoRK16TableIdToNodeMap"></span><span id="_CPPv2N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi9QueryPlan22HashtableCacheMetaInfoRK16TableIdToNodeMap"></span><span id="OverlapsJoinHashTable::OverlapsJoinHashTable__std::shared_ptr:Analyzer::BinOper:C.JoinTypeC.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.ColumnCacheMapR.ExecutorP.std::vector:InnerOuter:CR.iC.QueryPlan.HashtableCacheMetaInfo.TableIdToNodeMapCR"></span><span class="target" id="class_overlaps_join_hash_table_1a7cc1bc1b516036c40cf5233f01cdec90"></span><code class="sig-name descname">OverlapsJoinHashTable</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em>, <em class="property">const</em> int <em>device_count</em>, QueryPlan <em>query_plan_dag</em>, <a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a> <em>hashtable_cache_meta_info</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi9QueryPlan22HashtableCacheMetaInfoRK16TableIdToNodeMap" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap">
+<span id="_CPPv3N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap"></span><span id="_CPPv2N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap"></span><span id="OverlapsJoinHashTable::OverlapsJoinHashTable__std::shared_ptr:Analyzer::BinOper:C.JoinTypeC.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.ColumnCacheMapR.ExecutorP.std::vector:InnerOuter:CR.iC.HashtableAccessPathInfo.TableIdToNodeMapCR"></span><span class="target" id="class_overlaps_join_hash_table_1aa194d464f3f0f20dd00acb6d6664a104"></span><code class="sig-name descname">OverlapsJoinHashTable</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> std::vector&lt;InnerOuter&gt; &amp;<em>inner_outer_pairs</em>, <em class="property">const</em> int <em>device_count</em>, <a class="reference internal" href="../struct/struct_hashtable_access_path_info.html#_CPPv423HashtableAccessPathInfo" title="HashtableAccessPathInfo">HashtableAccessPathInfo</a> <em>hashtable_access_path_info</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable21OverlapsJoinHashTableEKNSt10shared_ptrIN8Analyzer7BinOperEEEK8JoinTypeRKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelER14ColumnCacheMapP8ExecutorRKNSt6vectorI10InnerOuterEEKi23HashtableAccessPathInfoRK16TableIdToNodeMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2210,8 +2212,13 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable19getCacheInvalidatorEv">
-<span id="_CPPv3N21OverlapsJoinHashTable19getCacheInvalidatorEv"></span><span id="_CPPv2N21OverlapsJoinHashTable19getCacheInvalidatorEv"></span><span id="OverlapsJoinHashTable::getCacheInvalidator"></span><span class="target" id="class_overlaps_join_hash_table_1a1b4d5e9b8f52830f1d379cb8c1c17dee"></span><em class="property">static</em> auto <code class="sig-name descname">getCacheInvalidator</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable19getCacheInvalidatorEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable15invalidateCacheEv">
+<span id="_CPPv3N21OverlapsJoinHashTable15invalidateCacheEv"></span><span id="_CPPv2N21OverlapsJoinHashTable15invalidateCacheEv"></span><span id="OverlapsJoinHashTable::invalidateCache"></span><span class="target" id="class_overlaps_join_hash_table_1a4ab98f532689c9afa07dcb78b4525ac9"></span><em class="property">static</em> void <code class="sig-name descname">invalidateCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable15invalidateCacheEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21OverlapsJoinHashTable21markCachedItemAsDirtyE6size_t">
+<span id="_CPPv3N21OverlapsJoinHashTable21markCachedItemAsDirtyE6size_t"></span><span id="_CPPv2N21OverlapsJoinHashTable21markCachedItemAsDirtyE6size_t"></span><span id="OverlapsJoinHashTable::markCachedItemAsDirty__s"></span><span class="target" id="class_overlaps_join_hash_table_1a5a8dce10b34056686a7ee78d8fc06d26"></span><em class="property">static</em> void <code class="sig-name descname">markCachedItemAsDirty</code><span class="sig-paren">(</span>size_t <em>table_key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable21markCachedItemAsDirtyE6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2433,8 +2440,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKd">
-<span id="_CPPv3N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKd"></span><span id="_CPPv2N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKd"></span><span id="OverlapsJoinHashTable::generateCacheKey__sC.doubleC"></span><span class="target" id="class_overlaps_join_hash_table_1af3011776493b95215e6c52623141ed4f"></span>void <code class="sig-name descname">generateCacheKey</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>max_hashtable_size</em>, <em class="property">const</em> double <em>bucket_threshold</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKd" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKdRKNSt6vectorIdEE">
+<span id="_CPPv3N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKdRKNSt6vectorIdEE"></span><span id="_CPPv2N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKdRKNSt6vectorIdEE"></span><span id="OverlapsJoinHashTable::generateCacheKey__sC.doubleC.std::vector:double:CR"></span><span class="target" id="class_overlaps_join_hash_table_1ae711babb772c7af32e91cb26ad06c912"></span>void <code class="sig-name descname">generateCacheKey</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>max_hashtable_size</em>, <em class="property">const</em> double <em>bucket_threshold</em>, <em class="property">const</em> std::vector&lt;double&gt; &amp;<em>bucket_sizes</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable16generateCacheKeyEK6size_tKdRKNSt6vectorIdEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2536,11 +2543,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N21OverlapsJoinHashTable21table_id_to_node_map_E">
-<span id="_CPPv3N21OverlapsJoinHashTable21table_id_to_node_map_E"></span><span id="_CPPv2N21OverlapsJoinHashTable21table_id_to_node_map_E"></span><span id="OverlapsJoinHashTable::table_id_to_node_map___TableIdToNodeMapC"></span><span class="target" id="class_overlaps_join_hash_table_1aec9ce8d97ab28c4ff549ebbd2ddccc0c"></span><em class="property">const</em> TableIdToNodeMap <code class="sig-name descname">table_id_to_node_map_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable21table_id_to_node_map_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N21OverlapsJoinHashTable20hashtable_cache_key_E">
 <span id="_CPPv3N21OverlapsJoinHashTable20hashtable_cache_key_E"></span><span id="_CPPv2N21OverlapsJoinHashTable20hashtable_cache_key_E"></span><span id="OverlapsJoinHashTable::hashtable_cache_key___QueryPlanHash"></span><span class="target" id="class_overlaps_join_hash_table_1afe4c5e2677b4394e04f4171616bc908a"></span>QueryPlanHash <code class="sig-name descname">hashtable_cache_key_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable20hashtable_cache_key_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2548,6 +2550,16 @@
 <dl class="member">
 <dt id="_CPPv4N21OverlapsJoinHashTable26hashtable_cache_meta_info_E">
 <span id="_CPPv3N21OverlapsJoinHashTable26hashtable_cache_meta_info_E"></span><span id="_CPPv2N21OverlapsJoinHashTable26hashtable_cache_meta_info_E"></span><span id="OverlapsJoinHashTable::hashtable_cache_meta_info___HashtableCacheMetaInfo"></span><span class="target" id="class_overlaps_join_hash_table_1af3ee0dd59c4ef30fe8e7f48e40716df7"></span><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html#_CPPv422HashtableCacheMetaInfo" title="HashtableCacheMetaInfo">HashtableCacheMetaInfo</a> <code class="sig-name descname">hashtable_cache_meta_info_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable26hashtable_cache_meta_info_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21OverlapsJoinHashTable11table_keys_E">
+<span id="_CPPv3N21OverlapsJoinHashTable11table_keys_E"></span><span id="_CPPv2N21OverlapsJoinHashTable11table_keys_E"></span><span id="OverlapsJoinHashTable::table_keys___std::unordered_set:s:"></span><span class="target" id="class_overlaps_join_hash_table_1ae3cce7e10d6c4fbe0d94c039c8e273cc"></span>std::unordered_set&lt;size_t&gt; <code class="sig-name descname">table_keys_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable11table_keys_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21OverlapsJoinHashTable21table_id_to_node_map_E">
+<span id="_CPPv3N21OverlapsJoinHashTable21table_id_to_node_map_E"></span><span id="_CPPv2N21OverlapsJoinHashTable21table_id_to_node_map_E"></span><span id="OverlapsJoinHashTable::table_id_to_node_map___TableIdToNodeMapC"></span><span class="target" id="class_overlaps_join_hash_table_1aec9ce8d97ab28c4ff549ebbd2ddccc0c"></span><em class="property">const</em> TableIdToNodeMap <code class="sig-name descname">table_id_to_node_map_</code><a class="headerlink" href="#_CPPv4N21OverlapsJoinHashTable21table_id_to_node_map_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
