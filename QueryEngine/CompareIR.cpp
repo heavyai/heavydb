@@ -312,10 +312,9 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     CHECK(coords_cd);
 
     std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
-    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(coords_cd->columnType,
-                                                    coords_cd->tableId,
-                                                    coords_cd->columnId,
-                                                    lhs_col->get_rte_idx()));
+    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(
+        coords_cd->makeInfo(executor()->getCatalog()->getDatabaseId()),
+        lhs_col->get_rte_idx()));
 
     Datum input_compression;
     input_compression.intval =
@@ -345,10 +344,9 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
         rhs_col->get_column_id() + rhs_ti.get_physical_coord_cols() + 1);
     CHECK(poly_bounds_cd);
 
-    auto bbox_col_var = makeExpr<Analyzer::ColumnVar>(poly_bounds_cd->columnType,
-                                                      poly_bounds_cd->tableId,
-                                                      poly_bounds_cd->columnId,
-                                                      rhs_col->get_rte_idx());
+    auto bbox_col_var = makeExpr<Analyzer::ColumnVar>(
+        poly_bounds_cd->makeInfo(executor()->getCatalog()->getDatabaseId()),
+        rhs_col->get_rte_idx());
 
     const auto bbox_contains_func_oper =
         makeExpr<Analyzer::FunctionOper>(SQLTypeInfo(kBOOLEAN, false),

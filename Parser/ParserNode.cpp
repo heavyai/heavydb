@@ -821,8 +821,7 @@ std::shared_ptr<Analyzer::Expr> ColumnRefExpr::analyze(
       throw std::runtime_error("Column name " + *column_ + " does not exist.");
     }
   }
-  return makeExpr<Analyzer::ColumnVar>(
-      cd->columnType, table_id, cd->columnId, rte_idx, cd->isVirtualCol);
+  return makeExpr<Analyzer::ColumnVar>(cd->makeInfo(catalog.getDatabaseId()), rte_idx);
 }
 
 std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(

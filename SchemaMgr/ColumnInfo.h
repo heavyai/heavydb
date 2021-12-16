@@ -15,6 +15,7 @@
 #pragma once
 
 #include "Shared/sqltypes.h"
+#include "Shared/toString.h"
 
 #include <memory>
 #include <unordered_set>
@@ -31,6 +32,12 @@ struct ColumnRef {
     return column_id == other.column_id && table_id == other.table_id &&
            db_id == other.db_id;
   }
+
+  std::string toString() const {
+    return ::typeName(this) + "(db_id=" + std::to_string(db_id) +
+           ", table_id=" + std::to_string(table_id) +
+           ", column_id=" + std::to_string(column_id);
+  }
 };
 
 using ColumnRefSet = std::unordered_set<ColumnRef>;
@@ -41,15 +48,27 @@ struct ColumnInfo : public ColumnRef {
              int column_id,
              const std::string name_,
              SQLTypeInfo type_,
-             bool is_rowid_)
+             bool is_rowid_,
+             bool is_delete_)
       : ColumnRef(db_id, table_id, column_id)
       , name(name_)
       , type(type_)
-      , is_rowid(is_rowid_) {}
+      , is_rowid(is_rowid_)
+      , is_delete(is_delete_) {}
 
   std::string name;
   SQLTypeInfo type;
+  // Virtual rowid column.
   bool is_rowid;
+  // Special column holding a bitmap for deleted rows.
+  bool is_delete;
+
+  std::string toString() const {
+    return name + "(db_id=" + std::to_string(db_id) +
+           ", table_id=" + std::to_string(table_id) +
+           ", column_id=" + std::to_string(column_id) + "type=" + type.toString() +
+           (is_rowid ? " [rowid])" : "") + (is_delete ? " [del])" : "") + ")";
+  }
 };
 
 using ColumnInfoPtr = std::shared_ptr<ColumnInfo>;

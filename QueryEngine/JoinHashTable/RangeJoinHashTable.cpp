@@ -97,11 +97,8 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                              range_expr_col_var->get_column_id() + 1);
   CHECK(coords_cd);
 
-  auto range_join_inner_col_expr =
-      makeExpr<Analyzer::ColumnVar>(coords_cd->columnType,
-                                    coords_cd->tableId,
-                                    coords_cd->columnId,
-                                    range_expr_col_var->get_rte_idx());
+  auto range_join_inner_col_expr = makeExpr<Analyzer::ColumnVar>(
+      coords_cd->makeInfo(cat->getDatabaseId()), range_expr_col_var->get_rte_idx());
 
   std::vector<InnerOuter> inner_outer_pairs;
   inner_outer_pairs.emplace_back(

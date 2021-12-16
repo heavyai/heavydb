@@ -99,7 +99,7 @@ struct ColumnDescriptor {
 
   ColumnInfoPtr makeInfo(int db_id = -1) const {
     return std::make_shared<ColumnInfo>(
-        db_id, tableId, columnId, columnName, columnType, isVirtualCol);
+        db_id, tableId, columnId, columnName, columnType, isVirtualCol, isDeletedCol);
   }
 };
 

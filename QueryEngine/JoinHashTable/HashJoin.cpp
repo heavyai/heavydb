@@ -407,7 +407,7 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
   }
 
   auto cv = std::make_shared<Analyzer::ColumnVar>(
-      ti, tmeta->tableId, cmeta->columnId, rte_idx, cmeta->isVirtualCol);
+      cmeta->makeInfo(catalog->getDatabaseId()), rte_idx);
   return cv;
 }
 

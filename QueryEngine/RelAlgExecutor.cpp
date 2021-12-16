@@ -1140,6 +1140,7 @@ void collect_used_input_desc(
                      col_id,
                      "",
                      input_ra->getOutputMetainfo()[col_id].get_type_info(),
+                     false,
                      false);
       input_col_descs_unique.insert(
           std::make_shared<const InputColDescriptor>(col_info, nest_level));
@@ -1711,8 +1712,8 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
       auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
       auto cd = cat_.getDeletedColumn(table_descriptor);
       CHECK(cd);
-      auto delete_column_expr = makeExpr<Analyzer::ColumnVar>(
-          cd->columnType, table_descriptor->tableId, cd->columnId, 0, false);
+      auto delete_column_expr =
+          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_.getDatabaseId()), 0);
       const auto rewritten_exe_unit =
           query_rewrite->rewriteColumnarDelete(work_unit.exe_unit, delete_column_expr);
       execute_delete_ra_exe_unit(rewritten_exe_unit, is_aggregate);
@@ -1890,11 +1891,7 @@ std::shared_ptr<Analyzer::Expr> transform_to_inner(const Analyzer::Expr* expr) {
   if (!col) {
     throw std::runtime_error("Only columns supported in the window partition for now");
   }
-  return makeExpr<Analyzer::ColumnVar>(col->get_type_info(),
-                                       col->get_table_id(),
-                                       col->get_column_id(),
-                                       1,
-                                       col->is_virtual());
+  return makeExpr<Analyzer::ColumnVar>(col->get_column_info(), 1);
 }
 
 }  // namespace
@@ -3884,7 +3881,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
         table_id,
         scan_ra ? input_idx + 1 : input_idx,
         rte_idx,
-        scan_ra ? scan_ra->isVirtualColBySpi(input_idx + 1) : false));
+        scan_ra ? scan_ra->isVirtualColBySpi(input_idx + 1) : false,
+        scan_ra ? scan_ra->isDeleteColBySpi(input_idx + 1) : false));
     ++input_idx;
   }
   return inputs;

@@ -3055,11 +3055,8 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
   }
   CHECK(deleted_cd->columnType.is_boolean());
   CHECK(!deleted_cd->isVirtualCol);
-  const auto deleted_expr =
-      makeExpr<Analyzer::ColumnVar>(deleted_cd->columnType,
-                                    outer_input_desc.getTableId(),
-                                    deleted_cd->columnId,
-                                    outer_input_desc.getNestLevel());
+  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
+      deleted_cd->makeInfo(db_id_), outer_input_desc.getNestLevel());
   CodeGenerator code_generator(this);
   const auto is_deleted =
       code_generator.toBool(code_generator.codegen(deleted_expr.get(), true, co).front());

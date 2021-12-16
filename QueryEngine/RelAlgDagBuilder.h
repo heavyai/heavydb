@@ -864,6 +864,16 @@ class RelScan : public RelAlgNode {
     return column_infos_[spi - 1]->is_rowid;
   }
 
+  bool isDeleteColBySpi(int spi) const {
+    // GEO column is never a delete col.
+    if (spi >= SPIMAP_MAGIC1) {
+      return false;
+    }
+
+    CHECK_LE(spi, column_infos_.size());
+    return column_infos_[spi - 1]->is_delete;
+  }
+
   int getColumnIdBySpi(int spi) const {
     int col_idx;
     int geo_idx = 0;
@@ -905,7 +915,8 @@ class RelScan : public RelAlgNode {
                                           getColumnIdBySpi(spi),
                                           "",
                                           getColumnTypeBySpi(spi),
-                                          isVirtualColBySpi(spi));
+                                          isVirtualColBySpi(spi),
+                                          isDeleteColBySpi(spi));
     }
 
     return column_infos_[spi - 1];

@@ -23,11 +23,7 @@ namespace {
 class BindFilterToOutermostVisitor : public DeepCopyVisitor {
   std::shared_ptr<Analyzer::Expr> visitColumnVar(
       const Analyzer::ColumnVar* col_var) const override {
-    return makeExpr<Analyzer::ColumnVar>(col_var->get_type_info(),
-                                         col_var->get_table_id(),
-                                         col_var->get_column_id(),
-                                         0,
-                                         col_var->is_virtual());
+    return makeExpr<Analyzer::ColumnVar>(col_var->get_column_info(), 0);
   }
 };
 

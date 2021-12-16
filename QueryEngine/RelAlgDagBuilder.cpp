@@ -2457,12 +2457,14 @@ class RelAlgDispatcher {
                                                           -1,
                                                           name,
                                                           SQLTypeInfo(kBIGINT, false),
+                                                          false,
                                                           false);
         auto cd = cat_->getMetadataForColumn(table_descriptor->tableId, name);
         if (cd) {
           info->column_id = cd->columnId;
           info->type = cd->columnType;
           info->is_rowid = cd->isVirtualCol;
+          info->is_delete = cd->isDeletedCol;
         } else {
           CHECK_EQ(std::string(name), "EXPR$DELETE_OFFSET_IN_FRAGMENT");
         }
