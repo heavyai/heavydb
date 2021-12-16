@@ -108,6 +108,20 @@ bool check_session_interrupted(const QuerySessionId& query_session, Executor* ex
   return false;
 }
 
+std::vector<int> getTableChunkKey(const TableDescriptor* td,
+                                  Catalog_Namespace::Catalog& catalog) {
+  std::vector<int> table_chunk_key_prefix;
+  if (td) {
+    if (td->fragmenter) {
+      table_chunk_key_prefix = td->fragmenter->getFragmentsForQuery().chunkKeyPrefix;
+    } else {
+      table_chunk_key_prefix.push_back(catalog.getCurrentDB().dbId);
+      table_chunk_key_prefix.push_back(td->tableId);
+    }
+  }
+  return table_chunk_key_prefix;
+}
+
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
@@ -3782,12 +3796,20 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   ddl_utils::validate_table_type(td, ddl_utils::TableType::TABLE, "DROP");
 
+  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.dropTable(td);
 
-  // invalidate cached hashtable
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
+  // invalidate cached item
+  if (!table_chunk_key_prefix.empty()) {
+    // todo (yoonmin): need to remove cached item for dropped table immediately?
+    auto table_key = boost::hash_value(table_chunk_key_prefix);
+    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+  } else {
+    DeleteTriggeredCacheInvalidator::invalidateCaches();
+  }
 }
 
 void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {}
@@ -3934,12 +3956,20 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(*table_ + " is a view.  Cannot Truncate.");
   }
   foreign_storage::validate_non_foreign_table_write(td);
+
+  // invalidate cached items
+  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.truncateTable(td);
 
-  // invalidate cached hashtable
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
+  if (!table_chunk_key_prefix.empty()) {
+    auto table_key = boost::hash_value(table_chunk_key_prefix);
+    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+  } else {
+    DeleteTriggeredCacheInvalidator::invalidateCaches();
+  }
 }
 
 OptimizeTableStmt::OptimizeTableStmt(const rapidjson::Value& payload) {
@@ -4550,8 +4580,15 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw;
   }
 
-  // invalidate cached hashtable
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
+  // invalidate cached items
+  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+
+  if (!table_chunk_key_prefix.empty()) {
+    auto table_key = boost::hash_value(table_chunk_key_prefix);
+    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+  } else {
+    DeleteTriggeredCacheInvalidator::invalidateCaches();
+  }
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -5257,6 +5294,17 @@ void CopyTableStmt::execute(
     } else {
       throw std::runtime_error("Table '" + *table_ + "' must exist before COPY FROM");
     }
+  }
+
+  // invalidate cached items
+  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+
+  // invalidate cached item
+  if (!table_chunk_key_prefix.empty()) {
+    auto table_key = boost::hash_value(table_chunk_key_prefix);
+    UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+  } else {
+    UpdateTriggeredCacheInvalidator::invalidateCaches();
   }
 
   return_message.reset(new std::string(tr));

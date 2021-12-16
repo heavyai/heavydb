@@ -106,12 +106,12 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     throw TooManyHashEntries();
   }
 
-  auto hashtable_cache_key_string =
-      HashtableRecycler::getHashtableKeyString(inner_outer_pairs,
-                                               condition->get_optype(),
-                                               join_type,
-                                               hashtable_build_dag_map,
-                                               executor);
+  auto hashtable_access_path_info =
+      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
+                                                    condition->get_optype(),
+                                                    join_type,
+                                                    hashtable_build_dag_map,
+                                                    executor);
 
   auto join_hash_table =
       std::make_shared<OverlapsJoinHashTable>(condition,
@@ -122,8 +122,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                               executor,
                                               inner_outer_pairs,
                                               device_count,
-                                              hashtable_cache_key_string.first,
-                                              hashtable_cache_key_string.second,
+                                              hashtable_access_path_info,
                                               table_id_to_node_map);
   if (query_hint.isAnyQueryHintDelivered()) {
     join_hash_table->registerQueryHint(query_hint);
@@ -663,7 +662,9 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
     // reifyImpl will check the hash table cache for an appropriate hash table w/ those
     // bucket sizes (or within tolerances) if a hash table exists use it, otherwise build
     // one
-    generateCacheKey(overlaps_max_table_size_bytes, *overlaps_threshold_override);
+    generateCacheKey(overlaps_max_table_size_bytes,
+                     *overlaps_threshold_override,
+                     inverse_bucket_sizes);
     reifyImpl(columns_per_device,
               query_info,
               layout,
@@ -675,10 +676,9 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
               *overlaps_threshold_override);
   } else {
     double overlaps_bucket_threshold = std::numeric_limits<double>::max();
-    generateCacheKey(overlaps_max_table_size_bytes, overlaps_bucket_threshold);
+    generateCacheKey(overlaps_max_table_size_bytes, overlaps_bucket_threshold, {});
     auto candidate_auto_tuner_cache_key = getCacheKey();
-    if ((query_plan_dag_.compare(EMPTY_QUERY_PLAN) == 0 ||
-         hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY) &&
+    if (candidate_auto_tuner_cache_key == EMPTY_HASHED_PLAN_DAG_KEY &&
         inner_outer_pairs_.front().first->get_table_id() > 0) {
       AlternativeCacheKeyForOverlapsHashJoin cache_key{
           inner_outer_pairs_,
@@ -686,10 +686,9 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
           composite_key_info_.cache_key_chunks,
           condition_->get_optype(),
           overlaps_max_table_size_bytes,
-          overlaps_bucket_threshold};
+          overlaps_bucket_threshold,
+          {}};
       candidate_auto_tuner_cache_key = getAlternativeCacheKey(cache_key);
-      VLOG(2) << "Use alternative auto tuner cache key due to unavailable query plan dag "
-                 "extraction";
     }
     auto cached_bucket_threshold =
         auto_tuner_cache_->getItemFromCache(candidate_auto_tuner_cache_key,
@@ -700,9 +699,11 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
       auto inverse_bucket_sizes = cached_bucket_threshold->bucket_sizes;
       setOverlapsHashtableMetaInfo(
           overlaps_max_table_size_bytes, overlaps_bucket_threshold, inverse_bucket_sizes);
-      generateCacheKey(overlaps_max_table_size_bytes, overlaps_bucket_threshold);
-      if ((query_plan_dag_.compare(EMPTY_QUERY_PLAN) == 0 ||
-           hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY) &&
+      generateCacheKey(
+          overlaps_max_table_size_bytes, overlaps_bucket_threshold, inverse_bucket_sizes);
+
+      auto table_keys = table_keys_;
+      if (hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
           inner_outer_pairs_.front().first->get_table_id() > 0) {
         AlternativeCacheKeyForOverlapsHashJoin cache_key{
             inner_outer_pairs_,
@@ -713,9 +714,14 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
             overlaps_bucket_threshold,
             inverse_bucket_sizes};
         hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
-        VLOG(2) << "Use alternative hashtable cache key due to unavailable query plan "
-                   "dag extraction";
+        std::vector<int> alternative_table_key{
+            composite_key_info_.cache_key_chunks.front()[0],
+            composite_key_info_.cache_key_chunks.front()[1]};
+        CHECK(!alternative_table_key.empty());
+        table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
       }
+      hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
+
       if (auto hash_table =
               hash_table_cache_->getItemFromCache(hashtable_cache_key_,
                                                   CacheItemType::OVERLAPS_HT,
@@ -759,6 +765,10 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
                                    overlaps_max_table_size_bytes,
                                    overlaps_bucket_threshold);
         setInverseBucketSizeInfo(inverse_bucket_sizes, columns_per_device, device_count_);
+
+        generateCacheKey(overlaps_max_table_size_bytes,
+                         overlaps_bucket_threshold,
+                         inverse_bucket_sizes);
 
         reifyImpl(columns_per_device,
                   query_info,
@@ -838,7 +848,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
       }
       CHECK_GE(tuning_state.chosen_overlaps_threshold, double(0));
       generateCacheKey(tuning_state.overlaps_max_table_size_bytes,
-                       tuning_state.chosen_overlaps_threshold);
+                       tuning_state.chosen_overlaps_threshold,
+                       {});
       candidate_auto_tuner_cache_key = getCacheKey();
       if (skip_hashtable_caching) {
         VLOG(1) << "Skip to add tuned parameters to auto tuner";
@@ -1166,8 +1177,9 @@ void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per
   setOverlapsHashtableMetaInfo(chosen_overlaps_bucket_threshold_,
                                chosen_overlaps_max_table_size_bytes_,
                                inverse_bucket_sizes_for_dimension_);
-  if ((query_plan_dag_.compare(EMPTY_QUERY_PLAN) == 0 ||
-       hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY) &&
+
+  auto table_keys = table_keys_;
+  if (hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
       inner_outer_pairs_.front().first->get_table_id() > 0) {
     // sometimes we cannot retrieve query plan dag, so try to recycler cache
     // with the old-passioned cache key if we deal with hashtable of non-temporary table
@@ -1180,9 +1192,14 @@ void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per
         chosen_overlaps_bucket_threshold_,
         inverse_bucket_sizes_for_dimension_};
     hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
-    VLOG(2) << "Use alternative hashtable cache key due to unavailable query plan dag "
-               "extraction";
+    std::vector<int> alternative_table_key{
+        composite_key_info_.cache_key_chunks.front()[0],
+        composite_key_info_.cache_key_chunks.front()[1]};
+    CHECK(!alternative_table_key.empty());
+    table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
   }
+  hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
+
   for (int device_id = 0; device_id < device_count_; ++device_id) {
     const auto fragments =
         shard_count

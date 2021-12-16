@@ -1637,8 +1637,6 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
   CHECK(node);
   auto timer = DEBUG_TIMER(__func__);
 
-  UpdateTriggeredCacheInvalidator::invalidateCaches();
-
   auto co = co_in;
   co.hoist_literals = false;  // disable literal hoisting as it interferes with dict
                               // encoded string updates
@@ -1653,6 +1651,15 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
           "UPDATE queries involving variable length columns are only supported on tables "
           "with the vacuum attribute set to 'delayed'");
     }
+
+    if (table_descriptor->fragmenter) {
+      auto table_key = boost::hash_value(
+          table_descriptor->fragmenter->getFragmentsForQuery().chunkKeyPrefix);
+      UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+    } else {
+      UpdateTriggeredCacheInvalidator::invalidateCaches();
+    }
+
     auto updated_table_desc = node->getModifiedTableDescriptor();
     dml_transaction_parameters_ =
         std::make_unique<UpdateTransactionParameters>(updated_table_desc,
@@ -1767,8 +1774,6 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
   CHECK(node);
   auto timer = DEBUG_TIMER(__func__);
 
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
-
   auto execute_delete_for_node = [this, &co, &eo_in](const auto node,
                                                      auto& work_unit,
                                                      const bool is_aggregate) {
@@ -1778,6 +1783,14 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
       throw std::runtime_error(
           "DELETE queries are only supported on tables with the vacuum attribute set to "
           "'delayed'");
+    }
+
+    if (table_descriptor->fragmenter) {
+      auto table_key = boost::hash_value(
+          table_descriptor->fragmenter->getFragmentsForQuery().chunkKeyPrefix);
+      DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+    } else {
+      DeleteTriggeredCacheInvalidator::invalidateCaches();
     }
 
     const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
@@ -2427,6 +2440,12 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = cat_.getCurrentDB().dbId;
   insert_data.tableId = table_id;
+
+  // mark the target table's cached item as dirty
+  std::vector<int> table_chunk_key_prefix{insert_data.databaseId, insert_data.tableId};
+  auto table_key = boost::hash_value(table_chunk_key_prefix);
+  UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     if (!col_cv) {

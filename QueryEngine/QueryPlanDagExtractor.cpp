@@ -187,7 +187,7 @@ bool QueryPlanDagExtractor::validateNodeId(const RelAlgNode* node,
                                            std::optional<RelNodeId> retrieved_node_id) {
   if (!retrieved_node_id) {
     VLOG(1) << "Stop DAG extraction (Detect an invalid dag id)";
-    clearInternaStatus();
+    clearInternalStatus();
     return false;
   }
   CHECK(retrieved_node_id.has_value());
@@ -233,7 +233,7 @@ void QueryPlanDagExtractor::visit(const RelAlgNode* parent_node,
     if (left_deep_tree_infos_.empty()) {
       // we should have left_deep_tree_info for input left deep tree node
       VLOG(1) << "Stop DAG extraction (Detect non-supported join pattern)";
-      clearInternaStatus();
+      clearInternalStatus();
       return;
     }
     const auto inner_cond = left_deep_joins->getInnerCondition();
@@ -283,20 +283,23 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
   QueryPlan current_plan_dag, after_rhs_visited, after_lhs_visited;
   current_plan_dag = getExtractedQueryPlanDagStr();
   auto rhs_node = rel_trans_join->getRHS();
+  std::unordered_set<size_t> rhs_input_keys, lhs_input_keys;
   if (rhs_node) {
     visit(rel_trans_join, rhs_node);
     after_rhs_visited = getExtractedQueryPlanDagStr();
     addTableIdToNodeLink(rhs_node->getId(), rhs_node);
+    rhs_input_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(rhs_node);
   }
   auto lhs_node = rel_trans_join->getLHS();
   if (rel_trans_join->getLHS()) {
     visit(rel_trans_join, lhs_node);
     after_lhs_visited = getExtractedQueryPlanDagStr();
     addTableIdToNodeLink(lhs_node->getId(), lhs_node);
+    lhs_input_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(lhs_node);
   }
   if (isEmptyQueryPlanDag(after_lhs_visited) || isEmptyQueryPlanDag(after_rhs_visited)) {
     VLOG(1) << "Stop DAG extraction (Detect invalid query plan dag of join col(s))";
-    clearInternaStatus();
+    clearInternalStatus();
     return;
   }
   // after visiting new node, we have added node id(s) which can be used as an access path
@@ -305,7 +308,6 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
   auto hash_table_identfier = split(after_lhs_visited, after_rhs_visited)[1];
 
   if (!rel_trans_join->isNestedLoopQual()) {
-    std::ostringstream oss;
     std::vector<std::string> join_cols_info;
     auto inner_join_cols = rel_trans_join->getJoinCols(true);
     auto inner_join_col_info =
@@ -316,8 +318,14 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
         global_dag_.translateColVarsToInfoString(outer_join_cols, false);
     join_cols_info.push_back(outer_join_col_info);
     auto join_qual_info = boost::join(join_cols_info, "|");
-    // hash table join cols info | hash table build plan dag (hashtable identifier or
-    // hashtable access path)
+    // collect table keys from both rhs and lhs side
+    std::unordered_set<size_t> collected_table_keys;
+    collected_table_keys.insert(lhs_input_keys.begin(), lhs_input_keys.end());
+    if (!inner_join_cols.empty() &&
+        inner_join_cols[0]->get_type_info().is_dict_encoded_type()) {
+      collected_table_keys.insert(rhs_input_keys.begin(), rhs_input_keys.end());
+    }
+
     auto it = hash_table_query_plan_dag_.find(join_qual_info);
     if (it == hash_table_query_plan_dag_.end()) {
       VLOG(2) << "Add hashtable access path"
@@ -325,11 +333,13 @@ void QueryPlanDagExtractor::handleTranslatedJoin(
               << " (access path: " << hash_table_identfier << ")"
               << ", outer join col info: " << outer_join_col_info
               << " (access path: " << outer_table_identifier << ")";
-      hash_table_query_plan_dag_.emplace(join_qual_info,
-                                         HashTableBuildDag(inner_join_col_info,
-                                                           outer_join_col_info,
-                                                           hash_table_identfier,
-                                                           outer_table_identifier));
+      hash_table_query_plan_dag_.emplace(
+          join_qual_info,
+          HashTableBuildDag(inner_join_col_info,
+                            outer_join_col_info,
+                            hash_table_identfier,
+                            outer_table_identifier,
+                            std::move(collected_table_keys)));
     }
   } else {
     VLOG(2) << "Add loop join access path, for LHS: " << outer_table_identifier
@@ -392,7 +402,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
   if (!left_deep_join_info) {
     // we should have left_deep_tree_info for input left deep tree node
     VLOG(1) << "Stop DAG extraction (Detect Non-supported join pattern)";
-    clearInternaStatus();
+    clearInternalStatus();
     return;
   }
 
@@ -456,6 +466,12 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
             if (col_pair_info.inner_outer.first && col_pair_info.inner_outer.second) {
               auto const* lhs_col_var = getColVar(col_pair_info.inner_outer.first);
               auto const* rhs_col_var = getColVar(col_pair_info.inner_outer.second);
+              // we need to modify lhs and rhs if range_oper is detected
+              if (auto range_oper = dynamic_cast<const Analyzer::RangeOper*>(
+                      col_pair_info.inner_outer.second)) {
+                lhs_col_var = getColVar(range_oper->get_left_operand());
+                rhs_col_var = getColVar(col_pair_info.inner_outer.first);
+              }
               // this qual is valid and used for join op
               if (lhs_col_var && rhs_col_var) {
                 found_valid_col_vars = true;
@@ -485,7 +501,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
     }
     if (inner_join_cols.size() != outer_join_cols.size()) {
       VLOG(1) << "Stop DAG extraction (Detect inner/outer col mismatch)";
-      clearInternaStatus();
+      clearInternalStatus();
       return;
     }
 

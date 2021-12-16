@@ -28,6 +28,7 @@
 #include "RelAlgDagBuilder.h"
 #include "RelAlgExecutionUnit.h"
 #include "ScalarExprVisitor.h"
+#include "Visitors/RelRexDagVisitor.h"
 
 constexpr size_t MAX_NODE_CACHE_SIZE = 1e9;  // set ~1GB as cache size threshold
 
@@ -38,6 +39,9 @@ using RelNodeMap = std::unordered_map<RelNodeExplainedHash, RelNodeId>;
 // reuse and compiled kernel reuse by exploiting graph-centric computation like subgraph
 // matching and graph isomorphism
 using QueryPlanDag = boost::labeled_graph<AdjacentList, RelNodeId, boost::hash_mapS>;
+using TableKeyToHashTableAccessPathMap = std::unordered_map<size_t, size_t>;
+using QueryPlanDagToInputTableKeyMap =
+    std::unordered_map<size_t, std::unordered_set<size_t>>;
 
 class ColumnVarsVisitor
     : public ScalarExprVisitor<std::vector<const Analyzer::ColumnVar*>> {
@@ -69,6 +73,30 @@ class ColumnVarsVisitor
     }
     return result;
   }
+};
+
+class ScanNodeTableKeyCollector final : public RelRexDagVisitor {
+ public:
+  using RelRexDagVisitor::visit;
+
+  static std::unordered_set<size_t> getScanNodeTableKey(RelAlgNode const* rel_alg_node) {
+    ScanNodeTableKeyCollector scan_node_table_key_collector;
+    scan_node_table_key_collector.visit(rel_alg_node);
+    return std::move(scan_node_table_key_collector.table_keys_);
+  }
+
+ private:
+  void visit(RelScan const* scan_node) override {
+    CHECK(scan_node->getTableDescriptor());
+    CHECK(scan_node->getTableDescriptor()->fragmenter);
+    auto hashed_chunk_key = boost::hash_value(scan_node->getTableDescriptor()
+                                                  ->fragmenter->getFragmentsForQuery()
+                                                  .chunkKeyPrefix);
+    table_keys_.insert(hashed_chunk_key);
+    RelRexDagVisitor::visit(scan_node);
+  }
+
+  std::unordered_set<size_t> table_keys_;
 };
 
 // This is one of main data structure for data recycling which manages a query plan shape
@@ -124,6 +152,10 @@ class QueryPlanDagCache {
   // a limitation of the maximum size of DAG cache (to prevent unlimited usage of memory
   // for DAG maintanence)
   size_t max_node_map_size_;
+  // a map between a table's chunk key to hashtable access path map
+  TableKeyToHashTableAccessPathMap table_key_to_hashtable_access_path_map_;
+  // a map between a query plan dag and its input table keys
+  QueryPlanDagToInputTableKeyMap query_plan_dag_to_input_table_key_map_;
   // a lock to protect contentions while accessing internal data structure of DAG cache
   std::mutex cache_lock_;
   ColumnVarsVisitor col_var_visitor_;

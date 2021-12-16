@@ -953,36 +953,6 @@ ExtractedPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) 
   return extracted_dag_info;
 }
 
-const int32_t* QueryRunner::getCachedPerfectHashTable(QueryPlan plan_dag) {
-  auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
-  CHECK(hash_table_cache);
-  auto cache_key = boost::hash_value(plan_dag);
-  auto hash_table = hash_table_cache->getItemFromCache(
-      cache_key, CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  CHECK(hash_table);
-  return reinterpret_cast<int32_t*>(hash_table->getCpuBuffer());
-}
-
-const int8_t* QueryRunner::getCachedBaselineHashTable(QueryPlan plan_dag) {
-  auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
-  CHECK(hash_table_cache);
-  auto cache_key = boost::hash_value(plan_dag);
-  auto hash_table = hash_table_cache->getItemFromCache(
-      cache_key, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  CHECK(hash_table);
-  return hash_table->getCpuBuffer();
-}
-
-size_t QueryRunner::getEntryCntCachedBaselineHashTable(QueryPlan plan_dag) {
-  auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
-  CHECK(hash_table_cache);
-  auto cache_key = boost::hash_value(plan_dag);
-  auto hash_table = hash_table_cache->getItemFromCache(
-      cache_key, CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  CHECK(hash_table);
-  return hash_table->getEntryCount();
-}
-
 // this function exists to test data recycler
 // specifically, it is tricky to get a hashtable cache key when we only know
 // a target query sql in test code
@@ -1051,37 +1021,105 @@ std::shared_ptr<CacheItemMetric> QueryRunner::getCacheItemMetric(
       hash_table_type, device_identifier, cache_key);
 }
 
-size_t QueryRunner::getNumberOfCachedPerfectHashTables() {
-  auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
-  CHECK(hash_table_cache);
-  return hash_table_cache->getCurrentNumCachedItems(
-      CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-};
+size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
+                                          CacheItemType hash_table_type,
+                                          bool with_overlaps_tuning_param) const {
+  auto get_num_cached_auto_tuner_param = [&item_status]() {
+    auto auto_tuner_cache = OverlapsJoinHashTable::getOverlapsTuningParamCache();
+    CHECK(auto_tuner_cache);
+    switch (item_status) {
+      case CacheItemStatus::ALL: {
+        return auto_tuner_cache->getCurrentNumCachedItems(
+            CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      }
+      case CacheItemStatus::CLEAN_ONLY: {
+        return auto_tuner_cache->getCurrentNumCleanCachedItems(
+            CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      }
+      case CacheItemStatus::DIRTY_ONLY: {
+        return auto_tuner_cache->getCurrentNumDirtyCachedItems(
+            CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      }
+      default: {
+        UNREACHABLE();
+        return static_cast<size_t>(0);
+      }
+    }
+  };
 
-size_t QueryRunner::getNumberOfCachedBaselineJoinHashTables() {
-  auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
-  CHECK(hash_table_cache);
-  return hash_table_cache->getCurrentNumCachedItems(
-      CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-}
+  auto get_num_cached_hashtable =
+      [&item_status,
+       &hash_table_type,
+       &with_overlaps_tuning_param,
+       &get_num_cached_auto_tuner_param](HashtableRecycler* hash_table_cache) {
+        switch (item_status) {
+          case CacheItemStatus::ALL: {
+            if (with_overlaps_tuning_param) {
+              // we assume additional consideration of turing param cache is only valid
+              // for overlaps join hashtable
+              CHECK_EQ(hash_table_type, CacheItemType::OVERLAPS_HT);
+              return hash_table_cache->getCurrentNumCachedItems(
+                         hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER) +
+                     get_num_cached_auto_tuner_param();
+            }
+            return hash_table_cache->getCurrentNumCachedItems(
+                hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+          }
+          case CacheItemStatus::CLEAN_ONLY: {
+            if (with_overlaps_tuning_param) {
+              CHECK_EQ(hash_table_type, CacheItemType::OVERLAPS_HT);
+              return hash_table_cache->getCurrentNumCleanCachedItems(
+                         hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER) +
+                     get_num_cached_auto_tuner_param();
+            }
+            return hash_table_cache->getCurrentNumCleanCachedItems(
+                hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+          }
+          case CacheItemStatus::DIRTY_ONLY: {
+            if (with_overlaps_tuning_param) {
+              CHECK_EQ(hash_table_type, CacheItemType::OVERLAPS_HT);
+              return hash_table_cache->getCurrentNumDirtyCachedItems(
+                         hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER) +
+                     get_num_cached_auto_tuner_param();
+            }
+            return hash_table_cache->getCurrentNumDirtyCachedItems(
+                hash_table_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+          }
+          default: {
+            UNREACHABLE();
+            return static_cast<size_t>(0);
+          }
+        }
+      };
 
-size_t QueryRunner::getNumberOfCachedOverlapsHashTables() {
-  auto hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
-  CHECK(hash_table_cache);
-  return hash_table_cache->getCurrentNumCachedItems(
-      CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-}
-
-size_t QueryRunner::getNumberOfCachedOverlapsHashTableTuringParams() {
-  auto hash_table_cache = OverlapsJoinHashTable::getOverlapsTuningParamCache();
-  CHECK(hash_table_cache);
-  return hash_table_cache->getCurrentNumCachedItems(
-      CacheItemType::OVERLAPS_AUTO_TUNER_PARAM, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-}
-
-size_t QueryRunner::getNumberOfCachedOverlapsHashTablesAndTuningParams() {
-  return getNumberOfCachedOverlapsHashTables() +
-         getNumberOfCachedOverlapsHashTableTuringParams();
+  switch (hash_table_type) {
+    case CacheItemType::PERFECT_HT: {
+      auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
+      CHECK(hash_table_cache);
+      return get_num_cached_hashtable(hash_table_cache);
+    }
+    case CacheItemType::BASELINE_HT: {
+      auto hash_table_cache = BaselineJoinHashTable::getHashTableCache();
+      CHECK(hash_table_cache);
+      return get_num_cached_hashtable(hash_table_cache);
+    }
+    case CacheItemType::OVERLAPS_HT: {
+      auto hash_table_cache = OverlapsJoinHashTable::getHashTableCache();
+      CHECK(hash_table_cache);
+      return get_num_cached_hashtable(hash_table_cache);
+    }
+    case CacheItemType::OVERLAPS_AUTO_TUNER_PARAM: {
+      return get_num_cached_auto_tuner_param();
+    }
+    default: {
+      UNREACHABLE();
+      return 0;
+    }
+  }
+  return 0;
 }
 
 void QueryRunner::reset() {

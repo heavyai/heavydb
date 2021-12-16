@@ -207,13 +207,12 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   }
   std::vector<InnerOuter> inner_outer_pairs;
   inner_outer_pairs.emplace_back(inner_col, cols.second);
-  auto hashtable_cache_key =
-      HashtableRecycler::getHashtableCacheKey(inner_outer_pairs,
-                                              qual_bin_oper->get_optype(),
-                                              join_type,
-                                              hashtable_build_dag_map,
-                                              executor);
-  auto hash_key = hashtable_cache_key.first;
+  auto hashtable_access_path_info =
+      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
+                                                    qual_bin_oper->get_optype(),
+                                                    join_type,
+                                                    hashtable_build_dag_map,
+                                                    executor);
   decltype(std::chrono::steady_clock::now()) ts1, ts2;
   if (VLOGGING(1)) {
     ts1 = std::chrono::steady_clock::now();
@@ -229,8 +228,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                column_cache,
                                executor,
                                device_count,
-                               hash_key,
-                               hashtable_cache_key.second,
+                               hashtable_access_path_info,
                                table_id_to_node_map));
   try {
     join_hash_table->reify();
@@ -373,6 +371,7 @@ void PerfectJoinHashTable::reify() {
       columns_per_device.push_back(columns_for_device);
       const auto chunk_key = genChunkKey(
           fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
+      auto table_keys = table_keys_;
       if (device_id == 0 && hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
           getInnerTableId() > 0) {
         // sometimes we cannot retrieve query plan dag, so try to recycler cache
@@ -389,9 +388,12 @@ void PerfectJoinHashTable::reify() {
             qual_bin_oper_->get_optype(),
             join_type_};
         hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
-        VLOG(2) << "Use alternative hashtable cache key due to unavailable query plan "
-                   "dag extraction";
+        std::vector<int> alternative_table_key{chunk_key[0], chunk_key[1]};
+        CHECK(!alternative_table_key.empty());
+        table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
       }
+      hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
+
       init_threads.push_back(std::async(std::launch::async,
                                         &PerfectJoinHashTable::reifyForDevice,
                                         this,
@@ -561,7 +563,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
     if (cached_hashtable_layout_type) {
       hash_type_ = *cached_hashtable_layout_type;
       hashtable_layout = hash_type_;
-      VLOG(1) << "Recycle hashtable layout: " << getHashTypeString(hashtable_layout);
     }
   }
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
@@ -737,6 +738,7 @@ std::shared_ptr<PerfectHashTable> PerfectJoinHashTable::initHashTableOnCpuFromCa
     DeviceIdentifier device_identifier) {
   CHECK(hash_table_cache_);
   auto timer = DEBUG_TIMER(__func__);
+  VLOG(1) << "Checking CPU hash table cache.";
   auto hashtable_ptr =
       hash_table_cache_->getItemFromCache(key, item_type, device_identifier);
   if (hashtable_ptr) {

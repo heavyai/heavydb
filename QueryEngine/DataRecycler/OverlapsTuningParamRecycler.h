@@ -45,7 +45,7 @@ class OverlapsTuningParamRecycler
       QueryPlanHash key,
       CacheItemType item_type,
       DeviceIdentifier device_identifier,
-      std::optional<EMPTY_META_INFO> meta_info = std::nullopt) const override;
+      std::optional<EMPTY_META_INFO> meta_info = std::nullopt) override;
 
   void putItemToCache(QueryPlanHash key,
                       std::optional<AutoTunerMetaInfo> item,
@@ -59,6 +59,11 @@ class OverlapsTuningParamRecycler
   void initCache() override {}
 
   void clearCache() override;
+
+  void markCachedItemAsDirty(size_t table_key,
+                             std::unordered_set<QueryPlanHash>& key_set,
+                             CacheItemType item_type,
+                             DeviceIdentifier device_identifier) override;
 
   std::string toString() const override;
 
@@ -76,9 +81,7 @@ class OverlapsTuningParamRecycler
       CacheItemType item_type,
       DeviceIdentifier device_identifier,
       std::lock_guard<std::mutex>& lock,
-      std::optional<EMPTY_META_INFO> meta_info = std::nullopt) override {
-    UNREACHABLE();
-  }
+      std::optional<EMPTY_META_INFO> meta_info = std::nullopt) override;
 
   // hauto tuner param has unlimited capacity so we do not need this
   void cleanupCacheForInsertion(

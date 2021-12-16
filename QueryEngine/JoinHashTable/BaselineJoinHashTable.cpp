@@ -58,12 +58,12 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
   }
   auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
-  auto hashtable_cache_key =
-      HashtableRecycler::getHashtableCacheKey(inner_outer_pairs,
-                                              condition->get_optype(),
-                                              join_type,
-                                              hashtable_build_dag_map,
-                                              executor);
+  auto hashtable_access_path_info =
+      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
+                                                    condition->get_optype(),
+                                                    join_type,
+                                                    hashtable_build_dag_map,
+                                                    executor);
   auto join_hash_table = std::shared_ptr<BaselineJoinHashTable>(
       new BaselineJoinHashTable(condition,
                                 join_type,
@@ -73,8 +73,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                 executor,
                                 inner_outer_pairs,
                                 device_count,
-                                hashtable_cache_key.first,
-                                hashtable_cache_key.second,
+                                hashtable_access_path_info,
                                 table_id_to_node_map));
   try {
     join_hash_table->reify(preferred_hash_type);
@@ -120,8 +119,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     Executor* executor,
     const std::vector<InnerOuter>& inner_outer_pairs,
     const int device_count,
-    QueryPlanHash hashtable_cache_key,
-    HashtableCacheMetaInfo hashtable_cache_meta_info,
+    HashtableAccessPathInfo hashtable_access_path_info,
     const TableIdToNodeMap& table_id_to_node_map)
     : condition_(condition)
     , join_type_(join_type)
@@ -133,9 +131,10 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , catalog_(executor->getCatalog())
     , device_count_(device_count)
     , needs_dict_translation_(false)
-    , table_id_to_node_map_(table_id_to_node_map)
-    , hashtable_cache_key_(hashtable_cache_key)
-    , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
+    , hashtable_cache_key_(hashtable_access_path_info.hashed_query_plan_dag)
+    , hashtable_cache_meta_info_(hashtable_access_path_info.meta_info)
+    , table_keys_(hashtable_access_path_info.table_keys)
+    , table_id_to_node_map_(table_id_to_node_map) {
   CHECK_GT(device_count_, 0);
   hash_tables_for_device_.resize(std::max(device_count_, 1));
 }
@@ -303,6 +302,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     columns_per_device.push_back(columns_for_device);
   }
   auto hashtable_layout_type = layout;
+  auto table_keys = table_keys_;
   if (hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY && getInnerTableId() > 0) {
     // sometimes we cannot retrieve query plan dag, so try to recycler cache
     // with the old-passioned cache key if we deal with hashtable of non-temporary table
@@ -312,9 +312,11 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
         condition_->get_optype(),
         join_type_};
     hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
-    VLOG(2) << "Use alternative hashtable cache key due to unavailable query plan dag "
-               "extraction";
+    std::vector<int> alternative_table_key{catalog_->getDatabaseId(), getInnerTableId()};
+    CHECK(!alternative_table_key.empty());
+    table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
   }
+  hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
 
   size_t emitted_keys_count = 0;
   if (hashtable_layout_type == HashType::OneToMany) {
@@ -605,7 +607,6 @@ int BaselineJoinHashTable::initHashTableForDevice(
           {});
       if (cached_hashtable_layout_type) {
         hashtable_layout = *cached_hashtable_layout_type;
-        VLOG(1) << "Recycle hashtable layout: " << getHashTypeString(hashtable_layout);
       }
       hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
                                                CacheItemType::BASELINE_HT,

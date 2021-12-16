@@ -81,7 +81,7 @@ TargetValue run_simple_query(const std::string& query_str,
     rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
   auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size()) << query_str;
+  EXPECT_EQ(size_t(1), crt_row.size()) << query_str;
   return crt_row[0];
 }
 
@@ -357,6 +357,12 @@ void import_tables_cache_invalidation_for_CPU_one_to_one_join(bool reverse) {
   }
 }
 
+void clearCaches() {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  executor->clearMemory(MemoryLevel::CPU_LEVEL);
+  executor->getQueryPlanDagCache().clearQueryPlanCache();
+}
+
 void import_tables_cache_invalidation_for_CPU_one_to_many_join(bool reverse) {
   const std::string drop_table_t1{"DROP TABLE IF EXISTS cache_invalid_t1;"};
   run_ddl_statement(drop_table_t1);
@@ -412,7 +418,9 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   std::vector<std::vector<int32_t>> baseline_hashtable_first_run;
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{1, 1});
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
   std::shared_ptr<BaselineHashTable> cached_q1_ht =
       std::dynamic_pointer_cast<BaselineHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT));
@@ -427,7 +435,9 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q2_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(1));
   std::vector<int32_t> perfect_hashtable_first_run{0, 1};
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_first_run,
                                         (int32_t*)cached_q2_ht->getCpuBuffer()));
@@ -439,7 +449,9 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q3_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_first_run,
                                         (int32_t*)cached_q3_ht->getCpuBuffer()));
 
@@ -447,9 +459,26 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   import_tables_cache_invalidation_for_CPU_one_to_one_join(true);
 
   // make sure we invalidate all cached hashtables after tables are dropped
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)0);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
+  clearCaches();
   visited_hashtable_key.clear();
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
 
   // (a) baseline hash join, the second run] tuple insertion order: (1, 1) -> (0, 0)
   run_query(q1, ExecutorDeviceType::CPU);
@@ -459,7 +488,9 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   std::vector<std::vector<int32_t>> baseline_hashtable_second_run;
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{1, 1});
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{0, 0});
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
   CHECK(check_one_to_one_baseline_hashtable(baseline_hashtable_second_run,
                                             cached_q1_ht_v2->getCpuBuffer(),
                                             cached_q1_ht_v2->getEntryCount()));
@@ -469,7 +500,9 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q2_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(1));
   std::vector<int32_t> perfect_hashtable_second_run{1, 0};
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_second_run,
                                         (int32_t*)cached_q2_ht_v2->getCpuBuffer()));
@@ -478,12 +511,35 @@ TEST(Select, DropAndReCreate_OneToOne_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q3_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
   CHECK(check_one_to_one_join_hashtable(perfect_hashtable_second_run,
                                         (int32_t*)cached_q3_ht_v2->getCpuBuffer()));
 
   run_ddl_statement("DROP TABLE cache_invalid_t1;");
   run_ddl_statement("DROP TABLE cache_invalid_t2;");
+  // make sure we invalidate all cached hashtables after tables are dropped
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
+  clearCaches();
+  visited_hashtable_key.clear();
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
 }
 
 TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
@@ -500,7 +556,9 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<BaselineHashTable> cached_q1_ht =
       std::dynamic_pointer_cast<BaselineHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
   std::vector<std::vector<int32_t>> baseline_hashtable_first_run;
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
@@ -518,7 +576,9 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
   auto q2_dag_info = QR::get()->extractQueryPlanDag(q2);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(1));
   std::vector<int32_t> perfect_hashtable_first_run{0, 0, 1};
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_first_run,
                                          (int32_t*)cached_q2_ht->getCpuBuffer()));
@@ -530,17 +590,36 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
   auto q3_dag_info = QR::get()->extractQueryPlanDag(q3);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_first_run,
                                          (int32_t*)cached_q3_ht->getCpuBuffer()));
 
   // [the second run] tuple insertion order: (1, 1) -> (0, 0) -> (0, 0)
   import_tables_cache_invalidation_for_CPU_one_to_many_join(true);
-  visited_hashtable_key.clear();
 
   // make sure we invalidate all cached hashtables after tables are dropped
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)0);
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
+  clearCaches();
+  visited_hashtable_key.clear();
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
 
   // (a) baseline hash join, the second run] tuple insertion order: (1, 1) -> (0, 0) ->
   // (0, 0)
@@ -548,7 +627,9 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<BaselineHashTable> cached_q1_ht_v2 =
       std::dynamic_pointer_cast<BaselineHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::BASELINE_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedBaselineJoinHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
   std::vector<std::vector<int32_t>> baseline_hashtable_second_run;
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{1, 1});
   baseline_hashtable_second_run.push_back(std::vector<int32_t>{0, 0});
@@ -562,7 +643,9 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q2_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(1));
   std::vector<int32_t> perfect_hashtable_second_run{1, 0, 0};
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_second_run,
                                          (int32_t*)cached_q2_ht_v2->getCpuBuffer()));
@@ -571,12 +654,35 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q3_ht_v2 =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)2);
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
   CHECK(check_one_to_many_join_hashtable(perfect_hashtable_second_run,
                                          (int32_t*)cached_q3_ht_v2->getCpuBuffer()));
 
   run_ddl_statement("DROP TABLE cache_invalid_t1;");
   run_ddl_statement("DROP TABLE cache_invalid_t2;");
+
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(1));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(2));
+  clearCaches();
+  visited_hashtable_key.clear();
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BASELINE_HT),
+            static_cast<size_t>(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::PERFECT_HT),
+            static_cast<size_t>(0));
 }
 
 TEST(Truncate, JoinCacheInvalidationTest) {
@@ -601,14 +707,21 @@ TEST(Truncate, JoinCacheInvalidationTest) {
 
     auto res_before_truncate = QR::get()->runSQL(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
-    ASSERT_EQ(static_cast<uint32_t>(5), res_before_truncate->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(static_cast<uint32_t>(5), res_before_truncate->rowCount());
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     run_ddl_statement("truncate table cache_invalid_t2;");
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
     auto res_after_truncate = QR::get()->runSQL(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
-    ASSERT_EQ(static_cast<uint32_t>(0), res_after_truncate->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+    EXPECT_EQ(static_cast<uint32_t>(0), res_after_truncate->rowCount());
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(0));
 
     std::vector<std::string> t2_col_val_v2{
         "1", "2", "3", "4", "5", "0", "0", "0", "0", "0"};
@@ -619,11 +732,20 @@ TEST(Truncate, JoinCacheInvalidationTest) {
 
     auto res_before_truncate_v2 = QR::get()->runSQL(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
-    ASSERT_EQ(static_cast<uint32_t>(5), res_before_truncate_v2->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(static_cast<uint32_t>(5), res_before_truncate_v2->rowCount());
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     run_ddl_statement("DROP TABLE cache_invalid_t1;");
     run_ddl_statement("DROP TABLE cache_invalid_t2;");
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(0));
+    clearCaches();
   }
 }
 
@@ -659,11 +781,19 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
     EXPECT_EQ(1, count);  // POINT(1 1)
   }
-  EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(),
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
             size_t(2));  // bucket threshold and hash table
 
   run_ddl_statement("TRUNCATE TABLE cache_invalid_poly");
-  EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), size_t(0));
+  EXPECT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::OVERLAPS_HT, true),
+      size_t(0));
+  EXPECT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::DIRTY_ONLY, CacheItemType::OVERLAPS_HT, true),
+      size_t(2));
 
   run_query(
       R"(INSERT INTO cache_invalid_poly VALUES ('MULTIPOLYGON(((0 0, 11 0, 11 11, 0 11, 0 0)))');)",
@@ -682,11 +812,29 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
     auto count = boost::get<int64_t>(boost::get<ScalarTargetValue>(row[0]));
     EXPECT_EQ(2, count);  // POINT(1 1) , POINT(10 10)
   }
-  EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(),
-            size_t(1));  // bucket threshold and hash table
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            size_t(3));  // bucket threshold and hash table
+  EXPECT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::DIRTY_ONLY, CacheItemType::OVERLAPS_HT, true),
+      size_t(2));
+  EXPECT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::OVERLAPS_HT, true),
+      size_t(1));
 
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_point;");
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_poly;");
+  EXPECT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::OVERLAPS_HT, true),
+      size_t(0));
+  EXPECT_EQ(
+      QR::get()->getNumberOfCachedItem(
+          QueryRunner::CacheItemStatus::DIRTY_ONLY, CacheItemType::OVERLAPS_HT, true),
+      size_t(3));
+  clearCaches();
 }
 
 TEST(Update, JoinCacheInvalidationTest) {
@@ -717,21 +865,31 @@ TEST(Update, JoinCacheInvalidationTest) {
         "string_join1.t = string_join2.t;",
         dt);
 
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     run_query("update string_join1 set t='not poutine' where t='poutine';", dt);
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
-    ASSERT_EQ(
+    EXPECT_EQ(
         int64_t(0),
         v<int64_t>(run_simple_query(
             "select count(string_join1.t) from string_join1 inner join string_join2 on "
             "string_join1.t = string_join2.t;",
             dt)));
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     run_ddl_statement("drop table string_join1;");
     run_ddl_statement("drop table string_join2;");
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
+    clearCaches();
   }
 }
 
@@ -763,21 +921,37 @@ TEST(Delete, JoinCacheInvalidationTest) {
         "string_join1.t = string_join2.t;",
         dt);
 
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     run_query("delete from string_join1 where t='poutine';", dt);
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(0));
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
-    ASSERT_EQ(
+    EXPECT_EQ(
         int64_t(0),
         v<int64_t>(run_simple_query(
             "select count(string_join1.t) from string_join1 inner join string_join2 on "
             "string_join1.t = string_join2.t;",
             dt)));
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     run_ddl_statement("drop table string_join1;");
     run_ddl_statement("drop table string_join2;");
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(0));
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
+    clearCaches();
   }
 }
 
@@ -805,22 +979,36 @@ TEST(Delete, JoinCacheInvalidationTest_DropTable) {
 
     auto res = QR::get()->runSQL(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
-    ASSERT_EQ(static_cast<uint32_t>(5), res->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(static_cast<uint32_t>(5), res->rowCount());
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     // add and drop dummy table
     run_ddl_statement("create table cache_invalid_t3 (dummy text encoding dict(32));");
     run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_t3;");
-    // we should have no cached hashtable after dropping a table
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
+    // we drop `cache_invalid_t3` so the cached hashtable built from `cache_invalid_t1`
+    // should alive
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     auto res_v2 = QR::get()->runSQL(
         "select * from cache_invalid_t1, cache_invalid_t2 where k1 = k2;", dt);
-    ASSERT_EQ(static_cast<uint32_t>(5), res_v2->rowCount());
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
+    EXPECT_EQ(static_cast<uint32_t>(5), res_v2->rowCount());
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
 
     run_ddl_statement("DROP TABLE cache_invalid_t1;");
     run_ddl_statement("DROP TABLE cache_invalid_t2;");
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(0));
+    EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT),
+              static_cast<size_t>(1));
+    clearCaches();
   }
 }
 

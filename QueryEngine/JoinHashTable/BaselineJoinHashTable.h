@@ -95,16 +95,30 @@ class BaselineJoinHashTable : public HashJoin {
 
   std::string getHashJoinType() const final { return "Baseline"; }
 
-  static auto getCacheInvalidator() -> std::function<void()> {
+  static void invalidateCache() {
+    CHECK(hash_table_layout_cache_);
+    hash_table_cache_->clearCache();
+
+    CHECK(hash_table_cache_);
+    hash_table_layout_cache_->clearCache();
+  }
+
+  static void markCachedItemAsDirty(size_t table_key) {
     CHECK(hash_table_cache_);
     CHECK(hash_table_layout_cache_);
-    return []() -> void {
-      auto layout_cache_invalidator = hash_table_layout_cache_->getCacheInvalidator();
-      layout_cache_invalidator();
-
-      auto main_cache_invalidator = hash_table_cache_->getCacheInvalidator();
-      main_cache_invalidator();
-    };
+    auto candidate_table_keys =
+        hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
+    if (candidate_table_keys.has_value()) {
+      hash_table_layout_cache_->markCachedItemAsDirty(
+          table_key,
+          *candidate_table_keys,
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      hash_table_cache_->markCachedItemAsDirty(table_key,
+                                               *candidate_table_keys,
+                                               CacheItemType::BASELINE_HT,
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    }
   }
 
   static HashtableRecycler* getHashTableCache() {
@@ -127,8 +141,7 @@ class BaselineJoinHashTable : public HashJoin {
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
                         const int device_count,
-                        QueryPlanHash hashtable_cache_key,
-                        HashtableCacheMetaInfo hashtable_cache_meta_info,
+                        HashtableAccessPathInfo hashtable_access_path_info,
                         const TableIdToNodeMap& table_id_to_node_map);
 
   size_t getComponentBufferSize() const noexcept override;
@@ -239,9 +252,10 @@ class BaselineJoinHashTable : public HashJoin {
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
 
-  const TableIdToNodeMap table_id_to_node_map_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
+  std::unordered_set<size_t> table_keys_;
+  const TableIdToNodeMap table_id_to_node_map_;
 
   static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;

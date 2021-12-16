@@ -69,15 +69,19 @@ struct HashTableBuildDag {
   HashTableBuildDag(const JoinColumnsInfo& in_inner_cols_info,
                     const JoinColumnsInfo& in_outer_cols_info,
                     const QueryPlan& in_inner_cols_access_path,
-                    const QueryPlan& in_outer_cols_access_path)
+                    const QueryPlan& in_outer_cols_access_path,
+                    std::unordered_set<size_t>&& inputTableKeys)
       : inner_cols_info(in_inner_cols_info)
       , outer_cols_info(in_outer_cols_info)
       , inner_cols_access_path(in_inner_cols_access_path)
-      , outer_cols_access_path(in_outer_cols_access_path) {}
+      , outer_cols_access_path(in_outer_cols_access_path)
+      , inputTableKeys(std::move(inputTableKeys)) {}
   JoinColumnsInfo inner_cols_info;
   JoinColumnsInfo outer_cols_info;
   QueryPlan inner_cols_access_path;
   QueryPlan outer_cols_access_path;
+  std::unordered_set<size_t>
+      inputTableKeys;  // table keys of input(s), e.g., scan node or subquery's DAG
 };
 // A map btw. join qual's column info and its corresponding hashtable access path as query
 // plan DAG i.e., A.a = B.b and build hashtable on B.b? <(A.a = B.b) --> query plan DAG of

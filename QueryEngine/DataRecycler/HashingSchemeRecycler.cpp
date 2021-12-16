@@ -21,7 +21,7 @@ std::optional<HashType> HashingSchemeRecycler::getItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
-    std::optional<EMPTY_META_INFO> meta_info) const {
+    std::optional<EMPTY_META_INFO> meta_info) {
   if (!g_enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return std::nullopt;
@@ -29,11 +29,13 @@ std::optional<HashType> HashingSchemeRecycler::getItemFromCache(
   CHECK_EQ(item_type, CacheItemType::HT_HASHING_SCHEME);
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto layout_cache = getCachedItemContainer(item_type, device_identifier);
-  auto candidate_layout = getCachedItem(key, *layout_cache);
+  auto candidate_layout = getCachedItemWithoutConsideringMetaInfo(
+      key, item_type, device_identifier, *layout_cache, lock);
   if (candidate_layout) {
+    CHECK(!candidate_layout->isDirty());
     VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
             << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-            << "] Recycle hashtable layout for the join qual: "
+            << "] Recycle hashtable layout in cache: "
             << HashJoin::getHashTypeString(*candidate_layout->cached_item);
     return candidate_layout->cached_item;
   }
@@ -54,16 +56,32 @@ void HashingSchemeRecycler::putItemToCache(QueryPlanHash key,
   CHECK_EQ(item_type, CacheItemType::HT_HASHING_SCHEME);
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto layout_cache = getCachedItemContainer(item_type, device_identifier);
-  auto candidate_layout = getCachedItem(key, *layout_cache);
+  auto candidate_layout = getCachedItemWithoutConsideringMetaInfo(
+      key, item_type, device_identifier, *layout_cache, lock);
   if (candidate_layout) {
     return;
   }
   layout_cache->emplace_back(key, item, nullptr, meta_info);
   VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
           << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-          << "] Put hashtable layout for the join qual to cache: "
-          << HashJoin::getHashTypeString(*item);
+          << "] Put hashtable layout to cache";
   return;
+}
+
+void HashingSchemeRecycler::removeItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex>& lock,
+    std::optional<EMPTY_META_INFO> meta_info) {
+  auto layout_cache = getCachedItemContainer(item_type, device_identifier);
+  auto filter = [key](auto const& item) { return item.key == key; };
+  auto itr = std::find_if(layout_cache->cbegin(), layout_cache->cend(), filter);
+  if (itr == layout_cache->cend()) {
+    return;
+  } else {
+    layout_cache->erase(itr);
+  }
 }
 
 void HashingSchemeRecycler::clearCache() {
@@ -71,6 +89,22 @@ void HashingSchemeRecycler::clearCache() {
   auto layout_cache_container = getCachedItemContainer(CacheItemType::HT_HASHING_SCHEME,
                                                        LAYOUT_CACHE_DEVICE_IDENTIFIER);
   layout_cache_container->clear();
+}
+
+void HashingSchemeRecycler::markCachedItemAsDirty(
+    size_t table_key,
+    std::unordered_set<QueryPlanHash>& key_set,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache || key_set.empty()) {
+    return;
+  }
+  CHECK_EQ(item_type, CacheItemType::HT_HASHING_SCHEME);
+  std::lock_guard<std::mutex> lock(getCacheLock());
+  auto layout_cache = getCachedItemContainer(item_type, device_identifier);
+  for (auto key : key_set) {
+    markCachedItemAsDirtyImpl(key, *layout_cache);
+  }
 }
 
 std::string HashingSchemeRecycler::toString() const {
@@ -100,5 +134,7 @@ bool HashingSchemeRecycler::hasItemInCache(
   }
   CHECK_EQ(item_type, CacheItemType::HT_HASHING_SCHEME);
   auto layout_cache = getCachedItemContainer(item_type, device_identifier);
-  return getCachedItem(key, *layout_cache).has_value();
+  return std::any_of(layout_cache->begin(),
+                     layout_cache->end(),
+                     [&key](const auto& cached_item) { return cached_item.key == key; });
 }

@@ -28,6 +28,7 @@
 
 #include <boost/functional/hash.hpp>
 
+#include <algorithm>
 #include <unordered_map>
 
 struct EMPTY_META_INFO {};
@@ -378,11 +379,17 @@ struct CachedItem {
       : key(hashed_plan)
       , cached_item(item)
       , item_metric(item_metric_ptr)
-      , meta_info(metadata) {}
+      , meta_info(metadata)
+      , dirty(false) {}
+
+  void setDirty() { dirty = true; }
+  bool isDirty() const { return dirty; }
+
   QueryPlanHash key;
   CACHED_ITEM_TYPE cached_item;
   std::shared_ptr<CacheItemMetric> item_metric;
   std::optional<META_INFO_TYPE> meta_info;
+  bool dirty;
 };
 
 // A main class of data recycler
@@ -427,7 +434,7 @@ class DataRecycler {
       QueryPlanHash key,
       CacheItemType item_type,
       DeviceIdentifier device_identifier,
-      std::optional<META_INFO_TYPE> meta_info = std::nullopt) const = 0;
+      std::optional<META_INFO_TYPE> meta_info = std::nullopt) = 0;
 
   virtual void putItemToCache(QueryPlanHash key,
                               CACHED_ITEM_TYPE item_ptr,
@@ -440,6 +447,33 @@ class DataRecycler {
   virtual void initCache() = 0;
 
   virtual void clearCache() = 0;
+
+  virtual void markCachedItemAsDirty(size_t table_key,
+                                     std::unordered_set<QueryPlanHash>& key_set,
+                                     CacheItemType item_type,
+                                     DeviceIdentifier device_identifier) = 0;
+
+  void markCachedItemAsDirtyImpl(QueryPlanHash key, CachedItemContainer& m) const {
+    auto candidate_it = std::find_if(
+        m.begin(),
+        m.end(),
+        [&key](const CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>& cached_item) {
+          return cached_item.key == key;
+        });
+    if (candidate_it != m.end()) {
+      candidate_it->setDirty();
+    }
+  }
+
+  bool isCachedItemDirty(QueryPlanHash key, CachedItemContainer& m) const {
+    auto candidate_it = std::find_if(
+        m.begin(),
+        m.end(),
+        [&key](const CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>& cached_item) {
+          return cached_item.key == key;
+        });
+    return candidate_it != m.end() && candidate_it->isDirty();
+  }
 
   virtual std::string toString() const = 0;
 
@@ -457,13 +491,25 @@ class DataRecycler {
     return nullptr;
   }
 
-  std::optional<CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>> getCachedItem(
-      QueryPlanHash key,
-      CachedItemContainer& m) const {
-    for (auto& candidate : m) {
-      if (candidate.key == key) {
-        return candidate;
+  std::optional<CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>>
+  getCachedItemWithoutConsideringMetaInfo(QueryPlanHash key,
+                                          CacheItemType item_type,
+                                          DeviceIdentifier device_identifier,
+                                          CachedItemContainer& m,
+                                          std::lock_guard<std::mutex>& lock) {
+    auto candidate_it = std::find_if(
+        m.begin(),
+        m.end(),
+        [&key](const CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>& cached_item) {
+          return cached_item.key == key;
+        });
+    if (candidate_it != m.end()) {
+      if (candidate_it->isDirty()) {
+        removeItemFromCache(
+            key, item_type, device_identifier, lock, candidate_it->meta_info);
+        return std::nullopt;
       }
+      return *candidate_it;
     }
     return std::nullopt;
   }
@@ -473,6 +519,24 @@ class DataRecycler {
     std::lock_guard<std::mutex> lock(cache_lock_);
     auto container = getCachedItemContainer(item_type, device_identifier);
     return container ? container->size() : 0;
+  }
+
+  size_t getCurrentNumDirtyCachedItems(CacheItemType item_type,
+                                       DeviceIdentifier device_identifier) const {
+    std::lock_guard<std::mutex> lock(cache_lock_);
+    auto container = getCachedItemContainer(item_type, device_identifier);
+    return std::count_if(container->begin(),
+                         container->end(),
+                         [](const auto& cached_item) { return cached_item.isDirty(); });
+  }
+
+  size_t getCurrentNumCleanCachedItems(CacheItemType item_type,
+                                       DeviceIdentifier device_identifier) const {
+    std::lock_guard<std::mutex> lock(cache_lock_);
+    auto container = getCachedItemContainer(item_type, device_identifier);
+    return std::count_if(container->begin(),
+                         container->end(),
+                         [](const auto& cached_item) { return !cached_item.isDirty(); });
   }
 
   size_t getCurrentCacheSizeForDevice(CacheItemType item_type,
@@ -503,10 +567,6 @@ class DataRecycler {
       std::lock_guard<std::mutex> lock(cache_lock_);
       getMetricTracker(item_type).setMaxCacheItemSize(new_max_cache_item_size);
     }
-  }
-
-  std::function<void()> getCacheInvalidator() {
-    return [this]() -> void { clearCache(); };
   }
 
  protected:

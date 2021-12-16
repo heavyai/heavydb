@@ -244,7 +244,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto q1_str = "SELECT x FROM T1 ORDER BY x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
-  ASSERT_TRUE(q1_query_info.left_deep_trees_id.empty());
+  EXPECT_TRUE(q1_query_info.left_deep_trees_id.empty());
   auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
@@ -257,11 +257,11 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   // 1. a sort node becomes a root (dag_rel_id = 0)
   // 2. a project node becomes a child of the sort node (dag_rel_id = 1)
   // 3. a scan node (the leaf of the query plan) becomes a child of the project node
-  ASSERT_TRUE(q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
+  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
 
   auto q2_str = "SELECT x FROM T1;";
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
-  ASSERT_TRUE(q2_query_info.left_deep_trees_id.empty());
+  EXPECT_TRUE(q2_query_info.left_deep_trees_id.empty());
   auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
@@ -272,11 +272,11 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
                                                  executor,
                                                  *q2_rel_alg_translator);
   // q2 is the same as q1 except sort node
-  ASSERT_TRUE(q2_plan_dag.extracted_dag.compare("1|2|") == 0);
+  EXPECT_TRUE(q2_plan_dag.extracted_dag.compare("1|2|") == 0);
 
   auto q3_str = "SELECT x FROM T1 GROUP BY x;";
   auto q3_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q3_str);
-  ASSERT_TRUE(q3_query_info.left_deep_trees_id.empty());
+  EXPECT_TRUE(q3_query_info.left_deep_trees_id.empty());
   auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
@@ -288,11 +288,11 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
                                                  *q3_rel_alg_translator);
   // compound node becomes the root (dag_rel_id = 3), and the scan node
   // (that is the same node as both q1 and q2) is the leaf of the query plan
-  ASSERT_TRUE(q3_plan_dag.extracted_dag.compare("3|2|") == 0);
+  EXPECT_TRUE(q3_plan_dag.extracted_dag.compare("3|2|") == 0);
 
   auto q4_str = "SELECT x FROM T1 GROUP BY x ORDER BY x;";
   auto q4_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q4_str);
-  ASSERT_TRUE(q4_query_info.left_deep_trees_id.empty());
+  EXPECT_TRUE(q4_query_info.left_deep_trees_id.empty());
   auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
@@ -304,7 +304,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
                                                  *q4_rel_alg_translator);
   // this sort node has different input compared with that of q1
   // so we assign the new dag_rel_id (4) to the sort node
-  ASSERT_TRUE(q4_plan_dag.extracted_dag.compare("4|3|2|") == 0);
+  EXPECT_TRUE(q4_plan_dag.extracted_dag.compare("4|3|2|") == 0);
 
   auto q1_dup_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
@@ -314,7 +314,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
                                                  {},
                                                  executor,
                                                  *q1_rel_alg_translator);
-  ASSERT_TRUE(q1_dup_plan_dag.extracted_dag.compare("0|1|2|") == 0);
+  EXPECT_TRUE(q1_dup_plan_dag.extracted_dag.compare("0|1|2|") == 0);
 
   auto q4_dup_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
@@ -324,7 +324,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
                                                  {},
                                                  executor,
                                                  *q4_rel_alg_translator);
-  ASSERT_TRUE(q4_dup_plan_dag.extracted_dag.compare("4|3|2|") == 0);
+  EXPECT_TRUE(q4_dup_plan_dag.extracted_dag.compare("4|3|2|") == 0);
 }
 
 TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
@@ -347,7 +347,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   // so we can extract q1's dag
   auto q1_str = create_query_having_IN_expr("T1", "x", 20);
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
-  ASSERT_TRUE(q1_query_info.left_deep_trees_id.empty());
+  EXPECT_TRUE(q1_query_info.left_deep_trees_id.empty());
   auto rel_alg_translator_for_q1 = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
@@ -357,13 +357,13 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
                                                  {},
                                                  executor,
                                                  *rel_alg_translator_for_q1);
-  ASSERT_EQ(q1_plan_dag.contain_not_supported_rel_node, false);
+  EXPECT_EQ(q1_plan_dag.contain_not_supported_rel_node, false);
   // but we skip to extract a DAG for q2 since it contains IN-expr having 21 elems in its
   // value list
 
   auto q2_str = create_query_having_IN_expr("T1", "x", 21);
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
-  ASSERT_TRUE(q2_query_info.left_deep_trees_id.empty());
+  EXPECT_TRUE(q2_query_info.left_deep_trees_id.empty());
   auto rel_alg_translator_for_q2 = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
@@ -373,7 +373,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
                                                  {},
                                                  executor,
                                                  *rel_alg_translator_for_q2);
-  ASSERT_EQ(q2_plan_dag.contain_not_supported_rel_node, true);
+  EXPECT_EQ(q2_plan_dag.contain_not_supported_rel_node, true);
 }
 
 TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
@@ -381,7 +381,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
 
   auto q1_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
-  ASSERT_TRUE(q1_query_info.left_deep_trees_id.size() == 1);
+  EXPECT_TRUE(q1_query_info.left_deep_trees_id.size() == 1);
   auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
@@ -394,7 +394,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
 
   auto q2_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.x = T2.x;";
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
-  ASSERT_TRUE(q2_query_info.left_deep_trees_id.size() == 1);
+  EXPECT_TRUE(q2_query_info.left_deep_trees_id.size() == 1);
   auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
@@ -405,11 +405,11 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
                                                  executor,
                                                  *q2_rel_alg_translator);
 
-  ASSERT_TRUE(q1_plan_dag.extracted_dag.compare(q2_plan_dag.extracted_dag) == 0);
+  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare(q2_plan_dag.extracted_dag) == 0);
 
   auto q3_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x and T2.y = T1.y;";
   auto q3_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q3_str);
-  ASSERT_TRUE(q3_query_info.left_deep_trees_id.size() == 1);
+  EXPECT_TRUE(q3_query_info.left_deep_trees_id.size() == 1);
   auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
@@ -422,7 +422,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
 
   auto q4_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.x = T2.x and T1.y = T2.y;";
   auto q4_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q4_str);
-  ASSERT_TRUE(q4_query_info.left_deep_trees_id.size() == 1);
+  EXPECT_TRUE(q4_query_info.left_deep_trees_id.size() == 1);
   auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
@@ -433,11 +433,11 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
                                                  executor,
                                                  *q4_rel_alg_translator);
 
-  ASSERT_TRUE(q3_plan_dag.extracted_dag.compare(q4_plan_dag.extracted_dag) != 0);
+  EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q4_plan_dag.extracted_dag) != 0);
 
   auto q5_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.y = T2.y and T1.x = T2.x;";
   auto q5_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q5_str);
-  ASSERT_TRUE(q5_query_info.left_deep_trees_id.size() == 1);
+  EXPECT_TRUE(q5_query_info.left_deep_trees_id.size() == 1);
   auto q5_rel_alg_translator = QR::get()->getRelAlgTranslator(q5_str, executor);
   auto q5_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(),
@@ -447,7 +447,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
                                                  {},
                                                  executor,
                                                  *q5_rel_alg_translator);
-  ASSERT_TRUE(q3_plan_dag.extracted_dag.compare(q5_plan_dag.extracted_dag) != 0);
+  EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q5_plan_dag.extracted_dag) != 0);
 }
 
 TEST(DataRecycler, QueryPlanDagExtractor_TableFunction) {
@@ -521,9 +521,9 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   // 1. a sort node becomes a root (dag_rel_id = 0)
   // 2. a project node becomes a child of the sort node (dag_rel_id = 1)
   // 3. a scan node (the leaf of the query plan) becomes a child of the project node
-  ASSERT_TRUE(q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
+  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
   // 3 unique REL nodes in the cache --> 3 * 2 * 8 = 48
-  ASSERT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 48u);
+  EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 48u);
   auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
@@ -535,9 +535,9 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
                                                  *q2_rel_alg_translator);
   // we set the DAG cache size be 48, so when we try to cache the q2, it becomes full
   // so it skips to extract DAG plan of this query and also clear the cache itself
-  ASSERT_TRUE(q2_plan_dag.extracted_dag.compare("") == 0);
+  EXPECT_TRUE(q2_plan_dag.extracted_dag.compare("") == 0);
   // 2 unique REL nodes in the cache --> 2 * 2 * 8 = 32
-  ASSERT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
+  EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
   DAG_CACHE.clearQueryPlanCache();
 
   // test: when a query size is too large, we skip caching the query
@@ -552,7 +552,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
                                                  *q3_rel_alg_translator);
   // q3 has more than three nodes, so its size is beyond the limit of the DAG cache (48)
   // so we cannot keep it to our DAG cache
-  ASSERT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
+  EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
 
   // test: increase the cache size that is enough to hold both q1 and q2
   DAG_CACHE.setNodeMapMaxSize(80);
@@ -564,7 +564,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
                                                  {},
                                                  executor,
                                                  *q1_rel_alg_translator);
-  ASSERT_TRUE(new_q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
+  EXPECT_TRUE(new_q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
   auto new_q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
                                                  *executor->getCatalog(),
@@ -573,8 +573,8 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
                                                  {},
                                                  executor,
                                                  *q2_rel_alg_translator);
-  ASSERT_TRUE(new_q2_plan_dag.extracted_dag.compare("3|2|") == 0);
-  ASSERT_GE(DAG_CACHE.getCurrentNodeMapSize(), 48u);
+  EXPECT_TRUE(new_q2_plan_dag.extracted_dag.compare("3|2|") == 0);
+  EXPECT_GE(DAG_CACHE.getCurrentNodeMapSize(), 48u);
 }
 
 TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
@@ -610,22 +610,26 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
 
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q1_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
       auto ht1_ref_count_v1 = q1_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
-      ASSERT_EQ(static_cast<size_t>(208), q1_ht_metrics->getMemSize());
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
+      EXPECT_EQ(static_cast<size_t>(208), q1_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       auto ht1_ref_count_v2 = q1_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
+      EXPECT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
       auto q2 =
           R"(SELECT count(*) from overlaps_t13 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto ht1_ref_count_v3 = q1_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
+      EXPECT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
     }
 
     {
@@ -633,13 +637,17 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
       clearCaches();
       auto q1 =
           R"(SELECT count(*) from overlaps_t11 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t11 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
     }
 
     {
@@ -659,23 +667,27 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
 
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q1_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
       auto ht1_ref_count = q1_overlaps_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count);
-      ASSERT_EQ(static_cast<size_t>(208), q1_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count);
+      EXPECT_EQ(static_cast<size_t>(208), q1_overlaps_ht_metrics->getMemSize());
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q2_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
       auto ht2_ref_count = q2_overlaps_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht2_ref_count);
-      ASSERT_EQ(static_cast<size_t>(416), q2_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht2_ref_count);
+      EXPECT_EQ(static_cast<size_t>(416), q2_overlaps_ht_metrics->getMemSize());
     }
 
     {
@@ -693,27 +705,33 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
 
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q1_ht_dag_info =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q2_ht_dag_info =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
 
       auto q3 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q3_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
       auto ht2_ref_count = q3_overlaps_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht2_ref_count);
-      ASSERT_EQ(static_cast<size_t>(416), q3_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht2_ref_count);
+      EXPECT_EQ(static_cast<size_t>(416), q3_overlaps_ht_metrics->getMemSize());
     }
 
     {
@@ -734,32 +752,36 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
 
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q1_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
       auto ht1_ref_count = q1_overlaps_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count);
-      ASSERT_EQ(static_cast<size_t>(208), q1_overlaps_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count);
+      EXPECT_EQ(static_cast<size_t>(208), q1_overlaps_ht_metrics->getMemSize());
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedOverlapsHashTables());
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
       auto q2_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
 
       auto q3 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
       auto q3_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
-      ASSERT_LT(static_cast<size_t>(1), q1_overlaps_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(1), q3_overlaps_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(416), q3_overlaps_ht_metrics->getMemSize());
+      EXPECT_LT(static_cast<size_t>(1), q1_overlaps_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(1), q3_overlaps_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(416), q3_overlaps_ht_metrics->getMemSize());
     }
 
     {
@@ -777,28 +799,34 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
 
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q1_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q2_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
 
       auto q3 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q3_overlaps_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
       auto current_cache_size =
           OverlapsJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(416), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(416), current_cache_size);
     }
   }
 }
@@ -860,58 +888,65 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       clearCaches();
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       if (!q1_ht_metainfo.has_value() &&
           !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
-      ASSERT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
 
       auto q1_v2 =
           R"(SELECT /*+ overlaps_bucket_threshold(0.718) */ count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1_v2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedOverlapsHashTables());
-      ASSERT_EQ(static_cast<size_t>(3),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1_v2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
+      EXPECT_EQ(static_cast<size_t>(3),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
       auto q1_v2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_v2_ht_metainfo = q1_v2_ht_and_metainfo.cached_ht_metainfo;
       if (!q1_v2_ht_metainfo.has_value() &&
           !q1_v2_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q1_v2_tuning_param = q1_v2_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
-      ASSERT_TRUE(!q1_v2_tuning_param.has_value());
+      EXPECT_TRUE(!q1_v2_tuning_param.has_value());
       // due to the hint the same query has different hashtable params
-      ASSERT_TRUE(!compareOverlapsHTParams(q1_ht_metainfo->overlaps_meta_info,
+      EXPECT_TRUE(!compareOverlapsHTParams(q1_ht_metainfo->overlaps_meta_info,
                                            q1_v2_ht_metainfo->overlaps_meta_info));
       auto q1_v3 =
           R"(SELECT /*+ overlaps_bucket_threshold(0.909), overlaps_max_size(2021) */ count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1_v3, dt)));
-      ASSERT_EQ(static_cast<size_t>(3), QR::get()->getNumberOfCachedOverlapsHashTables());
-      ASSERT_EQ(static_cast<size_t>(4),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1_v3, dt)));
+      EXPECT_EQ(static_cast<size_t>(3),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
+      EXPECT_EQ(static_cast<size_t>(4),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
 
       auto q1_v3_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_v3_ht_metainfo = q1_v3_ht_and_metainfo.cached_ht_metainfo;
       if (!q1_v3_ht_metainfo.has_value() &&
           !q1_v3_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q1_v3_tuning_param = q1_v3_ht_and_metainfo.cached_tuning_info;
       // we do not cache the tuning param if we give a related sql hint
-      ASSERT_TRUE(!q1_v3_tuning_param.has_value());
+      EXPECT_TRUE(!q1_v3_tuning_param.has_value());
       // due to the changes in the hint the same query has different hashtable params
-      ASSERT_TRUE(!compareOverlapsHTParams(q1_v2_ht_metainfo->overlaps_meta_info,
+      EXPECT_TRUE(!compareOverlapsHTParams(q1_v2_ht_metainfo->overlaps_meta_info,
                                            q1_v3_ht_metainfo->overlaps_meta_info));
     }
 
@@ -921,52 +956,55 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       clearCaches();
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       if (!q1_ht_metainfo.has_value() &&
           !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
-      ASSERT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t13 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(4),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(4),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
       auto q2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q2_ht_metainfo = q2_ht_and_metainfo.cached_ht_metainfo;
       if (!q2_ht_metainfo.has_value() &&
           !q2_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q2_tuning_param = q2_ht_and_metainfo.cached_tuning_info;
-      ASSERT_TRUE(q2_tuning_param.has_value());
+      EXPECT_TRUE(q2_tuning_param.has_value());
 
       auto q2_v2 =
           R"(SELECT /*+ overlaps_max_size(2021) */ count(*) from overlaps_t13 as b JOIN overlaps_t12 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2_v2, dt)));
-      ASSERT_EQ(static_cast<size_t>(6),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2_v2, dt)));
+      EXPECT_EQ(static_cast<size_t>(6),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
       auto q2_v2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q2_v2_ht_metainfo = q2_v2_ht_and_metainfo.cached_ht_metainfo;
       if (!q2_v2_ht_metainfo.has_value() &&
           !q2_v2_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q2_v2_tuning_param = q2_v2_ht_and_metainfo.cached_tuning_info;
       // we compute hashtable param when we give max_hashtable size hint
-      ASSERT_TRUE(q2_v2_tuning_param.has_value());
+      EXPECT_TRUE(q2_v2_tuning_param.has_value());
       // we should have different meta info due to the updated ht when executing q2_v2
-      ASSERT_TRUE(!compareOverlapsHTParams(q2_ht_metainfo->overlaps_meta_info,
+      EXPECT_TRUE(!compareOverlapsHTParams(q2_ht_metainfo->overlaps_meta_info,
                                            q2_v2_ht_metainfo->overlaps_meta_info));
     }
 
@@ -983,38 +1021,42 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       clearCaches();
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       if (!q1_ht_metainfo.has_value() &&
           !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
-      ASSERT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(3),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(3),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
-      ASSERT_EQ(static_cast<size_t>(1), q2_ht_and_metainfo.cached_metric->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(416), q2_ht_and_metainfo.cached_metric->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q2_ht_and_metainfo.cached_metric->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(416), q2_ht_and_metainfo.cached_metric->getMemSize());
       auto q2_ht_metainfo = q2_ht_and_metainfo.cached_ht_metainfo;
       if (!q2_ht_metainfo.has_value() &&
           !q2_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q2_tuning_param = q2_ht_and_metainfo.cached_tuning_info;
       if (!q2_tuning_param.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
     }
 
@@ -1033,44 +1075,48 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       clearCaches();
       auto q1 =
           R"(SELECT count(*) from overlaps_t12 as b JOIN overlaps_t11 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
       auto q1_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       auto q1_ht_metainfo = q1_ht_and_metainfo.cached_ht_metainfo;
       if (!q1_ht_metainfo.has_value() &&
           !q1_ht_metainfo->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
-      ASSERT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
       visited_hashtable_key.clear();
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(3),  // hashtable: q1, auto tuner param: q1 and q2
-                QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams());
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedOverlapsHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(3),  // hashtable: q1, auto tuner param: q1 and q2
+                QR::get()->getNumberOfCachedItem(
+                    QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
       auto q1_ht_and_metainfo_v2 =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
       // but we skip to cache ht of q2 and this means we still have that of q1
-      ASSERT_EQ(static_cast<size_t>(1),
+      EXPECT_EQ(static_cast<size_t>(1),
                 q1_ht_and_metainfo_v2.cached_metric->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(208),
+      EXPECT_EQ(static_cast<size_t>(208),
                 q1_ht_and_metainfo_v2.cached_metric->getMemSize());
       auto q1_ht_metainfo_v2 = q1_ht_and_metainfo_v2.cached_ht_metainfo;
       if (!q1_ht_metainfo_v2.has_value() &&
           !q1_ht_metainfo_v2->overlaps_meta_info.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
       auto q1_tuning_param_v2 = q1_ht_and_metainfo_v2.cached_tuning_info;
       if (!q1_tuning_param_v2.has_value()) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
-      ASSERT_TRUE(compareOverlapsHTParams(
+      EXPECT_TRUE(compareOverlapsHTParams(
           q1_ht_and_metainfo.cached_ht_metainfo->overlaps_meta_info,
           q1_ht_and_metainfo_v2.cached_ht_metainfo->overlaps_meta_info));
     }
@@ -1102,22 +1148,28 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       // test1. cache hashtable of t1.x and then reuse it correctly?
       clearCaches();
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q1_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
       auto ht1_ref_count_v1 = q1_perfect_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
-      ASSERT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
+      EXPECT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto ht1_ref_count_v2 = q1_perfect_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
+      EXPECT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
       auto q2 = "SELECT count(*) from t1, t3 where t1.x = t3.x;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto ht1_ref_count_v3 = q1_perfect_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
+      EXPECT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
     }
 
     {
@@ -1125,22 +1177,28 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q1_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
 
       auto q2 = "SELECT count(*) from t1, t2 where t1.y = t2.y;";
-      ASSERT_EQ(static_cast<int64_t>(9), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(9), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q2_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(static_cast<size_t>(1), q2_perfect_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(20), q2_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q2_perfect_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(20), q2_perfect_ht_metrics->getMemSize());
     }
 
     {
@@ -1157,24 +1215,28 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q1_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
 
       auto q2 = "SELECT count(*) from t4 a, t4 b where a.x = b.x;";
-      ASSERT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q2_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(static_cast<size_t>(1), q2_perfect_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(24), q2_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q2_perfect_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(24), q2_perfect_ht_metrics->getMemSize());
       auto current_cache_size =
           PerfectJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(24), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(24), current_cache_size);
     }
 
     {
@@ -1192,30 +1254,36 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q1_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
 
       auto q2 = "SELECT count(*) from t2 a, t2 b where a.x = b.x;";
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q2_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
 
       auto q3 = "SELECT count(*) from t4 a, t4 b where a.x = b.x;";
-      ASSERT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q3_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(static_cast<size_t>(24), q3_perfect_ht_metrics->getMemSize());
-      ASSERT_EQ(static_cast<size_t>(1), q3_perfect_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(24), q3_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q3_perfect_ht_metrics->getRefCount());
       auto current_cache_size =
           PerfectJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(24), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(24), current_cache_size);
     }
 
     {
@@ -1235,33 +1303,39 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q1_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), q1_perfect_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(12), q1_perfect_ht_metrics->getMemSize());
 
       auto q2 = "SELECT count(*) from t2 a, t2 b where a.x = b.x;";
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
 
       auto q3 = "SELECT count(*) from t3 a, t3 b where a.x = b.x;";
-      ASSERT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q3_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      ASSERT_EQ(q1_perfect_ht_metrics->getMemSize(), static_cast<size_t>(12));
-      ASSERT_GT(q1_perfect_ht_metrics->getRefCount(), static_cast<size_t>(1));
-      ASSERT_EQ(q3_perfect_ht_metrics->getMemSize(), static_cast<size_t>(20));
-      ASSERT_EQ(q3_perfect_ht_metrics->getRefCount(), static_cast<size_t>(1));
+      EXPECT_EQ(q1_perfect_ht_metrics->getMemSize(), static_cast<size_t>(12));
+      EXPECT_GT(q1_perfect_ht_metrics->getRefCount(), static_cast<size_t>(1));
+      EXPECT_EQ(q3_perfect_ht_metrics->getMemSize(), static_cast<size_t>(20));
+      EXPECT_EQ(q3_perfect_ht_metrics->getRefCount(), static_cast<size_t>(1));
       auto current_cache_size =
           PerfectJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(32), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(32), current_cache_size);
     }
 
     {
@@ -1278,30 +1352,36 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
       auto q1_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
 
       auto q2 = "SELECT count(*) from t2 a, t2 b where a.x = b.x;";
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
       auto q2_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
 
       auto q3 = "SELECT count(*) from t3 a, t3 b where a.x = b.x;";
-      ASSERT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q3_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
       auto current_cache_size =
           PerfectJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::PERFECT_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(28), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(28), current_cache_size);
       if (!q1_perfect_ht_metrics || !q1_perfect_ht_metrics || q3_perfect_ht_metrics) {
-        ASSERT_TRUE(false);
+        EXPECT_TRUE(false);
       }
     }
   }
@@ -1332,44 +1412,49 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       // test1. cache hashtable of t1 and then reuse it correctly?
       clearCaches();
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x and t1.y = t2.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q1_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht1_ref_count_v1 = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
-      ASSERT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
+      EXPECT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto ht1_ref_count_v2 = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
+      EXPECT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
       auto q2 = "SELECT count(*) from t1, t3 where t1.x = t3.x and t1.y = t3.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto ht1_ref_count_v3 = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
+      EXPECT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
     }
 
     {
       // test2. cache t1 and t2
       clearCaches();
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x and t1.y = t2.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q1_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht1_ref_count_v1 = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
-      ASSERT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
+      EXPECT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
 
       auto q2 = "SELECT count(*) from t2, t3 where t2.x = t3.x and t2.y = t3.y;";
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
     }
 
     {
@@ -1386,28 +1471,30 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x and t1.y = t2.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q1_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht1_ref_count = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count);
-      ASSERT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count);
+      EXPECT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
 
       auto q2 = "SELECT count(*) from t4 a, t4 b where a.x = b.x and a.y = b.y;";
-      ASSERT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q4_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht4_ref_count = q4_baseline_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht4_ref_count);
-      ASSERT_EQ(static_cast<size_t>(144), q4_baseline_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht4_ref_count);
+      EXPECT_EQ(static_cast<size_t>(144), q4_baseline_ht_metrics->getMemSize());
       auto current_cache_size =
           BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(144), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(144), current_cache_size);
     }
 
     {
@@ -1425,33 +1512,36 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x and t1.y = t2.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q1_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht1_ref_count = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count);
-      ASSERT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count);
+      EXPECT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
 
       auto q2 = "SELECT count(*) from t2 a, t2 b where a.x = b.x and a.y = b.y;";
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
 
       auto q3 = "SELECT count(*) from t4 a, t4 b where a.x = b.x and a.y = b.y;";
-      ASSERT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(6), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q3_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht4_ref_count = q3_baseline_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht4_ref_count);
-      ASSERT_EQ(static_cast<size_t>(144), q3_baseline_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<size_t>(1), ht4_ref_count);
+      EXPECT_EQ(static_cast<size_t>(144), q3_baseline_ht_metrics->getMemSize());
       auto current_cache_size =
           BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(144), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(144), current_cache_size);
     }
 
     {
@@ -1472,32 +1562,35 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x and t1.y = t2.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q1_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      ASSERT_EQ(static_cast<size_t>(1), q1_baseline_ht_metrics->getRefCount());
-      ASSERT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1), q1_baseline_ht_metrics->getRefCount());
+      EXPECT_EQ(static_cast<size_t>(72), q1_baseline_ht_metrics->getMemSize());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
 
       auto q2 = "SELECT count(*) from t2 a, t2 b where a.x = b.x and a.y = b.y;";
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
 
       auto q3 = "SELECT count(*) from t3 a, t3 b where a.x = b.x and a.y = b.y;";
-      ASSERT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q3_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      ASSERT_EQ(q3_baseline_ht_metrics->getMemSize(), static_cast<size_t>(120));
+      EXPECT_EQ(q3_baseline_ht_metrics->getMemSize(), static_cast<size_t>(120));
       auto current_cache_size =
           BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(192), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(192), current_cache_size);
     }
 
     {
@@ -1514,23 +1607,26 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
       clearCaches();
 
       auto q1 = "SELECT count(*) from t1, t2 where t1.x = t2.x and t1.y = t2.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
 
       auto q2 = "SELECT count(*) from t2 a, t2 b where a.x = b.x and a.y = b.y;";
-      ASSERT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
 
       auto q3 = "SELECT count(*) from t3 a, t3 b where a.x = b.x and a.y = b.y;";
-      ASSERT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto current_cache_size =
           BaselineJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::BASELINE_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      ASSERT_EQ(static_cast<size_t>(168), current_cache_size);
+      EXPECT_EQ(static_cast<size_t>(168), current_cache_size);
     }
   }
 }
@@ -1554,34 +1650,42 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
       auto q1 =
           "SELECT count(*) from t1, (select x from t2 where x < 3) tt2 where t1.x = "
           "tt2.x;";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q1_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
       auto ht1_ref_count_v1 = q1_perfect_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto ht1_ref_count_v2 = q1_perfect_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
+      EXPECT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
 
       auto q2 =
           "SELECT count(*) from t1, (select x from t2 where x < 2) tt2 where t1.x = "
           "tt2.x;";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto q2_perfect_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
       auto ht1_ref_count_v3 = q2_perfect_ht_metrics->getRefCount();
-      ASSERT_GT(ht1_ref_count_v2, ht1_ref_count_v3);
+      EXPECT_GT(ht1_ref_count_v2, ht1_ref_count_v3);
 
       auto q3 =
           "SELECT count(*) from (select x from t1) tt1, (select x from t2 where x < 2) "
           "tt2 where tt1.x = tt2.x;";
-      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(2), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       auto ht1_ref_count_v4 = q2_perfect_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v3, ht1_ref_count_v4);
+      EXPECT_LT(ht1_ref_count_v3, ht1_ref_count_v4);
     }
 
     {
@@ -1590,38 +1694,42 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
       auto q1 =
           "SELECT count(*) from t1, (select x,y from t2 where x < 4) tt2 where t1.x = "
           "tt2.x and t1.y = tt2.y;";
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q1_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht1_ref_count_v1 = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
-      ASSERT_EQ(static_cast<size_t>(1),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<size_t>(1), ht1_ref_count_v1);
+      EXPECT_EQ(static_cast<int64_t>(3), v<int64_t>(run_simple_query(q1, dt)));
+      EXPECT_EQ(static_cast<size_t>(1),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto ht1_ref_count_v2 = q1_baseline_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
+      EXPECT_LT(ht1_ref_count_v1, ht1_ref_count_v2);
 
       auto q2 =
           "SELECT count(*) from t1, (select x, y from t3 where x < 3) tt3 where t1.x = "
           "tt3.x and t1.y = tt3.y;";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto q2_baseline_ht_metrics =
           getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
       auto ht1_ref_count_v3 = q2_baseline_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v3, ht1_ref_count_v2);
+      EXPECT_LT(ht1_ref_count_v3, ht1_ref_count_v2);
 
       auto q3 =
           "SELECT count(*) from (select x, y from t1 where x < 3) tt1, (select x, y from "
           "t3 where x < 3) tt3 where tt1.x = tt3.x and tt1.y = tt3.y;";
-      ASSERT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
-      ASSERT_EQ(static_cast<size_t>(2),
-                QR::get()->getNumberOfCachedBaselineJoinHashTables());
+      EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
+      EXPECT_EQ(static_cast<size_t>(2),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::BASELINE_HT));
       auto ht1_ref_count_v4 = q2_baseline_ht_metrics->getRefCount();
-      ASSERT_LT(ht1_ref_count_v3, ht1_ref_count_v4);
+      EXPECT_LT(ht1_ref_count_v3, ht1_ref_count_v4);
     }
 
     {
@@ -1638,7 +1746,9 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
         QR::get()->runSQL(q2, dt);
       }
       // we have to skip hashtable caching for the above query
-      ASSERT_EQ(static_cast<size_t>(0), QR::get()->getNumberOfCachedPerfectHashTables());
+      EXPECT_EQ(static_cast<size_t>(0),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
     }
   }
 }
@@ -1761,7 +1871,8 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
       check_query(queries.first, false);
       check_query(queries.second, false);
       EXPECT_EQ(expected_num_cached_hashtable,
-                QR::get()->getNumberOfCachedPerfectHashTables());
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::PERFECT_HT));
       clear_caches(ExecutorDeviceType::CPU);
     }
   };
@@ -1774,8 +1885,9 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
     for (const auto& query : queries) {
       QR::get()->runSQL(query, ExecutorDeviceType::CPU);
     }
-    EXPECT_EQ(QR::get()->getNumberOfCachedPerfectHashTables(),
-              expected_num_cached_hashtable);
+    EXPECT_EQ(expected_num_cached_hashtable,
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
     clear_caches(ExecutorDeviceType::CPU);
   };
 
@@ -1824,6 +1936,504 @@ TEST(DataRecycler, Hashtable_For_Dict_Encoded_Column) {
   }
   execute_random_query_test(queries_case1, 6);
   execute_random_query_test(queries_case2, 1);
+}
+
+TEST(DataRecycler, SimpleInsertion) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  executor->clearMemory(MemoryLevel::CPU_LEVEL);
+  executor->getQueryPlanDagCache().clearQueryPlanCache();
+
+  auto drop_tables = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS tf1;");
+    run_ddl_statement("DROP TABLE IF EXISTS tf2;");
+    run_ddl_statement("DROP TABLE IF EXISTS tb1;");
+    run_ddl_statement("DROP TABLE IF EXISTS tb2;");
+  };
+
+  auto prepare_tables = [] {
+    run_ddl_statement("CREATE TABLE tf1 (x int);");
+    run_ddl_statement("CREATE TABLE tf2 (x int);");
+    for (int i = 1; i <= 4; i++) {
+      if (i < 3) {
+        QR::get()->runSQL("insert into tf1 values (" + ::toString(i) + ")",
+                          ExecutorDeviceType::CPU);
+      }
+      QR::get()->runSQL("insert into tf2 values (" + ::toString(i) + ")",
+                        ExecutorDeviceType::CPU);
+    }
+
+    run_ddl_statement("CREATE TABLE tb1 (x int, y int);");
+    run_ddl_statement("CREATE TABLE tb2 (x int, y int);");
+    for (int i = 1; i <= 4; i++) {
+      if (i < 3) {
+        auto insert_tb1 =
+            "insert into tb1 values (" + ::toString(i) + "," + ::toString(i) + ")";
+        QR::get()->runSQL(insert_tb1, ExecutorDeviceType::CPU);
+        QR::get()->runSQL(insert_tb1, ExecutorDeviceType::CPU);
+      }
+      auto insert_tb2 =
+          "insert into tb2 values (" + ::toString(i) + "," + ::toString(i) + ")";
+      QR::get()->runSQL(insert_tb2, ExecutorDeviceType::CPU);
+      QR::get()->runSQL(insert_tb2, ExecutorDeviceType::CPU);
+    }
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    drop_tables();
+    prepare_tables();
+
+    // perfect join hashtable
+    auto perfect_ht_join_query = "select count(1) from tf1, tf2 where tf1.x = tf2.x;";
+    QR::get()->runSQL(perfect_ht_join_query, dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+    QR::get()->runSQL("update tf1 set x = 4 where x = 1;", dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+
+    QR::get()->runSQL(perfect_ht_join_query, dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+
+    QR::get()->runSQL("insert into tf1 values (3);", dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+    auto perfect_ht_res =
+        v<int64_t>(run_simple_query(perfect_ht_join_query, dt, false, false));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<int64_t>(3), perfect_ht_res);
+
+    // baseline join hashtable
+    auto baseline_ht_join_query =
+        "select count(1) from tb1, tb2 where tb1.x = tb2.x and tb1.y = tb2.y;";
+    QR::get()->runSQL(baseline_ht_join_query, dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::BASELINE_HT));
+
+    QR::get()->runSQL("update tb1 set x = 4 where x = 1;", dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::BASELINE_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::BASELINE_HT));
+
+    QR::get()->runSQL(baseline_ht_join_query, dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::BASELINE_HT));
+
+    QR::get()->runSQL("insert into tb1 values (3, 3);", dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::BASELINE_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::BASELINE_HT));
+
+    auto baseline_ht_res =
+        v<int64_t>(run_simple_query(baseline_ht_join_query, dt, false, false));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::BASELINE_HT));
+    EXPECT_EQ(static_cast<int64_t>(6), baseline_ht_res);
+  }
+  drop_tables();
+}
+
+TEST(DataRecycler, Lazy_Cache_Invalidation) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto clearCache = [&executor] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+
+  auto drop_tables_for_string_joins = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS tns1;");
+    run_ddl_statement("DROP TABLE IF EXISTS tns2;");
+    run_ddl_statement("DROP TABLE IF EXISTS ts1;");
+    run_ddl_statement("DROP TABLE IF EXISTS ts2;");
+    run_ddl_statement("DROP TABLE IF EXISTS ts3;");
+    run_ddl_statement("DROP TABLE IF EXISTS ts4;");
+  };
+  auto drop_tables = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS tf1;");
+    run_ddl_statement("DROP TABLE IF EXISTS tf2;");
+    run_ddl_statement("DROP TABLE IF EXISTS tf3;");
+    run_ddl_statement("DROP TABLE IF EXISTS tf4;");
+
+    run_ddl_statement("DROP TABLE IF EXISTS tb1;");
+    run_ddl_statement("DROP TABLE IF EXISTS tb2;");
+    run_ddl_statement("DROP TABLE IF EXISTS tb3;");
+    run_ddl_statement("DROP TABLE IF EXISTS tb4;");
+  };
+
+  auto prepare_tables_for_string_joins = [] {
+    run_ddl_statement("CREATE TABLE ts1 (x text encoding dict);");
+    run_ddl_statement(
+        "CREATE TABLE ts2 (x text, shared dictionary (x) references ts1(x));");
+    run_ddl_statement("CREATE TABLE ts3 (x text encoding dict);");
+    run_ddl_statement(
+        "CREATE TABLE ts4 (x text, shared dictionary (x) references ts3(x));");
+    run_ddl_statement("CREATE TABLE tns1 (x text encoding dict);");
+    run_ddl_statement("CREATE TABLE tns2 (x text encoding dict);");
+
+    for (int i = 1; i <= 10; i++) {
+      if (i < 3) {
+        QR::get()->runSQL("insert into ts1 values (" + ::toString(i) + ");",
+                          ExecutorDeviceType::CPU);
+      }
+      if (i < 5) {
+        QR::get()->runSQL("insert into ts2 values (" + ::toString(i) + ");",
+                          ExecutorDeviceType::CPU);
+        QR::get()->runSQL("insert into tns1 values (" + ::toString(i) + ");",
+                          ExecutorDeviceType::CPU);
+      }
+      if (i < 8) {
+        QR::get()->runSQL("insert into ts4 values (" + ::toString(i) + ");",
+                          ExecutorDeviceType::CPU);
+      }
+      QR::get()->runSQL("insert into ts3 values (" + ::toString(i) + ");",
+                        ExecutorDeviceType::CPU);
+      QR::get()->runSQL("insert into tns2 values (" + ::toString(i) + ");",
+                        ExecutorDeviceType::CPU);
+    }
+  };
+
+  auto prepare_tables = [] {
+    run_ddl_statement("CREATE TABLE tf1 (x int);");
+    run_ddl_statement("CREATE TABLE tf2 (x int);");
+    run_ddl_statement("CREATE TABLE tf3 (x int);");
+    run_ddl_statement("CREATE TABLE tf4 (x int);");
+    for (int i = 1; i <= 10; i++) {
+      if (i < 3) {
+        QR::get()->runSQL("insert into tf1 values (" + ::toString(i) + ");",
+                          ExecutorDeviceType::CPU);
+      }
+      if (i < 5) {
+        QR::get()->runSQL("insert into tf2 values (" + ::toString(i) + ");",
+                          ExecutorDeviceType::CPU);
+      }
+      if (i < 8) {
+        QR::get()->runSQL("insert into tf3 values (" + ::toString(i) + ");",
+                          ExecutorDeviceType::CPU);
+      }
+      QR::get()->runSQL("insert into tf4 values (" + ::toString(i) + ");",
+                        ExecutorDeviceType::CPU);
+    }
+
+    run_ddl_statement("CREATE TABLE tb1 (x int, y int);");
+    run_ddl_statement("CREATE TABLE tb2 (x int, y int);");
+    run_ddl_statement("CREATE TABLE tb3 (x int, y int);");
+    run_ddl_statement("CREATE TABLE tb4 (x int, y int);");
+    for (int i = 1; i <= 20; i++) {
+      int val = i % 10;
+      if (i < 5) {
+        auto insert_tb1 =
+            "insert into tb1 values (" + ::toString(val) + "," + ::toString(val) + ");";
+        QR::get()->runSQL(insert_tb1, ExecutorDeviceType::CPU);
+      }
+      if (i < 10) {
+        auto insert_tb1 =
+            "insert into tb2 values (" + ::toString(val) + "," + ::toString(val) + ");";
+        QR::get()->runSQL(insert_tb1, ExecutorDeviceType::CPU);
+      }
+      if (i < 15) {
+        auto insert_tb1 =
+            "insert into tb3 values (" + ::toString(val) + "," + ::toString(val) + ");";
+        QR::get()->runSQL(insert_tb1, ExecutorDeviceType::CPU);
+      }
+      auto insert_tb2 =
+          "insert into tb4 values (" + ::toString(val) + "," + ::toString(val) + ");";
+      QR::get()->runSQL(insert_tb2, ExecutorDeviceType::CPU);
+    }
+  };
+
+  auto gen_perfect_hash_query =
+      [](const std::string& inner_table_name,
+         const std::string& outer_table_name) -> const std::string {
+    return "SELECT COUNT(1) FROM " + inner_table_name + " t1, " + outer_table_name +
+           " t2 WHERE t1.x = t2.x;";
+  };
+
+  auto gen_baseline_hash_query =
+      [](const std::string& inner_table_name,
+         const std::string& outer_table_name) -> const std::string {
+    return "SELECT COUNT(1) FROM " + inner_table_name + " t1, " + outer_table_name +
+           " t2 WHERE t1.x = t2.x and t1.y = t2.y;";
+  };
+
+  auto gen_update_query = [](const std::string& targe_table_name) -> const std::string {
+    return "UPDATE " + targe_table_name + " SET x = 1988 WHERE x = 1;";
+  };
+
+  auto gen_drop_query = [](const std::string& targe_table_name) -> const std::string {
+    return "DROP TABLE IF EXISTS " + targe_table_name + ";";
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    drop_tables();
+    prepare_tables();
+    clearCache();
+
+    // execute perfect hash join query, hashtable is built on tf1
+    QR::get()->runSQL(gen_perfect_hash_query("tf1", "tf2"), dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // execute baseline hash join query, hashtable is built on tb1
+    QR::get()->runSQL(gen_baseline_hash_query("tb1", "tb2"), dt);
+    // perfect hashtable cache remains the same
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+
+    // execute perfect hash join query, hashtable is built on tf2
+    QR::get()->runSQL(gen_perfect_hash_query("tf2", "tf3"), dt);
+    // perfect hashtable cache has two items: tf1 and tf2
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // execute baseline hash join query, hashtable is built on tb2
+    QR::get()->runSQL(gen_baseline_hash_query("tb2", "tb3"), dt);
+    // baseline hashtable cache has two items: tb1 and tb2
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+
+    // execute perfect hash join query, hashtable is built on tb2
+    QR::get()->runSQL(gen_perfect_hash_query("tb2", "tb3"), dt);
+    // perfect hashtable cache has three items: tf1, tf2 and tb2
+    EXPECT_EQ(static_cast<size_t>(3),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    // baseline hashtable cache remains the same: tb1 and tb2
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+
+    // execute update query on tb2
+    QR::get()->runSQL(gen_update_query("tb2"), dt);
+    // perfect hashtable cache has two clean items: tf1 and tf2
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    // perfect hashtable cache has one dirty item: tb2
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    // baseline hashtable cache has one dirty item: tb2
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::BASELINE_HT));
+    // baseline hashtable cache has total two cached item: tb1 (clean) and tb2 (dirty)
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::BASELINE_HT));
+
+    // execute perfect hash join query, hashtable is built on tb2 and dirty item is
+    // removed
+    QR::get()->runSQL(gen_perfect_hash_query("tb2", "tb3"), dt);
+    // perfect hashtable cache has three clean items: tf1, tf2 and tb2
+    EXPECT_EQ(static_cast<size_t>(3),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(0),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(3),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+    // hashtable on tb2 is still dirty in the baseline hashtable cache
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::BASELINE_HT));
+
+    // execute baseline hash join query, hashtable is built on tb2 and dirty item is
+    // removed
+    QR::get()->runSQL(gen_baseline_hash_query("tb2", "tb3"), dt);
+    // baseline hashtable cache has two clean items: tb1 and tb2
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::BASELINE_HT));
+
+    // execute perfect hash join query, hashtable is built on tb3
+    QR::get()->runSQL(gen_perfect_hash_query("tf3", "tf4"), dt);
+    // perfect hashtable cache has four clean items: tf1, tf2, tb2 and tf3
+    EXPECT_EQ(static_cast<size_t>(4),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // execute baseline hash join query, hashtable is built on tb3
+    QR::get()->runSQL(gen_baseline_hash_query("tb3", "tb4"), dt);
+    // baseline hashtable cache has three clean items: tb1, tb2 and tf3
+    EXPECT_EQ(static_cast<size_t>(3),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+
+    // execute drop table query on tf4, but nothing is changed since we have no
+    // cached item on tf4
+    run_ddl_statement(gen_drop_query("tf4"));
+    EXPECT_EQ(static_cast<size_t>(4),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    // execute drop table query on tb4, but nothing is changed since we have no
+    // cached item on tb4
+    run_ddl_statement(gen_drop_query("tb4"));
+    EXPECT_EQ(static_cast<size_t>(3),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::BASELINE_HT));
+
+    clearCache();
+
+    // string (with dictionaries)
+    drop_tables_for_string_joins();
+    prepare_tables_for_string_joins();
+
+    // built a hashtable on ts1
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts2"), dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    // drop table ts1, hashtable on it will be marked dirty
+    run_ddl_statement(gen_drop_query("ts1"));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // built a hashtable on ts4 (|ts4| < |ts3|)
+    QR::get()->runSQL(gen_perfect_hash_query("ts4", "ts3"), dt);
+    // we only have a single clean cached item: ts4
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    QR::get()->runSQL(gen_perfect_hash_query("ts3", "ts2"), dt);
+    // we have a two clean cached items: ts4 and ts2
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    // we still have a dirty cached item: ts1
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // drop table ts2
+    run_ddl_statement(gen_drop_query("ts2"));
+    // ts3 is built based on join qual with ts2, so its cached item will be marked dirty
+    // b/c they share dictionaries
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(3),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+
+    QR::get()->runSQL(gen_perfect_hash_query("tns1", "tns2"), dt);
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(4),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::PERFECT_HT));
+
+    clearCache();
+    drop_tables_for_string_joins();
+    prepare_tables_for_string_joins();
+
+    // join between dict encoded columns, ts1 and ts2: share dict1, ts3 and ts4: shared
+    // dict2 hashtable based on qual ts1-ts2 is cached, dict1 is referenced
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts2"), dt);
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    // hashtable based on qual ts1-ts3 is cached, dict2 of ts3 is referenced
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts3"), dt);
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // here, ts4 shares dictionary with ts3, so the hashtable for the qual ts1-ts4 is the
+    // same as ts1-ts3, e.g., use dict2 and |ts1| < |ts2| and |ts1| < |ts4|, but we
+    // separate them so hashtable for ts1-ts4 is classified as differently as that of
+    // ts1-ts3 in hashtable recycler
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts4"), dt);
+    // hashtables for 1) ts1-ts2, 2) ts1-ts3 and 3) ts1-ts4
+    EXPECT_EQ(static_cast<size_t>(3),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // drop table ts3, so cached hashtable of ts1-ts3 is marked dirty
+    run_ddl_statement(gen_drop_query("ts3"));
+    // remaining two cached items are in clean state
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    // drop table ts2, so cached hashtable of ts2-ts3 is also marked dirty
+    run_ddl_statement(gen_drop_query("ts2"));
+    // now all cached hashtables are marked dirty and no clean hashtable exists
+    EXPECT_EQ(static_cast<size_t>(1),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+    EXPECT_EQ(static_cast<size_t>(2),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                               CacheItemType::PERFECT_HT));
+
+    drop_tables_for_string_joins();
+    prepare_tables_for_string_joins();
+
+    // extreme case
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts2"), dt);
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "ts3"), dt);
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "tns1"), dt);
+    QR::get()->runSQL(gen_perfect_hash_query("ts1", "tns2"), dt);
+    run_ddl_statement(gen_drop_query("ts1"));
+    EXPECT_EQ(static_cast<size_t>(0),
+              QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                               CacheItemType::PERFECT_HT));
+  }
+  drop_tables();
+  drop_tables_for_string_joins();
 }
 
 int main(int argc, char* argv[]) {

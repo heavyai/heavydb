@@ -20,20 +20,22 @@ std::optional<AutoTunerMetaInfo> OverlapsTuningParamRecycler::getItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
-    std::optional<EMPTY_META_INFO> meta_info) const {
+    std::optional<EMPTY_META_INFO> meta_info) {
   if (!g_enable_data_recycler || !g_use_hashtable_cache ||
       key == EMPTY_HASHED_PLAN_DAG_KEY) {
     return std::nullopt;
   }
   CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
   std::lock_guard<std::mutex> lock(getCacheLock());
-  auto layout_cache = getCachedItemContainer(item_type, device_identifier);
-  auto param_cache = getCachedItem(key, *layout_cache);
-  if (param_cache) {
+  auto param_cache = getCachedItemContainer(item_type, device_identifier);
+  auto cached_param = getCachedItemWithoutConsideringMetaInfo(
+      key, item_type, device_identifier, *param_cache, lock);
+  if (cached_param) {
+    CHECK(!cached_param->isDirty());
     VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
             << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-            << "] Recycle auto tuner parameters for the overlaps hash join qual";
-    return param_cache->cached_item;
+            << "] Recycle auto tuner parameters in cache";
+    return cached_param->cached_item;
   }
   return std::nullopt;
 }
@@ -52,15 +54,16 @@ void OverlapsTuningParamRecycler::putItemToCache(
   }
   CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
   std::lock_guard<std::mutex> lock(getCacheLock());
-  auto layout_cache = getCachedItemContainer(item_type, device_identifier);
-  auto param_cache = getCachedItem(key, *layout_cache);
-  if (param_cache) {
+  auto param_cache = getCachedItemContainer(item_type, device_identifier);
+  auto cached_param = getCachedItemWithoutConsideringMetaInfo(
+      key, item_type, device_identifier, *param_cache, lock);
+  if (cached_param) {
     return;
   }
-  layout_cache->emplace_back(key, item, nullptr, meta_info);
+  param_cache->emplace_back(key, item, nullptr, meta_info);
   VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
           << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-          << "] Put auto tuner parameters for the overlaps hash join qual to cache";
+          << "] Put auto tuner parameters to cache";
   return;
 }
 
@@ -75,8 +78,28 @@ bool OverlapsTuningParamRecycler::hasItemInCache(
     return false;
   }
   CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
-  auto layout_cache = getCachedItemContainer(item_type, device_identifier);
-  return getCachedItem(key, *layout_cache).has_value();
+  auto param_cache = getCachedItemContainer(item_type, device_identifier);
+  auto candidate_it = std::find_if(
+      param_cache->begin(), param_cache->end(), [&key](const auto& cached_item) {
+        return cached_item.key == key;
+      });
+  return candidate_it != param_cache->end();
+}
+
+void OverlapsTuningParamRecycler::removeItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex>& lock,
+    std::optional<EMPTY_META_INFO> meta_info) {
+  auto param_cache = getCachedItemContainer(item_type, device_identifier);
+  auto filter = [key](auto const& item) { return item.key == key; };
+  auto itr = std::find_if(param_cache->cbegin(), param_cache->cend(), filter);
+  if (itr == param_cache->cend()) {
+    return;
+  } else {
+    param_cache->erase(itr);
+  }
 }
 
 void OverlapsTuningParamRecycler::clearCache() {
@@ -84,6 +107,22 @@ void OverlapsTuningParamRecycler::clearCache() {
   auto param_cache = getCachedItemContainer(CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
                                             PARAM_CACHE_DEVICE_IDENTIFIER);
   param_cache->clear();
+}
+
+void OverlapsTuningParamRecycler::markCachedItemAsDirty(
+    size_t table_key,
+    std::unordered_set<QueryPlanHash>& key_set,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier) {
+  if (!g_enable_data_recycler || !g_use_hashtable_cache || key_set.empty()) {
+    return;
+  }
+  CHECK_EQ(item_type, CacheItemType::OVERLAPS_AUTO_TUNER_PARAM);
+  std::lock_guard<std::mutex> lock(getCacheLock());
+  auto param_cache = getCachedItemContainer(item_type, device_identifier);
+  for (auto key : key_set) {
+    markCachedItemAsDirtyImpl(key, *param_cache);
+  }
 }
 
 std::string OverlapsTuningParamRecycler::toString() const {

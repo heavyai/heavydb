@@ -1469,6 +1469,7 @@ ExecutionResult RefreshForeignTablesCommand::execute() {
     foreign_storage::refresh_foreign_table(cat, table_name, evict_cached_entries);
   }
 
+  // todo(yoonmin) : allow per-table cache invalidation for the foreign table
   UpdateTriggeredCacheInvalidator::invalidateCaches();
 
   return ExecutionResult();

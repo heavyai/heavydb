@@ -122,28 +122,29 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                      condition.get(), executor, inner_outer_pairs)
                                : 0;
 
-  auto hashtable_cache_key_string =
-      HashtableRecycler::getHashtableKeyString(inner_outer_pairs,
-                                               condition->get_optype(),
-                                               join_type,
-                                               hashtable_build_dag_map,
-                                               executor);
+  std::vector<InnerOuter> inner_outer_pairs_for_cache_access;
+  inner_outer_pairs_for_cache_access.emplace_back(
+      InnerOuter{dynamic_cast<const Analyzer::ColumnVar*>(range_expr->get_left_operand()),
+                 condition->get_left_operand()});
+  auto hashtable_access_path_info =
+      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs_for_cache_access,
+                                                    condition->get_optype(),
+                                                    join_type,
+                                                    hashtable_build_dag_map,
+                                                    executor);
 
-  auto join_hash_table =
-      std::make_shared<RangeJoinHashTable>(condition,
-                                           join_type,
-                                           range_expr,
-                                           range_join_inner_col_expr,
-                                           query_infos,
-                                           memory_level,
-                                           column_cache,
-                                           executor,
-                                           inner_outer_pairs,
-                                           device_count,
-                                           hashtable_cache_key_string.first,
-                                           hashtable_cache_key_string.second,
-                                           hashtable_build_dag_map,
-                                           table_id_to_node_map);
+  auto join_hash_table = std::make_shared<RangeJoinHashTable>(condition,
+                                                              join_type,
+                                                              range_expr,
+                                                              range_join_inner_col_expr,
+                                                              query_infos,
+                                                              memory_level,
+                                                              column_cache,
+                                                              executor,
+                                                              inner_outer_pairs,
+                                                              device_count,
+                                                              hashtable_access_path_info,
+                                                              table_id_to_node_map);
   HashJoin::checkHashJoinReplicationConstraint(
       HashJoin::getInnerTableId(inner_outer_pairs), shard_count, executor);
   try {
@@ -376,10 +377,11 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
 
   setOverlapsHashtableMetaInfo(
       max_hashtable_size_, bucket_threshold_, inverse_bucket_sizes_for_dimension_);
-  generateCacheKey(max_hashtable_size_, max_hashtable_size_);
+  generateCacheKey(
+      max_hashtable_size_, max_hashtable_size_, inverse_bucket_sizes_for_dimension_);
 
-  if ((query_plan_dag_.compare(EMPTY_QUERY_PLAN) == 0 ||
-       hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY) &&
+  auto table_keys = table_keys_;
+  if (hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
       inner_outer_pairs_.front().first->get_table_id() > 0) {
     // sometimes we cannot retrieve query plan dag, so try to recycler cache
     // with the old-passioned cache key if we deal with hashtable of non-temporary table
@@ -391,10 +393,13 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
                                                      bucket_threshold_,
                                                      inverse_bucket_sizes_for_dimension_};
     hashtable_cache_key_ = getAlternativeCacheKey(cache_key);
-    VLOG(2) << "Use alternative hashtable cache key due to unavailable query plan dag "
-               "extraction (hashtable_cache_key: "
-            << hashtable_cache_key_ << ")";
+    std::vector<int> alternative_table_key{
+        composite_key_info_.cache_key_chunks.front()[0],
+        composite_key_info_.cache_key_chunks.front()[1]};
+    CHECK(!alternative_table_key.empty());
+    table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
   }
+  hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
 
   std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
   if (auto generic_hash_table =

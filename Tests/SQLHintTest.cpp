@@ -575,7 +575,9 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
       "INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p)) T1;";
   {
     auto res = run_query(q1, ExecutorDeviceType::CPU);
-    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(0));
+    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
+    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(0));
   }
 
   if (QR::get()->gpusPresent()) {
@@ -584,7 +586,9 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
         "geospatial_test a INNER JOIN geospatial_inner_join_test b ON "
         "ST_Contains(b.poly, a.p)) T1;";
     auto res = run_query(q2, ExecutorDeviceType::GPU);
-    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(0));
+    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
+    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(0));
   }
 
   // q3 and q4: two (e.g., multiple) subqueries and we disallow to put hashtable to cache
@@ -605,7 +609,9 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
     EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
-    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
+    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
   }
@@ -624,7 +630,9 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
     EXPECT_TRUE(approx_eq(query_hint->overlaps_bucket_threshold, 0.718));
-    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
+    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
   }
@@ -646,7 +654,9 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_TRUE(query_hint.has_value());
     EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
     EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
-    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
+    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
   }
@@ -666,7 +676,9 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_TRUE(query_hint.has_value());
     EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
     EXPECT_TRUE(approx_eq(query_hint->overlaps_bucket_threshold, 0.718));
-    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
+    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
   }
@@ -686,7 +698,9 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
     EXPECT_TRUE(query_hint.has_value());
     EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
     EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
-    EXPECT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), static_cast<size_t>(1));
+    auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
+        QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
+    EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
     QR::get()->clearCpuMemory();
     visited_hashtable_key.clear();
   }

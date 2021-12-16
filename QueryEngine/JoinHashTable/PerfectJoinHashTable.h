@@ -107,16 +107,30 @@ class PerfectJoinHashTable : public HashJoin {
     return hash_table_layout_cache_.get();
   }
 
-  static auto getCacheInvalidator() -> std::function<void()> {
-    CHECK(hash_table_cache_);
+  static void invalidateCache() {
     CHECK(hash_table_layout_cache_);
-    return []() -> void {
-      auto layout_cache_invalidator = hash_table_layout_cache_->getCacheInvalidator();
-      layout_cache_invalidator();
+    hash_table_layout_cache_->clearCache();
 
-      auto main_cache_invalidator = hash_table_cache_->getCacheInvalidator();
-      main_cache_invalidator();
-    };
+    CHECK(hash_table_cache_);
+    hash_table_cache_->clearCache();
+  }
+
+  static void markCachedItemAsDirty(size_t table_key) {
+    CHECK(hash_table_layout_cache_);
+    CHECK(hash_table_cache_);
+    auto candidate_table_keys =
+        hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
+    if (candidate_table_keys.has_value()) {
+      hash_table_layout_cache_->markCachedItemAsDirty(
+          table_key,
+          *candidate_table_keys,
+          CacheItemType::HT_HASHING_SCHEME,
+          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      hash_table_cache_->markCachedItemAsDirty(table_key,
+                                               *candidate_table_keys,
+                                               CacheItemType::PERFECT_HT,
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    }
   }
 
   virtual ~PerfectJoinHashTable() {}
@@ -157,8 +171,7 @@ class PerfectJoinHashTable : public HashJoin {
                        ColumnCacheMap& column_cache,
                        Executor* executor,
                        const int device_count,
-                       QueryPlanHash hashtable_cache_key,
-                       HashtableCacheMetaInfo hashtable_cache_meta_info,
+                       HashtableAccessPathInfo hashtable_access_path_info,
                        const TableIdToNodeMap& table_id_to_node_map)
       : qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
@@ -171,9 +184,10 @@ class PerfectJoinHashTable : public HashJoin {
       , column_cache_(column_cache)
       , device_count_(device_count)
       , needs_dict_translation_(false)
-      , table_id_to_node_map_(table_id_to_node_map)
-      , hashtable_cache_key_(hashtable_cache_key)
-      , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
+      , hashtable_cache_key_(hashtable_access_path_info.hashed_query_plan_dag)
+      , hashtable_cache_meta_info_(hashtable_access_path_info.meta_info)
+      , table_keys_(hashtable_access_path_info.table_keys)
+      , table_id_to_node_map_(table_id_to_node_map) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(device_count_);
@@ -248,9 +262,10 @@ class PerfectJoinHashTable : public HashJoin {
   ColumnCacheMap& column_cache_;
   const int device_count_;
   mutable bool needs_dict_translation_;
-  const TableIdToNodeMap table_id_to_node_map_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
+  std::unordered_set<size_t> table_keys_;
+  const TableIdToNodeMap table_id_to_node_map_;
 
   static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;

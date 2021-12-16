@@ -68,6 +68,12 @@ struct QueryPlanDagInfo {
   std::shared_ptr<RelAlgTranslator> rel_alg_translator;
 };
 
+enum CacheItemStatus {
+  CLEAN_ONLY,
+  DIRTY_ONLY,
+  ALL  // CLEAN + DIRTY
+};
+
 struct BufferPoolStats {
   size_t num_buffers;
   size_t num_bytes;
@@ -219,9 +225,7 @@ class QueryRunner {
       const std::string& query_str);
   std::optional<RegisteredQueryHint> getParsedGlobalQueryHints(
       const std::string& query_str);
-  const int32_t* getCachedPerfectHashTable(QueryPlan plan_dag);
-  const int8_t* getCachedBaselineHashTable(QueryPlan plan_dag);
-  size_t getEntryCntCachedBaselineHashTable(QueryPlan plan_dag);
+
   std::tuple<QueryPlanHash,
              std::shared_ptr<HashTable>,
              std::optional<HashtableCacheMetaInfo>>
@@ -231,11 +235,9 @@ class QueryRunner {
   std::shared_ptr<CacheItemMetric> getCacheItemMetric(QueryPlanHash cache_key,
                                                       CacheItemType hash_table_type,
                                                       DeviceIdentifier device_identifier);
-  size_t getNumberOfCachedPerfectHashTables();
-  size_t getNumberOfCachedBaselineJoinHashTables();
-  size_t getNumberOfCachedOverlapsHashTablesAndTuningParams();
-  size_t getNumberOfCachedOverlapsHashTables();
-  size_t getNumberOfCachedOverlapsHashTableTuringParams();
+  size_t getNumberOfCachedItem(CacheItemStatus item_status,
+                               CacheItemType hash_table_type,
+                               bool with_overlaps_tuning_param = false) const;
 
   void resizeDispatchQueue(const size_t num_executors);
 

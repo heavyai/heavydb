@@ -117,7 +117,7 @@ class QueryPlanDagExtractor {
     }
   }
 
-  void clearInternaStatus() {
+  void clearInternalStatus() {
     contain_not_supported_rel_node_ = true;
     extracted_dag_.clear();
     table_id_to_node_map_.clear();

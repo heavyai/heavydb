@@ -526,32 +526,42 @@ TEST_F(OverlapsTest, SkipHashtableCaching) {
       "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q1, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)2);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)2);
 
   const auto q2 =
       "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_no_cache */ count(*) FROM "
       "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)2);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)2);
 
   QR::get()->clearCpuMemory();
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)0);
 
   const auto q3 =
       "SELECT /*+ overlaps_no_cache */ count(*) FROM does_not_intersect_b as b JOIN "
       "does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q3, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)0);
 
   const auto q4 =
       "SELECT /*+ overlaps_max_size(1000), overlaps_no_cache */ count(*) FROM "
       "does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q4, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)0);
 
   const auto q5 =
       "SELECT /*+ overlaps_bucket_threshold(0.2), overlaps_max_size(1000), "
@@ -559,7 +569,9 @@ TEST_F(OverlapsTest, SkipHashtableCaching) {
       "does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q5, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)0);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)0);
 }
 
 TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
@@ -610,28 +622,36 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "SELECT count(*) FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q1, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)2);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)2);
 
   // <T_E, M_D> case, only add hashtable to cache with <T_E: 0.1, M_D>
   const auto q2 =
       "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q2, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)3);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)3);
 
   // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.2, M_D>
   const auto q3 =
       "SELECT /*+ overlaps_bucket_threshold(0.2) */ count(*) FROM does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q3, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)4);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)4);
 
   // only reuse cached hashtable for <T_E: 0.1, M_D>
   const auto q4 =
       "SELECT /*+ overlaps_bucket_threshold(0.1) */ count(*) FROM does_not_intersect_b "
       "as b JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q4, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)4);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)4);
 
   // skip max_size hint, so <T_E, M_D> case and only reuse <T_E: 0.1, M_D> hashtable
   const auto q5 =
@@ -639,7 +659,9 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q5, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)4);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)4);
 
   // <T_D, M_E> case, so it now becomes <T_C, M_E>
   // add <T_D, M_E> --> <T_C, M_E: 1000> mapping to auto_tuner
@@ -648,7 +670,9 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "SELECT /*+ overlaps_max_size(1000) */ count(*) FROM does_not_intersect_b as b "
       "JOIN does_not_intersect_a as a ON ST_Intersects(a.poly, b.poly);";
   execSQL(q6, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)6);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)6);
 
   // <T_E, M_D> case, only reuse cached hashtable of <T_E: 0.2, M_D>
   const auto q7 =
@@ -656,7 +680,9 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q7, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)6);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)6);
 
   // <T_E, M_D> case... only add hashtable to cache with <T_E: 0.3, M_D>
   const auto q8 =
@@ -664,7 +690,9 @@ TEST_F(OverlapsTest, CacheBehaviorUnderQueryHint) {
       "FROM does_not_intersect_b as b JOIN does_not_intersect_a as a ON "
       "ST_Intersects(a.poly, b.poly);";
   execSQL(q8, ExecutorDeviceType::CPU);
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTablesAndTuningParams(), (size_t)7);
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(
+                QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT, true),
+            (size_t)7);
 }
 
 class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
@@ -713,7 +741,6 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
                                            *executor->getCatalog(),
                                            executor->getTemporaryTables()),
             device_count,
-            EMPTY_QUERY_PLAN,
             {},
             {})
       , expected_values_per_step_(expected_values) {}
@@ -1792,7 +1819,9 @@ TEST_F(RangeJoinTest, DistanceLessThanEqCompressedCols) {
     size_t expected_hash_tables = 0;
 
     if (ctx.hash_join_enabled) {
-      ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+      ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT),
+                expected_hash_tables)
           << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
       expected_hash_tables++;
     }
@@ -1812,7 +1841,9 @@ TEST_F(RangeJoinTest, DistanceLessThanEqCompressedCols) {
           << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
       if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                   CacheItemType::OVERLAPS_HT),
+                  expected_hash_tables)
             << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
         expected_hash_tables++;
       }
@@ -1828,7 +1859,9 @@ TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedCols) {
     size_t expected_hash_tables = 0;
 
     if (ctx.hash_join_enabled) {
-      ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+      ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT),
+                expected_hash_tables)
           << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
       expected_hash_tables++;
     }
@@ -1846,7 +1879,9 @@ TEST_F(RangeJoinTest, DistanceLessThanEqUnCompressedCols) {
           << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
       if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                   CacheItemType::OVERLAPS_HT),
+                  expected_hash_tables)
             << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
         expected_hash_tables++;
       }
@@ -1863,7 +1898,9 @@ TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
       size_t expected_hash_tables = 0;
 
       if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                   CacheItemType::OVERLAPS_HT),
+                  expected_hash_tables)
             << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
         expected_hash_tables++;
       }
@@ -1881,7 +1918,8 @@ TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
             << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
         if (ctx.hash_join_enabled) {
-          ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
+          ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                     CacheItemType::OVERLAPS_HT),
                     expected_hash_tables)
               << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
           expected_hash_tables++;
@@ -1898,7 +1936,9 @@ TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
       size_t expected_hash_tables = 0;
 
       if (ctx.hash_join_enabled) {
-        ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+        ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                   CacheItemType::OVERLAPS_HT),
+                  expected_hash_tables)
             << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
         expected_hash_tables++;
       }
@@ -1916,7 +1956,8 @@ TEST_F(RangeJoinTest, DistanceLessThanMixedEncoding) {
             << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
         if (ctx.hash_join_enabled) {
-          ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(),
+          ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                     CacheItemType::OVERLAPS_HT),
                     expected_hash_tables)
               << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
           expected_hash_tables++;
@@ -1933,7 +1974,9 @@ TEST_F(RangeJoinTest, IsEnabledByDefault) {
   ExecutionContext ctx{ExecutorDeviceType::CPU, true};
   size_t expected_hash_tables{0};
 
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::OVERLAPS_HT),
+            expected_hash_tables)
       << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
   expected_hash_tables++;
 
@@ -1952,7 +1995,9 @@ TEST_F(RangeJoinTest, IsEnabledByDefault) {
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
-    ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
     expected_hash_tables++;
   }
@@ -1968,7 +2013,9 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
 
   const size_t expected_hash_tables{0};
 
-  ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+  ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::OVERLAPS_HT),
+            expected_hash_tables)
       << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
 
   const auto tableA = "t1_comp32";
@@ -1986,7 +2033,9 @@ TEST_F(RangeJoinTest, CanBeDisabled) {
     ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
         << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
 
-    ASSERT_EQ(QR::get()->getNumberOfCachedOverlapsHashTables(), expected_hash_tables)
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
         << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
   }
 }

@@ -35,6 +35,22 @@ struct HashtableCacheMetaInfo {
   std::optional<QueryPlanMetaInfo> query_plan_meta_info;
   std::optional<OverlapsHashTableMetaInfo> overlaps_meta_info;
   std::optional<RegisteredQueryHint> registered_query_hint;
+
+  HashtableCacheMetaInfo()
+      : query_plan_meta_info(std::nullopt)
+      , overlaps_meta_info(std::nullopt)
+      , registered_query_hint(std::nullopt){};
+};
+
+struct HashtableAccessPathInfo {
+  QueryPlanHash hashed_query_plan_dag;
+  HashtableCacheMetaInfo meta_info;
+  std::unordered_set<size_t> table_keys;
+
+  HashtableAccessPathInfo()
+      : hashed_query_plan_dag(EMPTY_HASHED_PLAN_DAG_KEY)
+      , meta_info(HashtableCacheMetaInfo())
+      , table_keys({}){};
 };
 
 class HashtableRecycler
@@ -50,7 +66,7 @@ class HashtableRecycler
       QueryPlanHash key,
       CacheItemType item_type,
       DeviceIdentifier device_identifier,
-      std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt) const override;
+      std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt) override;
 
   void putItemToCache(
       QueryPlanHash key,
@@ -66,20 +82,18 @@ class HashtableRecycler
 
   void clearCache() override;
 
+  void markCachedItemAsDirty(size_t table_key,
+                             std::unordered_set<QueryPlanHash>& key_set,
+                             CacheItemType item_type,
+                             DeviceIdentifier device_identifier) override;
+
   std::string toString() const override;
 
   bool checkOverlapsHashtableBucketCompatability(
       const OverlapsHashTableMetaInfo& candidate_bucket_dim,
       const OverlapsHashTableMetaInfo& target_bucket_dim) const;
 
-  static std::pair<QueryPlanHash, HashtableCacheMetaInfo> getHashtableCacheKey(
-      const std::vector<InnerOuter>& inner_outer_pairs,
-      const SQLOps op_type,
-      const JoinType join_type,
-      const HashTableBuildDagMap& hashtable_build_dag_map,
-      Executor* executor);
-
-  static std::pair<QueryPlan, HashtableCacheMetaInfo> getHashtableKeyString(
+  static HashtableAccessPathInfo getHashtableAccessPathInfo(
       const std::vector<InnerOuter>& inner_outer_pairs,
       const SQLOps op_type,
       const JoinType join_type,
@@ -112,6 +126,14 @@ class HashtableRecycler
                                     CacheItemType hash_table_type,
                                     DeviceIdentifier device_identifier);
 
+  void addQueryPlanDagForTableKeys(size_t hashed_query_plan_dag,
+                                   const std::unordered_set<size_t>& table_keys);
+
+  std::optional<std::unordered_set<size_t>> getMappedQueryPlanDagsWithTableKey(
+      size_t table_key) const;
+
+  void removeTableKeyInfoFromQueryPlanDagMap(size_t table_key);
+
  private:
   bool hasItemInCache(
       QueryPlanHash key,
@@ -133,4 +155,11 @@ class HashtableRecycler
       size_t required_size,
       std::lock_guard<std::mutex>& lock,
       std::optional<HashtableCacheMetaInfo> meta_info = std::nullopt) override;
+
+  // we maintain the mapping between a hashed table_key -> a set of hashed query plan dag
+  // only in hashtable recycler to minimize memory footprint
+  // so other types of data recycler related to hashtable cache
+  // i.e., hashing scheme recycler and overlaps tuning param recycler should use the
+  // key_set when we retrieve it from here, see `markCachedItemAsDirty` function
+  std::unordered_map<size_t, std::unordered_set<size_t>> table_key_to_query_plan_dag_map_;
 };

@@ -31,8 +31,7 @@ class OverlapsJoinHashTable : public HashJoin {
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
                         const int device_count,
-                        QueryPlan query_plan_dag,
-                        HashtableCacheMetaInfo hashtable_cache_meta_info,
+                        HashtableAccessPathInfo hashtable_access_path_info,
                         const TableIdToNodeMap& table_id_to_node_map)
       : condition_(condition)
       , join_type_(join_type)
@@ -42,10 +41,10 @@ class OverlapsJoinHashTable : public HashJoin {
       , column_cache_(column_cache)
       , inner_outer_pairs_(inner_outer_pairs)
       , device_count_(device_count)
-      , query_plan_dag_(query_plan_dag)
-      , table_id_to_node_map_(table_id_to_node_map)
-      , hashtable_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
-      , hashtable_cache_meta_info_(hashtable_cache_meta_info) {
+      , hashtable_cache_key_(hashtable_access_path_info.hashed_query_plan_dag)
+      , hashtable_cache_meta_info_(hashtable_access_path_info.meta_info)
+      , table_keys_(hashtable_access_path_info.table_keys)
+      , table_id_to_node_map_(table_id_to_node_map) {
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(std::max(device_count_, 1));
     query_hint_ = RegisteredQueryHint::defaults();
@@ -66,16 +65,29 @@ class OverlapsJoinHashTable : public HashJoin {
       const RegisteredQueryHint& query_hint,
       const TableIdToNodeMap& table_id_to_node_map);
 
-  static auto getCacheInvalidator() -> std::function<void()> {
-    return []() -> void {
-      CHECK(auto_tuner_cache_);
-      auto auto_tuner_cache_invalidator = auto_tuner_cache_->getCacheInvalidator();
-      auto_tuner_cache_invalidator();
+  static void invalidateCache() {
+    CHECK(auto_tuner_cache_);
+    auto_tuner_cache_->clearCache();
 
-      CHECK(hash_table_cache_);
-      auto main_cache_invalidator = hash_table_cache_->getCacheInvalidator();
-      main_cache_invalidator();
-    };
+    CHECK(hash_table_cache_);
+    hash_table_cache_->clearCache();
+  }
+
+  static void markCachedItemAsDirty(size_t table_key) {
+    CHECK(auto_tuner_cache_);
+    CHECK(hash_table_cache_);
+    auto candidate_table_keys =
+        hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
+    if (candidate_table_keys.has_value()) {
+      auto_tuner_cache_->markCachedItemAsDirty(table_key,
+                                               *candidate_table_keys,
+                                               CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      hash_table_cache_->markCachedItemAsDirty(table_key,
+                                               *candidate_table_keys,
+                                               CacheItemType::OVERLAPS_HT,
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    }
   }
 
   static HashtableRecycler* getHashTableCache() {
@@ -329,11 +341,14 @@ class OverlapsJoinHashTable : public HashJoin {
     return hash;
   }
 
-  void generateCacheKey(const size_t max_hashtable_size, const double bucket_threshold) {
+  void generateCacheKey(const size_t max_hashtable_size,
+                        const double bucket_threshold,
+                        const std::vector<double>& bucket_sizes) {
     std::ostringstream oss;
-    oss << query_plan_dag_;
+    oss << hashtable_cache_key_ << "|";
     oss << max_hashtable_size << "|";
-    oss << bucket_threshold;
+    oss << bucket_threshold << "|";
+    oss << ::toString(bucket_sizes);
     hashtable_cache_key_ = boost::hash_value(oss.str());
   }
 
@@ -387,7 +402,8 @@ class OverlapsJoinHashTable : public HashJoin {
 
   RegisteredQueryHint query_hint_;
   QueryPlan query_plan_dag_;
-  const TableIdToNodeMap table_id_to_node_map_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
+  std::unordered_set<size_t> table_keys_;
+  const TableIdToNodeMap table_id_to_node_map_;
 };
