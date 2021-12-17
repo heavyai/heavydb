@@ -523,6 +523,25 @@ TEST(NullValuesTest, NullTextColumn) {
                "SELECT COUNT(col3) FROM fsi_nulls_text WHERE col3 IS NOT NULL;")));
 }
 
+class BooleanTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists boolean_test;"););
+    ASSERT_NO_THROW(
+        run_ddl_statement("create dataframe boolean_test(a boolean, b bigint) from "
+                          "'CSV:../../Tests/Import/datafiles/fsi_bool_test.csv'"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists boolean_test;"););
+  }
+};
+
+TEST_F(BooleanTest, CheckWithoutNulls) {
+  check_query<int64_t>("select a from boolean_test order by b;",
+                       {1, 1, 1, 0, 0, 1, 0, 1});
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

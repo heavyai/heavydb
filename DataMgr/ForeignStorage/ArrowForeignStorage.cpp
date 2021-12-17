@@ -137,13 +137,12 @@ std::shared_ptr<arrow::ChunkedArray> ArrowForeignStorageBase::replaceNullValues(
   return nullptr;
 }
 
-void convertBoolBitmapBuffer(int8_t* dst,
-                             const uint8_t* src,
-                             const uint8_t* bitmap,
-                             int64_t length,
-                             int64_t bitmap_length,
-                             int8_t null_value) {
-  for (int64_t bitmap_idx = 0; bitmap_idx < bitmap_length - 1; ++bitmap_idx) {
+void convertBoolBitmapBufferWithNulls(int8_t* dst,
+                                      const uint8_t* src,
+                                      const uint8_t* bitmap,
+                                      int64_t length,
+                                      int8_t null_value) {
+  for (int64_t bitmap_idx = 0; bitmap_idx < length / 8; ++bitmap_idx) {
     auto source = src[bitmap_idx];
     auto dest = dst + bitmap_idx * 8;
     auto inversed_bitmap = ~bitmap[bitmap_idx];
@@ -154,10 +153,26 @@ void convertBoolBitmapBuffer(int8_t* dst,
     }
   }
 
-  for (int64_t j = (bitmap_length - 1) * 8; j < length; ++j) {
-    auto is_null = (~bitmap[bitmap_length - 1] >> (j % 8)) & 1;
-    auto val = (src[bitmap_length - 1] >> (j % 8)) & 1;
+  for (int64_t j = (length / 8) * 8; j < length; ++j) {
+    auto is_null = (~bitmap[length / 8] >> (j % 8)) & 1;
+    auto val = (src[length / 8] >> (j % 8)) & 1;
     dst[j] = is_null ? null_value : val;
+  }
+}
+
+void convertBoolBitmapBufferWithoutNulls(int8_t* dst,
+                                         const uint8_t* src,
+                                         int64_t length) {
+  for (int64_t bitmap_idx = 0; bitmap_idx < length / 8; ++bitmap_idx) {
+    auto source = src[bitmap_idx];
+    auto dest = dst + bitmap_idx * 8;
+    for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
+      dest[bitmap_offset] = (source >> bitmap_offset) & 1;
+    }
+  }
+
+  for (int64_t j = (length / 8) * 8; j < length; ++j) {
+    dst[j] = (src[length / 8] >> (j % 8)) & 1;
   }
 }
 
@@ -211,24 +226,29 @@ std::shared_ptr<arrow::ChunkedArray> ArrowForeignStorageBase::replaceNullValuesI
 
           auto chunkData = reinterpret_cast<const T*>(chunk->data()->buffers[1]->data());
 
+          const uint8_t* bitmap_data = chunk->null_bitmap_data();
+          const int64_t length = chunk->length();
+
           if (chunk->null_count() == 0) {
-            std::copy(chunkData, chunkData + chunk->length(), resWithOffset);
+            if constexpr (std::is_same_v<T, bool>) {
+              convertBoolBitmapBufferWithoutNulls(
+                  reinterpret_cast<int8_t*>(resWithOffset),
+                  reinterpret_cast<const uint8_t*>(chunkData),
+                  length);
+            } else {
+              std::copy(chunkData, chunkData + chunk->length(), resWithOffset);
+            }
             continue;
           }
 
-          const uint8_t* bitmap_data = chunk->null_bitmap_data();
-          const int64_t length = chunk->length();
-          const int64_t bitmap_length = chunk->null_bitmap()->size();
-
           if constexpr (std::is_same_v<T, bool>) {
-            convertBoolBitmapBuffer(reinterpret_cast<int8_t*>(resWithOffset),
-                                    reinterpret_cast<const uint8_t*>(chunkData),
-                                    bitmap_data,
-                                    length,
-                                    bitmap_length,
-                                    null_value);
+            convertBoolBitmapBufferWithNulls(reinterpret_cast<int8_t*>(resWithOffset),
+                                             reinterpret_cast<const uint8_t*>(chunkData),
+                                             bitmap_data,
+                                             length,
+                                             null_value);
           } else {
-            for (int64_t bitmap_idx = 0; bitmap_idx < bitmap_length - 1; ++bitmap_idx) {
+            for (int64_t bitmap_idx = 0; bitmap_idx < length / 8; ++bitmap_idx) {
               auto source = chunkData + bitmap_idx * 8;
               auto dest = resWithOffset + bitmap_idx * 8;
               auto inversed_bitmap = ~bitmap_data[bitmap_idx];
@@ -239,8 +259,8 @@ std::shared_ptr<arrow::ChunkedArray> ArrowForeignStorageBase::replaceNullValuesI
               }
             }
 
-            for (int64_t j = (bitmap_length - 1) * 8; j < length; ++j) {
-              auto is_null = (~bitmap_data[bitmap_length - 1] >> (j % 8)) & 1;
+            for (int64_t j = length / 8 * 8; j < length; ++j) {
+              auto is_null = (~bitmap_data[length / 8] >> (j % 8)) & 1;
               auto val = is_null ? null_value : chunkData[j];
               resWithOffset[j] = val;
             }
