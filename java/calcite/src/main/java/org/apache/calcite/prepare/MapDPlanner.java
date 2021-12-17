@@ -39,13 +39,7 @@ import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.externalize.MapDRelJsonReader;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
-import org.apache.calcite.rel.rules.CoreRules;
-import org.apache.calcite.rel.rules.DynamicFilterJoinRule;
-import org.apache.calcite.rel.rules.FilterJoinRule;
-import org.apache.calcite.rel.rules.InjectFilterRule;
-import org.apache.calcite.rel.rules.OuterJoinOptViaNullRejectionRule;
-import org.apache.calcite.rel.rules.QueryOptimizationRules;
-import org.apache.calcite.rel.rules.Restriction;
+import org.apache.calcite.rel.rules.*;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
@@ -224,7 +218,10 @@ public class MapDPlanner extends PlannerImpl {
     QueryOptimizationRules outerJoinOptRule =
             new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER);
 
-    HepProgram program = HepProgram.builder().addRuleInstance(outerJoinOptRule).build();
+    HepProgram program = HepProgram.builder()
+                                 .addRuleInstance(CoreRules.AGGREGATE_MERGE)
+                                 .addRuleInstance(outerJoinOptRule)
+                                 .build();
     HepPlanner prePlanner = MapDPlanner.getHepPlanner(program, true);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();

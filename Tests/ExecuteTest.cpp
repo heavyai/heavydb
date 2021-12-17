@@ -8976,6 +8976,32 @@ TEST(Select, Subqueries) {
       "y;",
       dt);
     c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test);", dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "str IN (SELECT DISTINCT str FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_inner) AND str IN "
+      "(SELECT str FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "str IN (SELECT DISTINCT str FROM test_inner) AND str IN (SELECT DISTINCT str FROM "
+      "test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "str IN (SELECT str FROM test_inner) AND str IN (SELECT DISTINCT str FROM "
+      "test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT  str FROM test_inner) AND str IN "
+      "(SELECT str FROM test_inner) AND str IN (SELECT DISTINCT str FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "x IN (SELECT DISTINCT x FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT DISTINCT str FROM test_inner) AND "
+      "x IN (SELECT x FROM test_inner);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN (SELECT str FROM test_inner) AND x IN "
+      "(SELECT x FROM test_inner);",
+      dt);
     c("SELECT SUM((x - (SELECT AVG(x) FROM test)) * (x - (SELECT AVG(x) FROM test)) / "
       "((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
