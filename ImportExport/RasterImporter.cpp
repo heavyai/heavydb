@@ -33,6 +33,7 @@
 #include <xercesc/parsers/XercesDOMParser.hpp>
 
 #include <gdal.h>
+#include <gdal_alg.h>
 #include <ogrsf_frmts.h>
 
 #include "Shared/import_helpers.h"
@@ -41,6 +42,50 @@
 #define DEBUG_RASTER_IMPORT 0
 
 namespace import_export {
+
+GCPTransformer::GCPTransformer(OGRDataSource* datasource, const Mode mode)
+    : transform_arg_{nullptr}, mode_{mode} {
+  CHECK(datasource);
+  auto const gcp_count = datasource->GetGCPCount();
+  auto const* gcp_list = datasource->GetGCPs();
+  switch (mode_) {
+    case Mode::kPolynomial:
+      static constexpr int kPolynomialOrder = 2;
+      transform_arg_ =
+          GDALCreateGCPTransformer(gcp_count, gcp_list, kPolynomialOrder, false);
+      break;
+    case Mode::kThinPlateSpline:
+      transform_arg_ = GDALCreateTPSTransformer(gcp_count, gcp_list, false);
+      break;
+  }
+  CHECK(transform_arg_);
+}
+
+GCPTransformer::~GCPTransformer() {
+  switch (mode_) {
+    case Mode::kPolynomial:
+      GDALDestroyGCPTransformer(transform_arg_);
+      break;
+    case Mode::kThinPlateSpline:
+      GDALDestroyTPSTransformer(transform_arg_);
+      break;
+  }
+}
+
+void GCPTransformer::transform(double& x, double& y) {
+  int success{0};
+  switch (mode_) {
+    case Mode::kPolynomial:
+      GDALGCPTransform(transform_arg_, false, 1, &x, &y, nullptr, &success);
+      break;
+    case Mode::kThinPlateSpline:
+      GDALTPSTransform(transform_arg_, false, 1, &x, &y, nullptr, &success);
+      break;
+  }
+  if (!success) {
+    throw std::runtime_error("Failed GCP/TPS Transform");
+  }
+}
 
 namespace {
 
@@ -250,8 +295,16 @@ void RasterImporter::detect(const std::string& file_name,
       }
     }
 
-    // note if it has a spatial reference
-    has_spatial_reference = (datasource->GetSpatialRef() != nullptr);
+    // note if it has a spatial reference (of either type)
+    if (datasource->GetSpatialRef()) {
+      has_spatial_reference = true;
+      LOG_IF(INFO, DEBUG_RASTER_IMPORT) << "DEBUG: Found regular Spatial Reference";
+    } else if (datasource->GetGCPSpatialRef()) {
+      auto const num_points = datasource->GetGCPCount();
+      LOG_IF(INFO, DEBUG_RASTER_IMPORT)
+          << "DEBUG: Found GCP Spatial Reference with " << num_points << " GCPs";
+      has_spatial_reference = (num_points > 0);
+    }
 
     // fetch
     getRawBandNamesForFormat(datasource);
@@ -259,6 +312,8 @@ void RasterImporter::detect(const std::string& file_name,
 
   // if we didn't find any subdatasources, just use the base file
   if (datasource_names_.size() == 0) {
+    LOG_IF(INFO, DEBUG_RASTER_IMPORT)
+        << "DEBUG: No sub-datasources found, just using '" << file_name << "'";
     datasource_names_.push_back(file_name);
   }
 
@@ -532,7 +587,15 @@ void RasterImporter::import(const uint32_t max_threads) {
   // create a world-space coordinate transformation for the points?
   if (srid != 0 && point_transform_ == PointTransform::kWorld) {
     // get the file's spatial reference, if it has one (only geo files will)
+    // also determine if we need to do additional GCP transformations
+    bool need_gcp_transformers{false};
     auto const* spatial_reference = global_datasource_handle->GetSpatialRef();
+    if (!spatial_reference) {
+      spatial_reference = global_datasource_handle->GetGCPSpatialRef();
+      if (spatial_reference) {
+        need_gcp_transformers = true;
+      }
+    }
     if (spatial_reference) {
       // if it's valid, create a transformation to use on the points
       // make a spatial reference for the desired SRID
@@ -553,6 +616,10 @@ void RasterImporter::import(const uint32_t max_threads) {
           throw std::runtime_error(
               "Failed to create coordinate system transformation to EPSG " +
               std::to_string(srid));
+        }
+        if (need_gcp_transformers) {
+          gcp_transformers_.emplace_back(
+              new GCPTransformer(global_datasource_handle.get()));
         }
       }
     }
@@ -628,12 +695,20 @@ const RasterImporter::Coords RasterImporter::getProjectedPixelCoords(
       dy = fdy;
 
       // do geo-spatial transform if we can (otherwise leave alone)
-      if (point_transform_ == PointTransform::kWorld &&
-          thread_idx < coordinate_transformations_.size()) {
-        int success{0};
-        coordinate_transformations_[thread_idx]->Transform(
-            1, &dx, &dy, nullptr, &success);
-        CHECK(success);
+      if (point_transform_ == PointTransform::kWorld) {
+        // first any GCP transformation
+        if (thread_idx < gcp_transformers_.size()) {
+          gcp_transformers_[thread_idx]->transform(dx, dy);
+        }
+        // then any additional transformation to world space
+        if (thread_idx < coordinate_transformations_.size()) {
+          int success{0};
+          coordinate_transformations_[thread_idx]->Transform(
+              1, &dx, &dy, nullptr, &success);
+          if (!success) {
+            throw std::runtime_error("Failed OGRCoordinateTransform");
+          }
+        }
       }
     }
 

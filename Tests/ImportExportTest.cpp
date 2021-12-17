@@ -3496,6 +3496,7 @@ static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.
 static constexpr const char* kGRIB = "hrrr.t00z.wrfsubhf00_small.grib2";
 static constexpr const char* kZARRArchive = "small.zarr.tgz";
 static constexpr const char* kZARRFile = "small.zarr";
+static constexpr const char* kS1B = "s1b_small.tiff";
 
 // RasterImporter Class Tests
 
@@ -3755,6 +3756,12 @@ TEST_F(RasterImporterTest, GeoTIFFProjectionTest) {
                                     100,
                                     -83.223951477975234,
                                     39.817841877096328));
+}
+
+TEST_F(RasterImporterTest, S1BProjectionTest) {
+  SKIP_ALL_ON_AGGREGATOR();
+  ASSERT_NO_THROW(runProjectionTest(
+      kS1B, TY::kDouble, TR::kWorld, 100, 100, 45.009807508249182, 62.641101973988086));
 }
 
 TEST_F(RasterImporterTest, PNGValueTest) {

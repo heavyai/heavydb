@@ -36,6 +36,21 @@ class OGRDataSource;
 
 namespace import_export {
 
+class GCPTransformer {
+ public:
+  enum class Mode { kPolynomial, kThinPlateSpline };
+
+  explicit GCPTransformer(OGRDataSource* datasource, const Mode mode = Mode::kPolynomial);
+  GCPTransformer() = delete;
+  ~GCPTransformer();
+
+  void transform(double& x, double& y);
+
+ private:
+  void* transform_arg_;
+  Mode mode_;
+};
+
 class RasterImporter {
  public:
   RasterImporter() = default;
@@ -101,6 +116,7 @@ class RasterImporter {
   PointTransform point_transform_{PointTransform::kNone};
   std::vector<Geospatial::GDAL::CoordinateTransformationUqPtr>
       coordinate_transformations_;
+  std::vector<std::unique_ptr<GCPTransformer>> gcp_transformers_;
   bool point_compute_angle_{false};
 
   void getRawBandNamesForFormat(const Geospatial::GDAL::DataSourceUqPtr& datasource);
