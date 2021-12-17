@@ -1584,7 +1584,7 @@ llvm::Function* create_row_function(const size_t in_col_count,
     // old total match count returned to the caller
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
     // max matched (total number of slots in the output buffer)
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(llvm::Type::getInt32Ty(context));
   }
 
   // aggregate init values

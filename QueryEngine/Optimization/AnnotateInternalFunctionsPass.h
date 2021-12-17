@@ -58,6 +58,9 @@ class AnnotateInternalFunctionsPass : public llvm::CallGraphSCCPass {
         for (const auto& attr : attrs) {
           fcn->addFnAttr(attr);
         }
+      } else if (isReadOnlyFunction(fcn->getName())) {
+        updated_function_defs = true;
+        fcn->addFnAttr(llvm::Attribute::ReadOnly);
       }
     }
 
@@ -79,6 +82,14 @@ class AnnotateInternalFunctionsPass : public llvm::CallGraphSCCPass {
   static bool isInternalMathFunction(const llvm::StringRef& func_name) {
     // include all math functions from ExtensionFunctions.hpp
     return math_builtins.count(func_name.str()) > 0;
+  }
+
+  static const std::set<std::string> readonly_functions;
+
+  static bool isReadOnlyFunction(const llvm::StringRef& func_name) {
+    // functions which do not write through any pointer arguments or modify any state
+    // visible to caller
+    return readonly_functions.count(func_name.str()) > 0;
   }
 };
 
@@ -122,3 +133,6 @@ const std::set<std::string> AnnotateInternalFunctionsPass::math_builtins =
                           "Cot",   "degrees", "Exp",  "Floor",    "ln",      "Log",
                           "Log10", "log",     "pi",   "power",    "radians", "Round",
                           "Sin",   "Tan",     "tan",  "Truncate", "isNan"};
+
+const std::set<std::string> AnnotateInternalFunctionsPass::readonly_functions =
+    std::set<std::string>{"check_interrupt"};
