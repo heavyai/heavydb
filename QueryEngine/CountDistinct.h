@@ -27,9 +27,9 @@
 
 #include "Descriptors/CountDistinctDescriptor.h"
 #include "HyperLogLog.h"
+#include "ThirdParty/robin_hood.h"
 
 #include <bitset>
-#include <set>
 #include <vector>
 
 using CountDistinctDescriptors = std::vector<CountDistinctDescriptor>;
@@ -93,8 +93,8 @@ inline int64_t count_distinct_set_size(
     }
     return bitmap_set_size(set_vals, count_distinct_desc.bitmapSizeBytes());
   }
-  CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
-  return reinterpret_cast<std::set<int64_t>*>(set_handle)->size();
+  CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::HashSet);
+  return reinterpret_cast<robin_hood::unordered_set<int64_t>*>(set_handle)->size();
 }
 
 inline void count_distinct_set_union(
@@ -142,9 +142,9 @@ inline void count_distinct_set_union(
       bitmap_set_union(new_set, old_set, bitmap_byte_sz);
     }
   } else {
-    CHECK(old_count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
-    auto old_set = reinterpret_cast<std::set<int64_t>*>(old_set_handle);
-    auto new_set = reinterpret_cast<std::set<int64_t>*>(new_set_handle);
+    CHECK(old_count_distinct_desc.impl_type_ == CountDistinctImplType::HashSet);
+    auto old_set = reinterpret_cast<robin_hood::unordered_set<int64_t>*>(old_set_handle);
+    auto new_set = reinterpret_cast<robin_hood::unordered_set<int64_t>*>(new_set_handle);
     new_set->insert(old_set->begin(), old_set->end());
   }
 }

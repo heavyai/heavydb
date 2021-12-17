@@ -38,7 +38,7 @@ inline size_t bitmap_bits_to_bytes(const size_t bitmap_sz) {
   return bitmap_byte_sz;
 }
 
-enum class CountDistinctImplType { Invalid, Bitmap, StdSet };
+enum class CountDistinctImplType { Invalid, Bitmap, HashSet };
 
 struct CountDistinctDescriptor {
   CountDistinctImplType impl_type_;

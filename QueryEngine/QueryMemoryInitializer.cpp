@@ -25,7 +25,7 @@
 #include "StreamingTopN.h"
 
 #include <Shared/checked_alloc.h>
-
+#include <ThirdParty/robin_hood.h>
 #include <x86intrin.h>
 
 // 8 GB, the limit of perfect hash group by under normal conditions
@@ -801,7 +801,7 @@ std::vector<int64_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
           init_agg_vals_[agg_col_idx] = allocateCountDistinctBitmap(bitmap_byte_sz);
         }
       } else {
-        CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
+        CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::HashSet);
         if (deferred) {
           agg_bitmap_size[agg_col_idx] = -1;
         } else {
@@ -828,7 +828,7 @@ int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_
 }
 
 int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
-  auto count_distinct_set = new std::set<int64_t>();
+  auto count_distinct_set = new robin_hood::unordered_set<int64_t>();
   row_set_mem_owner_->addCountDistinctSet(count_distinct_set);
   return reinterpret_cast<int64_t>(count_distinct_set);
 }

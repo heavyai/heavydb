@@ -83,6 +83,7 @@ java/thrift/src/
 *.project
 
 ThirdParty/
+!ThirdParty/robin_hood.h
 data/
 
 # IntelliJ/CLion settings files

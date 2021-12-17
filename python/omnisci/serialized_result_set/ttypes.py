@@ -41,18 +41,18 @@ class TResultSetLayout(object):
 class TCountDistinctImplType(object):
     Invalid = 0
     Bitmap = 1
-    StdSet = 2
+    HashSet = 2
 
     _VALUES_TO_NAMES = {
         0: "Invalid",
         1: "Bitmap",
-        2: "StdSet",
+        2: "HashSet",
     }
 
     _NAMES_TO_VALUES = {
         "Invalid": 0,
         "Bitmap": 1,
-        "StdSet": 2,
+        "HashSet": 2,
     }
 
 

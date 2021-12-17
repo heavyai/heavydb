@@ -20,7 +20,6 @@
 #include <list>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -32,6 +31,7 @@
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
+#include "ThirdParty/robin_hood.h"
 
 namespace Catalog_Namespace {
 class Catalog;
@@ -76,7 +76,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
         CountDistinctBitmapBuffer{count_distinct_buffer, bytes, physical_buffer});
   }
 
-  void addCountDistinctSet(std::set<int64_t>* count_distinct_set) {
+  void addCountDistinctSet(robin_hood::unordered_set<int64_t>* count_distinct_set) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     count_distinct_sets_.push_back(count_distinct_set);
   }
@@ -204,7 +204,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   };
 
   std::vector<CountDistinctBitmapBuffer> count_distinct_bitmaps_;
-  std::vector<std::set<int64_t>*> count_distinct_sets_;
+  std::vector<robin_hood::unordered_set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
   std::vector<void*> varlen_buffers_;
   std::list<std::string> strings_;

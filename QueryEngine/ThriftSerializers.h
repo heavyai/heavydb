@@ -300,7 +300,7 @@ inline TCountDistinctImplType::type count_distinct_impl_type_to_thrift(
   switch (impl_type) {
     THRIFT_COUNTDESCRIPTORIMPL_CASE(Invalid)
     THRIFT_COUNTDESCRIPTORIMPL_CASE(Bitmap)
-    THRIFT_COUNTDESCRIPTORIMPL_CASE(StdSet)
+    THRIFT_COUNTDESCRIPTORIMPL_CASE(HashSet)
     default:
       CHECK(false);
   }
@@ -335,7 +335,7 @@ inline CountDistinctImplType count_distinct_impl_type_from_thrift(
   switch (impl_type) {
     UNTHRIFT_COUNTDESCRIPTORIMPL_CASE(Invalid)
     UNTHRIFT_COUNTDESCRIPTORIMPL_CASE(Bitmap)
-    UNTHRIFT_COUNTDESCRIPTORIMPL_CASE(StdSet)
+    UNTHRIFT_COUNTDESCRIPTORIMPL_CASE(HashSet)
     default:
       CHECK(false);
   }

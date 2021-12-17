@@ -2644,7 +2644,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     for (size_t i = 0; i < num_count_distinct_descs; i++) {
       const auto& count_distinct_descriptor =
           query_mem_desc->getCountDistinctDescriptor(i);
-      if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet ||
+      if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::HashSet ||
           (count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid &&
            !co.hoist_literals)) {
         throw QueryMustRunOnCpu();

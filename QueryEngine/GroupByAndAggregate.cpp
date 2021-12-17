@@ -32,6 +32,7 @@
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"
 #include "../Shared/funcannotations.h"
+#include "../ThirdParty/robin_hood.h"
 #include "../Utils/ChunkIter.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
@@ -562,7 +563,9 @@ CountDistinctDescriptors init_count_distinct_descriptors(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const ExecutorDeviceType device_type,
-    Executor* executor) {
+    Executor* executor,
+    size_t group_by_slots_count,
+    QueryDescriptionType group_by_hash_type) {
   CountDistinctDescriptors count_distinct_descriptors;
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     auto agg_info = get_target_info(target_expr, g_bigint_count);
@@ -590,7 +593,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           arg_ti.is_fp() ? no_range_info
                          : get_expr_range_info(
                                ra_exe_unit, query_infos, agg_expr->get_arg(), executor);
-      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
+      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::HashSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
         const auto error_rate = agg_expr->get_arg1();
@@ -618,20 +621,30 @@ CountDistinctDescriptors init_count_distinct_descriptors(
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
           bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
-          if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
-            count_distinct_impl_type = CountDistinctImplType::StdSet;
+
+          if (group_by_hash_type == QueryDescriptionType::GroupByBaselineHash) {
+            const int64_t MAX_TOTAL_BITMAPS_BITS = 8 * 8 * 1000 * 1000 * 1000LL;  // 8GB
+            int64_t total_bitmaps_size = bitmap_sz_bits * group_by_slots_count / 2;
+
+            if (total_bitmaps_size <= 0 || total_bitmaps_size > MAX_TOTAL_BITMAPS_BITS) {
+              count_distinct_impl_type = CountDistinctImplType::HashSet;
+            }
+          } else {
+            const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
+            if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
+              count_distinct_impl_type = CountDistinctImplType::HashSet;
+            }
           }
         }
       }
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet &&
+          count_distinct_impl_type == CountDistinctImplType::HashSet &&
           !(arg_ti.is_array() || arg_ti.is_geometry())) {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
 
       if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet) {
+          count_distinct_impl_type == CountDistinctImplType::HashSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
       const auto sub_bitmap_count =
@@ -703,12 +716,17 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
     RenderInfo* render_info,
     const bool must_use_baseline_sort,
     const bool output_columnar_hint) {
-  const auto count_distinct_descriptors = init_count_distinct_descriptors(
-      ra_exe_unit_, query_infos_, device_type_, executor_);
-
   const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
   auto col_range_info_nosharding = getColRangeInfo();
+
+  const auto count_distinct_descriptors =
+      init_count_distinct_descriptors(ra_exe_unit_,
+                                      query_infos_,
+                                      device_type_,
+                                      executor_,
+                                      max_groups_buffer_entry_count,
+                                      col_range_info_nosharding.hash_type_);
 
   const auto shard_count =
       device_type_ == ExecutorDeviceType::GPU
@@ -1604,7 +1622,7 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
 }
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct(int64_t* agg, const int64_t val) {
-  reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
+  reinterpret_cast<robin_hood::unordered_set<int64_t>*>(*agg)->insert(val);
 }
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct_skip_val(int64_t* agg,

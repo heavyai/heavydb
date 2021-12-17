@@ -24,6 +24,8 @@
 
 #include <cstdint>
 #include "../Shared/funcannotations.h"
+#include "../ThirdParty/robin_hood.h"
+
 #include "../Utils/ChunkIter.h"
 #include "TypePunning.h"
 
@@ -328,7 +330,8 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t elem_bitcast_double(const double
     for (size_t i = 0; i < elem_count; ++i) {                                           \
       const auto val = reinterpret_cast<type*>(ad.pointer)[i];                          \
       if (val != null_val) {                                                            \
-        reinterpret_cast<std::set<int64_t>*>(*agg)->insert(elem_bitcast_##type(val));   \
+        reinterpret_cast<robin_hood::unordered_set<int64_t>*>(*agg)->insert(            \
+            elem_bitcast_##type(val));                                                  \
       }                                                                                 \
     }                                                                                   \
   }
