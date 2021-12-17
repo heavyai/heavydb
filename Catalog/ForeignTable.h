@@ -39,6 +39,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
 
   // Option keys
   static constexpr const char* FRAGMENT_SIZE_KEY = "FRAGMENT_SIZE";
+  static constexpr const char* MAX_CHUNK_SIZE_KEY = "MAX_CHUNK_SIZE";
   static constexpr const char* REFRESH_TIMING_TYPE_KEY = "REFRESH_TIMING_TYPE";
   static constexpr const char* REFRESH_START_DATE_TIME_KEY = "REFRESH_START_DATE_TIME";
   static constexpr const char* REFRESH_INTERVAL_KEY = "REFRESH_INTERVAL";
@@ -55,6 +56,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
   int64_t last_refresh_time{NULL_REFRESH_TIME}, next_refresh_time{NULL_REFRESH_TIME};
 
   inline static const std::set<const char*> supported_options{FRAGMENT_SIZE_KEY,
+                                                              MAX_CHUNK_SIZE_KEY,
                                                               REFRESH_TIMING_TYPE_KEY,
                                                               REFRESH_START_DATE_TIME_KEY,
                                                               REFRESH_INTERVAL_KEY,

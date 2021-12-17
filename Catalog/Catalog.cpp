@@ -4754,7 +4754,7 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   if (dump_defaults || td->maxFragRows != DEFAULT_FRAGMENT_ROWS) {
     with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
   }
-  if (!foreign_table && (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE)) {
+  if (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE) {
     with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
   }
   if (!foreign_table && (dump_defaults || td->fragPageSize != DEFAULT_PAGE_SIZE)) {

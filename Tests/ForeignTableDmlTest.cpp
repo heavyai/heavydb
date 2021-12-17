@@ -51,6 +51,7 @@ namespace bf = boost::filesystem;
 using path = bf::path;
 using WrapperType = std::string;
 using FragmentSizeType = int32_t;
+using ChunkSizeType = int64_t;
 using FileNameType = std::string;
 using RecoverCacheFlag = bool;
 using EvictCacheFlag = bool;
@@ -559,12 +560,14 @@ class SelectQueryTest : public ForeignTableTest {
       import_export::delimited_parser::get_max_buffer_resize();
 };
 
-class CacheControllingSelectQueryTest
-    : public SelectQueryTest,
-      public ::testing::WithParamInterface<File_Namespace::DiskCacheLevel> {
+class CacheControllingSelectQueryBaseTest : public SelectQueryTest {
  public:
   inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
   File_Namespace::DiskCacheLevel starting_cache_level_;
+  File_Namespace::DiskCacheLevel cache_level_;
+
+  CacheControllingSelectQueryBaseTest(const File_Namespace::DiskCacheLevel& cache_level)
+      : cache_level_(cache_level) {}
 
  protected:
   void resetPersistentStorageMgr(File_Namespace::DiskCacheLevel cache_level) {
@@ -582,8 +585,8 @@ class CacheControllingSelectQueryTest
                                 .getPersistentStorageMgr()
                                 ->getDiskCacheConfig()
                                 .enabled_level;
-    if (starting_cache_level_ != GetParam()) {
-      resetPersistentStorageMgr(GetParam());
+    if (starting_cache_level_ != cache_level_) {
+      resetPersistentStorageMgr(cache_level_);
     }
     SelectQueryTest::SetUp();
   }
@@ -591,10 +594,17 @@ class CacheControllingSelectQueryTest
   void TearDown() override {
     SelectQueryTest::TearDown();
     // Reset cache to pre-test conditions
-    if (starting_cache_level_ != GetParam()) {
+    if (starting_cache_level_ != cache_level_) {
       resetPersistentStorageMgr(starting_cache_level_);
     }
   }
+};
+
+class CacheControllingSelectQueryTest
+    : public CacheControllingSelectQueryBaseTest,
+      public ::testing::WithParamInterface<File_Namespace::DiskCacheLevel> {
+ public:
+  CacheControllingSelectQueryTest() : CacheControllingSelectQueryBaseTest(GetParam()) {}
 };
 
 class RecoverCacheQueryTest : public ForeignTableTest {

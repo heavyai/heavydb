@@ -25,6 +25,10 @@
 
 using namespace Data_Namespace;
 
+namespace Catalog_Namespace {
+class Catalog;
+}
+
 class PostEvictionRefreshException : public std::runtime_error {
  public:
   PostEvictionRefreshException() = delete;
@@ -40,6 +44,25 @@ class PostEvictionRefreshException : public std::runtime_error {
 };
 
 namespace foreign_storage {
+
+class ChunkSizeValidator {
+ public:
+  ChunkSizeValidator(const ChunkKey& chunk_key);
+
+  void validateChunkSize(const AbstractBuffer* buffer) const;
+
+  void validateChunkSizes(const ChunkToBufferMap& buffers) const;
+
+  void throwChunkSizeViolatedError(const int64_t actual_chunk_size,
+                                   const int column_id = -1) const;
+
+ private:
+  int column_id;
+  int64_t max_chunk_size;
+  std::shared_ptr<Catalog_Namespace::Catalog> catalog;
+  const ColumnDescriptor* column;
+  const ForeignTable* foreign_table;
+};
 
 bool set_comp(const ChunkKey& left, const ChunkKey& right);
 

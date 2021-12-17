@@ -56,14 +56,59 @@ void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
   }
 }
 
+ChunkSizeValidator::ChunkSizeValidator(const ChunkKey& chunk_key) {
+  int table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
+  column_id = chunk_key[CHUNK_KEY_COLUMN_IDX];
+  catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
+  column = catalog->getMetadataForColumn(table_id, column_id);
+  foreign_table = catalog->getForeignTable(table_id);
+  max_chunk_size = foreign_table->maxChunkSize;
+}
+
+void ChunkSizeValidator::validateChunkSize(const AbstractBuffer* buffer) const {
+  CHECK(buffer);
+  int64_t actual_chunk_size = buffer->size();
+  if (actual_chunk_size > max_chunk_size) {
+    throwChunkSizeViolatedError(actual_chunk_size);
+  }
+}
+
+void ChunkSizeValidator::validateChunkSizes(const ChunkToBufferMap& buffers) const {
+  for (const auto& [chunk_key, buffer] : buffers) {
+    int64_t actual_chunk_size = buffer->size();
+    if (actual_chunk_size > max_chunk_size) {
+      throwChunkSizeViolatedError(actual_chunk_size, chunk_key[CHUNK_KEY_COLUMN_IDX]);
+    }
+  }
+}
+
+void ChunkSizeValidator::throwChunkSizeViolatedError(const int64_t actual_chunk_size,
+                                                     const int column_id) const {
+  std::string column_name = column->columnName;
+  if (column_id > 0) {
+    column_name =
+        catalog->getMetadataForColumn(foreign_table->tableId, column_id)->columnName;
+  }
+  std::stringstream error_stream;
+  error_stream << "Chunk populated by data wrapper which is " << actual_chunk_size
+               << " bytes exceeds maximum byte size limit of " << max_chunk_size << "."
+               << " Foreign table: " << foreign_table->tableName
+               << ", column name : " << column_name;
+  throw ForeignStorageException(error_stream.str());
+}
+
 void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                     AbstractBuffer* destination_buffer,
                                     const size_t num_bytes) {
+  ChunkSizeValidator chunk_size_validator(chunk_key);
+
   checkIfS3NeedsToBeEnabled(chunk_key);
   CHECK(destination_buffer);
   CHECK(!destination_buffer->isDirty());
   // Use a temp buffer if we have no cache buffers and have one mapped for this chunk.
   if (fetchBufferIfTempBufferMapEntryExists(chunk_key, destination_buffer, num_bytes)) {
+    chunk_size_validator.validateChunkSize(destination_buffer);
     return;
   }
 
@@ -106,6 +151,8 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   required_buffers[chunk_key] = destination_buffer;
   // populate will write directly to destination_buffer so no need to copy.
   getDataWrapper(chunk_key)->populateChunkBuffers(required_buffers, optional_buffers);
+  chunk_size_validator.validateChunkSizes(required_buffers);
+  chunk_size_validator.validateChunkSizes(optional_buffers);
 }
 
 bool ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(

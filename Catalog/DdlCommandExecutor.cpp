@@ -1080,6 +1080,11 @@ void CreateForeignTableCommand::setTableDetails(
       it != foreign_table.options.end()) {
     foreign_table.maxFragRows = std::stoi(it->second);
   }
+
+  if (const auto it = foreign_table.options.find("MAX_CHUNK_SIZE");
+      it != foreign_table.options.end()) {
+    foreign_table.maxChunkSize = std::stol(it->second);
+  }
 }
 
 void CreateForeignTableCommand::setColumnDetails(std::list<ColumnDescriptor>& columns) {

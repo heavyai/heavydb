@@ -79,8 +79,10 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
 void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                            AbstractBuffer* destination_buffer,
                                            const size_t num_bytes) {
+  ChunkSizeValidator chunk_size_validator(chunk_key);
   if (is_system_table_chunk_key(chunk_key)) {
     ForeignStorageMgr::fetchBuffer(chunk_key, destination_buffer, num_bytes);
+    chunk_size_validator.validateChunkSize(destination_buffer);
     return;
   }
   CHECK(destination_buffer);
@@ -88,6 +90,7 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
 
   AbstractBuffer* buffer = disk_cache_->getCachedChunkIfExists(chunk_key);
   if (buffer) {
+    chunk_size_validator.validateChunkSize(buffer);
     buffer->copyTo(destination_buffer, num_bytes);
     return;
   } else {
@@ -119,6 +122,8 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     auto required_buffers = disk_cache_->getChunkBuffersForCaching(column_keys);
     CHECK(required_buffers.find(chunk_key) != required_buffers.end());
     populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
+    chunk_size_validator.validateChunkSizes(required_buffers);
+    chunk_size_validator.validateChunkSizes(optional_buffers);
 
     AbstractBuffer* buffer = required_buffers.at(chunk_key);
     CHECK(buffer);
