@@ -905,8 +905,8 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
     return nullptr;
   }
   CHECK(deleted_cd->columnType.is_boolean());
-  const auto deleted_expr =
-      makeExpr<Analyzer::ColumnVar>(deleted_cd->makeInfo(), input_desc.getNestLevel());
+  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
+      deleted_cd->makeInfo(catalog_->getDatabaseId()), input_desc.getNestLevel());
   return [this, deleted_expr, level_idx, &co](const std::vector<llvm::Value*>& prev_iters,
                                               llvm::Value* have_more_inner_rows) {
     const auto matching_row_index = addJoinLoopIterator(prev_iters, level_idx + 1);

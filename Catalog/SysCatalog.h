@@ -215,6 +215,7 @@ class SysCatalog : private CommonFileOperations {
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
+  std::shared_ptr<Data_Namespace::DataMgr> getDataMgrPtr() const { return dataMgr_; }
   Calcite& getCalciteMgr() const { return *calciteMgr_; }
   const std::string& getCatalogBasePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }

@@ -85,8 +85,8 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  InputColDescriptor group_col_desc{cd->makeInfo(), 0};
-  InputColDescriptor filter_col_desc{filter_cd->makeInfo(), 0};
+  InputColDescriptor group_col_desc{cd->makeInfo(cat->getDatabaseId()), 0};
+  InputColDescriptor filter_col_desc{filter_cd->makeInfo(cat->getDatabaseId()), 0};
 
   std::unordered_set<InputColDescriptor> col_descs{group_col_desc, filter_col_desc};
   std::unordered_set<int> phys_table_ids;
@@ -95,16 +95,18 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  input_col_descs.push_back(std::make_shared<InputColDescriptor>(cd->makeInfo(), 0));
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(), 0));
+      std::make_shared<InputColDescriptor>(cd->makeInfo(cat->getDatabaseId()), 0));
+  input_col_descs.push_back(
+      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(cat->getDatabaseId()), 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr = makeExpr<Analyzer::ColumnVar>(cd->makeInfo(), 0);
-  auto filter_col_expr = makeExpr<Analyzer::ColumnVar>(filter_cd->makeInfo(), 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat->getDatabaseId()), 0);
+  auto filter_col_expr =
+      makeExpr<Analyzer::ColumnVar>(filter_cd->makeInfo(cat->getDatabaseId()), 0);
   Datum d{int64_t(1)};
   auto filter_val_expr = makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   auto simple_filter_expr = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
@@ -181,8 +183,8 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  InputColDescriptor group_col_desc{cd->makeInfo(), 0};
-  InputColDescriptor filter_col_desc{filter_cd->makeInfo(), 0};
+  InputColDescriptor group_col_desc{cd->makeInfo(cat->getDatabaseId()), 0};
+  InputColDescriptor filter_col_desc{filter_cd->makeInfo(cat->getDatabaseId()), 0};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(
@@ -190,16 +192,18 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  input_col_descs.push_back(std::make_shared<InputColDescriptor>(cd->makeInfo(), 0));
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(), 0));
+      std::make_shared<InputColDescriptor>(cd->makeInfo(cat->getDatabaseId()), 0));
+  input_col_descs.push_back(
+      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(cat->getDatabaseId()), 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr = makeExpr<Analyzer::ColumnVar>(cd->makeInfo(), 0);
-  auto filter_col_expr = makeExpr<Analyzer::ColumnVar>(filter_cd->makeInfo(), 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat->getDatabaseId()), 0);
+  auto filter_col_expr =
+      makeExpr<Analyzer::ColumnVar>(filter_cd->makeInfo(cat->getDatabaseId()), 0);
   Datum d{int64_t(1)};
   auto filter_val_expr = makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   auto simple_filter_expr = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
@@ -266,8 +270,8 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
   CHECK(filter_cd);
 
-  InputColDescriptor group_col_desc{cd->makeInfo(), 0};
-  InputColDescriptor filter_col_desc{filter_cd->makeInfo(), 0};
+  InputColDescriptor group_col_desc{cd->makeInfo(cat->getDatabaseId()), 0};
+  InputColDescriptor filter_col_desc{filter_cd->makeInfo(cat->getDatabaseId()), 0};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(
@@ -275,9 +279,10 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  input_col_descs.push_back(std::make_shared<InputColDescriptor>(cd->makeInfo(), 0));
   input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(), 0));
+      std::make_shared<InputColDescriptor>(cd->makeInfo(cat->getDatabaseId()), 0));
+  input_col_descs.push_back(
+      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(cat->getDatabaseId()), 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 

@@ -813,7 +813,7 @@ class BucketSizeTest : public ::testing::Test {
     const auto pts_cd = catalog->getMetadataForColumn(pts_td->tableId, "pt");
     CHECK(pts_cd);
     auto pt_col_var = std::make_shared<Analyzer::ColumnVar>(
-        pts_cd->columnType, pts_cd->tableId, pts_cd->columnId, 0);
+        pts_cd->makeInfo(catalog->getDatabaseId()), 0);
     query_infos.emplace_back(InputTableInfo{pts_td->tableId, build_table_info({pts_td})});
 
     const auto poly_td = catalog->getMetadataForTable("bucket_size_poly");
@@ -824,7 +824,7 @@ class BucketSizeTest : public ::testing::Test {
         catalog->getMetadataForColumn(poly_td->tableId, poly_cd->columnId + 4);
     CHECK(bounds_cd && bounds_cd->columnType.is_array());
     auto poly_col_var = std::make_shared<Analyzer::ColumnVar>(
-        bounds_cd->columnType, poly_cd->tableId, bounds_cd->columnId, 1);
+        bounds_cd->makeInfo(catalog->getDatabaseId()), 1);
     query_infos.emplace_back(
         InputTableInfo{poly_td->tableId, build_table_info({poly_td})});
 

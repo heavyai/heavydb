@@ -143,7 +143,7 @@ void TableOptimizer::recomputeMetadata() const {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
     executor_->row_set_mem_owner_ =
         std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
-    executor_->catalog_ = &cat_;
+    executor_->setCatalog(&cat_);
     const auto table_id = td->tableId;
     auto stats = recomputeDeletedColumnMetadata(td);
 
@@ -218,7 +218,7 @@ DeletedColumnStats TableOptimizer::getDeletedColumnStats(
   CHECK(!cd->isVirtualCol);
 
   const auto input_col_desc =
-      std::make_shared<const InputColDescriptor>(cd->makeInfo(), 0);
+      std::make_shared<const InputColDescriptor>(cd->makeInfo(cat_.getDatabaseId()), 0);
   const auto col_expr =
       makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
   const auto count_expr =
@@ -316,7 +316,7 @@ void TableOptimizer::recomputeColumnMetadata(
 
   CHECK(!cd->isVirtualCol);
   const auto column_id = cd->columnId;
-  auto column_info = cd->makeInfo();
+  auto column_info = cd->makeInfo(cat_.getDatabaseId());
   const auto input_col_desc = std::make_shared<const InputColDescriptor>(column_info, 0);
   const auto col_expr = makeExpr<Analyzer::ColumnVar>(column_info, 0);
   auto max_expr =

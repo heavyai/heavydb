@@ -2637,8 +2637,7 @@ FetchResult Executor::fetchChunks(
                     << col_id->getColId() << ")";
           }
           frag_col_buffers[it->second] = column_fetcher.linearizeColumnFragments(
-              table_id,
-              col_id->getColId(),
+              col_id->getColInfo(),
               all_tables_fragments,
               chunks,
               chunk_iterators,
@@ -2648,8 +2647,7 @@ FetchResult Executor::fetchChunks(
               thread_idx);
         } else {
           frag_col_buffers[it->second] =
-              column_fetcher.getAllTableColumnFragments(table_id,
-                                                        col_id->getColId(),
+              column_fetcher.getAllTableColumnFragments(col_id->getColInfo(),
                                                         all_tables_fragments,
                                                         memory_level_for_column,
                                                         device_id,
@@ -2658,9 +2656,8 @@ FetchResult Executor::fetchChunks(
         }
       } else {
         frag_col_buffers[it->second] =
-            column_fetcher.getOneTableColumnFragment(table_id,
+            column_fetcher.getOneTableColumnFragment(col_id->getColInfo(),
                                                      frag_id,
-                                                     col_id->getColId(),
                                                      all_tables_fragments,
                                                      chunks,
                                                      chunk_iterators,
@@ -2785,8 +2782,7 @@ FetchResult Executor::fetchUnionChunks(
         }
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
           frag_col_buffers[it->second] =
-              column_fetcher.getAllTableColumnFragments(table_id,
-                                                        col_id->getColId(),
+              column_fetcher.getAllTableColumnFragments(col_id->getColInfo(),
                                                         all_tables_fragments,
                                                         memory_level_for_column,
                                                         device_id,
@@ -2794,9 +2790,8 @@ FetchResult Executor::fetchUnionChunks(
                                                         thread_idx);
         } else {
           frag_col_buffers[it->second] =
-              column_fetcher.getOneTableColumnFragment(table_id,
+              column_fetcher.getOneTableColumnFragment(col_id->getColInfo(),
                                                        frag_id,
-                                                       col_id->getColId(),
                                                        all_tables_fragments,
                                                        chunks,
                                                        chunk_iterators,
@@ -3581,8 +3576,8 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
     }
     if (!found) {
       // add deleted column
-      ra_exe_unit_with_deleted.input_col_descs.emplace_back(
-          new InputColDescriptor(deleted_cd->makeInfo(), input_table.getNestLevel()));
+      ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
+          deleted_cd->makeInfo(db_id_), input_table.getNestLevel()));
       add_deleted_col_to_map(deleted_cols_map, deleted_cd);
     }
   }

@@ -84,7 +84,7 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
         CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
         ChunkKey chunk_key{
             catalog->getCurrentDB().dbId, td->tableId, cid, fragment.fragmentId};
-        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(),
+        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog->getDatabaseId()),
                                                &catalog->getDataMgr(),
                                                chunk_key,
                                                memory_level,

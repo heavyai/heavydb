@@ -80,12 +80,10 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     return {nullptr, 0};
   }
   const auto table_id = hash_col.get_table_id();
-  const auto& catalog = *executor->getCatalog();
-  const auto cd =
-      get_column_descriptor_maybe(hash_col.get_column_id(), table_id, catalog);
-  CHECK(!cd || !(cd->isVirtualCol));
+  auto* data_mgr = executor->getDataMgr();
+  const auto col_info = hash_col.get_column_info();
   const int8_t* col_buff = nullptr;
-  if (cd) {  // real table
+  if (table_id >= 0) {  // real table
     /* chunk_meta_it is used here to retrieve chunk numBytes and
        numElements. Apparently, their values are often zeros. If we
        knew how to predict the zero values, calling
@@ -93,13 +91,13 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
        synthesize_metadata calls. */
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(hash_col.get_column_id());
     CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-    ChunkKey chunk_key{catalog.getCurrentDB().dbId,
+    ChunkKey chunk_key{col_info->db_id,
                        fragment.physicalTableId,
                        hash_col.get_column_id(),
                        fragment.fragmentId};
     const auto chunk = Chunk_NS::Chunk::getChunk(
-        cd->makeInfo(catalog.getDatabaseId()),
-        &catalog.getDataMgr(),
+        col_info,
+        data_mgr,
         chunk_key,
         effective_mem_lvl,
         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
@@ -137,7 +135,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     col_buff = transferColumnIfNeeded(
         col_frag,
         hash_col.get_column_id(),
-        &catalog.getDataMgr(),
+        data_mgr,
         effective_mem_lvl,
         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
         device_allocator);
@@ -210,15 +208,16 @@ JoinColumn ColumnFetcher::makeJoinColumn(
 }
 
 const int8_t* ColumnFetcher::getOneTableColumnFragment(
-    const int table_id,
+    ColumnInfoPtr col_info,
     const int frag_id,
-    const int col_id,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
     std::list<ChunkIter>& chunk_iter_holder,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
     DeviceAllocator* allocator) const {
+  int table_id = col_info->table_id;
+  int col_id = col_info->column_id;
   if (table_id < 0) {
     return getResultSetColumn(
         table_id, col_id, frag_id, memory_level, device_id, allocator, 0);
@@ -234,11 +233,7 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
   auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
   CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
   CHECK(table_id > 0);
-  const auto& cat = *executor_->getCatalog();
-  auto cd = get_column_descriptor(col_id, table_id, cat);
-  CHECK(cd);
-  const auto col_type =
-      get_column_type(col_id, table_id, cd, executor_->temporary_tables_);
+  const auto col_type = col_info->type;
   const bool is_real_string =
       col_type.is_string() && col_type.get_compression() == kENCODING_NONE;
   const bool is_varlen =
@@ -246,14 +241,14 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
       col_type.is_array();  // TODO: should it be col_type.is_varlen_array() ?
   {
     ChunkKey chunk_key{
-        cat.getCurrentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
+        col_info->db_id, fragment.physicalTableId, col_id, fragment.fragmentId};
     std::unique_ptr<std::lock_guard<std::mutex>> varlen_chunk_lock;
     if (is_varlen) {
       varlen_chunk_lock.reset(new std::lock_guard<std::mutex>(varlen_chunk_fetch_mutex_));
     }
     chunk = Chunk_NS::Chunk::getChunk(
-        cd->makeInfo(cat.getDatabaseId()),
-        &cat.getDataMgr(),
+        col_info,
+        executor_->getDataMgr(),
         chunk_key,
         memory_level,
         memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
@@ -289,13 +284,14 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
 }
 
 const int8_t* ColumnFetcher::getAllTableColumnFragments(
-    const int table_id,
-    const int col_id,
+    ColumnInfoPtr col_info,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
     DeviceAllocator* device_allocator,
     const size_t thread_idx) const {
+  int table_id = col_info->table_id;
+  int col_id = col_info->column_id;
   const auto fragments_it = all_tables_fragments.find(table_id);
   CHECK(fragments_it != all_tables_fragments.end());
   const auto fragments = fragments_it->second;
@@ -321,9 +317,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
         }
         auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
         CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-        auto col_buffer = getOneTableColumnFragment(table_id,
+        auto col_buffer = getOneTableColumnFragment(col_info,
                                                     static_cast<int>(frag_id),
-                                                    col_id,
                                                     all_tables_fragments,
                                                     chunk_holder,
                                                     chunk_iter_holder,
@@ -375,8 +370,7 @@ const int8_t* ColumnFetcher::getResultSetColumn(
 }
 
 const int8_t* ColumnFetcher::linearizeColumnFragments(
-    const int table_id,
-    const int col_id,
+    ColumnInfoPtr col_info,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
     std::list<ChunkIter>& chunk_iter_holder,
@@ -385,17 +379,16 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     DeviceAllocator* device_allocator,
     const size_t thread_idx) const {
   auto timer = DEBUG_TIMER(__func__);
+  int table_id = col_info->table_id;
+  int col_id = col_info->column_id;
   const auto fragments_it = all_tables_fragments.find(table_id);
   CHECK(fragments_it != all_tables_fragments.end());
   const auto fragments = fragments_it->second;
   const auto frag_count = fragments->size();
-  const auto& cat = *executor_->getCatalog();
-  auto cd = get_column_descriptor(col_id, table_id, cat);
-  CHECK(cd);
   InputDescriptor table_desc(table_id, 0);
   CHECK(table_desc.getSourceType() == InputSourceType::TABLE);
   CHECK_GT(table_id, 0);
-  bool is_varlen_chunk = cd->columnType.is_varlen() && !cd->columnType.is_fixlen_array();
+  bool is_varlen_chunk = col_info->type.is_varlen() && !col_info->type.is_fixlen_array();
   size_t total_num_tuples = 0;
   size_t total_data_buf_size = 0;
   size_t total_idx_buf_size = 0;
@@ -445,9 +438,9 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
       auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
       CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
       ChunkKey chunk_key{
-          cat.getCurrentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
-      chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(cat.getDatabaseId()),
-                                        &cat.getDataMgr(),
+          col_info->db_id, fragment.physicalTableId, col_id, fragment.fragmentId};
+      chunk = Chunk_NS::Chunk::getChunk(col_info,
+                                        executor_->getDataMgr(),
                                         chunk_key,
                                         Data_Namespace::CPU_LEVEL,
                                         0,
@@ -473,7 +466,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     }
   }
 
-  auto& col_ti = cd->columnType;
+  auto& col_ti = col_info->type;
   MergedChunk res{nullptr, nullptr};
   // Do linearize multi-fragmented column depending on column type
   // We cover array and non-encoded text columns
@@ -485,18 +478,17 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     std::lock_guard<std::mutex> linearization_guard(linearization_mutex_);
     if (col_ti.is_array()) {
       if (col_ti.is_fixlen_array()) {
-        VLOG(2) << "Linearize fixed-length multi-frag array column (col_id: "
-                << cd->columnId << ", col_name: " << cd->columnName
+        VLOG(2) << "Linearize fixed-length multi-frag array column (col_id: " << col_id
+                << ", col_name: " << col_info->name
                 << ", device_type: " << getMemoryLevelString(memory_level)
-                << ", device_id: " << device_id << "): " << cd->columnType.to_string();
-        res = linearizeFixedLenArrayColFrags(cat,
-                                             chunk_holder,
+                << ", device_id: " << device_id << "): " << col_ti.to_string();
+        res = linearizeFixedLenArrayColFrags(chunk_holder,
                                              chunk_iter_holder,
                                              local_chunk_holder,
                                              local_chunk_iter_holder,
                                              local_chunk_num_tuples,
                                              memory_level,
-                                             cd,
+                                             col_info,
                                              device_id,
                                              total_data_buf_size,
                                              total_idx_buf_size,
@@ -505,18 +497,17 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
                                              thread_idx);
       } else {
         CHECK(col_ti.is_varlen_array());
-        VLOG(2) << "Linearize variable-length multi-frag array column (col_id: "
-                << cd->columnId << ", col_name: " << cd->columnName
+        VLOG(2) << "Linearize variable-length multi-frag array column (col_id: " << col_id
+                << ", col_name: " << col_info->name
                 << ", device_type: " << getMemoryLevelString(memory_level)
-                << ", device_id: " << device_id << "): " << cd->columnType.to_string();
-        res = linearizeVarLenArrayColFrags(cat,
-                                           chunk_holder,
+                << ", device_id: " << device_id << "): " << col_info->type.to_string();
+        res = linearizeVarLenArrayColFrags(chunk_holder,
                                            chunk_iter_holder,
                                            local_chunk_holder,
                                            local_chunk_iter_holder,
                                            local_chunk_num_tuples,
                                            memory_level,
-                                           cd,
+                                           col_info,
                                            device_id,
                                            total_data_buf_size,
                                            total_idx_buf_size,
@@ -527,17 +518,16 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
     }
     if (col_ti.is_string() && !col_ti.is_dict_encoded_string()) {
       VLOG(2) << "Linearize variable-length multi-frag non-encoded text column (col_id: "
-              << cd->columnId << ", col_name: " << cd->columnName
+              << col_id << ", col_name: " << col_info->name
               << ", device_type: " << getMemoryLevelString(memory_level)
-              << ", device_id: " << device_id << "): " << cd->columnType.to_string();
-      res = linearizeVarLenArrayColFrags(cat,
-                                         chunk_holder,
+              << ", device_id: " << device_id << "): " << col_info->type.to_string();
+      res = linearizeVarLenArrayColFrags(chunk_holder,
                                          chunk_iter_holder,
                                          local_chunk_holder,
                                          local_chunk_iter_holder,
                                          local_chunk_num_tuples,
                                          memory_level,
-                                         cd,
+                                         col_info,
                                          device_id,
                                          total_data_buf_size,
                                          total_idx_buf_size,
@@ -555,7 +545,7 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
 
   // prepare ChunkIter for the linearized chunk
   auto merged_chunk = std::make_shared<Chunk_NS::Chunk>(
-      merged_data_buffer, merged_index_buffer, cd->makeInfo(cat.getDatabaseId()));
+      merged_data_buffer, merged_index_buffer, col_info);
   // to prepare chunk_iter for the merged chunk, we pass one of local chunk iter
   // to fill necessary metadata that is a common for all merged chunks
   auto merged_chunk_iter = prepareChunkIter(merged_data_buffer,
@@ -588,14 +578,13 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
 }
 
 MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
-    const Catalog_Namespace::Catalog& cat,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
     std::list<ChunkIter>& chunk_iter_holder,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& local_chunk_holder,
     std::list<ChunkIter>& local_chunk_iter_holder,
     std::list<size_t>& local_chunk_num_tuples,
     MemoryLevel memory_level,
-    const ColumnDescriptor* cd,
+    ColumnInfoPtr col_info,
     const int device_id,
     const size_t total_data_buf_size,
     const size_t total_idx_buf_size,
@@ -615,7 +604,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
   AbstractBuffer* merged_data_buffer = nullptr;
   bool has_cached_merged_idx_buf = false;
   bool has_cached_merged_data_buf = false;
-  CHECK(!cd->isVirtualCol);
+  CHECK(!col_info->is_rowid);
   // check linearized buffer's cache first
   // if not exists, alloc necessary buffer space to prepare linearization
   int64_t linearization_time_ms = 0;
@@ -623,7 +612,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
   {
     std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
     auto cached_data_buf_cache_it =
-        linearized_data_buf_cache_.find({cd->tableId, cd->columnId});
+        linearized_data_buf_cache_.find({col_info->table_id, col_info->column_id});
     if (cached_data_buf_cache_it != linearized_data_buf_cache_.end()) {
       auto& cd_cache = cached_data_buf_cache_it->second;
       auto cached_data_buf_it = cd_cache.find(device_id);
@@ -635,7 +624,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
                 << ")";
       } else {
         merged_data_buffer =
-            cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
+            executor_->getDataMgr()->alloc(memory_level, device_id, total_data_buf_size);
         VLOG(2) << "Allocate " << total_data_buf_size
                 << " bytes of data buffer space for linearized chunks (memory_level: "
                 << getMemoryLevelString(memory_level) << ", device_id: " << device_id
@@ -645,18 +634,18 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
     } else {
       DeviceMergedChunkMap m;
       merged_data_buffer =
-          cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
+          executor_->getDataMgr()->alloc(memory_level, device_id, total_data_buf_size);
       VLOG(2) << "Allocate " << total_data_buf_size
               << " bytes of data buffer space for linearized chunks (memory_level: "
               << getMemoryLevelString(memory_level) << ", device_id: " << device_id
               << ")";
       m.insert(std::make_pair(device_id, merged_data_buffer));
       linearized_data_buf_cache_.insert(
-          std::make_pair(std::make_pair(cd->tableId, cd->columnId), m));
+          std::make_pair(std::make_pair(col_info->table_id, col_info->column_id), m));
     }
 
     auto cached_index_buf_it =
-        linearlized_temporary_cpu_index_buf_cache_.find(cd->columnId);
+        linearlized_temporary_cpu_index_buf_cache_.find(col_info->column_id);
     if (cached_index_buf_it != linearlized_temporary_cpu_index_buf_cache_.end()) {
       has_cached_merged_idx_buf = true;
       merged_index_buffer_in_cpu = cached_index_buf_it->second;
@@ -666,12 +655,12 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
     } else {
       auto idx_buf_size = total_idx_buf_size + sizeof(ArrayOffsetT);
       merged_index_buffer_in_cpu =
-          cat.getDataMgr().alloc(Data_Namespace::CPU_LEVEL, 0, idx_buf_size);
+          executor_->getDataMgr()->alloc(Data_Namespace::CPU_LEVEL, 0, idx_buf_size);
       VLOG(2) << "Allocate " << idx_buf_size
               << " bytes of temporary idx buffer space on CPU for linearized chunks";
       // just copy the buf addr since we access it via the pointer itself
       linearlized_temporary_cpu_index_buf_cache_.insert(
-          std::make_pair(cd->columnId, merged_index_buffer_in_cpu));
+          std::make_pair(col_info->column_id, merged_index_buffer_in_cpu));
     }
   }
 
@@ -876,7 +865,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
   {
     std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
     auto merged_idx_buf_cache_it =
-        linearized_idx_buf_cache_.find({cd->tableId, cd->columnId});
+        linearized_idx_buf_cache_.find({col_info->table_id, col_info->column_id});
     // for CPU execution, we can use `merged_index_buffer_in_cpu` as is
     // but for GPU, we have to copy it to corresponding device
     if (memory_level == MemoryLevel::GPU_LEVEL) {
@@ -886,7 +875,8 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
         if (merged_idx_buf_it != merged_idx_buf_cache.end()) {
           merged_index_buffer = merged_idx_buf_it->second;
         } else {
-          merged_index_buffer = cat.getDataMgr().alloc(memory_level, device_id, buf_size);
+          merged_index_buffer =
+              executor_->getDataMgr()->alloc(memory_level, device_id, buf_size);
           copyBuf(merged_index_buffer_in_cpu->getMemoryPtr(),
                   merged_index_buffer->getMemoryPtr(),
                   buf_size,
@@ -894,7 +884,8 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
           merged_idx_buf_cache.insert(std::make_pair(device_id, merged_index_buffer));
         }
       } else {
-        merged_index_buffer = cat.getDataMgr().alloc(memory_level, device_id, buf_size);
+        merged_index_buffer =
+            executor_->getDataMgr()->alloc(memory_level, device_id, buf_size);
         copyBuf(merged_index_buffer_in_cpu->getMemoryPtr(),
                 merged_index_buffer->getMemoryPtr(),
                 buf_size,
@@ -902,7 +893,7 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
         DeviceMergedChunkMap m;
         m.insert(std::make_pair(device_id, merged_index_buffer));
         linearized_idx_buf_cache_.insert(
-            std::make_pair(std::make_pair(cd->tableId, cd->columnId), m));
+            std::make_pair(std::make_pair(col_info->table_id, col_info->column_id), m));
       }
     } else {
       // `linearlized_temporary_cpu_index_buf_cache_` has this buf
@@ -917,14 +908,13 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
 }
 
 MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
-    const Catalog_Namespace::Catalog& cat,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
     std::list<ChunkIter>& chunk_iter_holder,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& local_chunk_holder,
     std::list<ChunkIter>& local_chunk_iter_holder,
     std::list<size_t>& local_chunk_num_tuples,
     MemoryLevel memory_level,
-    const ColumnDescriptor* cd,
+    ColumnInfoPtr col_info,
     const int device_id,
     const size_t total_data_buf_size,
     const size_t total_idx_buf_size,
@@ -936,11 +926,11 @@ MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
   // linearize collected fragments
   AbstractBuffer* merged_data_buffer = nullptr;
   bool has_cached_merged_data_buf = false;
-  CHECK(!cd->isVirtualCol);
+  CHECK(!col_info->is_rowid);
   {
     std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
     auto cached_data_buf_cache_it =
-        linearized_data_buf_cache_.find({cd->tableId, cd->columnId});
+        linearized_data_buf_cache_.find({col_info->table_id, col_info->column_id});
     if (cached_data_buf_cache_it != linearized_data_buf_cache_.end()) {
       auto& cd_cache = cached_data_buf_cache_it->second;
       auto cached_data_buf_it = cd_cache.find(device_id);
@@ -952,7 +942,7 @@ MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
                 << ")";
       } else {
         merged_data_buffer =
-            cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
+            executor_->getDataMgr()->alloc(memory_level, device_id, total_data_buf_size);
         VLOG(2) << "Allocate " << total_data_buf_size
                 << " bytes of data buffer space for linearized chunks (memory_level: "
                 << getMemoryLevelString(memory_level) << ", device_id: " << device_id
@@ -962,14 +952,14 @@ MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
     } else {
       DeviceMergedChunkMap m;
       merged_data_buffer =
-          cat.getDataMgr().alloc(memory_level, device_id, total_data_buf_size);
+          executor_->getDataMgr()->alloc(memory_level, device_id, total_data_buf_size);
       VLOG(2) << "Allocate " << total_data_buf_size
               << " bytes of data buffer space for linearized chunks (memory_level: "
               << getMemoryLevelString(memory_level) << ", device_id: " << device_id
               << ")";
       m.insert(std::make_pair(device_id, merged_data_buffer));
       linearized_data_buf_cache_.insert(
-          std::make_pair(std::make_pair(cd->tableId, cd->columnId), m));
+          std::make_pair(std::make_pair(col_info->table_id, col_info->column_id), m));
     }
   }
   if (!has_cached_merged_data_buf) {
@@ -1087,13 +1077,12 @@ ChunkIter ColumnFetcher::prepareChunkIter(AbstractBuffer* merged_data_buf,
 
 void ColumnFetcher::freeLinearizedBuf() {
   std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
-  const auto& cat = *executor_->getCatalog();
-  auto& data_mgr = cat.getDataMgr();
+  auto data_mgr = executor_->getDataMgr();
 
   if (!linearized_data_buf_cache_.empty()) {
     for (auto& kv : linearized_data_buf_cache_) {
       for (auto& kv2 : kv.second) {
-        data_mgr.free(kv2.second);
+        data_mgr->free(kv2.second);
       }
     }
   }
@@ -1101,7 +1090,7 @@ void ColumnFetcher::freeLinearizedBuf() {
   if (!linearized_idx_buf_cache_.empty()) {
     for (auto& kv : linearized_idx_buf_cache_) {
       for (auto& kv2 : kv.second) {
-        data_mgr.free(kv2.second);
+        data_mgr->free(kv2.second);
       }
     }
   }
@@ -1109,11 +1098,10 @@ void ColumnFetcher::freeLinearizedBuf() {
 
 void ColumnFetcher::freeTemporaryCpuLinearizedIdxBuf() {
   std::lock_guard<std::mutex> linearized_col_cache_guard(linearized_col_cache_mutex_);
-  const auto& cat = *executor_->getCatalog();
-  auto& data_mgr = cat.getDataMgr();
+  auto data_mgr = executor_->getDataMgr();
   if (!linearlized_temporary_cpu_index_buf_cache_.empty()) {
     for (auto& kv : linearlized_temporary_cpu_index_buf_cache_) {
-      data_mgr.free(kv.second);
+      data_mgr->free(kv.second);
     }
   }
 }

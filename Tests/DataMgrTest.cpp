@@ -97,7 +97,7 @@ class DataMgrTest : public testing::Test {
     auto cd =
         std::make_unique<ColumnDescriptor>(key[1], key[2], "temp", SQLTypeInfo{kTINYINT});
     return Chunk_NS::Chunk::getChunk(
-        cd->makeInfo(), data_mgr_.get(), key, MemoryLevel::CPU_LEVEL, 0, 4, 4);
+        cd->makeInfo(key[0]), data_mgr_.get(), key, MemoryLevel::CPU_LEVEL, 0, 4, 4);
   }
 
  protected:

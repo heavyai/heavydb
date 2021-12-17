@@ -1606,7 +1606,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
       CHECK(cd);
       CHECK(!cd->isVirtualCol);
       auto projected_column_to_update =
-          makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_.getDatabaseId()), 0);
       const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
           work_unit.exe_unit, projected_column_to_update);
       if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {

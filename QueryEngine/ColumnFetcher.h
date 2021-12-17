@@ -76,9 +76,8 @@ class ColumnFetcher {
       ColumnCacheMap& column_cache);
 
   const int8_t* getOneTableColumnFragment(
-      const int table_id,
+      ColumnInfoPtr col_info,
       const int frag_id,
-      const int col_id,
       const std::map<int, const TableFragments*>& all_tables_fragments,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
@@ -87,8 +86,7 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator) const;
 
   const int8_t* getAllTableColumnFragments(
-      const int table_id,
-      const int col_id,
+      ColumnInfoPtr col_info,
       const std::map<int, const TableFragments*>& all_tables_fragments,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_id,
@@ -104,8 +102,7 @@ class ColumnFetcher {
                                    const size_t thread_idx) const;
 
   const int8_t* linearizeColumnFragments(
-      const int table_id,
-      const int col_id,
+    ColumnInfoPtr col_info,
       const std::map<int, const TableFragments*>& all_tables_fragments,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
@@ -127,14 +124,13 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator);
 
   MergedChunk linearizeVarLenArrayColFrags(
-      const Catalog_Namespace::Catalog& cat,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& local_chunk_holder,
       std::list<ChunkIter>& local_chunk_iter_holder,
       std::list<size_t>& local_chunk_num_tuples,
       MemoryLevel memory_level,
-      const ColumnDescriptor* cd,
+      ColumnInfoPtr col_info,
       const int device_id,
       const size_t total_data_buf_size,
       const size_t total_idx_buf_size,
@@ -143,14 +139,13 @@ class ColumnFetcher {
       const size_t thread_idx) const;
 
   MergedChunk linearizeFixedLenArrayColFrags(
-      const Catalog_Namespace::Catalog& cat,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& local_chunk_holder,
       std::list<ChunkIter>& local_chunk_iter_holder,
       std::list<size_t>& local_chunk_num_tuples,
       MemoryLevel memory_level,
-      const ColumnDescriptor* cd,
+      ColumnInfoPtr col_info,
       const int device_id,
       const size_t total_data_buf_size,
       const size_t total_idx_buf_size,

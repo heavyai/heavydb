@@ -354,13 +354,20 @@ void DBHandler::initialize(const bool is_new_db) {
 #endif  // HAVE_CUDA
 
   try {
-    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
-                                                system_parameters_,
-                                                std::move(cuda_mgr),
-                                                !cpu_mode_only_,
-                                                total_reserved,
-                                                num_reader_threads_,
-                                                disk_cache_config_));
+    // Some tests (e.g. DBObjectPrivilegesTest) use both QueryRunner and
+    // DBHandler. It causes multiple DataMgr instances created and used in
+    // parallel. To avoid this we can check if SysCatalog already has
+    // DataMgr instance.
+    data_mgr_ = SysCatalog::instance().getDataMgrPtr();
+    if (!data_mgr_) {
+      data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
+                                                  system_parameters_,
+                                                  std::move(cuda_mgr),
+                                                  !cpu_mode_only_,
+                                                  total_reserved,
+                                                  num_reader_threads_,
+                                                  disk_cache_config_));
+    }
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize data manager: " << e.what();
   }
