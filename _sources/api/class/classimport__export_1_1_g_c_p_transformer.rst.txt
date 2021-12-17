@@ -1,0 +1,9 @@
+Class import_export::GCPTransformer
+===================================
+
+.. doxygenclass:: import_export::GCPTransformer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

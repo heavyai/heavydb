@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 2ff40b9
+                6.0.0dev 0517d99
               </div>
             
           
@@ -1239,6 +1239,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_data_stream_sink.html">Class import_export::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_detector.html">Class import_export::Detector</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_foreign_data_importer.html">Class import_export::ForeignDataImporter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_g_c_p_transformer.html">Class import_export::GCPTransformer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_import_batch_result.html">Class import_export::ImportBatchResult</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer.html">Class import_export::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classimport__export_1_1_importer_utils.html">Class import_export::ImporterUtils</a></li>
@@ -2233,23 +2234,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N23ArrowForeignStorageBase18generateNullValuesERKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEERK11SQLTypeInfo">
-<span id="_CPPv3N23ArrowForeignStorageBase18generateNullValuesERKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEERK11SQLTypeInfo"></span><span id="_CPPv2N23ArrowForeignStorageBase18generateNullValuesERKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEERK11SQLTypeInfo"></span><span id="ArrowForeignStorageBase::generateNullValues__std::vector:Frag:CR.std::shared_ptr:arrow::ChunkedArray:.SQLTypeInfoCR"></span><span class="target" id="class_arrow_foreign_storage_base_1a230e5f8ae9a2b59ba9edcdb5ae360b81"></span>void <code class="sig-name descname">generateNullValues</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_frag.html#_CPPv44Frag" title="Frag">Frag</a>&gt; &amp;<em>fragments</em>, std::shared_ptr&lt;arrow::ChunkedArray&gt; <em>arr_col_chunked_array</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>columnType</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N23ArrowForeignStorageBase18generateNullValuesERKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEERK11SQLTypeInfo" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N23ArrowForeignStorageBase17replaceNullValuesERK11SQLTypeInfoNSt10shared_ptrIN5arrow12ChunkedArrayEEE">
+<span id="_CPPv3N23ArrowForeignStorageBase17replaceNullValuesERK11SQLTypeInfoNSt10shared_ptrIN5arrow12ChunkedArrayEEE"></span><span id="_CPPv2N23ArrowForeignStorageBase17replaceNullValuesERK11SQLTypeInfoNSt10shared_ptrIN5arrow12ChunkedArrayEEE"></span><span id="ArrowForeignStorageBase::replaceNullValues__SQLTypeInfoCR.std::shared_ptr:arrow::ChunkedArray:"></span><span class="target" id="class_arrow_foreign_storage_base_1aeb29fdce039733b355f790987723394a"></span>std::shared_ptr&lt;arrow::ChunkedArray&gt; <code class="sig-name descname">replaceNullValues</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>columnType</em>, std::shared_ptr&lt;arrow::ChunkedArray&gt; <em>arr_col_chunked_array</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N23ArrowForeignStorageBase17replaceNullValuesERK11SQLTypeInfoNSt10shared_ptrIN5arrow12ChunkedArrayEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4I0EN23ArrowForeignStorageBase13setNullValuesEvRKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEE">
-<span id="_CPPv3I0EN23ArrowForeignStorageBase13setNullValuesERKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEE"></span><span id="_CPPv2I0EN23ArrowForeignStorageBase13setNullValuesERKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEE"></span><span class="target" id="class_arrow_foreign_storage_base_1ac8caf2371840d4e4abf4ced9fd9ccf6d"></span>template&lt;typename <code class="sig-name descname">T</code>&gt;<br />void <code class="sig-name descname">setNullValues</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_frag.html#_CPPv44Frag" title="Frag">Frag</a>&gt; &amp;<em>fragments</em>, std::shared_ptr&lt;arrow::ChunkedArray&gt; <em>arr_col_chunked_array</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN23ArrowForeignStorageBase13setNullValuesEvRKNSt6vectorI4FragEENSt10shared_ptrIN5arrow12ChunkedArrayEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I0EN23ArrowForeignStorageBase8setNullsEvP6int8_ti">
-<span id="_CPPv3I0EN23ArrowForeignStorageBase8setNullsEP6int8_ti"></span><span id="_CPPv2I0EN23ArrowForeignStorageBase8setNullsEP6int8_ti"></span><span class="target" id="class_arrow_foreign_storage_base_1a3f0cf81ab7aa4dc87718047dfc08a0f2"></span>template&lt;typename <code class="sig-name descname">T</code>&gt;<br />void <code class="sig-name descname">setNulls</code><span class="sig-paren">(</span>int8_t *<em>data</em>, int <em>count</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN23ArrowForeignStorageBase8setNullsEvP6int8_ti" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N23ArrowForeignStorageBase22generateSentinelValuesEP6int8_tRK11SQLTypeInfo6size_t">
-<span id="_CPPv3N23ArrowForeignStorageBase22generateSentinelValuesEP6int8_tRK11SQLTypeInfo6size_t"></span><span id="_CPPv2N23ArrowForeignStorageBase22generateSentinelValuesEP6int8_tRK11SQLTypeInfo6size_t"></span><span id="ArrowForeignStorageBase::generateSentinelValues__int8_tP.SQLTypeInfoCR.s"></span><span class="target" id="class_arrow_foreign_storage_base_1ad36789b2f58c24cb1aeeda6ef1165c23"></span>void <code class="sig-name descname">generateSentinelValues</code><span class="sig-paren">(</span>int8_t *<em>data</em>, <em class="property">const</em> <a class="reference internal" href="class_s_q_l_type_info.html#_CPPv411SQLTypeInfo" title="SQLTypeInfo">SQLTypeInfo</a> &amp;<em>columnType</em>, size_t <em>count</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N23ArrowForeignStorageBase22generateSentinelValuesEP6int8_tRK11SQLTypeInfo6size_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0EN23ArrowForeignStorageBase21replaceNullValuesImplENSt10shared_ptrIN5arrow12ChunkedArrayEEENSt10shared_ptrIN5arrow12ChunkedArrayEEE">
+<span id="_CPPv3I0EN23ArrowForeignStorageBase21replaceNullValuesImplENSt10shared_ptrIN5arrow12ChunkedArrayEEE"></span><span id="_CPPv2I0EN23ArrowForeignStorageBase21replaceNullValuesImplENSt10shared_ptrIN5arrow12ChunkedArrayEEE"></span><span class="target" id="class_arrow_foreign_storage_base_1a4502d2b64492e30c22225f03782c64ad"></span>template&lt;typename <code class="sig-name descname">T</code>&gt;<br />std::shared_ptr&lt;arrow::ChunkedArray&gt; <code class="sig-name descname">replaceNullValuesImpl</code><span class="sig-paren">(</span>std::shared_ptr&lt;arrow::ChunkedArray&gt; <em>arr_col_chunked_array</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN23ArrowForeignStorageBase21replaceNullValuesImplENSt10shared_ptrIN5arrow12ChunkedArrayEEENSt10shared_ptrIN5arrow12ChunkedArrayEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2258,8 +2249,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEbb">
-<span id="_CPPv3N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEbb"></span><span id="_CPPv2N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEbb"></span><span id="ArrowForeignStorageBase::makeFragment__FragCR.ArrowFragmentR.std::vector:std::shared_ptr:arrow::Array::CR.b.b"></span><span class="target" id="class_arrow_foreign_storage_base_1a57c00acf5fc60ce661a275316348ab01"></span>int64_t <code class="sig-name descname">makeFragment</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_frag.html#_CPPv44Frag" title="Frag">Frag</a> &amp;<em>frag</em>, <a class="reference internal" href="../struct/struct_arrow_fragment.html#_CPPv413ArrowFragment" title="ArrowFragment">ArrowFragment</a> &amp;<em>arrowFrag</em>, <em class="property">const</em> std::vector&lt;std::shared_ptr&lt;arrow::Array&gt;&gt; &amp;<em>chunks</em>, bool <em>is_varlen</em>, bool <em>is_empty</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEbb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEb">
+<span id="_CPPv3N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEb"></span><span id="_CPPv2N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEb"></span><span id="ArrowForeignStorageBase::makeFragment__FragCR.ArrowFragmentR.std::vector:std::shared_ptr:arrow::Array::CR.b"></span><span class="target" id="class_arrow_foreign_storage_base_1a1c6aadd6bc4709745a39eaf73653eb5a"></span>int64_t <code class="sig-name descname">makeFragment</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_frag.html#_CPPv44Frag" title="Frag">Frag</a> &amp;<em>frag</em>, <a class="reference internal" href="../struct/struct_arrow_fragment.html#_CPPv413ArrowFragment" title="ArrowFragment">ArrowFragment</a> &amp;<em>arrowFrag</em>, <em class="property">const</em> std::vector&lt;std::shared_ptr&lt;arrow::Array&gt;&gt; &amp;<em>chunks</em>, bool <em>is_varlen</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N23ArrowForeignStorageBase12makeFragmentERK4FragR13ArrowFragmentRKNSt6vectorINSt10shared_ptrIN5arrow5ArrayEEEEEb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
