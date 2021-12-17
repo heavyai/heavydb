@@ -1372,13 +1372,15 @@ void throw_row_group_larger_than_fragment_size_error(const int row_group_index,
                                                      const int64_t max_row_group_size,
                                                      const int fragment_size,
                                                      const std::string& file_path) {
-  throw std::runtime_error{
+  auto metadata_scan_exception = MetadataScanInfeasibleFragmentSizeException{
       "Parquet file has a row group size that is larger than the fragment size. "
       "Please set the table fragment size to a number that is larger than the "
       "row group size. Row group index: " +
       std::to_string(row_group_index) +
       ", row group size: " + std::to_string(max_row_group_size) +
       ", fragment size: " + std::to_string(fragment_size) + ", file path: " + file_path};
+  metadata_scan_exception.min_feasible_fragment_size_ = max_row_group_size;
+  throw metadata_scan_exception;
 }
 
 void validate_column_mapping_and_row_group_metadata(

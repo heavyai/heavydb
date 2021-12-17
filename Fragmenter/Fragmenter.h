@@ -22,6 +22,7 @@
 #include <map>
 #include <mutex>
 #include "../Catalog/ColumnDescriptor.h"
+#include "../DataMgr/Chunk/Chunk.h"
 #include "../DataMgr/ChunkMetadata.h"
 #include "../Shared/mapd_shared_mutex.h"
 #include "../Shared/types.h"
@@ -43,6 +44,12 @@ class InsertOrderFragmenter;
 
 enum FragmenterType {
   INSERT_ORDER = 0  // these values persist in catalog.  make explicit
+};
+
+struct InsertChunks {
+  const int table_id;
+  const int db_id;
+  std::map</*column_id=*/int, std::shared_ptr<Chunk_NS::Chunk> > chunks;
 };
 
 /**

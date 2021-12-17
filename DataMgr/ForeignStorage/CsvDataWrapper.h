@@ -26,6 +26,10 @@ class CsvDataWrapper : public AbstractTextFileDataWrapper {
 
   CsvDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
+  CsvDataWrapper(const int db_id,
+                 const ForeignTable* foreign_table,
+                 const UserMapping* user_mapping);
+
   void validateTableOptions(const ForeignTable* foreign_table) const override;
 
   const std::set<std::string_view>& getSupportedTableOptions() const override;

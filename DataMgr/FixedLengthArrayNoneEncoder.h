@@ -43,6 +43,17 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   FixedLengthArrayNoneEncoder(AbstractBuffer* buffer, size_t as)
       : Encoder(buffer), has_nulls(false), initialized(false), array_size(as) {}
 
+  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                        const int start_idx,
+                                        const size_t num_elements,
+                                        const size_t byte_limit) override {
+    size_t data_size = num_elements * array_size;
+    if (data_size > byte_limit) {
+      data_size = byte_limit;
+    }
+    return data_size / array_size;
+  }
+
   size_t getNumElemsForBytesInsertData(const std::vector<ArrayDatum>* srcData,
                                        const int start_idx,
                                        const size_t numAppendElems,
@@ -53,6 +64,34 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       dataSize = byteLimit;
     }
     return dataSize / array_size;
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedDataAtIndices(
+      const int8_t* index_data,
+      int8_t* data,
+      const std::vector<size_t>& selected_idx) override {
+    std::vector<ArrayDatum> data_subset;
+    data_subset.reserve(selected_idx.size());
+    for (const auto& index : selected_idx) {
+      auto current_data = data + array_size * (index);
+      data_subset.emplace_back(
+          ArrayDatum(array_size, current_data, false, DoNothingDeleter{}));
+    }
+    return appendData(&data_subset, 0, selected_idx.size(), false);
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t* index_data,
+                                                   int8_t* data,
+                                                   const size_t start_idx,
+                                                   const size_t num_elements) override {
+    std::vector<ArrayDatum> data_subset;
+    data_subset.reserve(num_elements);
+    for (size_t count = 0; count < num_elements; ++count) {
+      auto current_data = data + array_size * (start_idx + count);
+      data_subset.emplace_back(
+          ArrayDatum(array_size, current_data, false, DoNothingDeleter{}));
+    }
+    return appendData(&data_subset, 0, num_elements, false);
   }
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,

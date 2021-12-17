@@ -1050,6 +1050,10 @@ struct LocalConnector : public DistributedConnector {
                                       std::vector<size_t> outer_frag_indices,
                                       bool allow_interrupt) override;
   size_t leafCount() override { return 1; };
+  void insertChunksToLeaf(
+      const Catalog_Namespace::SessionInfo& session,
+      const size_t leaf_idx,
+      const Fragmenter_Namespace::InsertChunks& insert_chunks) override;
   void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
                         const size_t leaf_idx,
                         Fragmenter_Namespace::InsertData& insert_data) override;

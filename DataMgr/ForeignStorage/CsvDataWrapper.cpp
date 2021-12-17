@@ -25,6 +25,11 @@ CsvDataWrapper::CsvDataWrapper() : AbstractTextFileDataWrapper() {}
 CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_table)
     : AbstractTextFileDataWrapper(db_id, foreign_table) {}
 
+CsvDataWrapper::CsvDataWrapper(const int db_id,
+                               const ForeignTable* foreign_table,
+                               const UserMapping* user_mapping)
+    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping) {}
+
 void CsvDataWrapper::validateTableOptions(const ForeignTable* foreign_table) const {
   AbstractTextFileDataWrapper::validateTableOptions(foreign_table);
   csv_file_buffer_parser_.validateAndGetCopyParams(foreign_table);

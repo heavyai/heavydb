@@ -26,6 +26,10 @@ struct InsertDataLoader {
  public:
   struct DistributedConnector {
     virtual size_t leafCount() = 0;
+    virtual void insertChunksToLeaf(
+        const Catalog_Namespace::SessionInfo& parent_session_info,
+        const size_t leaf_idx,
+        const Fragmenter_Namespace::InsertChunks& insert_chunks) = 0;
     virtual void insertDataToLeaf(
         const Catalog_Namespace::SessionInfo& parent_session_info,
         const size_t leaf_idx,
@@ -45,6 +49,9 @@ struct InsertDataLoader {
 
   void insertData(const Catalog_Namespace::SessionInfo& session_info,
                   InsertData& insert_data);
+
+  void insertChunks(const Catalog_Namespace::SessionInfo& session_info,
+                    const InsertChunks& insert_chunks);
 
  private:
   /**

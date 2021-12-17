@@ -35,6 +35,11 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
 
   AbstractTextFileDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
+  AbstractTextFileDataWrapper(const int db_id,
+                              const ForeignTable* foreign_table,
+                              const UserMapping* user_mapping,
+                              const bool disable_cache = true);
+
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
@@ -92,5 +97,14 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   size_t append_start_offset_;
   // Is this datawrapper restored from disk
   bool is_restored_;
+
+  // Optionally stored user mapping
+  std::optional<const UserMapping*> user_mapping_;
+
+  // Force cache to be disabled
+  const bool disable_cache_;
+
+  // If true, update metadata in fragmenter
+  const bool update_fragmenter_metadata_;
 };
 }  // namespace foreign_storage

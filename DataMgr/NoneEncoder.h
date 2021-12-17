@@ -39,6 +39,37 @@ class NoneEncoder : public Encoder {
     resetChunkStats();
   }
 
+  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                        const int start_idx,
+                                        const size_t num_elements,
+                                        const size_t byte_limit) override {
+    UNREACHABLE() << "getNumElemsForBytesEncodedData unexpectedly called for non varlen"
+                     " encoder";
+    return {};
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedDataAtIndices(
+      const int8_t*,
+      int8_t* data,
+      const std::vector<size_t>& selected_idx) override {
+    std::vector<T> data_subset;
+    data_subset.reserve(selected_idx.size());
+    auto encoded_data = reinterpret_cast<T*>(data);
+    for (const auto& index : selected_idx) {
+      data_subset.emplace_back(encoded_data[index]);
+    }
+    auto append_data = reinterpret_cast<int8_t*>(data_subset.data());
+    return appendData(append_data, selected_idx.size(), SQLTypeInfo{}, false);
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t*,
+                                                   int8_t* data,
+                                                   const size_t start_idx,
+                                                   const size_t num_elements) override {
+    auto current_data = data + sizeof(T) * start_idx;
+    return appendData(current_data, num_elements, SQLTypeInfo{}, false);
+  }
+
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
                                             const SQLTypeInfo&,

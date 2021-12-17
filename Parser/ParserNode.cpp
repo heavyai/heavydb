@@ -84,6 +84,8 @@ extern bool g_enable_fsi;
 bool g_enable_parquet_import_fsi{false};
 #endif
 
+bool g_enable_general_import_fsi{false};
+
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
 
@@ -2873,15 +2875,22 @@ std::vector<AggregatedResult> LocalConnector::query(
   return {res};
 }
 
+void LocalConnector::insertChunksToLeaf(
+    const Catalog_Namespace::SessionInfo& session,
+    const size_t leaf_idx,
+    const Fragmenter_Namespace::InsertChunks& insert_chunks) {
+  CHECK(leaf_idx == 0);
+  auto& catalog = session.getCatalog();
+  auto created_td = catalog.getMetadataForTable(insert_chunks.table_id);
+  created_td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
+}
+
 void LocalConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
                                       const size_t leaf_idx,
                                       Fragmenter_Namespace::InsertData& insert_data) {
   CHECK(leaf_idx == 0);
   auto& catalog = session.getCatalog();
   auto created_td = catalog.getMetadataForTable(insert_data.tableId);
-  ChunkKey chunkKey = {catalog.getCurrentDB().dbId, created_td->tableId};
-  // TODO(adb): Ensure that we have previously obtained a write lock for this table's
-  // data.
   created_td->fragmenter->insertDataNoCheckpoint(insert_data);
 }
 
@@ -4708,6 +4717,15 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              const std::string& file_path,
                              const import_export::CopyParams& copy_params)
       -> std::unique_ptr<import_export::AbstractImporter> {
+    // NOTE: if both g_enable_general_import_fsi and g_enable_parquet_import_fsi
+    // are enabled, the first takes precedence
+    if (copy_params.source_type == import_export::SourceType::kParquetFile ||
+        copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+      if (g_enable_general_import_fsi) {
+        return std::make_unique<import_export::ForeignDataImporter>(
+            file_path, copy_params, td);
+      }
+    }
     if (copy_params.source_type == import_export::SourceType::kParquetFile) {
 #ifdef ENABLE_IMPORT_PARQUET
       if (g_enable_parquet_import_fsi) {

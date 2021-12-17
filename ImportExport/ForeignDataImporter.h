@@ -44,8 +44,16 @@ class ForeignDataImporter : public AbstractImporter {
                 const std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>&
                     string_dictionaries);
 
+#ifdef ENABLE_IMPORT_PARQUET
+  ImportStatus importParquet(const Catalog_Namespace::SessionInfo* session_info);
+#endif
+
+  ImportStatus importGeneral(const Catalog_Namespace::SessionInfo* session_info);
+
   std::string file_path_;
   CopyParams copy_params_;
   const TableDescriptor* table_;
+
+  const static int32_t proxy_foreign_table_fragment_size_;
 };
 }  // namespace import_export

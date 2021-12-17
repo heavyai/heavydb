@@ -33,12 +33,33 @@
 
 namespace foreign_storage {
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper()
-    : db_id_(-1), foreign_table_(nullptr) {}
+    : db_id_(-1)
+    , foreign_table_(nullptr)
+    , user_mapping_(std::nullopt)
+    , disable_cache_(false)
+    , update_fragmenter_metadata_(false) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
     const ForeignTable* foreign_table)
-    : db_id_(db_id), foreign_table_(foreign_table), is_restored_(false) {}
+    : db_id_(db_id)
+    , foreign_table_(foreign_table)
+    , is_restored_(false)
+    , user_mapping_(std::nullopt)
+    , disable_cache_(false)
+    , update_fragmenter_metadata_(true) {}
+
+AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
+    const int db_id,
+    const ForeignTable* foreign_table,
+    const UserMapping* user_mapping,
+    const bool disable_cache)
+    : db_id_(db_id)
+    , foreign_table_(foreign_table)
+    , is_restored_(false)
+    , user_mapping_(user_mapping)
+    , disable_cache_(disable_cache)
+    , update_fragmenter_metadata_(false) {}
 
 namespace {
 std::set<const ColumnDescriptor*> get_columns(const ChunkToBufferMap& buffers,
@@ -109,6 +130,9 @@ void AbstractTextFileDataWrapper::populateChunkBuffers(
 void AbstractTextFileDataWrapper::updateMetadata(
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
     int fragment_id) {
+  if (!update_fragmenter_metadata_) {
+    return;  // updating metadata in fragmenter is explicitly disbled
+  }
   auto fragmenter = foreign_table_->fragmenter;
   if (fragmenter) {
     auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
@@ -372,6 +396,7 @@ struct MetadataScanMultiThreadingParams {
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_encoder_buffers;
   std::map<ChunkKey, Chunk_NS::Chunk> cached_chunks;
   std::mutex chunk_encoder_buffers_mutex;
+  bool disable_cache;
 };
 
 /**
@@ -432,11 +457,12 @@ void update_stats(Encoder* encoder,
 }
 namespace {
 foreign_storage::ForeignStorageCache* get_cache_if_enabled(
-    std::shared_ptr<Catalog_Namespace::Catalog>& catalog) {
-  if (catalog->getDataMgr()
-          .getPersistentStorageMgr()
-          ->getDiskCacheConfig()
-          .isEnabledForFSI()) {
+    std::shared_ptr<Catalog_Namespace::Catalog>& catalog,
+    const bool disable_cache) {
+  if (!disable_cache && catalog->getDataMgr()
+                            .getPersistentStorageMgr()
+                            ->getDiskCacheConfig()
+                            .isEnabledForFSI()) {
     return catalog->getDataMgr().getPersistentStorageMgr()->getDiskCache();
   } else {
     return nullptr;
@@ -451,11 +477,12 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
                   ChunkKey& chunk_key,
                   const ColumnDescriptor* column,
                   bool is_first_block,
-                  bool is_last_block) {
+                  bool is_last_block,
+                  bool disable_cache) {
   auto catalog =
       Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
   CHECK(catalog);
-  auto cache = get_cache_if_enabled(catalog);
+  auto cache = get_cache_if_enabled(catalog, disable_cache);
   if (cache) {
     ChunkKey index_key = {chunk_key[CHUNK_KEY_DB_IDX],
                           chunk_key[CHUNK_KEY_TABLE_IDX],
@@ -528,8 +555,8 @@ void process_data_blocks(MetadataScanMultiThreadingParams& multi_threading_param
         chunk_key,
         column,
         (num_elements - result.row_count) == 0,  // Is the first block added to this chunk
-        num_elements == request.getMaxFragRows()  // Is the last block for this chunk
-    );
+        num_elements == request.getMaxFragRows(),  // Is the last block for this chunk
+        multi_threading_params.disable_cache);
   }
 }
 
@@ -827,6 +854,7 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     column_by_id[column->columnId] = column;
   }
   MetadataScanMultiThreadingParams multi_threading_params;
+  multi_threading_params.disable_cache = disable_cache_;
 
   // Restore previous chunk data
   if (foreign_table_->isAppendMode()) {

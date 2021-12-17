@@ -45,6 +45,11 @@ class StringNoneEncoder : public Encoder {
                                        const size_t byteLimit,
                                        const bool replicating = false);
 
+  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                        const int start_idx,
+                                        const size_t num_elements,
+                                        const size_t byte_limit) override;
+
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
                                             const SQLTypeInfo& ti,
@@ -54,7 +59,18 @@ class StringNoneEncoder : public Encoder {
     return nullptr;
   }
 
-  std::shared_ptr<ChunkMetadata> appendData(const std::vector<std::string>* srcData,
+  std::shared_ptr<ChunkMetadata> appendEncodedDataAtIndices(
+      const int8_t* index_data,
+      int8_t* data,
+      const std::vector<size_t>& selected_idx) override;
+
+  std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t* index_data,
+                                                   int8_t* data,
+                                                   const size_t start_idx,
+                                                   const size_t num_elements) override;
+
+  template <typename StringType>
+  std::shared_ptr<ChunkMetadata> appendData(const std::vector<StringType>* srcData,
                                             const int start_idx,
                                             const size_t numAppendElems,
                                             const bool replicating = false);
@@ -126,11 +142,16 @@ class StringNoneEncoder : public Encoder {
   void resetChunkStats() override { has_nulls = false; }
 
  private:
+  std::string_view getStringAtIndex(const int8_t* index_data,
+                                    const int8_t* data,
+                                    size_t index);
+
   AbstractBuffer* index_buf;
   StringOffsetT last_offset;
   bool has_nulls;
 
-  void update_elem_stats(const std::string& elem);
+  template <typename StringType>
+  void update_elem_stats(const StringType& elem);
 
 };  // class StringNoneEncoder
 

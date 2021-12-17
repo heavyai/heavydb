@@ -94,7 +94,11 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    */
   void insertData(InsertData& insert_data_struct) override;
 
+  void insertChunks(const InsertChunks& insert_chunk) override;
+
   void insertDataNoCheckpoint(InsertData& insert_data_struct) override;
+
+  void insertChunksNoCheckpoint(const InsertChunks& insert_chunk) override;
 
   void dropFragmentsToSize(const size_t maxRows) override;
 
@@ -231,6 +235,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);
   void insertDataImpl(InsertData& insert_data);
+  void insertChunksImpl(const InsertChunks& insert_chunk);
   void addColumns(const InsertData& insertDataStruct);
 
   InsertOrderFragmenter(const InsertOrderFragmenter&);
@@ -251,6 +256,13 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   bool isAddingNewColumns(const InsertData& insert_data) const;
   void dropFragmentsToSizeNoInsertLock(const size_t max_rows);
   void setLastFragmentVarLenColumnSizes();
+  void insertChunksIntoFragment(const InsertChunks& insert_chunks,
+                                const std::optional<int> delete_column_id,
+                                FragmentInfo* current_fragment,
+                                const size_t num_rows_to_insert,
+                                size_t& num_rows_inserted,
+                                size_t& num_rows_left,
+                                const size_t start_fragment);
 };
 
 }  // namespace Fragmenter_Namespace

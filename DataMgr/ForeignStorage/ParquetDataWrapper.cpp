@@ -71,10 +71,33 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
 }
 }  // namespace
 
-ParquetDataWrapper::ParquetDataWrapper() : db_id_(-1), foreign_table_(nullptr) {}
+ParquetDataWrapper::ParquetDataWrapper()
+    : update_fragmenter_metadata_(false), db_id_(-1), foreign_table_(nullptr) {}
+
+ParquetDataWrapper::ParquetDataWrapper(const int db_id,
+                                       const ForeignTable* foreign_table,
+                                       const UserMapping* user_mapping)
+    : update_fragmenter_metadata_(false)
+    , db_id_(db_id)
+    , foreign_table_(foreign_table)
+    , last_fragment_index_(0)
+    , last_fragment_row_count_(0)
+    , total_row_count_(0)
+    , last_row_group_(0)
+    , is_restored_(false)
+    , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
+    , file_reader_cache_(std::make_unique<FileReaderMap>()) {
+  auto& server_options = foreign_table->foreign_server->options;
+  if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
+    file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
+  } else {
+    UNREACHABLE();
+  }
+}
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table)
-    : db_id_(db_id)
+    : update_fragmenter_metadata_(true)
+    , db_id_(db_id)
     , foreign_table_(foreign_table)
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
@@ -155,7 +178,7 @@ void ParquetDataWrapper::initializeChunkBuffers(
       auto encoder = buffer->getEncoder();
       encoder->resetChunkStats(metadata->chunkStats);
       encoder->setNumElems(metadata->numElements);
-      if (column->columnType.is_string() &&
+      if ((column->columnType.is_string() || column->columnType.is_geometry()) &&
           column->columnType.get_compression() == kENCODING_NONE) {
         auto index_buffer = chunk.getIndexBuf();
         index_buffer->reserve(sizeof(StringOffsetT) * (metadata->numElements + 1));
@@ -452,7 +475,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
           ->resetChunkStats(cached_metadata->chunkStats);
     }
 
-    if (fragmenter) {
+    if (update_fragmenter_metadata_ && fragmenter) {
       fragmenter->updateColumnChunkMetadata(column, fragment_id, cached_metadata);
     }
   }

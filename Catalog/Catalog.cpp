@@ -4420,6 +4420,7 @@ void Catalog::createDefaultServersIfNotExists() {
   local_csv_server->validate();
   createForeignServerNoLocks(std::move(local_csv_server), true);
 
+#ifdef ENABLE_IMPORT_PARQUET
   auto local_parquet_server = std::make_unique<foreign_storage::ForeignServer>(
       "omnisci_local_parquet",
       foreign_storage::DataWrapperType::PARQUET,
@@ -4427,6 +4428,7 @@ void Catalog::createDefaultServersIfNotExists() {
       OMNISCI_ROOT_USER_ID);
   local_parquet_server->validate();
   createForeignServerNoLocks(std::move(local_parquet_server), true);
+#endif
 
   auto local_regex_parser_server = std::make_unique<foreign_storage::ForeignServer>(
       "omnisci_local_regex_parser",

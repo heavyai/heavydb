@@ -26,6 +26,16 @@ class ForeignStorageException : public std::runtime_error {
       : std::runtime_error(error_message) {}
 };
 
+class MetadataScanInfeasibleFragmentSizeException : public std::runtime_error {
+ public:
+  MetadataScanInfeasibleFragmentSizeException(const std::string& error_message)
+      : std::runtime_error(error_message), min_feasible_fragment_size_(-1) {}
+
+  int32_t
+      min_feasible_fragment_size_;  // may be set to indicate what the minimum feasible
+                                    // fragment size for metadata scan should be
+};
+
 inline void throw_removed_row_in_result_set_error(const std::string& select_statement) {
   throw ForeignStorageException{
       "Refresh of foreign table created with \"APPEND\" update type failed as result set "

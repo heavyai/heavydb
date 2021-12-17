@@ -110,6 +110,38 @@ int compute_device_for_fragment(const int table_id,
   }
 }
 
+size_t get_num_rows_to_insert(const size_t rows_left_in_current_fragment,
+                              const size_t num_rows_left,
+                              const size_t num_rows_inserted,
+                              const std::unordered_map<int, size_t>& var_len_col_info,
+                              const size_t max_chunk_size,
+                              const InsertChunks& insert_chunks,
+                              std::map<int, Chunk_NS::Chunk>& column_map) {
+  size_t num_rows_to_insert = min(rows_left_in_current_fragment, num_rows_left);
+  if (rows_left_in_current_fragment != 0) {
+    for (const auto& var_len_col_info_it : var_len_col_info) {
+      CHECK_LE(var_len_col_info_it.second, max_chunk_size);
+      size_t bytes_left = max_chunk_size - var_len_col_info_it.second;
+      auto find_it = insert_chunks.chunks.find(var_len_col_info_it.first);
+      if (find_it == insert_chunks.chunks.end()) {
+        continue;
+      }
+      const auto& chunk = find_it->second;
+      auto column_type = chunk->getColumnDesc()->columnType;
+      const int8_t* index_buffer_ptr =
+          column_type.is_varlen_indeed() ? chunk->getIndexBuf()->getMemoryPtr() : nullptr;
+      CHECK(column_type.is_varlen());
+
+      auto col_map_it = column_map.find(var_len_col_info_it.first);
+      num_rows_to_insert = std::min(
+          num_rows_to_insert,
+          col_map_it->second.getNumElemsForBytesEncodedData(
+              index_buffer_ptr, num_rows_to_insert, num_rows_inserted, bytes_left));
+    }
+  }
+  return num_rows_to_insert;
+}
+
 }  // namespace
 
 void InsertOrderFragmenter::conditionallyInstantiateFileMgrWithParams() {
@@ -395,8 +427,29 @@ bool InsertOrderFragmenter::isAddingNewColumns(const InsertData& insert_data) co
   return all_columns_are_new;
 }
 
+void InsertOrderFragmenter::insertChunks(const InsertChunks& insert_chunk) {
+  try {
+    // prevent two threads from trying to insert into the same table simultaneously
+    mapd_unique_lock<mapd_shared_mutex> insertLock(insertMutex_);
+    insertChunksImpl(insert_chunk);
+    if (defaultInsertLevel_ ==
+        Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
+      dataMgr_->checkpoint(
+          chunkKeyPrefix_[0],
+          chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+    }
+  } catch (...) {
+    auto db_id = insert_chunk.db_id;
+    auto table_epochs = catalog_->getTableEpochs(db_id, insert_chunk.table_id);
+    // the statement below deletes *this* object!
+    // relying on exception propagation at this stage
+    // until we can sort this out in a cleaner fashion
+    catalog_->setTableEpochs(db_id, table_epochs);
+    throw;
+  }
+}
+
 void InsertOrderFragmenter::insertData(InsertData& insert_data_struct) {
-  // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
   try {
     // prevent two threads from trying to insert into the same table simultaneously
     mapd_unique_lock<mapd_shared_mutex> insertLock(insertMutex_);
@@ -420,6 +473,14 @@ void InsertOrderFragmenter::insertData(InsertData& insert_data_struct) {
     catalog_->setTableEpochs(insert_data_struct.databaseId, table_epochs);
     throw;
   }
+}
+
+void InsertOrderFragmenter::insertChunksNoCheckpoint(const InsertChunks& insert_chunk) {
+  // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
+  mapd_unique_lock<mapd_shared_mutex> insertLock(
+      insertMutex_);  // prevent two threads from trying to insert into the same table
+                      // simultaneously
+  insertChunksImpl(insert_chunk);
 }
 
 void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insert_data_struct) {
@@ -566,6 +627,155 @@ bool InsertOrderFragmenter::hasDeletedRows(const int delete_column_id) {
     }
   }
   return false;
+}
+
+void InsertOrderFragmenter::insertChunksIntoFragment(
+    const InsertChunks& insert_chunks,
+    const std::optional<int> delete_column_id,
+    FragmentInfo* current_fragment,
+    const size_t num_rows_to_insert,
+    size_t& num_rows_inserted,
+    size_t& num_rows_left,
+    const size_t start_fragment) {
+  mapd_unique_lock<mapd_shared_mutex> write_lock(fragmentInfoMutex_);
+  // for each column, append the data in the appropriate insert buffer
+  for (auto& [columnId, chunk] : insert_chunks.chunks) {
+    auto colMapIt = columnMap_.find(columnId);
+    CHECK(colMapIt != columnMap_.end());
+    current_fragment->shadowChunkMetadataMap[columnId] =
+        colMapIt->second.appendEncodedData(*chunk, num_rows_to_insert, num_rows_inserted);
+    auto varLenColInfoIt = varLenColInfo_.find(columnId);
+    if (varLenColInfoIt != varLenColInfo_.end()) {
+      varLenColInfoIt->second = colMapIt->second.getBuffer()->size();
+      CHECK_LE(varLenColInfoIt->second, maxChunkSize_);
+    }
+  }
+  if (hasMaterializedRowId_) {
+    size_t start_id = maxFragmentRows_ * current_fragment->fragmentId +
+                      current_fragment->shadowNumTuples;
+    std::vector<int64_t> row_id_data(num_rows_to_insert);
+    for (size_t i = 0; i < num_rows_to_insert; ++i) {
+      row_id_data[i] = i + start_id;
+    }
+    DataBlockPtr row_id_block;
+    row_id_block.numbersPtr = reinterpret_cast<int8_t*>(row_id_data.data());
+    auto col_map_it = columnMap_.find(rowIdColId_);
+    CHECK(col_map_it != columnMap_.end());
+    current_fragment->shadowChunkMetadataMap[rowIdColId_] = col_map_it->second.appendData(
+        row_id_block, num_rows_to_insert, num_rows_inserted);
+  }
+
+  if (delete_column_id) {  // has delete column
+    std::vector<int8_t> delete_data(num_rows_to_insert, false);
+    DataBlockPtr delete_block;
+    delete_block.numbersPtr = reinterpret_cast<int8_t*>(delete_data.data());
+    auto col_map_it = columnMap_.find(*delete_column_id);
+    CHECK(col_map_it != columnMap_.end());
+    current_fragment->shadowChunkMetadataMap[*delete_column_id] =
+        col_map_it->second.appendData(
+            delete_block, num_rows_to_insert, num_rows_inserted);
+  }
+
+  current_fragment->shadowNumTuples =
+      fragmentInfoVec_.back()->getPhysicalNumTuples() + num_rows_to_insert;
+  num_rows_left -= num_rows_to_insert;
+  num_rows_inserted += num_rows_to_insert;
+  for (auto partIt = fragmentInfoVec_.begin() + start_fragment;
+       partIt != fragmentInfoVec_.end();
+       ++partIt) {
+    auto fragment_ptr = partIt->get();
+    fragment_ptr->setPhysicalNumTuples(fragment_ptr->shadowNumTuples);
+    fragment_ptr->setChunkMetadataMap(fragment_ptr->shadowChunkMetadataMap);
+  }
+}
+
+void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) {
+  std::optional<int> delete_column_id{std::nullopt};
+  for (const auto& cit : columnMap_) {
+    if (cit.second.getColumnDesc()->isDeletedCol) {
+      delete_column_id = cit.second.getColumnDesc()->columnId;
+    }
+  }
+
+  // verify that all chunks to be inserted have same number of rows, otherwise the input
+  // data is malformed
+  std::optional<size_t> num_rows{std::nullopt};
+  for (const auto& [column_id, chunk] : insert_chunks.chunks) {
+    auto buffer = chunk->getBuffer();
+    CHECK(buffer);
+    CHECK(buffer->hasEncoder());
+    CHECK(buffer->getEncoder()->getNumElems());
+    if (!num_rows) {
+      num_rows = buffer->getEncoder()->getNumElems();
+    } else {
+      CHECK(num_rows == buffer->getEncoder()->getNumElems());
+    }
+  }
+
+  size_t num_rows_left = *num_rows;
+  size_t num_rows_inserted = 0;
+
+  if (num_rows_left == 0) {
+    return;
+  }
+
+  FragmentInfo* current_fragment{nullptr};
+
+  // Access to fragmentInfoVec_ is protected as we are under the insertMutex_ lock but it
+  // feels fragile
+  if (fragmentInfoVec_.empty()) {  // if no fragments exist for table
+    current_fragment = createNewFragment(defaultInsertLevel_);
+  } else {
+    current_fragment = fragmentInfoVec_.back().get();
+  }
+  CHECK(current_fragment);
+
+  size_t start_fragment = fragmentInfoVec_.size() - 1;
+
+  while (num_rows_left > 0) {  // may have to create multiple fragments for bulk insert
+    // loop until done inserting all rows
+    CHECK_LE(current_fragment->shadowNumTuples, maxFragmentRows_);
+    size_t rows_left_in_current_fragment =
+        maxFragmentRows_ - current_fragment->shadowNumTuples;
+    size_t num_rows_to_insert = get_num_rows_to_insert(rows_left_in_current_fragment,
+                                                       num_rows_left,
+                                                       num_rows_inserted,
+                                                       varLenColInfo_,
+                                                       maxChunkSize_,
+                                                       insert_chunks,
+                                                       columnMap_);
+
+    if (rows_left_in_current_fragment == 0 || num_rows_to_insert == 0) {
+      current_fragment = createNewFragment(defaultInsertLevel_);
+      if (num_rows_inserted == 0) {
+        start_fragment++;
+      }
+      rows_left_in_current_fragment = maxFragmentRows_;
+      for (auto& varLenColInfoIt : varLenColInfo_) {
+        varLenColInfoIt.second = 0;  // reset byte counter
+      }
+      num_rows_to_insert = get_num_rows_to_insert(rows_left_in_current_fragment,
+                                                  num_rows_left,
+                                                  num_rows_inserted,
+                                                  varLenColInfo_,
+                                                  maxChunkSize_,
+                                                  insert_chunks,
+                                                  columnMap_);
+    }
+
+    CHECK_GT(num_rows_to_insert, size_t(0));  // would put us into an endless loop as we'd
+                                              // never be able to insert anything
+
+    insertChunksIntoFragment(insert_chunks,
+                             delete_column_id,
+                             current_fragment,
+                             num_rows_to_insert,
+                             num_rows_inserted,
+                             num_rows_left,
+                             start_fragment);
+  }
+  numTuples_ += *num_rows;
+  dropFragmentsToSizeNoInsertLock(maxRows_);
 }
 
 void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {

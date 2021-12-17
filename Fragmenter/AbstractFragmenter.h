@@ -139,11 +139,26 @@ class AbstractFragmenter {
   virtual void insertData(InsertData& insert_data_struct) = 0;
 
   /**
+   * @brief Insert chunks into minimal number of fragments
+   *
+   * @param insert_chunk - the chunks to insert
+   */
+  virtual void insertChunks(const InsertChunks& insert_chunk) = 0;
+
+  /**
    * @brief Given data wrapped in an InsertData struct,
    * inserts it into the correct partitions
    * No locks and checkpoints taken needs to be managed externally
    */
   virtual void insertDataNoCheckpoint(InsertData& insert_data_struct) = 0;
+
+  /**
+   * @brief Insert chunks into minimal number of fragments; no locks or
+   * checkpoints taken
+   *
+   * @param chunk - the chunks to insert
+   */
+  virtual void insertChunksNoCheckpoint(const InsertChunks& insert_chunk) = 0;
 
   /**
    * @brief Will truncate table to less than maxRows by dropping

@@ -36,6 +36,10 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table);
 
+  ParquetDataWrapper(const int db_id,
+                     const ForeignTable* foreign_table,
+                     const UserMapping* user_mapping);
+
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
@@ -85,6 +89,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   std::map<int, std::vector<RowGroupInterval>> fragment_to_row_group_interval_map_;
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
+  const bool update_fragmenter_metadata_;
   const int db_id_;
   const ForeignTable* foreign_table_;
   int last_fragment_index_;

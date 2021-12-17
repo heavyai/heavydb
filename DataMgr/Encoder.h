@@ -150,6 +150,58 @@ class Encoder {
   Encoder(Data_Namespace::AbstractBuffer* buffer);
   virtual ~Encoder() {}
 
+  /**
+   * Compute the maximum number of variable length encoded elements given a
+   * byte limit
+   *
+   * @param index_data - (optional) index data for the encoded type
+   * @param start_idx - (optional) starting index of the encoded data
+   * @param num_elements - maximal number of elements
+   * @param byte_limit - byte limit that mus be respected
+   *
+   * @return the number of elements
+   *
+   * NOTE: optional parameters above may be ignored by the implementation, but
+   * may or may not be required depending on the encoder type backing the
+   * implementation.
+   */
+  virtual size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                                const int start_idx,
+                                                const size_t num_elements,
+                                                const size_t byte_limit) = 0;
+
+  /**
+   * Append selected encoded data to the chunk buffer backing this encoder.
+   *
+   * @param index_data - (optional) the index data of data to append
+   * @param data - the data to append
+   * @param selected_idx - which indices in the encoded data to append
+   *
+   * @return updated chunk metadata for the chunk buffer backing this encoder
+   *
+   * NOTE: `index_data` must be non-null for varlen encoder types.
+   */
+  virtual std::shared_ptr<ChunkMetadata> appendEncodedDataAtIndices(
+      const int8_t* index_data,
+      int8_t* data,
+      const std::vector<size_t>& selected_idx) = 0;
+
+  /**
+   * Append encoded data to the chunk buffer backing this encoder.
+   *
+   * @param index_data - (optional) the index data of data to append
+   * @param data - the data to append
+   * @param start_idx - the position to start encoding from in the `data` array
+   * @param num_elements - the number of elements to encode from the `data` array
+   * @return updated chunk metadata for the chunk buffer backing this encoder
+   *
+   * NOTE: `index_data` must be non-null for varlen encoder types.
+   */
+  virtual std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t* index_data,
+                                                           int8_t* data,
+                                                           const size_t start_idx,
+                                                           const size_t num_elements) = 0;
+
   //! Append data to the chunk buffer backing this encoder.
   //! @param src_data Source data for the append
   //! @param num_elems_to_append Number of elements to append

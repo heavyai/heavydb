@@ -66,6 +66,7 @@ extern bool g_enable_s3_fsi;
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_parquet_import_fsi;
 #endif
+extern bool g_enable_general_import_fsi;
 
 namespace {
 
@@ -661,13 +662,24 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
 }
 #endif
 
-using ImportAndSelectTestParameters = std::tuple</*source_type=*/std::string,
-                                                 /*data_source_type=*/std::string>;
+using ImportAndSelectTestParameters = std::tuple</*file_type=*/std::string,
+                                                 /*data_source_type=*/std::string,
+                                                 /*fragment_size=*/int32_t,
+                                                 /*max_chunk_size=*/int32_t,
+                                                 /*code_path=*/std::string>;
 
 class ImportAndSelectTest
     : public ImportExportTestBase,
       public ::testing::WithParamInterface<ImportAndSelectTestParameters> {
  protected:
+  struct Param {
+    std::string file_type, data_source_type;
+    int32_t fragment_size;
+    int32_t num_elements_per_chunk;
+    std::string code_path;
+  };
+  Param param_;
+
   static void SetUpTestSuite() {
 #ifdef HAVE_AWS_S3
     omnisci_aws_sdk::init_sdk();
@@ -683,11 +695,25 @@ class ImportAndSelectTest
   }
 
   void SetUp() override {
+    std::tie(param_.file_type,
+             param_.data_source_type,
+             param_.fragment_size,
+             param_.num_elements_per_chunk,
+             param_.code_path) = GetParam();
     g_enable_fsi = true;
     g_enable_s3_fsi = true;
+    if (param_.code_path == "parquet_fsi") {
 #ifdef ENABLE_IMPORT_PARQUET
-    g_enable_parquet_import_fsi = true;
+      g_enable_parquet_import_fsi = true;
+#else
+      throw std::runtime_error(
+          "Can not test code path `parquet_fsi` without `ENABLE_IMPORT_PARQUET`.");
 #endif
+    } else if (param_.code_path == "general_fsi") {
+      g_enable_general_import_fsi = true;
+    } else {
+      UNREACHABLE();
+    }
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
   }
@@ -697,9 +723,18 @@ class ImportAndSelectTest
     ImportExportTestBase::TearDown();
     g_enable_fsi = false;
     g_enable_s3_fsi = false;
+    if (param_.code_path == "parquet_fsi") {
 #ifdef ENABLE_IMPORT_PARQUET
-    g_enable_parquet_import_fsi = false;
+      g_enable_parquet_import_fsi = false;
+#else
+      throw std::runtime_error(
+          "Can not test code path `parquet_fsi` without `ENABLE_IMPORT_PARQUET`.");
 #endif
+    } else if (param_.code_path == "general_fsi") {
+      g_enable_general_import_fsi = false;
+    } else {
+      UNREACHABLE();
+    }
   }
 
 #ifdef HAVE_AWS_S3
@@ -710,14 +745,16 @@ class ImportAndSelectTest
 #endif
 
   bool testShouldBeSkipped() {
-    std::string file_type, data_source_type;
-    std::tie(file_type, data_source_type) = GetParam();
-    if (data_source_type == "s3_private") {
+    if (param_.data_source_type == "s3_private") {
 #ifdef HAVE_AWS_S3
       return insufficientPrivateCredentials();
 #else
       return true;
 #endif
+    }
+    if (isDistributedMode() &&
+        param_.code_path == "general_fsi") {  // currently unsupported
+      return true;
     }
     return false;
   }
@@ -725,15 +762,23 @@ class ImportAndSelectTest
   TQueryResult createTableCopyFromAndSelect(const std::string& schema,
                                             const std::string& file_name_base,
                                             const std::string& select_query,
+                                            const int64_t max_byte_size_per_element,
                                             const std::string& table_options = {},
                                             const bool is_dir = false) {
-    std::string file_type, data_source_type;
-    std::tie(file_type, data_source_type) = GetParam();
+    auto& file_type = param_.file_type;
+    auto& data_source_type = param_.data_source_type;
+    auto& fragment_size = param_.fragment_size;
+    auto& num_elements_per_chunk = param_.num_elements_per_chunk;
+
+    int64_t max_chunk_size = num_elements_per_chunk * max_byte_size_per_element;
 
     std::string query = "CREATE TABLE import_test_new (" + schema + ")";
+    std::string query_table_options = "fragment_size=" + std::to_string(fragment_size) +
+                                      ",max_chunk_size=" + std::to_string(max_chunk_size);
     if (!table_options.empty()) {
-      query += " WITH (" + table_options + ")";
+      query_table_options += "," + table_options;
     }
+    query += " WITH (" + query_table_options + ")";
     query += ";";
 
     std::string base_name = file_name_base + "." + file_type;
@@ -753,6 +798,7 @@ class ImportAndSelectTest
                         getCopyFromOptions(file_type, data_source_type) + ";"));
     TQueryResult result;
     sql(result, select_query);
+    validateTableChunkSizeAndMaxFragRows();
     return result;
   }
 
@@ -771,6 +817,50 @@ class ImportAndSelectTest
     std::string options_string = join(options, ", ");
     return "WITH (" + options_string + ")";
   }
+
+  void validateTableChunkSizeAndMaxFragRows(const TableDescriptor* table) {
+    auto& cat = getCatalog();
+    auto fragmenter = table->fragmenter;
+    ASSERT_NE(fragmenter, nullptr)
+        << "Fragmenter does not exist for table: " + table->tableName;
+    auto logical_and_physical_columns =
+        cat.getAllColumnMetadataForTable(table->tableId, false, false, true);
+
+    const auto db_id = cat.getDatabaseId();
+
+    auto query_info = fragmenter->getFragmentsForQuery();
+    for (const auto& fragment : query_info.fragments) {
+      if (fragment.getPhysicalNumTuples() == 0) {  // nothing to check
+        continue;
+      }
+      for (const auto& column : logical_and_physical_columns) {
+        const auto fragment_id = fragment.fragmentId;
+        const auto column_id = column->columnId;
+        ChunkKey data_key = {db_id, fragment.physicalTableId, column_id, fragment_id};
+        std::shared_ptr<Chunk_NS::Chunk> chunk = Chunk_NS::Chunk::getChunk(
+            column, &(cat.getDataMgr()), data_key, Data_Namespace::CPU_LEVEL, 0, 0, 0);
+        EXPECT_LE(chunk->getBuffer()->size(), static_cast<size_t>(table->maxChunkSize));
+        EXPECT_LE(chunk->getBuffer()->getEncoder()->getNumElems(),
+                  static_cast<size_t>(table->maxFragRows));
+      }
+    }
+  }
+
+  void validateTableChunkSizeAndMaxFragRows() {
+    auto& cat = getCatalog();
+
+    auto table = cat.getMetadataForTable("import_test_new", false);
+    ASSERT_NE(table, nullptr) << "Could not find table: " + table->tableName;
+
+    if (table->nShards == 0) {
+      validateTableChunkSizeAndMaxFragRows(table);
+    } else {
+      const auto& physical_tables = cat.getPhysicalTablesDescriptors(table);
+      for (const auto shard_table : physical_tables) {
+        validateTableChunkSizeAndMaxFragRows(shard_table);
+      }
+    }
+  }
 };
 
 TEST_P(ImportAndSelectTest, GeoTypes) {
@@ -780,7 +870,8 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
       "geo_types",
-      "SELECT * FROM import_test_new ORDER BY index;");
+      "SELECT * FROM import_test_new ORDER BY index;",
+      256);
   // clang-format off
     assertResultSetEqual({
     {
@@ -814,7 +905,8 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
       "FLOAT[], tm TIME[], tp TIMESTAMP[], d DATE[], txt TEXT[], fixedpoint "
       "DECIMAL(10,5)[]",
       "array_types",
-      "SELECT * FROM import_test_new ORDER BY index;");
+      "SELECT * FROM import_test_new ORDER BY index;",
+      24);
   // clang-format off
   assertResultSetEqual({
     {
@@ -848,7 +940,8 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
       "f FLOAT[2], tm TIME[2], tp TIMESTAMP[2], d DATE[2], txt TEXT[2], fixedpoint "
       "DECIMAL(10,5)[2]",
       "array_fixed_len_types",
-      "SELECT * FROM import_test_new ORDER BY index;");
+      "SELECT * FROM import_test_new ORDER BY index;",
+      24);
   // clang-format off
   assertResultSetEqual({
     {
@@ -882,7 +975,8 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
       "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
       "txt_2 TEXT ENCODING NONE",
       "scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;");
+      "SELECT * FROM import_test_new ORDER BY s;",
+      14);
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -895,8 +989,7 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
   };
   // clang-format on
 
-  std::string data_source_type = std::get<1>(GetParam());
-  if (data_source_type == "local") {
+  if (param_.data_source_type == "local") {
     expected_values.push_back(
         {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
   }
@@ -910,9 +1003,10 @@ TEST_P(ImportAndSelectTest, Sharded) {
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE, shard key(t)",
+      "txt_2 TEXT ENCODING NONE, shard key(txt)",
       "scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
+      14,
       "SHARD_COUNT=2");
 
   // clang-format off
@@ -926,8 +1020,7 @@ TEST_P(ImportAndSelectTest, Sharded) {
   };
   // clang-format on
 
-  std::string data_source_type = std::get<1>(GetParam());
-  if (data_source_type == "local") {
+  if (param_.data_source_type == "local") {
     expected_values.push_back(
         {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
   }
@@ -944,8 +1037,9 @@ TEST_P(ImportAndSelectTest, Multifile) {
   auto query = createTableCopyFromAndSelect("t TEXT, i INT, f FLOAT",
                                             "example_2",
                                             "SELECT * FROM import_test_new ORDER BY i,t;",
-                                            {},
-                                            true);
+                                            4,
+                                            /*table_options=*/{},
+                                            /*is_dir=*/true);
 
   assertResultSetEqual(
       {
@@ -962,8 +1056,15 @@ TEST_P(ImportAndSelectTest, Multifile) {
 namespace {
 auto print_import_and_select_test_param = [](const auto& param_info) {
   std::string file_type, data_source_type;
-  std::tie(file_type, data_source_type) = param_info.param;
-  return file_type + "_" + data_source_type;
+  int32_t fragment_size;
+  int32_t num_elements_per_chunk;
+  std::string code_path;
+  std::tie(
+      file_type, data_source_type, fragment_size, num_elements_per_chunk, code_path) =
+      param_info.param;
+  return file_type + "_" + data_source_type + "_fragmentSize_" +
+         std::to_string(fragment_size) + "_numElementsPerChunk_" +
+         std::to_string(num_elements_per_chunk) + "_codePath_" + code_path;
 };
 }
 
@@ -973,10 +1074,16 @@ INSTANTIATE_TEST_SUITE_P(FileAndDataSourceTypes,
                                             ::testing::Values("local"
 #ifdef HAVE_AWS_S3
                                                               ,
-                                                              "s3_private",
-                                                              "s3_public"
+                                                              "s3_private"
 #endif
-                                                              )),
+                                                              ),
+                                            ::testing::Values(1, DEFAULT_FRAGMENT_ROWS),
+                                            ::testing::Values(1, 1000000),
+                                            ::testing::Values(
+#ifdef ENABLE_IMPORT_PARQUET
+                                                "parquet_fsi",
+#endif
+                                                "general_fsi")),
                          print_import_and_select_test_param);
 
 const char* create_table_timestamps = R"(

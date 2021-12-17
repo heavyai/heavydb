@@ -62,6 +62,11 @@ class Chunk {
                            int start_idx = 0,
                            int skip = 1) const;
 
+  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                        const size_t num_elems,
+                                        const size_t start_idx,
+                                        const size_t byte_limit);
+
   size_t getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
                                        const size_t num_elems,
                                        const size_t start_idx,
@@ -72,6 +77,14 @@ class Chunk {
                                             const size_t numAppendElems,
                                             const size_t startIdx,
                                             const bool replicating = false);
+
+  std::shared_ptr<ChunkMetadata> appendEncodedDataAtIndices(
+      const Chunk& src_chunk,
+      const std::vector<size_t>& selected_idx);
+
+  std::shared_ptr<ChunkMetadata> appendEncodedData(const Chunk& src_chunk,
+                                                   const size_t num_elements,
+                                                   const size_t start_idx);
 
   void createChunkBuffer(DataMgr* data_mgr,
                          const ChunkKey& key,
@@ -94,6 +107,23 @@ class Chunk {
                                          const size_t num_bytes,
                                          const size_t num_elems);
 
+  /**
+   * @brief Compose a chunk from components and return it
+   *
+   * @param cd - the column descriptor for the chunk
+   * @param data_buffer - the data buffer for the chunk
+   * @param index_buffer - the (optional) index buffer for the chunk
+   *
+   * @return a chunk composed of supplied components
+   *
+   * Note, the `index_buffer` is only applicable if the column is a variable
+   * length column. If the column type is not variable length, this parameter
+   * is ignored.
+   */
+  static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
+                                         AbstractBuffer* data_buffer,
+                                         AbstractBuffer* index_buffer);
+
   bool isChunkOnDevice(DataMgr* data_mgr,
                        const ChunkKey& key,
                        const MemoryLevel mem_level,
@@ -114,6 +144,8 @@ class Chunk {
   std::string toString() const;
 
  private:
+  void setChunkBuffer(AbstractBuffer* buffer, AbstractBuffer* index_buffer);
+
   AbstractBuffer* buffer_;
   AbstractBuffer* index_buf_;
   const ColumnDescriptor* column_desc_;

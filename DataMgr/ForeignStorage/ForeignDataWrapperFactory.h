@@ -21,6 +21,7 @@
 #include "ImportExport/CopyParams.h"
 
 namespace foreign_storage {
+class UserMapping;
 /**
  * @type DataWrapperType
  * @brief Encapsulates an enumeration of foreign data wrapper type strings
@@ -81,6 +82,12 @@ class ForeignDataWrapperFactory {
    * Create for the import use-case.
    */
   static std::unique_ptr<ForeignDataWrapper> createForImport(
+      const std::string& data_wrapper_type,
+      const int db_id,
+      const ForeignTable* foreign_table,
+      const UserMapping* user_mapping);
+
+  static std::unique_ptr<ForeignDataWrapper> createForGeneralImport(
       const std::string& data_wrapper_type,
       const int db_id,
       const ForeignTable* foreign_table,

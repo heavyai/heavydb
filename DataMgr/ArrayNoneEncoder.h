@@ -65,6 +65,26 @@ class ArrayNoneEncoder : public Encoder {
     return n - start_idx;
   }
 
+  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                        const int start_idx,
+                                        const size_t num_elements,
+                                        const size_t byte_limit) override {
+    size_t data_size = 0;
+    auto array_offsets = reinterpret_cast<const ArrayOffsetT*>(index_data);
+    size_t count;
+    for (count = 1; count <= num_elements; ++count) {
+      auto current_index = start_idx + count;
+      auto offset = array_offsets[current_index];
+      int64_t last_offset = array_offsets[current_index - 1];
+      size_t array_byte_size = std::abs(offset) - std::abs(last_offset);
+      if (data_size + array_byte_size > byte_limit) {
+        break;
+      }
+      data_size += array_byte_size;
+    }
+    return count - 1;
+  }
+
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
                                             const SQLTypeInfo& ti,
@@ -72,6 +92,31 @@ class ArrayNoneEncoder : public Encoder {
                                             const int64_t offset = -1) override {
     UNREACHABLE();  // should never be called for arrays
     return nullptr;
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedDataAtIndices(
+      const int8_t* index_data,
+      int8_t* data,
+      const std::vector<size_t>& selected_idx) override {
+    std::vector<ArrayDatum> data_subset;
+    data_subset.reserve(selected_idx.size());
+    for (const auto& array_index : selected_idx) {
+      data_subset.emplace_back(getArrayDatumAtIndex(index_data, data, array_index));
+    }
+    return appendData(&data_subset, 0, selected_idx.size(), false);
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t* index_data,
+                                                   int8_t* data,
+                                                   const size_t start_idx,
+                                                   const size_t num_elements) override {
+    std::vector<ArrayDatum> data_subset;
+    data_subset.reserve(num_elements);
+    for (size_t count = 0; count < num_elements; ++count) {
+      auto current_index = start_idx + count;
+      data_subset.emplace_back(getArrayDatumAtIndex(index_data, data, current_index));
+    }
+    return appendData(&data_subset, 0, num_elements, false);
   }
 
   std::shared_ptr<ChunkMetadata> appendData(const std::vector<ArrayDatum>* srcData,
@@ -520,6 +565,19 @@ class ArrayNoneEncoder : public Encoder {
         UNREACHABLE();
     }
   };
+
+ private:
+  ArrayDatum getArrayDatumAtIndex(const int8_t* index_data, int8_t* data, size_t index) {
+    auto array_offsets = reinterpret_cast<const ArrayOffsetT*>(index_data);
+    auto current_index = index + 1;
+    auto offset = array_offsets[current_index];
+    int64_t last_offset = array_offsets[current_index - 1];
+    size_t array_byte_size = std::abs(offset) - std::abs(last_offset);
+    bool is_null = offset < 0;
+    auto current_data = data + std::abs(last_offset);
+    return is_null ? ArrayDatum(0, nullptr, true, DoNothingDeleter{})
+                   : ArrayDatum(array_byte_size, current_data, false, DoNothingDeleter{});
+  }
 
 };  // class ArrayNoneEncoder
 

@@ -33,41 +33,46 @@ class DateDaysEncoder : public Encoder {
     resetChunkStats();
   }
 
+  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                        const int start_idx,
+                                        const size_t num_elements,
+                                        const size_t byte_limit) override {
+    UNREACHABLE() << "getNumElemsForBytesEncodedData unexpectedly called for non varlen"
+                     " encoder";
+    return {};
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedDataAtIndices(
+      const int8_t*,
+      int8_t* data,
+      const std::vector<size_t>& selected_idx) override {
+    std::vector<V> data_subset;
+    data_subset.reserve(selected_idx.size());
+    auto encoded_data = reinterpret_cast<V*>(data);
+    for (const auto& index : selected_idx) {
+      data_subset.emplace_back(encoded_data[index]);
+    }
+    auto append_data = reinterpret_cast<int8_t*>(data_subset.data());
+    return appendEncodedOrUnencodedData(
+        append_data, selected_idx.size(), SQLTypeInfo{}, false, -1, true);
+  }
+
+  std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t*,
+                                                   int8_t* data,
+                                                   const size_t start_idx,
+                                                   const size_t num_elements) override {
+    auto current_data = data + sizeof(V) * start_idx;
+    return appendEncodedOrUnencodedData(
+        current_data, num_elements, SQLTypeInfo{}, false, -1, true);
+  }
+
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
                                             const SQLTypeInfo& ti,
                                             const bool replicating = false,
                                             const int64_t offset = -1) override {
-    CHECK(ti.is_date_in_days());
-    if (offset == 0 && num_elems_to_append >= num_elems_) {
-      resetChunkStats();
-    }
-    T* unencoded_data = reinterpret_cast<T*>(src_data);
-    auto encoded_data = std::make_unique<V[]>(num_elems_to_append);
-    for (size_t i = 0; i < num_elems_to_append; ++i) {
-      size_t ri = replicating ? 0 : i;
-      encoded_data.get()[i] = encodeDataAndUpdateStats(unencoded_data[ri]);
-    }
-
-    if (offset == -1) {
-      num_elems_ += num_elems_to_append;
-      buffer_->append(reinterpret_cast<int8_t*>(encoded_data.get()),
-                      num_elems_to_append * sizeof(V));
-      if (!replicating) {
-        src_data += num_elems_to_append * sizeof(T);
-      }
-    } else {
-      num_elems_ = offset + num_elems_to_append;
-      CHECK(!replicating);
-      CHECK_GE(offset, 0);
-      buffer_->write(reinterpret_cast<int8_t*>(encoded_data.get()),
-                     num_elems_to_append * sizeof(V),
-                     static_cast<size_t>(offset));
-    }
-
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    getMetadata(chunk_metadata);
-    return chunk_metadata;
+    return appendEncodedOrUnencodedData(
+        src_data, num_elems_to_append, ti, replicating, offset, false);
   }
 
   void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
@@ -182,6 +187,67 @@ class DateDaysEncoder : public Encoder {
   bool has_nulls;
 
  private:
+  std::shared_ptr<ChunkMetadata> appendEncodedOrUnencodedData(
+      int8_t*& src_data,
+      const size_t num_elems_to_append,
+      const SQLTypeInfo& ti,
+      const bool replicating,
+      const int64_t offset,
+      const bool is_encoded) {
+    if (offset == 0 && num_elems_to_append >= num_elems_) {
+      resetChunkStats();
+    }
+
+    CHECK(!is_encoded || !replicating);  // do not support replicating of encoded data
+
+    T* unencoded_data = reinterpret_cast<T*>(src_data);
+    std::vector<V> encoded_data;
+    V* data_to_write = nullptr;
+    if (!is_encoded) {
+      encoded_data.resize(num_elems_to_append);
+      data_to_write = encoded_data.data();
+      for (size_t i = 0; i < num_elems_to_append; ++i) {
+        size_t ri = replicating ? 0 : i;
+        encoded_data[i] = encodeDataAndUpdateStats(unencoded_data[ri]);
+      }
+    } else {
+      data_to_write = reinterpret_cast<V*>(src_data);
+      for (size_t i = 0; i < num_elems_to_append; ++i) {
+        updateStatsWithAlreadyEncoded(data_to_write[i]);
+      }
+    }
+
+    if (offset == -1) {
+      num_elems_ += num_elems_to_append;
+      buffer_->append(reinterpret_cast<int8_t*>(data_to_write),
+                      num_elems_to_append * sizeof(V));
+      if (!replicating) {
+        src_data += num_elems_to_append * sizeof(T);
+      }
+    } else {
+      num_elems_ = offset + num_elems_to_append;
+      CHECK(!replicating);
+      CHECK_GE(offset, 0);
+      buffer_->write(reinterpret_cast<int8_t*>(data_to_write),
+                     num_elems_to_append * sizeof(V),
+                     static_cast<size_t>(offset));
+    }
+
+    auto chunk_metadata = std::make_shared<ChunkMetadata>();
+    getMetadata(chunk_metadata);
+    return chunk_metadata;
+  }
+
+  void updateStatsWithAlreadyEncoded(const V& encoded_data) {
+    if (encoded_data == std::numeric_limits<V>::min()) {
+      has_nulls = true;
+    } else {
+      const T data = DateConverters::get_epoch_seconds_from_days(encoded_data);
+      dataMax = std::max(dataMax, data);
+      dataMin = std::min(dataMin, data);
+    }
+  }
+
   V encodeDataAndUpdateStats(const T& unencoded_data) {
     V encoded_data;
     if (unencoded_data == std::numeric_limits<V>::min()) {

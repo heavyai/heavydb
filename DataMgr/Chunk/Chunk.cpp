@@ -39,6 +39,14 @@ std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
   return chunkp;
 }
 
+std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
+                                       AbstractBuffer* data_buffer,
+                                       AbstractBuffer* index_buffer) {
+  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
+  chunkp->setChunkBuffer(data_buffer, index_buffer);
+  return chunkp;
+}
+
 bool Chunk::isChunkOnDevice(DataMgr* data_mgr,
                             const ChunkKey& key,
                             const MemoryLevel mem_level,
@@ -57,25 +65,12 @@ bool Chunk::isChunkOnDevice(DataMgr* data_mgr,
   }
 }
 
-void Chunk::getChunkBuffer(DataMgr* data_mgr,
-                           const ChunkKey& key,
-                           const MemoryLevel mem_level,
-                           const int device_id,
-                           const size_t num_bytes,
-                           const size_t num_elems) {
+void Chunk::setChunkBuffer(AbstractBuffer* buffer, AbstractBuffer* index_buffer) {
   if (column_desc_->columnType.is_varlen() &&
       !column_desc_->columnType.is_fixlen_array()) {
-    ChunkKey subKey = key;
-    subKey.push_back(1);  // 1 for the main buffer_
-    buffer_ = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
-    subKey.pop_back();
-    subKey.push_back(2);  // 2 for the index buffer_
-    index_buf_ = data_mgr->getChunkBuffer(
-        subKey,
-        mem_level,
-        device_id,
-        (num_elems + 1) * sizeof(StringOffsetT));  // always record n+1 offsets so string
-                                                   // length can be calculated
+    CHECK(index_buffer);
+    buffer_ = buffer;
+    index_buf_ = index_buffer;
     switch (column_desc_->columnType.get_type()) {
       case kARRAY: {
         auto array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer_->getEncoder());
@@ -105,7 +100,30 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
         UNREACHABLE();
     }
   } else {
-    buffer_ = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
+    buffer_ = buffer;
+  }
+}
+
+void Chunk::getChunkBuffer(DataMgr* data_mgr,
+                           const ChunkKey& key,
+                           const MemoryLevel mem_level,
+                           const int device_id,
+                           const size_t num_bytes,
+                           const size_t num_elems) {
+  if (column_desc_->columnType.is_varlen() &&
+      !column_desc_->columnType.is_fixlen_array()) {
+    ChunkKey data_key = key;
+    data_key.push_back(1);
+    ChunkKey index_key = key;
+    index_key.push_back(2);
+    setChunkBuffer(
+        data_mgr->getChunkBuffer(data_key, mem_level, device_id, num_bytes),
+        data_mgr->getChunkBuffer(
+            index_key, mem_level, device_id, (num_elems + 1) * sizeof(StringOffsetT)));
+
+  } else {
+    setChunkBuffer(data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes),
+                   nullptr);
   }
 }
 
@@ -125,6 +143,16 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
   } else {
     buffer_ = data_mgr->createChunkBuffer(key, mem_level, device_id, page_size);
   }
+}
+
+size_t Chunk::getNumElemsForBytesEncodedData(const int8_t* index_data,
+                                             const size_t num_elems,
+                                             const size_t start_idx,
+                                             const size_t byte_limit) {
+  CHECK(column_desc_->columnType.is_varlen());
+  CHECK(buffer_->getEncoder());
+  return buffer_->getEncoder()->getNumElemsForBytesEncodedData(
+      index_data, start_idx, num_elems, byte_limit);
 }
 
 size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
@@ -168,6 +196,30 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
       CHECK(false);
       return 0;
   }
+}
+
+std::shared_ptr<ChunkMetadata> Chunk::appendEncodedDataAtIndices(
+    const Chunk& src_chunk,
+    const std::vector<size_t>& selected_idx) {
+  const auto& ti = column_desc_->columnType;
+  int8_t* data_buffer_ptr = src_chunk.getBuffer()->getMemoryPtr();
+  const int8_t* index_buffer_ptr =
+      ti.is_varlen_indeed() ? src_chunk.getIndexBuf()->getMemoryPtr() : nullptr;
+  CHECK(buffer_->getEncoder());
+  return buffer_->getEncoder()->appendEncodedDataAtIndices(
+      index_buffer_ptr, data_buffer_ptr, selected_idx);
+}
+
+std::shared_ptr<ChunkMetadata> Chunk::appendEncodedData(const Chunk& src_chunk,
+                                                        const size_t num_elements,
+                                                        const size_t start_idx) {
+  const auto& ti = column_desc_->columnType;
+  int8_t* data_buffer_ptr = src_chunk.getBuffer()->getMemoryPtr();
+  const int8_t* index_buffer_ptr =
+      ti.is_varlen_indeed() ? src_chunk.getIndexBuf()->getMemoryPtr() : nullptr;
+  CHECK(buffer_->getEncoder());
+  return buffer_->getEncoder()->appendEncodedData(
+      index_buffer_ptr, data_buffer_ptr, start_idx, num_elements);
 }
 
 std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,

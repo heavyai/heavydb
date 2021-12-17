@@ -394,6 +394,11 @@ void CommandLineOptions::fillOptions() {
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
 
+  help_desc.add_options()("enable-general-import-fsi",
+                          po::value<bool>(&g_enable_general_import_fsi)
+                              ->default_value(g_enable_general_import_fsi)
+                              ->implicit_value(true),
+                          "Enable foreign storage interface based import.");
 #ifdef ENABLE_IMPORT_PARQUET
   help_desc.add_options()("enable-parquet-import-fsi",
                           po::value<bool>(&g_enable_parquet_import_fsi)
@@ -1030,6 +1035,10 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
   g_enable_s3_fsi = false;
+
+  if (g_enable_general_import_fsi) {
+    g_enable_fsi = true;  // a requirement for general FSI import is for FSI to be enabled
+  }
 
 #ifdef ENABLE_IMPORT_PARQUET
   if (g_enable_parquet_import_fsi) {

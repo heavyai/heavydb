@@ -40,6 +40,29 @@ bool is_s3_uri(const std::string& file_path) {
 
 namespace foreign_storage {
 
+std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralImport(
+    const std::string& data_wrapper_type,
+    const int db_id,
+    const ForeignTable* foreign_table,
+    const UserMapping* user_mapping) {
+  CHECK(
+#ifdef ENABLE_IMPORT_PARQUET
+      data_wrapper_type == DataWrapperType::PARQUET ||
+#endif
+      data_wrapper_type == DataWrapperType::CSV);
+
+  if (data_wrapper_type == DataWrapperType::CSV) {
+    return std::make_unique<CsvDataWrapper>(db_id, foreign_table, user_mapping);
+  }
+#ifdef ENABLE_IMPORT_PARQUET
+  else if (data_wrapper_type == DataWrapperType::PARQUET) {
+    return std::make_unique<ParquetDataWrapper>(db_id, foreign_table, user_mapping);
+  }
+#endif
+
+  return {};
+}
+
 std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForImport(
     const std::string& data_wrapper_type,
     const int db_id,
@@ -69,18 +92,21 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
     const int user_id,
     const std::string& file_path,
     const import_export::CopyParams& copy_params) {
-// only supported for parquet import path currently
+  CHECK(
 #ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile);
-#else
-  UNREACHABLE() << "Unexpected method call for non-Parquet import";
+      copy_params.source_type == import_export::SourceType::kParquetFile ||
 #endif
+      copy_params.source_type == import_export::SourceType::kDelimitedFile);
 
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>();
 
   foreign_server->id = -1;
   foreign_server->user_id = user_id;
-  foreign_server->data_wrapper_type = DataWrapperType::PARQUET;
+  if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+    foreign_server->data_wrapper_type = DataWrapperType::PARQUET;
+  } else if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+    foreign_server->data_wrapper_type = DataWrapperType::CSV;
+  }
   foreign_server->name = "import_proxy_server";
 
   bool is_aws_s3_storage_type = is_s3_uri(file_path);
@@ -100,12 +126,11 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     const std::string& file_path,
     const import_export::CopyParams& copy_params,
     const ForeignServer* server) {
-// only supported for parquet import path currently
+  CHECK(
 #ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile);
-#else
-  UNREACHABLE() << "Unexpected method call for non-Parquet import";
+      copy_params.source_type == import_export::SourceType::kParquetFile ||
 #endif
+      copy_params.source_type == import_export::SourceType::kDelimitedFile);
 
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   auto foreign_table = std::make_unique<ForeignTable>();

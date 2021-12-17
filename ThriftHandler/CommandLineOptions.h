@@ -205,6 +205,7 @@ extern bool g_enable_s3_fsi;
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_parquet_import_fsi;
 #endif
+extern bool g_enable_general_import_fsi;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern bool g_enable_cpu_sub_tasks;
