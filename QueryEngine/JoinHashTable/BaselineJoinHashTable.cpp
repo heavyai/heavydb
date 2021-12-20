@@ -818,7 +818,10 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
 
   CodeGenerator code_generator(executor_);
   for (size_t i = 0; i < getKeyComponentCount(); ++i) {
-    const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
+    const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(
+        key_buff_lv->getType()->getScalarType()->getPointerElementType(),
+        key_buff_lv,
+        LL_INT(i));
     const auto& inner_outer_pair = inner_outer_pairs_[i];
     const auto outer_col = inner_outer_pair.second;
     const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);

@@ -124,7 +124,8 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
     llvm::Value* size_val = nullptr;
     if (data_size_type->isPointerTy()) {
       CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
-      size_val = ir_builder.CreateLoad(data_size);
+      size_val =
+          ir_builder.CreateLoad(data_size->getType()->getPointerElementType(), data_size);
     } else {
       CHECK(data_size_type->isIntegerTy(64));
       size_val = data_size;
@@ -195,7 +196,8 @@ llvm::Value* alloc_column_list(std::string col_list_name,
     llvm::Value* size_val = nullptr;
     if (data_size_type->isPointerTy()) {
       CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
-      size_val = ir_builder.CreateLoad(data_size);
+      size_val =
+          ir_builder.CreateLoad(data_size->getType()->getPointerElementType(), data_size);
     } else {
       CHECK(data_size_type->isIntegerTy(64));
       size_val = data_size;

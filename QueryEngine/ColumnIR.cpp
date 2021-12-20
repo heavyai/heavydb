@@ -303,8 +303,11 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
   } else if (col_var->get_rte_idx() > 0) {
     auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
     auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(
-        frag_off_ptr, cgen_state_->llInt(int32_t(col_var->get_rte_idx())));
-    auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(input_off_ptr);
+        frag_off_ptr->getType()->getScalarType()->getPointerElementType(),
+        frag_off_ptr,
+        cgen_state_->llInt(int32_t(col_var->get_rte_idx())));
+    auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(
+        input_off_ptr->getType()->getPointerElementType(), input_off_ptr);
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, rowid_offset_lv);
   }
   if (table_generation.start_rowid > 0) {
@@ -482,7 +485,8 @@ llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
     CHECK(hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end());
     if (hash_pos_it->second->getType()->isPointerTy()) {
       CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
-      llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(hash_pos_it->second);
+      llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(
+          hash_pos_it->second->getType()->getPointerElementType(), hash_pos_it->second);
       result = cgen_state_->ir_builder_.CreateSExt(
           result, get_int_type(64, cgen_state_->context_));
       return result;

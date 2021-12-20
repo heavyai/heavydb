@@ -365,8 +365,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
       auto idx_lv = ConstantInt::get(i32_type, i);
-      auto agg_init_gep =
-          GetElementPtrInst::CreateInBounds(agg_init_val, idx_lv, "", bb_entry);
+      auto agg_init_gep = GetElementPtrInst::CreateInBounds(
+          agg_init_val->getType()->getPointerElementType(),
+          agg_init_val,
+          idx_lv,
+          "",
+          bb_entry);
       auto agg_init_val = new LoadInst(
           get_pointer_element_type(agg_init_gep), agg_init_gep, "", false, bb_entry);
       agg_init_val->setAlignment(LLVM_ALIGN(8));
@@ -481,8 +485,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
     for (size_t i = 0; i < aggr_col_count; ++i) {
       auto col_idx = ConstantInt::get(i32_type, i);
       if (gpu_smem_context.isSharedMemoryUsed()) {
-        auto target_addr =
-            GetElementPtrInst::CreateInBounds(smem_output_buffer, col_idx, "", bb_exit);
+        auto target_addr = GetElementPtrInst::CreateInBounds(
+            smem_output_buffer->getType()->getPointerElementType(),
+            smem_output_buffer,
+            col_idx,
+            "",
+            bb_exit);
         // TODO: generalize this once we want to support other types of aggregate
         // functions besides COUNT.
         auto agg_func = mod->getFunction("agg_sum_shared");
@@ -490,7 +498,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
         CallInst::Create(
             agg_func, std::vector<llvm::Value*>{target_addr, result_vec[i]}, "", bb_exit);
       } else {
-        auto out_gep = GetElementPtrInst::CreateInBounds(out, col_idx, "", bb_exit);
+        auto out_gep = GetElementPtrInst::CreateInBounds(
+            out->getType()->getPointerElementType(), out, col_idx, "", bb_exit);
         auto col_buffer =
             new LoadInst(get_pointer_element_type(out_gep), out_gep, "", false, bb_exit);
         col_buffer->setAlignment(LLVM_ALIGN(8));
@@ -499,8 +508,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
             BinaryOperator::CreateMul(frag_idx, pos_step, "", bb_exit),
             "",
             bb_exit);
-        auto target_addr =
-            GetElementPtrInst::CreateInBounds(col_buffer, slot_idx, "", bb_exit);
+        auto target_addr = GetElementPtrInst::CreateInBounds(
+            col_buffer->getType()->getPointerElementType(),
+            col_buffer,
+            slot_idx,
+            "",
+            bb_exit);
         StoreInst* result_st = new StoreInst(result_vec[i], target_addr, false, bb_exit);
         result_st->setAlignment(LLVM_ALIGN(8));
       }
@@ -516,8 +529,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template_impl(
       // If there are more targets than threads we do not currently use shared memory
       // optimization. This can be relaxed if necessary
       for (size_t i = 0; i < aggr_col_count; i++) {
-        auto out_gep = GetElementPtrInst::CreateInBounds(
-            out, ConstantInt::get(i32_type, i), "", bb_exit);
+        auto out_gep =
+            GetElementPtrInst::CreateInBounds(out->getType()->getPointerElementType(),
+                                              out,
+                                              ConstantInt::get(i32_type, i),
+                                              "",
+                                              bb_exit);
         auto gmem_output_buffer = new LoadInst(get_pointer_element_type(out_gep),
                                                out_gep,
                                                "gmem_output_buffer_" + std::to_string(i),

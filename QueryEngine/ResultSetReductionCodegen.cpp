@@ -212,11 +212,16 @@ void translate_body(const std::vector<std::unique_ptr<Instruction>>& body,
     const auto instr_ptr = instr.get();
     llvm::Value* translated{nullptr};
     if (auto gep = dynamic_cast<const GetElementPtr*>(instr_ptr)) {
+      auto* base = mapped_value(gep->base(), m);
       translated = cgen_state->ir_builder_.CreateGEP(
-          mapped_value(gep->base(), m), mapped_value(gep->index(), m), gep->label());
+          base->getType()->getScalarType()->getPointerElementType(),
+          base,
+          mapped_value(gep->index(), m),
+          gep->label());
     } else if (auto load = dynamic_cast<const Load*>(instr_ptr)) {
-      translated = cgen_state->ir_builder_.CreateLoad(mapped_value(load->source(), m),
-                                                      load->label());
+      auto* value = mapped_value(load->source(), m);
+      translated = cgen_state->ir_builder_.CreateLoad(
+          value->getType()->getPointerElementType(), value, load->label());
     } else if (auto icmp = dynamic_cast<const ICmp*>(instr_ptr)) {
       translated = cgen_state->ir_builder_.CreateICmp(llvm_predicate(icmp->predicate()),
                                                       mapped_value(icmp->lhs(), m),

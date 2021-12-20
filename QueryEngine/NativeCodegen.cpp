@@ -2958,7 +2958,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
           cgen_state_->context_, "loop_done_true", cgen_state_->row_func_);
       auto loop_done_false = llvm::BasicBlock::Create(
           cgen_state_->context_, "loop_done_false", cgen_state_->row_func_);
-      auto loop_done_flag = cgen_state_->ir_builder_.CreateLoad(loop_done);
+      auto loop_done_flag = cgen_state_->ir_builder_.CreateLoad(
+          loop_done->getType()->getPointerElementType(), loop_done);
       cgen_state_->ir_builder_.CreateCondBr(
           loop_done_flag, loop_done_true, loop_done_false);
       cgen_state_->ir_builder_.SetInsertPoint(loop_done_true);
@@ -2992,8 +2993,12 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
 
   std::vector<llvm::Value*> col_heads;
   for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
-    col_heads.emplace_back(ir_builder.CreateLoad(ir_builder.CreateGEP(
-        byte_stream_arg, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), col_id))));
+    auto* gep = ir_builder.CreateGEP(
+        byte_stream_arg->getType()->getScalarType()->getPointerElementType(),
+        byte_stream_arg,
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), col_id));
+    col_heads.emplace_back(
+        ir_builder.CreateLoad(gep->getType()->getPointerElementType(), gep));
   }
   return col_heads;
 }

@@ -1413,7 +1413,10 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
     const auto outer_geo_constructed_lvs = code_generator.codegen(outer_geo, true, co);
     // CHECK_EQ(outer_geo_constructed_lvs.size(), size_t(2));     // Pointer and size
     const auto array_ptr = outer_geo_constructed_lvs.front();  // Just need the pointer
-    arr_ptr = LL_BUILDER.CreateGEP(array_ptr, LL_INT(0));
+    arr_ptr = LL_BUILDER.CreateGEP(
+        array_ptr->getType()->getScalarType()->getPointerElementType(),
+        array_ptr,
+        LL_INT(0));
     arr_ptr = code_generator.castArrayPointer(array_ptr, SQLTypeInfo(kTINYINT, true));
   }
   if (!arr_ptr) {
@@ -1422,7 +1425,10 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
   }
 
   for (size_t i = 0; i < 2; i++) {
-    const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
+    const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(
+        key_buff_lv->getType()->getScalarType()->getPointerElementType(),
+        key_buff_lv,
+        LL_INT(i));
 
     // Note that get_bucket_key_for_range_compressed will need to be specialized for
     // future compression schemes
