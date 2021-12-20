@@ -227,10 +227,13 @@ llvm::Value* codegen_smem_dest_slot_ptr(llvm::LLVMContext& context,
     return llvm::Type::getInt32PtrTy(context, /*address_space=*/3);
   };
 
-  const auto casted_dest_slot_address =
-      ir_builder.CreatePointerCast(ir_builder.CreateGEP(dest_byte_stream, byte_offset),
-                                   ptr_type(slot_bytes, sql_type),
-                                   "dest_slot_adr_" + std::to_string(slot_idx));
+  const auto casted_dest_slot_address = ir_builder.CreatePointerCast(
+      ir_builder.CreateGEP(
+          dest_byte_stream->getType()->getScalarType()->getPointerElementType(),
+          dest_byte_stream,
+          byte_offset),
+      ptr_type(slot_bytes, sql_type),
+      "dest_slot_adr_" + std::to_string(slot_idx));
   return casted_dest_slot_address;
 }
 }  // namespace

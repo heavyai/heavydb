@@ -106,10 +106,15 @@ class PointAccessors : public Codegen {
       auto compressed_arr_ptr = builder.CreateBitCast(
           array_buff_ptr, llvm::Type::getInt32PtrTy(cgen_state->context_));
       auto coord_index = is_x ? cgen_state->llInt(0) : cgen_state->llInt(1);
-      auto coord_lv_ptr =
-          builder.CreateGEP(compressed_arr_ptr, coord_index, expr_name + "_coord_ptr");
+      auto coord_lv_ptr = builder.CreateGEP(
+          compressed_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+          compressed_arr_ptr,
+          coord_index,
+          expr_name + "_coord_ptr");
       auto compressed_coord_lv =
-          builder.CreateLoad(coord_lv_ptr, expr_name + "_coord_compressed");
+          builder.CreateLoad(coord_lv_ptr->getType()->getPointerElementType(),
+                             coord_lv_ptr,
+                             expr_name + "_coord_compressed");
 
       coord_lv =
           cgen_state->emitExternalCall("decompress_" + expr_name + "_coord_geoint",
@@ -119,9 +124,14 @@ class PointAccessors : public Codegen {
       auto coord_arr_ptr = builder.CreateBitCast(
           array_buff_ptr, llvm::Type::getDoublePtrTy(cgen_state->context_));
       auto coord_index = is_x ? cgen_state->llInt(0) : cgen_state->llInt(1);
-      auto coord_lv_ptr =
-          builder.CreateGEP(coord_arr_ptr, coord_index, expr_name + "_coord_ptr");
-      coord_lv = builder.CreateLoad(coord_lv_ptr, expr_name + "_coord");
+      auto coord_lv_ptr = builder.CreateGEP(
+          coord_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+          coord_arr_ptr,
+          coord_index,
+          expr_name + "_coord_ptr");
+      coord_lv = builder.CreateLoad(coord_lv_ptr->getType()->getPointerElementType(),
+                                    coord_lv_ptr,
+                                    expr_name + "_coord");
     }
 
     auto ret = coord_lv;

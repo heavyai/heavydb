@@ -100,8 +100,11 @@ class StartEndPoint : public Codegen {
     const auto index_lv =
         is_end_point ? builder.CreateSub(num_elements_lv, cgen_state->llInt(int32_t(2)))
                      : cgen_state->llInt(int32_t(0));
-    auto array_offset_lv =
-        builder.CreateGEP(array_buff_cast, index_lv, operator_->getName() + "_Offset");
+    auto array_offset_lv = builder.CreateGEP(
+        array_buff_cast->getType()->getScalarType()->getPointerElementType(),
+        array_buff_cast,
+        index_lv,
+        operator_->getName() + "_Offset");
     return {array_offset_lv, args.back()};
   }
 };

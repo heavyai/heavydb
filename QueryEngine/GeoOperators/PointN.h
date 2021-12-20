@@ -143,8 +143,11 @@ class PointN : public Codegen {
     }
 
     const auto index_lv = args.back();
-    auto array_offset_lv =
-        builder.CreateGEP(array_buff_cast, index_lv, operator_->getName() + "_Offset");
+    auto array_offset_lv = builder.CreateGEP(
+        array_buff_cast->getType()->getScalarType()->getPointerElementType(),
+        array_buff_cast,
+        index_lv,
+        operator_->getName() + "_Offset");
     CHECK(nullcheck_codegen);
     auto ret_lv = nullcheck_codegen->finalize(
         llvm::ConstantPointerNull::get(

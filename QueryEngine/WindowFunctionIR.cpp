@@ -366,7 +366,8 @@ llvm::Value* Executor::codegenAggregateWindowState() {
     }
   }
   if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
-    return cgen_state_->ir_builder_.CreateLoad(aggregate_state);
+    return cgen_state_->ir_builder_.CreateLoad(
+        aggregate_state->getType()->getPointerElementType(), aggregate_state);
   }
   switch (window_func_ti.get_type()) {
     case kFLOAT: {
@@ -376,7 +377,8 @@ llvm::Value* Executor::codegenAggregateWindowState() {
       return cgen_state_->emitCall("load_double", {aggregate_state});
     }
     default: {
-      return cgen_state_->ir_builder_.CreateLoad(aggregate_state);
+      return cgen_state_->ir_builder_.CreateLoad(
+          aggregate_state->getType()->getPointerElementType(), aggregate_state);
     }
   }
 }

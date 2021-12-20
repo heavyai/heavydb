@@ -155,7 +155,11 @@ class Centroid : public Codegen {
 
     auto idx_lv = cgen_state->llInt(0);
     auto pt_local_storage_gep = llvm::GetElementPtrInst::CreateInBounds(
-        pt_local_storage_lv, {idx_lv, idx_lv}, "", builder.GetInsertBlock());
+        pt_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
+        pt_local_storage_lv,
+        {idx_lv, idx_lv},
+        "",
+        builder.GetInsertBlock());
     // Pass local storage to centroid function
     operand_lvs.push_back(pt_local_storage_gep);
     CHECK(ret_ti.get_type() == kPOINT);
@@ -168,27 +172,39 @@ class Centroid : public Codegen {
       // Take values out of local storage, compress, store in compressed local storage
 
       auto x_ptr = builder.CreateGEP(
-          pt_local_storage_lv, {cgen_state->llInt(0), cgen_state->llInt(0)}, "x_ptr");
-      auto x_lv = builder.CreateLoad(x_ptr);
+          pt_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
+          pt_local_storage_lv,
+          {cgen_state->llInt(0), cgen_state->llInt(0)},
+          "x_ptr");
+      auto x_lv = builder.CreateLoad(x_ptr->getType()->getPointerElementType(), x_ptr);
       auto compressed_x_lv =
           cgen_state->emitExternalCall("compress_x_coord_geoint",
                                        llvm::Type::getInt32Ty(cgen_state->context_),
                                        {x_lv});
       auto compressed_x_ptr =
-          builder.CreateGEP(pt_compressed_local_storage_lv,
+          builder.CreateGEP(pt_compressed_local_storage_lv->getType()
+                                ->getScalarType()
+                                ->getPointerElementType(),
+                            pt_compressed_local_storage_lv,
                             {cgen_state->llInt(0), cgen_state->llInt(0)},
                             "compressed_x_ptr");
       builder.CreateStore(compressed_x_lv, compressed_x_ptr);
 
       auto y_ptr = builder.CreateGEP(
-          pt_local_storage_lv, {cgen_state->llInt(0), cgen_state->llInt(1)}, "y_ptr");
-      auto y_lv = builder.CreateLoad(y_ptr);
+          pt_local_storage_lv->getType()->getScalarType()->getPointerElementType(),
+          pt_local_storage_lv,
+          {cgen_state->llInt(0), cgen_state->llInt(1)},
+          "y_ptr");
+      auto y_lv = builder.CreateLoad(y_ptr->getType()->getPointerElementType(), y_ptr);
       auto compressed_y_lv =
           cgen_state->emitExternalCall("compress_y_coord_geoint",
                                        llvm::Type::getInt32Ty(cgen_state->context_),
                                        {y_lv});
       auto compressed_y_ptr =
-          builder.CreateGEP(pt_compressed_local_storage_lv,
+          builder.CreateGEP(pt_compressed_local_storage_lv->getType()
+                                ->getScalarType()
+                                ->getPointerElementType(),
+                            pt_compressed_local_storage_lv,
                             {cgen_state->llInt(0), cgen_state->llInt(1)},
                             "compressed_y_ptr");
       builder.CreateStore(compressed_y_lv, compressed_y_ptr);

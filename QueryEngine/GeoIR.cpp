@@ -442,7 +442,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
   cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(Executor::ERR_GEOS));
   cgen_state_->needs_error_check_ = true;
   cgen_state_->ir_builder_.SetInsertPoint(geos_pred_ok_bb);
-  auto res = cgen_state_->ir_builder_.CreateLoad(result);
+  auto res = cgen_state_->ir_builder_.CreateLoad(
+      result->getType()->getPointerElementType(), result);
   return {res};
 }
 
@@ -509,12 +510,18 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
   // The type of result is returned in `result_type`
 
   // Load return values
-  auto buf1 = cgen_state_->ir_builder_.CreateLoad(result_coords);
-  auto buf1s = cgen_state_->ir_builder_.CreateLoad(result_coords_size);
-  auto buf2 = cgen_state_->ir_builder_.CreateLoad(result_ring_sizes);
-  auto buf2s = cgen_state_->ir_builder_.CreateLoad(result_ring_sizes_size);
-  auto buf3 = cgen_state_->ir_builder_.CreateLoad(result_poly_rings);
-  auto buf3s = cgen_state_->ir_builder_.CreateLoad(result_poly_rings_size);
+  auto buf1 = cgen_state_->ir_builder_.CreateLoad(
+      result_coords->getType()->getPointerElementType(), result_coords);
+  auto buf1s = cgen_state_->ir_builder_.CreateLoad(
+      result_coords_size->getType()->getPointerElementType(), result_coords_size);
+  auto buf2 = cgen_state_->ir_builder_.CreateLoad(
+      result_ring_sizes->getType()->getPointerElementType(), result_ring_sizes);
+  auto buf2s = cgen_state_->ir_builder_.CreateLoad(
+      result_ring_sizes_size->getType()->getPointerElementType(), result_ring_sizes_size);
+  auto buf3 = cgen_state_->ir_builder_.CreateLoad(
+      result_poly_rings->getType()->getPointerElementType(), result_poly_rings);
+  auto buf3s = cgen_state_->ir_builder_.CreateLoad(
+      result_poly_rings_size->getType()->getPointerElementType(), result_poly_rings_size);
 
   // generate register_buffer_with_executor_rsm() calls to register all output buffers
   cgen_state_->emitExternalCall(

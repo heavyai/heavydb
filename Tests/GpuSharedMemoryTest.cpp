@@ -102,7 +102,10 @@ void GpuReductionTester::codegenWrapperKernel() {
 
   // locate the corresponding input buffer:
   ir_builder.SetInsertPoint(bb_body);
-  auto input_buffer_gep = ir_builder.CreateGEP(input_ptrs, block_index);
+  auto input_buffer_gep = ir_builder.CreateGEP(
+      input_ptrs->getType()->getScalarType()->getPointerElementType(),
+      input_ptrs,
+      block_index);
   auto input_buffer = ir_builder.CreateLoad(
       llvm::Type::getInt8PtrTy(context_, address_space), input_buffer_gep);
   auto input_buffer_ptr =

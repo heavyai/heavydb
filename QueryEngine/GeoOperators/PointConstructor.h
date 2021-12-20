@@ -57,9 +57,11 @@ class PointConstructor : public Codegen {
       CHECK_EQ(instruction_list.size(), size_t(1));
       builder.SetInsertPoint(crt_insert_block, instruction_list.begin());
 
-      auto x_coord_ptr = builder.CreateGEP(pt_local_storage_lv_,
-                                           {cgen_state->llInt(0), cgen_state->llInt(0)},
-                                           "x_coord_ptr");
+      auto x_coord_ptr = builder.CreateGEP(
+          pt_local_storage_lv_->getType()->getScalarType()->getPointerElementType(),
+          pt_local_storage_lv_,
+          {cgen_state->llInt(0), cgen_state->llInt(0)},
+          "x_coord_ptr");
       const auto& geo_ti = operator_->get_type_info();
       if (geo_ti.get_compression() == kENCODING_GEOINT) {
         // TODO: probably wrong
@@ -167,9 +169,11 @@ class PointConstructor : public Codegen {
     const bool is_compressed = geo_ti.get_compression() == kENCODING_GEOINT;
 
     // store x coord
-    auto x_coord_ptr = builder.CreateGEP(pt_local_storage_lv_,
-                                         {cgen_state->llInt(0), cgen_state->llInt(0)},
-                                         "x_coord_ptr");
+    auto x_coord_ptr = builder.CreateGEP(
+        pt_local_storage_lv_->getType()->getScalarType()->getPointerElementType(),
+        pt_local_storage_lv_,
+        {cgen_state->llInt(0), cgen_state->llInt(0)},
+        "x_coord_ptr");
     if (is_compressed) {
       auto compressed_lv =
           cgen_state->emitExternalCall("compress_x_coord_geoint",
@@ -181,9 +185,11 @@ class PointConstructor : public Codegen {
     }
 
     // store y coord
-    auto y_coord_ptr = builder.CreateGEP(pt_local_storage_lv_,
-                                         {cgen_state->llInt(0), cgen_state->llInt(1)},
-                                         "y_coord_ptr");
+    auto y_coord_ptr = builder.CreateGEP(
+        pt_local_storage_lv_->getType()->getScalarType()->getPointerElementType(),
+        pt_local_storage_lv_,
+        {cgen_state->llInt(0), cgen_state->llInt(1)},
+        "y_coord_ptr");
     if (is_compressed) {
       auto compressed_lv =
           cgen_state->emitExternalCall("compress_y_coord_geoint",

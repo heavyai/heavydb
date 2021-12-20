@@ -124,7 +124,8 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
     llvm::Value* size_val = nullptr;
     if (data_size_type->isPointerTy()) {
       CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
-      size_val = ir_builder.CreateLoad(data_size);
+      size_val =
+          ir_builder.CreateLoad(data_size->getType()->getPointerElementType(), data_size);
     } else {
       CHECK(data_size_type->isIntegerTy(64));
       size_val = data_size;
@@ -195,7 +196,8 @@ llvm::Value* alloc_column_list(std::string col_list_name,
     llvm::Value* size_val = nullptr;
     if (data_size_type->isPointerTy()) {
       CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
-      size_val = ir_builder.CreateLoad(data_size);
+      size_val =
+          ir_builder.CreateLoad(data_size->getType()->getPointerElementType(), data_size);
     } else {
       CHECK(data_size_type->isIntegerTy(64));
       size_val = data_size;
@@ -350,18 +352,22 @@ void TableFunctionCompilationContext::generateEntryPoint(
     if (ti.is_fp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_fp_ptr_type(get_bit_width(ti), ctx));
-      func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+      func_args.push_back(
+          cgen_state->ir_builder_.CreateLoad(r->getType()->getPointerElementType(), r));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_integer() || ti.is_boolean()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_int_ptr_type(get_bit_width(ti), ctx));
-      func_args.push_back(cgen_state->ir_builder_.CreateLoad(r));
+      func_args.push_back(
+          cgen_state->ir_builder_.CreateLoad(r->getType()->getPointerElementType(), r));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_bytes()) {
       auto varchar_size =
           cgen_state->ir_builder_.CreateBitCast(col_heads[i], get_int_ptr_type(64, ctx));
-      auto varchar_ptr =
-          cgen_state->ir_builder_.CreateGEP(col_heads[i], cgen_state->llInt(8));
+      auto varchar_ptr = cgen_state->ir_builder_.CreateGEP(
+          col_heads[i]->getType()->getScalarType()->getPointerElementType(),
+          col_heads[i],
+          cgen_state->llInt(8));
       auto [varchar_struct, varchar_struct_ptr] =
           alloc_column(std::string("varchar_literal.") + std::to_string(func_arg_index),
                        i,
@@ -370,9 +376,11 @@ void TableFunctionCompilationContext::generateEntryPoint(
                        varchar_size,
                        ctx,
                        cgen_state->ir_builder_);
-      func_args.push_back((pass_column_by_value
-                               ? cgen_state->ir_builder_.CreateLoad(varchar_struct)
-                               : varchar_struct_ptr));
+      func_args.push_back(
+          (pass_column_by_value
+               ? cgen_state->ir_builder_.CreateLoad(
+                     varchar_struct->getType()->getPointerElementType(), varchar_struct)
+               : varchar_struct_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column()) {
       auto [col, col_ptr] =
@@ -383,8 +391,10 @@ void TableFunctionCompilationContext::generateEntryPoint(
                        row_count_heads[i],
                        ctx,
                        cgen_state->ir_builder_);
-      func_args.push_back(
-          (pass_column_by_value ? cgen_state->ir_builder_.CreateLoad(col) : col_ptr));
+      func_args.push_back((pass_column_by_value
+                               ? cgen_state->ir_builder_.CreateLoad(
+                                     col->getType()->getPointerElementType(), col)
+                               : col_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column_list()) {
       if (col_index == -1) {
@@ -412,8 +422,12 @@ void TableFunctionCompilationContext::generateEntryPoint(
   }
   std::vector<llvm::Value*> output_col_args;
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
-    auto output_load = cgen_state->ir_builder_.CreateLoad(
-        cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state->llInt(i)));
+    auto* gep = cgen_state->ir_builder_.CreateGEP(
+        output_buffers_arg->getType()->getScalarType()->getPointerElementType(),
+        output_buffers_arg,
+        cgen_state->llInt(i));
+    auto output_load =
+        cgen_state->ir_builder_.CreateLoad(gep->getType()->getPointerElementType(), gep);
     const auto& expr = exe_unit.target_exprs[i];
     const auto& ti = expr->get_type_info();
     CHECK(!ti.is_column());       // UDTF output column type is its data type
@@ -445,12 +459,17 @@ void TableFunctionCompilationContext::generateEntryPoint(
     cgen_state->emitExternalCall(
         "TableFunctionManager_set_output_row_size",
         llvm::Type::getVoidTy(ctx),
-        {mgr_ptr, cgen_state->ir_builder_.CreateLoad(output_row_count_ptr)});
+        {mgr_ptr,
+         cgen_state->ir_builder_.CreateLoad(
+             output_row_count_ptr->getType()->getPointerElementType(),
+             output_row_count_ptr)});
   }
 
   for (auto& col : output_col_args) {
-    func_args.push_back(
-        (pass_column_by_value ? cgen_state->ir_builder_.CreateLoad(col) : col));
+    func_args.push_back((pass_column_by_value
+                             ? cgen_state->ir_builder_.CreateLoad(
+                                   col->getType()->getPointerElementType(), col)
+                             : col));
   }
 
   generateTableFunctionCall(

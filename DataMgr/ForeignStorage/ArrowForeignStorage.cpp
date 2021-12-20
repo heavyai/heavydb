@@ -214,7 +214,7 @@ std::shared_ptr<arrow::ChunkedArray> ArrowForeignStorageBase::replaceNullValuesI
       [&](const tbb::blocked_range<size_t>& r) {
         for (size_t c = r.begin(); c != r.end(); ++c) {
           size_t offset = 0;
-          for (int i = 0; i < c; i++) {
+          for (size_t i = 0; i < c; i++) {
             offset += arr_col_chunked_array->chunk(i)->length();
           }
           auto resWithOffset = resultData + offset;

@@ -205,19 +205,23 @@ void TargetExprCodegen::codegen(
         CHECK(std::get<1>(agg_out_ptr_w_idx));
         auto offset =
             LL_BUILDER.CreateAdd(std::get<1>(agg_out_ptr_w_idx), LL_INT(col_off));
+        auto* bit_cast = LL_BUILDER.CreateBitCast(
+            std::get<0>(agg_out_ptr_w_idx),
+            llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
         agg_col_ptr = LL_BUILDER.CreateGEP(
-            LL_BUILDER.CreateBitCast(
-                std::get<0>(agg_out_ptr_w_idx),
-                llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0)),
+            bit_cast->getType()->getScalarType()->getPointerElementType(),
+            bit_cast,
             offset);
       } else {
         col_off = query_mem_desc.getColOnlyOffInBytes(slot_index);
         CHECK_EQ(size_t(0), col_off % chosen_bytes);
         col_off /= chosen_bytes;
+        auto* bit_cast = LL_BUILDER.CreateBitCast(
+            std::get<0>(agg_out_ptr_w_idx),
+            llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
         agg_col_ptr = LL_BUILDER.CreateGEP(
-            LL_BUILDER.CreateBitCast(
-                std::get<0>(agg_out_ptr_w_idx),
-                llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0)),
+            bit_cast->getType()->getScalarType()->getPointerElementType(),
+            bit_cast,
             LL_INT(col_off));
       }
     }
@@ -333,9 +337,13 @@ void TargetExprCodegen::codegenAggregate(
       executor->cgen_state_->emitExternalCall(
           "agg_count_distinct_array_" + numeric_type_name(elem_ti),
           llvm::Type::getVoidTy(LL_CONTEXT),
-          {is_group_by
-               ? LL_BUILDER.CreateGEP(std::get<0>(agg_out_ptr_w_idx), LL_INT(col_off))
-               : agg_out_vec[slot_index],
+          {is_group_by ? LL_BUILDER.CreateGEP(std::get<0>(agg_out_ptr_w_idx)
+                                                  ->getType()
+                                                  ->getScalarType()
+                                                  ->getPointerElementType(),
+                                              std::get<0>(agg_out_ptr_w_idx),
+                                              LL_INT(col_off))
+                       : agg_out_vec[slot_index],
            target_lvs[target_lv_idx],
            code_generator.posArg(arg_expr),
            elem_ti.is_fp()
@@ -408,8 +416,9 @@ void TargetExprCodegen::codegenAggregate(
             llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0));
         const int64_t chosen_bytes =
             target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16;
+        auto* arg = get_arg_by_name(ROW_FUNC, "old_total_matched");
         const auto output_buffer_slot = LL_BUILDER.CreateZExt(
-            LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched")),
+            LL_BUILDER.CreateLoad(arg->getType()->getPointerElementType(), arg),
             llvm::Type::getInt64Ty(LL_CONTEXT));
         const auto varlen_buffer_row_sz = query_mem_desc.varlenOutputBufferElemSize();
         CHECK(varlen_buffer_row_sz);

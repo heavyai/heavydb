@@ -107,20 +107,36 @@ class Transform : public Codegen {
       auto compressed_arr_ptr = builder.CreateBitCast(
           arr_buff_ptr, llvm::Type::getInt32PtrTy(cgen_state->context_));
       // x coord
+      auto* gep = builder.CreateGEP(
+          compressed_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+          compressed_arr_ptr,
+          cgen_state->llInt(0));
       auto x_coord_lv = cgen_state->emitExternalCall(
           "decompress_x_coord_geoint",
           llvm::Type::getDoubleTy(cgen_state->context_),
-          {builder.CreateLoad(builder.CreateGEP(compressed_arr_ptr, cgen_state->llInt(0)),
-                              "compressed_x_coord")});
-      builder.CreateStore(x_coord_lv,
-                          builder.CreateGEP(new_arr_ptr, cgen_state->llInt(0)));
+          {builder.CreateLoad(
+              gep->getType()->getPointerElementType(), gep, "compressed_x_coord")});
+      builder.CreateStore(
+          x_coord_lv,
+          builder.CreateGEP(
+              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+              new_arr_ptr,
+              cgen_state->llInt(0)));
+      gep = builder.CreateGEP(
+          compressed_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+          compressed_arr_ptr,
+          cgen_state->llInt(1));
       auto y_coord_lv = cgen_state->emitExternalCall(
           "decompress_y_coord_geoint",
           llvm::Type::getDoubleTy(cgen_state->context_),
-          {builder.CreateLoad(builder.CreateGEP(compressed_arr_ptr, cgen_state->llInt(1)),
-                              "compressed_y_coord")});
-      builder.CreateStore(y_coord_lv,
-                          builder.CreateGEP(new_arr_ptr, cgen_state->llInt(1)));
+          {builder.CreateLoad(
+              gep->getType()->getPointerElementType(), gep, "compressed_y_coord")});
+      builder.CreateStore(
+          y_coord_lv,
+          builder.CreateGEP(
+              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+              new_arr_ptr,
+              cgen_state->llInt(1)));
       arr_buff_ptr = new_arr_ptr;
     } else if (!can_transform_in_place_) {
       auto new_arr_ptr =
@@ -130,12 +146,26 @@ class Transform : public Codegen {
       const auto arr_buff_ptr_cast = builder.CreateBitCast(
           arr_buff_ptr, llvm::Type::getDoublePtrTy(cgen_state->context_));
 
+      auto* gep = builder.CreateGEP(
+          arr_buff_ptr_cast->getType()->getScalarType()->getPointerElementType(),
+          arr_buff_ptr_cast,
+          cgen_state->llInt(0));
       builder.CreateStore(
-          builder.CreateLoad(builder.CreateGEP(arr_buff_ptr_cast, cgen_state->llInt(0))),
-          builder.CreateGEP(new_arr_ptr, cgen_state->llInt(0)));
+          builder.CreateLoad(gep->getType()->getPointerElementType(), gep),
+          builder.CreateGEP(
+              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+              new_arr_ptr,
+              cgen_state->llInt(0)));
+      gep = builder.CreateGEP(
+          arr_buff_ptr_cast->getType()->getScalarType()->getPointerElementType(),
+          arr_buff_ptr_cast,
+          cgen_state->llInt(1));
       builder.CreateStore(
-          builder.CreateLoad(builder.CreateGEP(arr_buff_ptr_cast, cgen_state->llInt(1))),
-          builder.CreateGEP(new_arr_ptr, cgen_state->llInt(1)));
+          builder.CreateLoad(gep->getType()->getPointerElementType(), gep),
+          builder.CreateGEP(
+              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
+              new_arr_ptr,
+              cgen_state->llInt(1)));
       arr_buff_ptr = new_arr_ptr;
     }
     CHECK(arr_buff_ptr->getType() == llvm::Type::getDoublePtrTy(cgen_state->context_));
@@ -187,12 +217,20 @@ class Transform : public Codegen {
     }
     CHECK(!transform_function_prefix.empty());
 
-    auto x_coord_ptr_lv =
-        builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(0), "x_coord_ptr");
-    transform_args.push_back(builder.CreateLoad(x_coord_ptr_lv, "x_coord"));
-    auto y_coord_ptr_lv =
-        builder.CreateGEP(arr_buff_ptr, cgen_state->llInt(1), "y_coord_ptr");
-    transform_args.push_back(builder.CreateLoad(y_coord_ptr_lv, "y_coord"));
+    auto x_coord_ptr_lv = builder.CreateGEP(
+        arr_buff_ptr->getType()->getScalarType()->getPointerElementType(),
+        arr_buff_ptr,
+        cgen_state->llInt(0),
+        "x_coord_ptr");
+    transform_args.push_back(builder.CreateLoad(
+        x_coord_ptr_lv->getType()->getPointerElementType(), x_coord_ptr_lv, "x_coord"));
+    auto y_coord_ptr_lv = builder.CreateGEP(
+        arr_buff_ptr->getType()->getScalarType()->getPointerElementType(),
+        arr_buff_ptr,
+        cgen_state->llInt(1),
+        "y_coord_ptr");
+    transform_args.push_back(builder.CreateLoad(
+        y_coord_ptr_lv->getType()->getPointerElementType(), y_coord_ptr_lv, "y_coord"));
     if (co.device_type == ExecutorDeviceType::GPU) {
       auto fn_x = cgen_state->module_->getFunction(transform_function_prefix + 'x');
       CHECK(fn_x);

@@ -711,7 +711,10 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
         code_generator.castArrayPointer(array_ptr, coords_cd->columnType.get_elem_type());
 
     // load and unpack offsets
-    const auto offset = LL_BUILDER.CreateLoad(offset_ptr, "packed_bucket_offset");
+    const auto offset =
+        LL_BUILDER.CreateLoad(offset_ptr->getType()->getPointerElementType(),
+                              offset_ptr,
+                              "packed_bucket_offset");
     const auto x_offset =
         LL_BUILDER.CreateTrunc(offset, llvm::Type::getInt32Ty(LL_CONTEXT));
 
@@ -726,7 +729,10 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
         LL_BUILDER.CreateSExt(y_offset, llvm::Type::getInt64Ty(LL_CONTEXT));
 
     for (size_t i = 0; i < 2; i++) {
-      const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
+      const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(
+          key_buff_lv->getType()->getScalarType()->getPointerElementType(),
+          key_buff_lv,
+          LL_INT(i));
 
       const auto funcName = isProbeCompressed() ? "get_bucket_key_for_range_compressed"
                                                 : "get_bucket_key_for_range_double";
