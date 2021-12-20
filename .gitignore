@@ -82,8 +82,7 @@ java/thrift/src/
 *.classpath
 *.project
 
-ThirdParty/
-!ThirdParty/robin_hood.h
+ThirdParty/googlebenchmark
 data/
 
 # IntelliJ/CLion settings files
