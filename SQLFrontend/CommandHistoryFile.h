@@ -23,10 +23,9 @@
 
 #include <sys/types.h>
 #ifdef _WIN32
-#include <folly/portability/unistd.h>
+using uid_t = int;
 #include <shlobj_core.h>
 #include "Shared/cleanup_global_namespace.h"
-using namespace folly::portability::unistd;
 #else
 #include <pwd.h>
 #include <unistd.h>
@@ -38,12 +37,23 @@ inline constexpr char const* const getDefaultHistoryFilename() {
 
 class DefaultEnvResolver {
  public:
-  auto getuid() const { return ::getuid(); }
+  uid_t getuid() const {
+#ifdef _WIN32
+    // The windows SHGetFolder functions do not use
+    // a uid. in the wat getpsuid does and the
+    // 'folly' library approach for getuid which
+    // I've copied is to simply returns a 1.
+    return 1;
+#else
+    return ::getuid();
+#endif
+  }
+
 #ifndef _WIN32
-  auto const* getpwuid(decltype(::getuid()) uid) const { return ::getpwuid(uid); }
+  auto const* getpwuid(uid_t uid) const { return ::getpwuid(uid); }
 #endif
 
-  const char* getpwdir(decltype(::getuid()) uid) const {
+  const char* getpwdir(uid_t uid) const {
 #ifdef _WIN32
     if (uid != getuid()) {
       return nullptr;

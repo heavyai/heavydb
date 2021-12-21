@@ -25,7 +25,7 @@ else()
     add_custom_target(proj-data ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${PROJ_DATA_PATH}" "${CMAKE_BINARY_DIR}/ThirdParty/gdal-data/proj")
     add_dependencies(proj-data gdal-data)
   else()
-    message(ERROR "proj data path not found. Will not attempt to copy proj_lib data files.")
+    message(WARNING "proj data path not found. Will not attempt to copy proj_lib data files.")
   endif()
 endif()
 

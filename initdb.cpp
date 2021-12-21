@@ -133,15 +133,21 @@ static void loadGeo(std::string base_path) {
     const std::string table_name = SampleGeoTableNames[i];
     const std::string file_name = SampleGeoFileNames[i];
 
-    const auto file_path = boost::filesystem::path(
-        omnisci::get_root_abs_path() + "/ThirdParty/geo_samples/" + file_name);
+    auto file_path = boost::filesystem::path(omnisci::get_root_abs_path()) /
+                     "ThirdParty" / "geo_samples" / file_name;
+
     if (!boost::filesystem::exists(file_path)) {
       throw std::runtime_error(
           "Unable to populate geo sample data. File does not exist: " +
           file_path.string());
     }
+#ifdef _WIN32
+    std::string sql_string = "COPY " + table_name + " FROM '" +
+                             file_path.generic_string() + "' WITH (GEO='true');";
+#else
     std::string sql_string =
         "COPY " + table_name + " FROM '" + file_path.string() + "' WITH (GEO='true');";
+#endif
     db_handler->sql_execute(res, session_id, sql_string, true, "", -1, -1);
   }
 }
@@ -267,14 +273,14 @@ int main(int argc, char* argv[]) {
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
 
-    if (!skip_geo) {
-      loadGeo(base_path);
-    }
-
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";
   }
 
   Catalog_Namespace::SysCatalog::destroy();
+  if (!skip_geo) {
+    loadGeo(base_path);
+  }
+
   return 0;
 }
