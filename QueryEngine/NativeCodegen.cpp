@@ -408,11 +408,12 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     llvm::Function* func,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
-  auto module = func->getParent();
+  auto llvm_module = func->getParent();
   // run optimizations
 #ifndef WITH_JIT_DEBUG
   llvm::legacy::PassManager pass_manager;
-  optimize_ir(func, module, pass_manager, live_funcs, /*is_gpu_smem_used=*/false, co);
+  optimize_ir(
+      func, llvm_module, pass_manager, live_funcs, /*is_gpu_smem_used=*/false, co);
 #endif  // WITH_JIT_DEBUG
 
   auto init_err = llvm::InitializeNativeTarget();
@@ -423,7 +424,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   llvm::InitializeNativeTargetAsmParser();
 
   std::string err_str;
-  std::unique_ptr<llvm::Module> owner(module);
+  std::unique_ptr<llvm::Module> owner(llvm_module);
   llvm::EngineBuilder eb(std::move(owner));
   eb.setErrorStr(&err_str);
   eb.setEngineKind(llvm::EngineKind::JIT);
@@ -437,9 +438,9 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
   // Force the module data layout to match the layout for the selected target
-  module->setDataLayout(execution_engine->getDataLayout());
+  llvm_module->setDataLayout(execution_engine->getDataLayout());
 
-  LOG(ASM) << assemblyForCPU(execution_engine, module);
+  LOG(ASM) << assemblyForCPU(execution_engine, llvm_module);
 
   execution_engine->finalizeObject();
   return execution_engine;

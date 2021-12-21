@@ -14,7 +14,7 @@
 #     GDAL_INCLUDE_DIR - Where to find the headers
 #
 
-# windows uses vcpkgi which will call this module,
+# windows uses vcpkg which will call this module,
 # though it doesn't need to.  Further windows vcpkg 
 # doesn't use or install GDAL_CONFIG and the call
 # will make the cmake process fail.

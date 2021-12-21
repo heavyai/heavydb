@@ -17,6 +17,7 @@ set(EXPORT_SOURCES
   QueryExporterCSV.cpp)
 
 add_library(RenderGroupAnalyzer RenderGroupAnalyzer.cpp)
+add_dependencies(RenderGroupAnalyzer Calcite)
 add_library(ImportExport ${IMPORT_SOURCES} ${EXPORT_SOURCES} ${S3Archive})
 
 target_link_libraries(ImportExport RenderGroupAnalyzer mapd_thrift Logger Shared Catalog DataMgr StringDictionary ${CMAKE_DL_LIBS}
