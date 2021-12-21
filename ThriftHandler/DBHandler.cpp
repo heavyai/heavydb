@@ -4208,7 +4208,7 @@ void DBHandler::import_table(const TSessionId& session,
           new import_export::Importer(cat, td, file_path.string(), copy_params));
     }
     auto ms = measure<>::execution([&]() { importer->import(session_ptr.get()); });
-    std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
+    LOG(INFO) << "Total Import Time: " << (double)ms / 1000.0 << " Seconds.";
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
