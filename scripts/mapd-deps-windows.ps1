@@ -67,7 +67,6 @@ if (-Not (Test-Path -Path $deps_path\vcpkg)) {
   Push-Location $deps_path\vcpkg
 }
 
-
 Write-Host "Installing vcpkg dependencies (this will take a long time)..."
 $static_package_list = @("glog",
                   "thrift",

@@ -21,6 +21,7 @@ set(EXPORT_SOURCES
   QueryExporterGDAL.cpp)
 
 add_library(RenderGroupAnalyzer RenderGroupAnalyzer.cpp)
+add_dependencies(RenderGroupAnalyzer Calcite)
 add_library(ImportExport ${IMPORT_SOURCES} ${EXPORT_SOURCES} ${S3Archive})
 
 find_package(XercesC REQUIRED)

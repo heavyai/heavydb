@@ -76,16 +76,13 @@ void GDAL::init() {
   // init under mutex
   if (!initialized_) {
     // FIXME(andrewseidl): investigate if CPLPushFinderLocation can be public
-#ifdef _MSC_VER
-    SetEnvironmentVariable(
-        L"GDAL_DATA",
-        reinterpret_cast<LPCWSTR>(
-            std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str()));
-    SetEnvironmentVariable(
-        L"PROJ_LIB",
-        reinterpret_cast<LPCWSTR>(
-            std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj")
-                .c_str()));
+#ifdef _WIN32
+    _putenv_s(
+        "GDAL_DATA",
+        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str());
+    _putenv_s(
+        "PROJ_LIB",
+        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str());
 #else
     setenv("GDAL_DATA",
            std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
