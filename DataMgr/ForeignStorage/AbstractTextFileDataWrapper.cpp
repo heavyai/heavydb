@@ -192,6 +192,7 @@ ParseFileRegionResult parse_file_regions(
     ParseBufferRequest& parse_file_request,
     const std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
     const TextFileBufferParser& parser) {
+  auto timer = DEBUG_TIMER(__func__);
   ParseFileRegionResult load_file_region_result{};
   load_file_region_result.file_offset = file_regions[start_index].first_row_file_offset;
   load_file_region_result.row_count = 0;

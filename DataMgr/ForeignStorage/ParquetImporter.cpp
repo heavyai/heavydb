@@ -246,7 +246,8 @@ std::set<std::string> ParquetImporter::getAllFilePaths() {
   auto timer = DEBUG_TIMER(__func__);
   std::set<std::string> file_paths;
   auto file_path = getFullFilePath(foreign_table_);
-  auto file_info_result = file_system_->GetFileInfo(file_path);
+  auto file_info_result =
+      ParquetS3FileSystem::arrowGetFileInfo<std::string>(file_system_, file_path);
   if (!file_info_result.ok()) {
     throw_file_access_error(file_path, file_info_result.status().message());
   } else {
@@ -260,7 +261,9 @@ std::set<std::string> ParquetImporter::getAllFilePaths() {
       arrow::fs::FileSelector file_selector{};
       file_selector.base_dir = file_path;
       file_selector.recursive = true;
-      auto selector_result = file_system_->GetFileInfo(file_selector);
+      auto selector_result =
+          ParquetS3FileSystem::arrowGetFileInfo<arrow::fs::FileSelector>(file_system_,
+                                                                         file_selector);
       if (!selector_result.ok()) {
         throw_file_access_error(file_path, selector_result.status().message());
       } else {
