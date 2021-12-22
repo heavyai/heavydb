@@ -298,7 +298,7 @@ void convert_column(ResultSetPtr result,
 
   threading::parallel_for(static_cast<size_t>(0), values.size(), [&](size_t idx) {
     size_t chunk_rows_count = chunks[idx].second;
-    int64_t null_count = 0;
+
     auto res = arrow::AllocateBuffer((chunk_rows_count + 7) / 8);
     CHECK(res.ok());
 
@@ -311,49 +311,54 @@ void convert_column(ResultSetPtr result,
     null_type_t<C_TYPE> null_val = null_type<C_TYPE>::value;
 
     size_t unroll_count = chunk_rows_count & 0xFFFFFFFFFFFFFFF8ULL;
+    std::atomic<int64_t> null_count = 0;
 
     threading::parallel_for(
         threading::blocked_range<size_t>(static_cast<size_t>(0), unroll_count / 8),
         [&](auto r) {
+          int64_t local_null_count = 0;
           for (auto i = r.begin() * 8; i < r.end() * 8; i += 8) {
             uint8_t valid_byte = 0;
             uint8_t valid;
             valid = vals[i + 0] != null_val;
             valid_byte |= valid << 0;
-            null_count += !valid;
+            local_null_count += !valid;
             valid = vals[i + 1] != null_val;
             valid_byte |= valid << 1;
-            null_count += !valid;
+            local_null_count += !valid;
             valid = vals[i + 2] != null_val;
             valid_byte |= valid << 2;
-            null_count += !valid;
+            local_null_count += !valid;
             valid = vals[i + 3] != null_val;
             valid_byte |= valid << 3;
-            null_count += !valid;
+            local_null_count += !valid;
             valid = vals[i + 4] != null_val;
             valid_byte |= valid << 4;
-            null_count += !valid;
+            local_null_count += !valid;
             valid = vals[i + 5] != null_val;
             valid_byte |= valid << 5;
-            null_count += !valid;
+            local_null_count += !valid;
             valid = vals[i + 6] != null_val;
             valid_byte |= valid << 6;
-            null_count += !valid;
+            local_null_count += !valid;
             valid = vals[i + 7] != null_val;
             valid_byte |= valid << 7;
-            null_count += !valid;
+            local_null_count += !valid;
             is_valid_data[i >> 3] = valid_byte;
           }
+          null_count += local_null_count;
         });
 
     if (unroll_count != chunk_rows_count) {
       uint8_t valid_byte = 0;
+      int64_t local_null_count = 0;
       for (size_t i = unroll_count; i < chunk_rows_count; ++i) {
         bool valid = vals[i] != null_val;
         valid_byte |= valid << (i & 7);
-        null_count += !valid;
+        local_null_count += !valid;
       }
       is_valid_data[unroll_count >> 3] = valid_byte;
+      null_count += local_null_count;
     }
 
     if (!null_count) {
