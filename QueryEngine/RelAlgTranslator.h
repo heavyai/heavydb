@@ -46,15 +46,13 @@ class QueryState;
 
 class RelAlgTranslator {
  public:
-  RelAlgTranslator(const Catalog_Namespace::Catalog& cat,
-                   std::shared_ptr<const query_state::QueryState> q_s,
+  RelAlgTranslator(std::shared_ptr<const query_state::QueryState> q_s,
                    const Executor* executor,
                    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
                    const std::vector<JoinType>& join_types,
                    const time_t now,
                    const bool just_explain)
-      : cat_(cat)
-      , query_state_(q_s)
+      : query_state_(q_s)
       , executor_(executor)
       , input_to_nest_level_(input_to_nest_level)
       , join_types_(join_types)
@@ -205,7 +203,6 @@ class RelAlgTranslator {
                                                                    SQLTypeInfo&,
                                                                    bool) const;
 
-  const Catalog_Namespace::Catalog& cat_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   const Executor* executor_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;

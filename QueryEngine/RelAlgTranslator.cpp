@@ -802,8 +802,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
       // const int32_t dest_dict_id = arg_type.get_comp_param();
       // const int32_t source_dict_id = col_type.get_comp_param();
-      const DictRef dest_dict_ref(arg_type.get_comp_param(), cat_.getDatabaseId());
-      const DictRef source_dict_ref(col_type.get_comp_param(), cat_.getDatabaseId());
       const auto dd = executor_->getStringDictionaryProxy(
           arg_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
       const auto sd = executor_->getStringDictionaryProxy(
@@ -812,35 +810,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       const auto needle_null_val = inline_int_null_val(arg_type);
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [this,
-           &val_set,
-           &total_in_vals_count,
-           sd,
-           dd,
-           source_dict_ref,
-           dest_dict_ref,
-           needle_null_val](
+          [this, &val_set, &total_in_vals_count, sd, dd, needle_null_val](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-            if (g_cluster) {
-              CHECK_GE(dd->getGeneration(), 0);
-              fill_dictionary_encoded_in_vals(in_vals,
-                                              total_in_vals_count,
-                                              &val_set,
-                                              {start, end},
-                                              cat_.getStringDictionaryHosts(),
-                                              source_dict_ref,
-                                              dest_dict_ref,
-                                              dd->getGeneration(),
-                                              needle_null_val);
-            } else {
-              fill_dictionary_encoded_in_vals(in_vals,
-                                              total_in_vals_count,
-                                              &val_set,
-                                              {start, end},
-                                              sd,
-                                              dd,
-                                              needle_null_val);
-            }
+            CHECK(!g_cluster);
+            fill_dictionary_encoded_in_vals(in_vals,
+                                            total_in_vals_count,
+                                            &val_set,
+                                            {start, end},
+                                            sd,
+                                            dd,
+                                            needle_null_val);
           },
           std::ref(expr_set[i]),
           start_entry,
