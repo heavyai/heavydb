@@ -234,13 +234,13 @@ inline const TemporaryTable& get_temporary_table(const TemporaryTables* temporar
 
 inline const SQLTypeInfo get_column_type(const int col_id,
                                          const int table_id,
-                                         const ColumnDescriptor* cd,
+                                         ColumnInfoPtr col_info,
                                          const TemporaryTables* temporary_tables) {
-  CHECK(cd || temporary_tables);
-  if (cd) {
-    CHECK_EQ(col_id, cd->columnId);
-    CHECK_EQ(table_id, cd->tableId);
-    return cd->columnType;
+  CHECK(col_info || temporary_tables);
+  if (col_info) {
+    CHECK_EQ(col_id, col_info->column_id);
+    CHECK_EQ(table_id, col_info->table_id);
+    return col_info->type;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
   return temp.getColType(col_id);
@@ -441,8 +441,8 @@ class Executor {
   const Catalog_Namespace::Catalog* getCatalog() const;
   void setCatalog(const Catalog_Namespace::Catalog* catalog);
 
-  const SchemaProvider* getSchemaProvider() { return schema_provider_; }
-  void setSchemaProvider(const SchemaProvider* provider) { schema_provider_ = provider; }
+  SchemaProviderPtr getSchemaProvider() const { return schema_provider_; }
+  void setSchemaProvider(SchemaProviderPtr provider) { schema_provider_ = provider; }
 
   int getDatabaseId() const { return db_id_; }
 
@@ -1096,7 +1096,7 @@ class Executor {
 
   const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
-  const SchemaProvider* schema_provider_;
+  SchemaProviderPtr schema_provider_;
   int db_id_ = -1;
   Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;

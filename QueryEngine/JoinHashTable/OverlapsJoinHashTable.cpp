@@ -64,7 +64,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                            table_id_to_node_map);
   } else {
     inner_outer_pairs = HashJoin::normalizeColumnPairs(
-        condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
+        condition.get(), executor->getSchemaProvider(), executor->getTemporaryTables());
   }
   CHECK(!inner_outer_pairs.empty());
 

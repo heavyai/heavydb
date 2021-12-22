@@ -46,15 +46,15 @@ class SchemaProvider {
                                       int table_id,
                                       const std::string& col_name) const = 0;
 
-  ColumnInfoPtr getColumnInfo(const TableRef& tref, int col_id) {
+  ColumnInfoPtr getColumnInfo(const TableRef& tref, int col_id) const {
     return getColumnInfo(tref.db_id, tref.table_id, col_id);
   }
 
-  ColumnInfoPtr getColumnInfo(const TableRef& tref, const std::string& col_name) {
+  ColumnInfoPtr getColumnInfo(const TableRef& tref, const std::string& col_name) const {
     return getColumnInfo(tref.db_id, tref.table_id, col_name);
   }
 
-  ColumnInfoPtr getColumnInfo(const ColumnRef& cref) {
+  ColumnInfoPtr getColumnInfo(const ColumnRef& cref) const {
     return getColumnInfo(cref.db_id, cref.table_id, cref.column_id);
   }
 };

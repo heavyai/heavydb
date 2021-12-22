@@ -226,14 +226,14 @@ class HashJoin {
   // Swap the columns if needed and make the inner column the first component.
   static InnerOuter normalizeColumnPair(const Analyzer::Expr* lhs,
                                         const Analyzer::Expr* rhs,
-                                        const Catalog_Namespace::Catalog& cat,
+                                        SchemaProviderPtr schema_provider,
                                         const TemporaryTables* temporary_tables,
                                         const bool is_overlaps_join = false);
 
   // Normalize each expression tuple
   static std::vector<InnerOuter> normalizeColumnPairs(
       const Analyzer::BinOper* condition,
-      const Catalog_Namespace::Catalog& cat,
+      SchemaProviderPtr schema_provider,
       const TemporaryTables* temporary_tables);
 
   HashTable* getHashTableForDevice(const size_t device_id) const {

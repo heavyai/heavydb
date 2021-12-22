@@ -409,6 +409,8 @@ std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
                                       true)
                             .plan_result;
   executor->setCatalog(&cat);
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat));
   auto ra_executor = RelAlgExecutor(executor, cat, query_ra);
   auto root_node_shared_ptr = ra_executor.getRootRelAlgNodeShPtr();
   return ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
@@ -432,6 +434,8 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
                                       true)
                             .plan_result;
   executor->setCatalog(&cat);
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat));
   auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra);
   // note that we assume the test for data recycler that needs to have join_info
   // does not contain any ORDER BY clause; this is necessary to create work_unit
@@ -893,7 +897,7 @@ ExtractedPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto extracted_dag_info =
       QueryPlanDagExtractor::extractQueryPlanDag(query_dag_info.root_node.get(),
-                                                 *getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  query_dag_info.left_deep_trees_info,
                                                  *executor->getTemporaryTables(),

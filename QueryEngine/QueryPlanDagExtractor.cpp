@@ -32,8 +32,7 @@ struct IsEquivBinOp {
 }  // namespace
 
 std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
-    const Analyzer::BinOper* condition,
-    const Catalog_Namespace::Catalog& cat) {
+    const Analyzer::BinOper* condition) {
   std::vector<InnerOuterOrLoopQual> result;
   const auto lhs_tuple_expr =
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
@@ -41,13 +40,13 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
 
   CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
-  auto do_normalize_inner_outer_pair = [&result, &cat, &condition](
+  auto do_normalize_inner_outer_pair = [this, &result, &condition](
                                            const Analyzer::Expr* lhs,
                                            const Analyzer::Expr* rhs,
                                            const TemporaryTables* temporary_table) {
     try {
       auto inner_outer_pair = HashJoin::normalizeColumnPair(
-          lhs, rhs, cat, temporary_table, condition->is_overlaps_oper());
+          lhs, rhs, schema_provider_, temporary_table, condition->is_overlaps_oper());
       InnerOuterOrLoopQual valid_qual{
           std::make_pair(inner_outer_pair.first, inner_outer_pair.second), false};
       result.push_back(valid_qual);
@@ -80,7 +79,7 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
 ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
     const RelAlgNode*
         node, /* the root node of the query plan tree we want to extract its DAG */
-    const Catalog_Namespace::Catalog& catalog,
+    SchemaProviderPtr schema_provider,
     std::optional<unsigned> left_deep_tree_id,
     std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
     const TemporaryTables& temporary_tables,
@@ -92,14 +91,18 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
     return {node, EMPTY_QUERY_PLAN, nullptr, nullptr, {}, {}, true};
   }
 
-  return extractQueryPlanDagImpl(
-      node, catalog, left_deep_tree_id, left_deep_tree_infos, temporary_tables, executor);
+  return extractQueryPlanDagImpl(node,
+                                 schema_provider,
+                                 left_deep_tree_id,
+                                 left_deep_tree_infos,
+                                 temporary_tables,
+                                 executor);
 }
 
 ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
     const RelAlgNode*
         node, /* the root node of the query plan tree we want to extract its DAG */
-    const Catalog_Namespace::Catalog& catalog,
+    SchemaProviderPtr schema_provider,
     std::optional<unsigned> left_deep_tree_id,
     std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
     const TemporaryTables& temporary_tables,
@@ -108,7 +111,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
 
   auto& cached_dag = executor->getQueryPlanDagCache();
   QueryPlanDagExtractor dag_extractor(
-      cached_dag, catalog, left_deep_tree_infos, temporary_tables, executor);
+      cached_dag, schema_provider, left_deep_tree_infos, temporary_tables, executor);
 
   // add the root node of this query plan DAG
   auto res = cached_dag.addNodeIfAbsent(node);
@@ -421,7 +424,7 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
                            ::toString(qual_bin_oper->get_qualifier()),
                            qual_bin_oper->get_type_info().to_string()};
         }
-        for (auto& col_pair_info : normalizeColumnsPair(qual_bin_oper.get(), catalog_)) {
+        for (auto& col_pair_info : normalizeColumnsPair(qual_bin_oper.get())) {
           if (col_pair_info.loop_join_qual && !found_eq_join_qual) {
             // we only consider that cur level's join is loop join if we have no
             // equi-join qual and both lhs and rhs are not col_var,

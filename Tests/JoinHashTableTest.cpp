@@ -90,6 +90,8 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -117,6 +119,8 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -138,6 +142,8 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
@@ -362,6 +368,8 @@ TEST(Build, detectProperJoinQual) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId).get();
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -464,6 +472,8 @@ TEST(Build, KeyedOneToOne) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -523,6 +533,8 @@ TEST(Build, KeyedOneToMany) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -584,6 +596,8 @@ TEST(Build, GeoOneToMany1) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -660,6 +674,8 @@ TEST(Build, GeoOneToMany2) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -873,6 +889,8 @@ TEST(MultiFragment, KeyedOneToOne) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -963,6 +981,8 @@ TEST(MultiFragment, KeyedOneToMany) {
   auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
   CHECK(executor);
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

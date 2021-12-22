@@ -40,11 +40,11 @@ std::unique_ptr<HashingSchemeRecycler> PerfectJoinHashTable::hash_table_layout_c
 namespace {
 
 InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
-                    const Catalog_Namespace::Catalog& cat,
+                    SchemaProviderPtr schema_provider,
                     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
+  return HashJoin::normalizeColumnPair(lhs, rhs, schema_provider, temporary_tables);
 }
 
 HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
@@ -156,8 +156,8 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const TableIdToNodeMap& table_id_to_node_map) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
-  const auto cols =
-      get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
+  const auto cols = get_cols(
+      qual_bin_oper.get(), executor->getSchemaProvider(), executor->temporary_tables_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
@@ -281,13 +281,13 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                   const Analyzer::Expr* outer_col_expr,
                                   const Executor* executor) {
-  const auto catalog = executor->getCatalog();
-  CHECK(catalog);
-  const auto inner_cd = get_column_descriptor_maybe(
-      inner_col->get_column_id(), inner_col->get_table_id(), *catalog);
+  auto schema_provider = executor->getSchemaProvider();
+  CHECK(schema_provider);
+  const auto inner_col_info =
+      schema_provider->getColumnInfo(*inner_col->get_column_info());
   const auto& inner_ti = get_column_type(inner_col->get_column_id(),
                                          inner_col->get_table_id(),
-                                         inner_cd,
+                                         inner_col_info,
                                          executor->getTemporaryTables());
   // Only strings may need dictionary translation.
   if (!inner_ti.is_string()) {
@@ -295,15 +295,15 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
   }
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_col_expr);
   CHECK(outer_col);
-  const auto outer_cd = get_column_descriptor_maybe(
-      outer_col->get_column_id(), outer_col->get_table_id(), *catalog);
+  const auto outer_col_info =
+      schema_provider->getColumnInfo(*outer_col->get_column_info());
   // Don't want to deal with temporary tables for now, require translation.
-  if (!inner_cd || !outer_cd) {
+  if (!inner_col_info || !outer_col_info) {
     return true;
   }
   const auto& outer_ti = get_column_type(outer_col->get_column_id(),
                                          outer_col->get_table_id(),
-                                         outer_cd,
+                                         outer_col_info,
                                          executor->getTemporaryTables());
   CHECK_EQ(inner_ti.is_string(), outer_ti.is_string());
   // If the two columns don't share the dictionary, translation is needed.
@@ -338,8 +338,8 @@ void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
   auto catalog = const_cast<Catalog_Namespace::Catalog*>(executor_->getCatalog());
-  const auto cols =
-      get_cols(qual_bin_oper_.get(), *catalog, executor_->temporary_tables_);
+  const auto cols = get_cols(
+      qual_bin_oper_.get(), executor_->getSchemaProvider(), executor_->temporary_tables_);
   const auto inner_col = cols.first;
   HashJoin::checkHashJoinReplicationConstraint(
       inner_col->get_table_id(),
@@ -837,7 +837,7 @@ HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOp
                                                              const size_t index) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto cols = get_cols(
-      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
+      qual_bin_oper_.get(), executor_->getSchemaProvider(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -981,7 +981,7 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
 
   CHECK(getHashType() == HashType::OneToOne);
   const auto cols = get_cols(
-      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
+      qual_bin_oper_.get(), executor_->getSchemaProvider(), executor_->temporary_tables_);
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;

@@ -709,7 +709,7 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
             column_cache,
             executor,
             HashJoin::normalizeColumnPairs(condition.get(),
-                                           *executor->getCatalog(),
+                                           executor->getSchemaProvider(),
                                            executor->getTemporaryTables()),
             device_count,
             EMPTY_QUERY_PLAN,
@@ -840,6 +840,8 @@ TEST_F(BucketSizeTest, OverlapsTunerEarlyOut) {
   CHECK(catalog);
   auto executor = QR::get()->getExecutor();
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
 
@@ -869,6 +871,8 @@ TEST_F(BucketSizeTest, OverlapsTooBig) {
   CHECK(catalog);
   auto executor = QR::get()->getExecutor();
   executor->setCatalog(catalog.get());
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
 
   auto [condition, query_infos] = BucketSizeTest::getOverlapsBuildInfo();
 

@@ -2126,7 +2126,8 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
     switch (col_ti.get_type()) {
       case kPOINT: {
         ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName = cd.columnName + "_coords";
+        physical_cd_coords.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 0);
         physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
@@ -2136,12 +2137,14 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
       }
       case kLINESTRING: {
         ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName = cd.columnName + "_coords";
+        physical_cd_coords.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 0);
         physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
         ColumnDescriptor physical_cd_bounds(true);
-        physical_cd_bounds.columnName = cd.columnName + "_bounds";
+        physical_cd_bounds.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 1);
         physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 1);
         columns.push_back(physical_cd_bounds);
 
@@ -2151,22 +2154,26 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
       }
       case kPOLYGON: {
         ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName = cd.columnName + "_coords";
+        physical_cd_coords.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 0);
         physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
         ColumnDescriptor physical_cd_ring_sizes(true);
-        physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
+        physical_cd_ring_sizes.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 1);
         physical_cd_ring_sizes.columnType = get_geo_physical_col_type(col_ti, 1);
         columns.push_back(physical_cd_ring_sizes);
 
         ColumnDescriptor physical_cd_bounds(true);
-        physical_cd_bounds.columnName = cd.columnName + "_bounds";
+        physical_cd_bounds.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 2);
         physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 2);
         columns.push_back(physical_cd_bounds);
 
         ColumnDescriptor physical_cd_render_group(true);
-        physical_cd_render_group.columnName = cd.columnName + "_render_group";
+        physical_cd_render_group.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 3);
         physical_cd_render_group.columnType = get_geo_physical_col_type(col_ti, 3);
         columns.push_back(physical_cd_render_group);
 
@@ -2176,27 +2183,32 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
       }
       case kMULTIPOLYGON: {
         ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName = cd.columnName + "_coords";
+        physical_cd_coords.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 0);
         physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
         columns.push_back(physical_cd_coords);
 
         ColumnDescriptor physical_cd_ring_sizes(true);
-        physical_cd_ring_sizes.columnName = cd.columnName + "_ring_sizes";
+        physical_cd_ring_sizes.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 1);
         physical_cd_ring_sizes.columnType = get_geo_physical_col_type(col_ti, 1);
         columns.push_back(physical_cd_ring_sizes);
 
         ColumnDescriptor physical_cd_poly_rings(true);
-        physical_cd_poly_rings.columnName = cd.columnName + "_poly_rings";
+        physical_cd_poly_rings.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 2);
         physical_cd_poly_rings.columnType = get_geo_physical_col_type(col_ti, 2);
         columns.push_back(physical_cd_poly_rings);
 
         ColumnDescriptor physical_cd_bounds(true);
-        physical_cd_bounds.columnName = cd.columnName + "_bounds";
+        physical_cd_bounds.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 3);
         physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 3);
         columns.push_back(physical_cd_bounds);
 
         ColumnDescriptor physical_cd_render_group(true);
-        physical_cd_render_group.columnName = cd.columnName + "_render_group";
+        physical_cd_render_group.columnName =
+            get_geo_physical_col_name(cd.columnName, col_ti, 4);
         physical_cd_render_group.columnType = get_geo_physical_col_type(col_ti, 4);
         columns.push_back(physical_cd_render_group);
 

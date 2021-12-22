@@ -888,6 +888,27 @@ class RelScan : public RelAlgNode {
     return column_infos_[col_idx]->column_id + geo_idx;
   }
 
+  std::string getColumnNameBySpi(int spi) const {
+    int col_idx;
+    int geo_idx = 0;
+    if (spi >= SPIMAP_MAGIC1) {
+      col_idx = (spi - SPIMAP_MAGIC1) / SPIMAP_MAGIC2 - 1;
+      geo_idx = (spi - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
+    } else {
+      col_idx = spi - 1;
+    }
+
+    // Physical geo column case.
+    if (geo_idx > 0) {
+      CHECK(column_infos_[col_idx]->type.is_geometry());
+      return get_geo_physical_col_name(
+          column_infos_[col_idx]->name, column_infos_[col_idx]->type, geo_idx - 1);
+    }
+
+    CHECK_LT(col_idx, column_infos_.size());
+    return column_infos_[col_idx]->name;
+  }
+
   SQLTypeInfo getColumnTypeBySpi(int spi) const {
     int col_idx;
     int geo_idx = 0;
@@ -913,7 +934,7 @@ class RelScan : public RelAlgNode {
       return std::make_shared<ColumnInfo>(table_info_->db_id,
                                           table_info_->table_id,
                                           getColumnIdBySpi(spi),
-                                          "",
+                                          getColumnNameBySpi(spi),
                                           getColumnTypeBySpi(spi),
                                           isVirtualColBySpi(spi),
                                           isDeleteColBySpi(spi));

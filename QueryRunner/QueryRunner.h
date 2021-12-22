@@ -279,6 +279,7 @@ class QueryRunner {
   std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
+  SchemaProviderPtr schema_provider_;
 };
 
 class ImportDriver : public QueryRunner {

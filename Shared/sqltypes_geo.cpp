@@ -105,3 +105,51 @@ SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx)
       throw std::runtime_error("Unrecognized geometry type.");
   }
 }
+
+std::string get_geo_physical_col_name(const std::string& name,
+                                      const SQLTypeInfo& geo_ti,
+                                      size_t col_idx) {
+  CHECK(geo_ti.is_geometry());
+  switch (geo_ti.get_type()) {
+    case kPOINT: {
+      CHECK_EQ(col_idx, 0);
+      return name + "_coords";
+    }
+    case kLINESTRING: {
+      if (col_idx == 0) {
+        return name + "_coords";
+      } else {
+        CHECK_EQ(col_idx, 1);
+        return name + "_bounds";
+      }
+    }
+    case kPOLYGON: {
+      if (col_idx == 0) {
+        return name + "_coords";
+      } else if (col_idx == 1) {
+        return name + "_ring_sizes";
+      } else if (col_idx == 2) {
+        return name + "_bounds";
+      } else {
+        CHECK_EQ(col_idx, 3);
+        return name + "_render_group";
+      }
+    }
+    case kMULTIPOLYGON: {
+      if (col_idx == 0) {
+        return name + "_coords";
+      } else if (col_idx == 1) {
+        return name + "_ring_sizes";
+      } else if (col_idx == 2) {
+        return name + "_poly_rings";
+      } else if (col_idx == 3) {
+        return name + "_bounds";
+      } else {
+        CHECK_EQ(col_idx, 4);
+        return name + "_render_group";
+      }
+    }
+    default:
+      throw std::runtime_error("Unrecognized geometry type.");
+  }
+}

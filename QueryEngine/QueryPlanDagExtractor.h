@@ -56,12 +56,12 @@ class QueryPlanDagExtractor {
  public:
   QueryPlanDagExtractor(
       QueryPlanDagCache& global_dag,
-      const Catalog_Namespace::Catalog& catalog,
+      SchemaProviderPtr schema_provider,
       std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
       const TemporaryTables& temporary_tables,
       Executor* executor)
       : global_dag_(global_dag)
-      , catalog_(catalog)
+      , schema_provider_(schema_provider)
       , contain_not_supported_rel_node_(false)
       , left_deep_tree_infos_(left_deep_tree_infos)
       , temporary_tables_(temporary_tables)
@@ -72,7 +72,7 @@ class QueryPlanDagExtractor {
   // a function that try to extract query plan DAG
   static ExtractedPlanDag extractQueryPlanDag(
       const RelAlgNode* node,
-      const Catalog_Namespace::Catalog& catalog,
+      SchemaProviderPtr schema_provider,
       std::optional<unsigned> left_deep_tree_id,
       std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
       const TemporaryTables& temporary_tables,
@@ -103,8 +103,7 @@ class QueryPlanDagExtractor {
   std::string getExtractedQueryPlanDagStr();
 
   std::vector<InnerOuterOrLoopQual> normalizeColumnsPair(
-      const Analyzer::BinOper* condition,
-      const Catalog_Namespace::Catalog& cat);
+      const Analyzer::BinOper* condition);
 
   bool isEmptyQueryPlanDag(const std::string& dag) { return dag.compare("N/A") == 0; }
 
@@ -134,14 +133,14 @@ class QueryPlanDagExtractor {
                               std::optional<RelNodeId> retrieved_node_id);
   static ExtractedPlanDag extractQueryPlanDagImpl(
       const RelAlgNode* node,
-      const Catalog_Namespace::Catalog& catalog,
+      SchemaProviderPtr schema_provider,
       std::optional<unsigned> left_deep_tree_id,
       std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
       const TemporaryTables& temporary_tables,
       Executor* executor);
 
   QueryPlanDagCache& global_dag_;
-  const Catalog_Namespace::Catalog& catalog_;
+  SchemaProviderPtr schema_provider_;
   bool contain_not_supported_rel_node_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos_;
   const TemporaryTables& temporary_tables_;

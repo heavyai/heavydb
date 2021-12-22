@@ -185,6 +185,39 @@ class RexPhysicalInputsVisitor
   }
 };
 
+class RexPhysicalInfoVisitor
+    : public RexInputVisitorBase<RexPhysicalInfoVisitor, ColumnInfoMap> {
+ public:
+  RexPhysicalInfoVisitor() {}
+
+  ColumnInfoMap visitInput(const RexInput* input) const override {
+    const auto source_ra = input->getSourceNode();
+    const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
+    if (!scan_ra) {
+      const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
+      if (join_ra) {
+        const auto node_inputs = get_node_output(join_ra);
+        CHECK_LT(input->getIndex(), node_inputs.size());
+        return visitInput(&node_inputs[input->getIndex()]);
+      }
+      return ColumnInfoMap{};
+    }
+
+    ColumnInfoMap res;
+    auto col_info = scan_ra->getColumnInfoBySpi(input->getIndex() + 1);
+    CHECK_GT(col_info->table_id, 0);
+    res.insert({*col_info, col_info});
+
+    for (auto i = 0; i < col_info->type.get_physical_cols(); i++) {
+      auto geo_col_info = scan_ra->getColumnInfoBySpi(
+          SPIMAP_GEO_PHYSICAL_INPUT(input->getIndex(), i + 1));
+      res.insert({*geo_col_info, geo_col_info});
+    }
+
+    return res;
+  }
+};
+
 class RexRefInputsVisitor
     : public RexInputVisitorBase<RexRefInputsVisitor, ColumnRefSet> {
  public:
@@ -265,6 +298,11 @@ ColumnRefSet get_ref_inputs(const RelAlgNode* ra) {
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {
   RelAlgPhysicalTableInputsVisitor phys_table_inputs_visitor;
   return phys_table_inputs_visitor.visit(ra);
+}
+
+ColumnInfoMap get_physical_column_infos(const RelAlgNode* ra) {
+  RelAlgPhysicalInputsVisitor<RexPhysicalInfoVisitor, ColumnInfoMap> visitor;
+  return visitor.visit(ra);
 }
 
 TableInfoMap get_physical_table_infos(const RelAlgNode* ra) {

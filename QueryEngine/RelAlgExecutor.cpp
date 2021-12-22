@@ -110,7 +110,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
-  executor_->setSchemaProvider(schema_provider_.get());
+  executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
@@ -128,7 +128,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->setCatalog(&cat_);
-  executor_->setSchemaProvider(schema_provider_.get());
+  executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
 
   WindowProjectNodeContext::reset(executor_);
@@ -296,7 +296,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
-  executor_->setSchemaProvider(schema_provider_.get());
+  executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
@@ -364,7 +364,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(executor_, cat_, query_state_);
+    RelAlgExecutor ra_executor(executor_, cat_, schema_provider_, query_state_);
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
@@ -526,7 +526,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   executor_->setCatalog(&cat_);
-  executor_->setSchemaProvider(schema_provider_.get());
+  executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
 
   time(&now_);
@@ -609,7 +609,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
   executor_->setCatalog(&cat_);
-  executor_->setSchemaProvider(schema_provider_.get());
+  executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   time(&now_);
@@ -3665,7 +3665,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                  rewritten_exe_unit.join_quals);
   }
   auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(compound,
-                                                             cat_,
+                                                             schema_provider_,
                                                              left_deep_tree_id,
                                                              left_deep_trees_info,
                                                              temporary_tables_,
@@ -3920,7 +3920,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
   auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(aggregate,
-                                                             cat_,
+                                                             schema_provider_,
                                                              std::nullopt,
                                                              getLeftDeepJoinTreesInfo(),
                                                              temporary_tables_,
@@ -4042,7 +4042,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                                  rewritten_exe_unit.join_quals);
   }
   auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(project,
-                                                             cat_,
+                                                             schema_provider_,
                                                              left_deep_tree_id,
                                                              left_deep_trees_info,
                                                              temporary_tables_,
@@ -4415,7 +4415,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   filter->setOutputMetainfo(in_metainfo);
   const auto rewritten_qual = rewrite_expr(qual.get());
   auto dag_info = QueryPlanDagExtractor::extractQueryPlanDag(filter,
-                                                             cat_,
+                                                             schema_provider_,
                                                              std::nullopt,
                                                              getLeftDeepJoinTreesInfo(),
                                                              temporary_tables_,

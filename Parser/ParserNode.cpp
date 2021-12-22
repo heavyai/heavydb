@@ -2024,7 +2024,10 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   foreign_storage::validate_non_foreign_table_write(td);
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  RelAlgExecutor ra_executor(executor.get(), catalog);
+  RelAlgExecutor ra_executor(
+      executor.get(),
+      catalog,
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog));
 
   ra_executor.executeSimpleInsert(query);
 }

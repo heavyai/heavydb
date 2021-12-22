@@ -2433,7 +2433,7 @@ bool Executor::skipFragmentPair(
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
     auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-        join_condition, *getCatalog(), getTemporaryTables());
+        join_condition, getSchemaProvider(), getTemporaryTables());
     shard_count = BaselineJoinHashTable::getShardCountForCondition(
         join_condition, this, inner_outer_pairs);
   } else {

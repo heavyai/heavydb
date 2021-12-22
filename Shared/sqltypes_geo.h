@@ -17,3 +17,6 @@
 #include "sqltypes.h"
 
 SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx);
+std::string get_geo_physical_col_name(const std::string& name,
+                                      const SQLTypeInfo& geo_ti,
+                                      size_t col_idx);

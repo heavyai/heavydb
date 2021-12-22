@@ -228,7 +228,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q1_query_info.left_deep_trees_info,
                                                  {},
@@ -245,7 +245,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q2_query_info.left_deep_trees_info,
                                                  {},
@@ -260,7 +260,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q3_query_info.left_deep_trees_info,
                                                  {},
@@ -276,7 +276,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q4_query_info.left_deep_trees_info,
                                                  {},
@@ -288,7 +288,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
 
   auto q1_dup_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q1_query_info.left_deep_trees_info,
                                                  {},
@@ -298,7 +298,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
 
   auto q4_dup_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q4_query_info.left_deep_trees_info,
                                                  {},
@@ -331,7 +331,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   auto rel_alg_translator_for_q1 = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q1_query_info.left_deep_trees_info,
                                                  {},
@@ -347,7 +347,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   auto rel_alg_translator_for_q2 = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q2_query_info.left_deep_trees_info,
                                                  {},
@@ -365,7 +365,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  q1_query_info.left_deep_trees_id[0],
                                                  q1_query_info.left_deep_trees_info,
                                                  {},
@@ -378,7 +378,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  q2_query_info.left_deep_trees_id[0],
                                                  q2_query_info.left_deep_trees_info,
                                                  {},
@@ -393,7 +393,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  q3_query_info.left_deep_trees_id[0],
                                                  q3_query_info.left_deep_trees_info,
                                                  {},
@@ -406,7 +406,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  q4_query_info.left_deep_trees_id[0],
                                                  q4_query_info.left_deep_trees_info,
                                                  {},
@@ -421,7 +421,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q5_rel_alg_translator = QR::get()->getRelAlgTranslator(q5_str, executor);
   auto q5_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  q5_query_info.left_deep_trees_id[0],
                                                  q5_query_info.left_deep_trees_info,
                                                  {},
@@ -457,7 +457,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q1_query_info.left_deep_trees_info,
                                                  {},
@@ -472,7 +472,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q2_query_info.left_deep_trees_info,
                                                  {},
@@ -489,7 +489,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  q3_query_info.left_deep_trees_id[0],
                                                  q3_query_info.left_deep_trees_info,
                                                  {},
@@ -503,7 +503,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   DAG_CACHE.setNodeMapMaxSize(80);
   auto new_q1_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q1_query_info.left_deep_trees_info,
                                                  {},
@@ -512,7 +512,7 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   ASSERT_TRUE(new_q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
   auto new_q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
+                                                 executor->getSchemaProvider(),
                                                  std::nullopt,
                                                  q2_query_info.left_deep_trees_info,
                                                  {},

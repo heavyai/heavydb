@@ -21,14 +21,11 @@ RelAlgSchemaProvider::RelAlgSchemaProvider(const RelAlgNode& root) {
     table_index_by_name_[pr.first.db_id][pr.second->name] = pr.second;
   }
 
-  auto col_descs = get_physical_inputs(&root);
-  for (auto& col_desc : col_descs) {
-    auto info = col_desc.getColInfo();
-    column_infos_[{info->db_id, info->table_id, info->column_id}] = info;
-
-    TableRef table_ref{info->db_id, info->table_id};
-    CHECK_EQ(column_index_by_name_[table_ref].count(info->name), 0);
-    column_index_by_name_[table_ref][info->name] = info;
+  column_infos_ = get_physical_column_infos(&root);
+  for (auto& [col_ref, col_info] : column_infos_) {
+    TableRef table_ref{col_ref.db_id, col_ref.table_id};
+    CHECK_EQ(column_index_by_name_[table_ref].count(col_info->name), 0);
+    column_index_by_name_[table_ref][col_info->name] = col_info;
   }
 }
 
@@ -40,8 +37,7 @@ TableInfoList RelAlgSchemaProvider::listTables(int db_id) const {
   UNREACHABLE();
 }
 
-ColumnInfoList RelAlgSchemaProvider::listColumns(int db_id,
-                                                             int table_id) const {
+ColumnInfoList RelAlgSchemaProvider::listColumns(int db_id, int table_id) const {
   UNREACHABLE();
 }
 

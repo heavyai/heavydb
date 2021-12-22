@@ -57,7 +57,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     ts1 = std::chrono::steady_clock::now();
   }
   auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-      condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
+      condition.get(), executor->getSchemaProvider(), executor->getTemporaryTables());
   auto hashtable_cache_key =
       HashtableRecycler::getHashtableCacheKey(inner_outer_pairs,
                                               condition->get_optype(),

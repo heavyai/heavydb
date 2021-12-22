@@ -447,8 +447,7 @@ void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* e
 
   std::unordered_set<InputColDescriptor> col_descs;
   for (auto cv : cvs) {
-    col_descs.emplace(InputColDescriptor{cv->get_column_info(),
-                                         cv->get_rte_idx()});
+    col_descs.emplace(InputColDescriptor{cv->get_column_info(), cv->get_rte_idx()});
   }
 
   executor->setupCaching(col_descs, phys_table_ids);
@@ -603,7 +602,7 @@ void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
 
 InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
                                          const Analyzer::Expr* rhs,
-                                         const Catalog_Namespace::Catalog& cat,
+                                         SchemaProviderPtr schema_provider,
                                          const TemporaryTables* temporary_tables,
                                          const bool is_overlaps_join) {
   const auto& lhs_ti = lhs->get_type_info();
@@ -683,11 +682,11 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
   }
   // We need to fetch the actual type information from the catalog since Analyzer
   // always reports nullable as true for inner table columns in left joins.
-  const auto inner_col_cd = get_column_descriptor_maybe(
-      inner_col->get_column_id(), inner_col->get_table_id(), cat);
+  const auto inner_col_info =
+      schema_provider->getColumnInfo(*inner_col->get_column_info());
   const auto inner_col_real_ti = get_column_type(inner_col->get_column_id(),
                                                  inner_col->get_table_id(),
-                                                 inner_col_cd,
+                                                 inner_col_info,
                                                  temporary_tables);
   const auto& outer_col_ti =
       !(dynamic_cast<const Analyzer::FunctionOper*>(lhs)) && outer_col
@@ -744,7 +743,7 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
 
 std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
     const Analyzer::BinOper* condition,
-    const Catalog_Namespace::Catalog& cat,
+    SchemaProviderPtr schema_provider,
     const TemporaryTables* temporary_tables) {
   std::vector<InnerOuter> result;
   const auto lhs_tuple_expr =
@@ -760,7 +759,7 @@ std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
     for (size_t i = 0; i < lhs_tuple.size(); ++i) {
       result.push_back(normalizeColumnPair(lhs_tuple[i].get(),
                                            rhs_tuple[i].get(),
-                                           cat,
+                                           schema_provider,
                                            temporary_tables,
                                            condition->is_overlaps_oper()));
     }
@@ -768,7 +767,7 @@ std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
     CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
     result.push_back(normalizeColumnPair(condition->get_left_operand(),
                                          condition->get_right_operand(),
-                                         cat,
+                                         schema_provider,
                                          temporary_tables,
                                          condition->is_overlaps_oper()));
   }
@@ -779,11 +778,11 @@ std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
 namespace {
 
 InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
-                    const Catalog_Namespace::Catalog& cat,
+                    SchemaProviderPtr schema_provider,
                     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
+  return HashJoin::normalizeColumnPair(lhs, rhs, schema_provider, temporary_tables);
 }
 
 }  // namespace
@@ -794,8 +793,8 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   const Analyzer::Expr* outer_col{nullptr};
   std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
   try {
-    std::tie(inner_col, outer_col) =
-        get_cols(join_condition, *executor->getCatalog(), executor->getTemporaryTables());
+    std::tie(inner_col, outer_col) = get_cols(
+        join_condition, executor->getSchemaProvider(), executor->getTemporaryTables());
   } catch (...) {
     return 0;
   }
