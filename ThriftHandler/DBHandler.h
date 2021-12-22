@@ -60,6 +60,7 @@
 
 #include <sys/types.h>
 #include <thrift/server/TServer.h>
+#include <thrift/transport/THttpClient.h>
 #include <thrift/transport/THttpTransport.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransport.h>

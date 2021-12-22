@@ -20,9 +20,6 @@
 
 #include <thrift/Thrift.h>
 #include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/TSocket.h>
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
