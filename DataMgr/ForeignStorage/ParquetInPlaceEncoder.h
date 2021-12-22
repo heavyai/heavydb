@@ -315,8 +315,9 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     V stats_min, stats_max;
     auto min_string = stats->EncodeMin();
     auto max_string = stats->EncodeMax();
-    if (parquet_column_descriptor->physical_type() ==
-        parquet::Type::FIXED_LEN_BYTE_ARRAY) {
+    if constexpr (std::is_same<T, parquet::FixedLenByteArray>::value) {
+      CHECK_EQ(parquet_column_descriptor->physical_type(),
+               parquet::Type::FIXED_LEN_BYTE_ARRAY);
       parquet::FixedLenByteArray min_byte_array, max_byte_array;
       min_byte_array.ptr = reinterpret_cast<const uint8_t*>(min_string.data());
       max_byte_array.ptr = reinterpret_cast<const uint8_t*>(max_string.data());
@@ -324,7 +325,8 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
                     reinterpret_cast<int8_t*>(&stats_min));
       encodeAndCopy(reinterpret_cast<int8_t*>(&max_byte_array),
                     reinterpret_cast<int8_t*>(&stats_max));
-    } else if (parquet_column_descriptor->physical_type() == parquet::Type::BYTE_ARRAY) {
+    } else if constexpr (std::is_same<T, parquet::ByteArray>::value) {
+      CHECK_EQ(parquet_column_descriptor->physical_type(), parquet::Type::BYTE_ARRAY);
       parquet::ByteArray min_byte_array, max_byte_array;
       min_byte_array.ptr = reinterpret_cast<const uint8_t*>(min_string.data());
       min_byte_array.len = min_string.length();
