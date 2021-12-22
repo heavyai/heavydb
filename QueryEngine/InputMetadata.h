@@ -72,6 +72,7 @@ class TemporaryTable {
 using TemporaryTables = std::unordered_map<int, TemporaryTable>;
 
 struct InputTableInfo {
+  int db_id;
   int table_id;
   Fragmenter_Namespace::TableInfo info;
 };

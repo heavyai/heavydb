@@ -3856,13 +3856,14 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
 AggregatedColRange Executor::computeColRangesCache(
     const std::unordered_set<InputColDescriptor>& col_descs) {
   AggregatedColRange agg_col_range_cache;
-  std::unordered_set<int> phys_table_ids;
+  TableRefSet phys_table_refs;
   for (const auto& col_desc : col_descs) {
-    phys_table_ids.insert(col_desc.getTableId());
+    phys_table_refs.insert({col_desc.getDatabaseId(), col_desc.getTableId()});
   }
   std::vector<InputTableInfo> query_infos;
-  for (const int table_id : phys_table_ids) {
-    query_infos.emplace_back(InputTableInfo{table_id, getTableInfo(table_id)});
+  for (auto& tref : phys_table_refs) {
+    query_infos.emplace_back(
+        InputTableInfo{tref.db_id, tref.table_id, getTableInfo(tref.table_id)});
   }
   for (const auto& col_desc : col_descs) {
     if (ExpressionRange::typeSupportsRange(col_desc.getType())) {

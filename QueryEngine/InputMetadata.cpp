@@ -151,16 +151,15 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
                          const std::vector<InputDescriptor>& input_descs,
                          Executor* executor) {
   const auto temporary_tables = executor->getTemporaryTables();
-  const auto cat = executor->getCatalog();
-  CHECK(cat);
-  std::unordered_map<int, size_t> info_cache;
+  const auto db_id = executor->getDatabaseId();
+  std::unordered_map<TableRef, size_t> info_cache;
   for (const auto& input_desc : input_descs) {
     const auto table_id = input_desc.getTableId();
-    const auto cached_index_it = info_cache.find(table_id);
+    const auto cached_index_it = info_cache.find({db_id, table_id});
     if (cached_index_it != info_cache.end()) {
       CHECK_LT(cached_index_it->second, table_infos.size());
       table_infos.push_back(
-          {table_id, copy_table_info(table_infos[cached_index_it->second].info)});
+          {db_id, table_id, copy_table_info(table_infos[cached_index_it->second].info)});
       continue;
     }
     if (input_desc.getSourceType() == InputSourceType::RESULT) {
@@ -169,13 +168,13 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       const auto it = temporary_tables->find(table_id);
       LOG_IF(FATAL, it == temporary_tables->end())
           << "Failed to find previous query result for node " << -table_id;
-      table_infos.push_back({table_id, synthesize_table_info(it->second)});
+      table_infos.push_back({db_id, table_id, synthesize_table_info(it->second)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
-      table_infos.push_back({table_id, executor->getTableInfo(table_id)});
+      table_infos.push_back({db_id, table_id, executor->getTableInfo(table_id)});
     }
     CHECK(!table_infos.empty());
-    info_cache.insert(std::make_pair(table_id, table_infos.size() - 1));
+    info_cache.insert(std::make_pair(TableRef{db_id, table_id}, table_infos.size() - 1));
   }
 }
 

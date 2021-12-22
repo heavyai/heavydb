@@ -80,6 +80,8 @@ class InputColDescriptor {
 
   int getTableId() const { return col_info_->table_id; }
 
+  int getDatabaseId() const { return col_info_->db_id; }
+
   int getNestLevel() const { return nest_level_; }
 
   InputDescriptor getScanDesc() const { return {col_info_->table_id, nest_level_}; }
