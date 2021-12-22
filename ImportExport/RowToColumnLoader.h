@@ -58,11 +58,6 @@
 #include <boost/program_options.hpp>
 
 // include files for Thrift and MapD Thrift Services
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/THttpClient.h>
-#include <thrift/transport/TSocket.h>
 #include "CopyParams.h"
 #include "gen-cpp/OmniSci.h"
 #include "gen-cpp/omnisci_types.h"
