@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 #include "Shared/ThriftClient.h"
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/protocol/TJSONProtocol.h>
+#include <thrift/transport/THttpClient.h>
+#include <thrift/transport/TSocket.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/filesystem.hpp>
 #include <iostream>
 #include <sstream>
+
 using namespace ::apache::thrift::transport;
+using namespace ::apache::thrift::protocol;
 using Decision = AccessManager::Decision;
 
 void check_standard_ca(std::string& ca_cert_file) {

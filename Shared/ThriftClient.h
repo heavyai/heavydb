@@ -16,12 +16,8 @@
 
 #ifndef THRIFTCLIENT_H
 #define THRIFTCLIENT_H
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/THttpClient.h>
+#include <thrift/protocol/TProtocol.h>
 #include <thrift/transport/TSSLSocket.h>
-#include <thrift/transport/TSocket.h>
 #include <string>
 
 using namespace ::apache::thrift::transport;
