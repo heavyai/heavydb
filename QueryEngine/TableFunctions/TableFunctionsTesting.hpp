@@ -1680,3 +1680,55 @@ EXTENSION_NOINLINE int32_t ct_test_preflight_sizer_const(const Column<int32_t>& 
   out[1] = 321;
   return out.size();
 }
+
+#ifndef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_test_preflight_singlecursor_qe227__cpu_(TableFunctionManager,
+          Cursor<Column<int32_t> col, ColumnList<int32_t> lst>,
+          int32_t x, int32_t y | require="x > 0" | require="y > 0") ->
+    Column<int32_t> out
+ */
+// clang-format on
+
+EXTENSION_NOINLINE int32_t
+ct_test_preflight_singlecursor_qe227__cpu_(TableFunctionManager& mgr,
+                                           const Column<int32_t>& col,
+                                           const ColumnList<int32_t>& lst,
+                                           const int x,
+                                           const int y,
+                                           Column<int32_t>& out) {
+  mgr.set_output_row_size(lst.numCols() + 1);
+  out[0] = col[0];
+  for (int i = 0; i < lst.numCols(); i++) {
+    out[i + 1] = lst[i][0];
+  }
+  return out.size();
+}
+
+// clang-format off
+/*
+  UDTF: ct_test_preflight_multicursor_qe227__cpu_(TableFunctionManager,
+          Column<int32_t> col, ColumnList<int32_t> lst,
+          int32_t x, int32_t y | require="x > 0" | require="y > 0") ->
+    Column<int32_t> out
+ */
+// clang-format on
+
+EXTENSION_NOINLINE int32_t
+ct_test_preflight_multicursor_qe227__cpu_(TableFunctionManager& mgr,
+                                          const Column<int32_t>& col,
+                                          const ColumnList<int32_t>& lst,
+                                          const int x,
+                                          const int y,
+                                          Column<int32_t>& out) {
+  mgr.set_output_row_size(lst.numCols() + 1);
+  out[0] = col[1];
+  for (int i = 0; i < lst.numCols(); i++) {
+    out[i + 1] = lst[i][1];
+  }
+  return out.size();
+}
+
+#endif

@@ -127,8 +127,19 @@ class Declaration:
         self.type = type
         self.annotations = annotations
 
+    @property
+    def name(self):
+        return self.type.name
+
+    @property
+    def args(self):
+        return self.type.args
+
+    def format_sizer(self):
+        return self.type.format_sizer()
+
     def __repr__(self):
-        return 'Declaration(%r, %r)' % (self.type, self.annotations)
+        return 'Declaration(%r, ann=%r)' % (self.type, self.annotations)
 
     def __str__(self):
         if not self.annotations:
@@ -147,12 +158,16 @@ class Declaration:
     def get_cpp_type(self):
         return self.type.get_cpp_type()
 
-    def format_cpp_type(self, idx, arg_name=None, is_input=True):
-        return self.type.format_cpp_type(idx, arg_name=arg_name, is_input=is_input)
+    def format_cpp_type(self, idx, use_generic_arg_name=False, is_input=True):
+        real_arg_name = dict(self.annotations).get('name', None)
+        return self.type.format_cpp_type(idx,
+                                         use_generic_arg_name=use_generic_arg_name,
+                                         real_arg_name=real_arg_name,
+                                         is_input=is_input)
 
     def __getattr__(self, name):
         if name.startswith('is_'):
-            return getattr(self.type, name)()
+            return getattr(self.type, name)
         raise AttributeError(name)
 
 
@@ -171,7 +186,7 @@ class Bracket:
         self.args = args
 
     def __repr__(self):
-        return 'Bracket(%r, %r)' % (self.name, self.args)
+        return 'Bracket(%r, args=%r)' % (self.name, self.args)
 
     def __str__(self):
         if not self.args:
@@ -288,12 +303,15 @@ class Bracket:
             return ctype
         return '%s<%s>' % (clsname, ctype)
 
-    def format_cpp_type(self, idx, arg_name=None, is_input=True):
-        # Perhaps integrate this to Bracket?
+    def format_cpp_type(self, idx, use_generic_arg_name=False, real_arg_name=None, is_input=True):
         col_typs = ('Column', 'ColumnList')
         literal_ref_typs = ('TextEncodingNone',)
-        # TODO: use name in annotations when present?
-        if arg_name is None:
+        if use_generic_arg_name:
+            arg_name = 'input' + str(idx) if is_input else 'output' + str(idx)
+        elif real_arg_name is not None:
+            arg_name = real_arg_name
+        else:
+            # in some cases, the real arg name is not specified
             arg_name = 'input' + str(idx) if is_input else 'output' + str(idx)
         const = 'const ' if is_input else ''
         cpp_type = self.get_cpp_type()
@@ -722,6 +740,15 @@ class AstPrinter(AstVisitor):
         return translate_map.get(t, t)
 
 
+class AstDebugger(AstTransformer):
+    """Like AstPrinter but returns a node instead of a string
+    """
+    def visit_udtf_node(self, udtf_node):
+        if udtf_node.name == 'ct_union_pushdown_projection__cpu_template':
+            print(udtf_node.accept(AstPrinter()))
+        return udtf_node
+
+
 def product_dict(**kwargs):
     keys = kwargs.keys()
     vals = kwargs.values()
@@ -766,12 +793,36 @@ class TemplateTransformer(AstTransformer):
         return primitive_node.copy(typ)
 
 
-class NormalizeTransformer(AstTransformer):
+class FixRowMultiplierPosArgTransformer(AstTransformer):
+    def visit_primitive_node(self, primitive_node):
+        """
+        * Fix kUserSpecifiedRowMultiplier without a pos arg
+        """
+        t = primitive_node.type
 
+        if primitive_node.is_output_buffer_sizer():
+            pos = PrimitiveNode(str(primitive_node.get_parent(ArgNode).arg_pos + 1))
+            node = ComposedNode(t, inner=[pos])
+            return node
+
+        return primitive_node
+
+
+class RenameNodesTransformer(AstTransformer):
+    def visit_primitive_node(self, primitive_node):
+        """
+        * Rename nodes using translate_map as dictionary
+            int -> Int32
+            float -> Float
+        """
+        t = primitive_node.type
+        return primitive_node.copy(translate_map.get(t, t))
+
+
+class TextEncodingDictTransformer(AstTransformer):
     def visit_udtf_node(self, udtf_node):
         """
         * Add default_input_id to Column(List)<TextEncodingDict> without one
-        * Generate fields annotation to Cursor if non-existing
         """
         udtf_node = super(type(self), self).visit_udtf_node(udtf_node)
 
@@ -788,10 +839,6 @@ class NormalizeTransformer(AstTransformer):
             elif t.type.is_column_list_text_encoding_dict():
                 default_input_id = AnnotationNode('input_id', 'args<%s, 0>' % (idx,))
 
-            if t.type.is_cursor() and t.get_annotation('fields') is None:
-                fields = list(PrimitiveNode(a.get_annotation('name', 'field%s' % i)) for i, a in enumerate(t.type.inner))
-                t.annotations.append(AnnotationNode('fields', fields))
-
         for t in udtf_node.outputs:
             if isinstance(t.type, ComposedNode) and t.type.is_any_text_encoding_dict():
                 for a in t.annotations:
@@ -806,22 +853,26 @@ class NormalizeTransformer(AstTransformer):
 
         return udtf_node
 
-    def visit_primitive_node(self, primitive_node):
+
+class FieldAnnotationTransformer(AstTransformer):
+
+    def visit_udtf_node(self, udtf_node):
         """
-        * Rename nodes using translate_map as dictionary
-            int -> Int32
-            float -> Float
-
-        * Fix kUserSpecifiedRowMultiplier without a pos arg
+        * Generate fields annotation to Cursor if non-existing
         """
-        t = primitive_node.type
+        udtf_node = super(type(self), self).visit_udtf_node(udtf_node)
 
-        if primitive_node.is_output_buffer_sizer():
-            pos = PrimitiveNode(str(primitive_node.get_parent(ArgNode).arg_pos + 1))
-            node = ComposedNode(t, inner=[pos])
-            return node
+        for _, t in enumerate(udtf_node.inputs):
 
-        return primitive_node.copy(translate_map.get(t, t))
+            if not isinstance(t.type, ComposedNode):
+                continue
+
+
+            if t.type.is_cursor() and t.get_annotation('fields') is None:
+                fields = list(PrimitiveNode(a.get_annotation('name', 'field%s' % i)) for i, a in enumerate(t.type.inner))
+                t.annotations.append(AnnotationNode('fields', fields))
+
+        return udtf_node
 
 
 class SupportedAnnotationsTransformer(AstTransformer):
@@ -847,7 +898,7 @@ class SupportedAnnotationsTransformer(AstTransformer):
         return udtf_node
 
 
-class SignatureTransformer(AstTransformer):
+class DeclBracketTransformer(AstTransformer):
 
     def visit_udtf_node(self, udtf_node):
         name = udtf_node.name
@@ -860,7 +911,7 @@ class SignatureTransformer(AstTransformer):
 
         for i in udtf_node.inputs:
             decl = i.accept(self)
-            inputs.append(decl.type)
+            inputs.append(decl)
             input_annotations.append(decl.annotations)
 
         for o in udtf_node.outputs:
@@ -892,7 +943,7 @@ class SignatureTransformer(AstTransformer):
 
     def visit_primitive_node(self, primitive_node):
         t = primitive_node.type
-        return Bracket(translate_map.get(t, t))
+        return Bracket(t)
 
     def visit_annotation_node(self, annotation_node):
         key = annotation_node.key
@@ -1574,7 +1625,13 @@ def find_signatures(input_file):
             # Template transformer expands templates into multiple lines
             skip_signature = False
             try:
-                result = Pipeline(TemplateTransformer, NormalizeTransformer, SupportedAnnotationsTransformer, AstPrinter)(ast)
+                result = Pipeline(TemplateTransformer,
+                                  FieldAnnotationTransformer,
+                                  TextEncodingDictTransformer,
+                                  SupportedAnnotationsTransformer,
+                                  FixRowMultiplierPosArgTransformer,
+                                  RenameNodesTransformer,
+                                  AstPrinter)(ast)
             except TransformerException as msg:
                 result = ['%s: %s' % (type(msg).__name__, msg)]
                 skip_signature = True
@@ -1586,47 +1643,56 @@ def find_signatures(input_file):
                 continue
 
         signature = Pipeline(TemplateTransformer,
-                             NormalizeTransformer,
+                             FieldAnnotationTransformer,
+                             TextEncodingDictTransformer,
                              SupportedAnnotationsTransformer,
-                             SignatureTransformer)(ast)
+                             FixRowMultiplierPosArgTransformer,
+                             RenameNodesTransformer,
+                             DeclBracketTransformer)(ast)
 
         signatures.extend(signature)
 
     return signatures
 
 
-def build_template_function_call(caller, callee, input_types, output_types, uses_manager):
-    # caller calls callee
-
-    input_cpp_args = []
-    output_cpp_args = []
-    arg_names = []
+def format_function_args(input_types, output_types, uses_manager, use_generic_arg_name):
+    cpp_args = []
+    name_args = []
 
     if uses_manager:
-        input_cpp_args.append("TableFunctionManager& mgr")
-        arg_names.append("mgr")
+        cpp_args.append('TableFunctionManager& mgr')
+        name_args.append('mgr')
 
-    for idx, input_type in enumerate(input_types):
-        cpp_arg, arg_name = input_type.format_cpp_type(idx)
-        input_cpp_args.append(cpp_arg)
-        arg_names.append(arg_name)
+    for idx, typ in enumerate(input_types):
+        cpp_arg, name = typ.format_cpp_type(idx,
+                                            use_generic_arg_name=use_generic_arg_name,
+                                            is_input=True)
+        cpp_args.append(cpp_arg)
+        name_args.append(name)
 
-    for idx, output_type in enumerate(output_types):
-        cpp_arg, arg_name = output_type.format_cpp_type(idx, is_input=False)
-        output_cpp_args.append(cpp_arg)
-        arg_names.append(arg_name)
+    for idx, typ in enumerate(output_types):
+        cpp_arg, name = typ.format_cpp_type(idx,
+                                            use_generic_arg_name=use_generic_arg_name,
+                                            is_input=False)
+        cpp_args.append(cpp_arg)
+        name_args.append(name)
 
-    args = ', '.join(input_cpp_args + output_cpp_args)
-    arg_names = ', '.join(arg_names)
+    cpp_args = ', '.join(cpp_args)
+    name_args = ', '.join(name_args)
+    return cpp_args, name_args
+
+
+def build_template_function_call(caller, called, input_types, output_types, uses_manager):
+    cpp_args, name_args = format_function_args(input_types, output_types, uses_manager, use_generic_arg_name=True)
 
     template = ("EXTENSION_NOINLINE int32_t\n"
                 "%s(%s) {\n"
                 "    return %s(%s);\n"
-                "}\n") % (caller, args, callee, arg_names)
+                "}\n") % (caller, cpp_args, called, name_args)
     return template
 
 
-def build_preflight_function(fn_name, sizer, input_types, output_types, input_annotations, uses_manager):
+def build_preflight_function(fn_name, sizer, input_types, output_types, uses_manager):
 
     def format_error_msg(err_msg, uses_manager):
         if uses_manager:
@@ -1634,31 +1700,17 @@ def build_preflight_function(fn_name, sizer, input_types, output_types, input_an
         else:
             return "    return table_function_error(%s);\n" % (err_msg,)
 
-    input_cpp_args = []
-    output_cpp_args = []
-    arg_names = []
-
-    for idx, (typ, ann) in enumerate(zip(input_types, input_annotations)):
-        arg_names.append(dict(ann).get('name', 'input%s' % (idx)))
-        cpp_arg, _ = typ.format_cpp_type(idx, arg_name=arg_names[idx])
-        input_cpp_args.append(cpp_arg)
-
-    for idx, typ in enumerate(output_types):
-        cpp_arg, arg_name = typ.format_cpp_type(idx, is_input=False)
-        arg_names.append(arg_name)
-        output_cpp_args.append(cpp_arg)
+    cpp_args, _ = format_function_args(input_types, output_types, uses_manager, use_generic_arg_name=False)
 
     if uses_manager:
-        input_cpp_args = ["TableFunctionManager& mgr"] + input_cpp_args
-        arg_names = ["mgr"] + arg_names
-        input_annotations = [[]] + input_annotations
+        fn = "EXTENSION_NOINLINE int32_t\n"
+        fn += "%s(%s) {\n" % (fn_name.lower() + "__preflight", cpp_args)
+    else:
+        fn = "EXTENSION_NOINLINE int32_t\n"
+        fn += "%s(%s) {\n" % (fn_name.lower() + "__preflight", cpp_args)
 
-    args = ', '.join(input_cpp_args + output_cpp_args)
-    fn = "EXTENSION_NOINLINE int32_t\n"
-    fn += "%s(%s) {\n" % (fn_name.lower() + "__preflight", args)
-
-    for idx, _ in enumerate(input_annotations):
-        ann = input_annotations[idx]
+    for typ in input_types:
+        ann = typ.annotations
         for key, value in ann:
             if key == 'require':
                 err_msg = '"Constraint `%s` is not satisfied."' % (value[1:-1])
@@ -1815,7 +1867,7 @@ def parse_annotations(input_files):
 
             if must_emit_preflight_function(sig, sizer):
                 fn_name = '%s_%s' % (sig.name, str(counter)) if is_template_function(sig) else sig.name
-                check_fn = build_preflight_function(fn_name, sizer, input_types_, sig.outputs, input_annotations, uses_manager)
+                check_fn = build_preflight_function(fn_name, sizer, input_types_, sig.outputs, uses_manager)
                 cond_fns.append(check_fn)
 
             if is_template_function(sig):

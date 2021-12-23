@@ -450,6 +450,39 @@ TEST_F(TableFunctions, BasicProjection) {
       }
     }
 
+    // Test for bug (QE-227)
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_test_preflight_singlecursor_qe227(cursor(SELECT x, "
+          "x+10, "
+          "x+20 from "
+          "tf_test), "
+          "200, 50));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(3));
+      std::vector<int64_t> expected_result_set{0, 10, 20};
+      for (size_t i = 0; i < 3; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_test_preflight_multicursor_qe227(cursor(SELECT x from "
+          "tf_test), "
+          "cursor(SELECT x+30, x+40 from tf_test), "
+          "200, 50));",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(3));
+      std::vector<int64_t> expected_result_set{1, 31, 41};
+      for (size_t i = 0; i < 3; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
+
     // Tests various invalid returns from a table function:
     if (dt == ExecutorDeviceType::CPU) {
       const auto rows = run_multiple_agg(
