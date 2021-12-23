@@ -466,7 +466,6 @@ class SysCatalog : private CommonFileOperations {
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args);
 
-  void initializeInformationSchemaDb();
   void recordExecutedMigration(const std::string& migration_name) const;
   bool hasVersionHistoryTable() const;
   void createVersionHistoryTable() const;

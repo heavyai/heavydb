@@ -62,7 +62,6 @@ using namespace std::string_literals;
 
 std::string g_base_path;
 bool g_enable_idp_temporary_users{true};
-bool g_enable_system_tables{false};
 
 extern bool g_enable_fsi;
 extern bool g_read_only;
@@ -190,7 +189,6 @@ void SysCatalog::init(const std::string& basePath,
     buildRoleMap();
     buildUserRoleMap();
     buildObjectDescriptorMap();
-    initializeInformationSchemaDb();
   }
 }
 
@@ -1235,7 +1233,6 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
         "sort_column_id integer default 0, storage_type text default '', "
         "max_rollback_epochs integer default -1, "
-        "is_system_table boolean default 0, "
         "num_shards integer, key_metainfo TEXT, version_num "
         "BIGINT DEFAULT 1) ");
     dbConn->query(
@@ -2814,27 +2811,6 @@ void SysCatalog::reassignObjectOwners(
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-}
-
-void SysCatalog::initializeInformationSchemaDb() {
-  if (g_enable_system_tables && !hasExecutedMigration(INFORMATION_SCHEMA_MIGRATION)) {
-    sys_write_lock write_lock(this);
-    DBMetadata db_metadata;
-    if (getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
-      LOG(WARNING) << "A database with name \"" << INFORMATION_SCHEMA_DB
-                   << "\" already exists. System table creation will be skipped. Rename "
-                      "this database in order to use system tables.";
-    } else {
-      createDatabase(INFORMATION_SCHEMA_DB, OMNISCI_ROOT_USER_ID);
-      try {
-        recordExecutedMigration(INFORMATION_SCHEMA_MIGRATION);
-      } catch (...) {
-        getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata);
-        dropDatabase(db_metadata);
-        throw;
-      }
-    }
-  }
 }
 
 bool SysCatalog::hasExecutedMigration(const std::string& migration_name) const {

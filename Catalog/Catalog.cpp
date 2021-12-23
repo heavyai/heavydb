@@ -94,7 +94,6 @@ int g_test_against_columnId_gap{0};
 bool g_enable_fsi{false};
 bool g_enable_s3_fsi{false};
 extern bool g_cache_string_hash;
-extern bool g_enable_system_tables;
 
 // Serialize temp tables to a json file in the Catalogs directory for Calcite parsing
 // under unit testing.
@@ -190,7 +189,6 @@ Catalog::Catalog(const string& basePath,
   if (g_serialize_temp_tables) {
     boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
   }
-  conditionallyInitializeSystemTables();
   // once all initialized use real object
   initialized_ = true;
 }
@@ -283,11 +281,6 @@ void Catalog::updateTableDescriptorSchema() {
         cols.end()) {
       string queryString("ALTER TABLE mapd_tables ADD max_rollback_epochs INT DEFAULT " +
                          std::to_string(-1));
-      sqliteConnector_.query(queryString);
-    }
-    if (std::find(cols.begin(), cols.end(), std::string("is_system_table")) ==
-        cols.end()) {
-      string queryString("ALTER TABLE mapd_tables ADD is_system_table BOOLEAN DEFAULT 0");
       sqliteConnector_.query(queryString);
     }
   } catch (std::exception& e) {
@@ -975,7 +968,7 @@ void Catalog::buildMaps() {
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
       "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
-      "sort_column_id, storage_type, max_rollback_epochs, is_system_table "
+      "sort_column_id, storage_type, max_rollback_epochs "
       "from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -1021,7 +1014,6 @@ void Catalog::buildMaps() {
       td->fragmenter = nullptr;
     }
     td->maxRollbackEpochs = sqliteConnector_.getData<int>(r, 18);
-    td->is_system_table = sqliteConnector_.getData<bool>(r, 19);
     td->hasDeletedCol = false;
 
     tableDescriptorMap_[to_upper(td->tableName)] = td;
@@ -2299,7 +2291,7 @@ void Catalog::createTable(
   if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     try {
       sqliteConnector_.query_with_text_params(
-          R"(INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, sort_column_id, storage_type, max_rollback_epochs, is_system_table, key_metainfo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?))",
+          R"(INSERT INTO mapd_tables (name, userid, ncolumns, isview, fragments, frag_type, max_frag_rows, max_chunk_size, frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, sort_column_id, storage_type, max_rollback_epochs, key_metainfo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?))",
           std::vector<std::string>{td.tableName,
                                    std::to_string(td.userId),
                                    std::to_string(td.nColumns),
@@ -2317,7 +2309,6 @@ void Catalog::createTable(
                                    std::to_string(td.sortedColumnId),
                                    td.storageType,
                                    std::to_string(td.maxRollbackEpochs),
-                                   std::to_string(td.is_system_table),
                                    td.keyMetainfo});
 
       // now get the auto generated tableid
@@ -4479,7 +4470,6 @@ std::vector<std::string> Catalog::getTableDictDirectories(
 // NOTE(sy): Might be able to replace dumpSchema() later with
 //           dumpCreateTable() after a deeper review of the TableArchiver code.
 std::string Catalog::dumpSchema(const TableDescriptor* td) const {
-  CHECK(!td->is_system_table);
   cat_read_lock read_lock(this);
 
   std::ostringstream os;
@@ -4613,7 +4603,7 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
   std::ostringstream os;
 
-  if (foreign_table && !td->is_system_table) {
+  if (foreign_table) {
     os << "CREATE FOREIGN TABLE " << td->tableName << " (";
   } else if (!td->isView) {
     os << "CREATE ";
@@ -4705,7 +4695,7 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   os << ")";
 
   std::vector<std::string> with_options;
-  if (foreign_table && !td->is_system_table) {
+  if (foreign_table) {
     if (multiline_formatting) {
       os << "\n";
     } else {
@@ -5372,140 +5362,4 @@ void Catalog::restoreOldOwnersInMemory(
   }
 }
 
-void Catalog::conditionallyInitializeSystemTables() {
-  if (g_enable_system_tables && name() == INFORMATION_SCHEMA_DB) {
-    createSystemTableServer(CATALOG_SERVER_NAME,
-                            foreign_storage::DataWrapperType::INTERNAL_CATALOG);
-    if (!getMetadataForTable(USERS_SYS_TABLE_NAME, false)) {
-      createSystemTable(USERS_SYS_TABLE_NAME,
-                        CATALOG_SERVER_NAME,
-                        {{"user_id", {kINT}},
-                         {"user_name", {kTEXT}},
-                         {"is_super_user", {kBOOLEAN}},
-                         {"default_db_id", {kINT}},
-                         {"can_login", {kBOOLEAN}}});
-    }
-
-    if (!getMetadataForTable(DATABASES_SYS_TABLE_NAME, false)) {
-      createSystemTable(
-          DATABASES_SYS_TABLE_NAME,
-          CATALOG_SERVER_NAME,
-          {{"database_id", {kINT}}, {"database_name", {kTEXT}}, {"owner_id", {kINT}}});
-    }
-
-    if (!getMetadataForTable(PERMISSIONS_SYS_TABLE_NAME, false)) {
-      createSystemTable(
-          PERMISSIONS_SYS_TABLE_NAME,
-          CATALOG_SERVER_NAME,
-          {{"role_name", {kTEXT}},
-           {"is_user_role", {kBOOLEAN}},
-           {"database_id", {kINT}},
-           {"object_name", {kTEXT}},
-           {"object_id", {kINT}},
-           {"object_owner_id", {kINT}},
-           {"object_permission_type", {kTEXT}},
-           {"object_permissions", {kARRAY, 0, 0, false, kENCODING_DICT, 0, kTEXT}}});
-    }
-
-    if (!getMetadataForTable(ROLES_SYS_TABLE_NAME, false)) {
-      createSystemTable(
-          ROLES_SYS_TABLE_NAME, CATALOG_SERVER_NAME, {{"role_name", {kTEXT}}});
-    }
-
-    // TODO: Add the following tables after resolving the issue with data wrappers using
-    // unlocked methods
-
-    //    if (!getMetadataForTable(TABLES_SYS_TABLE_NAME, false)) {
-    //      createSystemTable(TABLES_SYS_TABLE_NAME,
-    //                        CATALOG_SERVER_NAME,
-    //                        {{"database_id", {kINT}},
-    //                         {"table_id", {kINT}},
-    //                         {"table_name", {kTEXT}},
-    //                         {"owner_id", {kINT}},
-    //                         {"column_count", {kINT}},
-    //                         {"is_view", {kBOOLEAN}},
-    //                         {"view_sql", {kTEXT}},
-    //                         {"max_fragment_size", {kINT}},
-    //                         {"max_chunk_size", {kBIGINT}},
-    //                         {"fragment_page_size", {kINT}},
-    //                         {"max_rows", {kBIGINT}},
-    //                         {"max_rollback_epochs", {kINT}},
-    //                         {"shard_count", {kINT}}});
-    //    }
-    //
-    //    if (!getMetadataForTable(DASHBOARDS_SYS_TABLE_NAME, false)) {
-    //      createSystemTable(DASHBOARDS_SYS_TABLE_NAME,
-    //                        CATALOG_SERVER_NAME,
-    //                        {{"database_id", {kINT}},
-    //                         {"dashboard_id", {kINT}},
-    //                         {"dashboard_name", {kTEXT}},
-    //                         {"owner_id", {kINT}},
-    //                         {"last_updated_at", {kTIMESTAMP}}});
-    //    }
-    //
-    //    if (!getMetadataForTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME, false)) {
-    //      createSystemTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
-    //                        CATALOG_SERVER_NAME,
-    //                        {{"role_name", {kTEXT}}, {"user_name", {kTEXT}}});
-    //    }
-  }
-}
-
-void Catalog::createSystemTableServer(const std::string& server_name,
-                                      const std::string& data_wrapper_type) {
-  auto server =
-      std::make_unique<foreign_storage::ForeignServer>(server_name,
-                                                       data_wrapper_type,
-                                                       foreign_storage::OptionsMap{},
-                                                       OMNISCI_ROOT_USER_ID);
-  server->validate();
-  createForeignServer(std::move(server), true);
-}
-
-void Catalog::createSystemTable(
-    const std::string& table_name,
-    const std::string& server_name,
-    const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name) {
-  foreign_storage::ForeignTable foreign_table;
-  foreign_table.tableName = table_name;
-  foreign_table.nColumns = column_type_by_name.size();
-  foreign_table.isView = false;
-  foreign_table.is_system_table = true;
-  foreign_table.fragmenter = nullptr;
-  foreign_table.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-  foreign_table.maxFragRows = DEFAULT_FRAGMENT_ROWS;
-  foreign_table.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
-  foreign_table.fragPageSize = DEFAULT_PAGE_SIZE;
-  foreign_table.maxRows = DEFAULT_MAX_ROWS;
-  foreign_table.userId = OMNISCI_ROOT_USER_ID;
-  foreign_table.storageType = StorageType::FOREIGN_TABLE;
-  foreign_table.hasDeletedCol = false;
-  foreign_table.keyMetainfo = "[]";
-  foreign_table.fragments = "";
-  foreign_table.partitions = "";
-  foreign_table.foreign_server = getForeignServer(server_name);
-  CHECK(foreign_table.foreign_server);
-
-  list<ColumnDescriptor> columns;
-  for (const auto& [column_name, column_type] : column_type_by_name) {
-    columns.emplace_back();
-    auto& cd = columns.back();
-    cd.columnName = column_name;
-    cd.columnType.set_type(column_type.get_type());
-    cd.columnType.set_subtype(column_type.get_subtype());
-    cd.columnType.set_notnull(false);
-    if (cd.columnType.is_string() || cd.columnType.is_string_array()) {
-      cd.columnType.set_compression(kENCODING_DICT);
-      cd.columnType.set_comp_param(32);
-    }
-    if (cd.columnType.is_array()) {
-      cd.columnType.set_size(-1);
-    } else {
-      cd.columnType.set_fixed_size();
-    }
-    cd.isSystemCol = false;
-    cd.isVirtualCol = false;
-  }
-  createTable(foreign_table, columns, {}, true);
-}
 }  // namespace Catalog_Namespace

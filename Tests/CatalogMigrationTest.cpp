@@ -34,7 +34,6 @@
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
-extern bool g_enable_system_tables;
 
 namespace BF = boost::filesystem;
 using SC = Catalog_Namespace::SysCatalog;
@@ -363,59 +362,6 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
                               "omnisci_local_parquet",
                               foreign_storage::DataWrapperType::PARQUET,
                               OMNISCI_ROOT_USER_ID);
-}
-
-class SystemTableMigrationTest : public SysCatalogTest {
- protected:
-  void SetUp() override {
-    dropInformationSchemaDb();
-    deleteInformationSchemaMigration();
-  }
-
-  void TearDown() override {
-    dropInformationSchemaDb();
-    deleteInformationSchemaMigration();
-    g_enable_system_tables = false;
-    g_enable_fsi = false;
-  }
-
-  void dropInformationSchemaDb() {
-    auto& system_catalog = SC::instance();
-    Catalog_Namespace::DBMetadata db_metadata;
-    if (system_catalog.getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
-      system_catalog.dropDatabase(db_metadata);
-    }
-  }
-
-  void deleteInformationSchemaMigration() {
-    if (tableExists("mapd_version_history")) {
-      syscat_conn_.query_with_text_param(
-          "DELETE FROM mapd_version_history WHERE migration_history = ?",
-          INFORMATION_SCHEMA_MIGRATION);
-    }
-  }
-
-  bool isInformationSchemaMigrationRecorded() {
-    return hasResult("SELECT * FROM mapd_version_history WHERE migration_history = '" +
-                     INFORMATION_SCHEMA_MIGRATION + "';");
-  }
-};
-
-TEST_F(SystemTableMigrationTest, SystemTablesEnabled) {
-  g_enable_system_tables = true;
-  g_enable_fsi = true;
-  reinitializeSystemCatalog();
-  ASSERT_TRUE(isInformationSchemaMigrationRecorded());
-}
-
-TEST_F(SystemTableMigrationTest, PreExistingInformationSchemaDatabase) {
-  g_enable_system_tables = false;
-  SC::instance().createDatabase("information_schema", OMNISCI_ROOT_USER_ID);
-
-  g_enable_system_tables = true;
-  g_enable_fsi = true;
-  reinitializeSystemCatalog();
-  ASSERT_FALSE(isInformationSchemaMigrationRecorded());
 }
 
 int main(int argc, char** argv) {

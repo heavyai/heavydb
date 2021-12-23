@@ -116,8 +116,6 @@ extern bool g_enable_parquet_import_fsi;
 extern bool g_allow_s3_server_privileges;
 #endif
 
-extern bool g_enable_system_tables;
-
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
 
@@ -6211,18 +6209,9 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       return;
     }
 
-    if (g_enable_system_tables && is_info_schema_db(cat.name())) {
-      // Prevent any other query from running while accessing system tables.
-      // TODO: Remove this logic after use of unlocked methods in system table data
-      // wrappers is resolved.
-      executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
-    } else {
-      executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
-          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-              legacylockmgr::ExecutorOuterLock, true));
-    }
+    executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
 
     std::string query_ra = query_str;
     if (use_calcite) {
@@ -6547,22 +6536,6 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     };
     process_calcite_request();
 
-    for (const auto& table_name : result.resolved_accessed_objects.tables_selected_from) {
-      auto td = cat->getMetadataForTable(table_name[0], false);
-      CHECK(td);
-      if (td->is_system_table) {
-        if (g_enable_system_tables) {
-          // Reset system tables fragmenters in order to force chunk metadata fetch on
-          // next query
-          cat->removeFragmenterForTable(td->tableId);
-        } else {
-          throw std::runtime_error(
-              "Query cannot be executed because use of system tables is currently "
-              "disabled.");
-        }
-      }
-    }
-
     lockmgr::LockedTableDescriptors locks;
     if (acquire_locks) {
       std::set<std::vector<std::string>> write_only_tables;
@@ -6617,17 +6590,10 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
                       cat->getDatabaseId(), (*locks.back())())));
         } else {
           auto lock_td = (*locks.back())();
-          if (lock_td->is_system_table) {
-            locks.emplace_back(
-                std::make_unique<lockmgr::TableDataLockContainer<lockmgr::WriteLock>>(
-                    lockmgr::TableDataLockContainer<lockmgr::WriteLock>::acquire(
-                        cat->getDatabaseId(), lock_td)));
-          } else {
-            locks.emplace_back(
-                std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
-                    lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
-                        cat->getDatabaseId(), lock_td)));
-          }
+          locks.emplace_back(
+              std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
+                  lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
+                      cat->getDatabaseId(), lock_td)));
         }
       }
     }

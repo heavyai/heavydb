@@ -56,7 +56,6 @@ size_t g_estimator_failure_max_groupby_size{256000000};
 
 extern bool g_enable_bump_allocator;
 extern size_t g_default_max_groups_buffer_entry_guess;
-extern bool g_enable_system_tables;
 
 namespace {
 

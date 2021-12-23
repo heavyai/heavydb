@@ -37,7 +37,6 @@ using NullableTargetValue = boost::variant<TargetValue, void*>;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
-extern bool g_enable_system_tables;
 
 /**
  * Helper class for asserting equality between a result set represented as a boost variant

@@ -729,14 +729,6 @@ class Catalog final {
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 
-  void conditionallyInitializeSystemTables();
-  void createSystemTableServer(const std::string& server_name,
-                               const std::string& data_wrapper_type);
-  void createSystemTable(
-      const std::string& table_name,
-      const std::string& server_name,
-      const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name);
-
   static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
 
  public:

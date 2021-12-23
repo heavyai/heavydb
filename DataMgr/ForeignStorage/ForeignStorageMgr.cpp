@@ -232,33 +232,6 @@ void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   }
 }
 
-void ForeignStorageMgr::clear_system_table_cache(const ColumnRefSet& input_cols,
-                                                 const CompilationOptions& co) {
-  std::unordered_map<int32_t, std::unordered_set<int32_t>> table_ids_by_db_id;
-  for (const auto& col : input_cols) {
-    table_ids_by_db_id[col.db_id].insert(col.table_id);
-  }
-
-  // Go through all input tables and clear caches for system ones.
-  for (auto& pr : table_ids_by_db_id) {
-    auto db_id = pr.first;
-    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
-    for (auto table_id : pr.second) {
-      auto table = catalog->getMetadataForTable(table_id, false);
-      CHECK(table);
-      if (table->is_system_table) {
-        // Queries involving system tables must be executed on CPU.
-        if (co.device_type != ExecutorDeviceType::CPU) {
-          throw QueryMustRunOnCpu();
-        }
-
-        catalog->getDataMgr().deleteChunksWithPrefix(ChunkKey{db_id, table_id},
-                                                     Data_Namespace::CPU_LEVEL);
-      }
-    }
-  }
-}
-
 void ForeignStorageMgr::set_parallelism_hints(const ColumnRefSet& input_cols) {
   std::map<ChunkKey, std::set<ParallelismHint>> parallelism_hints_per_table;
   for (const auto& col : input_cols) {
@@ -269,20 +242,18 @@ void ForeignStorageMgr::set_parallelism_hints(const ColumnRefSet& input_cols) {
 
     auto table = catalog->getMetadataForTable(table_id, false);
     CHECK(table && table->storageType == StorageType::FOREIGN_TABLE);
-    if (!table->is_system_table) {
-      const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
-      auto foreign_table = catalog->getForeignTable(table_id);
-      for (const auto& fragment :
-           foreign_table->fragmenter->getFragmentsForQuery().fragments) {
-        Chunk_NS::Chunk chunk{col_desc->makeInfo(catalog->getDatabaseId())};
-        ChunkKey chunk_key = {
-            catalog->getDatabaseId(), table_id, col_id, fragment.fragmentId};
-        // do not include chunk hints that are in CPU memory
-        if (!chunk.isChunkOnDevice(
-                &catalog->getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
-          parallelism_hints_per_table[{catalog->getDatabaseId(), table_id}].insert(
-              ParallelismHint{col_id, fragment.fragmentId});
-        }
+    const auto col_desc = catalog->getMetadataForColumn(table_id, col_id);
+    auto foreign_table = catalog->getForeignTable(table_id);
+    for (const auto& fragment :
+         foreign_table->fragmenter->getFragmentsForQuery().fragments) {
+      Chunk_NS::Chunk chunk{col_desc->makeInfo(catalog->getDatabaseId())};
+      ChunkKey chunk_key = {
+          catalog->getDatabaseId(), table_id, col_id, fragment.fragmentId};
+      // do not include chunk hints that are in CPU memory
+      if (!chunk.isChunkOnDevice(
+              &catalog->getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
+        parallelism_hints_per_table[{catalog->getDatabaseId(), table_id}].insert(
+            ParallelismHint{col_id, fragment.fragmentId});
       }
     }
   }
@@ -332,9 +303,6 @@ void ForeignStorageMgr::prepareTablesForExecution(const ColumnRefSet& input_cols
                                                   const CompilationOptions& co,
                                                   const ExecutionOptions& eo,
                                                   ExecutionPhase phase) {
-  if (phase == ExecutionPhase::PrepareQuery) {
-    clear_system_table_cache(input_cols, co);
-  }
   set_parallelism_hints(input_cols);
   prepare_string_dictionaries(input_cols);
 }
