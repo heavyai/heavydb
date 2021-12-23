@@ -2932,8 +2932,9 @@ class ExportTest : public ImportTestGDAL {
   std::vector<std::string> readFileWithOGRInfo(const std::string& file,
                                                const std::string& layer_name) {
     std::string temp_file = BASE_PATH "/mapd_export/" + std::to_string(getpid()) + ".tmp";
-    std::string ogrinfo_cmd = "ogrinfo " + file + " " + layer_name;
-    boost::process::system(ogrinfo_cmd, boost::process::std_out > temp_file);
+    auto ogrinfo = boost::process::search_path("ogrinfo");
+    boost::process::system(
+        ogrinfo, file, layer_name, boost::process::std_out > temp_file);
     auto lines =
         readTextFile(temp_file, false, {"DBF_DATE_LAST_UPDATE", "INFO: Open of"});
     boost::filesystem::remove(temp_file);
