@@ -675,6 +675,18 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                   "WHERE ST_Intersects(mpoly, ST_GeomFromText('MULTIPOLYGON(((0 4.5, 7 "
                   "0.5, 10 10)))'));",
                   dt)));
+    // Pip running on double coords (point literal blocking switch to compressed coords)
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(gpoly4326, ST_GeomFromText('POINT(0.1 0.1)', 4326));)",
+            dt)));
+    // Pip running on compressed coords (centroid is dynamically compressed)
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(gpoly4326, ST_SetSRID(ST_Centroid(gpoly4326),4326));)",
+            dt)));
 
     // disjoint
     ASSERT_EQ(static_cast<int64_t>(0),
