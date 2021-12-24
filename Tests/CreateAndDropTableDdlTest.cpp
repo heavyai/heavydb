@@ -1106,8 +1106,7 @@ TEST_P(CreateTableTest, WithFragmentSizeOption) {
 
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
                          CreateTableTest,
-                         testing::Values(ddl_utils::TableType::TABLE,
-                                         ddl_utils::TableType::FOREIGN_TABLE),
+                         testing::Values(ddl_utils::TableType::TABLE),
                          [](const auto& param_info) {
                            return ddl_utils::table_type_enum_to_string(param_info.param);
                          });
@@ -1136,8 +1135,7 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
 INSTANTIATE_TEST_SUITE_P(
     CreateTableTest,
     NegativePrecisionOrDimensionTest,
-    testing::Combine(testing::Values(ddl_utils::TableType::TABLE,
-                                     ddl_utils::TableType::FOREIGN_TABLE),
+    testing::Combine(testing::Values(ddl_utils::TableType::TABLE),
                      testing::Values("CHAR", "VARCHAR", "DECIMAL", "NUMERIC")),
     [](const auto& param_info) {
       return ddl_utils::table_type_enum_to_string(std::get<0>(param_info.param)) + "_" +
@@ -1165,286 +1163,15 @@ TEST_P(PrecisionAndScaleTest, ScaleNotLessThanPrecision) {
                           "DECIMAL and NUMERIC must have precision larger than scale.");
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    CreateTableTest,
-    PrecisionAndScaleTest,
-    testing::Combine(testing::Values(ddl_utils::TableType::TABLE,
-                                     ddl_utils::TableType::FOREIGN_TABLE),
-                     testing::Values("DECIMAL", "NUMERIC")),
-    [](const auto& param_info) {
-      return ddl_utils::table_type_enum_to_string(std::get<0>(param_info.param)) + "_" +
-             std::get<1>(param_info.param);
-    });
-
-class CreateForeignTableTest : public CreateAndDropTableDdlTest {
- protected:
-  void SetUp() override {
-    CreateAndDropTableDdlTest::SetUp();
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    dropTestUser();
-  }
-
-  void TearDown() override {
-    g_enable_fsi = true;
-    g_enable_s3_fsi = false;
-    loginAdmin();
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    sql("DROP SERVER IF EXISTS test_server;");
-    dropTestUser();
-    CreateAndDropTableDdlTest::TearDown();
-  }
-
-  void assertOptionEquals(const foreign_storage::ForeignTable* table,
-                          const std::string& key,
-                          const std::string& value) {
-    if (const auto& opt_it = table->options.find(key); opt_it != table->options.end()) {
-      ASSERT_EQ(opt_it->second, value);
-    } else {
-      FAIL() << "Expected value for option " << key;
-    }
-  }
-
-  const foreign_storage::ForeignTable* getForeignTable(
-      const std::string& filename) const {
-    auto table = getCatalog().getMetadataForTable(filename, false);
-    CHECK(table);
-    auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
-    return foreign_table;
-  }
-
-  std::unique_ptr<const foreign_storage::ForeignTable> getForeignTableFromStorage(
-      const std::string& filename) const {
-    return getCatalog().getForeignTableFromStorage(getForeignTable(filename)->tableId);
-  }
-
-  // Asserts option is as expected for in-memory table then again in catalog storage.
-  void assertOptionEquals(const std::string& key, const std::string& value) {
-    assertOptionEquals(getForeignTable("test_foreign_table"), key, value);
-    assertOptionEquals(
-        getForeignTableFromStorage("test_foreign_table").get(), key, value);
-  }
-};
-
-TEST_F(CreateForeignTableTest, NonExistentServer) {
-  std::string query{
-      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) SERVER "
-      "non_existent_server;"};
-  queryAndAssertException(
-      query,
-      "Foreign Table with name \"test_foreign_table\" can not be created. "
-      "Associated foreign server with name \"non_existent_server\" does not exist.");
-}
-
-TEST_F(CreateForeignTableTest, DefaultCsvFileServerName) {
-  sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '" +
-      getTestFilePath() + "');");
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
-}
-
-TEST_F(CreateForeignTableTest, DefaultParquetFileServerName) {
-  sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_parquet WITH (file_path = '" +
-      getTestFilePath() + "');");
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
-}
-
-TEST_F(CreateForeignTableTest, InvalidTableOption) {
-  std::string query{
-      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (invalid_option = 'value');"};
-  queryAndAssertException(query, "Invalid foreign table option \"INVALID_OPTION\".");
-}
-
-TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
-  std::string query{
-      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (delimiter = ',,', file_path = '" +
-      getTestFilePath() + "');"};
-  queryAndAssertException(query,
-                          "Invalid value specified for option \"DELIMITER\". "
-                          "Expected a single character, \"\\n\" or  \"\\t\".");
-}
-
-TEST_F(CreateForeignTableTest, InvalidTableOptionBooleanValue) {
-  std::string query{
-      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (header = 'value', file_path = '" +
-      getTestFilePath() + "');"};
-  queryAndAssertException(
-      query,
-      "Invalid boolean value specified for \"HEADER\" foreign table option. "
-      "Value must be either 'true' or 'false'.");
-}
-
-TEST_F(CreateForeignTableTest, FsiDisabled) {
-  g_enable_fsi = false;
-  std::string query = getCreateTableQuery(
-      ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)");
-  // Exception differs depending on which parser is enabled
-  EXPECT_ANY_THROW(sql(query));
-}
-
-TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
-  queryAndAssertException(
-      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv;",
-      "No file_path found for Foreign Table \"test_foreign_table\". "
-      "Table must have either set a \"FILE_PATH\" "
-      "option, or its parent server must have set a \"BASE_PATH\" option.");
-}
-
-TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingParquet) {
-  queryAndAssertException(
-      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_parquet;",
-      "No file_path found for Foreign Table \"test_foreign_table\". "
-      "Table must have either set a \"FILE_PATH\" "
-      "option, or its parent server must have set a \"BASE_PATH\" option.");
-}
-
-TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathMissing) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
-      "'LOCAL_FILE', base_path = '" +
-      bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
-  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server;");
-  sql("SELECT * FROM test_foreign_table;");
-}
-
-TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathEmpty) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
-      "'LOCAL_FILE', base_path = '" +
-      bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
-  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = '');");
-  sql("SELECT * FROM test_foreign_table;");
-}
-
-TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
-      "'LOCAL_FILE');");
-  queryAndAssertException(
-      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server;",
-      "No file_path found for Foreign Table \"test_foreign_table\". "
-      "Table must have either set a \"FILE_PATH\" "
-      "option, or its parent server must have set a \"BASE_PATH\" option.");
-}
-
-TEST_F(CreateForeignTableTest, UnsupportedOption) {
-  queryAndAssertException(
-      "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '" +
-          getTestFilePath() + "', shard_count = 4);",
-      "Invalid foreign table option \"SHARD_COUNT\".");
-}
-
-TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathRelative) {
-  sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '../../Tests/FsiDataFiles/0.csv');");
-  sql("SELECT * FROM test_foreign_table;");
-}
-
-TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
-  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
-                      "SERVER omnisci_local_csv WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
-                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
-  queryAndAssertException(
-      query,
-      "The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
-      "servers with \"STORAGE_TYPE\" option value of \"AWS_S3\".");
-}
-
-TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
-  createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  queryAndAssertException(
-      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
-      "Current user does not have USAGE privilege on foreign server: "
-      "test_server");
-}
-
-TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
-  createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT USAGE ON SERVER test_server TO test_user;");
-  login("test_user", "test_pass");
-  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = '" +
-      getTestFilePath() + "');");
-  sql("SELECT * FROM test_foreign_table;");
-}
-
-TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
-  createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = '" +
-      getTestFilePath() + "');");
-  sql("SELECT * FROM test_foreign_table;");
-}
-
-TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
-  createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
-  sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = '" +
-      getTestFilePath() + "');");
-  sql("SELECT * FROM test_foreign_table;");
-}
-
-TEST_F(CreateForeignTableTest, RevokedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
-  createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT USAGE ON SERVER test_server TO test_user;");
-  sql("REVOKE USAGE ON SERVER test_server FROM test_user;");
-  login("test_user", "test_pass");
-  queryAndAssertException(
-      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
-      "Current user does not have USAGE privilege on foreign server: "
-      "test_server");
-}
-
-TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-      "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
-  createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
-  sql("REVOKE SERVER USAGE ON DATABASE omnisci FROM test_user;");
-  login("test_user", "test_pass");
-  queryAndAssertException(
-      "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
-      "SERVER test_server WITH (file_path = '../../Tests/FsiDataFiles/0.csv');",
-      "Current user does not have USAGE privilege on foreign server: "
-      "test_server");
-}
-
-TEST_F(CreateForeignTableTest, TableDirectoryIsNotCreated) {
-  sql(getCreateTableQuery(ddl_utils::TableType::FOREIGN_TABLE,
-                          "test_foreign_table",
-                          "(t TEXT, i INTEGER[])"));
-  sql("SELECT * FROM test_foreign_table;");
-  ASSERT_FALSE(boost::filesystem::exists(getTableDirPath()));
-}
+INSTANTIATE_TEST_SUITE_P(CreateTableTest,
+                         PrecisionAndScaleTest,
+                         testing::Combine(testing::Values(ddl_utils::TableType::TABLE),
+                                          testing::Values("DECIMAL", "NUMERIC")),
+                         [](const auto& param_info) {
+                           return ddl_utils::table_type_enum_to_string(
+                                      std::get<0>(param_info.param)) +
+                                  "_" + std::get<1>(param_info.param);
+                         });
 
 class CreateTableInThrift : public DBHandlerTestFixture {
  protected:
@@ -1603,8 +1330,7 @@ TEST_P(CreateTableTest, RealAlias) {
 
 INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
                          DropTableTest,
-                         testing::Values(ddl_utils::TableType::TABLE,
-                                         ddl_utils::TableType::FOREIGN_TABLE),
+                         testing::Values(ddl_utils::TableType::TABLE),
                          [](const auto& param_info) {
                            if (param_info.param == ddl_utils::TableType::TABLE) {
                              return "Table";
@@ -1622,8 +1348,6 @@ TEST_F(DropTableTypeMismatchTest, Table_DropCommandForOtherTableTypes) {
 
   queryAndAssertException("DROP VIEW test_table;",
                           "test_table is a table. Use DROP TABLE.");
-  queryAndAssertException("DROP FOREIGN TABLE test_table;",
-                          "test_table is a table. Use DROP TABLE.");
 
   sql("DROP table test_table;");
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_table", false));
@@ -1634,51 +1358,10 @@ TEST_F(DropTableTypeMismatchTest, View_DropCommandForOtherTableTypes) {
   sql("CREATE VIEW test_view AS SELECT * FROM test_table;");
 
   queryAndAssertException("DROP table test_view;", "test_view is a view. Use DROP VIEW.");
-  queryAndAssertException("DROP FOREIGN TABLE test_view;",
-                          "test_view is a view. Use DROP VIEW.");
 
   sql("DROP VIEW test_view;");
   ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_view", false));
   sql("DROP TABLE test_table");
-}
-
-TEST_F(DropTableTypeMismatchTest, ForeignTable_DropCommandForOtherTableTypes) {
-  sql(getCreateTableQuery(
-      ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)"));
-
-  queryAndAssertException(
-      "DROP table test_foreign_table;",
-      "test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
-  queryAndAssertException(
-      "DROP VIEW test_foreign_table;",
-      "test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
-
-  sql("DROP FOREIGN TABLE test_foreign_table;");
-  ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
-}
-
-class DropForeignTableTest : public CreateAndDropTableDdlTest {
- protected:
-  void SetUp() override {
-    CreateAndDropTableDdlTest::SetUp();
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-  }
-
-  void TearDown() override {
-    g_enable_fsi = true;
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    CreateAndDropTableDdlTest::TearDown();
-  }
-};
-
-TEST_F(DropForeignTableTest, FsiDisabled) {
-  sql(getCreateTableQuery(
-      ddl_utils::TableType::FOREIGN_TABLE, "test_foreign_table", "(col1 INTEGER)"));
-
-  g_enable_fsi = false;
-  queryAndAssertException(
-      "DROP table test_foreign_table;",
-      "test_foreign_table is a foreign table. Use DROP FOREIGN TABLE.");
 }
 
 class CreateViewUnsupportedTest : public CreateAndDropTableDdlTest {

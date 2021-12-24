@@ -880,7 +880,6 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
   }
 
   void TearDown() override {
@@ -889,7 +888,6 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS showcreatetabletest1;");
     sql("DROP TABLE IF EXISTS showcreatetabletest2;");
     sql("DROP VIEW IF EXISTS showcreateviewtest;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     DBHandlerTestFixture::TearDown();
   }
 
@@ -1062,96 +1060,6 @@ TEST_F(ShowCreateTableTest, TimestampEncoding) {
                         "TIMESTAMP(0) ENCODING FIXED(32));"}});
 }
 
-TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
-  sql("CREATE FOREIGN TABLE test_foreign_table(b BOOLEAN, bint BIGINT, i INTEGER, sint "
-      "SMALLINT, tint TINYINT, f FLOAT, d DOUBLE, dc DECIMAL(5, 2), t TEXT, tm TIME, "
-      "tstamp "
-      "TIMESTAMP, dt DATE, i_array INTEGER[], t_array TEXT[5], p POINT, l LINESTRING, "
-      "poly POLYGON, mpoly MULTIPOLYGON) "
-      "SERVER omnisci_local_csv "
-      "WITH (file_path = '" +
-      getTestFilePath() + "');");
-  sqlAndCompareResult(
-      "SHOW CREATE TABLE test_foreign_table;",
-      {{"CREATE FOREIGN TABLE test_foreign_table (\n  b BOOLEAN,\n  bint BIGINT,\n  i "
-        "INTEGER,\n  sint SMALLINT,\n  tint TINYINT,\n  f FLOAT,\n  d DOUBLE,\n  dc "
-        "DECIMAL(5,2) ENCODING FIXED(32),\n  t TEXT ENCODING DICT(32),\n  tm TIME,\n  "
-        "tstamp TIMESTAMP(0),\n  dt DATE ENCODING DAYS(32),\n  i_array INTEGER[],\n  "
-        "t_array TEXT[5] ENCODING DICT(32),\n  p GEOMETRY(POINT) ENCODING NONE,\n  l "
-        "GEOMETRY(LINESTRING) ENCODING NONE,\n  poly GEOMETRY(POLYGON) ENCODING "
-        "NONE,\n  mpoly GEOMETRY(MULTIPOLYGON) ENCODING NONE)"
-        "\nSERVER omnisci_local_csv"
-        "\nWITH (FILE_PATH='" +
-        getTestFilePath() +
-        "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
-}
-
-TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
-  sql("CREATE FOREIGN TABLE test_foreign_table(bint BIGINT ENCODING FIXED(16), i "
-      "INTEGER "
-      "ENCODING FIXED(8), sint SMALLINT ENCODING FIXED(8), t1 TEXT ENCODING DICT(16), "
-      "t2 "
-      "TEXT ENCODING NONE, tm TIME ENCODING FIXED(32), tstamp TIMESTAMP(3), tstamp2 "
-      "TIMESTAMP ENCODING FIXED(32), dt DATE ENCODING DAYS(16), p GEOMETRY(POINT, "
-      "4326), "
-      "l GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), "
-      "poly GEOMETRY(POLYGON, 4326) ENCODING NONE, "
-      "mpoly GEOMETRY(MULTIPOLYGON, 900913)) "
-      "SERVER omnisci_local_csv "
-      "WITH (file_path = '" +
-      getTestFilePath() + "');");
-  sqlAndCompareResult(
-      "SHOW CREATE TABLE test_foreign_table;",
-      {{"CREATE FOREIGN TABLE test_foreign_table (\n  bint BIGINT ENCODING "
-        "FIXED(16),\n  "
-        "i INTEGER ENCODING FIXED(8),\n  sint SMALLINT ENCODING FIXED(8),\n  t1 TEXT "
-        "ENCODING DICT(16),\n  t2 TEXT ENCODING NONE,\n  tm TIME ENCODING FIXED(32),\n "
-        " "
-        "tstamp TIMESTAMP(3),\n  tstamp2 TIMESTAMP(0) ENCODING FIXED(32),\n  dt DATE "
-        "ENCODING DAYS(16),\n  p GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n  l "
-        "GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n  poly GEOMETRY(POLYGON, "
-        "4326) ENCODING NONE,\n  mpoly GEOMETRY(MULTIPOLYGON, 900913) ENCODING NONE)"
-        "\nSERVER omnisci_local_csv"
-        "\nWITH (FILE_PATH='" +
-        getTestFilePath() +
-        "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
-}
-
-TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
-  std::time_t timestamp = std::time(0) + (60 * 60);
-  std::tm* gmt_time = std::gmtime(&timestamp);
-  constexpr int buffer_size = 256;
-  char buffer[buffer_size];
-  std::strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", gmt_time);
-  std::string start_date_time = buffer;
-
-  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) "
-      "SERVER omnisci_local_csv "
-      "WITH (file_path = '" +
-      getTestFilePath() +
-      "', fragment_size = 50, refresh_update_type = 'append', refresh_timing_type = "
-      "'scheduled', refresh_start_date_time = '" +
-      start_date_time +
-      "', refresh_interval= '5H', array_delimiter = '_', array_marker = '[]', "
-      "buffer_size = '100', delimiter = '|', escape = '\\', header = 'false', "
-      "line_delimiter = '.', lonlat = 'false', nulls = 'NIL', "
-      "quote = '`', quoted = 'false');");
-  sqlAndCompareResult("SHOW CREATE TABLE test_foreign_table;",
-                      {{"CREATE FOREIGN TABLE test_foreign_table (\n  i INTEGER)"
-                        "\nSERVER omnisci_local_csv"
-                        "\nWITH (ARRAY_DELIMITER='_', ARRAY_MARKER='[]', "
-                        "BUFFER_SIZE='100', DELIMITER='|', ESCAPE='\\', "
-                        "FILE_PATH='" +
-                        getTestFilePath() +
-                        "', FRAGMENT_SIZE='50', HEADER='false', LINE_DELIMITER='.', "
-                        "LONLAT='false', NULLS='NIL', QUOTE='`', QUOTED='false', "
-                        "REFRESH_INTERVAL='5H', "
-                        "REFRESH_START_DATE_TIME='" +
-                        start_date_time +
-                        "', REFRESH_TIMING_TYPE='SCHEDULED', "
-                        "REFRESH_UPDATE_TYPE='APPEND', FRAGMENT_SIZE=50);"}});
-}
-
 TEST_F(ShowCreateTableTest, NotCaseSensitive) {
   sql("CREATE TABLE showcreatetabletest(c1 int);");
 
@@ -1212,9 +1120,6 @@ class ShowDiskCacheUsageTest : public ShowTest {
   static inline constexpr int64_t chunk_size{DEFAULT_PAGE_SIZE + METADATA_PAGE_SIZE};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
   static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
-  static inline std::string foreign_table1{"foreign_table1"};
-  static inline std::string foreign_table2{"foreign_table2"};
-  static inline std::string foreign_table3{"foreign_table3"};
   static inline std::string table1{"table1"};
 
   static void SetUpTestSuite() {
@@ -1238,26 +1143,12 @@ class ShowDiskCacheUsageTest : public ShowTest {
     }
     DBHandlerTestFixture::SetUp();
     login("admin", "HyperInteractive", "test_db");
-    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table1 + ";");
-    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table2 + ";");
-    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table3 + ";");
     sql("DROP TABLE IF EXISTS " + table1 + ";");
   }
 
   void TearDown() override {
-    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table1 + ";");
-    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table2 + ";");
-    sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table3 + ";");
     sql("DROP TABLE IF EXISTS " + table1 + ";");
     DBHandlerTestFixture::TearDown();
-  }
-
-  void sqlCreateBasicForeignTable(std::string& table_name) {
-    sql("CREATE FOREIGN TABLE " + table_name +
-        " (i INTEGER) SERVER omnisci_local_parquet WITH "
-        "(file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.parquet").string() +
-        "');");
   }
 
   uint64_t getWrapperSizeForTable(const std::string& table_name) {
@@ -1283,120 +1174,8 @@ class ShowDiskCacheUsageTest : public ShowTest {
   }
 };
 
-TEST_F(ShowDiskCacheUsageTest, SingleTable) {
-  sqlCreateBasicForeignTable(foreign_table1);
-
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
-}
-
-TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
-  sqlCreateBasicForeignTable(foreign_table1);
-
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, i(getMinSizeForTable(foreign_table1))}});
-}
-
-TEST_F(ShowDiskCacheUsageTest, MultipleTables) {
-  sqlCreateBasicForeignTable(foreign_table1);
-  sqlCreateBasicForeignTable(foreign_table2);
-  sqlCreateBasicForeignTable(foreign_table3);
-
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sql("SELECT * FROM " + foreign_table2 + ";");
-
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, i(getMinSizeForTable(foreign_table1))},
-                       {foreign_table2, i(getMinSizeForTable(foreign_table2))},
-                       {foreign_table3, empty_mgr_size}});
-}
-
 TEST_F(ShowDiskCacheUsageTest, NoTables) {
   sqlAndCompareResult("SHOW DISK CACHE USAGE;", {});
-}
-
-TEST_F(ShowDiskCacheUsageTest, NoTablesFiltered) {
-  queryAndAssertException("SHOW DISK CACHE USAGE foreign_table;",
-                          "Can not show disk cache usage for table: "
-                          "foreign_table. Table does not exist.");
-}
-
-TEST_F(ShowDiskCacheUsageTest, MultipleTablesFiltered) {
-  sqlCreateBasicForeignTable(foreign_table1);
-  sqlCreateBasicForeignTable(foreign_table2);
-  sqlCreateBasicForeignTable(foreign_table3);
-
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sql("SELECT * FROM " + foreign_table2 + ";");
-
-  sqlAndCompareResult(
-      "SHOW DISK CACHE USAGE " + foreign_table1 + ", " + foreign_table3 + ";",
-      {{foreign_table1, i(getMinSizeForTable(foreign_table1))},
-       {foreign_table3, empty_mgr_size}});
-}
-
-TEST_F(ShowDiskCacheUsageTest, SingleTableDropped) {
-  sqlCreateBasicForeignTable(foreign_table1);
-
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sql("DROP FOREIGN TABLE " + foreign_table1 + ";");
-
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {});
-}
-
-TEST_F(ShowDiskCacheUsageTest, SingleTableEvicted) {
-  sqlCreateBasicForeignTable(foreign_table1);
-
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sql("REFRESH FOREIGN TABLES " + foreign_table1 + " WITH (evict=true);");
-
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
-}
-
-TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
-  sqlCreateBasicForeignTable(foreign_table1);
-
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sql("REFRESH FOREIGN TABLES " + foreign_table1 + ";");
-
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, i(getMinSizeForTable(foreign_table1))}});
-}
-
-TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
-  sqlCreateBasicForeignTable(foreign_table1);
-
-  sql("SELECT COUNT(*) FROM " + foreign_table1 + ";");
-
-  sqlAndCompareResult(
-      "SHOW DISK CACHE USAGE;",
-      {{foreign_table1, i(METADATA_PAGE_SIZE + getWrapperSizeForTable(foreign_table1))}});
-}
-
-TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
-  sqlCreateBasicForeignTable(foreign_table1);
-  sql("CREATE TABLE " + table1 + " (s TEXT);");
-
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sql("SELECT * FROM " + table1 + ";");
-
-  sqlAndCompareResult(
-      "SHOW DISK CACHE USAGE;",
-      {{foreign_table1, i(getMinSizeForTable(foreign_table1))}, {table1, i(0)}});
-}
-
-TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
-  sql("CREATE FOREIGN TABLE " + foreign_table1 +
-      " (t TEXT, i INTEGER[]) SERVER omnisci_local_parquet WITH "
-      "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.parquet")
-          .string() +
-      "');");
-  sql("SELECT * FROM " + foreign_table1 + ";");
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1,
-                        i(getMinSizeForTable(foreign_table1) +
-                          (2 * (METADATA_PAGE_SIZE + DEFAULT_PAGE_SIZE)))}});
 }
 
 class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
@@ -1421,41 +1200,29 @@ class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
 };
 
 TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableEmptyUninitialized) {
-  sqlCreateBasicForeignTable(foreign_table1);
   sql("CREATE TABLE " + table1 + " (s TEXT);");
 
-  sql("SELECT * FROM " + foreign_table1 + ";");
-
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, i(getMinSizeForTable(foreign_table1))},
-                       {table1, empty_mgr_size}});
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{table1, empty_mgr_size}});
 }
 
 // If a table is initialized, but empty (it has a fileMgr, but no content), it will have
 // created an epoch file, so it returns the size of that file only.  This is different
 // from the case where no manager is found which returns 0.
 TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableEmptyInitialized) {
-  sqlCreateBasicForeignTable(foreign_table1);
   sql("CREATE TABLE " + table1 + " (s TEXT);");
 
-  sql("SELECT * FROM " + foreign_table1 + ";");
   sql("SELECT * FROM " + table1 + ";");
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, i(getMinSizeForTable(foreign_table1))},
-                       {table1, empty_mgr_size}});
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{table1, empty_mgr_size}});
 }
 
 TEST_F(ShowDiskCacheUsageForNormalTableTest, NormalTableMinimum) {
-  sqlCreateBasicForeignTable(foreign_table1);
   sql("CREATE TABLE " + table1 + " (s TEXT);");
 
-  sql("SELECT * FROM " + foreign_table1 + ";");
   sql("INSERT INTO " + table1 + " VALUES('1');");
 
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
-                      {{foreign_table1, i(getMinSizeForTable(foreign_table1))},
-                       {table1, i(chunk_size * 2 + getWrapperSizeForTable(table1))}});
+                      {{table1, i(chunk_size * 2 + getWrapperSizeForTable(table1))}});
 }
 
 class ShowTableDetailsTest : public ShowTest,
@@ -1502,7 +1269,6 @@ class ShowTableDetailsTest : public ShowTest,
     sql("DROP TABLE IF EXISTS test_table_2;");
     sql("DROP TABLE IF EXISTS test_table_3;");
     sql("DROP TABLE IF EXISTS test_table_4;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     sql("DROP TABLE IF EXISTS test_temp_table;");
     sql("DROP TABLE IF EXISTS test_arrow_table;");
     sql("DROP VIEW IF EXISTS test_view;");
@@ -1946,13 +1712,6 @@ TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
   sql("create view test_view as select * from test_table_1;");
 
-  if (!isDistributedMode()) {
-    sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
-        "WITH "
-        "(file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
-  }
-
   TQueryResult result;
   sql(result, "show table details;");
   assertExpectedHeaders(result);
@@ -1976,21 +1735,6 @@ TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
                          result);
   }
   // clang-format on
-}
-
-TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Foreign tables are currently not supported in distributed mode";
-  }
-
-  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
-      "WITH "
-      "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
-
-  queryAndAssertException("show table details test_foreign_table;",
-                          "SHOW TABLE DETAILS is not supported for foreign "
-                          "tables. Table name: test_foreign_table.");
 }
 
 TEST_F(ShowTableDetailsTest, TemporaryTableSpecified) {

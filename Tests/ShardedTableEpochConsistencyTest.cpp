@@ -839,9 +839,6 @@ class EpochValidationTest : public EpochConsistencyTest {
     sql("DROP TABLE IF EXISTS test_temp_table;");
     sql("DROP TABLE IF EXISTS test_arrow_table;");
     sql("DROP VIEW IF EXISTS test_view;");
-    if (!isDistributedMode()) {
-      sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    }
   }
 
   std::string getValidateStatement() {
@@ -949,11 +946,6 @@ TEST_F(EpochValidationTest, DifferentTableTypes) {
   sql("create dataframe test_arrow_table (a int) from 'CSV:" +
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
   sql("create view test_view as select * from test_table;");
-  if (!isDistributedMode()) {
-    sql("create foreign table test_foreign_table(a int) server omnisci_local_csv "
-        "with (file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
-  }
   sqlAndCompareResult(getValidateStatement(), {{getSuccessfulValidationResult()}});
 }
 

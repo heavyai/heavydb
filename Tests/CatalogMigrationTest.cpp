@@ -289,63 +289,6 @@ TEST_F(FsiSchemaTest, FsiTablesAreNotDroppedWhenFsiIsDisabled) {
   assertFsiTablesExist();
 }
 
-class ForeignTablesTest : public DBHandlerTestFixture {
- protected:
-  static void SetUpTestSuite() {
-    g_enable_fsi = true;
-    DBHandlerTestFixture::SetUpTestSuite();
-  }
-
-  static void TearDownTestSuite() {
-    DBHandlerTestFixture::TearDownTestSuite();
-    g_enable_fsi = false;
-  }
-
-  void SetUp() override {
-    g_enable_fsi = true;
-    DBHandlerTestFixture::SetUp();
-    dropTestTables();
-  }
-
-  void TearDown() override {
-    dropTestTables();
-    DBHandlerTestFixture::TearDown();
-  }
-
- private:
-  void dropTestTables() {
-    g_enable_fsi = true;
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    sql("DROP TABLE IF EXISTS test_table;");
-    sql("DROP VIEW IF EXISTS test_view;");
-  }
-};
-
-TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
-  g_enable_fsi = true;
-  resetCatalog();
-  loginAdmin();
-
-  const auto file_path = BF::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
-  sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
-      "WITH (file_path = '" +
-      file_path + "');");
-  sql("CREATE TABLE test_table (c1 int);");
-  sql("CREATE VIEW test_view AS SELECT * FROM test_table;");
-
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_table", false));
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_view", false));
-
-  g_enable_fsi = false;
-  resetCatalog();
-  loginAdmin();
-
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_table", false));
-  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_view", false));
-}
-
 class DefaultForeignServersTest : public FsiSchemaTest {};
 
 TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {

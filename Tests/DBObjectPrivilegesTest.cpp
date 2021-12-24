@@ -257,33 +257,6 @@ class DashboardObject : public ::testing::Test {
   void TearDown() override { drop_dashboards(); }
 };
 
-struct ServerObject : public DBHandlerTestFixture {
-  Users user_;
-  Roles role_;
-
- protected:
-  void SetUp() override {
-    if (g_aggregator) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      return;
-    }
-    g_enable_fsi = true;
-    DBHandlerTestFixture::SetUp();
-    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
-  }
-
-  void TearDown() override {
-    if (g_aggregator) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      return;
-    }
-    sql("DROP SERVER IF EXISTS test_server;");
-    DBHandlerTestFixture::TearDown();
-    g_enable_fsi = false;
-  }
-};
-
 TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
   if (g_aggregator) {
     LOG(ERROR) << "Test not supported in distributed mode.";
@@ -1436,185 +1409,6 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   int recs5 = static_cast<int>(perms_list.size());
   ASSERT_EQ(recs1, recs5);
   ASSERT_EQ(recs5, 0);
-}
-
-TEST_F(ServerObject, AccessDefaultsTest) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
-  Catalog_Namespace::Catalog& cat = getCatalog();
-  AccessPrivileges server_priv;
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::DROP_SERVER));
-  privObjects.clear();
-  DBObject server_object("test_server", DBObjectType::ServerDBObjectType);
-  server_object.loadKey(cat);
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.push_back(server_object);
-
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
-}
-
-TEST_F(ServerObject, AccessAfterGrantsRevokes) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
-  Catalog_Namespace::Catalog& cat = getCatalog();
-  ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
-  ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
-  AccessPrivileges server_priv;
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::DROP_SERVER));
-  DBObject server_object("test_server", DBObjectType::ServerDBObjectType);
-  server_object.loadKey(cat);
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Sudens", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", server_object, cat));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
-
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Sudens", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("OldLady", server_object, cat));
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
-}
-
-TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
-  Catalog_Namespace::Catalog& cat = getCatalog();
-  ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
-  ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
-  AccessPrivileges server_priv;
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALL_SERVER));
-  DBObject server_object("test_server", DBObjectType::ServerDBObjectType);
-  server_object.loadKey(cat);
-
-  // Effectively give all users ALL_SERVER privileges
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Sudens", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", server_object, cat));
-
-  // All users should now have ALL_SERVER privileges, check this is true
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
-
-  // Check that all users have a subset of ALL_SERVER privileges, in this case
-  // check that is true for CREATE_SERVER
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::CREATE_SERVER));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
-
-  // Revoke CREATE_SERVER from all users and check that they don't have it
-  // anymore (expect super-users)
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Sudens", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("OldLady", server_object, cat));
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
-
-  // All users should still have DROP_SERVER privileges, check that this is true
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::DROP_SERVER));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
-
-  // All users should still have ALTER_SERVER privileges, check that this is true
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALTER_SERVER));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
-
-  // All users should still have SERVER_USAGE privileges, check that this is true
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::SERVER_USAGE));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
-
-  // Revoke ALL_SERVER privileges
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALL_SERVER));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Sudens", server_object, cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("OldLady", server_object, cat));
-
-  // Check that after the revoke of ALL_SERVER privileges users no longer
-  // have the DROP_SERVER privilege (except super-users)
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::DROP_SERVER));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
-
-  // users no longer have the ALTER_SERVER privileges, check that this is true
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::ALTER_SERVER));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
-
-  // users no longer have the SERVER_USAGE privileges, check that this is true
-  server_priv.reset();
-  ASSERT_NO_THROW(server_priv.add(AccessPrivileges::SERVER_USAGE));
-  ASSERT_NO_THROW(server_object.setPrivileges(server_priv));
-  privObjects.clear();
-  privObjects.push_back(server_object);
-  EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
-  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
-  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 }
 
 void create_tables(std::string prefix, int max) {
@@ -3094,31 +2888,16 @@ class TablePermissionsTest : public DBHandlerTestFixture {
     sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   }
 
-  void createTestForeignTable() {
-    sql("DROP FOREIGN TABLE IF EXISTS test_table;");
-    std::string query{
-        "CREATE FOREIGN TABLE test_table (i BIGINT) SERVER omnisci_local_csv WITH "
-        "(file_path = '" +
-        getDataFilesPath() + "1.csv');"};
-    sql(query);
-    is_foreign_table_ = true;
-  }
-
   void createTestTable() {
     sql("DROP TABLE IF EXISTS test_table;");
     std::string query{"CREATE TABLE test_table (i BIGINT);"};
     sql(query);
     sql("INSERT INTO test_table VALUES (1);");
-    is_foreign_table_ = false;
   }
 
   void tearDownTable() {
     loginAdmin();
-    if (is_foreign_table_) {
-      sql("DROP FOREIGN TABLE IF EXISTS test_table;");
-    } else {
-      sql("DROP TABLE IF EXISTS test_table;");
-    }
+    sql("DROP TABLE IF EXISTS test_table;");
   }
 
   static void dropTestUser() {
@@ -3131,8 +2910,6 @@ class TablePermissionsTest : public DBHandlerTestFixture {
   }
 
  private:
-  bool is_foreign_table_;
-
   static std::string getDataFilesPath() {
     return boost::filesystem::canonical(g_test_binary_file_path +
                                         "/../../Tests/FsiDataFiles")
@@ -3153,9 +2930,6 @@ class ForeignTableAndTablePermissionsTest
       return;
     }
     switch (GetParam()) {
-      case ddl_utils::TableType::FOREIGN_TABLE:
-        createTestForeignTable();
-        break;
       case ddl_utils::TableType::TABLE:
         createTestTable();
         break;
@@ -3164,35 +2938,6 @@ class ForeignTableAndTablePermissionsTest
     }
   }
 };
-
-class ForeignTablePermissionsTest : public TablePermissionsTest {
- protected:
-  void SetUp() override {
-    TablePermissionsTest::SetUp();
-    if (g_aggregator) {
-      LOG(INFO) << "Test not supported in distributed mode.";
-      GTEST_SKIP();
-    }
-  }
-};
-
-INSTANTIATE_TEST_SUITE_P(ForeignTableAndTablePermissionsTest,
-                         ForeignTableAndTablePermissionsTest,
-                         ::testing::Values(ddl_utils::TableType::FOREIGN_TABLE,
-                                           ddl_utils::TableType::TABLE));
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDropPrivilege) {
-  std::string privilege{"DROP"};
-  std::string query{"DROP FOREIGN TABLE test_table;"};
-  std::string no_privilege_exception{
-      "Foreign table \"test_table\" will not be dropped. User has no DROP "
-      "TABLE privileges."};
-  createTestForeignTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilege(query, privilege);
-}
 
 TEST_F(TablePermissionsTest, TableGrantRevokeDropPrivilege) {
   std::string privilege{"DROP"};
@@ -3225,23 +2970,6 @@ TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeDeletePrivilege) {
-  std::string privilege{"DELETE"};
-  std::string query{"DELETE FROM test_table WHERE i = 1;"};
-  std::string no_privilege_exception{
-      "Violation of access privileges: user test_user has no proper "
-      "privileges for "
-      "object test_table"};
-  std::string query_exception{
-      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
-      "supported for foreign tables."};
-  createTestForeignTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
-}
-
 TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
   std::string privilege{"DELETE"};
   std::string query{"DELETE FROM test_table WHERE i = 1;"};
@@ -3256,20 +2984,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeInsertPrivilege) {
-  std::string privilege{"INSERT"};
-  std::string query{"INSERT INTO test_table VALUES (2);"};
-  std::string no_privilege_exception{"User has no insert privileges on test_table."};
-  std::string query_exception{
-      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
-      "supported for foreign tables."};
-  createTestForeignTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
-}
-
 TEST_F(TablePermissionsTest, TableGrantRevokeInsertPrivilege) {
   std::string privilege{"INSERT"};
   std::string query{"INSERT INTO test_table VALUES (2);"};
@@ -3279,22 +2993,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeInsertPrivilege) {
   grantThenRevokePrivilegeToTestUser(privilege);
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   queryAsTestUserWithPrivilege(query, privilege);
-}
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeTruncatePrivilege) {
-  std::string privilege{"TRUNCATE"};
-  std::string query{"TRUNCATE TABLE test_table;"};
-  std::string no_privilege_exception{
-      "Table test_table will not be truncated. User test_user has no proper "
-      "privileges."};
-  std::string query_exception{
-      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
-      "supported for foreign tables."};
-  createTestForeignTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
 }
 
 TEST_F(TablePermissionsTest, TableGrantRevokeTruncatePrivilege) {
@@ -3308,23 +3006,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeTruncatePrivilege) {
   grantThenRevokePrivilegeToTestUser(privilege);
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   queryAsTestUserWithPrivilege(query, privilege);
-}
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeUpdatePrivilege) {
-  std::string privilege{"UPDATE"};
-  std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
-  std::string no_privilege_exception{
-      "Violation of access privileges: user test_user has no proper "
-      "privileges for "
-      "object test_table"};
-  std::string query_exception{
-      "DELETE, INSERT, TRUNCATE, OR UPDATE commands are not "
-      "supported for foreign tables."};
-  createTestForeignTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilegeAndAssertException(query, privilege, query_exception);
 }
 
 TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
@@ -3367,20 +3048,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeAlterTablePrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(ForeignTablePermissionsTest, TableGrantRevokeAlterForeignTablePrivilege) {
-  std::string privilege{"ALTER"};
-  std::string query{
-      "ALTER FOREIGN TABLE test_table SET (refresh_update_type = 'append');"};
-  std::string no_privilege_exception{
-      "Current user does not have the privilege to alter foreign table: "
-      "test_table"};
-  createTestForeignTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilege(query, privilege);
-}
-
 TEST_F(TablePermissionsTest, TableRenameTablePrivilege) {
   std::string privilege{"ALTER"};
   std::string query{"RENAME TABLE test_table TO renamed_test_table;"};
@@ -3389,16 +3056,6 @@ TEST_F(TablePermissionsTest, TableRenameTablePrivilege) {
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   queryAsTestUserWithPrivilege(query, privilege);
-}
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableAllPrivileges) {
-  createTestForeignTable();
-  sql("GRANT ALL ON TABLE test_table TO test_user;");
-  login("test_user", "test_pass");
-  runQuery("SHOW CREATE TABLE test_table;");
-  runQuery("SELECT * FROM test_table;");
-  runQuery("ALTER FOREIGN TABLE test_table SET (refresh_update_type = 'append');");
-  runQuery("DROP FOREIGN TABLE test_table;");
 }
 
 TEST_F(TablePermissionsTest, TableAllPrivileges) {
@@ -3418,336 +3075,6 @@ TEST_F(TablePermissionsTest, TableAllPrivileges) {
   }
   runQuery("ALTER TABLE test_table RENAME COLUMN i TO j;");
   runQuery("DROP TABLE test_table;");
-}
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege) {
-  login("test_user", "test_pass");
-  executeLambdaAndAssertException([this] { createTestForeignTable(); },
-                                  "Foreign table \"test_table\" will not be "
-                                  "created. User has no CREATE TABLE privileges.");
-
-  switchToAdmin();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
-  login("test_user", "test_pass");
-  executeLambdaAndAssertException([this] { createTestForeignTable(); },
-                                  "Foreign table \"test_table\" will not be "
-                                  "created. User has no CREATE TABLE privileges.");
-
-  switchToAdmin();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  createTestForeignTable();
-
-  // clean up permissions
-  switchToAdmin();
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
-}
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshOwner) {
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  createTestForeignTable();
-  runQuery("REFRESH FOREIGN TABLES test_table;");
-  // clean up permissions
-  switchToAdmin();
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
-}
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshSuperUser) {
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  createTestForeignTable();
-  switchToAdmin();
-  runQuery("REFRESH FOREIGN TABLES test_table;");
-  // clean up permissions
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
-}
-
-TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshNonOwner) {
-  createTestForeignTable();
-  sql("GRANT ALL ON TABLE test_table TO test_user;");
-  login("test_user", "test_pass");
-  runQueryAndAssertException(
-      "REFRESH FOREIGN TABLES test_table;",
-      "REFRESH FOREIGN TABLES failed on table \"test_table\". It can only be "
-      "executed by super user or owner of the object.");
-}
-
-class ServerPrivApiTest : public DBHandlerTestFixture {
- protected:
-  static void SetUpTestSuite() {
-    createDBHandler();
-    switchToAdmin();
-    createTestUser("test_user");
-    createTestUser("test_user_2");
-  }
-
-  static void TearDownTestSuite() {
-    dropTestUser("test_user");
-    dropTestUser("test_user_2");
-  }
-
-  void SetUp() override {
-    if (g_aggregator) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      GTEST_SKIP();
-      return;
-    }
-    g_enable_fsi = true;
-    DBHandlerTestFixture::SetUp();
-    loginAdmin();
-    dropServer();
-    createTestServer();
-  }
-
-  void TearDown() override {
-    g_enable_fsi = true;
-    loginAdmin();
-    dropServer();
-    revokeTestUserServerPrivileges("test_user");
-    revokeTestUserServerPrivileges("test_user_2");
-  }
-  static void createTestUser(std::string name) {
-    sql("CREATE USER  " + name + " (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO  " + name + ";");
-  }
-
-  static void dropTestUser(std::string name) {
-    try {
-      sql("DROP USER " + name + ";");
-    } catch (const std::exception& e) {
-      // Swallow and log exceptions that may occur, since there is no "IF EXISTS" option.
-      LOG(WARNING) << e.what();
-    }
-  }
-
-  void revokeTestUserServerPrivileges(std::string name) {
-    sql("REVOKE ALL ON DATABASE omnisci FROM " + name + ";");
-    sql("GRANT ACCESS ON DATABASE omnisci TO " + name + ";");
-  }
-  void createTestServer() {
-    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
-        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
-  }
-
-  void dropServer() { sql("DROP SERVER IF EXISTS test_server;"); }
-
-  void assertExpectedDBObj(std::vector<TDBObject>& db_objs,
-                           std::string name,
-                           TDBObjectType::type obj_type,
-                           std::vector<bool> privs,
-                           std::string grantee_name,
-                           TDBObjectType::type priv_type) {
-    bool obj_found = false;
-    for (const auto& db_obj : db_objs) {
-      if ((db_obj.objectName == name) && (db_obj.objectType == obj_type) &&
-          (db_obj.privs == privs) && (db_obj.grantee == grantee_name) &&
-          (db_obj.privilegeObjectType == priv_type)) {
-        obj_found = true;
-        break;
-      };
-    }
-    ASSERT_TRUE(obj_found);
-  }
-
-  void assertDBAccessObj(std::vector<TDBObject>& db_objs) {
-    assertExpectedDBObj(db_objs,
-                        "omnisci",
-                        TDBObjectType::DatabaseDBObjectType,
-                        {0, 0, 0, 1},
-                        "test_user",
-                        TDBObjectType::DatabaseDBObjectType);
-  }
-  void assertSuperAccessObj(std::vector<TDBObject>& db_objs) {
-    assertExpectedDBObj(db_objs,
-                        "super",
-                        TDBObjectType::AbstractDBObjectType,
-                        {1, 1, 1, 1},
-                        "admin",
-                        TDBObjectType::ServerDBObjectType);
-  }
-};
-
-TEST_F(ServerPrivApiTest, CreateForGrantee) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2u);
-  assertDBAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "omnisci",
-                      TDBObjectType::DatabaseDBObjectType,
-                      {1, 0, 0, 0},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, DropForGrantee) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2u);
-  assertDBAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "omnisci",
-                      TDBObjectType::DatabaseDBObjectType,
-                      {0, 1, 0, 0},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, AlterForGrantee) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2u);
-  assertDBAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "omnisci",
-                      TDBObjectType::DatabaseDBObjectType,
-                      {0, 0, 1, 0},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, AlterOnServerGrantee) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT ALTER ON SERVER test_server TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2u);
-  assertDBAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "test_server",
-                      TDBObjectType::ServerDBObjectType,
-                      {0, 0, 1, 0},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, UsageForGrantee) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2u);
-  assertDBAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "omnisci",
-                      TDBObjectType::DatabaseDBObjectType,
-                      {0, 0, 0, 1},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, UsageOnServerGrantee) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT USAGE ON SERVER test_server TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2u);
-  assertDBAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "test_server",
-                      TDBObjectType::ServerDBObjectType,
-                      {0, 0, 0, 1},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, GetDBObjNonSuser) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
-  login("test_user", "test_pass");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
-  ASSERT_EQ(priv_objs.size(), 2u);
-  assertDBAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "omnisci",
-                      TDBObjectType::DatabaseDBObjectType,
-                      {1, 0, 0, 0},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, GetDBObjNoAccess) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user_2;");
-  login("test_user", "test_pass");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user_2");
-  // no privs returned
-  ASSERT_EQ(priv_objs.size(), 0u);
-}
-
-TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivs) {
-  sql("GRANT ALTER ON SERVER test_server TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  login("test_user", "test_pass");
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  db_handler->get_db_object_privs(
-      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
-  ASSERT_EQ(priv_objs.size(), 1u);
-  assertExpectedDBObj(priv_objs,
-                      "test_server",
-                      TDBObjectType::ServerDBObjectType,
-                      {0, 0, 1, 0},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, AlterOnServerObjectPrivsSuper) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT ALTER ON SERVER test_server TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_object_privs(
-      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
-  ASSERT_EQ(priv_objs.size(), 2u);
-  // Suser access obj returned when calling as suser
-  assertSuperAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "test_server",
-                      TDBObjectType::ServerDBObjectType,
-                      {0, 0, 1, 0},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivs) {
-  sql("GRANT USAGE ON SERVER test_server TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  login("test_user", "test_pass");
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  db_handler->get_db_object_privs(
-      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
-  ASSERT_EQ(priv_objs.size(), 1u);
-  assertExpectedDBObj(priv_objs,
-                      "test_server",
-                      TDBObjectType::ServerDBObjectType,
-                      {0, 0, 0, 1},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
-}
-
-TEST_F(ServerPrivApiTest, UsageOnServerObjectPrivsSuper) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT USAGE ON SERVER test_server TO test_user;");
-  std::vector<TDBObject> priv_objs;
-  db_handler->get_db_object_privs(
-      priv_objs, session_id, "test_server", TDBObjectType::ServerDBObjectType);
-  ASSERT_EQ(priv_objs.size(), 2u);
-  // Suser access obj returned when calling as suser
-  assertSuperAccessObj(priv_objs);
-  assertExpectedDBObj(priv_objs,
-                      "test_server",
-                      TDBObjectType::ServerDBObjectType,
-                      {0, 0, 0, 1},
-                      "test_user",
-                      TDBObjectType::ServerDBObjectType);
 }
 
 TEST(Temporary, Users) {
@@ -3826,8 +3153,6 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
     sql("DROP TABLE IF EXISTS test_table_2;");
     sql("DROP VIEW IF EXISTS test_view_1;");
     sql("DROP VIEW IF EXISTS test_view_2;");
-    sql("DROP SERVER IF EXISTS test_server_1;");
-    sql("DROP SERVER IF EXISTS test_server_2;");
     sql("DROP DATABASE IF EXISTS test_db;");
   }
 
@@ -3836,10 +3161,6 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
     sql("GRANT ACCESS, CREATE TABLE, CREATE VIEW, CREATE DASHBOARD ON "
         "DATABASE omnisci TO " +
         user_name + ";");
-    if (!isDistributedMode()) {
-      // FSI is currently not supported in distributed mode.
-      sql("GRANT CREATE SERVER ON DATABASE omnisci TO " + user_name + ";");
-    }
     UserMetadata user_metadata{};
     SysCatalog::instance().getMetadataForUser(user_name, user_metadata);
     return user_metadata.userId;
@@ -3859,11 +3180,6 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
     sql("CREATE TABLE test_table_" + name_suffix + " (i INTEGER);");
     sql("CREATE VIEW test_view_" + name_suffix + " AS SELECT * FROM test_table_" +
         name_suffix + ";");
-    if (!isDistributedMode()) {
-      sql("CREATE SERVER test_server_" + name_suffix +
-          " FOREIGN DATA WRAPPER omnisci_csv "
-          "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
-    }
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     db_handler->create_dashboard(
         session_id, "test_dashboard_" + name_suffix, "state", "image", "metadata");
@@ -3903,18 +3219,6 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
       assertObjectRoleDescriptor(
           DBObjectType::DashboardDBObjectType, dashboard->dashboardId, user_id);
     }
-
-    if (!isDistributedMode()) {
-      auto server = catalog.getForeignServer("test_server_" + name_suffix);
-      ASSERT_NE(server, nullptr);
-      ASSERT_EQ(user_id, server->user_id);
-
-      if (!user.isSuper) {
-        ASSERT_TRUE(SysCatalog::instance().verifyDBObjectOwnership(
-            user, DBObject{server->id, ServerDBObjectType}, catalog));
-        assertObjectRoleDescriptor(DBObjectType::ServerDBObjectType, server->id, user_id);
-      }
-    }
   }
 
   void assertObjectRoleDescriptor(DBObjectType object_type,
@@ -3953,16 +3257,6 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
                             AccessPrivileges::ALL_VIEW,
                             DBObjectType::ViewDBObjectType,
                             has_object_permissions);
-
-    if (!isDistributedMode()) {
-      auto server = catalog.getForeignServer("test_server_" + name_suffix);
-      ASSERT_NE(server, nullptr);
-      assertObjectPermissions(user_name,
-                              server->id,
-                              AccessPrivileges::ALL_SERVER,
-                              DBObjectType::ServerDBObjectType,
-                              has_object_permissions);
-    }
 
     UserMetadata user;
     SysCatalog::instance().getMetadataForUser(owner_user_name, user);

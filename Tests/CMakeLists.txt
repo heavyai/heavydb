@@ -13,12 +13,10 @@ add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
-add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
 add_executable(ShowCommandsDdlTest ShowCommandsDdlTest.cpp)
 add_executable(AlterSystemTest AlterSystemTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
-add_executable(ForeignTableDmlTest ForeignTableDmlTest.cpp)
 add_executable(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest.cpp)
 add_executable(FileMgrTest FileMgrTest.cpp)
 add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
@@ -170,12 +168,10 @@ target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
 target_link_libraries(ImportExportTest gtest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CtasUpdateTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DBObjectPrivilegesTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-target_link_libraries(ForeignServerDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ShowCommandsDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(AlterSystemTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-target_link_libraries(ForeignTableDmlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DashboardAndCustomExpressionTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -262,12 +258,10 @@ add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
-add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
 add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
 add_test(AlterSystemTest AlterSystemTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
-add_test(ForeignTableDmlTest ForeignTableDmlTest ${TEST_ARGS})
 add_test(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest ${TEST_ARGS})
 add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
 add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
@@ -360,12 +354,10 @@ set(TEST_PROGRAMS
   StringFunctionsTest
   StringDictionaryTest
   CommandLineTest
-  ForeignServerDdlTest
   ShowCommandsDdlTest
   AlterSystemTest
   CatalogMigrationTest
   CreateAndDropTableDdlTest
-  ForeignTableDmlTest
   DashboardAndCustomExpressionTest
   FileMgrTest
   FilePathWhitelistTest

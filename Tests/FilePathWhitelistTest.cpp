@@ -16,8 +16,8 @@
 
 /**
  * @file FilePathWhitelistTest.cpp
- * @brief Test suite for file path whitelist validation for COPY FROM, COPY TO, and CREATE
- * FOREIGN TABLE use cases
+ * @brief Test suite for file path whitelist validation for COPY FROM and COPY TO use
+ * cases
  */
 #include <fstream>
 
@@ -63,7 +63,6 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
 
   void TearDown() override {
     sql("DROP TABLE IF EXISTS test_table;");
-    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     DBHandlerTestFixture::TearDown();
     ddl_utils::FilePathWhitelist::clear();
     ddl_utils::FilePathBlacklist::clear();
@@ -81,12 +80,6 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
       query = "COPY test_table FROM '" + file_path + "';";
     } else if (GetParam() == "CopyTo") {
       query = "COPY (SELECT * FROM test_table) TO '" + file_path + "';";
-    } else if (GetParam() == "ForeignTable") {
-      query =
-          "CREATE FOREIGN TABLE test_foreign_table (col1 text) "
-          "SERVER omnisci_local_csv "
-          "WITH (file_path = '" +
-          file_path + "');";
     } else {
       UNREACHABLE();
     }
@@ -318,7 +311,6 @@ TEST_P(FilePathWhitelistTest, RootPathWhitelisted) {
   whitelistRootPath();
   std::string file_path = getTestFilePath();
   EXPECT_NO_THROW(sql(getQuery(file_path)));
-  sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
 
   // Validation should fail if path is in the blacklist,
   // even when the root path is set for the whitelist.
@@ -341,7 +333,7 @@ TEST_F(FilePathWhitelistTest, ExportRelativePath) {
 
 INSTANTIATE_TEST_SUITE_P(FilePathWhitelistTest,
                          FilePathWhitelistTest,
-                         testing::Values("CopyFrom", "CopyTo", "ForeignTable"),
+                         testing::Values("CopyFrom", "CopyTo"),
                          [](const auto& param_info) { return param_info.param; });
 
 TEST_F(FilePathWhitelistTest, DetectTypesBlacklist) {

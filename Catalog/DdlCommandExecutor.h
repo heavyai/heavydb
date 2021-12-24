@@ -54,85 +54,6 @@ class DdlCommand {
   bool isDefaultServer(const std::string& server_name);
 };
 
-class CreateForeignServerCommand : public DdlCommand {
- public:
-  CreateForeignServerCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-
-  ExecutionResult execute() override;
-};
-
-class AlterForeignServerCommand : public DdlCommand {
- public:
-  AlterForeignServerCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-
-  ExecutionResult execute() override;
-
- private:
-  void changeForeignServerOwner();
-  void renameForeignServer();
-  void setForeignServerOptions();
-  void setForeignServerDataWrapper();
-  bool hasAlterServerPrivileges();
-};
-
-class DropForeignServerCommand : public DdlCommand {
- public:
-  DropForeignServerCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-
-  ExecutionResult execute() override;
-};
-
-class CreateForeignTableCommand : public DdlCommand {
- public:
-  CreateForeignTableCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-
-  ExecutionResult execute() override;
-
- private:
-  void setTableDetails(const std::string& table_name,
-                       TableDescriptor& td,
-                       const std::list<ColumnDescriptor>& columns);
-  void setColumnDetails(std::list<ColumnDescriptor>& columns);
-};
-
-class DropForeignTableCommand : public DdlCommand {
- public:
-  DropForeignTableCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-  ExecutionResult execute() override;
-};
-
-class AlterForeignTableCommand : public DdlCommand {
- public:
-  AlterForeignTableCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-  ExecutionResult execute() override;
-
- private:
-  void alterOptions(const foreign_storage::ForeignTable* foreign_table);
-  void renameTable(const foreign_storage::ForeignTable* foreign_table);
-  void renameColumn(const foreign_storage::ForeignTable* foreign_table);
-};
-
-class ShowForeignServersCommand : public DdlCommand {
- public:
-  ShowForeignServersCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-
-  ExecutionResult execute() override;
-};
-
 class ShowTablesCommand : public DdlCommand {
  public:
   ShowTablesCommand(const DdlCommandData& ddl_data,
@@ -176,15 +97,6 @@ class ShowDiskCacheUsageCommand : public DdlCommand {
 class ShowUserDetailsCommand : public DdlCommand {
  public:
   ShowUserDetailsCommand(
-      const DdlCommandData& ddl_data,
-      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
-
-  ExecutionResult execute() override;
-};
-
-class RefreshForeignTablesCommand : public DdlCommand {
- public:
-  RefreshForeignTablesCommand(
       const DdlCommandData& ddl_data,
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
