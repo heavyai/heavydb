@@ -642,12 +642,9 @@ DEVICE ALWAYS_INLINE bool point_in_polygon_winding_number(const int8_t* poly,
 
     if constexpr (include_point_on_edge) {
       const T xp = (px - e1x) * (e0y - e1y) - (py - e1y) * (e0x - e1x);
-      if (!tol_zero_template(xp, epsilon)) {
-        return false;
-      }
       const T pt_vec_magnitude = (px - e0x) * (px - e0x) + (py - e0y) * (py - e0y);
       const T edge_vec_magnitude = (e1x - e0x) * (e1x - e0x) + (e1y - e0y) * (e1y - e0y);
-      if (pt_vec_magnitude <= edge_vec_magnitude) {
+      if (tol_zero_template(xp, epsilon) && (pt_vec_magnitude <= edge_vec_magnitude)) {
         DEBUG_STMT(printf("point is on edge: %e && %e <= %e\n",
                           (double)xp,
                           (double)pt_vec_magnitude,
