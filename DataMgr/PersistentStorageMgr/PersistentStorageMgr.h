@@ -19,7 +19,6 @@
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
-#include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 
 using namespace Data_Namespace;
 
@@ -69,7 +68,6 @@ class PersistentStorageMgr : public AbstractBufferMgr {
                                         bool load_dict = true) override;
 
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
-  foreign_storage::ForeignStorageMgr* getForeignStorageMgr() const;
   foreign_storage::ForeignStorageCache* getDiskCache() const;
   inline const File_Namespace::DiskCacheConfig getDiskCacheConfig() const {
     return disk_cache_config_;
@@ -86,7 +84,6 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   int recoverDataWrapperIfCachedAndGetHighestFragId(const ChunkKey& table_key);
 
   std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
-  std::unique_ptr<foreign_storage::ForeignStorageMgr> foreign_storage_mgr_;
   std::unique_ptr<foreign_storage::ForeignStorageCache> disk_cache_;
   File_Namespace::DiskCacheConfig disk_cache_config_;
   std::shared_ptr<ForeignStorageInterface> fsi_;

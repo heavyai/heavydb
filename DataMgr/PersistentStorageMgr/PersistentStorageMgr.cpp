@@ -15,10 +15,8 @@
  */
 
 #include "PersistentStorageMgr.h"
-#include "Catalog/Catalog.h"
 #include "DataMgr/FileMgr/CachingGlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
-#include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 
 PersistentStorageMgr::PersistentStorageMgr(
@@ -41,14 +39,6 @@ PersistentStorageMgr::PersistentStorageMgr(
   } else {
     global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
         0, fsi_, data_dir, num_reader_threads);
-  }
-
-  if (disk_cache_config_.isEnabledForFSI()) {
-    CHECK(disk_cache_);
-    foreign_storage_mgr_ =
-        std::make_unique<foreign_storage::CachingForeignStorageMgr>(disk_cache_.get());
-  } else {
-    foreign_storage_mgr_ = std::make_unique<foreign_storage::ForeignStorageMgr>();
   }
 }
 
@@ -159,17 +149,7 @@ void PersistentStorageMgr::prepareTablesForExecution(const ColumnRefSet& input_c
                                                      const CompilationOptions& co,
                                                      const ExecutionOptions& eo,
                                                      ExecutionPhase phase) {
-  ColumnRefSet gfs_input_cols;
-  ColumnRefSet foreign_input_cols;
-  for (auto& col : input_cols) {
-    if (isForeignStorage({col.db_id, col.table_id})) {
-      foreign_input_cols.insert(col);
-    } else {
-      gfs_input_cols.insert(col);
-    }
-  }
-  getGlobalFileMgr()->prepareTablesForExecution(gfs_input_cols, co, eo, phase);
-  getForeignStorageMgr()->prepareTablesForExecution(foreign_input_cols, co, eo, phase);
+  getGlobalFileMgr()->prepareTablesForExecution(input_cols, co, eo, phase);
 }
 
 const DictDescriptor* PersistentStorageMgr::getDictMetadata(int db_id,
@@ -178,37 +158,9 @@ const DictDescriptor* PersistentStorageMgr::getDictMetadata(int db_id,
   return getGlobalFileMgr()->getDictMetadata(db_id, dict_id, load_dict);
 }
 
-bool PersistentStorageMgr::isForeignStorage(const ChunkKey& chunk_key) const {
-  CHECK(has_table_prefix(chunk_key));
-  auto db_id = chunk_key[CHUNK_KEY_DB_IDX];
-  auto table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
-  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
-
-  // if catalog doesnt exist at this point we must be in an old migration.
-  // Old migration can not, at this point 5.5.1, be using foreign storage
-  // so this hack is to avoid the crash, when migrating old
-  // catalogs that have not been upgraded over time due to issue
-  // [BE-5728]
-  if (!catalog) {
-    return false;
-  }
-
-  auto table = catalog->getMetadataForTableImpl(table_id, false);
-  // TODO: unknown tables get get there through prepareTablesForExecution. Check why.
-  return table && table->storageType == StorageType::FOREIGN_TABLE;
-}
-
 AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(
     const ChunkKey& table_key) const {
-  if (isForeignStorage(table_key)) {
-    return foreign_storage_mgr_.get();
-  } else {
-    return global_file_mgr_.get();
-  }
-}
-
-foreign_storage::ForeignStorageMgr* PersistentStorageMgr::getForeignStorageMgr() const {
-  return foreign_storage_mgr_.get();
+  return global_file_mgr_.get();
 }
 
 foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const {
