@@ -10,8 +10,6 @@ endif()
 
 set(IMPORT_SOURCES
   Importer.cpp
-  ForeignDataImporter.cpp
-  DistributedForeignDataImporter.cpp
   DelimitedParserUtils.cpp)
 
 set(EXPORT_SOURCES

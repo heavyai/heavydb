@@ -47,7 +47,6 @@
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
-#include "ImportExport/DistributedForeignDataImporter.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "OSDependent/omnisci_hostname.h"
