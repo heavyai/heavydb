@@ -1351,8 +1351,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   SQLTypeInfo arg0_ti;
   SQLTypeInfo arg1_ti;
 
-  auto geoargs0 = translateGeoFunctionArg(
-      rex_function->getOperand(swap_args ? 1 : 0), arg0_ti, with_bounds, false, false);
+  // Proactively try to compress the first arg of ST_Intersects to preempt arg swap
+  bool try_to_compress_arg0 = func_resolve(function_name, "ST_Intersects"sv);
+
+  auto geoargs0 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 1 : 0),
+                                          arg0_ti,
+                                          with_bounds,
+                                          false,
+                                          false,
+                                          false,
+                                          false,
+                                          try_to_compress_arg0);
   geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
 
   // If first arg is compressed, try to compress the second one
@@ -1431,15 +1440,23 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   };
   if (function_name == "ST_Contains"sv) {
     if (can_use_compressed_coords(arg0_ti, geoargs0, arg1_ti, geoargs1)) {
-      // use the compressed version of ST_Contains
+      // Switch to compressed implementation of ST_Contains
       function_name = "ST_cContains";
     }
   }
   if (function_name == "ST_Intersects"sv) {
-    if (can_use_compressed_coords(arg0_ti, geoargs0, arg1_ti, geoargs1) ||
-        can_use_compressed_coords(arg1_ti, geoargs1, arg0_ti, geoargs0)) {
-      // use the compressed version of ST_Intersects
+    if (can_use_compressed_coords(arg0_ti, geoargs0, arg1_ti, geoargs1)) {
+      // Switch to compressed implementation of ST_Intersects
       function_name = "ST_cIntersects";
+    } else if (can_use_compressed_coords(arg1_ti, geoargs1, arg0_ti, geoargs0)) {
+      // Switch to compressed implementation of ST_Intersects on swapped args
+      function_name = "ST_cIntersects";
+      geoargs.clear();
+      geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
+      geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
+      auto tmp_ti = arg0_ti;
+      arg0_ti = arg1_ti;
+      arg1_ti = tmp_ti;
     }
   }
 

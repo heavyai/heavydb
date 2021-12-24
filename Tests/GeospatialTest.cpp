@@ -687,6 +687,19 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         v<int64_t>(run_simple_agg(
             R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(gpoly4326, ST_SetSRID(ST_Centroid(gpoly4326),4326));)",
             dt)));
+    // Pip running on compressed coords (arguments are swapped for consistency)
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(gp4326,gpoly4326);)",
+            dt)));
+    // Pip running on compressed coords (centroid arg is proactively dynamically
+    // compressed, additionally arguments are swapped for consistency)
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Intersects(ST_SetSRID(ST_Centroid(gpoly4326),4326),gpoly4326);)",
+            dt)));
 
     // disjoint
     ASSERT_EQ(static_cast<int64_t>(0),
@@ -723,6 +736,13 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM geospatial_test "
             "WHERE ST_Disjoint(mpoly, ST_GeomFromText('LINESTRING(0 4.5, 7 0.5)'));",
+            dt)));
+    // Disjoint runs as negated Intersects, compressed geometries will result in a switch
+    // to pip running on compressed coords (arguments are swapped for consistency)
+    ASSERT_EQ(
+        static_cast<int64_t>(8),
+        v<int64_t>(run_simple_agg(
+            R"(SELECT COUNT(*) FROM geospatial_test WHERE ST_Disjoint(gp4326,gpoly4326);)",
             dt)));
 
     // contains, within
