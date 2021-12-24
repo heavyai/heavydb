@@ -69,11 +69,11 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
     const int user_id,
     const std::string& file_path,
     const import_export::CopyParams& copy_params) {
-// only supported for parquet import path currently
 #ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile);
+  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
+        copy_params.source_type == import_export::SourceType::kDelimitedFile);
 #else
-  UNREACHABLE() << "Unexpected method call for non-Parquet import";
+  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
 #endif
 
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>();
@@ -100,13 +100,12 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     const std::string& file_path,
     const import_export::CopyParams& copy_params,
     const ForeignServer* server) {
-// only supported for parquet import path currently
 #ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile);
+  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
+        copy_params.source_type == import_export::SourceType::kDelimitedFile);
 #else
-  UNREACHABLE() << "Unexpected method call for non-Parquet import";
+  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
 #endif
-
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   auto foreign_table = std::make_unique<ForeignTable>();
 
