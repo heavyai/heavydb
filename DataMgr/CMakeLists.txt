@@ -40,7 +40,6 @@ set(datamgr_source_files
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
-    ForeignStorage/ForeignTableRefresh.cpp
     ForeignStorage/AbstractFileStorageDataWrapper.cpp
     ForeignStorage/ForeignDataWrapperFactory.cpp
     ForeignStorage/InternalCatalogDataWrapper.cpp

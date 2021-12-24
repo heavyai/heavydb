@@ -60,7 +60,6 @@
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/scope.h"
-#include "ThriftHandler/ForeignTableRefreshScheduler.h"
 #if ENABLE_ITT
 #include <ittnotify.h>
 #endif
@@ -401,10 +400,6 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
 
     wait_for_server_threads();
 
-    if (g_enable_fsi) {
-      foreign_storage::ForeignTableRefreshScheduler::stop();
-    }
-
     Catalog_Namespace::SysCatalog::destroy();
 
 #ifdef HAVE_AWS_S3
@@ -478,10 +473,6 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     }
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
-  }
-
-  if (g_enable_fsi) {
-    foreign_storage::ForeignTableRefreshScheduler::start(g_running);
   }
 
   // TCP port setup. We use Thrift both for a TCP socket and for an optional HTTP socket.
