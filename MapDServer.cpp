@@ -308,6 +308,9 @@ void run_warmup_queries(std::shared_ptr<DBHandler> handler,
   }
 }
 
+extern bool g_enable_thrift_logs;
+extern bool g_enable_fsi;
+
 void thrift_stop() {
   if (auto thrift_http_server = g_thrift_http_server; thrift_http_server) {
     thrift_http_server->stop();

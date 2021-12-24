@@ -57,6 +57,7 @@ if(ENABLE_AWS_S3)
 endif()
 
 add_library(DataMgr ${datamgr_source_files})
+add_dependencies(DataMgr Calcite)
 
 target_link_libraries(DataMgr CudaMgr Catalog ArrowStorage ImportExport $<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}> Shared SchemaMgr ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})
 
