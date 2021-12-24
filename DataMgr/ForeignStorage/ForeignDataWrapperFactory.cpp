@@ -45,11 +45,12 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralI
     const int db_id,
     const ForeignTable* foreign_table,
     const UserMapping* user_mapping) {
-  CHECK(
 #ifdef ENABLE_IMPORT_PARQUET
-      data_wrapper_type == DataWrapperType::PARQUET ||
+  CHECK(data_wrapper_type == DataWrapperType::PARQUET ||
+        data_wrapper_type == DataWrapperType::CSV);
+#else
+  CHECK(data_wrapper_type == DataWrapperType::CSV);
 #endif
-      data_wrapper_type == DataWrapperType::CSV);
 
   if (data_wrapper_type == DataWrapperType::CSV) {
     return std::make_unique<CsvDataWrapper>(db_id, foreign_table, user_mapping);
@@ -92,11 +93,12 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
     const int user_id,
     const std::string& file_path,
     const import_export::CopyParams& copy_params) {
-  CHECK(
 #ifdef ENABLE_IMPORT_PARQUET
-      copy_params.source_type == import_export::SourceType::kParquetFile ||
+  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
+        copy_params.source_type == import_export::SourceType::kDelimitedFile);
+#else
+  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
 #endif
-      copy_params.source_type == import_export::SourceType::kDelimitedFile);
 
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>();
 
@@ -126,12 +128,12 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     const std::string& file_path,
     const import_export::CopyParams& copy_params,
     const ForeignServer* server) {
-  CHECK(
 #ifdef ENABLE_IMPORT_PARQUET
-      copy_params.source_type == import_export::SourceType::kParquetFile ||
+  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
+        copy_params.source_type == import_export::SourceType::kDelimitedFile);
+#else
+  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
 #endif
-      copy_params.source_type == import_export::SourceType::kDelimitedFile);
-
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   auto foreign_table = std::make_unique<ForeignTable>();
 

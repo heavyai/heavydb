@@ -49,14 +49,16 @@ GCPTransformer::GCPTransformer(OGRDataSource* datasource, const Mode mode)
   auto const gcp_count = datasource->GetGCPCount();
   auto const* gcp_list = datasource->GetGCPs();
   switch (mode_) {
-    case Mode::kPolynomial:
+    case Mode::kPolynomial: {
       static constexpr int kPolynomialOrder = 2;
       transform_arg_ =
           GDALCreateGCPTransformer(gcp_count, gcp_list, kPolynomialOrder, false);
       break;
-    case Mode::kThinPlateSpline:
+    }
+    case Mode::kThinPlateSpline: {
       transform_arg_ = GDALCreateTPSTransformer(gcp_count, gcp_list, false);
       break;
+    }
   }
   CHECK(transform_arg_);
 }

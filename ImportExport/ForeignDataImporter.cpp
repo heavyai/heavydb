@@ -75,11 +75,12 @@ ImportStatus ForeignDataImporter::importGeneral(
     const Catalog_Namespace::SessionInfo* session_info) {
   auto& catalog = session_info->getCatalog();
 
-  CHECK(
 #ifdef ENABLE_IMPORT_PARQUET
-      copy_params_.source_type == import_export::SourceType::kParquetFile ||
+  CHECK(copy_params_.source_type == import_export::SourceType::kParquetFile ||
+        copy_params_.source_type == import_export::SourceType::kDelimitedFile);
+#else
+  CHECK(copy_params_.source_type == import_export::SourceType::kDelimitedFile);
 #endif
-      copy_params_.source_type == import_export::SourceType::kDelimitedFile);
 
   auto& current_user = session_info->get_currentUser();
   auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(

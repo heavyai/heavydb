@@ -222,13 +222,13 @@ template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::strin
     const std::vector<std::string>* srcData,
     const int start_idx,
     const size_t numAppendElems,
-    const bool replicating = false);
+    const bool replicating);
 
 template std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData<std::string_view>(
     const std::vector<std::string_view>* srcData,
     const int start_idx,
     const size_t numAppendElems,
-    const bool replicating = false);
+    const bool replicating);
 
 template void StringNoneEncoder::update_elem_stats<std::string>(const std::string& elem);
 template void StringNoneEncoder::update_elem_stats<std::string_view>(

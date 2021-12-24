@@ -33,3 +33,7 @@
 #ifdef GetObject
 #undef GetObject
 #endif
+
+#ifdef X509_NAME
+#undef X509_NAME
+#endif
