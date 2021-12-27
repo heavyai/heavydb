@@ -22,7 +22,6 @@
 #include <boost/filesystem.hpp>
 
 #include "ForeignStorageException.h"
-#include "ForeignStorageMgr.h"
 #include "FsiJsonUtils.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
@@ -468,7 +467,7 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
 
   CHECK(!buffers_to_load.empty());
 
-  std::set<ForeignStorageMgr::ParallelismHint> col_frag_hints;
+  std::set<std::pair<int, int>> col_frag_hints;
   for (const auto& [chunk_key, buffer] : buffers_to_load) {
     CHECK_EQ(buffer->size(), static_cast<size_t>(0));
     col_frag_hints.emplace(

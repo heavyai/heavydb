@@ -20,11 +20,9 @@ set(datamgr_source_files
     ForeignStorage/ArrowForeignStorage.cpp
     ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.cpp
     ForeignStorage/CsvDataWrapper.cpp
-    ForeignStorage/CachingForeignStorageMgr.cpp
     ForeignStorage/DummyForeignStorage.cpp
     ForeignStorage/ForeignStorageInterface.cpp
     ForeignStorage/ForeignStorageBuffer.cpp
-    ForeignStorage/ForeignStorageMgr.cpp
     ForeignStorage/ForeignStorageCache.cpp
     ForeignStorage/FsiChunkUtils.cpp
     ForeignStorage/FsiJsonUtils.cpp

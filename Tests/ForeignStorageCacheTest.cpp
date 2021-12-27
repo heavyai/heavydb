@@ -16,7 +16,6 @@
 
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
-#include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 #include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "DataMgrTestHelpers.h"
 #include "TestHelpers.h"
