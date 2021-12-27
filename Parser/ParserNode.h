@@ -29,6 +29,7 @@
 #include <list>
 #include <string>
 
+#include <rapidjson/document.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/process/search_path.hpp>
 

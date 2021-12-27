@@ -1268,10 +1268,6 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
         std::vector<std::string>{std::to_string(owner)});
 
-    if (g_enable_fsi) {
-      dbConn->query(Catalog::getForeignServerSchema());
-      dbConn->query(Catalog::getForeignTableSchema());
-    }
     dbConn->query(Catalog::getCustomExpressionsSchema());
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");
@@ -1309,15 +1305,6 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   // force a migration on the new database
   removeCatalog(name);
   cat = getCatalog(db, false);
-
-  if (g_enable_fsi) {
-    try {
-      cat->createDefaultServersIfNotExists();
-    } catch (...) {
-      boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
-      throw;
-    }
-  }
 }
 
 void SysCatalog::dropDatabase(const DBMetadata& db) {

@@ -199,23 +199,6 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
       loadKey();
       break;
     }
-    case ServerDBObjectType: {
-      objectKey_.dbId = catalog.getCurrentDB().dbId;
-
-      if (!getName().empty()) {
-        auto server = catalog.getForeignServer(getName());
-        if (!server) {
-          throw std::runtime_error("Failure generating DB object key. Server " +
-                                   getName() + " does not exist.");
-        }
-        objectKey_.objectId = server->id;
-        ownerId_ = server->user_id;
-      } else {
-        ownerId_ = catalog.getCurrentDB().dbOwner;
-      }
-
-      break;
-    }
     case ViewDBObjectType:
     case TableDBObjectType: {
       objectKey_.dbId = catalog.getCurrentDB().dbId;

@@ -18,7 +18,6 @@
 
 #include <map>
 #include <string>
-#include "Catalog/ForeignServer.h"
 
 namespace foreign_storage {
 struct UserMappingType {

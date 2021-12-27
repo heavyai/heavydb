@@ -44,8 +44,6 @@
 #include "Catalog/CustomExpression.h"
 #include "Catalog/DashboardDescriptor.h"
 #include "Catalog/DictDescriptor.h"
-#include "Catalog/ForeignServer.h"
-#include "Catalog/ForeignTable.h"
 #include "Catalog/LinkDescriptor.h"
 #include "Catalog/SessionInfo.h"
 #include "Catalog/SysCatalog.h"
@@ -197,12 +195,6 @@ class Catalog final {
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
   const LinkDescriptor* getMetadataForLink(int linkId) const;
 
-  const foreign_storage::ForeignTable* getForeignTableUnlocked(int tableId) const;
-  const foreign_storage::ForeignTable* getForeignTable(
-      const std::string& tableName) const;
-
-  const foreign_storage::ForeignTable* getForeignTable(int table_id) const;
-
   /**
    * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the
    * columns from a particular table specified by table id
@@ -315,131 +307,6 @@ class Catalog final {
                               bool dump_defaults = false) const;
 
   /**
-   * Gets the DDL statement used to create a foreign table schema.
-   *
-   * @param if_not_exists - flag that indicates whether or not to include
-   * the "IF NOT EXISTS" phrase in the DDL statement
-   * @return string containing DDL statement
-   */
-  static const std::string getForeignTableSchema(bool if_not_exists = false);
-
-  /**
-   * Gets the DDL statement used to create a foreign server schema.
-   *
-   * @param if_not_exists - flag that indicates whether or not to include
-   * the "IF NOT EXISTS" phrase in the DDL statement
-   * @return string containing DDL statement
-   */
-  static const std::string getForeignServerSchema(bool if_not_exists = false);
-
-  /**
-   * Creates a new foreign server DB object.
-   *
-   * @param foreign_server - unique pointer to struct containing foreign server details
-   * @param if_not_exists - flag indicating whether or not an attempt to create a new
-   * foreign server should occur if a server with the same name already exists. An
-   * exception is thrown if this flag is set to "false" and an attempt is made to create
-   * a pre-existing foreign server
-   */
-  void createForeignServer(std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
-                           bool if_not_exists);
-
-  /**
-   * Gets a pointer to a struct containing foreign server details.
-   *
-   * @param server_name - Name of foreign server whose details will be fetched
-   * @return pointer to a struct containing foreign server details. nullptr is returned if
-   * no foreign server exists with the given name
-   */
-  const foreign_storage::ForeignServer* getForeignServer(
-      const std::string& server_name) const;
-
-  /**
-   * Gets a pointer to a struct containing foreign server details fetched from storage.
-   * This is mainly used for testing when asserting that expected catalog data is
-   * persisted.
-   *
-   * @param server_name - Name of foreign server whose details will be fetched
-   * @return pointer to a struct containing foreign server details. nullptr is returned if
-   * no foreign server exists with the given name
-   */
-  const std::unique_ptr<const foreign_storage::ForeignServer> getForeignServerFromStorage(
-      const std::string& server_name);
-
-  /**
-   * Gets a pointer to a struct containing foreign table details fetched from storage.
-   * This is mainly used for testing when asserting that expected catalog data is
-   * persisted.
-   *
-   * @param table_name - Name of foreign table whose details will be fetched
-   * @return pointer to a struct containing foreign table details. nullptr is returned if
-   * no foreign table exists with the given name
-   */
-  const std::unique_ptr<const foreign_storage::ForeignTable> getForeignTableFromStorage(
-      int table_id);
-
-  /**
-   * Change the owner of a Foreign Server to a new owner.
-   *
-   * @param server_name - Name of the foreign server whose owner to change
-   * @param new_owner_id - New owner's user id
-   */
-  void changeForeignServerOwner(const std::string& server_name, const int new_owner_id);
-
-  /**
-   * Set the data wrapper of a Foreign Server.
-   *
-   * @param server_name - Name of the foreign server whose data wrapper will be set
-   * @param data_wrapper - Data wrapper to use
-   */
-  void setForeignServerDataWrapper(const std::string& server_name,
-                                   const std::string& data_wrapper);
-  /**
-   * Set the options of a Foreign Server.
-   *
-   * @param server_name - Name of the foreign server whose options will be set
-   * @param options - Options to set
-   */
-  void setForeignServerOptions(const std::string& server_name,
-                               const std::string& options);
-  /**
-   * Rename a Foreign Server.
-   *
-   * @param server_name - Name of the foreign server whose name will be changed
-   * @param name - New name of server
-   */
-  void renameForeignServer(const std::string& server_name, const std::string& name);
-
-  /**
-   * Drops/deletes a foreign server DB object.
-   *
-   * @param server_name - Name of foreign server that will be deleted
-   */
-  void dropForeignServer(const std::string& server_name);
-
-  /**
-   * Performs a query on all foreign servers accessible to user with optional filter,
-   * and returns pointers toresulting server objects
-   *
-   * @param filters - Json Value representing SQL WHERE clause to filter results, eg.:
-   * "WHERE attribute1 = value1 AND attribute2 LIKE value2", or Null Value
-   *  Array of Values with attribute, value, operator, and chain specifier after first
-   * entry
-   * @param user - user to retrieve server names
-   * @param results - results returned as a vector of pointers to
-   * const foreign_storage::ForeignServer
-   */
-  void getForeignServersForUser(
-      const rapidjson::Value* filters,
-      const UserMetadata& user,
-      std::vector<const foreign_storage::ForeignServer*>& results);
-
-  /**
-   * Creates default local file servers (if they don't already exist).
-   */
-  void createDefaultServersIfNotExists();
-
-  /**
    * Validates that a table or view with given name does not already exist.
    * An exception is thrown if a table or view with given name already exists and
    * "if_not_exists" is false.
@@ -450,33 +317,6 @@ class Catalog final {
    * @return true if table or view with name does not exist. Otherwise, return false
    */
   bool validateNonExistentTableOrView(const std::string& name, const bool if_not_exists);
-
-  /**
-   * Gets all the foreign tables that are pending refreshes. The list of tables
-   * includes tables that are configured for scheduled refreshes with next
-   * refresh timestamps that are in the past.
-   *
-   * @return foreign tables pending refreshes
-   */
-  std::vector<const TableDescriptor*> getAllForeignTablesForRefresh() const;
-
-  /**
-   * Updates the last and next (if applicable) refresh times of the foreign table
-   * with the given table id.
-   *
-   * @param table_id - id of table to apply updates to
-   */
-  void updateForeignTableRefreshTimes(const int32_t table_id);
-
-  /**
-   * Set the options of a Foreign Table.
-   *
-   * @param table_name - Name of the foreign table whose options will be set
-   * @param options - Options to set
-   */
-  void setForeignTableOptions(const std::string& table_name,
-                              foreign_storage::OptionsMap& options_map,
-                              bool clear_existing_options = true);
 
   void updateLeaf(const LeafHostInfo& string_dict_host);
 
@@ -582,7 +422,6 @@ class Catalog final {
   void updateDefaultColumnValues();
   void updateFrontendViewsToDashboards();
   void updateCustomExpressionsSchema();
-  void updateFsiSchemas();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
@@ -645,8 +484,6 @@ class Catalog final {
   DashboardDescriptorMap dashboardDescriptorMap_;
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;
-  ForeignServerMap foreignServerMap_;
-  ForeignServerMapById foreignServerMapById_;
   CustomExpressionMapById custom_expr_map_by_id_;
 
   SqliteConnector sqliteConnector_;
@@ -682,16 +519,6 @@ class Catalog final {
   void renameTableDirectories(const std::string& temp_data_dir,
                               const std::vector<std::string>& target_paths,
                               const std::string& name_prefix) const;
-  void buildForeignServerMap();
-  void addForeignTableDetails();
-
-  void setForeignServerProperty(const std::string& server_name,
-                                const std::string& property,
-                                const std::string& value);
-
-  void setForeignTableProperty(const foreign_storage::ForeignTable* table,
-                               const std::string& property,
-                               const std::string& value);
 
   void alterPhysicalTableMetadata(const TableDescriptor* td,
                                   const TableDescriptorUpdateParams& table_update_params);
@@ -704,17 +531,6 @@ class Catalog final {
                                 const GetTablesType get_tables_type) const;
 
   TableDescriptor* getMutableMetadataForTableUnlocked(int tableId);
-
-  /**
-   * Same as createForeignServer() but without acquiring locks. This should only be called
-   * from within a function/code block that already acquires appropriate locks.
-   */
-  void createForeignServerNoLocks(
-      std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
-      bool if_not_exists);
-
-  foreign_storage::ForeignTable* getForeignTableUnlocked(
-      const std::string& tableName) const;
 
   const Catalog* getObjForLock();
   void removeChunksUnlocked(const int table_id) const;

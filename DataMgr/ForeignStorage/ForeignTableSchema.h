@@ -17,6 +17,7 @@
 #pragma once
 
 #include "Catalog/Catalog.h"
+#include "Catalog/ForeignTable.h"
 
 namespace foreign_storage {
 class ForeignTableSchema {

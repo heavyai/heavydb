@@ -648,19 +648,6 @@ void Catalog::updateDictionarySchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::updateFsiSchemas() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query(getForeignServerSchema(true));
-    sqliteConnector_.query(getForeignTableSchema(true));
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
-}
-
 void Catalog::updateCustomExpressionsSchema() {
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -671,21 +658,6 @@ void Catalog::updateCustomExpressionsSchema() {
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-}
-
-const std::string Catalog::getForeignServerSchema(bool if_not_exists) {
-  return "CREATE TABLE " + (if_not_exists ? std::string{"IF NOT EXISTS "} : "") +
-         "omnisci_foreign_servers(id integer primary key, name text unique, " +
-         "data_wrapper_type text, owner_user_id integer, creation_time integer, " +
-         "options text)";
-}
-
-const std::string Catalog::getForeignTableSchema(bool if_not_exists) {
-  return "CREATE TABLE " + (if_not_exists ? std::string{"IF NOT EXISTS "} : "") +
-         "omnisci_foreign_tables(table_id integer unique, server_id integer, " +
-         "options text, last_refresh_time integer, next_refresh_time integer, " +
-         "FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), " +
-         "FOREIGN KEY(server_id) REFERENCES omnisci_foreign_servers(id))";
 }
 
 const std::string Catalog::getCustomExpressionsSchema(bool if_not_exists) {
@@ -919,9 +891,6 @@ void Catalog::CheckAndExecuteMigrations() {
   updateDeletedColumnIndicator();
   updateFrontendViewsToDashboards();
   recordOwnershipOfObjectsInObjectPermissions();
-  if (g_enable_fsi) {
-    updateFsiSchemas();
-  }
   updateCustomExpressionsSchema();
   updateDefaultColumnValues();
 }
@@ -975,7 +944,7 @@ void Catalog::buildMaps() {
   for (size_t r = 0; r < numRows; ++r) {
     TableDescriptor* td;
     const auto& storage_type = sqliteConnector_.getData<string>(r, 17);
-    if (!storage_type.empty() && storage_type != StorageType::FOREIGN_TABLE) {
+    if (!storage_type.empty()) {
       const auto table_id = sqliteConnector_.getData<int>(r, 0);
       const auto& table_name = sqliteConnector_.getData<string>(r, 1);
       LOG(FATAL) << "Unable to read Catalog metadata: storage type is currently not a "
@@ -984,12 +953,7 @@ void Catalog::buildMaps() {
                  << currentDB_.dbName << ").";
     }
 
-    if (storage_type == StorageType::FOREIGN_TABLE) {
-      td = new foreign_storage::ForeignTable();
-    } else {
-      td = new TableDescriptor();
-    }
-
+    td = new TableDescriptor();
     td->storageType = storage_type;
     td->tableId = sqliteConnector_.getData<int>(r, 0);
     td->tableName = sqliteConnector_.getData<string>(r, 1);
@@ -1018,12 +982,6 @@ void Catalog::buildMaps() {
 
     tableDescriptorMap_[to_upper(td->tableName)] = td;
     tableDescriptorMapById_[td->tableId] = td;
-  }
-
-  if (g_enable_fsi) {
-    buildForeignServerMap();
-    createDefaultServersIfNotExists();
-    addForeignTableDetails();
   }
 
   string columnQuery(
@@ -1194,17 +1152,8 @@ void Catalog::addTableToMap(const TableDescriptor* td,
                             const list<ColumnDescriptor>& columns,
                             const list<DictDescriptor>& dicts) {
   cat_write_lock write_lock(this);
-  TableDescriptor* new_td;
-
-  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
-  if (foreign_table) {
-    auto new_foreign_table = new foreign_storage::ForeignTable();
-    *new_foreign_table = *foreign_table;
-    new_td = new_foreign_table;
-  } else {
-    new_td = new TableDescriptor();
-    *new_td = *td;
-  }
+  TableDescriptor* new_td = new TableDescriptor();
+  *new_td = *td;
 
   new_td->mutex_ = std::make_shared<std::mutex>();
   tableDescriptorMap_[to_upper(td->tableName)] = new_td;
@@ -1468,21 +1417,6 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
   LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took "
             << time_ms << "ms";
 }
-
-foreign_storage::ForeignTable* Catalog::getForeignTableUnlocked(
-    const std::string& tableName) const {
-  auto tableDescIt = tableDescriptorMap_.find(to_upper(tableName));
-  if (tableDescIt == tableDescriptorMap_.end()) {  // check to make sure table exists
-    return nullptr;
-  }
-  return dynamic_cast<foreign_storage::ForeignTable*>(tableDescIt->second);
-};
-
-const foreign_storage::ForeignTable* Catalog::getForeignTable(
-    const std::string& tableName) const {
-  cat_read_lock read_lock(this);
-  return getForeignTableUnlocked(tableName);
-};
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
                                                     const bool populateFragmenter) const {
@@ -1755,20 +1689,6 @@ const LinkDescriptor* Catalog::getMetadataForLink(int linkId) const {
     return nullptr;
   }
   return linkDescIt->second;
-}
-
-const foreign_storage::ForeignTable* Catalog::getForeignTableUnlocked(
-    int table_id) const {
-  auto table = getMetadataForTableImpl(table_id, false);
-  CHECK(table);
-  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(table);
-  CHECK(foreign_table);
-  return foreign_table;
-}
-
-const foreign_storage::ForeignTable* Catalog::getForeignTable(int table_id) const {
-  cat_read_lock read_lock(this);
-  return getForeignTableUnlocked(table_id);
 }
 
 void Catalog::getAllColumnMetadataForTableImpl(
@@ -2215,19 +2135,6 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
   }
 }
 
-namespace {
-int64_t get_next_refresh_time(const foreign_storage::ForeignTable& foreign_table) {
-  auto timing_type_entry =
-      foreign_table.options.find(foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
-  CHECK(timing_type_entry != foreign_table.options.end());
-  if (timing_type_entry->second ==
-      foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE) {
-    return foreign_storage::get_next_refresh_time(foreign_table.options);
-  }
-  return foreign_storage::ForeignTable::NULL_REFRESH_TIME;
-}
-}  // namespace
-
 void Catalog::createTable(
     TableDescriptor& td,
     const list<ColumnDescriptor>& cols,
@@ -2239,8 +2146,7 @@ void Catalog::createTable(
   std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
 
-  if (!td.storageType.empty() &&
-      (!g_enable_fsi || td.storageType != StorageType::FOREIGN_TABLE)) {
+  if (!td.storageType.empty()) {
     if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
       throw std::runtime_error("Only temporary tables can be backed by foreign storage.");
     }
@@ -2375,18 +2281,6 @@ void Catalog::createTable(
             "INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
             std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
       }
-      if (td.storageType == StorageType::FOREIGN_TABLE) {
-        auto& foreign_table = dynamic_cast<foreign_storage::ForeignTable&>(td);
-        foreign_table.next_refresh_time = get_next_refresh_time(foreign_table);
-        sqliteConnector_.query_with_text_params(
-            "INSERT INTO omnisci_foreign_tables (table_id, server_id, options, "
-            "last_refresh_time, next_refresh_time) VALUES (?, ?, ?, ?, ?)",
-            std::vector<std::string>{std::to_string(foreign_table.tableId),
-                                     std::to_string(foreign_table.foreign_server->id),
-                                     foreign_table.getOptionsAsJsonString(),
-                                     std::to_string(foreign_table.last_refresh_time),
-                                     std::to_string(foreign_table.next_refresh_time)});
-      }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
       throw;
@@ -2449,7 +2343,7 @@ void Catalog::createTable(
 
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
-    if (!td.storageType.empty() && td.storageType != StorageType::FOREIGN_TABLE) {
+    if (!td.storageType.empty()) {
       dataMgr_->getForeignStorageInterface()->registerTable(this, td, cds);
     }
   } catch (std::exception& e) {
@@ -2459,11 +2353,9 @@ void Catalog::createTable(
   }
   sqliteConnector_.query("END TRANSACTION");
 
-  if (td.storageType != StorageType::FOREIGN_TABLE) {
-    sqlite_lock.unlock();
-    getMetadataForTable(td.tableName,
-                        true);  // cause instantiateFragmenter() to be called
-  }
+  sqlite_lock.unlock();
+  getMetadataForTable(td.tableName,
+                      true);  // cause instantiateFragmenter() to be called
 }
 
 void Catalog::serializeTableJsonUnlocked(const TableDescriptor* td,
@@ -2558,292 +2450,6 @@ void Catalog::dropTableFromJsonUnlocked(const std::string& table_name) const {
   Writer<OStreamWrapper> json_writer(json_wrapper);
   d.Accept(json_writer);
   writer.close();
-}
-
-void Catalog::createForeignServer(
-    std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
-    bool if_not_exists) {
-  cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  createForeignServerNoLocks(std::move(foreign_server), if_not_exists);
-}
-
-void Catalog::createForeignServerNoLocks(
-    std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
-    bool if_not_exists) {
-  sqliteConnector_.query_with_text_params(
-      "SELECT name from omnisci_foreign_servers where name = ?",
-      std::vector<std::string>{foreign_server->name});
-
-  if (sqliteConnector_.getNumRows() == 0) {
-    foreign_server->creation_time = std::time(nullptr);
-    sqliteConnector_.query_with_text_params(
-        "INSERT INTO omnisci_foreign_servers (name, data_wrapper_type, owner_user_id, "
-        "creation_time,  "
-        "options) "
-        "VALUES (?, ?, ?, ?, ?)",
-        std::vector<std::string>{foreign_server->name,
-                                 foreign_server->data_wrapper_type,
-                                 std::to_string(foreign_server->user_id),
-                                 std::to_string(foreign_server->creation_time),
-                                 foreign_server->getOptionsAsJsonString()});
-    sqliteConnector_.query_with_text_params(
-        "SELECT id from omnisci_foreign_servers where name = ?",
-        std::vector<std::string>{foreign_server->name});
-    CHECK_EQ(sqliteConnector_.getNumRows(), size_t(1));
-    foreign_server->id = sqliteConnector_.getData<int32_t>(0, 0);
-    std::shared_ptr<foreign_storage::ForeignServer> foreign_server_shared =
-        std::move(foreign_server);
-    CHECK(foreignServerMap_.find(foreign_server_shared->name) == foreignServerMap_.end())
-        << "Attempting to insert a foreign server into foreign server map that already "
-           "exists.";
-    foreignServerMap_[foreign_server_shared->name] = foreign_server_shared;
-    foreignServerMapById_[foreign_server_shared->id] = foreign_server_shared;
-  } else if (!if_not_exists) {
-    throw std::runtime_error{"A foreign server with name \"" + foreign_server->name +
-                             "\" already exists."};
-  }
-}
-
-const foreign_storage::ForeignServer* Catalog::getForeignServer(
-    const std::string& server_name) const {
-  foreign_storage::ForeignServer* foreign_server = nullptr;
-  cat_read_lock read_lock(this);
-
-  if (foreignServerMap_.find(server_name) != foreignServerMap_.end()) {
-    foreign_server = foreignServerMap_.find(server_name)->second.get();
-  }
-  return foreign_server;
-}
-
-const std::unique_ptr<const foreign_storage::ForeignServer>
-Catalog::getForeignServerFromStorage(const std::string& server_name) {
-  std::unique_ptr<foreign_storage::ForeignServer> foreign_server = nullptr;
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query_with_text_params(
-      "SELECT id, name, data_wrapper_type, options, owner_user_id, creation_time "
-      "FROM omnisci_foreign_servers WHERE name = ?",
-      std::vector<std::string>{server_name});
-  if (sqliteConnector_.getNumRows() > 0) {
-    foreign_server = std::make_unique<foreign_storage::ForeignServer>(
-        sqliteConnector_.getData<int>(0, 0),
-        sqliteConnector_.getData<std::string>(0, 1),
-        sqliteConnector_.getData<std::string>(0, 2),
-        sqliteConnector_.getData<std::string>(0, 3),
-        sqliteConnector_.getData<std::int32_t>(0, 4),
-        sqliteConnector_.getData<std::int32_t>(0, 5));
-  }
-  return foreign_server;
-}
-
-const std::unique_ptr<const foreign_storage::ForeignTable>
-Catalog::getForeignTableFromStorage(int table_id) {
-  std::unique_ptr<foreign_storage::ForeignTable> foreign_table = nullptr;
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query_with_text_params(
-      "SELECT table_id, server_id, options, last_refresh_time, next_refresh_time from "
-      "omnisci_foreign_tables WHERE table_id = ?",
-      std::vector<std::string>{to_string(table_id)});
-  auto num_rows = sqliteConnector_.getNumRows();
-  if (num_rows > 0) {
-    CHECK_EQ(size_t(1), num_rows);
-    foreign_table = std::make_unique<foreign_storage::ForeignTable>(
-        sqliteConnector_.getData<int>(0, 0),
-        foreignServerMapById_[sqliteConnector_.getData<int32_t>(0, 1)].get(),
-        sqliteConnector_.getData<std::string>(0, 2),
-        sqliteConnector_.getData<int>(0, 3),
-        sqliteConnector_.getData<int>(0, 4));
-  }
-  return foreign_table;
-}
-
-void Catalog::changeForeignServerOwner(const std::string& server_name,
-                                       const int new_owner_id) {
-  cat_write_lock write_lock(this);
-  foreign_storage::ForeignServer* foreign_server =
-      foreignServerMap_.find(server_name)->second.get();
-  CHECK(foreign_server);
-  setForeignServerProperty(server_name, "owner_user_id", std::to_string(new_owner_id));
-  // update in-memory server
-  foreign_server->user_id = new_owner_id;
-}
-
-void Catalog::setForeignServerDataWrapper(const std::string& server_name,
-                                          const std::string& data_wrapper) {
-  cat_write_lock write_lock(this);
-  auto data_wrapper_type = to_upper(data_wrapper);
-  // update in-memory server
-  foreign_storage::ForeignServer* foreign_server =
-      foreignServerMap_.find(server_name)->second.get();
-  CHECK(foreign_server);
-  std::string saved_data_wrapper_type = foreign_server->data_wrapper_type;
-  foreign_server->data_wrapper_type = data_wrapper_type;
-  try {
-    foreign_server->validate();
-  } catch (const std::exception& e) {
-    // validation did not succeed:
-    // revert to saved data_wrapper_type & throw exception
-    foreign_server->data_wrapper_type = saved_data_wrapper_type;
-    throw;
-  }
-  setForeignServerProperty(server_name, "data_wrapper_type", data_wrapper_type);
-}
-
-void Catalog::setForeignServerOptions(const std::string& server_name,
-                                      const std::string& options) {
-  cat_write_lock write_lock(this);
-  // update in-memory server
-  foreign_storage::ForeignServer* foreign_server =
-      foreignServerMap_.find(server_name)->second.get();
-  CHECK(foreign_server);
-  auto saved_options = foreign_server->options;
-  foreign_server->populateOptionsMap(options, true);
-  try {
-    foreign_server->validate();
-  } catch (const std::exception& e) {
-    // validation did not succeed:
-    // revert to saved options & throw exception
-    foreign_server->options = saved_options;
-    throw;
-  }
-  setForeignServerProperty(server_name, "options", options);
-}
-
-void Catalog::renameForeignServer(const std::string& server_name,
-                                  const std::string& name) {
-  cat_write_lock write_lock(this);
-  auto foreign_server_it = foreignServerMap_.find(server_name);
-  CHECK(foreign_server_it != foreignServerMap_.end());
-  setForeignServerProperty(server_name, "name", name);
-  auto foreign_server_shared = foreign_server_it->second;
-  foreign_server_shared->name = name;
-  foreignServerMap_[name] = foreign_server_shared;
-  foreignServerMap_.erase(foreign_server_it);
-}
-
-void Catalog::dropForeignServer(const std::string& server_name) {
-  cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-
-  sqliteConnector_.query_with_text_params(
-      "SELECT id from omnisci_foreign_servers where name = ?",
-      std::vector<std::string>{server_name});
-  auto num_rows = sqliteConnector_.getNumRows();
-  if (num_rows > 0) {
-    CHECK_EQ(size_t(1), num_rows);
-    auto server_id = sqliteConnector_.getData<int32_t>(0, 0);
-    sqliteConnector_.query_with_text_param(
-        "SELECT table_id from omnisci_foreign_tables where server_id = ?",
-        std::to_string(server_id));
-    if (sqliteConnector_.getNumRows() > 0) {
-      throw std::runtime_error{"Foreign server \"" + server_name +
-                               "\" is referenced "
-                               "by existing foreign tables and cannot be dropped."};
-    }
-    sqliteConnector_.query("BEGIN TRANSACTION");
-    try {
-      sqliteConnector_.query_with_text_params(
-          "DELETE FROM omnisci_foreign_servers WHERE name = ?",
-          std::vector<std::string>{server_name});
-    } catch (const std::exception& e) {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw;
-    }
-    sqliteConnector_.query("END TRANSACTION");
-    foreignServerMap_.erase(server_name);
-    foreignServerMapById_.erase(server_id);
-  }
-}
-
-void Catalog::getForeignServersForUser(
-    const rapidjson::Value* filters,
-    const UserMetadata& user,
-    std::vector<const foreign_storage::ForeignServer*>& results) {
-  sys_read_lock syscat_read_lock(&SysCatalog::instance());
-  cat_read_lock read_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  // Customer facing and internal SQlite names
-  std::map<std::string, std::string> col_names{{"server_name", "name"},
-                                               {"data_wrapper", "data_wrapper_type"},
-                                               {"created_at", "creation_time"},
-                                               {"options", "options"}};
-
-  // TODO add "owner" when FSI privilege is implemented
-  std::stringstream filter_string;
-  std::vector<std::string> arguments;
-
-  if (filters != nullptr) {
-    // Create SQL WHERE clause for SQLite query
-    int num_filters = 0;
-    filter_string << " WHERE";
-    for (auto& filter_def : filters->GetArray()) {
-      if (num_filters > 0) {
-        filter_string << " " << std::string(filter_def["chain"].GetString());
-        ;
-      }
-
-      if (col_names.find(std::string(filter_def["attribute"].GetString())) ==
-          col_names.end()) {
-        throw std::runtime_error{"Attribute with name \"" +
-                                 std::string(filter_def["attribute"].GetString()) +
-                                 "\" does not exist."};
-      }
-
-      filter_string << " " << col_names[std::string(filter_def["attribute"].GetString())];
-
-      bool equals_operator = false;
-      if (std::strcmp(filter_def["operation"].GetString(), "EQUALS") == 0) {
-        filter_string << " = ? ";
-        equals_operator = true;
-      } else {
-        filter_string << " LIKE ? ";
-      }
-
-      bool timestamp_column =
-          (std::strcmp(filter_def["attribute"].GetString(), "created_at") == 0);
-
-      if (timestamp_column && !equals_operator) {
-        throw std::runtime_error{"LIKE operator is incompatible with TIMESTAMP data"};
-      }
-
-      if (timestamp_column && equals_operator) {
-        arguments.push_back(std::to_string(
-            dateTimeParse<kTIMESTAMP>(filter_def["value"].GetString(), 0)));
-      } else {
-        arguments.push_back(filter_def["value"].GetString());
-      }
-
-      num_filters++;
-    }
-  }
-  // Create select query for the omnisci_foreign_servers table
-  std::string query = std::string("SELECT name from omnisci_foreign_servers ");
-  query += filter_string.str();
-
-  sqliteConnector_.query_with_text_params(query, arguments);
-  auto num_rows = sqliteConnector_.getNumRows();
-
-  if (sqliteConnector_.getNumRows() == 0)
-    return;
-
-  CHECK(sqliteConnector_.getNumCols() == 1);
-  // Return pointers to objects
-  results.reserve(num_rows);
-  for (size_t row = 0; row < num_rows; ++row) {
-    const foreign_storage::ForeignServer* foreign_server =
-        getForeignServer(sqliteConnector_.getData<std::string>(row, 0));
-
-    CHECK(foreign_server != nullptr);
-
-    DBObject dbObject(foreign_server->name, ServerDBObjectType);
-    dbObject.loadKey(*this);
-    std::vector<DBObject> privObjects = {dbObject};
-    if (!SysCatalog::instance().hasAnyPrivileges(user, privObjects)) {
-      // skip server, as there are no privileges to access it
-      continue;
-    }
-    results.push_back(foreign_server);
-  }
 }
 
 // returns the table epoch or -1 if there is something wrong with the shared epoch
@@ -3594,10 +3200,6 @@ void Catalog::executeDropTableSqliteQueries(const TableDescriptor* td) {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
                                            std::to_string(tableId));
   }
-  if (td->storageType == StorageType::FOREIGN_TABLE) {
-    sqliteConnector_.query_with_text_param(
-        "DELETE FROM omnisci_foreign_tables WHERE table_id = ?", std::to_string(tableId));
-  }
 }
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {
@@ -4319,99 +3921,6 @@ std::string Catalog::generatePhysicalTableName(const std::string& logicalTableNa
   return (physicalTableName);
 }
 
-void Catalog::buildForeignServerMap() {
-  sqliteConnector_.query(
-      "SELECT id, name, data_wrapper_type, options, owner_user_id, creation_time FROM "
-      "omnisci_foreign_servers");
-  auto num_rows = sqliteConnector_.getNumRows();
-  for (size_t row = 0; row < num_rows; row++) {
-    auto foreign_server = std::make_shared<foreign_storage::ForeignServer>(
-        sqliteConnector_.getData<int>(row, 0),
-        sqliteConnector_.getData<std::string>(row, 1),
-        sqliteConnector_.getData<std::string>(row, 2),
-        sqliteConnector_.getData<std::string>(row, 3),
-        sqliteConnector_.getData<std::int32_t>(row, 4),
-        sqliteConnector_.getData<std::int32_t>(row, 5));
-    foreignServerMap_[foreign_server->name] = foreign_server;
-    foreignServerMapById_[foreign_server->id] = foreign_server;
-  }
-}
-
-void Catalog::addForeignTableDetails() {
-  sqliteConnector_.query(
-      "SELECT table_id, server_id, options, last_refresh_time, next_refresh_time from "
-      "omnisci_foreign_tables");
-  auto num_rows = sqliteConnector_.getNumRows();
-  for (size_t r = 0; r < num_rows; r++) {
-    const auto table_id = sqliteConnector_.getData<int32_t>(r, 0);
-    const auto server_id = sqliteConnector_.getData<int32_t>(r, 1);
-    const auto& options = sqliteConnector_.getData<std::string>(r, 2);
-    const auto last_refresh_time = sqliteConnector_.getData<int>(r, 3);
-    const auto next_refresh_time = sqliteConnector_.getData<int>(r, 4);
-
-    CHECK(tableDescriptorMapById_.find(table_id) != tableDescriptorMapById_.end());
-    auto foreign_table =
-        dynamic_cast<foreign_storage::ForeignTable*>(tableDescriptorMapById_[table_id]);
-    CHECK(foreign_table);
-    foreign_table->foreign_server = foreignServerMapById_[server_id].get();
-    CHECK(foreign_table->foreign_server);
-    foreign_table->populateOptionsMap(options);
-    foreign_table->last_refresh_time = last_refresh_time;
-    foreign_table->next_refresh_time = next_refresh_time;
-  }
-}
-
-void Catalog::setForeignServerProperty(const std::string& server_name,
-                                       const std::string& property,
-                                       const std::string& value) {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query_with_text_params(
-      "SELECT id from omnisci_foreign_servers where name = ?",
-      std::vector<std::string>{server_name});
-  auto num_rows = sqliteConnector_.getNumRows();
-  if (num_rows > 0) {
-    CHECK_EQ(size_t(1), num_rows);
-    auto server_id = sqliteConnector_.getData<int32_t>(0, 0);
-    sqliteConnector_.query_with_text_params(
-        "UPDATE omnisci_foreign_servers SET " + property + " = ? WHERE id = ?",
-        std::vector<std::string>{value, std::to_string(server_id)});
-  } else {
-    throw std::runtime_error{"Can not change property \"" + property +
-                             "\" for foreign server." + " Foreign server \"" +
-                             server_name + "\" is not found."};
-  }
-}
-
-void Catalog::createDefaultServersIfNotExists() {
-  foreign_storage::OptionsMap options;
-  options[foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
-      foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE;
-
-  auto local_csv_server = std::make_unique<foreign_storage::ForeignServer>(
-      "omnisci_local_csv",
-      foreign_storage::DataWrapperType::CSV,
-      options,
-      OMNISCI_ROOT_USER_ID);
-  local_csv_server->validate();
-  createForeignServerNoLocks(std::move(local_csv_server), true);
-
-  auto local_parquet_server = std::make_unique<foreign_storage::ForeignServer>(
-      "omnisci_local_parquet",
-      foreign_storage::DataWrapperType::PARQUET,
-      options,
-      OMNISCI_ROOT_USER_ID);
-  local_parquet_server->validate();
-  createForeignServerNoLocks(std::move(local_parquet_server), true);
-
-  auto local_regex_parser_server = std::make_unique<foreign_storage::ForeignServer>(
-      "omnisci_local_regex_parser",
-      foreign_storage::DataWrapperType::REGEX_PARSER,
-      options,
-      OMNISCI_ROOT_USER_ID);
-  local_regex_parser_server->validate();
-  createForeignServerNoLocks(std::move(local_regex_parser_server), true);
-}
-
 // prepare a fresh file reload on next table access
 void Catalog::setForReload(const int32_t tableId) {
   cat_read_lock read_lock(this);
@@ -4600,12 +4109,9 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
                                      bool dump_defaults) const {
   cat_read_lock read_lock(this);
 
-  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
   std::ostringstream os;
 
-  if (foreign_table) {
-    os << "CREATE FOREIGN TABLE " << td->tableName << " (";
-  } else if (!td->isView) {
+  if (!td->isView) {
     os << "CREATE ";
     if (td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL) {
       os << "TEMPORARY ";
@@ -4695,30 +4201,16 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   os << ")";
 
   std::vector<std::string> with_options;
-  if (foreign_table) {
-    if (multiline_formatting) {
-      os << "\n";
-    } else {
-      os << " ";
-    }
-    os << "SERVER " << foreign_table->foreign_server->name;
-
-    // gather WITH options ...
-    for (const auto& [option, value] : foreign_table->options) {
-      with_options.emplace_back(option + "='" + value + "'");
-    }
-  }
-
   if (dump_defaults || td->maxFragRows != DEFAULT_FRAGMENT_ROWS) {
     with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
   }
-  if (!foreign_table && (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE)) {
+  if (dump_defaults || td->maxChunkSize != DEFAULT_MAX_CHUNK_SIZE) {
     with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
   }
-  if (!foreign_table && (dump_defaults || td->fragPageSize != DEFAULT_PAGE_SIZE)) {
+  if (dump_defaults || td->fragPageSize != DEFAULT_PAGE_SIZE) {
     with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
   }
-  if (!foreign_table && (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS)) {
+  if (dump_defaults || td->maxRows != DEFAULT_MAX_ROWS) {
     with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
   }
   if ((dump_defaults || td->maxRollbackEpochs != DEFAULT_MAX_ROLLBACK_EPOCHS) &&
@@ -4726,20 +4218,20 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
     with_options.push_back("MAX_ROLLBACK_EPOCHS=" +
                            std::to_string(td->maxRollbackEpochs));
   }
-  if (!foreign_table && (dump_defaults || !td->hasDeletedCol)) {
+  if (dump_defaults || !td->hasDeletedCol) {
     with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");
   }
-  if (!foreign_table && !td->partitions.empty()) {
+  if (!td->partitions.empty()) {
     with_options.push_back("PARTITIONS='" + td->partitions + "'");
   }
-  if (!foreign_table && td->nShards > 0) {
+  if (td->nShards > 0) {
     const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
     CHECK(shard_cd);
     with_options.push_back(
         "SHARD_COUNT=" +
         std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
   }
-  if (!foreign_table && td->sortedColumnId > 0) {
+  if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
     CHECK(sort_cd);
     with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
@@ -4766,95 +4258,6 @@ bool Catalog::validateNonExistentTableOrView(const std::string& name,
     throw std::runtime_error("Table or View with name \"" + name + "\" already exists.");
   }
   return true;
-}
-
-std::vector<const TableDescriptor*> Catalog::getAllForeignTablesForRefresh() const {
-  cat_read_lock read_lock(this);
-  std::vector<const TableDescriptor*> tables;
-  for (auto entry : tableDescriptorMapById_) {
-    auto table_descriptor = entry.second;
-    if (table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
-      auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
-      CHECK(foreign_table);
-      auto timing_type_entry = foreign_table->options.find(
-          foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
-      CHECK(timing_type_entry != foreign_table->options.end());
-      int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
-                                 std::chrono::system_clock::now().time_since_epoch())
-                                 .count();
-      if (timing_type_entry->second ==
-              foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE &&
-          foreign_table->next_refresh_time <= current_time) {
-        tables.emplace_back(foreign_table);
-      }
-    }
-  }
-  return tables;
-}
-
-void Catalog::updateForeignTableRefreshTimes(const int32_t table_id) {
-  cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  CHECK(tableDescriptorMapById_.find(table_id) != tableDescriptorMapById_.end());
-  auto table_descriptor = tableDescriptorMapById_.find(table_id)->second;
-  CHECK(table_descriptor);
-  auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
-  CHECK(foreign_table);
-  int64_t current_time = std::chrono::duration_cast<std::chrono::seconds>(
-                             std::chrono::system_clock::now().time_since_epoch())
-                             .count();
-  auto last_refresh_time = current_time;
-  auto next_refresh_time = get_next_refresh_time(*foreign_table);
-  sqliteConnector_.query_with_text_params(
-      "UPDATE omnisci_foreign_tables SET last_refresh_time = ?, next_refresh_time = ? "
-      "WHERE table_id = ?",
-      std::vector<std::string>{std::to_string(last_refresh_time),
-                               std::to_string(next_refresh_time),
-                               std::to_string(foreign_table->tableId)});
-  foreign_table->last_refresh_time = last_refresh_time;
-  foreign_table->next_refresh_time = next_refresh_time;
-}
-
-// TODO(Misiu): This function should be merged with setForeignServerOptions via
-// inheritance rather than replication similar functions.
-void Catalog::setForeignTableOptions(const std::string& table_name,
-                                     foreign_storage::OptionsMap& options_map,
-                                     bool clear_existing_options) {
-  cat_write_lock write_lock(this);
-  // update in-memory table
-  auto foreign_table = getForeignTableUnlocked(table_name);
-  auto saved_options = foreign_table->options;
-  foreign_table->populateOptionsMap(std::move(options_map), clear_existing_options);
-  try {
-    foreign_table->validateOptionValues();
-  } catch (const std::exception& e) {
-    // validation did not succeed:
-    // revert to saved options & throw exception
-    foreign_table->options = saved_options;
-    throw;
-  }
-  setForeignTableProperty(
-      foreign_table, "options", foreign_table->getOptionsAsJsonString());
-}
-
-void Catalog::setForeignTableProperty(const foreign_storage::ForeignTable* table,
-                                      const std::string& property,
-                                      const std::string& value) {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query_with_text_params(
-      "SELECT table_id from omnisci_foreign_tables where table_id = ?",
-      std::vector<std::string>{std::to_string(table->tableId)});
-  auto num_rows = sqliteConnector_.getNumRows();
-  if (num_rows > 0) {
-    CHECK_EQ(size_t(1), num_rows);
-    sqliteConnector_.query_with_text_params(
-        "UPDATE omnisci_foreign_tables SET " + property + " = ? WHERE table_id = ?",
-        std::vector<std::string>{value, std::to_string(table->tableId)});
-  } else {
-    throw std::runtime_error{"Can not change property \"" + property +
-                             "\" for foreign table." + " Foreign table \"" +
-                             table->tableName + "\" is not found."};
-  }
 }
 
 std::string Catalog::quoteIfRequired(const std::string& column_name) const {
@@ -5241,19 +4644,6 @@ void Catalog::reassignOwners(const std::set<std::string>& old_owners,
       }
       dashboardDescriptorMap_.merge(new_owner_dashboard_map);
 
-      if (g_enable_fsi) {
-        for (const auto& [server_name, server] : foreignServerMap_) {
-          if (shared::contains(old_owner_ids, server->user_id)) {
-            add_db_object(server->name,
-                          DBObjectType::ServerDBObjectType,
-                          server->user_id,
-                          AccessPrivileges::ALL_SERVER,
-                          old_owner_db_objects);
-            server->user_id = new_owner_id;
-          }
-        }
-      }
-
       // Ensure new owner is set in the DB objects.
       for (auto& [old_owner_id, db_objects] : old_owner_db_objects) {
         for (auto& db_object : db_objects) {
@@ -5350,11 +4740,6 @@ void Catalog::restoreOldOwnersInMemory(
         dashboardDescriptorMap_[std::to_string(old_owner_id) + ":" +
                                 db_object.getName()] = it->second;
         dashboardDescriptorMap_.erase(it);
-      } else if (object_type == DBObjectType::ServerDBObjectType) {
-        auto it = foreignServerMapById_.find(object_id);
-        CHECK(it != foreignServerMapById_.end());
-        CHECK(it->second);
-        it->second->user_id = old_owner_id;
       } else {
         UNREACHABLE() << "Unexpected DB object type: " << static_cast<int>(object_type);
       }
