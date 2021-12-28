@@ -52,11 +52,7 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
-bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  const auto v_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&v));
-  const auto target_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&target));
-  return v_u64 == target_u64 || (target - eps < v && v < target + eps);
-}
+constexpr double EPS = 1e-10;
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
