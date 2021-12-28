@@ -53,11 +53,7 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
-bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  const auto v_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&v));
-  const auto target_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&target));
-  return v_u64 == target_u64 || (target - eps < v && v < target + eps);
-}
+constexpr double EPS = 1e-10;
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
@@ -173,8 +169,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q1_hints = QR::get()->getParsedQueryHint(q1);
-    EXPECT_TRUE(q1_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold) &&
-                approx_eq(q1_hints.overlaps_bucket_threshold, 0.718));
+    EXPECT_TRUE(q1_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
+    EXPECT_NEAR(0.718, q1_hints.overlaps_bucket_threshold, EPS * 0.718);
   }
   {
     const auto q2 =
@@ -182,7 +178,7 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
         "geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q2_hints = QR::get()->getParsedQueryHint(q2);
     EXPECT_TRUE(q2_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
-                (q2_hints.overlaps_max_size == 2021));
+                q2_hints.overlaps_max_size == 2021);
   }
 
   {
@@ -195,8 +191,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
     auto q3_hints = QR::get()->getParsedQueryHint(q3);
     EXPECT_TRUE(q3_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold) &&
                 q3_hints.isHintRegistered(QueryHint::kOverlapsMaxSize) &&
-                (q3_hints.overlaps_max_size == 2021) &&
-                approx_eq(q3_hints.overlaps_bucket_threshold, 0.718));
+                q3_hints.overlaps_max_size == 2021);
+    EXPECT_NEAR(0.718, q3_hints.overlaps_bucket_threshold, EPS * 0.718);
   }
 
   {
@@ -212,8 +208,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q4_hints = QR::get()->getParsedQueryHint(q4);
-    EXPECT_TRUE(q4_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold) &&
-                approx_eq(q4_hints.overlaps_bucket_threshold, 0.1));
+    EXPECT_TRUE(q4_hints.isHintRegistered(QueryHint::kOverlapsBucketThreshold));
+    EXPECT_NEAR(0.1, q4_hints.overlaps_bucket_threshold, EPS * 0.1);
   }
   {
     const auto q5 =
@@ -221,8 +217,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q5_hints = QR::get()->getParsedQueryHint(q5);
-    EXPECT_TRUE(q5_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin) &&
-                approx_eq(q5_hints.overlaps_keys_per_bin, 0.1));
+    EXPECT_TRUE(q5_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
+    EXPECT_NEAR(0.1, q5_hints.overlaps_keys_per_bin, EPS * 0.1);
   }
   {
     const auto q6 =
@@ -230,8 +226,8 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
         "INNER "
         "JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p);";
     auto q6_hints = QR::get()->getParsedQueryHint(q6);
-    EXPECT_TRUE(q6_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin) &&
-                approx_eq(q6_hints.overlaps_keys_per_bin, 19980909.01));
+    EXPECT_TRUE(q6_hints.isHintRegistered(QueryHint::kOverlapsKeysPerBin));
+    EXPECT_NEAR(19980909.01, q6_hints.overlaps_keys_per_bin, EPS * 19980909.01);
   }
 
   {
@@ -629,7 +625,7 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
         getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_TRUE(approx_eq(query_hint->overlaps_bucket_threshold, 0.718));
+    EXPECT_NEAR(0.718, query_hint->overlaps_bucket_threshold, EPS * 0.718);
     auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
         QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
@@ -652,7 +648,7 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
         getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
+    EXPECT_NEAR(0.1, query_hint->overlaps_keys_per_bin, EPS * 0.1);
     EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
     auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
         QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
@@ -674,8 +670,8 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
         getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
-    EXPECT_TRUE(approx_eq(query_hint->overlaps_bucket_threshold, 0.718));
+    EXPECT_NEAR(0.1, query_hint->overlaps_keys_per_bin, EPS * 0.1);
+    EXPECT_NEAR(0.718, query_hint->overlaps_bucket_threshold, EPS * 0.718);
     auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
         QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
     EXPECT_EQ(numCachedOverlapsHashTable, static_cast<size_t>(1));
@@ -696,7 +692,7 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
         getCachedHashTable(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
     auto query_hint = cached_ht_info.second;
     EXPECT_TRUE(query_hint.has_value());
-    EXPECT_TRUE(approx_eq(query_hint->overlaps_keys_per_bin, 0.1));
+    EXPECT_NEAR(0.1, query_hint->overlaps_keys_per_bin, EPS * 0.1);
     EXPECT_EQ(query_hint->overlaps_max_size, static_cast<size_t>(7777));
     auto numCachedOverlapsHashTable = QR::get()->getNumberOfCachedItem(
         QueryRunner::CacheItemStatus::ALL, CacheItemType::OVERLAPS_HT);
