@@ -38,8 +38,8 @@ std::string SingleNodeValidator::validate() const {
 bool should_validate_epoch(const TableDescriptor* table_descriptor) {
   // Epoch validation only applies to persisted local tables. Validation uses the logical
   // table id to validate epoch consistency across shards.
-  return (table_descriptor->shard == -1 && !table_descriptor->isForeignTable() &&
-          !table_descriptor->isTemporaryTable() && !table_descriptor->isView);
+  return (table_descriptor->shard == -1 && !table_descriptor->isTemporaryTable() &&
+          !table_descriptor->isView);
 }
 
 std::string validate_table_epochs(

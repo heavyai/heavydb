@@ -826,11 +826,6 @@ std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
       }
       auto [td, td_with_lock] =
           get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
-      if (td->isForeignTable()) {
-        throw std::runtime_error{
-            "SHOW TABLE DETAILS is not supported for foreign tables. Table name: " +
-            table_name + "."};
-      }
       if (td->isTemporaryTable()) {
         throw std::runtime_error{
             "SHOW TABLE DETAILS is not supported for temporary tables. Table name: " +
@@ -842,7 +837,7 @@ std::vector<std::string> ShowTableDetailsCommand::getFilteredTableNames() {
     for (const auto& table_name : all_table_names) {
       auto [td, td_with_lock] =
           get_table_descriptor_with_lock<lockmgr::ReadLock>(*catalog, table_name, false);
-      if (td->isForeignTable() || td->isTemporaryTable()) {
+      if (td->isTemporaryTable()) {
         continue;
       }
       filtered_table_names.emplace_back(table_name);

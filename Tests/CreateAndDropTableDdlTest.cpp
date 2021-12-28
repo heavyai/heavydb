@@ -70,20 +70,11 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
                                   const std::string& columns,
                                   std::map<std::string, std::string> options,
                                   bool if_not_exists = false) {
-    std::string query{"CREATE "};
-    if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      query += "FOREIGN TABLE ";
-    } else {
-      query += "TABLE ";
-    }
+    std::string query{"CREATE TABLE "};
     if (if_not_exists) {
       query += "IF NOT EXISTS ";
     }
     query += table_name + columns;
-    if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      query += " SERVER omnisci_local_csv";
-      options["file_path"] = "'" + getTestFilePath() + "'";
-    }
     if (!options.empty()) {
       query += " WITH (";
       bool is_first = true;
@@ -104,12 +95,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
   std::string getDropTableQuery(const ddl_utils::TableType table_type,
                                 const std::string& table_name,
                                 bool if_exists = false) {
-    std::string query{"DROP "};
-    if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      query += "FOREIGN TABLE ";
-    } else {
-      query += "TABLE ";
-    }
+    std::string query{"DROP TABLE "};
 
     if (if_exists) {
       query += "IF EXISTS ";
@@ -1045,15 +1031,9 @@ TEST_P(CreateTableTest, UnauthorizedUser) {
   login("test_user", "test_pass");
   std::string query = getCreateTableQuery(GetParam(), "test_table", "(col1 INTEGER)");
 
-  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-    queryAndAssertException(query,
-                            "Foreign table \"test_table\" will not be "
-                            "created. User has no CREATE TABLE privileges.");
-  } else {
-    queryAndAssertException(query,
-                            "Table test_table will not be created. User has "
-                            "no create privileges.");
-  }
+  queryAndAssertException(query,
+                          "Table test_table will not be created. User has "
+                          "no create privileges.");
 }
 
 TEST_P(CreateTableTest, AuthorizedUser) {
@@ -1109,12 +1089,8 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
     sql(getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(-1))"));
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
-    if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
-    } else {
-      if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("No negative number in type definition.", e.error_msg);
-      }
+    if (!g_enable_calcite_ddl_parser) {
+      ASSERT_EQ("No negative number in type definition.", e.error_msg);
     }
   }
 }
@@ -1244,15 +1220,9 @@ TEST_P(DropTableTest, UnauthorizedUser) {
   login("test_user", "test_pass");
   std::string query = getDropTableQuery(GetParam(), "test_table");
 
-  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-    queryAndAssertException(query,
-                            "Foreign table \"test_table\" will not be "
-                            "dropped. User has no DROP TABLE privileges.");
-  } else {
-    queryAndAssertException(query,
-                            "Table test_table will not be dropped. User has "
-                            "no proper privileges.");
-  }
+  queryAndAssertException(query,
+                          "Table test_table will not be dropped. User has "
+                          "no proper privileges.");
 
   loginAdmin();
   sql(getDropTableQuery(GetParam(), "test_table"));
@@ -1275,12 +1245,8 @@ TEST_P(CreateTableTest, InvalidSyntax) {
     sql(query);
     FAIL() << "An exception should have been thrown for this test case.";
   } catch (const TOmniSciException& e) {
-    if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-      ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
-    } else {
-      if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
-      }
+    if (!g_enable_calcite_ddl_parser) {
+      ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
     }
   }
 }
@@ -1300,12 +1266,6 @@ TEST_P(CreateTableTest, InvalidColumnDefinition) {
 }
 
 TEST_P(CreateTableTest, RealAlias) {
-  // TODO(vancouver: support for FSI)
-  if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-    LOG(ERROR) << "REAL alias not yet supported for FSI.";
-    return;
-  }
-
   std::string query = getCreateTableQuery(GetParam(), "test_table", "(f REAL)");
   sql(query);
   auto td = getCatalog().getMetadataForTable("test_table", false);

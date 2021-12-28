@@ -2924,11 +2924,6 @@ class ForeignTableAndTablePermissionsTest
  protected:
   void SetUp() override {
     TablePermissionsTest::SetUp();
-    if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      GTEST_SKIP();
-      return;
-    }
     switch (GetParam()) {
       case ddl_utils::TableType::TABLE:
         createTestTable();
@@ -3023,10 +3018,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
 }
 
 TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeShowCreateTablePrivilege) {
-  if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
   std::string privilege{"DROP"};
   std::string query{"SHOW CREATE TABLE test_table;"};
   std::string no_privilege_exception{"Table/View test_table does not exist."};

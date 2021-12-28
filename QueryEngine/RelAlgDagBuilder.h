@@ -42,7 +42,6 @@
 #include "SchemaMgr/TableInfo.h"
 #include "Shared/sqltypes_geo.h"
 #include "Shared/toString.h"
-#include "Utils/FsiUtils.h"
 
 class Rex {
  public:
@@ -1865,7 +1864,6 @@ class RelModify : public RelAlgNode {
       , flattened_(flattened)
       , operation_(yieldModifyOperationEnum(op_string))
       , target_column_list_(target_column_list) {
-    foreign_storage::validate_non_foreign_table_write(table_descriptor_);
     inputs_.push_back(input);
   }
 
@@ -1880,7 +1878,6 @@ class RelModify : public RelAlgNode {
       , flattened_(flattened)
       , operation_(op)
       , target_column_list_(target_column_list) {
-    foreign_storage::validate_non_foreign_table_write(table_descriptor_);
     inputs_.push_back(input);
   }
 

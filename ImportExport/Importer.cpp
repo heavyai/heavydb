@@ -3591,7 +3591,7 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
 
 void Importer::checkpoint(
     const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
-  if (loader->getTableDesc()->storageType != StorageType::FOREIGN_TABLE) {
+  {
     mapd_lock_guard<mapd_shared_mutex> read_lock(import_mutex_);
     if (import_status_.load_failed) {
       // rollback to starting epoch - undo all the added records

@@ -696,11 +696,6 @@ void validate_table_type(const TableDescriptor* td,
     if (expected_table_type != TableType::VIEW) {
       throw std::runtime_error(td->tableName + " is a view. Use " + command + " VIEW.");
     }
-  } else if (td->storageType == StorageType::FOREIGN_TABLE) {
-    if (expected_table_type != TableType::FOREIGN_TABLE) {
-      throw std::runtime_error(td->tableName + " is a foreign table. Use " + command +
-                               " FOREIGN TABLE.");
-    }
   } else if (expected_table_type != TableType::TABLE) {
     throw std::runtime_error(td->tableName + " is a table. Use " + command + " TABLE.");
   }
@@ -709,9 +704,6 @@ void validate_table_type(const TableDescriptor* td,
 std::string table_type_enum_to_string(const TableType table_type) {
   if (table_type == ddl_utils::TableType::TABLE) {
     return "Table";
-  }
-  if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-    return "ForeignTable";
   }
   if (table_type == ddl_utils::TableType::VIEW) {
     return "View";

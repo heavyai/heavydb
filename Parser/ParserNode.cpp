@@ -67,7 +67,6 @@
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
-#include "Utils/FsiUtils.h"
 
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
@@ -1627,7 +1626,6 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
   }
-  foreign_storage::validate_non_foreign_table_write(td);
   query.set_result_table_id(td->tableId);
   std::list<int> result_col_list;
   if (column_list_.empty()) {
@@ -1669,7 +1667,6 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
   }
-  foreign_storage::validate_non_foreign_table_write(td);
   if (td->partitions == "REPLICATED") {
     throw std::runtime_error("Cannot determine leaf on replicated table.");
   }
@@ -2020,7 +2017,6 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView) {
     throw std::runtime_error("Singleton inserts on views is not supported.");
   }
-  foreign_storage::validate_non_foreign_table_write(td);
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(
@@ -2924,7 +2920,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                                                bool for_CTAS) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
-  foreign_storage::validate_non_foreign_table_write(td);
 
   LocalConnector local_connector;
   bool populate_table = false;
@@ -3903,7 +3898,6 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView) {
     throw std::runtime_error(*table_ + " is a view.  Cannot Truncate.");
   }
-  foreign_storage::validate_non_foreign_table_write(td);
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.truncateTable(td);
@@ -4146,15 +4140,6 @@ void checkNameSubstition(SubstituteMap& sMap) {
 }
 }  // namespace
 
-namespace {
-void disable_foreign_tables(const TableDescriptor* td) {
-  if (td->storageType == StorageType::FOREIGN_TABLE) {
-    throw std::runtime_error(td->tableName + " is a foreign table. " +
-                             "Use ALTER FOREIGN TABLE.");
-  }
-}
-}  // namespace
-
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
@@ -4196,9 +4181,6 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (hasData(tableSubtituteMap, altCurTableName)) {
       const TableDescriptor* td = catalog.getMetadataForTable(altCurTableName);
       if (td) {
-        // Tables *and* views may be renamed here, foreign tables not
-        //    -> just block just foreign tables
-        disable_foreign_tables(td);
         check_alter_table_privilege(session, td);
       }
 

@@ -104,7 +104,7 @@ class FilePathBlacklist {
   static std::vector<std::string> blacklisted_paths_;
 };
 
-enum class TableType { TABLE = 1, VIEW, FOREIGN_TABLE };
+enum class TableType { TABLE = 1, VIEW };
 
 void set_default_encoding(ColumnDescriptor& cd);
 

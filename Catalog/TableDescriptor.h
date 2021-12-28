@@ -30,7 +30,6 @@
  * @brief Encapsulates an enumeration of table storage type strings
  */
 struct StorageType {
-  static constexpr char const* FOREIGN_TABLE = "FOREIGN_TABLE";
   static constexpr char const* LOCAL_TABLE = "LOCAL_TABLE";
 };
 
@@ -92,8 +91,6 @@ struct TableDescriptor {
       , mutex_(std::make_shared<std::mutex>()) {}
 
   virtual ~TableDescriptor() = default;
-
-  inline bool isForeignTable() const { return storageType == StorageType::FOREIGN_TABLE; }
 
   inline bool isTemporaryTable() const {
     return persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;

@@ -59,16 +59,6 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   auto const* td = cat.getMetadataForTable(tableName);
   CHECK(td);
 
-  // foreign tables not supported
-  if (td->storageType == StorageType::FOREIGN_TABLE) {
-    if (DEBUG_RENDER_GROUP_ANALYZER) {
-      LOG(INFO) << "DEBUG: Table is a foreign table";
-    }
-    _rtree = std::make_unique<RTree>();
-    CHECK(_rtree);
-    return;
-  }
-
   // if the table is empty, just make an empty tree
   CHECK(td->fragmenter);
   if (td->fragmenter->getFragmentsForQuery().getPhysicalNumTuples() == 0) {
