@@ -707,8 +707,7 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
             {DatabaseDBObjectType, AccessPrivileges::ALL_DATABASE},
             {TableDBObjectType, AccessPrivileges::ALL_TABLE},
             {DashboardDBObjectType, AccessPrivileges::ALL_DASHBOARD},
-            {ViewDBObjectType, AccessPrivileges::ALL_VIEW},
-            {ServerDBObjectType, AccessPrivileges::ALL_SERVER}};
+            {ViewDBObjectType, AccessPrivileges::ALL_VIEW}};
 
     // grant owner all permissions on DB
     DBObjectKey key;
@@ -4692,12 +4691,6 @@ void Catalog::restoreOldOwners(
         } else if (object_type == DBObjectType::DashboardDBObjectType) {
           sqliteConnector_.query_with_text_params(
               "UPDATE mapd_dashboards SET userid = ? WHERE userid = ? AND id = ?",
-              query_params);
-        } else if (object_type == DBObjectType::ServerDBObjectType) {
-          CHECK(g_enable_fsi);
-          sqliteConnector_.query_with_text_params(
-              "UPDATE omnisci_foreign_servers SET owner_user_id = ? "
-              "WHERE owner_user_id = ? AND id = ?",
               query_params);
         } else {
           UNREACHABLE() << "Unexpected DB object type: " << static_cast<int>(object_type);

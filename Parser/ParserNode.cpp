@@ -5153,8 +5153,6 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
           {{"ALL"s, DashboardDBObjectType},
            {AccessPrivileges::ALL_DASHBOARD, DashboardDBObjectType}},
           {{"ALL"s, ViewDBObjectType}, {AccessPrivileges::ALL_VIEW, ViewDBObjectType}},
-          {{"ALL"s, ServerDBObjectType},
-           {AccessPrivileges::ALL_SERVER, ServerDBObjectType}},
 
           {{"CREATE TABLE"s, DatabaseDBObjectType},
            {AccessPrivileges::CREATE_TABLE, TableDBObjectType}},
@@ -5214,21 +5212,6 @@ static std::pair<AccessPrivileges, DBObjectType> parseStringPrivs(
            {AccessPrivileges::EDIT_DASHBOARD, DashboardDBObjectType}},
           {{"DELETE"s, DashboardDBObjectType},
            {AccessPrivileges::DELETE_DASHBOARD, DashboardDBObjectType}},
-
-          {{"CREATE SERVER"s, DatabaseDBObjectType},
-           {AccessPrivileges::CREATE_SERVER, ServerDBObjectType}},
-          {{"DROP SERVER"s, DatabaseDBObjectType},
-           {AccessPrivileges::DROP_SERVER, ServerDBObjectType}},
-          {{"DROP"s, ServerDBObjectType},
-           {AccessPrivileges::DROP_SERVER, ServerDBObjectType}},
-          {{"ALTER SERVER"s, DatabaseDBObjectType},
-           {AccessPrivileges::ALTER_SERVER, ServerDBObjectType}},
-          {{"ALTER"s, ServerDBObjectType},
-           {AccessPrivileges::ALTER_SERVER, ServerDBObjectType}},
-          {{"USAGE"s, ServerDBObjectType},
-           {AccessPrivileges::SERVER_USAGE, ServerDBObjectType}},
-          {{"SERVER USAGE"s, DatabaseDBObjectType},
-           {AccessPrivileges::SERVER_USAGE, ServerDBObjectType}},
 
           {{"VIEW SQL EDITOR"s, DatabaseDBObjectType},
            {AccessPrivileges::VIEW_SQL_EDITOR, DatabaseDBObjectType}},
@@ -5318,9 +5301,6 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   const auto objectName =
       extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
   auto objectType = DBObjectTypeFromString(parserObjectType);
-  if (objectType == ServerDBObjectType && !g_enable_fsi) {
-    throw std::runtime_error("GRANT failed. SERVER object unrecognized.");
-  }
   /* verify object exists and is of proper type *before* trying to execute */
   verifyObject(catalog, objectName, objectType, "GRANT");
 
@@ -5340,9 +5320,6 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
         boost::to_upper_copy<std::string>(get_privs()[i]), objectType, get_object());
     objects[i].setPrivileges(priv.first);
     objects[i].setPermissionType(priv.second);
-    if (priv.second == ServerDBObjectType && !g_enable_fsi) {
-      throw std::runtime_error("GRANT failed. SERVER object unrecognized.");
-    }
   }
   SysCatalog::instance().grantDBObjectPrivilegesBatch(grantees_, objects, catalog);
 }
@@ -5381,9 +5358,6 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   const auto objectName =
       extractObjectNameFromHierName(get_object(), parserObjectType, catalog);
   auto objectType = DBObjectTypeFromString(parserObjectType);
-  if (objectType == ServerDBObjectType && !g_enable_fsi) {
-    throw std::runtime_error("REVOKE failed. SERVER object unrecognized.");
-  }
   /* verify object exists and is of proper type *before* trying to execute */
   verifyObject(catalog, objectName, objectType, "REVOKE");
 
@@ -5403,9 +5377,6 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
         boost::to_upper_copy<std::string>(get_privs()[i]), objectType, get_object());
     objects[i].setPrivileges(priv.first);
     objects[i].setPermissionType(priv.second);
-    if (priv.second == ServerDBObjectType && !g_enable_fsi) {
-      throw std::runtime_error("REVOKE failed. SERVER object unrecognized.");
-    }
   }
   SysCatalog::instance().revokeDBObjectPrivilegesBatch(grantees_, objects, catalog);
 }

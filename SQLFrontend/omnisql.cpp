@@ -875,8 +875,7 @@ static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_ma
           {TDBObjectType::DashboardDBObjectType,
            {"create"s, "delete"s, "view"s, "edit"s}},
           {TDBObjectType::ViewDBObjectType,
-           {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}},
-          {TDBObjectType::ServerDBObjectType, {"create"s, "drop"s, "alter"s, "usage"s}}};
+           {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}}};
 
   const auto privilege_names = privilege_names_lookup.find(type);
 
@@ -1511,9 +1510,6 @@ int main(int argc, char** argv) {
           success = get_db_object_privs(context);
         } else if (args[1] == "table") {
           context.object_type = TDBObjectType::TableDBObjectType;
-          success = get_db_object_privs(context);
-        } else if (args[1] == "server") {
-          context.object_type = TDBObjectType::ServerDBObjectType;
           success = get_db_object_privs(context);
         } else {
           std::cerr << "Object type should be one of { database, table, server }"

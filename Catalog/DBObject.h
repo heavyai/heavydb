@@ -44,8 +44,7 @@ enum DBObjectType {
   DatabaseDBObjectType,
   TableDBObjectType,
   DashboardDBObjectType,
-  ViewDBObjectType,
-  ServerDBObjectType
+  ViewDBObjectType
 };
 
 std::string DBObjectTypeToString(DBObjectType type);

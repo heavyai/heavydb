@@ -476,8 +476,7 @@ enum TDBObjectType {
   DatabaseDBObjectType,
   TableDBObjectType,
   DashboardDBObjectType,
-  ViewDBObjectType,
-  ServerDBObjectType
+  ViewDBObjectType
 }
 
 struct TDBObject {

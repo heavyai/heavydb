@@ -1620,9 +1620,6 @@ void SysCatalog::createDBObject(const UserMetadata& user,
     case DashboardDBObjectType:
       object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
       break;
-    case ServerDBObjectType:
-      object.setPrivileges(AccessPrivileges::ALL_SERVER);
-      break;
     default:
       object.setPrivileges(AccessPrivileges::ALL_DATABASE);
       break;
@@ -1745,7 +1742,6 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
 
   if (g_enable_fsi) {
     tmp_object.setPrivileges(AccessPrivileges::ALL_SERVER);
-    tmp_object.setPermissionType(ServerDBObjectType);
     grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
   }
 
@@ -1890,9 +1886,6 @@ void SysCatalog::changeDBObjectOwnership(const UserMetadata& new_owner,
       break;
     case DashboardDBObjectType:
       object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
-      break;
-    case ServerDBObjectType:
-      object.setPrivileges(AccessPrivileges::ALL_SERVER);
       break;
     case DatabaseDBObjectType:
       object.setPrivileges(AccessPrivileges::ALL_DATABASE);

@@ -1880,14 +1880,6 @@ static TDBObject serialize_db_object(const std::string& roleName,
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::DELETE_FROM_VIEW));
 
       break;
-    case ServerDBObjectType:
-      outObject.privilegeObjectType = TDBObjectType::ServerDBObjectType;
-      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::CREATE_SERVER));
-      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::DROP_SERVER));
-      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::ALTER_SERVER));
-      outObject.privs.push_back(ap.hasPermission(ServerPrivileges::SERVER_USAGE));
-
-      break;
     default:
       CHECK(false);
   }
@@ -2026,10 +2018,6 @@ bool DBHandler::has_object_privilege(const TSessionId& sessionId,
       type = DBObjectType::ViewDBObjectType;
       func_name = "view";
       break;
-    case TDBObjectType::ServerDBObjectType:
-      type = DBObjectType::ServerDBObjectType;
-      func_name = "server";
-      break;
     default:
       THROW_MAPD_EXCEPTION("Invalid object type (" + std::to_string(objectType) + ").");
   }
@@ -2092,9 +2080,6 @@ void DBHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
       break;
     case TDBObjectType::ViewDBObjectType:
       object_type = DBObjectType::ViewDBObjectType;
-      break;
-    case TDBObjectType::ServerDBObjectType:
-      object_type = DBObjectType::ServerDBObjectType;
       break;
     default:
       THROW_MAPD_EXCEPTION("Failed to get object privileges for " + objectName +

@@ -90,8 +90,6 @@ std::string DBObjectTypeToString(DBObjectType type) {
       return "DASHBOARD";
     case ViewDBObjectType:
       return "VIEW";
-    case ServerDBObjectType:
-      return "SERVER";
     default:
       CHECK(false);
   }
@@ -107,8 +105,6 @@ DBObjectType DBObjectTypeFromString(const std::string& type) {
     return DashboardDBObjectType;
   } else if (type.compare("VIEW") == 0) {
     return ViewDBObjectType;
-  } else if (type.compare("SERVER") == 0) {
-    return ServerDBObjectType;
   } else {
     throw std::runtime_error("DB object type " + type + " is not supported.");
   }
@@ -166,7 +162,6 @@ std::vector<std::string> DBObject::toString() const {
     case TableDBObjectType:
     case DashboardDBObjectType:
     case ViewDBObjectType:
-    case ServerDBObjectType:
       objectKey.push_back(std::to_string(objectKey_.permissionType));
       objectKey.push_back(std::to_string(objectKey_.dbId));
       objectKey.push_back(std::to_string(objectKey_.objectId));
@@ -249,7 +244,6 @@ DBObjectKey DBObjectKey::fromString(const std::vector<std::string>& key,
       objectKey.permissionType = std::stoi(key[0]);
       objectKey.dbId = std::stoi(key[1]);
       break;
-    case ServerDBObjectType:
     case TableDBObjectType:
     case ViewDBObjectType:
     case DashboardDBObjectType:

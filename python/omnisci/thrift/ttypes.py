@@ -215,7 +215,6 @@ class TDBObjectType(object):
     TableDBObjectType = 2
     DashboardDBObjectType = 3
     ViewDBObjectType = 4
-    ServerDBObjectType = 5
 
     _VALUES_TO_NAMES = {
         0: "AbstractDBObjectType",
@@ -223,7 +222,6 @@ class TDBObjectType(object):
         2: "TableDBObjectType",
         3: "DashboardDBObjectType",
         4: "ViewDBObjectType",
-        5: "ServerDBObjectType",
     }
 
     _NAMES_TO_VALUES = {
@@ -232,7 +230,6 @@ class TDBObjectType(object):
         "TableDBObjectType": 2,
         "DashboardDBObjectType": 3,
         "ViewDBObjectType": 4,
-        "ServerDBObjectType": 5,
     }
 
 
