@@ -581,14 +581,6 @@ size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   return gfm->getTableEpoch(db_id, tb_id);
 }
 
-void DataMgr::prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                        const CompilationOptions& co,
-                                        const ExecutionOptions& eo,
-                                        ExecutionPhase phase) const {
-  dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])
-      ->prepareTablesForExecution(input_cols, co, eo, phase);
-}
-
 File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
   File_Namespace::GlobalFileMgr* global_file_mgr{nullptr};
   global_file_mgr =

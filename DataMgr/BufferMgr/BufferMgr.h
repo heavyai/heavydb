@@ -155,13 +155,6 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   void checkpoint(const int db_id, const int tb_id) override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
 
-  void prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                 const CompilationOptions& co,
-                                 const ExecutionOptions& eo,
-                                 ExecutionPhase phase) override {
-    UNREACHABLE();
-  }
-
   const DictDescriptor* getDictMetadata(int db_id,
                                         int dict_id,
                                         bool load_dict = true) override {

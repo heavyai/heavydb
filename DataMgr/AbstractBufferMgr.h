@@ -100,11 +100,6 @@ class AbstractBufferMgr {
   virtual void checkpoint(const int db_id, const int tb_id) = 0;
   virtual void removeTableRelatedDS(const int db_id, const int table_id) = 0;
 
-  virtual void prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                         const CompilationOptions& co,
-                                         const ExecutionOptions& eo,
-                                         ExecutionPhase phase) = 0;
-
   virtual const DictDescriptor* getDictMetadata(int db_id,
                                                 int dict_id,
                                                 bool load_dict = true) = 0;

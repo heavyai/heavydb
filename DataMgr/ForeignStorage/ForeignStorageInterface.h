@@ -208,13 +208,6 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     UNREACHABLE();
   }
 
-  void prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                 const CompilationOptions& co,
-                                 const ExecutionOptions& eo,
-                                 ExecutionPhase phase) override {
-    UNREACHABLE();
-  }
-
   const DictDescriptor* getDictMetadata(int db_id,
                                         int dict_id,
                                         bool load_dict = true) override {

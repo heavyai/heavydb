@@ -190,11 +190,6 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                     const int32_t tb_id);  // A locked public wrapper for deleteFileMgr,
                                            // for now for unit testing
 
-  void prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                 const CompilationOptions& co,
-                                 const ExecutionOptions& eo,
-                                 ExecutionPhase phase) override {}
-
   const DictDescriptor* getDictMetadata(int db_id,
                                         int dict_id,
                                         bool load_dict = true) override;

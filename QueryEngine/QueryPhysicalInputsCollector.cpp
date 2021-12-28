@@ -218,32 +218,6 @@ class RexPhysicalInfoVisitor
   }
 };
 
-class RexRefInputsVisitor
-    : public RexInputVisitorBase<RexRefInputsVisitor, ColumnRefSet> {
- public:
-  RexRefInputsVisitor() {}
-
-  ColumnRefSet visitInput(const RexInput* input) const override {
-    const auto source_ra = input->getSourceNode();
-    const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
-    if (!scan_ra) {
-      const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
-      if (join_ra) {
-        const auto node_inputs = get_node_output(join_ra);
-        CHECK_LT(input->getIndex(), node_inputs.size());
-        return visitInput(&node_inputs[input->getIndex()]);
-      }
-      return ColumnRefSet{};
-    }
-
-    const int db_id = scan_ra->getDatabaseId();
-    const int table_id = scan_ra->getTableId();
-    const int col_id = scan_ra->getColumnIdBySpi(input->getIndex() + 1);
-    CHECK_GT(table_id, 0);
-    return {{db_id, table_id, col_id}};
-  }
-};
-
 class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set<int>> {
  public:
   RelAlgPhysicalTableInputsVisitor() {}
@@ -288,11 +262,6 @@ std::unordered_set<InputColDescriptor> get_physical_inputs(const RelAlgNode* ra)
   RelAlgPhysicalInputsVisitor<RexPhysicalInputsVisitor, InputColDescriptorSet>
       phys_inputs_visitor;
   return phys_inputs_visitor.visit(ra);
-}
-
-ColumnRefSet get_ref_inputs(const RelAlgNode* ra) {
-  RelAlgPhysicalInputsVisitor<RexRefInputsVisitor, ColumnRefSet> idx_inputs_visitor;
-  return idx_inputs_visitor.visit(ra);
 }
 
 std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {

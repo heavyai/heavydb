@@ -212,11 +212,6 @@ class DataMgr {
   void setTableEpoch(const int db_id, const int tb_id, const int start_epoch);
   size_t getTableEpoch(const int db_id, const int tb_id);
 
-  void prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                 const CompilationOptions& co,
-                                 const ExecutionOptions& eo,
-                                 ExecutionPhase phase) const;
-
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
   std::shared_ptr<ForeignStorageInterface> getForeignStorageInterface() const;

@@ -64,8 +64,6 @@ struct CompilationOptions {
 
 enum class ExecutorType { Native, Extern, TableFunctions };
 
-enum class ExecutionPhase { PrepareQuery, ExecuteStep };
-
 struct ExecutionOptions {
   bool output_columnar_hint;
   bool allow_multifrag;

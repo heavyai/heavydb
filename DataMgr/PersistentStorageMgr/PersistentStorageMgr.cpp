@@ -145,13 +145,6 @@ void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table
   getStorageMgrForTableKey({db_id, table_id})->removeTableRelatedDS(db_id, table_id);
 }
 
-void PersistentStorageMgr::prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                                     const CompilationOptions& co,
-                                                     const ExecutionOptions& eo,
-                                                     ExecutionPhase phase) {
-  getGlobalFileMgr()->prepareTablesForExecution(input_cols, co, eo, phase);
-}
-
 const DictDescriptor* PersistentStorageMgr::getDictMetadata(int db_id,
                                                             int dict_id,
                                                             bool load_dict) {

@@ -62,6 +62,4 @@ std::unordered_set<int> get_physical_table_inputs(const RelAlgNode*);
 TableInfoMap get_physical_table_infos(const RelAlgNode*);
 ColumnInfoMap get_physical_column_infos(const RelAlgNode*);
 
-ColumnRefSet get_ref_inputs(const RelAlgNode*);
-
 #endif  // QUERYENGINE_QUERYPHYSICALINPUTSCOLLECTOR_H

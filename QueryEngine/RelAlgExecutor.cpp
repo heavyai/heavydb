@@ -286,10 +286,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     }
   }
 
-  const auto ref_inputs = get_ref_inputs(&ra);
-  executor_->getDataMgr()->prepareTablesForExecution(
-      ref_inputs, co, eo, ExecutionPhase::PrepareQuery);
-
   int64_t queue_time_ms = timer_stop(clock_begin);
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
@@ -716,11 +712,6 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     eo_hint_applied.output_columnar_hint = columnar_output_enabled;
     return std::make_pair(co_hint_applied, eo_hint_applied);
   };
-
-  // Load required data prior execution.
-  const auto ref_inputs = get_ref_inputs(body);
-  executor_->getDataMgr()->prepareTablesForExecution(
-      ref_inputs, co, eo, ExecutionPhase::ExecuteStep);
 
   auto hint_applied = handle_hint();
   const auto compound = dynamic_cast<const RelCompound*>(body);

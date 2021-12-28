@@ -359,13 +359,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // Used to describe the manager in logging and error messages.
   virtual std::string describeSelf() const;
 
-  void prepareTablesForExecution(const ColumnRefSet& input_cols,
-                                 const CompilationOptions& co,
-                                 const ExecutionOptions& eo,
-                                 ExecutionPhase phase) override {
-    UNREACHABLE();
-  }
-
   const DictDescriptor* getDictMetadata(int db_id,
                                         int dict_id,
                                         bool load_dict = true) override {
