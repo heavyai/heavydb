@@ -22,7 +22,6 @@
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 
-#include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
 #include "Fragmenter/FragmentDefaultValues.h"
@@ -200,21 +199,9 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
     EXPECT_EQ("", td->fragments);
     EXPECT_EQ("", td->partitions);
 
-    if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
-      ASSERT_NE(nullptr, foreign_table);
-      EXPECT_EQ(column_count + 1, td->nColumns);  // +1 for rowid column
-      EXPECT_FALSE(td->hasDeletedCol);
-      EXPECT_EQ(StorageType::FOREIGN_TABLE, foreign_table->storageType);
-      ASSERT_TRUE(foreign_table->options.find("FILE_PATH") !=
-                  foreign_table->options.end());
-      EXPECT_EQ(getTestFilePath(), foreign_table->options.find("FILE_PATH")->second);
-      EXPECT_EQ("omnisci_local_csv", foreign_table->foreign_server->name);
-    } else {
-      EXPECT_EQ(column_count + 2, td->nColumns);  // +2 for rowid and $deleted$ columns
-      EXPECT_TRUE(td->hasDeletedCol);
-      EXPECT_TRUE(td->storageType.empty());
-    }
+    EXPECT_EQ(column_count + 2, td->nColumns);  // +2 for rowid and $deleted$ columns
+    EXPECT_TRUE(td->hasDeletedCol);
+    EXPECT_TRUE(td->storageType.empty());
   }
 
   void assertColumnDetails(const ColumnAttributes expected,
@@ -1334,9 +1321,6 @@ INSTANTIATE_TEST_SUITE_P(CreateAndDropTableDdlTest,
                          [](const auto& param_info) {
                            if (param_info.param == ddl_utils::TableType::TABLE) {
                              return "Table";
-                           }
-                           if (param_info.param == ddl_utils::TableType::FOREIGN_TABLE) {
-                             return "ForeignTable";
                            }
                            throw std::runtime_error{"Unexpected parameter type"};
                          });

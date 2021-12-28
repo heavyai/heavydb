@@ -58,7 +58,6 @@
 
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
-#include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
@@ -67,7 +66,6 @@
 #include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
-#include "RefreshTimeCalculator.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"

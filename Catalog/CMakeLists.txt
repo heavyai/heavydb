@@ -10,8 +10,6 @@ set(catalog_source_files
     SharedDictionaryValidator.cpp
     SysCatalog.cpp
     SysCatalog.h
-    ForeignServer.h
-    ForeignTable.cpp
     DdlCommandExecutor.cpp
     DdlCommandExecutor.h
 )

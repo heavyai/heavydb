@@ -22,7 +22,6 @@
 #include "rapidjson/document.h"
 
 #include "Archive/PosixFileArchive.h"
-#include "Catalog/ForeignTable.h"
 #include "ImportExport/CopyParams.h"
 
 namespace foreign_storage {

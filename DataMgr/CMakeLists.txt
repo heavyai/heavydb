@@ -16,10 +16,8 @@ set(datamgr_source_files
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
-    ForeignStorage/AbstractTextFileDataWrapper.cpp
     ForeignStorage/ArrowForeignStorage.cpp
     ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.cpp
-    ForeignStorage/CsvDataWrapper.cpp
     ForeignStorage/DummyForeignStorage.cpp
     ForeignStorage/ForeignStorageInterface.cpp
     ForeignStorage/ForeignStorageBuffer.cpp
@@ -28,8 +26,6 @@ set(datamgr_source_files
     ForeignStorage/FsiJsonUtils.cpp
     ForeignStorage/FileReader.cpp
     ForeignStorage/FileRegions.cpp
-    ForeignStorage/TextFileBufferParser.cpp
-    ForeignStorage/CsvFileBufferParser.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
@@ -38,33 +34,7 @@ set(datamgr_source_files
     BufferMgr/BufferMgr.cpp
     BufferMgr/Buffer.cpp
     PersistentStorageMgr/PersistentStorageMgr.cpp
-    ForeignStorage/AbstractFileStorageDataWrapper.cpp
-    ForeignStorage/ForeignDataWrapperFactory.cpp
-    ForeignStorage/InternalCatalogDataWrapper.cpp
-    ForeignStorage/RegexParserDataWrapper.cpp
-    ForeignStorage/RegexFileBufferParser.cpp
 )
-
-if(ENABLE_AWS_S3)
-  list(APPEND datamgr_source_files ForeignStorage/S3FilePathUtil.cpp)
-endif()
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-if(ENABLE_AWS_S3)
-  list(APPEND datamgr_source_files ForeignStorage/ee/FileReaderS3.cpp)
-  list(APPEND datamgr_source_files ForeignStorage/ee/S3Utils.cpp)
-  list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectClient.cpp)
-  list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectDataWrapper.cpp)
-endif()
-endif()
-
-if(ENABLE_IMPORT_PARQUET)
-  list(APPEND datamgr_source_files ForeignStorage/ParquetDataWrapper.cpp)
-  list(APPEND datamgr_source_files ForeignStorage/ParquetShared.cpp)
-  list(APPEND datamgr_source_files ForeignStorage/LazyParquetChunkLoader.cpp)
-  list(APPEND datamgr_source_files ForeignStorage/TypedParquetStorageBuffer.cpp)
-  list(APPEND datamgr_source_files ForeignStorage/ParquetImporter.cpp)
-endif()
 
 # On Linux, Arrow internally links symbols for its dependency libraries (such as the C++ AWS SDK)
 # when it is built as a shared library. In this case, set a flag that would be used to determine
