@@ -4473,24 +4473,30 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
   CHECK_EQ(input_col_exprs.size(), rel_table_func->getColInputsSize());
   std::vector<Analyzer::Expr*> table_func_outputs;
+  constexpr int32_t transient_pos{-1};
   for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
     auto ti = table_function_impl.getOutputSQLType(i);
     if (ti.is_dict_encoded_string()) {
       auto p = table_function_impl.getInputID(i);
 
       int32_t input_pos = p.first;
-      // Iterate over the list of arguments to compute the offset. Use this offset to
-      // get the corresponding input
-      int32_t offset = 0;
-      for (int j = 0; j < input_pos; j++) {
-        const auto ti = table_function_type_infos[j];
-        offset += ti.is_column_list() ? ti.get_dimension() : 1;
-      }
-      input_pos = offset + p.second;
+      if (input_pos == transient_pos) {
+        ti.set_comp_param(TRANSIENT_DICT_ID);
+      } else {
+        // Iterate over the list of arguments to compute the offset. Use this offset to
+        // get the corresponding input
+        int32_t offset = 0;
+        for (int j = 0; j < input_pos; j++) {
+          const auto ti = table_function_type_infos[j];
+          offset += ti.is_column_list() ? ti.get_dimension() : 1;
+        }
+        input_pos = offset + p.second;
 
-      CHECK_LT(input_pos, input_exprs.size());
-      int32_t comp_param = input_exprs_owned[input_pos]->get_type_info().get_comp_param();
-      ti.set_comp_param(comp_param);
+        CHECK_LT(input_pos, input_exprs.size());
+        int32_t comp_param =
+            input_exprs_owned[input_pos]->get_type_info().get_comp_param();
+        ti.set_comp_param(comp_param);
+      }
     }
     target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
     table_func_outputs.push_back(target_exprs_owned_.back().get());

@@ -1501,13 +1501,16 @@ class Parser:
             value = self.parse_identifier()
             if not self.is_at_end() and self.match(Token.LESS):
                 self.consume(Token.LESS)
-                num1 = self.parse_number()
-                if self.match(Token.COMMA):
-                    self.consume(Token.COMMA)
-                    num2 = self.parse_number()
-                    value += "<%s,%s>" % (num1, num2)
+                if self.match(Token.GREATER):
+                    value += "<%s>" % (-1) # Signifies no input
                 else:
-                    value += "<%s>" % (num1)
+                    num1 = self.parse_number()
+                    if self.match(Token.COMMA):
+                        self.consume(Token.COMMA)
+                        num2 = self.parse_number()
+                        value += "<%s,%s>" % (num1, num2)
+                    else:
+                        value += "<%s>" % (num1)
                 self.consume(Token.GREATER)
         return AnnotationNode(key, value)
 

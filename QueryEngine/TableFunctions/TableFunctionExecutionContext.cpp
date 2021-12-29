@@ -136,14 +136,14 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   }
   std::vector<const int8_t*> col_buf_ptrs;
   std::vector<int64_t> col_sizes;
-  std::vector<const int8_t*> str_dict_proxy_ptrs;
+  std::vector<const int8_t*> input_str_dict_proxy_ptrs;
   std::optional<size_t> input_num_rows;
 
   int col_index = -1;
   // TODO: col_list_bufs are allocated on CPU memory, so UDTFs with column_list
   // arguments are not supported on GPU atm.
   std::vector<std::vector<const int8_t*>> col_list_bufs;
-  std::vector<std::vector<const int8_t*>> col_list_str_dict_proxy_ptrs;
+  std::vector<std::vector<const int8_t*>> input_col_list_str_dict_proxy_ptrs;
   for (const auto& input_expr : exe_unit.input_exprs) {
     auto ti = input_expr->get_type_info();
     if (!ti.is_column_list()) {
@@ -173,42 +173,43 @@ ResultSetPtr TableFunctionExecutionContext::execute(
         input_num_rows = (buf_elem_count ? buf_elem_count : 1);
       }
 
-      int8_t* str_dict_proxy_ptr = nullptr;
+      int8_t* input_str_dict_proxy_ptr = nullptr;
       if (ti.is_subtype_dict_encoded_string()) {
-        const auto string_dictionary_proxy = executor->getStringDictionaryProxy(
+        const auto input_string_dictionary_proxy = executor->getStringDictionaryProxy(
             ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
-        str_dict_proxy_ptr = reinterpret_cast<int8_t*>(string_dictionary_proxy);
+        input_str_dict_proxy_ptr =
+            reinterpret_cast<int8_t*>(input_string_dictionary_proxy);
       }
       if (ti.is_column_list()) {
         if (col_index == -1) {
           col_list_bufs.push_back({});
-          col_list_str_dict_proxy_ptrs.push_back({});
+          input_col_list_str_dict_proxy_ptrs.push_back({});
           col_list_bufs.back().reserve(ti.get_dimension());
-          col_list_str_dict_proxy_ptrs.back().reserve(ti.get_dimension());
+          input_col_list_str_dict_proxy_ptrs.back().reserve(ti.get_dimension());
         } else {
           CHECK_EQ(col_sizes.back(), buf_elem_count);
         }
         col_index++;
         col_list_bufs.back().push_back(col_buf);
-        col_list_str_dict_proxy_ptrs.back().push_back(str_dict_proxy_ptr);
+        input_col_list_str_dict_proxy_ptrs.back().push_back(input_str_dict_proxy_ptr);
         // append col_buf to column_list col_buf
         if (col_index + 1 == ti.get_dimension()) {
           col_index = -1;
         }
         // columns in the same column_list point to column_list data
         col_buf_ptrs.push_back((const int8_t*)col_list_bufs.back().data());
-        str_dict_proxy_ptrs.push_back(
-            (const int8_t*)col_list_str_dict_proxy_ptrs.back().data());
+        input_str_dict_proxy_ptrs.push_back(
+            (const int8_t*)input_col_list_str_dict_proxy_ptrs.back().data());
       } else {
         col_buf_ptrs.push_back(col_buf);
-        str_dict_proxy_ptrs.push_back(str_dict_proxy_ptr);
+        input_str_dict_proxy_ptrs.push_back(input_str_dict_proxy_ptr);
       }
       col_sizes.push_back(buf_elem_count);
     } else if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
       // TODO(adb): Unify literal handling with rest of system, either in Codegen or as a
       // separate serialization component
       col_sizes.push_back(0);
-      str_dict_proxy_ptrs.push_back(nullptr);
+      input_str_dict_proxy_ptrs.push_back(nullptr);
       const auto const_val_datum = constant_val->get_constval();
       const auto& ti = constant_val->get_type_info();
       if (ti.is_fp()) {
@@ -285,6 +286,19 @@ ResultSetPtr TableFunctionExecutionContext::execute(
                                                       // row size
     CHECK(input_num_rows);
   }
+  std::vector<int8_t*> output_str_dict_proxy_ptrs;
+  for (const auto& output_expr : exe_unit.target_exprs) {
+    int8_t* output_str_dict_proxy_ptr = nullptr;
+    auto ti = output_expr->get_type_info();
+    if (ti.is_dict_encoded_string()) {
+      const auto output_string_dictionary_proxy = executor->getStringDictionaryProxy(
+          ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
+      output_str_dict_proxy_ptr =
+          reinterpret_cast<int8_t*>(output_string_dictionary_proxy);
+    }
+    output_str_dict_proxy_ptrs.emplace_back(output_str_dict_proxy_ptr);
+  }
+
   if (is_pre_launch_udtf) {
     CHECK(exe_unit.table_func.containsPreFlightFn());
     launchPreCodeOnCpu(
@@ -303,8 +317,9 @@ ResultSetPtr TableFunctionExecutionContext::execute(
             std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context),
             col_buf_ptrs,
             col_sizes,
-            str_dict_proxy_ptrs,
+            input_str_dict_proxy_ptrs,
             *input_num_rows,
+            output_str_dict_proxy_ptrs,
             executor);
       case ExecutorDeviceType::GPU:
         return launchGpuCode(
@@ -312,8 +327,9 @@ ResultSetPtr TableFunctionExecutionContext::execute(
             std::dynamic_pointer_cast<GpuCompilationContext>(compilation_context),
             col_buf_ptrs,
             col_sizes,
-            str_dict_proxy_ptrs,
+            input_str_dict_proxy_ptrs,
             *input_num_rows,
+            output_str_dict_proxy_ptrs,
             /*device_id=*/0,
             executor);
     }
@@ -363,8 +379,9 @@ void TableFunctionExecutionContext::launchPreCodeOnCpu(
       reinterpret_cast<const int8_t*>(mgr.get()),
       byte_stream_ptr,  // input columns buffer
       col_sizes_ptr,    // input column sizes
-      nullptr,  // string dictionary proxy ptrs - not supported for pre-flights yet
+      nullptr,  // input string dictionary proxy ptrs - not supported for pre-flights yet
       nullptr,
+      nullptr,  // output string dictionary proxy ptrs - not supported for pre-flights yet
       &output_row_count);
 
   if (exe_unit.table_func.hasPreFlightOutputSizer()) {
@@ -385,8 +402,9 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     const std::shared_ptr<CpuCompilationContext>& compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
     std::vector<int64_t>& col_sizes,
-    std::vector<const int8_t*>& str_dict_proxy_ptrs,
+    std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
     const size_t elem_count,  // taken from first source only currently
+    std::vector<int8_t*>& output_str_dict_proxy_ptrs,
     Executor* executor) {
   auto timer = DEBUG_TIMER(__func__);
   int64_t output_row_count = 0;
@@ -423,18 +441,24 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   if (!col_sizes.empty()) {
     CHECK(col_sizes_ptr);
   }
-  const auto str_dict_proxy_byte_stream_ptr =
-      !str_dict_proxy_ptrs.empty()
-          ? reinterpret_cast<const int8_t**>(str_dict_proxy_ptrs.data())
+  const auto input_str_dict_proxy_byte_stream_ptr =
+      !input_str_dict_proxy_ptrs.empty()
+          ? reinterpret_cast<const int8_t**>(input_str_dict_proxy_ptrs.data())
+          : nullptr;
+
+  const auto output_str_dict_proxy_byte_stream_ptr =
+      !output_str_dict_proxy_ptrs.empty()
+          ? reinterpret_cast<int8_t**>(output_str_dict_proxy_ptrs.data())
           : nullptr;
 
   // execute
   const auto err = compilation_context->table_function_entry_point()(
       reinterpret_cast<const int8_t*>(mgr.get()),
-      byte_stream_ptr,                 // input columns buffer
-      col_sizes_ptr,                   // input column sizes
-      str_dict_proxy_byte_stream_ptr,  // input str dictionary proxies
+      byte_stream_ptr,                       // input columns buffer
+      col_sizes_ptr,                         // input column sizes
+      input_str_dict_proxy_byte_stream_ptr,  // input str dictionary proxies
       nullptr,
+      output_str_dict_proxy_byte_stream_ptr,
       &output_row_count);
 
   if (err == TableFunctionErrorCode::GenericError) {
@@ -502,8 +526,9 @@ enum {
   ERROR_BUFFER,
   COL_BUFFERS,
   COL_SIZES,
-  STR_DICT_PROXIES,
+  INPUT_STR_DICT_PROXIES,
   OUTPUT_BUFFERS,
+  OUTPUT_STR_DICT_PROXIES,
   OUTPUT_ROW_COUNT,
   KERNEL_PARAM_COUNT,
 };
@@ -514,8 +539,9 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
     const std::shared_ptr<GpuCompilationContext>& compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
     std::vector<int64_t>& col_sizes,
-    std::vector<const int8_t*>& str_dict_proxy_ptrs,
+    std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
     const size_t elem_count,
+    std::vector<int8_t*>& output_str_dict_proxy_ptrs,
     const int device_id,
     Executor* executor) {
 #ifdef HAVE_CUDA

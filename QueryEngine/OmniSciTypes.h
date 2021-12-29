@@ -24,7 +24,10 @@
 /* `../` is required for UDFCompiler */
 #include "../Shared/InlineNullValues.h"
 #include "../Shared/funcannotations.h"
+
+#ifndef __CUDACC__
 #include "../StringDictionary/StringDictionaryProxy.h"
+#endif  // #ifndef __CUDACC__
 
 // declaring CPU functions as __host__ can help catch erroneous compilation of
 // these being done by the CUDA compiler at build time
@@ -277,8 +280,9 @@ template <>
 struct Column<TextEncodingDict> {
   TextEncodingDict* ptr_;  // row data
   int64_t size_;           // row count
-  // int8_t* string_dict_proxy_address;
+#ifndef __CUDACC__
   StringDictionaryProxy* string_dict_proxy_;
+#endif  // #ifndef __CUDACC__
 
   DEVICE TextEncodingDict& operator[](const unsigned int index) const {
     if (index >= size_) {
@@ -300,10 +304,12 @@ struct Column<TextEncodingDict> {
 
 #ifndef __CUDACC__
   DEVICE inline const std::string getString(int64_t index) const {
-    // StringDictionaryProxy* string_dict_proxy =
-    //    reinterpret_cast<StringDictionaryProxy*>(string_dict_proxy_address);
     return isNull(index) ? "" : string_dict_proxy_->getString(ptr_[index].value);
   }
+  DEVICE inline const TextEncodingDict getStringId(const std::string& str) {
+    return string_dict_proxy_->getOrAddTransient(str);
+  }
+
 #endif
 
   DEVICE Column<TextEncodingDict>& operator=(const Column<TextEncodingDict>& other) {
@@ -369,10 +375,12 @@ struct ColumnList {
 
 template <>
 struct ColumnList<TextEncodingDict> {
-  int8_t** ptrs_;                                // ptrs to columns data
-  int64_t num_cols_;                             // the length of columns list
-  int64_t size_;                                 // the size of columns
+  int8_t** ptrs_;     // ptrs to columns data
+  int64_t num_cols_;  // the length of columns list
+  int64_t size_;      // the size of columns
+#ifndef __CUDACC__
   StringDictionaryProxy** string_dict_proxies_;  // the size of columns
+#endif                                           // #ifndef __CUDACC__
 
   DEVICE int64_t size() const { return size_; }
   DEVICE int64_t numCols() const { return num_cols_; }
@@ -380,9 +388,18 @@ struct ColumnList<TextEncodingDict> {
     if (index >= 0 && index < num_cols_) {
       return {reinterpret_cast<TextEncodingDict*>(ptrs_[index]),
               size_,
-              string_dict_proxies_[index]};
+#ifndef __CUDACC__
+              string_dict_proxies_[index]
+#endif  // #ifndef __CUDACC__
+      };
     } else {
-      return {nullptr, -1, nullptr};
+      return {nullptr,
+              -1
+#ifndef __CUDACC__
+              ,
+              nullptr
+#endif  // #ifndef__CUDACC__
+      };
     }
   }
 

@@ -35,7 +35,7 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
 
   const auto func_type = llvm::FunctionType::get(
       i32_type,
-      {pi8_type, ppi8_type, pi64_type, ppi8_type, ppi64_type, pi64_type},
+      {pi8_type, ppi8_type, pi64_type, ppi8_type, ppi64_type, ppi8_type, pi64_type},
       false);
 
   auto func = llvm::Function::Create(func_type,
@@ -53,6 +53,8 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   input_str_dict_proxies->setName("input_str_dict_proxies");
   const auto output_buffers = &*(++arg_it);
   output_buffers->setName("output_buffers");
+  const auto output_str_dict_proxies = &*(++arg_it);
+  output_str_dict_proxies->setName("output_str_dict_proxies");
   const auto output_row_count = &*(++arg_it);
   output_row_count->setName("output_row_count");
   return func;
@@ -368,13 +370,14 @@ void TableFunctionCompilationContext::generateEntryPoint(
     bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(entry_point_func_);
-  CHECK_EQ(entry_point_func_->arg_size(), 6);
+  CHECK_EQ(entry_point_func_->arg_size(), 7);
   auto arg_it = entry_point_func_->arg_begin();
   const auto mgr_ptr = &*arg_it;
   const auto input_cols_arg = &*(++arg_it);
   const auto input_row_counts_arg = &*(++arg_it);
   const auto input_str_dict_proxies_arg = &*(++arg_it);
   const auto output_buffers_arg = &*(++arg_it);
+  const auto output_str_dict_proxies_arg = &*(++arg_it);
   const auto output_row_count_ptr = &*(++arg_it);
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
@@ -398,7 +401,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
   auto row_count_heads = generate_column_heads_load(
       exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
-  auto str_dict_proxy_heads =
+  auto input_str_dict_proxy_heads =
       !is_gpu ? (generate_column_heads_load(exe_unit.input_exprs.size(),
                                             input_str_dict_proxies_arg,
                                             cgen_state->ir_builder_,
@@ -461,7 +464,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
                        ti.get_elem_type(),
                        col_heads[i],
                        row_count_heads[i],
-                       !is_gpu ? str_dict_proxy_heads[i] : nullptr,
+                       !is_gpu ? input_str_dict_proxy_heads[i] : nullptr,
                        ctx,
                        cgen_state->ir_builder_);
       func_args.push_back((pass_column_by_value
@@ -477,7 +480,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
             col_heads[i],
             ti.get_dimension(),
             row_count_heads[i],
-            str_dict_proxy_heads[i],
+            input_str_dict_proxy_heads[i],
             ctx,
             cgen_state->ir_builder_);
         func_args.push_back(col_list);
@@ -494,6 +497,13 @@ void TableFunctionCompilationContext::generateEntryPoint(
           ti.get_type_name());
     }
   }
+  auto output_str_dict_proxy_heads =
+      !is_gpu ? (generate_column_heads_load(exe_unit.target_exprs.size(),
+                                            output_str_dict_proxies_arg,
+                                            cgen_state->ir_builder_,
+                                            ctx))
+              : std::vector<llvm::Value*>();
+
   std::vector<llvm::Value*> output_col_args;
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
     auto* gep = cgen_state->ir_builder_.CreateGEP(
@@ -514,7 +524,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
         (is_gpu ? output_load : nullptr),  // CPU: set_output_row_size will set the output
                                            // Column ptr member
         output_row_count_ptr,
-        nullptr,
+        !is_gpu ? output_str_dict_proxy_heads[i] : nullptr,
         ctx,
         cgen_state->ir_builder_);
     if (!is_gpu && !emit_only_preflight_fn) {

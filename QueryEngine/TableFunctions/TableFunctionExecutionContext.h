@@ -56,8 +56,9 @@ class TableFunctionExecutionContext {
       const std::shared_ptr<CpuCompilationContext>& compilation_context,
       std::vector<const int8_t*>& col_buf_ptrs,
       std::vector<int64_t>& col_sizes,
-      std::vector<const int8_t*>& str_dict_proxy_ptrs,
+      std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
       const size_t elem_count,
+      std::vector<int8_t*>& output_str_dict_proxy_ptrs,
       Executor* executor);
 
   ResultSetPtr launchGpuCode(
@@ -65,8 +66,9 @@ class TableFunctionExecutionContext {
       const std::shared_ptr<GpuCompilationContext>& compilation_context,
       std::vector<const int8_t*>& col_buf_ptrs,
       std::vector<int64_t>& col_sizes,
-      std::vector<const int8_t*>& str_dict_proxy_ptrs,
+      std::vector<const int8_t*>& input_str_dict_proxy_ptrs,
       const size_t elem_count,
+      std::vector<int8_t*>& output_str_dict_proxy_ptrs,
       const int device_id,
       Executor* executor);
 

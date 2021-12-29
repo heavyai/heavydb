@@ -670,6 +670,78 @@ int32_t ct_binding_str_equals__cpu_(const ColumnList<TextEncodingDict>& input_st
   return num_rows;
 }
 
+// clang-format off
+/*
+  UDTF: ct_substr__cpu_(TableFunctionManager, Cursor<Column<TextEncodingDict> str, Column<int> pos, Column<int> len>) -> Column<TextEncodingDict> substr | input_id=args<0>
+*/
+// clang-format on
+
+EXTENSION_NOINLINE_HOST
+int32_t ct_substr__cpu_(TableFunctionManager& mgr,
+                        const Column<TextEncodingDict>& input_str,
+                        const Column<int>& pos,
+                        const Column<int>& len,
+                        Column<TextEncodingDict>& output_substr) {
+  const int64_t num_rows = input_str.size();
+  mgr.set_output_row_size(num_rows);
+  for (int64_t row_idx = 0; row_idx < num_rows; row_idx++) {
+    const std::string input_string{input_str.getString(row_idx)};
+    const std::string substring = input_string.substr(pos[row_idx], len[row_idx]);
+    const TextEncodingDict substr_id = output_substr.getStringId(substring);
+    output_substr[row_idx] = substr_id;
+  }
+  return num_rows;
+}
+
+// clang-format off
+/*
+  UDTF: ct_string_concat__cpu_(TableFunctionManager, Cursor<ColumnList<TextEncodingDict>>, TextEncodingNone separator) -> Column<TextEncodingDict> concatted_str | input_id=args<0, 0>
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_string_concat__cpu_(TableFunctionManager& mgr,
+                               const ColumnList<TextEncodingDict>& input_strings,
+                               const TextEncodingNone& separator,
+                               Column<TextEncodingDict>& concatted_string) {
+  const int64_t num_rows = input_strings.size();
+  const int64_t num_cols = input_strings.numCols();
+  const std::string separator_str{separator.getString()};
+  mgr.set_output_row_size(num_rows);
+  for (int64_t row_idx = 0; row_idx < num_rows; row_idx++) {
+    if (num_cols > 0) {
+      std::string concatted_output{input_strings[0].getString(row_idx)};
+      for (int64_t col_idx = 1; col_idx < num_cols; ++col_idx) {
+        concatted_output += separator_str;
+        concatted_output += input_strings[col_idx].getString(row_idx);
+      }
+      const TextEncodingDict concatted_str_id =
+          concatted_string.getStringId(concatted_output);
+      concatted_string[row_idx] = concatted_str_id;
+    } else {
+      concatted_string.setNull(row_idx);
+    }
+  }
+  return num_rows;
+}
+
+// clang-format off
+/*
+  UDTF: ct_synthesize_new_dict__cpu_(TableFunctionManager, int32_t num_strings) -> Column<TextEncodingDict> new_dict_col | input_id=args<0>
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_synthesize_new_dict__cpu_(TableFunctionManager& mgr,
+                                     const int64_t num_strings,
+                                     Column<TextEncodingDict>& new_dict_col) {
+  mgr.set_output_row_size(num_strings);
+  for (int32_t s = 0; s < num_strings; ++s) {
+    const std::string new_string = "String_" + std::to_string(s);
+    const int32_t string_id = new_dict_col.getStringId(new_string);
+    new_dict_col[s] = string_id;
+  }
+  return num_strings;
+}
+
 #endif  // #ifndef __CUDACC__
 
 #ifndef __CUDACC__

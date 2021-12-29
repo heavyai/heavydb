@@ -999,7 +999,7 @@ TEST_F(TableFunctions, CursorlessInputs) {
   }
 }
 
-TEST_F(TableFunctions, DictionaryAccess) {
+TEST_F(TableFunctions, DictionaryReadAccess) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     // Column access to string dictionary proxy
@@ -1071,6 +1071,75 @@ TEST_F(TableFunctions, DictionaryAccess) {
         auto is_equal = boost::get<int64_t>(TestHelpers::v<int64_t>(row[1]));
         ASSERT_EQ(str, expected_result_strings[r]);
         ASSERT_EQ(is_equal, 1);
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, DictionaryWriteAccess) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    {
+      // Test write to one column sharing output dictionary with input column
+      const auto rows = run_multiple_agg(
+          "SELECT substr, COUNT(*) AS n, ANY_VALUE(KEY_FOR_STRING(substr)) AS str_key "
+          "FROM TABLE(ct_substr(CURSOR(SELECT t1, 0, 4 FROM sd_test))) GROUP BY substr "
+          "ORDER by substr;",
+          dt);
+      const std::vector<std::string> expected_result_strings{"Cali", "New ", "Ohio"};
+      const std::vector<int64_t> expected_result_counts{1, 3, 1};
+      ASSERT_EQ(rows->rowCount(), size_t(3));
+      ASSERT_EQ(rows->colCount(), size_t(3));
+      for (size_t r = 0; r < 3; ++r) {
+        auto row = rows->getNextRow(true, false);
+        auto str = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        auto count = boost::get<int64_t>(TestHelpers::v<int64_t>(row[1]));
+        auto str_key = boost::get<int64_t>(TestHelpers::v<int64_t>(row[2]));
+        ASSERT_EQ(str, expected_result_strings[r]);
+        ASSERT_EQ(count, expected_result_counts[r]);
+        if (r < 2) {
+          ASSERT_LE(str_key, -2);  // "Cali" and "New " should have temp dictionary ids
+                                   // since they are not in the original dictionary
+        } else {
+          ASSERT_GE(str_key, 0);  // "Ohio" have regular dictioanry id
+        }
+      }
+    }
+
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT concatted_str FROM TABLE(ct_string_concat(CURSOR(SELECT t1, t2, t3 "
+          "FROM sd_test), '|')) ORDER BY concatted_str;",
+          dt);
+      const std::vector<std::string> expected_result_strings{
+          "California|California|California",
+          "New York|Indiana|Indiana",
+          "New York|New York|New York",
+          "New York|Ohio|California",
+          "Ohio|Ohio|North Carolina"};
+      ASSERT_EQ(rows->rowCount(), expected_result_strings.size());
+      ASSERT_EQ(rows->colCount(), size_t(1));
+      for (size_t r = 0; r < expected_result_strings.size(); ++r) {
+        auto row = rows->getNextRow(true, false);
+        auto str = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(str, expected_result_strings[r]);
+      }
+    }
+
+    {
+      // Test creating a new dictionary (i.e. dictionary is created for output column for
+      // which there is no input)
+      const auto rows = run_multiple_agg(
+          "SELECT new_dict_col FROM TABLE(ct_synthesize_new_dict(3)) ORDER BY "
+          "new_dict_col;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), 3UL);
+      ASSERT_EQ(rows->colCount(), size_t(1));
+      for (size_t r = 0; r < 3; ++r) {
+        auto row = rows->getNextRow(true, false);
+        auto str = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        ASSERT_EQ(str, "String_" + std::to_string(r));
       }
     }
   }
