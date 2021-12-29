@@ -74,6 +74,7 @@ class CpuCompilationContext : public CompilationContext {
   using TableFunctionEntryPointPtr = int32_t (*)(const int8_t* mgr_ptr,
                                                  const int8_t** input_cols,
                                                  const int64_t* input_row_count,
+                                                 const int8_t** str_dict_proxy_ptrs,
                                                  int64_t** out,
                                                  int64_t* output_row_count);
   TableFunctionEntryPointPtr table_function_entry_point() const {

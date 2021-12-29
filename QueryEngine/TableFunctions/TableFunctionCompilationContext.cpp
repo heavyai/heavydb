@@ -34,7 +34,9 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   const auto i32_type = get_int_type(32, ctx);
 
   const auto func_type = llvm::FunctionType::get(
-      i32_type, {pi8_type, ppi8_type, pi64_type, ppi64_type, pi64_type}, false);
+      i32_type,
+      {pi8_type, ppi8_type, pi64_type, ppi8_type, ppi64_type, pi64_type},
+      false);
 
   auto func = llvm::Function::Create(func_type,
                                      llvm::Function::ExternalLinkage,
@@ -47,6 +49,8 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   input_cols_arg->setName("input_col_buffers");
   const auto input_row_counts = &*(++arg_it);
   input_row_counts->setName("input_row_counts");
+  const auto input_str_dict_proxies = &*(++arg_it);
+  input_str_dict_proxies->setName("input_str_dict_proxies");
   const auto output_buffers = &*(++arg_it);
   output_buffers->setName("output_buffers");
   const auto output_row_count = &*(++arg_it);
@@ -79,6 +83,7 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
                                                     const SQLTypeInfo& data_target_info,
                                                     llvm::Value* data_ptr,
                                                     llvm::Value* data_size,
+                                                    llvm::Value* data_str_dict_proxy_ptr,
                                                     llvm::LLVMContext& ctx,
                                                     llvm::IRBuilder<>& ir_builder) {
   /*
@@ -87,24 +92,45 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
     unspecified (have nullptr values) then the corresponding members
     are initialized with NULL and -1, respectively.
 
+    If we are allocating a TextEncodingDict Column type, this function
+    adds and populates a int8* pointer to a StringDictProxy object.
+
     Return a pair of Column allocation (caller should apply
     builder.CreateLoad to it in order to construct a Column instance
     as a value) and a pointer to the Column instance.
    */
   llvm::Type* data_ptr_llvm_type =
       get_llvm_type_from_sql_column_type(data_target_info, ctx);
+  const bool is_text_encoding_dict_type =
+      data_target_info.is_string() &&
+      data_target_info.get_compression() == kENCODING_DICT;
+
   llvm::StructType* col_struct_type =
-      llvm::StructType::get(ctx,
-                            {
-                                data_ptr_llvm_type,         /* T* ptr */
-                                llvm::Type::getInt64Ty(ctx) /* int64_t sz */
-                            });
+      is_text_encoding_dict_type
+          ? llvm::StructType::get(
+                ctx,
+                {
+                    data_ptr_llvm_type,           /* T* ptr */
+                    llvm::Type::getInt64Ty(ctx),  /* int64_t sz */
+                    llvm::Type::getInt8PtrTy(ctx) /* int64_t string_dictionary_ptr */
+                })
+          : llvm::StructType::get(ctx,
+                                  {
+                                      data_ptr_llvm_type,         /* T* ptr */
+                                      llvm::Type::getInt64Ty(ctx) /* int64_t sz */
+                                  });
   auto col = ir_builder.CreateAlloca(col_struct_type);
   col->setName(col_name);
   auto col_ptr_ptr = ir_builder.CreateStructGEP(col_struct_type, col, 0);
   auto col_sz_ptr = ir_builder.CreateStructGEP(col_struct_type, col, 1);
+  auto col_str_dict_ptr = is_text_encoding_dict_type
+                              ? ir_builder.CreateStructGEP(col_struct_type, col, 2)
+                              : nullptr;
   col_ptr_ptr->setName(col_name + ".ptr");
   col_sz_ptr->setName(col_name + ".sz");
+  if (is_text_encoding_dict_type) {
+    col_str_dict_ptr->setName(col_name + ".string_dict_proxy");
+  }
 
   if (data_ptr != nullptr) {
     if (data_ptr->getType() == data_ptr_llvm_type->getPointerElementType()) {
@@ -132,6 +158,17 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
     auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
     ir_builder.CreateStore(const_minus1, col_sz_ptr);
   }
+  if (is_text_encoding_dict_type) {
+    if (data_str_dict_proxy_ptr != nullptr) {
+      auto data_str_dict_proxy_type = data_str_dict_proxy_ptr->getType();
+      CHECK(data_str_dict_proxy_type->getPointerElementType()->isIntegerTy(8));
+      ir_builder.CreateStore(data_str_dict_proxy_ptr, col_str_dict_ptr);
+    } else {
+      ir_builder.CreateStore(llvm::Constant::getNullValue(llvm::Type::getInt8PtrTy(ctx)),
+                             col_str_dict_ptr);
+    }
+  }
+
   auto col_ptr = ir_builder.CreatePointerCast(
       col_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
   col_ptr->setName(col_name + "_ptr");
@@ -143,6 +180,7 @@ llvm::Value* alloc_column_list(std::string col_list_name,
                                llvm::Value* data_ptrs,
                                int length,
                                llvm::Value* data_size,
+                               llvm::Value* data_str_dict_proxy_ptrs,
                                llvm::LLVMContext& ctx,
                                llvm::IRBuilder<>& ir_builder) {
   /*
@@ -152,24 +190,44 @@ llvm::Value* alloc_column_list(std::string col_list_name,
     and -1, respectively.
    */
   llvm::Type* data_ptrs_llvm_type = llvm::Type::getInt8PtrTy(ctx);
+  const bool is_text_encoding_dict_type =
+      data_target_info.is_string() &&
+      data_target_info.get_compression() == kENCODING_DICT;
 
   llvm::StructType* col_list_struct_type =
-      llvm::StructType::get(ctx,
-                            {
-                                data_ptrs_llvm_type,         /* int8_t* ptrs */
-                                llvm::Type::getInt64Ty(ctx), /* int64_t length */
-                                llvm::Type::getInt64Ty(ctx)  /* int64_t size */
-                            });
+      is_text_encoding_dict_type
+          ? llvm::StructType::get(
+                ctx,
+                {
+                    data_ptrs_llvm_type,         /* int8_t* ptrs */
+                    llvm::Type::getInt64Ty(ctx), /* int64_t length */
+                    llvm::Type::getInt64Ty(ctx), /* int64_t size */
+                    data_ptrs_llvm_type          /* int8_t* str_dict_proxy_ptrs */
+                })
+          : llvm::StructType::get(ctx,
+                                  {
+                                      data_ptrs_llvm_type,         /* int8_t* ptrs */
+                                      llvm::Type::getInt64Ty(ctx), /* int64_t length */
+                                      llvm::Type::getInt64Ty(ctx)  /* int64_t size */
+                                  });
+
   auto col_list = ir_builder.CreateAlloca(col_list_struct_type);
   col_list->setName(col_list_name);
   auto col_list_ptr_ptr = ir_builder.CreateStructGEP(col_list_struct_type, col_list, 0);
   auto col_list_length_ptr =
       ir_builder.CreateStructGEP(col_list_struct_type, col_list, 1);
   auto col_list_size_ptr = ir_builder.CreateStructGEP(col_list_struct_type, col_list, 2);
+  auto col_str_dict_ptr_ptr =
+      is_text_encoding_dict_type
+          ? ir_builder.CreateStructGEP(col_list_struct_type, col_list, 3)
+          : nullptr;
 
   col_list_ptr_ptr->setName(col_list_name + ".ptrs");
   col_list_length_ptr->setName(col_list_name + ".length");
   col_list_size_ptr->setName(col_list_name + ".size");
+  if (is_text_encoding_dict_type) {
+    col_str_dict_ptr_ptr->setName(col_list_name + ".string_dict_proxies");
+  }
 
   CHECK(length >= 0);
   auto const_length = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), length, true);
@@ -203,6 +261,17 @@ llvm::Value* alloc_column_list(std::string col_list_name,
   } else {
     auto const_minus1 = llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), -1, true);
     ir_builder.CreateStore(const_minus1, col_list_size_ptr);
+  }
+
+  if (is_text_encoding_dict_type) {
+    if (data_str_dict_proxy_ptrs != nullptr) {
+      auto data_str_dict_proxies_type = data_str_dict_proxy_ptrs->getType();
+      CHECK(data_str_dict_proxies_type->getPointerElementType()->isIntegerTy(8));
+      ir_builder.CreateStore(data_str_dict_proxy_ptrs, col_str_dict_ptr_ptr);
+    } else {
+      ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptrs_llvm_type),
+                             col_list_ptr_ptr);
+    }
   }
 
   auto col_list_ptr = ir_builder.CreatePointerCast(
@@ -299,11 +368,12 @@ void TableFunctionCompilationContext::generateEntryPoint(
     bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(entry_point_func_);
-  CHECK_EQ(entry_point_func_->arg_size(), 5);
+  CHECK_EQ(entry_point_func_->arg_size(), 6);
   auto arg_it = entry_point_func_->arg_begin();
   const auto mgr_ptr = &*arg_it;
   const auto input_cols_arg = &*(++arg_it);
   const auto input_row_counts_arg = &*(++arg_it);
+  const auto input_str_dict_proxies_arg = &*(++arg_it);
   const auto output_buffers_arg = &*(++arg_it);
   const auto output_row_count_ptr = &*(++arg_it);
   auto cgen_state = executor_->getCgenStatePtr();
@@ -328,6 +398,12 @@ void TableFunctionCompilationContext::generateEntryPoint(
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
   auto row_count_heads = generate_column_heads_load(
       exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
+  auto str_dict_proxy_heads =
+      !is_gpu ? (generate_column_heads_load(exe_unit.input_exprs.size(),
+                                            input_str_dict_proxies_arg,
+                                            cgen_state->ir_builder_,
+                                            ctx))
+              : std::vector<llvm::Value*>();
   // The column arguments of C++ UDTFs processed by clang must be
   // passed by reference, see rbc issues 200 and 289.
   auto pass_column_by_value = passColumnsByValue(exe_unit, is_gpu);
@@ -369,6 +445,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
                        ti,
                        varchar_ptr,
                        varchar_size,
+                       nullptr,
                        ctx,
                        cgen_state->ir_builder_);
       func_args.push_back(
@@ -384,6 +461,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
                        ti.get_elem_type(),
                        col_heads[i],
                        row_count_heads[i],
+                       !is_gpu ? str_dict_proxy_heads[i] : nullptr,
                        ctx,
                        cgen_state->ir_builder_);
       func_args.push_back((pass_column_by_value
@@ -399,6 +477,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
             col_heads[i],
             ti.get_dimension(),
             row_count_heads[i],
+            str_dict_proxy_heads[i],
             ctx,
             cgen_state->ir_builder_);
         func_args.push_back(col_list);
@@ -435,6 +514,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
         (is_gpu ? output_load : nullptr),  // CPU: set_output_row_size will set the output
                                            // Column ptr member
         output_row_count_ptr,
+        nullptr,
         ctx,
         cgen_state->ir_builder_);
     if (!is_gpu && !emit_only_preflight_fn) {

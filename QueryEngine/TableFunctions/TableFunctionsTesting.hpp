@@ -618,6 +618,58 @@ NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(const Column<
   return num_rows;
 }
 
+// clang-format off
+/*
+  UDTF: ct_binding_str_length__cpu_(Cursor<TextEncodingDict>) -> Column<TextEncodingDict> string | input_id=args<0>, Column<int64_t> string_length
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_binding_str_length__cpu_(const Column<TextEncodingDict>& input_str,
+                                    Column<TextEncodingDict>& out_str,
+                                    Column<int64_t>& out_size) {
+  const int64_t num_rows = input_str.size();
+  set_output_row_size(num_rows);
+  for (int64_t i = 0; i < num_rows; i++) {
+    out_str[i] = input_str[i];
+    const std::string str = input_str.getString(i);
+    out_size[i] = str.size();
+  }
+  return num_rows;
+}
+
+// clang-format off
+/*
+  UDTF: ct_binding_str_equals__cpu_(Cursor<ColumnList<TextEncodingDict>>) -> Column<TextEncodingDict> string_if_equal | input_id=args<0, 0>, Column<bool> strings_are_equal
+*/
+// clang-format on
+EXTENSION_NOINLINE_HOST
+int32_t ct_binding_str_equals__cpu_(const ColumnList<TextEncodingDict>& input_strings,
+                                    Column<TextEncodingDict>& string_if_equal,
+                                    Column<bool>& strings_are_equal) {
+  const int64_t num_rows = input_strings.size();
+  const int64_t num_cols = input_strings.numCols();
+  set_output_row_size(num_rows);
+  for (int64_t r = 0; r < num_rows; r++) {
+    bool are_equal = true;
+    if (num_cols > 0) {
+      std::string first_str = input_strings[0].getString(r);
+      for (int64_t c = 1; c != num_cols; ++c) {
+        if (input_strings[c].getString(r) != first_str) {
+          are_equal = false;
+          break;
+        }
+      }
+      strings_are_equal[r] = are_equal;
+      if (are_equal && num_cols > 0) {
+        string_if_equal[r] = input_strings[0][r];
+      } else {
+        string_if_equal.setNull(r);
+      }
+    }
+  }
+  return num_rows;
+}
+
 #endif  // #ifndef __CUDACC__
 
 #ifndef __CUDACC__

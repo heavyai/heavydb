@@ -94,18 +94,23 @@ class TableFunctions : public ::testing::Test {
           "CREATE TABLE sd_test ("
           "   base TEXT ENCODING DICT(32),"
           "   derived TEXT,"
-          "   SHARED DICTIONARY (derived) REFERENCES sd_test(base)"
+          "   t1 TEXT ENCODING DICT(32),"
+          "   t2 TEXT,"
+          "   t3 TEXT ENCODING DICT(32),"
+          "   SHARED DICTIONARY (derived) REFERENCES sd_test(base),"
+          "   SHARED DICTIONARY (t2) REFERENCES sd_test(t1)"
           ");");
 
       TestHelpers::ValuesGenerator gen("sd_test");
-      std::vector<std::pair<std::string, std::string>> v = {{"'hello'", "'world'"},
-                                                            {"'foo'", "'bar'"},
-                                                            {"'bar'", "'baz'"},
-                                                            {"'world'", "'foo'"},
-                                                            {"'baz'", "'hello'"}};
+      std::vector<std::vector<std::string>> v = {
+          {"'hello'", "'world'", "'California'", "'California'", "'California'"},
+          {"'foo'", "'bar'", "'Ohio'", "'Ohio'", "'North Carolina'"},
+          {"'bar'", "'baz'", "'New York'", "'Indiana'", "'Indiana'"},
+          {"'world'", "'foo'", "'New York'", "'New York'", "'New York'"},
+          {"'baz'", "'hello'", "'New York'", "'Ohio'", "'California'"}};
 
-      for (const auto& p : v) {
-        const auto insert_query = gen(p.first, p.second);
+      for (const auto r : v) {
+        const auto insert_query = gen(r[0], r[1], r[2], r[3], r[4]);
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
     }
@@ -989,6 +994,83 @@ TEST_F(TableFunctions, CursorlessInputs) {
       for (size_t r = 0; r < 4; ++r) {
         auto crt_row = rows->getNextRow(false, false);
         ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(7));
+      }
+    }
+  }
+}
+
+TEST_F(TableFunctions, DictionaryAccess) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Column access to string dictionary proxy
+
+    auto len_test = [](const std::shared_ptr<ResultSet>& rows,
+                       const std::vector<std::string>& expected_result_set) {
+      ASSERT_EQ(rows->colCount(), size_t(2));  // string and length
+      const size_t num_rows{rows->rowCount()};
+      ASSERT_EQ(num_rows, expected_result_set.size());
+      for (size_t r = 0; r < num_rows; ++r) {
+        auto row = rows->getNextRow(true, false);
+        auto s = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        const int64_t len = TestHelpers::v<int64_t>(row[1]);
+        ASSERT_EQ(s, expected_result_set[r]);
+        ASSERT_GE(len, 0L);
+        ASSERT_EQ(static_cast<size_t>(len), s.size());
+      }
+    };
+
+    {
+      // Test default TEXT ENCODING DICT(32) access
+      const auto rows = run_multiple_agg(
+          "SELECT string, string_length FROM TABLE(ct_binding_str_length(cursor(SELECT "
+          "t1 FROM "
+          "sd_test))) ORDER BY string;",
+          dt);
+      const std::vector<std::string> expected_result_set{
+          "California", "New York", "New York", "New York", "Ohio"};
+      len_test(rows, expected_result_set);
+    }
+
+    {
+      // Test shared dict access
+      const auto rows = run_multiple_agg(
+          "SELECT string, string_length FROM TABLE(ct_binding_str_length(cursor(SELECT "
+          "t2 FROM "
+          "sd_test))) ORDER BY string;",
+          dt);
+      const std::vector<std::string> expected_result_set{
+          "California", "Indiana", "New York", "Ohio", "Ohio"};
+      len_test(rows, expected_result_set);
+    }
+
+    {
+      // Test TEXT ENCODING DICT(8) access
+      const auto rows = run_multiple_agg(
+          "SELECT string, string_length FROM TABLE(ct_binding_str_length(cursor(SELECT "
+          "t3 FROM "
+          "sd_test))) ORDER BY string;",
+          dt);
+      const std::vector<std::string> expected_result_set{
+          "California", "California", "Indiana", "New York", "North Carolina"};
+      len_test(rows, expected_result_set);
+    }
+
+    {
+      // Test ability to equality check between strings
+      const auto rows = run_multiple_agg(
+          "SELECT string_if_equal, strings_are_equal FROM "
+          "TABLE(ct_binding_str_equals(cursor(SELECT t1, t2, t3 FROM "
+          "sd_test))) WHERE string_if_equal IS NOT NULL ORDER BY string_if_equal NULLS "
+          "LAST;",
+          dt);
+      const std::vector<std::string> expected_result_strings{"California", "New York"};
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      for (size_t r = 0; r < 2; ++r) {
+        auto row = rows->getNextRow(true, false);
+        auto str = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        auto is_equal = boost::get<int64_t>(TestHelpers::v<int64_t>(row[1]));
+        ASSERT_EQ(str, expected_result_strings[r]);
+        ASSERT_EQ(is_equal, 1);
       }
     }
   }

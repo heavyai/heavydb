@@ -24,6 +24,7 @@
 /* `../` is required for UDFCompiler */
 #include "../Shared/InlineNullValues.h"
 #include "../Shared/funcannotations.h"
+#include "../StringDictionary/StringDictionaryProxy.h"
 
 // declaring CPU functions as __host__ can help catch erroneous compilation of
 // these being done by the CUDA compiler at build time
@@ -235,11 +236,7 @@ struct Column {
       throw std::runtime_error("column buffer index is out of range");
 #else
       auto& null_value = Column_null_value<T>;
-      if constexpr (std::is_same<T, TextEncodingDict>::value) {
-        set_null(null_value.value);
-      } else {
-        set_null(null_value);
-      }
+      set_null(null_value);
       return null_value;
 #endif
     }
@@ -277,14 +274,64 @@ struct Column {
 };
 
 template <>
-DEVICE inline bool Column<TextEncodingDict>::isNull(int64_t index) const {
-  return is_null(ptr_[index].value);
-}
+struct Column<TextEncodingDict> {
+  TextEncodingDict* ptr_;  // row data
+  int64_t size_;           // row count
+  // int8_t* string_dict_proxy_address;
+  StringDictionaryProxy* string_dict_proxy_;
 
-template <>
-DEVICE inline void Column<TextEncodingDict>::setNull(int64_t index) {
-  set_null(ptr_[index].value);
-}
+  DEVICE TextEncodingDict& operator[](const unsigned int index) const {
+    if (index >= size_) {
+#ifndef __CUDACC__
+      throw std::runtime_error("column buffer index is out of range");
+#else
+      static DEVICE TextEncodingDict null_value;
+      set_null(null_value.value);
+      return null_value;
+#endif
+    }
+    return ptr_[index];
+  }
+  DEVICE int64_t size() const { return size_; }
+
+  DEVICE inline bool isNull(int64_t index) const { return is_null(ptr_[index].value); }
+
+  DEVICE inline void setNull(int64_t index) { set_null(ptr_[index].value); }
+
+#ifndef __CUDACC__
+  DEVICE inline const std::string getString(int64_t index) const {
+    // StringDictionaryProxy* string_dict_proxy =
+    //    reinterpret_cast<StringDictionaryProxy*>(string_dict_proxy_address);
+    return isNull(index) ? "" : string_dict_proxy_->getString(ptr_[index].value);
+  }
+#endif
+
+  DEVICE Column<TextEncodingDict>& operator=(const Column<TextEncodingDict>& other) {
+#ifndef __CUDACC__
+    if (size() == other.size()) {
+      memcpy(ptr_, other.ptr_, other.size() * sizeof(TextEncodingDict));
+    } else {
+      throw std::runtime_error("cannot copy assign columns with different sizes");
+    }
+#else
+    if (size() == other.size()) {
+      for (unsigned int i = 0; i < size(); i++) {
+        ptr_[i] = other[i];
+      }
+    } else {
+      // TODO: set error
+    }
+#endif
+    return *this;
+  }
+
+#ifdef HAVE_TOSTRING
+  std::string toString() const {
+    return ::typeName(this) + "(ptr=" + ::toString(reinterpret_cast<void*>(ptr_)) +
+           ", size=" + std::to_string(size_) + ")";
+  }
+#endif
+};
 
 /*
   ColumnList is an ordered list of Columns.
@@ -302,6 +349,41 @@ struct ColumnList {
       return {reinterpret_cast<T*>(ptrs_[index]), size_};
     else
       return {nullptr, -1};
+  }
+
+#ifdef HAVE_TOSTRING
+
+  std::string toString() const {
+    std::string result = ::typeName(this) + "(ptrs=[";
+    for (int64_t index = 0; index < num_cols_; index++) {
+      result += ::toString(reinterpret_cast<void*>(ptrs_[index])) +
+                (index < num_cols_ - 1 ? ", " : "");
+    }
+    result += "], num_cols=" + std::to_string(num_cols_) +
+              ", size=" + std::to_string(size_) + ")";
+    return result;
+  }
+
+#endif
+};
+
+template <>
+struct ColumnList<TextEncodingDict> {
+  int8_t** ptrs_;                                // ptrs to columns data
+  int64_t num_cols_;                             // the length of columns list
+  int64_t size_;                                 // the size of columns
+  StringDictionaryProxy** string_dict_proxies_;  // the size of columns
+
+  DEVICE int64_t size() const { return size_; }
+  DEVICE int64_t numCols() const { return num_cols_; }
+  DEVICE Column<TextEncodingDict> operator[](const int index) const {
+    if (index >= 0 && index < num_cols_) {
+      return {reinterpret_cast<TextEncodingDict*>(ptrs_[index]),
+              size_,
+              string_dict_proxies_[index]};
+    } else {
+      return {nullptr, -1, nullptr};
+    }
   }
 
 #ifdef HAVE_TOSTRING
