@@ -69,17 +69,6 @@ const AccessPrivileges AccessPrivileges::DELETE_FROM_VIEW =
 const AccessPrivileges AccessPrivileges::TRUNCATE_VIEW =
     AccessPrivileges(ViewPrivileges::TRUNCATE_VIEW);
 
-const AccessPrivileges AccessPrivileges::ALL_SERVER =
-    AccessPrivileges(ServerPrivileges::ALL);
-const AccessPrivileges AccessPrivileges::CREATE_SERVER =
-    AccessPrivileges(ServerPrivileges::CREATE_SERVER);
-const AccessPrivileges AccessPrivileges::DROP_SERVER =
-    AccessPrivileges(ServerPrivileges::DROP_SERVER);
-const AccessPrivileges AccessPrivileges::ALTER_SERVER =
-    AccessPrivileges(ServerPrivileges::ALTER_SERVER);
-const AccessPrivileges AccessPrivileges::SERVER_USAGE =
-    AccessPrivileges(ServerPrivileges::SERVER_USAGE);
-
 std::string DBObjectTypeToString(DBObjectType type) {
   switch (type) {
     case DatabaseDBObjectType:

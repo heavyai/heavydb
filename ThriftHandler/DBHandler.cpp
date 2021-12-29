@@ -1960,20 +1960,6 @@ bool DBHandler::has_view_permission(const AccessPrivileges& privs,
   }
 }
 
-bool DBHandler::has_server_permission(const AccessPrivileges& privs,
-                                      const TDBObjectPermissions& permissions) {
-  CHECK(permissions.__isset.server_permissions_);
-  auto perms = permissions.server_permissions_;
-  if ((perms.create_ && !privs.hasPermission(ServerPrivileges::CREATE_SERVER)) ||
-      (perms.drop_ && !privs.hasPermission(ServerPrivileges::DROP_SERVER)) ||
-      (perms.alter_ && !privs.hasPermission(ServerPrivileges::ALTER_SERVER)) ||
-      (perms.usage_ && !privs.hasPermission(ServerPrivileges::SERVER_USAGE))) {
-    return false;
-  } else {
-    return true;
-  }
-}
-
 bool DBHandler::has_object_privilege(const TSessionId& sessionId,
                                      const std::string& granteeName,
                                      const std::string& objectName,

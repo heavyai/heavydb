@@ -1740,11 +1740,6 @@ void SysCatalog::grantAllOnDatabase_unsafe(const std::string& roleName,
   tmp_object.setPermissionType(ViewDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
 
-  if (g_enable_fsi) {
-    tmp_object.setPrivileges(AccessPrivileges::ALL_SERVER);
-    grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
-  }
-
   tmp_object.setPrivileges(AccessPrivileges::ALL_DASHBOARD);
   tmp_object.setPermissionType(DashboardDBObjectType);
   grantDBObjectPrivileges_unsafe(roleName, tmp_object, catalog);
