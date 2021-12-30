@@ -72,14 +72,16 @@ class PersistentStorageMgr : public AbstractBufferMgr {
     return fsi_;
   }
 
+  void registerDataProvider(int schema_id, std::unique_ptr<AbstractBufferMgr>);
+
  protected:
   bool isForeignStorage(const ChunkKey& chunk_key) const;
   AbstractBufferMgr* getStorageMgrForTableKey(const ChunkKey& table_key) const;
   bool isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const;
   int recoverDataWrapperIfCachedAndGetHighestFragId(const ChunkKey& table_key);
 
-  std::unique_ptr<File_Namespace::GlobalFileMgr> global_file_mgr_;
   std::unique_ptr<foreign_storage::ForeignStorageCache> disk_cache_;
   File_Namespace::DiskCacheConfig disk_cache_config_;
   std::shared_ptr<ForeignStorageInterface> fsi_;
+  std::unordered_map<int, std::unique_ptr<AbstractBufferMgr>> mgr_by_schema_id_;
 };
