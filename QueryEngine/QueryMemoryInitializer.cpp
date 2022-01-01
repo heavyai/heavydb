@@ -361,25 +361,20 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     return;
   }
 
-  size_t group_buffer_size{0};
   const size_t num_columns = query_mem_desc.getBufferColSlotCount();
-  group_buffer_size = num_rows_ * num_columns * sizeof(int64_t);
-  CHECK_GE(group_buffer_size, size_t(0));
-
-  const auto index_buffer_qw =
-      device_type == ExecutorDeviceType::GPU && query_mem_desc.hasKeylessHash()
-          ? query_mem_desc.getEntryCount()
-          : size_t(0);
-  const auto actual_group_buffer_size =
-      group_buffer_size + index_buffer_qw * sizeof(int64_t);
-  CHECK_GE(actual_group_buffer_size, group_buffer_size);
+  size_t total_group_by_buffer_size{0};
+  for (size_t i = 0; i < num_columns; ++i) {
+    const size_t col_width = exe_unit.target_exprs[i]->get_type_info().get_size();
+    const size_t group_buffer_size = num_rows_ * col_width;
+    total_group_by_buffer_size =
+        align_to_int64(total_group_by_buffer_size + group_buffer_size);
+  }
 
   CHECK_EQ(num_buffers_, size_t(1));
   auto group_by_buffer = alloc_group_by_buffer(
-      actual_group_buffer_size, nullptr, thread_idx_, row_set_mem_owner.get());
+      total_group_by_buffer_size, nullptr, thread_idx_, row_set_mem_owner.get());
   if (!query_mem_desc.lazyInitGroups(device_type)) {
-    initColumnarGroups(
-        query_mem_desc, group_by_buffer + index_buffer_qw, init_agg_vals_, executor);
+    initColumnarGroups(query_mem_desc, group_by_buffer, init_agg_vals_, executor);
   }
   group_by_buffers_.push_back(group_by_buffer);
 
@@ -951,37 +946,34 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
     const unsigned grid_size_x) {
   const size_t num_columns = query_mem_desc.getBufferColSlotCount();
   CHECK_GT(num_columns, size_t(0));
+  size_t total_group_by_buffer_size{0};
+  const auto col_slot_context = query_mem_desc.getColSlotContext();
 
-  const size_t column_size = num_rows_ * sizeof(int64_t);
-  const size_t groups_buffer_size = num_columns * (column_size == 0 ? 1 : column_size);
-  const size_t mem_size =
-      groups_buffer_size * (query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
+  std::vector<size_t> col_byte_offsets;
+  col_byte_offsets.reserve(num_columns);
+
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    const size_t col_width = col_slot_context.getSlotInfo(col_idx).logical_size;
+    size_t group_buffer_size = num_rows_ * col_width;
+    col_byte_offsets.emplace_back(total_group_by_buffer_size);
+    total_group_by_buffer_size =
+        align_to_int64(total_group_by_buffer_size + group_buffer_size);
+  }
 
   int8_t* dev_buffers_allocation{nullptr};
-  dev_buffers_allocation = device_allocator_->alloc(mem_size);
+  dev_buffers_allocation = device_allocator_->alloc(total_group_by_buffer_size);
   CHECK(dev_buffers_allocation);
 
   auto dev_buffers_mem = dev_buffers_allocation;
-  const size_t step{block_size_x};
-  const size_t num_ptrs{block_size_x * grid_size_x};
-  std::vector<int8_t*> dev_buffers(num_columns * num_ptrs);
-  auto dev_buffer = dev_buffers_mem;
-  for (size_t i = 0; i < num_ptrs; i += step) {
-    for (size_t j = 0; j < step; j += 1) {
-      for (size_t k = 0; k < num_columns; k++) {
-        dev_buffers[(i + j) * num_columns + k] = dev_buffer + k * column_size;
-      }
-    }
-    if (!query_mem_desc.blocksShareMemory()) {
-      dev_buffer += groups_buffer_size;
-    }
+  std::vector<int8_t*> dev_buffers(num_columns);
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    dev_buffers[col_idx] = dev_buffers_allocation + col_byte_offsets[col_idx];
   }
-
-  auto dev_ptr = device_allocator_->alloc(num_columns * num_ptrs * sizeof(CUdeviceptr));
+  auto dev_ptrs = device_allocator_->alloc(num_columns * sizeof(CUdeviceptr));
   device_allocator_->copyToDevice(
-      dev_ptr, dev_buffers.data(), num_columns * num_ptrs * sizeof(CUdeviceptr));
+      dev_ptrs, dev_buffers.data(), num_columns * sizeof(CUdeviceptr));
 
-  return {dev_ptr, dev_buffers_mem, (size_t)num_rows_};
+  return {dev_ptrs, dev_buffers_mem, (size_t)num_rows_};
 }
 
 void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
@@ -993,21 +985,30 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
     const unsigned block_size_x,
     const unsigned grid_size_x) {
   const size_t num_columns = query_mem_desc.getBufferColSlotCount();
-  const size_t column_size = entry_count * sizeof(int64_t);
-  const size_t orig_column_size = gpu_group_by_buffers.entry_count * sizeof(int64_t);
+
   int8_t* dev_buffer = gpu_group_by_buffers.data;
   int8_t* host_buffer = reinterpret_cast<int8_t*>(group_by_buffers_[0]);
-  CHECK_LE(column_size, orig_column_size);
+
+  const size_t original_entry_count = gpu_group_by_buffers.entry_count;
+  CHECK_LE(entry_count, original_entry_count);
+  size_t output_device_col_offset{0};
+  size_t output_host_col_offset{0};
+
+  const auto col_slot_context = query_mem_desc.getColSlotContext();
 
   auto allocator = data_mgr->createGpuAllocator(device_id);
-  if (orig_column_size == column_size) {
-    allocator->copyFromDevice(host_buffer, dev_buffer, column_size * num_columns);
-  } else {
-    for (size_t k = 0; k < num_columns; ++k) {
-      allocator->copyFromDevice(host_buffer, dev_buffer, column_size);
-      dev_buffer += orig_column_size;
-      host_buffer += column_size;
-    }
+
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    const size_t col_width = col_slot_context.getSlotInfo(col_idx).logical_size;
+    const size_t output_device_col_size = original_entry_count * col_width;
+    const size_t output_host_col_size = entry_count * col_width;
+    allocator->copyFromDevice(host_buffer + output_host_col_offset,
+                              dev_buffer + output_device_col_offset,
+                              output_host_col_size);
+    output_device_col_offset =
+        align_to_int64(output_device_col_offset + output_device_col_size);
+    output_host_col_offset =
+        align_to_int64(output_host_col_offset + output_host_col_size);
   }
 }
 

@@ -112,8 +112,9 @@ struct TableFunctionManager {
     query_mem_desc.setOutputColumnar(true);
 
     for (size_t i = 0; i < num_out_columns; i++) {
-      // All outputs padded to 8 bytes
-      query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});
+      // All outputs have padded width set to logical column width
+      const size_t col_width = exe_unit_.target_exprs[i]->get_type_info().get_size();
+      query_mem_desc.addColSlotInfo({std::make_tuple(col_width, col_width)});
     }
 
     // The members layout of Column must match with Column defined in
@@ -141,14 +142,18 @@ struct TableFunctionManager {
     if (output_num_rows_ != 0) {
       auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
       CHECK(group_by_buffers_ptr);
-      auto output_buffers_ptr = reinterpret_cast<int64_t*>(group_by_buffers_ptr[0]);
+      auto output_buffers_ptr = reinterpret_cast<int8_t*>(group_by_buffers_ptr[0]);
       for (size_t i = 0; i < num_out_columns; i++) {
         Column* col = reinterpret_cast<Column*>(output_column_ptrs[i]);
         CHECK(col);
         // set the members of output Column instances:
-        output_col_buf_ptrs[i] = output_buffers_ptr + i * output_num_rows_;
-        col->ptr = reinterpret_cast<int8_t*>(output_col_buf_ptrs[i]);
+        output_col_buf_ptrs[i] = reinterpret_cast<int64_t*>(output_buffers_ptr);
+        col->ptr = output_buffers_ptr;
         col->size = output_num_rows_;
+
+        const size_t col_width = exe_unit_.target_exprs[i]->get_type_info().get_size();
+        output_buffers_ptr =
+            align_to_int64(output_buffers_ptr + col_width * output_num_rows_);
       }
     }
   }

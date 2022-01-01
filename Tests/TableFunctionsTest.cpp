@@ -588,6 +588,30 @@ TEST_F(TableFunctions, GroupByIn) {
   }
 }
 
+TEST_F(TableFunctions, GroupByOut) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Tests QE-240 output column width mismatch fix
+      const auto rows = run_multiple_agg(
+          "SELECT out0, COUNT(*) AS n FROM(SELECT * FROM "
+          "TABLE(row_copier_text(CURSOR(SELECT base FROM sd_test ORDER BY "
+          "KEY_FOR_STRING(base) LIMIT 2), 2))) GROUP BY out0 ORDER by out0;",
+          dt);
+      std::vector<std::string> expected_out0{"hello", "world"};
+      std::vector<int64_t> expected_n{2, 2};
+      ASSERT_EQ(rows->rowCount(), size_t(2));
+      for (size_t i = 0; i < 2; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto out0 = boost::get<std::string>(TestHelpers::v<NullableString>(row[0]));
+        auto n = TestHelpers::v<int64_t>(row[1]);
+        ASSERT_EQ(out0, expected_out0[i]);
+        ASSERT_EQ(n, expected_n[i]);
+      }
+    }
+  }
+}
+
 TEST_F(TableFunctions, GroupByInAndOut) {
   auto check_result = [](const auto rows, const size_t copies) {
     ASSERT_EQ(rows->rowCount(), size_t(5));

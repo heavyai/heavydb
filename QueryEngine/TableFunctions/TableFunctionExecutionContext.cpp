@@ -446,8 +446,6 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
 
   mgr->query_buffers->getResultSet(0)->updateStorageEntryCount(output_row_count);
 
-  const size_t column_size = output_row_count * sizeof(int64_t);
-  const size_t allocated_column_size = mgr->get_nrows() * sizeof(int64_t);
   auto group_by_buffers_ptr = mgr->query_buffers->getGroupByBuffersPtr();
   CHECK(group_by_buffers_ptr);
   auto output_buffers_ptr = reinterpret_cast<int64_t*>(group_by_buffers_ptr[0]);
@@ -455,13 +453,19 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   auto num_out_columns = exe_unit.target_exprs.size();
   int8_t* src = reinterpret_cast<int8_t*>(output_buffers_ptr);
   int8_t* dst = reinterpret_cast<int8_t*>(output_buffers_ptr);
-  for (size_t i = 0; i < num_out_columns; i++) {
+  // Todo (todd): Consolidate this column byte offset logic that occurs in at least 4
+  // places
+  for (size_t col_idx = 0; col_idx < num_out_columns; col_idx++) {
+    const size_t target_width =
+        exe_unit.target_exprs[col_idx]->get_type_info().get_size();
+    const size_t allocated_column_size = target_width * mgr->get_nrows();
+    const size_t actual_column_size = target_width * output_row_count;
     if (src != dst) {
-      auto t = memmove(dst, src, column_size);
+      auto t = memmove(dst, src, actual_column_size);
       CHECK_EQ(dst, t);
     }
-    src += allocated_column_size;
-    dst += column_size;
+    src = align_to_int64(src + allocated_column_size);
+    dst = align_to_int64(dst + actual_column_size);
   }
   return mgr->query_buffers->getResultSetOwned(0);
 }
@@ -533,8 +537,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   query_mem_desc.setOutputColumnar(true);
 
   for (size_t i = 0; i < num_out_columns; i++) {
-    // All outputs padded to 8 bytes
-    query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});
+    const size_t col_width = exe_unit.target_exprs[i]->get_type_info().get_size();
+    query_mem_desc.addColSlotInfo({std::make_tuple(col_width, col_width)});
   }
   const auto allocated_output_row_count = get_output_row_count(exe_unit, elem_count);
   auto query_buffers = std::make_unique<QueryMemoryInitializer>(
