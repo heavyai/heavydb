@@ -1008,7 +1008,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   }
 
   const std::vector<std::string>& getFields() const { return fields_; }
-  void setFields(std::vector<std::string>& fields) { fields_ = std::move(fields); }
+  void setFields(std::vector<std::string>&& fields) { fields_ = std::move(fields); }
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
@@ -1119,7 +1119,7 @@ class RelAggregate : public RelAlgNode {
   const size_t getAggExprsCount() const { return agg_exprs_.size(); }
 
   const std::vector<std::string>& getFields() const { return fields_; }
-  void setFields(std::vector<std::string>& new_fields) {
+  void setFields(std::vector<std::string>&& new_fields) {
     fields_ = std::move(new_fields);
   }
 
@@ -1572,6 +1572,8 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
+  void setFields(std::vector<std::string>&& fields) { fields_ = std::move(fields); }
+
   const size_t getScalarSourcesSize() const { return scalar_sources_.size(); }
 
   const RexScalar* getScalarSource(const size_t i) const {
@@ -1628,7 +1630,7 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
   std::unique_ptr<const RexScalar> filter_expr_;
   const size_t groupby_count_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
-  const std::vector<std::string> fields_;
+  std::vector<std::string> fields_;
   const bool is_agg_;
   std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually
@@ -1955,6 +1957,7 @@ class RelTableFunction : public RelAlgNode {
   }
 
   const std::vector<std::string>& getFields() const { return fields_; }
+  void setFields(std::vector<std::string>&& fields) { fields_ = std::move(fields); }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelTableFunction>(*this);
