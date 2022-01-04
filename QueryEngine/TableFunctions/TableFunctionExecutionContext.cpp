@@ -563,11 +563,20 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   gpu_allocator->copyToDevice(reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
                               reinterpret_cast<int8_t*>(&output_row_count),
                               sizeof(output_row_count));
-
-  const unsigned block_size_x = executor->blockSize();
+  /*
+ ￼ TODO: RBC generated runtime table functions do not support
+   concurrent execution on a CUDA device. Hence, we'll force 1 as
+   block/grid size in the case of runtime table functions.  To support
+   this, in RBC, we'll need to expose threadIdx/blockIdx/blockDim to
+   runtime table functions and these must do something sensible with
+   this information..
+ */
+  const unsigned block_size_x =
+      (exe_unit.table_func.isRuntime() ? 1 : executor->blockSize());
   const unsigned block_size_y = 1;
   const unsigned block_size_z = 1;
-  const unsigned grid_size_x = executor->gridSize();
+  const unsigned grid_size_x =
+      (exe_unit.table_func.isRuntime() ? 1 : executor->gridSize());
   const unsigned grid_size_y = 1;
   const unsigned grid_size_z = 1;
 
