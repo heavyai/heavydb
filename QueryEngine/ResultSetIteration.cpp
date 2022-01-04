@@ -1114,7 +1114,7 @@ const VarlenOutputInfo* ResultSet::getVarlenOutputInfo(const size_t entry_idx) c
 }
 
 /**
- * For each specified column, this function goes through all available storages and copy
+ * For each specified column, this function goes through all available storages and copies
  * its content into a contiguous output_buffer
  */
 void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
@@ -2091,13 +2091,19 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
 
 /*
  * Returns true if the entry contain empty keys
- * This function should only be used with columanr format.
+ * This function should only be used with columnar format.
  */
 bool ResultSetStorage::isEmptyEntryColumnar(const size_t entry_idx,
                                             const int8_t* buff) const {
   CHECK(query_mem_desc_.didOutputColumnar());
   if (query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::NonGroupedAggregate) {
+    return false;
+  }
+  if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::TableFunction) {
+    // For table functions the entry count should always be set to the actual output size
+    // (i.e. there are not empty entries), so just assume value is non-empty
+    CHECK_LT(entry_idx, getEntryCount());
     return false;
   }
   if (query_mem_desc_.hasKeylessHash()) {
@@ -2165,6 +2171,8 @@ inline size_t make_bin_search(size_t l, size_t r, T&& is_empty_fn) {
 }  // namespace
 
 size_t ResultSetStorage::binSearchRowCount() const {
+  // Note that table function result sets should never use this path as the row count
+  // can be known statically (as the output buffers do not contain empty entries)
   CHECK(query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection);
   CHECK_EQ(query_mem_desc_.getEffectiveKeyWidth(), size_t(8));
 

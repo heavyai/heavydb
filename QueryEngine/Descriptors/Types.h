@@ -27,6 +27,7 @@ enum class QueryDescriptionType {
   GroupByPerfectHash,
   GroupByBaselineHash,
   Projection,
+  TableFunction,
   NonGroupedAggregate,
   Estimator
 };

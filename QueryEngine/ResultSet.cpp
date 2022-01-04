@@ -410,6 +410,9 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
   if (just_explain_) {
     return 1;
   }
+  if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::TableFunction) {
+    return entryCount();
+  }
   if (!permutation_.empty()) {
     if (drop_first_ > permutation_.size()) {
       return 0;
@@ -1161,11 +1164,15 @@ bool ResultSet::isDirectColumnarConversionPossible() const {
   } else if (query_mem_desc_.didOutputColumnar()) {
     return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
                                         QueryDescriptionType::Projection ||
-                                    (query_mem_desc_.getQueryDescriptionType() ==
-                                         QueryDescriptionType::GroupByPerfectHash ||
-                                     query_mem_desc_.getQueryDescriptionType() ==
-                                         QueryDescriptionType::GroupByBaselineHash));
+                                    query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::TableFunction ||
+                                    query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::GroupByPerfectHash ||
+                                    query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::GroupByBaselineHash);
   } else {
+    CHECK(!(query_mem_desc_.getQueryDescriptionType() ==
+            QueryDescriptionType::TableFunction));
     return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
                                         QueryDescriptionType::GroupByPerfectHash ||
                                     query_mem_desc_.getQueryDescriptionType() ==
@@ -1175,7 +1182,9 @@ bool ResultSet::isDirectColumnarConversionPossible() const {
 
 bool ResultSet::isZeroCopyColumnarConversionPossible(size_t column_idx) const {
   return query_mem_desc_.didOutputColumnar() &&
-         query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection &&
+         (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection ||
+          query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::TableFunction) &&
          appended_storage_.empty() && storage_ &&
          (lazy_fetch_info_.empty() || !lazy_fetch_info_[column_idx].is_lazily_fetched);
 }

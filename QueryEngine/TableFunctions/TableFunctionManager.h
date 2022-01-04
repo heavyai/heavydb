@@ -107,7 +107,7 @@ struct TableFunctionManager {
     auto num_out_columns = get_ncols();
     QueryMemoryDescriptor query_mem_desc(executor_,
                                          output_num_rows,  // divide by row multiplier???
-                                         QueryDescriptionType::Projection,
+                                         QueryDescriptionType::TableFunction,
                                          /*is_table_function=*/true);
     query_mem_desc.setOutputColumnar(true);
 

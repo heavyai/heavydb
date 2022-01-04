@@ -89,7 +89,9 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
 }
 
 inline bool is_columnar_projection(const QueryMemoryDescriptor& query_mem_desc) {
-  return query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
+  return (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection ||
+          query_mem_desc.getQueryDescriptionType() ==
+              QueryDescriptionType::TableFunction) &&
          query_mem_desc.didOutputColumnar();
 }
 

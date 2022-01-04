@@ -1714,7 +1714,7 @@ ResultSetPtr Executor::executeTableFunction(
   if (eo.just_validate) {
     QueryMemoryDescriptor query_mem_desc(this,
                                          /*entry_count=*/0,
-                                         QueryDescriptionType::Projection,
+                                         QueryDescriptionType::TableFunction,
                                          /*is_table_function=*/true);
     query_mem_desc.setOutputColumnar(true);
     return std::make_shared<ResultSet>(

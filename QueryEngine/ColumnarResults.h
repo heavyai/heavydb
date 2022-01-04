@@ -126,6 +126,9 @@ class ColumnarResults {
   // Direct columnarization for Projections (only output is columnar)
   void materializeAllColumnsProjection(const ResultSet& rows, const size_t num_columns);
 
+  void materializeAllColumnsTableFunction(const ResultSet& rows,
+                                          const size_t num_columns);
+
   void copyAllNonLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
                              const ResultSet& rows,
                              const size_t num_columns);

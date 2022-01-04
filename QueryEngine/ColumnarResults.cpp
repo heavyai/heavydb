@@ -358,6 +358,10 @@ void ColumnarResults::materializeAllColumnsDirectly(const ResultSet& rows,
       materializeAllColumnsProjection(rows, num_columns);
       break;
     }
+    case QueryDescriptionType::TableFunction: {
+      materializeAllColumnsTableFunction(rows, num_columns);
+      break;
+    }
     case QueryDescriptionType::GroupByPerfectHash:
     case QueryDescriptionType::GroupByBaselineHash: {
       materializeAllColumnsGroupBy(rows, num_columns);
@@ -380,8 +384,8 @@ void ColumnarResults::materializeAllColumnsProjection(const ResultSet& rows,
                                                       const size_t num_columns) {
   CHECK(rows.query_mem_desc_.didOutputColumnar());
   CHECK(isDirectColumnarConversionPossible() &&
-        rows.query_mem_desc_.getQueryDescriptionType() ==
-            QueryDescriptionType::Projection);
+        (rows.query_mem_desc_.getQueryDescriptionType() ==
+         QueryDescriptionType::Projection));
 
   const auto& lazy_fetch_info = rows.getLazyFetchInfo();
 
@@ -390,6 +394,22 @@ void ColumnarResults::materializeAllColumnsProjection(const ResultSet& rows,
 
   // Only lazy columns are iterated through first and then materialized
   materializeAllLazyColumns(lazy_fetch_info, rows, num_columns);
+}
+
+void ColumnarResults::materializeAllColumnsTableFunction(const ResultSet& rows,
+                                                         const size_t num_columns) {
+  CHECK(rows.query_mem_desc_.didOutputColumnar());
+  CHECK(isDirectColumnarConversionPossible() &&
+        (rows.query_mem_desc_.getQueryDescriptionType() ==
+         QueryDescriptionType::TableFunction));
+
+  const auto& lazy_fetch_info = rows.getLazyFetchInfo();
+  // Lazy fetching is not currently allowed for table function outputs
+  for (const auto col_lazy_fetch_info : lazy_fetch_info) {
+    CHECK(!col_lazy_fetch_info.is_lazily_fetched);
+  }
+  // We can directly copy each non-lazy column's content
+  copyAllNonLazyColumns(lazy_fetch_info, rows, num_columns);
 }
 
 /*
@@ -419,6 +439,8 @@ void ColumnarResults::copyAllNonLazyColumns(
       CHECK(!column_buffers_[col_idx]);
       column_buffers_[col_idx] = const_cast<int8_t*>(rows.getColumnarBuffer(col_idx));
     } else if (is_column_non_lazily_fetched(col_idx)) {
+      CHECK(!(rows.query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::TableFunction));
       direct_copy_threads.push_back(std::async(
           std::launch::async,
           [&rows, this](const size_t column_index) {
@@ -449,6 +471,8 @@ void ColumnarResults::materializeAllLazyColumns(
     const ResultSet& rows,
     const size_t num_columns) {
   CHECK(isDirectColumnarConversionPossible());
+  CHECK(!(rows.query_mem_desc_.getQueryDescriptionType() ==
+          QueryDescriptionType::TableFunction));
   const auto do_work_just_lazy_columns = [num_columns, &rows, this](
                                              const size_t row_idx,
                                              const std::vector<bool>& targets_to_skip) {

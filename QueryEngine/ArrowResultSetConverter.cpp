@@ -797,9 +797,13 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   std::vector<std::shared_ptr<ValueArray>> column_values(col_count, nullptr);
   std::vector<std::shared_ptr<std::vector<bool>>> null_bitmaps(col_count, nullptr);
   const bool multithreaded = entry_count > 10000 && !results_->isTruncated();
+  // Don't believe we ever output directly from a table function, but this
+  // might be possible with a future query plan optimization
   bool use_columnar_converter = results_->isDirectColumnarConversionPossible() &&
-                                results_->getQueryMemDesc().getQueryDescriptionType() ==
-                                    QueryDescriptionType::Projection &&
+                                (results_->getQueryMemDesc().getQueryDescriptionType() ==
+                                     QueryDescriptionType::Projection ||
+                                 results_->getQueryMemDesc().getQueryDescriptionType() ==
+                                     QueryDescriptionType::TableFunction) &&
                                 entry_count == results_->entryCount();
   std::vector<bool> non_lazy_cols;
   if (use_columnar_converter) {

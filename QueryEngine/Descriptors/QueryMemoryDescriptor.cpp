@@ -484,11 +484,11 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , use_streaming_top_n_(use_streaming_top_n)
     , force_4byte_float_(false)
     , col_slot_context_(col_slot_context) {
+  CHECK(!(query_desc_type_ == QueryDescriptionType::TableFunction));
   col_slot_context_.setAllUnsetSlotsPaddedSize(8);
   col_slot_context_.validate();
 
   sort_on_gpu_ = sort_on_gpu_hint && canOutputColumnar() && !keyless_hash_;
-
   if (sort_on_gpu_) {
     CHECK(!ra_exe_unit.use_bump_allocator);
     output_columnar_ = true;
@@ -1009,6 +1009,7 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
  *
  * Columnar:
  *  if projection: it returns index buffer + columnar buffer (all non-lazy columns)
+ *  if table function: only the columnar buffer
  *  if group by: it returns the amount required for each group column (assumes 64-bit
  * per group) + columnar buffer (all involved agg columns)
  *
@@ -1028,14 +1029,21 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device
   constexpr size_t row_index_width = sizeof(int64_t);
   size_t total_bytes{0};
   if (output_columnar_) {
-    total_bytes = (query_desc_type_ == QueryDescriptionType::Projection
-                       ? row_index_width * entry_count
-                       : sizeof(int64_t) * group_col_widths_.size() * entry_count) +
-                  getTotalBytesOfColumnarBuffers();
+    switch (query_desc_type_) {
+      case QueryDescriptionType::Projection:
+        total_bytes = row_index_width * entry_count + getTotalBytesOfColumnarBuffers();
+        break;
+      case QueryDescriptionType::TableFunction:
+        total_bytes = getTotalBytesOfColumnarBuffers();
+        break;
+      default:
+        total_bytes = sizeof(int64_t) * group_col_widths_.size() * entry_count +
+                      getTotalBytesOfColumnarBuffers();
+        break;
+    }
   } else {
     total_bytes = getRowSize() * entry_count;
   }
-
   return total_bytes;
 }
 
@@ -1059,7 +1067,8 @@ bool QueryMemoryDescriptor::isLogicalSizedColumnsAllowed() const {
   // In distributed mode, result sets are serialized using rowwise iterators, so we use
   // consistent slot widths for now
   return output_columnar_ && !g_cluster &&
-         (query_desc_type_ == QueryDescriptionType::Projection);
+         (query_desc_type_ == QueryDescriptionType::Projection ||
+          query_desc_type_ == QueryDescriptionType::TableFunction);
 }
 
 size_t QueryMemoryDescriptor::getBufferColSlotCount() const {
@@ -1083,7 +1092,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (g_cluster || is_table_function_) {
+  if (g_cluster) {
     return true;
   }
   if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
@@ -1092,6 +1101,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
   if (executor_->isCPUOnly() || render_output_ ||
       query_desc_type_ == QueryDescriptionType::GroupByBaselineHash ||
       query_desc_type_ == QueryDescriptionType::Projection ||
+      query_desc_type_ == QueryDescriptionType::TableFunction ||
       (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
        getGroupbyColCount() > 1)) {
     return true;
@@ -1188,6 +1198,8 @@ std::string QueryMemoryDescriptor::queryDescTypeToString() const {
       return "Baseline Hash";
     case QueryDescriptionType::Projection:
       return "Projection";
+    case QueryDescriptionType::TableFunction:
+      return "Table Function";
     case QueryDescriptionType::NonGroupedAggregate:
       return "Non-grouped Aggregate";
     case QueryDescriptionType::Estimator:

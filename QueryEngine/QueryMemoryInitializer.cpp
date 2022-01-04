@@ -533,6 +533,11 @@ void QueryMemoryInitializer::initColumnarGroups(
     const std::vector<int64_t>& init_vals,
     const Executor* executor) {
   CHECK(groups_buffer);
+  if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::TableFunction) {
+    // As an optimization we don't init table function buffers as we expect outputs to be
+    // dense
+    return;
+  }
   for (const auto target_expr : executor->plan_state_->target_exprs_) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(!is_distinct_target(agg_info));
