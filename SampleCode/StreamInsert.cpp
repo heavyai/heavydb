@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,11 @@
  * @author  Wei Hong <wei@mapd.com>
  * @brief   Sample MapD Client code for inserting a stream of rows
  * with optional transformations from stdin to a MapD table.
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
+
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+#include "Shared/ThriftConfig.h"
+#endif
 
 #include <boost/regex.hpp>
 #include <cstring>
@@ -91,9 +93,16 @@ namespace {
 #define MAX_FIELD_LEN 20000
 
 void createConnection(ConnectionDetails con) {
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+  std::shared_ptr<TTransport> socket(
+      new TSocket(con.server_host, con.port, shared::default_tconfig()));
+  mytransport.reset(new TBufferedTransport(socket, shared::default_tconfig()));
+#else
   std::shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
   mytransport.reset(new TBufferedTransport(socket));
+#endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
+
   client.reset(new OmniSciClient(protocol));
   try {
     mytransport->open();  // open transport

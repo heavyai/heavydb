@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,11 @@
  * 2. get the table descriptor of <table>
  * 3. randomly generate tab-delimited data that can be imported to <table>
  * 4. disconnect from omnisci_server
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
+
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+#include "Shared/ThriftConfig.h"
+#endif
 
 #include <cfloat>
 #include <cstdint>
@@ -197,8 +199,15 @@ int main(int argc, char** argv) {
     }
   }
 
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+  std::shared_ptr<TTransport> socket(
+      new TSocket(server_host, port, shared::default_tconfig()));
+  std::shared_ptr<TTransport> transport(
+      new TBufferedTransport(socket, shared::default_tconfig()));
+#else
   std::shared_ptr<TTransport> socket(new TSocket(server_host, port));
   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+#endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   OmniSciClient client(protocol);
   TSessionId session;
