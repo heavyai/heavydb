@@ -29,15 +29,19 @@
 #include "JoinHashTable/OverlapsJoinHashTable.h"
 #include "JoinHashTable/PerfectJoinHashTable.h"
 
-using UpdateTriggeredCacheInvalidator =
-    CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
+using UpdateTriggeredCacheInvalidator = CacheInvalidator<OverlapsJoinHashTable,
+                                                         BaselineJoinHashTable,
+                                                         PerfectJoinHashTable,
+                                                         HashJoin>;
 using DeleteTriggeredCacheInvalidator = UpdateTriggeredCacheInvalidator;
 
 // Note that this is functionally the same as the above two invalidators. The
 // JoinHashTableCacheInvalidator is a generic invalidator used during `clear_cpu` calls.
 // The above cache invalidators are specific invalidators called during update/delete and
 // will likely be extended in the future.
-using JoinHashTableCacheInvalidator =
-    CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
+using JoinHashTableCacheInvalidator = CacheInvalidator<OverlapsJoinHashTable,
+                                                       BaselineJoinHashTable,
+                                                       PerfectJoinHashTable,
+                                                       HashJoin>;
 
 #endif

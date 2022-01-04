@@ -53,10 +53,10 @@ struct HashtableAccessPathInfo {
       , table_keys({}){};
 };
 
-class HashtableRecycler
+class HashTableRecycler
     : public DataRecycler<std::shared_ptr<HashTable>, HashtableCacheMetaInfo> {
  public:
-  HashtableRecycler(CacheItemType hashtable_type, int num_gpus)
+  HashTableRecycler(CacheItemType hashtable_type, int num_gpus)
       : DataRecycler({hashtable_type},
                      g_hashtable_cache_total_bytes,
                      g_max_cacheable_hashtable_size_bytes,
@@ -133,6 +133,35 @@ class HashtableRecycler
       size_t table_key) const;
 
   void removeTableKeyInfoFromQueryPlanDagMap(size_t table_key);
+
+  std::pair<bool, std::optional<HashJoinHint>> has_join_hint(
+      std::optional<HashtableCacheMetaInfo> meta_info) {
+    if (meta_info && meta_info->registered_query_hint) {
+      auto join_hint = meta_info->registered_query_hint->hash_join;
+      if (join_hint) {
+        return std::make_pair(true, join_hint);
+      }
+    }
+    return std::make_pair(false, std::nullopt);
+  };
+
+  bool compare_query_hints(const HashJoinHint& h1, const HashJoinHint& h2) {
+    // caching hint option is ignored here since it only controls
+    // the addition of new item to cache
+    auto hashing = false;
+    auto layout = false;
+    if (h1.hashing && h2.hashing) {
+      hashing = *h1.hashing == *h2.hashing;
+    } else if (!h1.hashing && !h2.hashing) {
+      hashing = true;
+    }
+    if (h1.layout && h2.layout) {
+      layout = *h1.layout == *h2.layout;
+    } else if (!h1.layout && !h2.layout) {
+      layout = true;
+    }
+    return hashing && layout;
+  }
 
  private:
   bool hasItemInCache(

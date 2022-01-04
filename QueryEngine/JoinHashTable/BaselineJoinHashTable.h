@@ -29,8 +29,8 @@
 #include "Analyzer/Analyzer.h"
 #include "DataMgr/MemoryLevel.h"
 #include "QueryEngine/ColumnarResults.h"
-#include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
-#include "QueryEngine/DataRecycler/HashtableRecycler.h"
+#include "QueryEngine/DataRecycler/HashTablePropertyRecycler.h"
+#include "QueryEngine/DataRecycler/HashTableRecycler.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/BaselineHashTable.h"
@@ -56,7 +56,8 @@ class BaselineJoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
-      const TableIdToNodeMap& table_id_to_node_map);
+      const TableIdToNodeMap& table_id_to_node_map,
+      const RegisteredQueryHint& query_hint);
 
   static size_t getShardCountForCondition(
       const Analyzer::BinOper* condition,
@@ -93,27 +94,24 @@ class BaselineJoinHashTable : public HashJoin {
 
   size_t payloadBufferOff() const noexcept override;
 
+  const RegisteredQueryHint& getRegisteredQueryHint() override { return query_hint_; }
+
+  void registerQueryHint(const RegisteredQueryHint& query_hint) override {
+    query_hint_ = query_hint;
+  }
+
   std::string getHashJoinType() const final { return "Baseline"; }
 
   static void invalidateCache() {
-    CHECK(hash_table_layout_cache_);
-    hash_table_cache_->clearCache();
-
     CHECK(hash_table_cache_);
-    hash_table_layout_cache_->clearCache();
+    hash_table_cache_->clearCache();
   }
 
   static void markCachedItemAsDirty(size_t table_key) {
     CHECK(hash_table_cache_);
-    CHECK(hash_table_layout_cache_);
     auto candidate_table_keys =
         hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
     if (candidate_table_keys.has_value()) {
-      hash_table_layout_cache_->markCachedItemAsDirty(
-          table_key,
-          *candidate_table_keys,
-          CacheItemType::HT_HASHING_SCHEME,
-          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       hash_table_cache_->markCachedItemAsDirty(table_key,
                                                *candidate_table_keys,
                                                CacheItemType::BASELINE_HT,
@@ -121,13 +119,13 @@ class BaselineJoinHashTable : public HashJoin {
     }
   }
 
-  static HashtableRecycler* getHashTableCache() {
+  static HashTableRecycler* getHashTableCache() {
     CHECK(hash_table_cache_);
     return hash_table_cache_.get();
   }
-  static HashingSchemeRecycler* getHashingSchemeCache() {
-    CHECK(hash_table_layout_cache_);
-    return hash_table_layout_cache_.get();
+  static HashTablePropertyRecycler* getHashtablePropertyCache() {
+    CHECK(hash_table_property_cache_);
+    return hash_table_property_cache_.get();
   }
 
   virtual ~BaselineJoinHashTable() {}
@@ -198,7 +196,8 @@ class BaselineJoinHashTable : public HashJoin {
   std::shared_ptr<HashTable> initHashTableOnCpuFromCache(
       QueryPlanHash key,
       CacheItemType item_type,
-      DeviceIdentifier device_identifier);
+      DeviceIdentifier device_identifier,
+      HashType expected_layout);
 
   void putHashTableOnCpuToCache(QueryPlanHash key,
                                 CacheItemType item_type,
@@ -252,11 +251,11 @@ class BaselineJoinHashTable : public HashJoin {
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
 
+  RegisteredQueryHint query_hint_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
 
-  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
-  static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
+  static std::unique_ptr<HashTableRecycler> hash_table_cache_;
 };

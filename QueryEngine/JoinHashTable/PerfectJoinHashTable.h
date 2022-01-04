@@ -26,8 +26,8 @@
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "QueryEngine/ColumnarResults.h"
-#include "QueryEngine/DataRecycler/HashingSchemeRecycler.h"
-#include "QueryEngine/DataRecycler/HashtableRecycler.h"
+#include "QueryEngine/DataRecycler/HashTablePropertyRecycler.h"
+#include "QueryEngine/DataRecycler/HashTableRecycler.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/ExpressionRange.h"
@@ -60,7 +60,8 @@ class PerfectJoinHashTable : public HashJoin {
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
-      const TableIdToNodeMap& table_id_to_node_map);
+      const TableIdToNodeMap& table_id_to_node_map,
+      const RegisteredQueryHint& query_hint);
 
   std::string toString(const ExecutorDeviceType device_type,
                        const int device_id = 0,
@@ -96,36 +97,33 @@ class PerfectJoinHashTable : public HashJoin {
 
   size_t payloadBufferOff() const noexcept override;
 
+  const RegisteredQueryHint& getRegisteredQueryHint() override { return query_hint_; }
+
+  void registerQueryHint(const RegisteredQueryHint& query_hint) override {
+    query_hint_ = query_hint;
+  }
+
   std::string getHashJoinType() const final { return "Perfect"; }
 
-  static HashtableRecycler* getHashTableCache() {
+  static HashTableRecycler* getHashTableCache() {
     CHECK(hash_table_cache_);
     return hash_table_cache_.get();
   }
-  static HashingSchemeRecycler* getHashingSchemeCache() {
-    CHECK(hash_table_layout_cache_);
-    return hash_table_layout_cache_.get();
+  static HashTablePropertyRecycler* getHashtablePropertyCache() {
+    CHECK(hash_table_property_cache_);
+    return hash_table_property_cache_.get();
   }
 
   static void invalidateCache() {
-    CHECK(hash_table_layout_cache_);
-    hash_table_layout_cache_->clearCache();
-
     CHECK(hash_table_cache_);
     hash_table_cache_->clearCache();
   }
 
   static void markCachedItemAsDirty(size_t table_key) {
-    CHECK(hash_table_layout_cache_);
     CHECK(hash_table_cache_);
     auto candidate_table_keys =
         hash_table_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
     if (candidate_table_keys.has_value()) {
-      hash_table_layout_cache_->markCachedItemAsDirty(
-          table_key,
-          *candidate_table_keys,
-          CacheItemType::HT_HASHING_SCHEME,
-          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       hash_table_cache_->markCachedItemAsDirty(table_key,
                                                *candidate_table_keys,
                                                CacheItemType::PERFECT_HT,
@@ -191,6 +189,7 @@ class PerfectJoinHashTable : public HashJoin {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(device_count_);
+    query_hint_ = RegisteredQueryHint::defaults();
   }
 
   ChunkKey genChunkKey(const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -201,7 +200,8 @@ class PerfectJoinHashTable : public HashJoin {
   std::shared_ptr<PerfectHashTable> initHashTableOnCpuFromCache(
       QueryPlanHash key,
       CacheItemType item_type,
-      DeviceIdentifier device_identifier);
+      DeviceIdentifier device_identifier,
+      HashType expected_layout);
   void putHashTableOnCpuToCache(QueryPlanHash key,
                                 CacheItemType item_type,
                                 std::shared_ptr<PerfectHashTable> hashtable_ptr,
@@ -262,13 +262,14 @@ class PerfectJoinHashTable : public HashJoin {
   ColumnCacheMap& column_cache_;
   const int device_count_;
   mutable bool needs_dict_translation_;
+
+  RegisteredQueryHint query_hint_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
 
-  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
-  static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
+  static std::unique_ptr<HashTableRecycler> hash_table_cache_;
 };
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,

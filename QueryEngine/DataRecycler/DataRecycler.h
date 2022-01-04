@@ -38,7 +38,7 @@ enum CacheItemType {
   PERFECT_HT = 0,             // Perfect hashtable
   BASELINE_HT,                // Baseline hashtable
   OVERLAPS_HT,                // Overlaps hashtable
-  HT_HASHING_SCHEME,          // Hashtable layout
+  HT_PROPERTY,                // Hashtable property
   BASELINE_HT_APPROX_CARD,    // Approximated cardinality for baseline hashtable
   OVERLAPS_AUTO_TUNER_PARAM,  // Hashtable auto tuner's params for overlaps join
   // TODO (yoonmin): support the following items for recycling
@@ -122,7 +122,7 @@ class DataRecyclerUtil {
       shared::string_view_array("Perfect Join Hashtable",
                                 "Baseline Join Hashtable",
                                 "Overlaps Join Hashtable",
-                                "Hashing Scheme for Join Hashtable",
+                                "HashTable Property",
                                 "Baseline Join Hashtable's Approximated Cardinality",
                                 "Overlaps Join Hashtable's Auto Tuner's Parameters");
   static std::string_view toStringCacheItemType(CacheItemType item_type) {

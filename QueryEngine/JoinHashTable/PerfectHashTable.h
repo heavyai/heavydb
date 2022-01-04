@@ -72,6 +72,8 @@ class PerfectHashTable : public HashTable {
 
   HashType getLayout() const override { return layout_; }
 
+  void setLayout(HashType layout) override { layout_ = layout; }
+
   int8_t* getCpuBuffer() override {
     return reinterpret_cast<int8_t*>(cpu_hash_table_buff_.get());
   }

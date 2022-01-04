@@ -26,6 +26,9 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/ScalarExprVisitor.h"
 
+std::unique_ptr<HashTablePropertyRecycler> HashJoin::hash_table_property_cache_ =
+    std::make_unique<HashTablePropertyRecycler>();
+
 extern bool g_enable_overlaps_hashjoin;
 
 void ColumnsForDevice::setBucketInfo(
@@ -40,7 +43,6 @@ void ColumnsForDevice::setBucketInfo(
     const auto inner_col = inner_outer_pair.first;
     const auto& ti = inner_col->get_type_info();
     const auto elem_ti = ti.get_elem_type();
-    // CHECK(elem_ti.is_fp());
 
     join_buckets.emplace_back(JoinBucketInfo{inverse_bucket_sizes_for_dimension,
                                              elem_ti.get_type() == kDOUBLE});
@@ -259,6 +261,39 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     throw std::runtime_error(
         "Overlaps hash join disabled, attempting to fall back to loop join");
   }
+  auto delivered_query_hint = query_hint;
+  auto hashtable_type =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())
+          ? std::make_pair(HashTableHashingType::BASELINE, "Baseline")
+          : std::make_pair(HashTableHashingType::PERFECT, "Perfect");
+  // since we have two separate caches for perfect and baseline join hash tables,
+  // we check a hashing scheme hint here to invoke specific hash table builder
+  bool hashing_hint_delivered =
+      delivered_query_hint.isHintRegistered(QueryHint::kHashJoin) &&
+      delivered_query_hint.hash_join && delivered_query_hint.hash_join->hashing;
+  if (hashing_hint_delivered) {
+    auto delivered_hashtable_type = delivered_query_hint.hash_join->hashing.value();
+    if (delivered_hashtable_type != hashtable_type.first) {
+      if (delivered_hashtable_type == HashTableHashingType::PERFECT &&
+          hashtable_type.first == HashTableHashingType::BASELINE) {
+        VLOG(1)
+            << "Skipping hash table hashing type hint: cannot build Perfect hash table "
+               "with more than one join column";
+        // invalidate hashing scheme hint
+        if (!delivered_query_hint.hash_join->layout) {
+          // if no layout hint is delivered, then we completely remove hash join hint
+          delivered_query_hint.unregisterHint(QueryHint::kHashJoin);
+        }
+        delivered_query_hint.hash_join->hashing = std::nullopt;
+      } else {
+        hashtable_type.first = delivered_query_hint.hash_join->hashing.value();
+        hashtable_type.second = hashtable_type.first == HashTableHashingType::BASELINE
+                                    ? "Baseline"
+                                    : "Perfect";
+        VLOG(1) << "A user forces to build " << hashtable_type.second << " hash table";
+      }
+    }
+  }
   if (qual_bin_oper->is_overlaps_oper()) {
     VLOG(1) << "Trying to build geo hash table:";
     join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
@@ -269,41 +304,12 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          column_cache,
                                                          executor,
                                                          hashtable_build_dag_map,
-                                                         query_hint,
-                                                         table_id_to_node_map);
-  } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
-                 qual_bin_oper->get_left_operand())) {
-    VLOG(1) << "Trying to build keyed hash table:";
-    join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
-                                                         query_infos,
-                                                         memory_level,
-                                                         join_type,
-                                                         preferred_hash_type,
-                                                         device_count,
-                                                         column_cache,
-                                                         executor,
-                                                         hashtable_build_dag_map,
+                                                         delivered_query_hint,
                                                          table_id_to_node_map);
   } else {
-    try {
-      VLOG(1) << "Trying to build perfect hash table:";
-      join_hash_table = PerfectJoinHashTable::getInstance(qual_bin_oper,
-                                                          query_infos,
-                                                          memory_level,
-                                                          join_type,
-                                                          preferred_hash_type,
-                                                          device_count,
-                                                          column_cache,
-                                                          executor,
-                                                          hashtable_build_dag_map,
-                                                          table_id_to_node_map);
-    } catch (TooManyHashEntries&) {
-      const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
-      CHECK_EQ(join_quals.size(), size_t(1));
-      const auto join_qual =
-          std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
-      VLOG(1) << "Trying to build keyed hash table after perfect hash table:";
-      join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
+    VLOG(1) << "Trying to build " << hashtable_type.second << " hash table";
+    if (hashtable_type.first == HashTableHashingType::BASELINE) {
+      join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                            query_infos,
                                                            memory_level,
                                                            join_type,
@@ -312,7 +318,54 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                            column_cache,
                                                            executor,
                                                            hashtable_build_dag_map,
-                                                           table_id_to_node_map);
+                                                           table_id_to_node_map,
+                                                           delivered_query_hint);
+    } else {
+      CHECK(HashTableHashingType::PERFECT == hashtable_type.first);
+      auto buildBaselineJoinHashTable = [&]() {
+        const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
+        CHECK_EQ(join_quals.size(), size_t(1));
+        const auto join_qual =
+            std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
+        VLOG(1) << "Switching to build Baseline hash table after trying to build Perfect "
+                   "hash table";
+        join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
+                                                             query_infos,
+                                                             memory_level,
+                                                             join_type,
+                                                             preferred_hash_type,
+                                                             device_count,
+                                                             column_cache,
+                                                             executor,
+                                                             hashtable_build_dag_map,
+                                                             table_id_to_node_map,
+                                                             delivered_query_hint);
+      };
+      try {
+        join_hash_table = PerfectJoinHashTable::getInstance(qual_bin_oper,
+                                                            query_infos,
+                                                            memory_level,
+                                                            join_type,
+                                                            preferred_hash_type,
+                                                            device_count,
+                                                            column_cache,
+                                                            executor,
+                                                            hashtable_build_dag_map,
+                                                            table_id_to_node_map,
+                                                            delivered_query_hint);
+      } catch (TooManyHashEntries&) {
+        buildBaselineJoinHashTable();
+      } catch (HashingTypeHintDetected& e) {
+        // perfect join hash table which is invoked with a single binary join qual
+        // can be switched to baseline alternative per user-given hashing scheme hint
+        // specifically, perfect join hash table builder may detect a cached hash table
+        // property and we may need to invoke baseline hash table builder depending on the
+        // cached hashing scheme property
+        // note that a baseline join qual having more than one binary join op can never
+        // invoke perfect hash table builder
+        CHECK(e.hashing_type_ == HashTableHashingType::BASELINE);
+        buildBaselineJoinHashTable();
+      }
     }
   }
   CHECK(join_hash_table);

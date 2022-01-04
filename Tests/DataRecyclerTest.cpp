@@ -2436,6 +2436,278 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
   drop_tables_for_string_joins();
 }
 
+TEST(DataRecycler, HashTable_Property_Cache_Per_Hash_Join_QueryHint) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  std::set<QueryPlanHash> visited_hashtable_key;
+  auto clearCache = [&executor, &visited_hashtable_key] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+    visited_hashtable_key.clear();
+  };
+
+  auto drop_tables = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS tb1;");
+    run_ddl_statement("DROP TABLE IF EXISTS tb2;");
+  };
+
+  auto prepare_tables = [] {
+    run_ddl_statement("CREATE TABLE tb1 (v1 int, v2 int, v3 int, v4 int);");
+    run_ddl_statement("CREATE TABLE tb2 (v1 int, v2 int, v3 int, v4 int);");
+    std::vector<int> val1, val2, val3;
+    for (int i = 0; i < 20; ++i) {
+      val1.push_back(i);
+      val2.push_back((i / 20) + 1);
+      val3.push_back(i % 5);
+    }
+    for (int i = 0; i < 10; ++i) {
+      auto insert_stmt = "(" + ::toString(val1[i]) + "," + ::toString(val2[i]) + "," +
+                         ::toString(val3[i]) + "," + ::toString(val3[i]) + ");";
+      QR::get()->runSQL("INSERT INTO tb1 VALUES " + insert_stmt, ExecutorDeviceType::CPU);
+      QR::get()->runSQL("INSERT INTO tb2 VALUES " + insert_stmt, ExecutorDeviceType::CPU);
+    }
+    for (int i = 10; i < 20; ++i) {
+      auto insert_stmt = "INSERT INTO tb2 VALUES (" + ::toString(val1[i]) + "," +
+                         ::toString(val2[i]) + "," + ::toString(val3[i]) + "," +
+                         ::toString(val3[i]) + ");";
+      QR::get()->runSQL(insert_stmt, ExecutorDeviceType::CPU);
+    }
+  };
+
+  auto gen_query = [](const std::string& join_qual, const std::string& query_hint = "") {
+    auto last_part = " count(1) FROM tb1, tb2 WHERE " + join_qual + ";";
+    return "SELECT " + query_hint + last_part;
+  };
+
+  auto check_num_cached_hashtable =
+      [&](QueryRunner::CacheItemStatus status, CacheItemType ht_type, size_t expected) {
+        EXPECT_EQ(expected, QR::get()->getNumberOfCachedItem(status, ht_type));
+      };
+
+  auto get_cache_key = [&visited_hashtable_key](CacheItemType ht_type) -> QueryPlanHash {
+    auto ht_metrics = ::getCachedHashTableMetric(visited_hashtable_key, ht_type);
+    CHECK(ht_metrics);
+    return ht_metrics->getQueryPlanHash();
+  };
+
+  auto get_cached_ht_prop = [](QueryPlanHash cache_key, const std::string& query) {
+    auto prop = HashJoin::getHashTablePropertyCache()->getItemFromCache(
+        cache_key,
+        CacheItemType::HT_PROPERTY,
+        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+        std::nullopt);
+    CHECK(prop) << query;
+    return prop;
+  };
+
+  auto check_cached_ht_invalidation = [check_num_cached_hashtable]() {
+    check_num_cached_hashtable(
+        QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::PERFECT_HT, 0);
+    check_num_cached_hashtable(
+        QueryRunner::CacheItemStatus::CLEAN_ONLY, CacheItemType::BASELINE_HT, 0);
+  };
+
+  auto check_prop = [get_cached_ht_prop](HashTableHashingType hashing_type,
+                                         HashTableLayoutType layout_type,
+                                         QueryPlanHash cache_key,
+                                         const std::string query) {
+    auto cached_prop = get_cached_ht_prop(cache_key, query);
+    CHECK(cached_prop);
+    EXPECT_EQ(*cached_prop->hashing, hashing_type);
+    EXPECT_EQ(*cached_prop->layout, layout_type);
+  };
+
+  auto check_query_res = [](const std::string& query_with_hint,
+                            const std::string& query_without_hint,
+                            ExecutorDeviceType dt,
+                            size_t expected_num_res_row,
+                            CacheItemType ht_type) {
+    EXPECT_EQ(static_cast<int64_t>(expected_num_res_row),
+              v<int64_t>(run_simple_query(query_with_hint, dt)));
+    EXPECT_EQ(static_cast<int64_t>(expected_num_res_row),
+              v<int64_t>(run_simple_query(query_without_hint, dt)));
+  };
+
+  // we currently only cache CPU hash table
+  for (auto dt : {ExecutorDeviceType::CPU}) {
+    drop_tables();
+
+    // test 1. original query: perfect hashing scheme + OneToOne layout
+    clearCache();
+    prepare_tables();
+    std::string q1_qual{"tb1.v1 = tb2.v1"};
+    auto q1_no_hint = gen_query(q1_qual);
+    check_query_res(q1_no_hint, q1_no_hint, dt, 10, CacheItemType::PERFECT_HT);
+    auto q1_cache_key = get_cache_key(CacheItemType::PERFECT_HT);
+    check_prop(HashTableHashingType::PERFECT,
+               HashTableLayoutType::ONE,
+               q1_cache_key,
+               q1_no_hint);
+
+    auto q1_hint1 = gen_query(q1_qual, "/*+ hash_join(layout=\'OneToMany\') */");
+    check_query_res(q1_hint1, q1_no_hint, dt, 10, CacheItemType::PERFECT_HT);
+    check_prop(
+        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q1_cache_key, q1_hint1);
+
+    auto q1_hint2 = gen_query(q1_qual, "/*+ hash_join(hashing=\'baseline\') */");
+    check_query_res(q1_hint2, q1_no_hint, dt, 10, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q1_cache_key,
+               q1_hint2);
+
+    auto q1_hint3 = gen_query(
+        q1_qual, "/*+ hash_join(hashing=\'baseline\', layout =\'OneToMany\') */");
+    check_query_res(q1_hint3, q1_no_hint, dt, 10, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q1_cache_key,
+               q1_hint3);
+
+    auto q1_hint4 = gen_query(q1_qual, "/*+ hash_join(hashing=\'perfect\') */");
+    check_query_res(q1_hint4, q1_no_hint, dt, 10, CacheItemType::PERFECT_HT);
+    check_prop(
+        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q1_cache_key, q1_hint4);
+    drop_tables();
+    // check per-table hash table invalidation works correctly
+    check_cached_ht_invalidation();
+    clearCache();
+
+    // test 2. original query: perfect hashing scheme + OneToMany layout
+    prepare_tables();
+    std::string q2_qual{"tb1.v3 = tb2.v3"};
+    auto q2_no_hint = gen_query(q2_qual);
+    check_query_res(q2_no_hint, q2_no_hint, dt, 40, CacheItemType::PERFECT_HT);
+    auto q2_cache_key = get_cache_key(CacheItemType::PERFECT_HT);
+    check_prop(HashTableHashingType::PERFECT,
+               HashTableLayoutType::MANY,
+               q2_cache_key,
+               q2_no_hint);
+
+    auto q2_hint1 = gen_query(q2_qual, "/*+ hash_join(layout=\'OneToOne\') */");
+    check_query_res(q2_hint1, q2_no_hint, dt, 40, CacheItemType::PERFECT_HT);
+    check_prop(
+        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q2_cache_key, q2_hint1);
+
+    auto q2_hint2 = gen_query(q2_qual, "/*+ hash_join(hashing=\'Baseline\') */");
+    // since the previous cached ht prop for this qual is {hashing='Perfect' /
+    // layout='OneToMany'}, we reuse the cached layout even though we changed the hashing
+    // scheme from `Perfect` to `Baseline`
+    check_query_res(q2_hint2, q2_no_hint, dt, 40, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q2_cache_key,
+               q2_hint2);
+
+    auto q2_hint3 =
+        gen_query(q2_qual, "/*+ hash_join(hashing=\'Baseline\', layout=\'OneToOne\') */");
+    // we have a cached ht prop for this qual as: {hashing='Baseline' /
+    // layout='OneToMany'}, and we'd like to change its layout to 'Perfect' but we can't
+    // since q2_qual has more than one join column pairs in this case, we invalidate the
+    // delivered query hint and try to reuse the cached prop
+    check_query_res(q2_hint3, q2_no_hint, dt, 40, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q2_cache_key,
+               q2_hint3);
+
+    auto q2_hint4 = gen_query(q2_qual, "/*+ hash_join(hashing=\'Perfect\') */");
+    // now we try to back to 'Perfect' join hash table, and it is valid
+    // also we reuse a cached layout 'OneToMany' from the cached prop for this qual
+    check_query_res(q2_hint4, q2_no_hint, dt, 40, CacheItemType::PERFECT_HT);
+    check_prop(
+        HashTableHashingType::PERFECT, HashTableLayoutType::MANY, q2_cache_key, q2_hint4);
+    drop_tables();
+    // check per-table hash table invalidation works correctly
+    check_cached_ht_invalidation();
+    clearCache();
+
+    // test 3. original query: baseline hashing scheme + OneToOne layout
+    prepare_tables();
+    std::string q3_qual{"tb1.v1 = tb2.v1 and tb1.v2 = tb2.v2"};
+    auto q3_no_hint = gen_query(q3_qual);
+    check_query_res(q3_no_hint, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
+    auto q3_cache_key = get_cache_key(CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::ONE,
+               q3_cache_key,
+               q3_no_hint);
+
+    auto q3_hint1 = gen_query(q3_qual, "/*+ hash_join(layout=\'OneToMany\') */");
+    check_query_res(q3_hint1, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q3_cache_key,
+               q3_hint1);
+
+    auto q3_hint2 = gen_query(q3_qual, "/*+ hash_join(hashing=\'Perfect\') */");
+    check_query_res(q3_hint2, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q3_cache_key,
+               q3_hint2);
+
+    auto q3_hint3 =
+        gen_query(q3_qual, "/*+ hash_join(hashing=\'Perfect\', layout=\'OneToOne\') */");
+    check_query_res(q3_hint3, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
+    check_prop(
+        HashTableHashingType::BASELINE, HashTableLayoutType::ONE, q3_cache_key, q3_hint3);
+
+    auto q3_hint4 = gen_query(q3_qual, "/*+ hash_join(hashing=\'Baseline\') */");
+    check_query_res(q3_hint4, q3_no_hint, dt, 10, CacheItemType::BASELINE_HT);
+    check_prop(
+        HashTableHashingType::BASELINE, HashTableLayoutType::ONE, q3_cache_key, q3_hint4);
+    drop_tables();
+    // check per-table hash table invalidation works correctly
+    check_cached_ht_invalidation();
+    clearCache();
+
+    // test 4. original query: baseline hashing scheme + OneToMany layout
+    prepare_tables();
+    std::string q4_qual{"tb1.v3 = tb2.v3 and tb1.v4 = tb2.v4"};
+    auto q4_no_hint = gen_query(q4_qual);
+    check_query_res(q4_no_hint, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
+    auto q4_cache_key = get_cache_key(CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q4_cache_key,
+               q4_no_hint);
+
+    auto q4_hint1 = gen_query(q4_qual, "/*+ hash_join(layout=\'OneToOne\') */");
+    check_query_res(q4_hint1, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q4_cache_key,
+               q4_hint1);
+
+    auto q4_hint2 = gen_query(q4_qual, "/*+ hash_join(hashing=\'Perfect\') */");
+    check_query_res(q4_hint2, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q4_cache_key,
+               q4_hint2);
+
+    auto q4_hint3 =
+        gen_query(q4_qual, "/*+ hash_join(hashing=\'Perfect\', layout=\'OneToOne\') */");
+    check_query_res(q4_hint3, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q4_cache_key,
+               q4_hint3);
+
+    auto q4_hint4 = gen_query(q4_qual, "/*+ hash_join(hashing=\'Baseline\') */");
+    check_query_res(q4_hint4, q4_no_hint, dt, 40, CacheItemType::BASELINE_HT);
+    check_prop(HashTableHashingType::BASELINE,
+               HashTableLayoutType::MANY,
+               q4_cache_key,
+               q4_hint4);
+
+    drop_tables();
+    // check per-table hash table invalidation works correctly
+    check_cached_ht_invalidation();
+    clearCache();
+  }
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);

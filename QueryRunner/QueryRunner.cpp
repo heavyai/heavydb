@@ -26,7 +26,7 @@
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
-#include "QueryEngine/DataRecycler/HashtableRecycler.h"
+#include "QueryEngine/DataRecycler/HashTableRecycler.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
@@ -969,7 +969,7 @@ std::tuple<QueryPlanHash,
 QueryRunner::getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
                                                CacheItemType hash_table_type,
                                                DeviceIdentifier device_identifier) {
-  HashtableRecycler* hash_table_cache{nullptr};
+  HashTableRecycler* hash_table_cache{nullptr};
   switch (hash_table_type) {
     case CacheItemType::PERFECT_HT: {
       hash_table_cache = PerfectJoinHashTable::getHashTableCache();
@@ -997,7 +997,7 @@ std::shared_ptr<CacheItemMetric> QueryRunner::getCacheItemMetric(
     QueryPlanHash cache_key,
     CacheItemType hash_table_type,
     DeviceIdentifier device_identifier) {
-  HashtableRecycler* hash_table_cache{nullptr};
+  HashTableRecycler* hash_table_cache{nullptr};
   switch (hash_table_type) {
     case CacheItemType::PERFECT_HT: {
       hash_table_cache = PerfectJoinHashTable::getHashTableCache();
@@ -1054,7 +1054,7 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
       [&item_status,
        &hash_table_type,
        &with_overlaps_tuning_param,
-       &get_num_cached_auto_tuner_param](HashtableRecycler* hash_table_cache) {
+       &get_num_cached_auto_tuner_param](HashTableRecycler* hash_table_cache) {
         switch (item_status) {
           case CacheItemStatus::ALL: {
             if (with_overlaps_tuning_param) {

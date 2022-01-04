@@ -31,11 +31,8 @@
 #include "QueryEngine/RuntimeFunctions.h"
 
 // let's only consider CPU hahstable recycler at this moment
-std::unique_ptr<HashtableRecycler> PerfectJoinHashTable::hash_table_cache_ =
-    std::make_unique<HashtableRecycler>(CacheItemType::PERFECT_HT,
-                                        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-std::unique_ptr<HashingSchemeRecycler> PerfectJoinHashTable::hash_table_layout_cache_ =
-    std::make_unique<HashingSchemeRecycler>();
+std::unique_ptr<HashTableRecycler> PerfectJoinHashTable::hash_table_cache_ =
+    std::make_unique<HashTableRecycler>(CacheItemType::PERFECT_HT, 0);
 
 namespace {
 
@@ -154,7 +151,14 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
-    const TableIdToNodeMap& table_id_to_node_map) {
+    const TableIdToNodeMap& table_id_to_node_map,
+    const RegisteredQueryHint& query_hint) {
+  decltype(std::chrono::steady_clock::now()) ts1, ts2;
+  if (VLOGGING(1)) {
+    VLOG(1) << "Building perfect hash table " << getHashTypeString(preferred_hash_type)
+            << " for qual: " << qual_bin_oper->toString();
+    ts1 = std::chrono::steady_clock::now();
+  }
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
   const auto cols =
       get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
@@ -208,15 +212,11 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   std::vector<InnerOuter> inner_outer_pairs;
   inner_outer_pairs.emplace_back(inner_col, cols.second);
   auto hashtable_access_path_info =
-      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
+      HashTableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
                                                     qual_bin_oper->get_optype(),
                                                     join_type,
                                                     hashtable_build_dag_map,
                                                     executor);
-  decltype(std::chrono::steady_clock::now()) ts1, ts2;
-  if (VLOGGING(1)) {
-    ts1 = std::chrono::steady_clock::now();
-  }
   auto join_hash_table = std::shared_ptr<PerfectJoinHashTable>(
       new PerfectJoinHashTable(qual_bin_oper,
                                inner_col,
@@ -230,6 +230,10 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                device_count,
                                hashtable_access_path_info,
                                table_id_to_node_map));
+
+  if (query_hint.isAnyQueryHintDelivered()) {
+    join_hash_table->registerQueryHint(query_hint);
+  }
   try {
     join_hash_table->reify();
   } catch (const TableMustBeReplicated& e) {
@@ -250,6 +254,8 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(
         std::string("Ran out of memory while building hash tables for equijoin | ") +
         e.what());
+  } catch (const HashingTypeHintDetected& e) {
+    throw e;
   } catch (const std::exception& e) {
     throw std::runtime_error(
         std::string("Fatal error while attempting to build hash tables for join: ") +
@@ -257,8 +263,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   }
   if (VLOGGING(1)) {
     ts2 = std::chrono::steady_clock::now();
-    VLOG(1) << "Built perfect hash table "
-            << getHashTypeString(join_hash_table->getHashType()) << " in "
+    VLOG(1) << "Built perfect hash table in "
             << std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count()
             << " ms";
   }
@@ -391,8 +396,11 @@ void PerfectJoinHashTable::reify() {
         std::vector<int> alternative_table_key{chunk_key[0], chunk_key[1]};
         CHECK(!alternative_table_key.empty());
         table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
+        VLOG(2) << "Use alternative hash table cache key";
       }
       hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
+      getHashtablePropertyCache()->addQueryPlanDagForTableKeys(hashtable_cache_key_,
+                                                               table_keys);
 
       init_threads.push_back(std::async(std::launch::async,
                                         &PerfectJoinHashTable::reifyForDevice,
@@ -411,6 +419,7 @@ void PerfectJoinHashTable::reify() {
     }
   } catch (const NeedsOneToManyHash& e) {
     hash_type_ = HashType::OneToMany;
+    query_hint_ = RegisteredQueryHint::defaults();
     freeHashBufferMemory();
     init_threads.clear();
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
@@ -512,13 +521,15 @@ void PerfectJoinHashTable::reifyForDevice(const ChunkKey& chunk_key,
                                             effective_memory_level,
                                             device_id);
     if (err) {
+      VLOG(1) << "Switching to OneToMany layout after trying to build Perfect join hash "
+                 "table with OneToOne layout";
       throw NeedsOneToManyHash();
     }
   } else {
     const auto err = initHashTableForDevice(chunk_key,
                                             join_column,
                                             inner_outer_pairs_.front(),
-                                            HashType::OneToMany,
+                                            layout,
                                             effective_memory_level,
                                             device_id);
     if (err) {
@@ -551,18 +562,65 @@ int PerfectJoinHashTable::initHashTableForDevice(
 #endif
   int err{0};
   const int32_t hash_join_invalid_val{-1};
-  auto hashtable_layout = layout;
-  auto allow_hashtable_recycling = HashtableRecycler::isSafeToCacheHashtable(
+  // hash table proper cache is located as a global static variable within HashJoin class
+  // to maintain a unique property per hash table access path (cache key)
+  // regardless of hash table hashing types (perfect and baseline)
+  auto hash_table_property_cache = getHashtablePropertyCache();
+  auto query_hint_delivered =
+      query_hint_.isHintRegistered(QueryHint::kHashJoin) && query_hint_.hash_join;
+  bool layout_hint_delivered = query_hint_delivered && query_hint_.hash_join->layout;
+  bool need_update_cached_layout_prop = layout_hint_delivered;
+  hash_type_ = layout_hint_delivered ? hash_table_property_cache->translateLayoutType(
+                                           query_hint_.hash_join->layout.value())
+                                     : layout;
+  if (layout_hint_delivered) {
+    VLOG(1) << "A user tries to set hash table layout as "
+            << getHashTypeString(hash_type_);
+  }
+
+  auto allow_hashtable_recycling = HashTableRecycler::isSafeToCacheHashtable(
       table_id_to_node_map_, needs_dict_translation_, inner_col->get_table_id());
-  if (allow_hashtable_recycling) {
-    auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
+  auto allow_put_hashtable_to_cache =
+      !query_hint_delivered || (query_hint_delivered && query_hint_.hash_join->caching);
+  // Unlike hashing scheme hint, a layout hint is handled per each hash table type
+  // if a layout hint is delivered, we ignore a cached property and update it
+  // based on the given query hint after building a hash table
+  if (allow_hashtable_recycling && !layout_hint_delivered) {
+    auto cached_hashtable_property = hash_table_property_cache->getItemFromCache(
         hashtable_cache_key_,
-        CacheItemType::HT_HASHING_SCHEME,
+        CacheItemType::HT_PROPERTY,
         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-        {});
-    if (cached_hashtable_layout_type) {
-      hash_type_ = *cached_hashtable_layout_type;
-      hashtable_layout = hash_type_;
+        std::nullopt);
+    if (cached_hashtable_property) {
+      if (cached_hashtable_property->hashing &&
+          *cached_hashtable_property->hashing == HashTableHashingType::BASELINE) {
+        // we have a cached hash table property (provided in the previous query) and it
+        // indicates hashing scheme as baseline
+        if (query_hint_delivered && query_hint_.hash_join->hashing &&
+            (*query_hint_.hash_join->hashing == HashTableHashingType::PERFECT)) {
+          // but now we have a hashing scheme hint which explicitly invokes perfect hash,
+          // need to update the cached hash table prop
+          need_update_cached_layout_prop = true;
+        } else {
+          throw HashingTypeHintDetected(HashTableHashingType::BASELINE);
+        }
+      }
+      if (cached_hashtable_property->layout) {
+        auto cached_layout_type = hash_table_property_cache->translateLayoutType(
+            *cached_hashtable_property->layout);
+        if (cached_layout_type == HashType::OneToOne &&
+            hash_type_ == HashType::OneToMany) {
+          // if we try to build OneToMany layout hash table even though we give OneToOne
+          // layout hint, it means OneToOne hash table building is failed and we retry to
+          // build a hash table with OneToMany layout we actually clear delivered query
+          // hint when rebuilding the hash table due to layout issue, but since we
+          // explicitly control it by query hint, we add this logic for the correctness
+          VLOG(1) << "Skipping hash table layout hint: cannot apply OneToOne layout hint "
+                     "when building OneToMany hash table";
+        } else {
+          hash_type_ = cached_layout_type;
+        }
+      }
     }
   }
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
@@ -571,7 +629,8 @@ int PerfectJoinHashTable::initHashTableForDevice(
     if (allow_hashtable_recycling) {
       hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
                                                CacheItemType::PERFECT_HT,
-                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                               hash_type_);
     }
     decltype(std::chrono::steady_clock::now()) ts1, ts2;
     ts1 = std::chrono::steady_clock::now();
@@ -579,13 +638,13 @@ int PerfectJoinHashTable::initHashTableForDevice(
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       if (!hash_table) {
         PerfectJoinHashTableBuilder builder;
-        if (hashtable_layout == HashType::OneToOne) {
+        if (hash_type_ == HashType::OneToOne) {
           builder.initOneToOneHashTableOnCpu(join_column,
                                              col_range_,
                                              isBitwiseEq(),
                                              cols,
                                              join_type_,
-                                             hashtable_layout,
+                                             hash_type_,
                                              hash_entry_info,
                                              hash_join_invalid_val,
                                              executor_);
@@ -603,21 +662,35 @@ int PerfectJoinHashTable::initHashTableForDevice(
         ts2 = std::chrono::steady_clock::now();
         auto build_time =
             std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-        if (allow_hashtable_recycling && hash_table) {
+        if (!err && allow_hashtable_recycling && hash_table) {
           // add ht-related items to cache iff we have a valid hashtable
-          hash_table_layout_cache_->putItemToCache(
-              hashtable_cache_key_,
-              hashtable_layout,
-              CacheItemType::HT_HASHING_SCHEME,
-              DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-              0,
-              0,
-              {});
-          putHashTableOnCpuToCache(hashtable_cache_key_,
-                                   CacheItemType::PERFECT_HT,
-                                   hash_table,
-                                   DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                   build_time);
+          HashTableProperty prop{HashTablePropertyRecycler::translateHashType(hash_type_),
+                                 HashTableHashingType::PERFECT};
+          if (layout_hint_delivered || need_update_cached_layout_prop) {
+            // this cases require us to update the cached prop if necessary
+            hash_table_property_cache->updateItemInCacheIfNecessary(
+                hashtable_cache_key_,
+                prop,
+                CacheItemType::HT_PROPERTY,
+                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+          } else {
+            // otherwise, we try to cache the prop
+            hash_table_property_cache->putItemToCache(
+                hashtable_cache_key_,
+                prop,
+                CacheItemType::HT_PROPERTY,
+                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                0,
+                0,
+                std::nullopt);
+          }
+          if (allow_put_hashtable_to_cache) {
+            putHashTableOnCpuToCache(hashtable_cache_key_,
+                                     CacheItemType::PERFECT_HT,
+                                     hash_table,
+                                     DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                     build_time);
+          }
         }
       }
     }
@@ -625,6 +698,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
     // but the query runs on GPU (join on dictionary encoded columns).
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
+      auto timer = DEBUG_TIMER("Copy CPU hash table to GPU");
       const auto& ti = inner_col->get_type_info();
       CHECK(ti.is_string());
       auto data_mgr = executor_->getDataMgr();
@@ -668,7 +742,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
     PerfectJoinHashTableBuilder builder;
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     builder.allocateDeviceMemory(join_column,
-                                 hashtable_layout,
+                                 hash_type_,
                                  hash_entry_info,
                                  shardCount(),
                                  device_id,
@@ -680,7 +754,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                isBitwiseEq(),
                                cols,
                                join_type_,
-                               hashtable_layout,
+                               hash_type_,
                                hash_entry_info,
                                shardCount(),
                                hash_join_invalid_val,
@@ -691,14 +765,23 @@ int PerfectJoinHashTable::initHashTableForDevice(
     hash_tables_for_device_[device_id] = builder.getHashTable();
     if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
       // add layout to cache iff we have a valid hashtable
-      hash_table_layout_cache_->putItemToCache(
-          hashtable_cache_key_,
-          hash_tables_for_device_[device_id]->getLayout(),
-          CacheItemType::HT_HASHING_SCHEME,
-          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-          0,
-          0,
-          {});
+      HashTableProperty prop{HashTablePropertyRecycler::translateHashType(hash_type_),
+                             HashTableHashingType::PERFECT};
+      if (layout_hint_delivered || need_update_cached_layout_prop) {
+        hash_table_property_cache->updateItemInCacheIfNecessary(
+            hashtable_cache_key_,
+            prop,
+            CacheItemType::HT_PROPERTY,
+            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      } else {
+        hash_table_property_cache->putItemToCache(hashtable_cache_key_,
+                                                  prop,
+                                                  CacheItemType::HT_PROPERTY,
+                                                  DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                                  0,
+                                                  0,
+                                                  std::nullopt);
+      }
     }
 #else
     UNREACHABLE();
@@ -735,14 +818,29 @@ ChunkKey PerfectJoinHashTable::genChunkKey(
 std::shared_ptr<PerfectHashTable> PerfectJoinHashTable::initHashTableOnCpuFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
-    DeviceIdentifier device_identifier) {
+    DeviceIdentifier device_identifier,
+    HashType expected_layout) {
   CHECK(hash_table_cache_);
   auto timer = DEBUG_TIMER(__func__);
   VLOG(1) << "Checking CPU hash table cache.";
-  auto hashtable_ptr =
-      hash_table_cache_->getItemFromCache(key, item_type, device_identifier);
-  if (hashtable_ptr) {
-    return std::dynamic_pointer_cast<PerfectHashTable>(hashtable_ptr);
+  HashtableCacheMetaInfo meta_info;
+  meta_info.registered_query_hint = query_hint_;
+  if (auto cached_hash_table = hash_table_cache_->getItemFromCache(
+          key, item_type, device_identifier, meta_info)) {
+    if (expected_layout != cached_hash_table->getLayout()) {
+      auto translated_expected_layout =
+          HashTablePropertyRecycler::translateHashType(expected_layout);
+      auto translated_cached_layout =
+          HashTablePropertyRecycler::translateHashType(cached_hash_table->getLayout());
+      VLOG(1) << "Skipping hash table recycling: candidate cached hash table does not "
+                 "have an expected layout (expected: "
+              << HashTablePropertyRecycler::getLayoutString(translated_expected_layout)
+              << ", actual: "
+              << HashTablePropertyRecycler::getLayoutString(translated_cached_layout)
+              << ")";
+      return nullptr;
+    }
+    return std::dynamic_pointer_cast<PerfectHashTable>(cached_hash_table);
   }
   return nullptr;
 }
@@ -755,13 +853,16 @@ void PerfectJoinHashTable::putHashTableOnCpuToCache(
     size_t hashtable_building_time) {
   CHECK(hash_table_cache_);
   CHECK(hashtable_ptr && !hashtable_ptr->getGpuBuffer());
+  HashtableCacheMetaInfo meta_info;
+  meta_info.registered_query_hint = query_hint_;
   hash_table_cache_->putItemToCache(
       key,
       hashtable_ptr,
       item_type,
       device_identifier,
       hashtable_ptr->getHashTableBufferSize(ExecutorDeviceType::CPU),
-      hashtable_building_time);
+      hashtable_building_time,
+      meta_info);
 }
 
 llvm::Value* PerfectJoinHashTable::codegenHashTableLoad(const size_t table_idx) {
@@ -921,7 +1022,8 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
   return HashTable::toString("perfect",
-                             getHashTypeString(hash_type_),
+                             hash_table ? getHashTypeString(hash_table->getLayout())
+                                        : getHashTypeString(hash_type_),
                              0,
                              0,
                              hash_table ? hash_table->getEntryCount() : 0,

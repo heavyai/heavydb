@@ -27,9 +27,8 @@
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 
-std::unique_ptr<HashtableRecycler> OverlapsJoinHashTable::hash_table_cache_ =
-    std::make_unique<HashtableRecycler>(CacheItemType::OVERLAPS_HT,
-                                        DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+std::unique_ptr<HashTableRecycler> OverlapsJoinHashTable::hash_table_cache_ =
+    std::make_unique<HashTableRecycler>(CacheItemType::OVERLAPS_HT, 0);
 std::unique_ptr<OverlapsTuningParamRecycler> OverlapsJoinHashTable::auto_tuner_cache_ =
     std::make_unique<OverlapsTuningParamRecycler>();
 
@@ -107,7 +106,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
   }
 
   auto hashtable_access_path_info =
-      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
+      HashTableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
                                                     condition->get_optype(),
                                                     join_type,
                                                     hashtable_build_dag_map,
@@ -576,7 +575,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
     VLOG(1) << oss.str();
   }
   if (query_hint.isHintRegistered(QueryHint::kOverlapsNoCache)) {
-    VLOG(1) << "User requests to skip caching overlaps join hashtable and its tuned "
+    VLOG(1) << "User requests to skip caching overlaps join hash table and its tuned "
                "parameters for this query";
     skip_hashtable_caching = true;
   }
@@ -586,6 +585,10 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
             << overlaps_target_entries_per_bin << " -> "
             << query_hint.overlaps_keys_per_bin;
     overlaps_target_entries_per_bin = query_hint.overlaps_keys_per_bin;
+  }
+  if (query_hint.isHintRegistered(QueryHint::kHashJoin) &&
+      !query_hint.hash_join->caching) {
+    skip_hashtable_caching = true;
   }
   auto data_mgr = executor_->getDataMgr();
   // we prioritize CPU when building an overlaps join hashtable, but if we have GPU and
@@ -719,6 +722,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
             composite_key_info_.cache_key_chunks.front()[1]};
         CHECK(!alternative_table_key.empty());
         table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
+        VLOG(2) << "Use alternative hash table cache key";
       }
       hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
 
@@ -1341,7 +1345,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
   }
   std::shared_ptr<BaselineHashTable> hash_table = builder.getHashTable();
   if (skip_hashtable_caching) {
-    VLOG(1) << "Skip to cache overlaps join hashtable";
+    VLOG(1) << "Skipping overlaps join hash table caching";
   } else {
     auto hashtable_build_time =
         std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();

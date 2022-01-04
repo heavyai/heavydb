@@ -16,7 +16,7 @@
 
 #pragma once
 
-enum class HashType : int { OneToOne, OneToMany, ManyToMany };
+enum class HashType : int { OneToOne, OneToMany, ManyToMany, Invalid };
 
 struct DecodedJoinHashBufferEntry {
   std::vector<int64_t> key;
@@ -42,6 +42,7 @@ class HashTable {
   virtual int8_t* getCpuBuffer() = 0;
   virtual int8_t* getGpuBuffer() const = 0;
   virtual HashType getLayout() const = 0;
+  virtual void setLayout(HashType layout) = 0;
 
   virtual size_t getEntryCount() const = 0;
   virtual size_t getEmittedKeysCount() const = 0;

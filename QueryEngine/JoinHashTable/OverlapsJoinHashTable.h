@@ -90,7 +90,7 @@ class OverlapsJoinHashTable : public HashJoin {
     }
   }
 
-  static HashtableRecycler* getHashTableCache() {
+  static HashTableRecycler* getHashTableCache() {
     CHECK(hash_table_cache_);
     return hash_table_cache_.get();
   }
@@ -212,9 +212,9 @@ class OverlapsJoinHashTable : public HashJoin {
     return nullptr;
   }
 
-  const RegisteredQueryHint& getRegisteredQueryHint() { return query_hint_; }
+  const RegisteredQueryHint& getRegisteredQueryHint() override { return query_hint_; }
 
-  void registerQueryHint(const RegisteredQueryHint& query_hint) {
+  void registerQueryHint(const RegisteredQueryHint& query_hint) override {
     query_hint_ = query_hint;
   }
 
@@ -396,7 +396,7 @@ class OverlapsJoinHashTable : public HashJoin {
   // in this scenario, the rule we follow is cache everything
   // with the assumption that varying P is intended by user
   // for the performance and so worth to keep it for future recycling
-  static std::unique_ptr<HashtableRecycler> hash_table_cache_;
+  static std::unique_ptr<HashTableRecycler> hash_table_cache_;
   // auto tuner cache is maintained separately with hashtable cache
   static std::unique_ptr<OverlapsTuningParamRecycler> auto_tuner_cache_;
 

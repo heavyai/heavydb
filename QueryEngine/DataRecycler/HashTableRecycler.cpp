@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include "HashtableRecycler.h"
+#include "HashTableRecycler.h"
 
 extern bool g_is_test_env;
 
-bool HashtableRecycler::hasItemInCache(
+bool HashTableRecycler::hasItemInCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
@@ -51,7 +51,7 @@ bool HashtableRecycler::hasItemInCache(
   return false;
 }
 
-std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
+std::shared_ptr<HashTable> HashTableRecycler::getItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
@@ -65,32 +65,41 @@ std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
   auto candidate_ht = getCachedItemWithoutConsideringMetaInfo(
       key, item_type, device_identifier, *hashtable_cache, lock);
   if (candidate_ht) {
-    bool can_return_cached_item = false;
+    bool can_return_cached_item = true;
+    auto join_hint = has_join_hint(meta_info);
+    auto candidate_join_hint = has_join_hint(candidate_ht->meta_info);
+    // if query hint is not given, we try to recycle it regardless of the existence of
+    // candidate join hint otherwise, we only recycle it iff two hints are matched
+    if (join_hint.first &&
+        (!candidate_join_hint.first ||
+         (candidate_join_hint.first &&
+          !compare_query_hints(*join_hint.second, *candidate_join_hint.second)))) {
+      VLOG(1) << "Fail to recycle a cached hash table (unmatched query hint)";
+      can_return_cached_item = false;
+    }
     if (item_type == OVERLAPS_HT) {
       // we have to check hashtable metainfo for overlaps join hashtable
-      CHECK(candidate_ht->meta_info && candidate_ht->meta_info->overlaps_meta_info);
-      CHECK(meta_info && meta_info->overlaps_meta_info);
-      if (checkOverlapsHashtableBucketCompatability(
+      CHECK(candidate_ht->meta_info->overlaps_meta_info);
+      CHECK(meta_info->overlaps_meta_info);
+      if (!checkOverlapsHashtableBucketCompatability(
               *candidate_ht->meta_info->overlaps_meta_info,
               *meta_info->overlaps_meta_info)) {
-        can_return_cached_item = true;
+        can_return_cached_item = false;
       }
-    } else {
-      can_return_cached_item = true;
     }
     if (can_return_cached_item) {
       CHECK(!candidate_ht->isDirty());
       candidate_ht->item_metric->incRefCount();
       VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
               << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-              << "] Recycle item in a cache";
+              << "] Recycle hash table";
       return candidate_ht->cached_item;
     }
   }
   return nullptr;
 }
 
-void HashtableRecycler::putItemToCache(QueryPlanHash key,
+void HashTableRecycler::putItemToCache(QueryPlanHash key,
                                        std::shared_ptr<HashTable> item_ptr,
                                        CacheItemType item_type,
                                        DeviceIdentifier device_identifier,
@@ -110,22 +119,28 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
         std::find_if(hashtable_cache->begin(),
                      hashtable_cache->end(),
                      [&key](const auto& cached_item) { return cached_item.key == key; });
-    bool found_candidate = false;
+    bool valid_candidate = false;
     if (candidate_it != hashtable_cache->end()) {
-      if (item_type == OVERLAPS_HT) {
+      auto join_hint = has_join_hint(meta_info);
+      auto candidate_join_hint = has_join_hint(candidate_it->meta_info);
+      if (!join_hint.first ||
+          (join_hint.first && candidate_join_hint.first &&
+           compare_query_hints(*join_hint.second, *candidate_join_hint.second))) {
+        valid_candidate = true;
+      }
+      if (valid_candidate && item_type == OVERLAPS_HT) {
         // we have to check hashtable metainfo for overlaps join hashtable
         CHECK(candidate_it->meta_info && candidate_it->meta_info->overlaps_meta_info);
         CHECK(meta_info && meta_info->overlaps_meta_info);
         if (checkOverlapsHashtableBucketCompatability(
                 *candidate_it->meta_info->overlaps_meta_info,
                 *meta_info->overlaps_meta_info)) {
-          found_candidate = true;
+          valid_candidate = true;
         }
-      } else {
-        found_candidate = true;
       }
-      if (found_candidate && candidate_it->isDirty()) {
-        // remove the dirty item from the cache and make a room for the new one
+      if (!valid_candidate || candidate_it->isDirty()) {
+        // remove invalid or the dirty hash table from the cache and make a room for the
+        // new one
         removeItemFromCache(
             key, item_type, device_identifier, lock, candidate_it->meta_info);
         has_cached_ht = false;
@@ -166,7 +181,7 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
   return;
 }
 
-void HashtableRecycler::removeItemFromCache(
+void HashTableRecycler::removeItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
@@ -198,7 +213,7 @@ void HashtableRecycler::removeItemFromCache(
   return;
 }
 
-void HashtableRecycler::cleanupCacheForInsertion(
+void HashTableRecycler::cleanupCacheForInsertion(
     CacheItemType item_type,
     DeviceIdentifier device_identifier,
     size_t required_size,
@@ -239,7 +254,7 @@ void HashtableRecycler::cleanupCacheForInsertion(
       device_identifier, CacheUpdateAction::REMOVE, removed_size);
 }
 
-void HashtableRecycler::clearCache() {
+void HashTableRecycler::clearCache() {
   std::lock_guard<std::mutex> lock(getCacheLock());
   for (auto& item_type : getCacheItemType()) {
     getMetricTracker(item_type).clearCacheMetricTracker();
@@ -251,7 +266,7 @@ void HashtableRecycler::clearCache() {
   table_key_to_query_plan_dag_map_.clear();
 }
 
-void HashtableRecycler::markCachedItemAsDirty(size_t table_key,
+void HashTableRecycler::markCachedItemAsDirty(size_t table_key,
                                               std::unordered_set<QueryPlanHash>& key_set,
                                               CacheItemType item_type,
                                               DeviceIdentifier device_identifier) {
@@ -269,7 +284,7 @@ void HashtableRecycler::markCachedItemAsDirty(size_t table_key,
   removeTableKeyInfoFromQueryPlanDagMap(table_key);
 }
 
-std::string HashtableRecycler::toString() const {
+std::string HashTableRecycler::toString() const {
   std::ostringstream oss;
   oss << "A current status of the Hashtable Recycler:\n";
   for (auto& item_type : getCacheItemType()) {
@@ -290,7 +305,7 @@ std::string HashtableRecycler::toString() const {
   return oss.str();
 }
 
-bool HashtableRecycler::checkOverlapsHashtableBucketCompatability(
+bool HashTableRecycler::checkOverlapsHashtableBucketCompatability(
     const OverlapsHashTableMetaInfo& candidate,
     const OverlapsHashTableMetaInfo& target) const {
   if (candidate.bucket_sizes.size() != target.bucket_sizes.size()) {
@@ -308,7 +323,7 @@ bool HashtableRecycler::checkOverlapsHashtableBucketCompatability(
   return threshold_check && hashtable_size_check;
 }
 
-std::string HashtableRecycler::getJoinColumnInfoString(
+std::string HashTableRecycler::getJoinColumnInfoString(
     std::vector<const Analyzer::ColumnVar*>& inner_cols,
     std::vector<const Analyzer::ColumnVar*>& outer_cols,
     Executor* executor) {
@@ -320,7 +335,7 @@ std::string HashtableRecycler::getJoinColumnInfoString(
   return boost::join(join_cols_info, "|");
 }
 
-bool HashtableRecycler::isSafeToCacheHashtable(
+bool HashTableRecycler::isSafeToCacheHashtable(
     const TableIdToNodeMap& table_id_to_node_map,
     bool need_dict_translation,
     const int table_id) {
@@ -362,7 +377,7 @@ bool HashtableRecycler::isSafeToCacheHashtable(
   return !(found_sort_node || (found_project_node && need_dict_translation));
 }
 
-HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
+HashtableAccessPathInfo HashTableRecycler::getHashtableAccessPathInfo(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const SQLOps op_type,
     const JoinType join_type,
@@ -421,7 +436,7 @@ HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
 std::tuple<QueryPlanHash,
            std::shared_ptr<HashTable>,
            std::optional<HashtableCacheMetaInfo>>
-HashtableRecycler::getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
+HashTableRecycler::getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
                                                      CacheItemType hash_table_type,
                                                      DeviceIdentifier device_identifier) {
   std::lock_guard<std::mutex> lock(getCacheLock());
@@ -434,7 +449,7 @@ HashtableRecycler::getCachedHashtableWithoutCacheKey(std::set<size_t>& visited,
   return std::make_tuple(EMPTY_HASHED_PLAN_DAG_KEY, nullptr, std::nullopt);
 }
 
-void HashtableRecycler::addQueryPlanDagForTableKeys(
+void HashTableRecycler::addQueryPlanDagForTableKeys(
     size_t hashed_query_plan_dag,
     const std::unordered_set<size_t>& table_keys) {
   std::lock_guard<std::mutex> lock(getCacheLock());
@@ -450,14 +465,14 @@ void HashtableRecycler::addQueryPlanDagForTableKeys(
 }
 
 std::optional<std::unordered_set<size_t>>
-HashtableRecycler::getMappedQueryPlanDagsWithTableKey(size_t table_key) const {
+HashTableRecycler::getMappedQueryPlanDagsWithTableKey(size_t table_key) const {
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto it = table_key_to_query_plan_dag_map_.find(table_key);
   return it != table_key_to_query_plan_dag_map_.end() ? std::make_optional(it->second)
                                                       : std::nullopt;
 }
 
-void HashtableRecycler::removeTableKeyInfoFromQueryPlanDagMap(size_t table_key) {
+void HashTableRecycler::removeTableKeyInfoFromQueryPlanDagMap(size_t table_key) {
   // this function is called when marking cached item for the given table_key as dirty
   // and when we do that we already acquire the cache lock so we skip to lock in this func
   table_key_to_query_plan_dag_map_.erase(table_key);
