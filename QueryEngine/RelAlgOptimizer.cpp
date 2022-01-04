@@ -1082,7 +1082,7 @@ sweep_dead_columns(
         }
       }
       aggregate->setAggExprs(new_exprs);
-      aggregate->setFields(new_fields);
+      aggregate->setFields(std::move(new_fields));
     } else if (auto project = std::dynamic_pointer_cast<RelProject>(node)) {
       auto old_exprs = project->getExpressionsAndRelease();
       std::vector<std::unique_ptr<const RexScalar>> new_exprs;
@@ -1094,7 +1094,7 @@ sweep_dead_columns(
         }
       }
       project->setExpressions(new_exprs);
-      project->setFields(new_fields);
+      project->setFields(std::move(new_fields));
     } else {
       CHECK(false);
     }
@@ -1727,6 +1727,26 @@ void hoist_filter_cond_to_cross_join(
   }
 }
 
+void sync_field_names_if_necessary(std::shared_ptr<const RelProject> from_node,
+                                   RelAlgNode* to_node) noexcept {
+  auto from_fields = from_node->getFields();
+  if (!from_fields.empty()) {
+    if (auto proj_to = dynamic_cast<RelProject*>(to_node);
+        proj_to && proj_to->getFields().size() == from_fields.size()) {
+      proj_to->setFields(std::move(from_fields));
+    } else if (auto agg_to = dynamic_cast<RelAggregate*>(to_node);
+               agg_to && agg_to->getFields().size() == from_fields.size()) {
+      agg_to->setFields(std::move(from_fields));
+    } else if (auto compound_to = dynamic_cast<RelCompound*>(to_node);
+               compound_to && compound_to->getFields().size() == from_fields.size()) {
+      compound_to->setFields(std::move(from_fields));
+    } else if (auto tf_to = dynamic_cast<RelTableFunction*>(to_node);
+               tf_to && tf_to->getFields().size() == from_fields.size()) {
+      tf_to->setFields(std::move(from_fields));
+    }
+  }
+}
+
 // For some reason, Calcite generates Sort, Project, Sort sequences where the
 // two Sort nodes are identical and the Project is identity. Simplify this
 // pattern by re-binding the input of the second sort to the input of the first.
@@ -1740,6 +1760,8 @@ void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
     auto second_sort = std::dynamic_pointer_cast<RelSort>(nodes[i + 2]);
     if (first_sort && second_sort && project && project->isIdentity() &&
         *first_sort == *second_sort) {
+      sync_field_names_if_necessary(project, /* an input of the second sort */
+                                    const_cast<RelAlgNode*>(first_sort->getInput(0)));
       second_sort->replaceInput(second_sort->getAndOwnInput(0),
                                 first_sort->getAndOwnInput(0));
       nodes[i].reset();
