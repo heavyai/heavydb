@@ -19,6 +19,9 @@
 
 #include "../Fragmenter/Fragmenter.h"
 
+#include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
+#include <tbb/task_group.h>
 #include <future>
 
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
@@ -132,9 +135,182 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
 
 }  // namespace
 
+template <typename T>
+void compute_table_function_col_chunk_stats(
+    std::shared_ptr<ChunkMetadata>& chunk_metadata,
+    const T* col_buffer,
+    const T null_val) {
+  const size_t row_count = chunk_metadata->numElements;
+  T min_val{std::numeric_limits<T>::max()};
+  T max_val{std::numeric_limits<T>::lowest()};
+  bool has_nulls{false};
+  constexpr size_t parallel_stats_compute_threshold = 20000UL;
+  if (row_count < parallel_stats_compute_threshold) {
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const T cell_val = col_buffer[row_idx];
+      if (cell_val == null_val) {
+        has_nulls = true;
+        continue;
+      }
+      if (cell_val < min_val) {
+        min_val = cell_val;
+      }
+      if (cell_val > max_val) {
+        max_val = cell_val;
+      }
+    }
+  } else {
+    const size_t max_thread_count = std::thread::hardware_concurrency();
+    const size_t max_inputs_per_thread = 20000;
+    const size_t min_grain_size = max_inputs_per_thread / 2;
+    const size_t num_threads =
+        std::min(max_thread_count,
+                 ((row_count + max_inputs_per_thread - 1) / max_inputs_per_thread));
+
+    std::vector<T> threads_local_mins(num_threads, std::numeric_limits<T>::max());
+    std::vector<T> threads_local_maxes(num_threads, std::numeric_limits<T>::lowest());
+    std::vector<bool> threads_local_has_nulls(num_threads, false);
+    tbb::task_arena limited_arena(num_threads);
+    tbb::task_group tg;
+
+    limited_arena.execute([&] {
+      tg.run([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<size_t>(0, row_count, min_grain_size),
+            [&](const tbb::blocked_range<size_t>& r) {
+              const size_t start_idx = r.begin();
+              const size_t end_idx = r.end();
+              T local_min_val = std::numeric_limits<T>::max();
+              T local_max_val = std::numeric_limits<T>::lowest();
+              bool local_has_nulls = false;
+              for (size_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
+                const T cell_val = col_buffer[row_idx];
+                if (cell_val == null_val) {
+                  local_has_nulls = true;
+                  continue;
+                }
+                if (cell_val < local_min_val) {
+                  local_min_val = cell_val;
+                }
+                if (cell_val > local_max_val) {
+                  local_max_val = cell_val;
+                }
+              }
+              size_t thread_idx = tbb::this_task_arena::current_thread_index();
+              if (local_min_val < threads_local_mins[thread_idx]) {
+                threads_local_mins[thread_idx] = local_min_val;
+              }
+              if (local_max_val > threads_local_maxes[thread_idx]) {
+                threads_local_maxes[thread_idx] = local_max_val;
+              }
+              if (local_has_nulls) {
+                threads_local_has_nulls[thread_idx] = true;
+              }
+            },
+            tbb::simple_partitioner());
+      });
+    });
+
+    limited_arena.execute([&] { tg.wait(); });
+    for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+      if (threads_local_mins[thread_idx] < min_val) {
+        min_val = threads_local_mins[thread_idx];
+      }
+      if (threads_local_maxes[thread_idx] > max_val) {
+        max_val = threads_local_maxes[thread_idx];
+      }
+      has_nulls |= threads_local_has_nulls[thread_idx];
+    }
+  }
+  chunk_metadata->fillChunkStats(min_val, max_val, has_nulls);
+}
+
+ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
+  CHECK(rows->getQueryMemDesc().getQueryDescriptionType() ==
+        QueryDescriptionType::TableFunction);
+  CHECK(rows->didOutputColumnar());
+  CHECK(!(rows->areAnyColumnsLazyFetched()));
+  const size_t col_count = rows->colCount();
+  const auto row_count = rows->entryCount();
+
+  ChunkMetadataMap chunk_metadata_map;
+
+  for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
+    const int8_t* columnar_buffer = const_cast<int8_t*>(rows->getColumnarBuffer(col_idx));
+    const auto col_sql_type_info = rows->getColType(col_idx);
+    const auto col_type = col_sql_type_info.get_type();
+    if (col_type != kTEXT) {
+      CHECK(col_sql_type_info.get_compression() == kENCODING_NONE);
+    } else {
+      CHECK(col_sql_type_info.get_compression() == kENCODING_DICT);
+      CHECK_EQ(col_sql_type_info.get_size(), sizeof(int32_t));
+    }
+    std::shared_ptr<ChunkMetadata> chunk_metadata = std::make_shared<ChunkMetadata>();
+    chunk_metadata->sqlType = col_sql_type_info;
+    chunk_metadata->numBytes = row_count * col_sql_type_info.get_size();
+    chunk_metadata->numElements = row_count;
+
+    switch (col_sql_type_info.get_type()) {
+      case kBOOLEAN:
+      case kTINYINT:
+        compute_table_function_col_chunk_stats(
+            chunk_metadata,
+            columnar_buffer,
+            static_cast<int8_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+        break;
+      case kSMALLINT:
+        compute_table_function_col_chunk_stats(
+            chunk_metadata,
+            reinterpret_cast<const int16_t*>(columnar_buffer),
+            static_cast<int16_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+        break;
+      case kINT:
+        compute_table_function_col_chunk_stats(
+            chunk_metadata,
+            reinterpret_cast<const int32_t*>(columnar_buffer),
+            static_cast<int32_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+        break;
+      case kBIGINT:
+        compute_table_function_col_chunk_stats(
+            chunk_metadata,
+            reinterpret_cast<const int64_t*>(columnar_buffer),
+            static_cast<int64_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+        break;
+      case kFLOAT:
+        // For float use the typed null accessor as the generic one converts to double,
+        // and do not want to risk loss of precision
+        compute_table_function_col_chunk_stats(
+            chunk_metadata,
+            reinterpret_cast<const float*>(columnar_buffer),
+            inline_fp_null_value<float>());
+        break;
+      case kDOUBLE:
+        compute_table_function_col_chunk_stats(
+            chunk_metadata,
+            reinterpret_cast<const double*>(columnar_buffer),
+            inline_fp_null_value<double>());
+        break;
+      case kTEXT:
+        compute_table_function_col_chunk_stats(
+            chunk_metadata,
+            reinterpret_cast<const int32_t*>(columnar_buffer),
+            static_cast<int32_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
+        break;
+      default:
+        UNREACHABLE();
+    }
+    chunk_metadata_map.emplace(col_idx, chunk_metadata);
+  }
+  return chunk_metadata_map;
+}
+
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   auto timer = DEBUG_TIMER(__func__);
   rows->moveToBegin();
+  if (rows->getQueryMemDesc().getQueryDescriptionType() ==
+      QueryDescriptionType::TableFunction) {
+    return synthesize_metadata_table_function(rows);
+  }
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
   const size_t worker_count =
       result_set::use_parallel_algorithms(*rows) ? cpu_threads() : 1;

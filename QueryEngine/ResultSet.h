@@ -431,6 +431,24 @@ class ResultSet {
     return lazy_fetch_info_;
   }
 
+  bool areAnyColumnsLazyFetched() const {
+    bool any_columns_lazy_fetched = false;
+    for (const auto col_lazy_fetch_info : lazy_fetch_info_) {
+      any_columns_lazy_fetched |= col_lazy_fetch_info.is_lazily_fetched;
+    }
+    return any_columns_lazy_fetched;
+  }
+
+  size_t getNumColumnsLazyFetched() const {
+    size_t num_columns_lazy_fetched{0UL};
+    for (const auto col_lazy_fetch_info : lazy_fetch_info_) {
+      if (col_lazy_fetch_info.is_lazily_fetched) {
+        num_columns_lazy_fetched++;
+      }
+    }
+    return num_columns_lazy_fetched;
+  }
+
   void setSeparateVarlenStorageValid(const bool val) {
     separate_varlen_storage_valid_ = val;
   }
@@ -443,6 +461,8 @@ class ResultSet {
   ENTRY_TYPE getEntryAt(const size_t row_idx,
                         const size_t target_idx,
                         const size_t slot_idx) const;
+
+  ChunkStats getTableFunctionChunkStats(const size_t target_idx) const;
 
   static double calculateQuantile(quantile::TDigest* const t_digest);
 
