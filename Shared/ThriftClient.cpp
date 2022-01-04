@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "Shared/ThriftClient.h"
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+#include "Shared/ThriftConfig.h"
+#endif
+
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/THttpClient.h>
@@ -21,6 +26,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/filesystem.hpp>
+
 #include <iostream>
 #include <sstream>
 
@@ -85,10 +91,22 @@ class ProxyTHttpClient : public THttpClient {
   ProxyTHttpClient(std::shared_ptr<TTransport> transport,
                    std::string host,
                    std::string path)
-      : THttpClient(transport, host, path) {}
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+      : THttpClient(transport, host, path, shared::default_tconfig()) {
+  }
+#else
+      : THttpClient(transport, host, path) {
+  }
+#endif
 
   ProxyTHttpClient(std::string host, int port, std::string path)
-      : THttpClient(host, port, path) {}
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+      : THttpClient(host, port, path, shared::default_tconfig()) {
+  }
+#else
+      : THttpClient(host, port, path) {
+  }
+#endif
 
   ~ProxyTHttpClient() override {}
   // thrift parseHeader d and call the super constructor.
@@ -219,14 +237,23 @@ std::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transpo
     factory_->access(std::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
   }
   if (!using_X509_store_ && ca_cert_name.empty()) {
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+    const auto socket =
+        std::make_shared<TSocket>(server_host, port, shared::default_tconfig());
+#else
     const auto socket = std::make_shared<TSocket>(server_host, port);
+#endif
     if (with_timeout) {
       socket->setKeepAlive(with_keepalive);
       socket->setConnTimeout(connect_timeout);
       socket->setRecvTimeout(recv_timeout);
       socket->setSendTimeout(send_timeout);
     }
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+    transport = std::make_shared<TBufferedTransport>(socket, shared::default_tconfig());
+#else
     transport = std::make_shared<TBufferedTransport>(socket);
+#endif
   } else {
     std::shared_ptr<TSocket> secure_socket = factory_->createSocket(server_host, port);
     if (with_timeout) {
@@ -235,7 +262,12 @@ std::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transpo
       secure_socket->setRecvTimeout(recv_timeout);
       secure_socket->setSendTimeout(send_timeout);
     }
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+    transport = std::shared_ptr<TTransport>(
+        new TBufferedTransport(secure_socket, shared::default_tconfig()));
+#else
     transport = std::shared_ptr<TTransport>(new TBufferedTransport(secure_socket));
+#endif
   }
 
   return transport;

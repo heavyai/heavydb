@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@
 
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "ThriftHandler/DBHandler.h"
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+#include "Shared/ThriftConfig.h"
+#endif
 
 #ifdef HAVE_THRIFT_THREADFACTORY
 #include <thrift/concurrency/ThreadFactory.h>
@@ -340,20 +343,13 @@ void heartbeat() {
 
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
 namespace {
-// Creates a configuration object with the maximum possible value for the message size
-// limit (~2GB).
-inline std::shared_ptr<TConfiguration> create_unbounded_transport_config() {
-  return std::make_shared<TConfiguration>(std::numeric_limits<int32_t>::max());
-}
-
 class UnboundedTBufferedTransportFactory : public TBufferedTransportFactory {
  public:
   UnboundedTBufferedTransportFactory() : TBufferedTransportFactory() {}
 
   std::shared_ptr<TTransport> getTransport(
       std::shared_ptr<TTransport> transport) override {
-    return std::shared_ptr<TTransport>(
-        new TBufferedTransport(transport, create_unbounded_transport_config()));
+    return std::make_shared<TBufferedTransport>(transport, shared::default_tconfig());
   }
 };
 
@@ -363,8 +359,7 @@ class UnboundedTHttpServerTransportFactory : public THttpServerTransportFactory 
 
   std::shared_ptr<TTransport> getTransport(
       std::shared_ptr<TTransport> transport) override {
-    return std::shared_ptr<TTransport>(
-        new THttpServer(transport, create_unbounded_transport_config()));
+    return std::make_shared<THttpServer>(transport, shared::default_tconfig());
   }
 };
 }  // namespace
