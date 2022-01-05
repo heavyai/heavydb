@@ -18098,6 +18098,8 @@ TEST_F(SubqueryTestEnv, SubqueryTest) {
     // multi-step multi-subquery
     c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 > (SELECT min(t2.r1) FROM R1 t2 where t2.r2 < 3) and t1.r2 >= (SELECT max(t3.r2) FROM R1 t3 where t3.r3 > (SELECT avg(t4.r3) FROM R1 t4 where t4.r1 < 2)) order by 1, 2;)",
       dt);
+    c(R"(select (select sum(x - y) from ( select count(1) as x, ( select count(1) from ( select distinct str as py from test_inner ) ) as y from ( select str as x from test_inner group by str ) ) ) from test_inner;)",
+      dt);
   }
 }
 

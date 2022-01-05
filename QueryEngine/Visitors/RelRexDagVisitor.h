@@ -54,7 +54,7 @@ class RelRexDagVisitor {
   virtual void visit(RexAbstractInput const*) {}
   virtual void visit(RexCase const*);
   virtual void visit(RexFunctionOperator const*);
-  virtual void visit(RexInput const*) {}  // Don't visit SourceNode
+  virtual void visit(RexInput const*);
   virtual void visit(RexLiteral const*) {}
   virtual void visit(RexOperator const*);
   virtual void visit(RexRef const*) {}

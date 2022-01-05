@@ -71,6 +71,9 @@ void RelRexDagVisitor::visit(RelCompound const* rel_compound) {
   if (rel_compound->getFilterExpr()) {
     visit(rel_compound->getFilterExpr());
   }
+  for (size_t i = 0; i < rel_compound->getScalarSourcesSize(); ++i) {
+    visit(rel_compound->getScalarSource(i));
+  }
 }
 
 void RelRexDagVisitor::visit(RelFilter const* rel_filter) {
@@ -177,4 +180,8 @@ void RelRexDagVisitor::visit(RexOperator const* rex_operator) {
 
 void RelRexDagVisitor::visit(RexSubQuery const* rex_sub_query) {
   visit(rex_sub_query->getRelAlg());
+}
+
+void RelRexDagVisitor::visit(RexInput const* rex_input) {
+  visit(rex_input->getSourceNode());
 }
