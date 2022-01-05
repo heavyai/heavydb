@@ -396,16 +396,18 @@ HashtableAccessPathInfo HashTableRecycler::getHashtableAccessPathInfo(
     join_qual_info.push_back(::toString(op_type));
     join_qual_info.push_back(::toString(join_type));
     auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(join_col_pair.second);
-    join_qual_info.push_back(join_col_pair.first->get_type_info().toString());
     if (outer_col_var) {
       outer_cols_vec.push_back(outer_col_var);
-      if (join_col_pair.first->get_type_info().is_dict_encoded_string()) {
-        // add comp param for dict encoded string
-        join_qual_info.push_back(
-            executor->getQueryPlanDagCache().getJoinColumnsInfoString(
-                outer_col_var, JoinColumnSide::kDirect, true));
-        join_qual_info.push_back(outer_col_var->get_type_info().toString());
-      }
+    } else {
+      auto cvs = executor->getQueryPlanDagCache().collectColVars(join_col_pair.second);
+      std::copy(cvs.begin(), cvs.end(), std::back_inserter(outer_cols_vec));
+    }
+    join_qual_info.push_back(join_col_pair.first->get_type_info().toString());
+    if (join_col_pair.first->get_type_info().is_dict_encoded_string() && outer_col_var) {
+      // add comp param for dict encoded string
+      join_qual_info.push_back(executor->getQueryPlanDagCache().getJoinColumnsInfoString(
+          outer_col_var, JoinColumnSide::kDirect, true));
+      join_qual_info.push_back(outer_col_var->get_type_info().toString());
     }
   }
   auto inner_join_cols_info = boost::join(join_qual_info, "|");

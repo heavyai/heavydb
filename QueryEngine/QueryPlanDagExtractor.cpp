@@ -370,16 +370,13 @@ int get_input_idx(const RelLeftDeepInnerJoin* rel_left_deep_join, int const tbl_
 }
 }  // namespace
 
-Analyzer::ColumnVar const* QueryPlanDagExtractor::getColVar(
+std::vector<Analyzer::ColumnVar const*> QueryPlanDagExtractor::getColVar(
     Analyzer::Expr const* col_info) {
-  auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(col_info);
-  if (!col_var) {
-    auto visited_cols = global_dag_.collectColVars(col_info);
-    if (visited_cols.size() == 1) {
-      col_var = dynamic_cast<const Analyzer::ColumnVar*>(visited_cols[0]);
-    }
+  if (auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(col_info)) {
+    return {col_var};
+  } else {
+    return global_dag_.collectColVars(col_info);
   }
-  return col_var;
 }
 
 // we coalesce join quals and related filter conditions into a single RelLeftDeepInnerJoin
@@ -441,10 +438,12 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
     // qualifier, ...
     // when we have more than one quals, i.e., current_level_join_conditions.quals.size()
     // > 1, we consider the first qual is used as hashtable building
+    bool is_geo_join{false};
     for (const auto& join_qual : current_level_join_conditions.quals) {
       auto qual_bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(join_qual);
       auto join_qual_str = ::toString(join_qual);
       if (qual_bin_oper) {
+        is_geo_join = qual_bin_oper->is_overlaps_oper();
         if (join_qual == current_level_join_conditions.quals.front()) {
           // set op_info based on the first qual
           op_info = OpInfo{::toString(qual_bin_oper->get_optype()),
@@ -456,50 +455,55 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
             // we only consider that cur level's join is loop join if we have no
             // equi-join qual and both lhs and rhs are not col_var,
             // i.e., lhs: col_var / rhs: constant / bin_op: kGE
-            if (visited_filter_ops.emplace(std::move(join_qual_str)).second) {
+            if (visited_filter_ops.insert(join_qual_str).second) {
               filter_ops.push_back(join_qual);
             }
           } else {
             // a qual_bin_oper becomes an inner join qual iff both lhs and rhs are col_var
             // otherwise it becomes a filter qual
             bool found_valid_col_vars = false;
+            std::vector<const Analyzer::ColumnVar*> lhs_cvs, rhs_cvs;
             if (col_pair_info.inner_outer.first && col_pair_info.inner_outer.second) {
-              auto const* lhs_col_var = getColVar(col_pair_info.inner_outer.first);
-              auto const* rhs_col_var = getColVar(col_pair_info.inner_outer.second);
               // we need to modify lhs and rhs if range_oper is detected
               if (auto range_oper = dynamic_cast<const Analyzer::RangeOper*>(
                       col_pair_info.inner_outer.second)) {
-                lhs_col_var = getColVar(range_oper->get_left_operand());
-                rhs_col_var = getColVar(col_pair_info.inner_outer.first);
+                lhs_cvs = getColVar(range_oper->get_left_operand());
+                rhs_cvs = getColVar(col_pair_info.inner_outer.first);
+                is_geo_join = true;
+              } else {
+                // this qual is valid and used for typical hash join op
+                lhs_cvs = getColVar(col_pair_info.inner_outer.first);
+                rhs_cvs = getColVar(col_pair_info.inner_outer.second);
               }
-              // this qual is valid and used for join op
-              if (lhs_col_var && rhs_col_var) {
+              if (!lhs_cvs.empty() && !rhs_cvs.empty()) {
                 found_valid_col_vars = true;
                 if (inner_input_idx == -1) {
                   inner_input_idx =
-                      get_input_idx(rel_left_deep_join, lhs_col_var->get_table_id());
+                      get_input_idx(rel_left_deep_join, lhs_cvs.front()->get_table_id());
                 }
                 if (outer_input_idx == -1) {
                   outer_input_idx =
-                      get_input_idx(rel_left_deep_join, rhs_col_var->get_table_id());
+                      get_input_idx(rel_left_deep_join, rhs_cvs.front()->get_table_id());
                 }
-                inner_join_cols.push_back(lhs_col_var);
-                outer_join_cols.push_back(rhs_col_var);
+                std::copy(
+                    lhs_cvs.begin(), lhs_cvs.end(), std::back_inserter(inner_join_cols));
+                std::copy(
+                    rhs_cvs.begin(), rhs_cvs.end(), std::back_inserter(outer_join_cols));
               }
             }
             if (!found_valid_col_vars &&
-                visited_filter_ops.emplace(std::move(join_qual_str)).second) {
+                visited_filter_ops.insert(join_qual_str).second) {
               filter_ops.push_back(join_qual);
             }
           }
         }
       } else {
-        if (visited_filter_ops.emplace(std::move(join_qual_str)).second) {
+        if (visited_filter_ops.insert(join_qual_str).second) {
           filter_ops.push_back(join_qual);
         }
       }
     }
-    if (inner_join_cols.size() != outer_join_cols.size()) {
+    if (!is_geo_join && (inner_join_cols.size() != outer_join_cols.size())) {
       VLOG(1) << "Stop DAG extraction (Detect inner/outer col mismatch)";
       clearInternalStatus();
       return;

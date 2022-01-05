@@ -1326,9 +1326,7 @@ class RelTranslatedJoin : public RelAlgNode {
       , join_type_(join_type)
       , op_type_(op_type)
       , qualifier_(qualifier)
-      , op_typeinfo_(op_typeinfo) {
-    CHECK_EQ(lhs_join_cols_.size(), rhs_join_cols_.size());
-  }
+      , op_typeinfo_(op_typeinfo) {}
 
   std::string toString() const override {
     return cat(::typeName(this),

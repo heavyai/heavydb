@@ -111,6 +111,16 @@ void create_table_for_overlaps_hashjoin() {
                         poly geometry(polygon, 4326),
                         mpoly geometry(multipolygon, 4326),
                         pt geometry(point, 4326));
+    )",
+      R"(create table overlaps_t3 (id int,
+                        poly geometry(polygon, 4326),
+                        mpoly geometry(multipolygon, 4326),
+                        pt geometry(point, 4326));
+    )",
+      R"(create table overlaps_t4 (id int,
+                        poly geometry(polygon, 4326),
+                        mpoly geometry(multipolygon, 4326),
+                        pt geometry(point, 4326));
     )"};
 
   for (const auto& stmt : init_stmts_ddl) {
@@ -122,20 +132,24 @@ void insert_dml_for_overlaps_hashjoin() {
   std::string value_str =
       "(0,'polygon((20 20,30 25,30 30,25 30,20 20))','multipolygon(((20 20,30 25,30 "
       "30,25 30,20 2)))','point(22 22)');";
-  std::string overlaps_t2_val1 =
-      "insert into overlaps_t2 values (0,'polygon((20 20,30 25,30 30,25 30,20 "
+  std::string overlaps_val1 =
+      " values (0,'polygon((20 20,30 25,30 30,25 30,20 "
       "20))','multipolygon(((20 20,30 25,30 30,25 30,20 2)))','point(22 22)')";
-  std::string overlaps_t2_val2 =
-      "insert into overlaps_t2 values (1,'polygon((2 2,10 2,10 10,2 10,2 2))', "
+  std::string overlaps_val2 =
+      " values (1,'polygon((2 2,10 2,10 10,2 10,2 2))', "
       "'multipolygon(((2 2,10 2,10 10,2 10,2 2)))', 'point(8 8)')";
   auto insert_stmt = [&value_str](const std::string& tbl_name) {
     return "INSERT INTO " + tbl_name + " VALUES " + value_str;
   };
-  QR::get()->runSQL(insert_stmt("overlaps_t11"), ExecutorDeviceType::CPU);
-  QR::get()->runSQL(insert_stmt("overlaps_t12"), ExecutorDeviceType::CPU);
-  QR::get()->runSQL(insert_stmt("overlaps_t13"), ExecutorDeviceType::CPU);
-  QR::get()->runSQL(overlaps_t2_val1, ExecutorDeviceType::CPU);
-  QR::get()->runSQL(overlaps_t2_val2, ExecutorDeviceType::CPU);
+  std::vector<std::string> tbl_names1{"overlaps_t11", "overlaps_t12", "overlaps_t13"};
+  std::vector<std::string> tbl_names2{"overlaps_t2", "overlaps_t3", "overlaps_t4"};
+  for (const std::string& tbl_name : tbl_names1) {
+    QR::get()->runSQL(insert_stmt(tbl_name), ExecutorDeviceType::CPU);
+  }
+  for (const std::string& tbl_name : tbl_names2) {
+    QR::get()->runSQL("insert into " + tbl_name + overlaps_val1, ExecutorDeviceType::CPU);
+    QR::get()->runSQL("insert into " + tbl_name + overlaps_val2, ExecutorDeviceType::CPU);
+  }
 }
 
 int drop_table() {
@@ -827,6 +841,50 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
           OverlapsJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
               CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
       EXPECT_EQ(static_cast<size_t>(416), current_cache_size);
+    }
+
+    {
+      clearCaches();
+      std::unordered_set<QueryPlanHash> key_set;
+      // Test 7. check whether we can recycle overlaps hash table correctly for st_contain
+      // between mpoly and st_point
+      auto q1 =
+          R"(SELECT count(1) FROM overlaps_t11 t2, overlaps_t2 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
+      auto q2 =
+          R"(SELECT count(1) FROM overlaps_t12 t2, overlaps_t3 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
+      auto q3 =
+          R"(SELECT count(1) FROM overlaps_t13 t2, overlaps_t4 t1 WHERE st_contains(t1.mpoly, t2.pt);)";
+      run_simple_query(q1, dt);
+      auto q1_overlaps_ht_metrics =
+          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+      auto q1_key = q1_overlaps_ht_metrics->getQueryPlanHash();
+      key_set.insert(q1_key);
+      run_simple_query(q2, dt);
+      auto q2_overlaps_ht_metrics =
+          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+      auto q2_key = q2_overlaps_ht_metrics->getQueryPlanHash();
+      key_set.insert(q2_key);
+      run_simple_query(q3, dt);
+      auto q3_overlaps_ht_metrics =
+          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::OVERLAPS_HT);
+      auto q3_key = q3_overlaps_ht_metrics->getQueryPlanHash();
+      key_set.insert(q3_key);
+      EXPECT_EQ(static_cast<size_t>(3),
+                QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                                 CacheItemType::OVERLAPS_HT));
+      EXPECT_EQ(static_cast<size_t>(3), key_set.size());
+      run_simple_query(q2, dt);
+      run_simple_query(q2, dt);
+      run_simple_query(q3, dt);
+      run_simple_query(q3, dt);
+      run_simple_query(q3, dt);
+      run_simple_query(q3, dt);
+
+      auto q1_ref_cnt = q1_overlaps_ht_metrics->getRefCount();
+      auto q2_ref_cnt = q2_overlaps_ht_metrics->getRefCount();
+      auto q3_ref_cnt = q3_overlaps_ht_metrics->getRefCount();
+      EXPECT_LT(q1_ref_cnt, q2_ref_cnt);
+      EXPECT_LT(q2_ref_cnt, q3_ref_cnt);
     }
   }
 }

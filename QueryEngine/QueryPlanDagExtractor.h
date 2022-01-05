@@ -125,7 +125,7 @@ class QueryPlanDagExtractor {
 
  private:
   void visit(const RelAlgNode*, const RelAlgNode*);
-  Analyzer::ColumnVar const* getColVar(const Analyzer::Expr* col_info);
+  std::vector<Analyzer::ColumnVar const*> getColVar(const Analyzer::Expr* col_info);
   void handleLeftDeepJoinTree(const RelAlgNode*, const RelLeftDeepInnerJoin*);
   void handleTranslatedJoin(const RelAlgNode*, const RelTranslatedJoin*);
   bool validateNodeId(const RelAlgNode* node, std::optional<RelNodeId> retrieved_node_id);

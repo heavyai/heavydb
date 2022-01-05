@@ -2061,6 +2061,176 @@ TEST_F(RangeJoinTest, BadOrdering) {
   EXPECT_NO_THROW(execSQL(sql, ctx));
 }
 
+TEST_F(RangeJoinTest, HashTableRecycling) {
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  // .device_type = ExecutorDeviceType::CPU,  .hash_join_enabled = true,
+  ExecutionContext ctx{ExecutorDeviceType::CPU, true};
+  size_t expected_hash_tables{0};
+
+  const auto tableA1 = "t1_comp32";
+  const auto tableA2 = "t1";
+  const auto tableB1 = "t2_comp32";
+  const auto tableB2 = "t2";
+  std::set<size_t> visited;
+  std::vector<size_t> cache_keys;
+  std::vector<size_t> ht_ref_cnts;
+
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA1,
+                    tableB1,
+                    tableA1,
+                    tableB1,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+    expected_hash_tables++;
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+    auto ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
+        visited, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto cache_key = std::get<0>(ht_info);
+    cache_keys.push_back(cache_key);
+    auto ht_metrics = QR::get()->getCacheItemMetric(
+        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    CHECK(ht_metrics);
+    ht_ref_cnts.push_back(ht_metrics->getRefCount());
+  }
+
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA1,
+                    tableB2,
+                    tableA1,
+                    tableB2,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+    expected_hash_tables++;
+    auto ht_info = QR::get()->getCachedHashtableWithoutCacheKey(
+        visited, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    auto cache_key = std::get<0>(ht_info);
+    cache_keys.push_back(cache_key);
+    auto ht_metrics = QR::get()->getCacheItemMetric(
+        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    CHECK(ht_metrics);
+    ht_ref_cnts.push_back(ht_metrics->getRefCount());
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+  }
+
+  size_t idx = 0;
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA1,
+                    tableB1,
+                    tableA1,
+                    tableB1,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+    auto cache_key = cache_keys[idx];
+    auto ht_metrics = QR::get()->getCacheItemMetric(
+        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    CHECK(ht_metrics);
+    EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
+    ht_ref_cnts[idx] = ht_metrics->getRefCount();
+    ++idx;
+  }
+
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA1,
+                    tableB2,
+                    tableA1,
+                    tableB2,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+    auto cache_key = cache_keys[idx];
+    auto ht_metrics = QR::get()->getCacheItemMetric(
+        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    CHECK(ht_metrics);
+    EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
+    ht_ref_cnts[idx] = ht_metrics->getRefCount();
+    ++idx;
+  }
+
+  idx = 0;
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA2,
+                    tableB1,
+                    tableA2,
+                    tableB1,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+    auto cache_key = cache_keys[idx];
+    auto ht_metrics = QR::get()->getCacheItemMetric(
+        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    CHECK(ht_metrics);
+    EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
+    ++idx;
+  }
+
+  for (const auto& b : testBounds()) {
+    auto sql =
+        fmt::format("SELECT count(*) FROM {}, {} where ST_Distance({}.p1, {}.p1) <= {};",
+                    tableA2,
+                    tableB2,
+                    tableA2,
+                    tableB2,
+                    b.upper_bound);
+
+    ASSERT_EQ(int64_t(b.expected_value), v<int64_t>(execSQL(sql, ctx)))
+        << fmt::format("Failed <= 1 \n{}\n{}", ctx.toString(), b.toString());
+
+    ASSERT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                               CacheItemType::OVERLAPS_HT),
+              expected_hash_tables)
+        << fmt::format("Returned incorrect # of cached tables. {}", ctx.toString());
+    auto cache_key = cache_keys[idx];
+    auto ht_metrics = QR::get()->getCacheItemMetric(
+        cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+    CHECK(ht_metrics);
+    EXPECT_LT(ht_ref_cnts[idx], ht_metrics->getRefCount());
+    ++idx;
+  }
+}
+
 int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
