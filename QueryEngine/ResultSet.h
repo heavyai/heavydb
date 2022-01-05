@@ -32,6 +32,7 @@
 #include "Shared/quantile.h"
 #include "TargetValue.h"
 
+#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <list>
@@ -432,21 +433,13 @@ class ResultSet {
   }
 
   bool areAnyColumnsLazyFetched() const {
-    bool any_columns_lazy_fetched = false;
-    for (const auto col_lazy_fetch_info : lazy_fetch_info_) {
-      any_columns_lazy_fetched |= col_lazy_fetch_info.is_lazily_fetched;
-    }
-    return any_columns_lazy_fetched;
+    auto is_lazy = [](auto const& info) { return info.is_lazily_fetched; };
+    return std::any_of(lazy_fetch_info_.begin(), lazy_fetch_info_.end(), is_lazy);
   }
 
   size_t getNumColumnsLazyFetched() const {
-    size_t num_columns_lazy_fetched{0UL};
-    for (const auto col_lazy_fetch_info : lazy_fetch_info_) {
-      if (col_lazy_fetch_info.is_lazily_fetched) {
-        num_columns_lazy_fetched++;
-      }
-    }
-    return num_columns_lazy_fetched;
+    auto is_lazy = [](auto const& info) { return info.is_lazily_fetched; };
+    return std::count_if(lazy_fetch_info_.begin(), lazy_fetch_info_.end(), is_lazy);
   }
 
   void setSeparateVarlenStorageValid(const bool val) {

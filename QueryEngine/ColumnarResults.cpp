@@ -405,7 +405,7 @@ void ColumnarResults::materializeAllColumnsTableFunction(const ResultSet& rows,
 
   const auto& lazy_fetch_info = rows.getLazyFetchInfo();
   // Lazy fetching is not currently allowed for table function outputs
-  for (const auto col_lazy_fetch_info : lazy_fetch_info) {
+  for (const auto& col_lazy_fetch_info : lazy_fetch_info) {
     CHECK(!col_lazy_fetch_info.is_lazily_fetched);
   }
   // We can directly copy each non-lazy column's content
