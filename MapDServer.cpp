@@ -28,13 +28,13 @@
 
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TSSLServerSocket.h>
 #include <thrift/transport/TSSLSocket.h>
 #include <thrift/transport/TServerSocket.h>
+#include "Shared/ThriftJSONProtocolInclude.h"
 
 #include "Logger/Logger.h"
 #include "Shared/SystemParameters.h"

@@ -19,16 +19,17 @@
 #include "Shared/ThriftConfig.h"
 #endif
 
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/transport/THttpClient.h>
-#include <thrift/transport/TSocket.h>
+#include <iostream>
+#include <sstream>
+
 #include <boost/algorithm/string.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/filesystem.hpp>
 
-#include <iostream>
-#include <sstream>
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/transport/THttpClient.h>
+#include <thrift/transport/TSocket.h>
+#include "Shared/ThriftJSONProtocolInclude.h"
 
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::protocol;

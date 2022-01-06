@@ -112,7 +112,7 @@ ExtractedPlanDag QueryPlanDagExtractor::extractQueryPlanDagImpl(
 
   auto& cached_dag = executor->getQueryPlanDagCache();
   QueryPlanDagExtractor dag_extractor(
-      cached_dag, catalog, left_deep_tree_infos, temporary_tables, executor);
+      cached_dag, catalog, left_deep_tree_infos, temporary_tables);
 
   // add the root node of this query plan DAG
   auto res = cached_dag.addNodeIfAbsent(node);

@@ -335,15 +335,13 @@ struct TableFunctionManager {
   }
 
 #ifdef HAVE_TOSTRING
-
   std::string toString() const {
     std::string result = ::typeName(this) + "(";
-    if (!this) {
+    if (!(void*)this) {  // cast to void* to avoid warnings
       result += "UNINITIALIZED";
     }
     result += ")";
     return result;
   }
-
 #endif  // HAVE_TOSTRING
 };

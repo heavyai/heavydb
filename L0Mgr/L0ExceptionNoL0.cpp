@@ -19,6 +19,9 @@ namespace l0 {
 L0Exception::L0Exception(L0result status) : status_(status) {}
 
 const char* L0Exception::what() const noexcept {
+  // avoid clang unused private member warning
+  // marking status_ directly triggers a gcc attribute warning
+  [[maybe_unused]] int foo = status_;
   return "L0 is not enabled";
 }
 }  // namespace l0

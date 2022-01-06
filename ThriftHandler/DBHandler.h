@@ -1044,7 +1044,8 @@ class DBHandler : public OmniSciIf {
   ExecutionResult getQueries(
       std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 
-  void get_queries_info(std::vector<TQueryInfo>& _return, const TSessionId& session);
+  void get_queries_info(std::vector<TQueryInfo>& _return,
+                        const TSessionId& session) override;
 
   // this function passes the interrupt request to the DB executor
   void interruptQuery(const Catalog_Namespace::SessionInfo& session_info,

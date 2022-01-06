@@ -30,10 +30,10 @@
 #include <sys/shm.h>
 #include <thrift/Thrift.h>
 #include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
 #include <boost/program_options.hpp>
+#include "Shared/ThriftJSONProtocolInclude.h"
 
 #ifdef HAVE_CUDA
 #include <arrow/gpu/cuda_api.h>
