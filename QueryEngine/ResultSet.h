@@ -499,6 +499,9 @@ class ResultSet {
 
   const std::vector<std::string> getStringDictionaryPayloadCopy(const int dict_id) const;
 
+  const std::pair<std::vector<int32_t>, std::vector<std::string>>
+  getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const;
+
   StringDictionaryProxy* getStringDictionaryProxy(int const dict_id) const;
 
   template <typename ENTRY_TYPE, QueryDescriptionType QUERY_TYPE, bool COLUMNAR_FORMAT>

@@ -180,6 +180,12 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
     const std::shared_ptr<ResultSet>& rows,
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
 
+enum class ArrowStringRemapMode {
+  ALL_STRINGS_REMAPPED,
+  ONLY_TRANSIENT_STRINGS_REMAPPED,
+  INVALID
+};
+
 class ArrowResultSetConverter {
  public:
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
@@ -200,14 +206,15 @@ class ArrowResultSetConverter {
   // TODO(adb): Proper namespacing for this set of functionality. For now, make this
   // public and leverage the converter class as namespace
   struct ColumnBuilder {
-    using TransientStrId = int32_t;
+    using StrId = int32_t;
     using ArrowStrId = int32_t;
 
     std::shared_ptr<arrow::Field> field;
     std::unique_ptr<arrow::ArrayBuilder> builder;
     SQLTypeInfo col_type;
     SQLTypes physical_type;
-    std::unordered_map<TransientStrId, ArrowStrId> transient_string_remapping;
+    ArrowStringRemapMode string_remap_mode{ArrowStringRemapMode::INVALID};
+    std::unordered_map<StrId, ArrowStrId> string_remapping;
   };
 
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
@@ -237,6 +244,7 @@ class ArrowResultSetConverter {
 
   void initializeColumnBuilder(ColumnBuilder& column_builder,
                                const SQLTypeInfo& col_type,
+                               const size_t result_col_idx,
                                const std::shared_ptr<arrow::Field>& field) const;
 
   void append(ColumnBuilder& column_builder,

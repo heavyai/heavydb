@@ -1225,6 +1225,40 @@ const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
   return sdp->getDictionary()->copyStrings();
 }
 
+const std::pair<std::vector<int32_t>, std::vector<std::string>>
+ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
+  const auto col_type_info = getColType(col_idx);
+  CHECK(col_type_info.get_type() == kTEXT);
+  CHECK(col_type_info.get_compression() == kENCODING_DICT);
+  std::unordered_set<int32_t> unique_string_ids_set;
+  const size_t num_entries = entryCount();
+  std::vector<bool> targets_to_skip(colCount(), true);
+  targets_to_skip[col_idx] = false;
+
+  for (size_t row_idx = 0; row_idx < num_entries; ++row_idx) {
+    const auto result_row = getRowAtNoTranslations(row_idx, targets_to_skip);
+    if (!result_row.empty()) {
+      const auto scalar_col_val = boost::get<ScalarTargetValue>(result_row[col_idx]);
+      const int32_t string_id = static_cast<int32_t>(boost::get<int64_t>(scalar_col_val));
+      unique_string_ids_set.emplace(string_id);
+    }
+  }
+
+  const size_t num_unique_strings = unique_string_ids_set.size();
+  std::vector<int32_t> unique_string_ids(num_unique_strings);
+  size_t string_idx{0};
+  for (const auto unique_string_id : unique_string_ids_set) {
+    unique_string_ids[string_idx++] = unique_string_id;
+  }
+
+  const int32_t dict_id = col_type_info.get_comp_param();
+  const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
+      dict_id, /*with_generation=*/true, catalog_);
+  CHECK(sdp);
+
+  return std::make_pair(unique_string_ids, sdp->getStrings(unique_string_ids));
+}
+
 /**
  * Determines if it is possible to directly form a ColumnarResults class from this
  * result set, bypassing the default columnarization.

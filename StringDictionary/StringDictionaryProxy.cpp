@@ -100,6 +100,30 @@ std::string StringDictionaryProxy::getString(int32_t string_id) const {
   return it->second;
 }
 
+std::vector<std::string> StringDictionaryProxy::getStrings(
+    const std::vector<int32_t>& string_ids) const {
+  const size_t num_string_ids = string_ids.size();
+  std::vector<std::string> strings;
+  if (num_string_ids == size_t(0)) {
+    return strings;
+  }
+  strings.reserve(num_string_ids);
+  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  for (const auto& string_id : string_ids) {
+    if (inline_int_null_value<int32_t>() == string_id) {
+      strings.emplace_back("");
+      continue;
+    }
+    if (string_id >= 0) {
+      strings.emplace_back(string_dict_->getString(string_id));
+      continue;
+    }
+    auto it = transient_int_to_str_.find(string_id);
+    strings.emplace_back(it->second);
+  }
+  return strings;
+}
+
 namespace {
 
 bool is_like(const std::string& str,
@@ -215,6 +239,10 @@ std::pair<const char*, size_t> StringDictionaryProxy::getStringBytes(
   auto it = transient_int_to_str_.find(string_id);
   CHECK(it != transient_int_to_str_.end());
   return std::make_pair(it->second.c_str(), it->second.size());
+}
+
+size_t StringDictionaryProxy::entryCount() const {
+  return string_dict_.get()->storageEntryCount() + transient_str_to_int_.size();
 }
 
 size_t StringDictionaryProxy::storageEntryCount() const {

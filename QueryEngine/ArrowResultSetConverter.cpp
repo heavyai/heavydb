@@ -932,7 +932,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
 
   // Create array builders
   for (size_t i = 0; i < col_count; ++i) {
-    initializeColumnBuilder(builders[i], results_->getColType(i), schema->field(i));
+    initializeColumnBuilder(builders[i], results_->getColType(i), i, schema->field(i));
   }
 
   // TODO(miyu): speed up for columnar buffers
@@ -1394,6 +1394,7 @@ void ArrowResultSet::deallocateArrowResultBuffer(const ArrowResult& result,
 void ArrowResultSetConverter::initializeColumnBuilder(
     ColumnBuilder& column_builder,
     const SQLTypeInfo& col_type,
+    const size_t results_col_slot_idx,
     const std::shared_ptr<arrow::Field>& field) const {
   column_builder.field = field;
   column_builder.col_type = col_type;
@@ -1403,25 +1404,103 @@ void ArrowResultSetConverter::initializeColumnBuilder(
 
   auto value_type = field->type();
   if (col_type.is_dict_encoded_string()) {
+    auto timer = DEBUG_TIMER("Translate string dictionary to Arrow dictionary");
     column_builder.builder.reset(new arrow::StringDictionary32Builder());
     // add values to the builder
     const int dict_id = col_type.get_comp_param();
-    auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
+    constexpr size_t min_result_size_for_bulk_dictionary_fetch{10000UL};
+    constexpr float max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch{0.1};
+
+    // ResultSet::rowCount(), unlike ResultSet::entryCount(), will return
+    // the actual number of rows in the result set, taking into account
+    // things like any limit and offset set
+    const size_t result_set_rows = results_->rowCount();
+    // result_set_rows guaranteed > 0 by parent
+    CHECK_GT(result_set_rows, 0UL);
+
+    auto sdp = results_->getStringDictionaryProxy(dict_id);
+    const size_t dictionary_proxy_entries = sdp->entryCount();
+    const float dictionary_to_result_size_ratio =
+        static_cast<float>(dictionary_proxy_entries) / result_set_rows;
+
+    // We are conservative with when we do a bulk dictionary fetch,
+    // even though it is generally more efficient than dictionary unique value "plucking",
+    // for the following reasons:
+    // 1) The number of actual distinct dictionary values can be much lower than the
+    // number of result rows, but without getting the expression range (and that would
+    // only work in some cases), we don't know by how much 2) Regardless of the effect of
+    // #1, the size of the dictionary generated via the "pluck" method will always be at
+    // worst equal in size, and very likely significantly smaller, than the dictionary
+    // created by the bulk dictionary fetch method, and maller Arrow dictionaries are
+    // always a win when it comes to sending the Arrow results over the wire, and for
+    // lowering the processing load for clients (which often is a web browser with a lot
+    // less compute and memory resources than our server.)
+
+    const bool do_dictionary_bulk_fetch =
+        result_set_rows > min_result_size_for_bulk_dictionary_fetch &&
+        dictionary_to_result_size_ratio <=
+            max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch;
 
     arrow::StringBuilder str_array_builder;
-    ARROW_THROW_NOT_OK(str_array_builder.AppendValues(str_list));
 
-    // add transients
-    auto sdp = results_->getStringDictionaryProxy(dict_id);
-    CHECK(sdp);
+    if (do_dictionary_bulk_fetch) {
+      VLOG(1) << "Arrow dictionary creation: bulk copying all dictionary "
+              << " entries for column at offset " << results_col_slot_idx << ". "
+              << "Column has " << dictionary_proxy_entries << " string entries"
+              << " for a result set with " << result_set_rows << " rows.";
+      column_builder.string_remap_mode =
+          ArrowStringRemapMode::ONLY_TRANSIENT_STRINGS_REMAPPED;
+      auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
+      ARROW_THROW_NOT_OK(str_array_builder.AppendValues(str_list));
 
-    const auto& transient_map = sdp->getTransientMapping();
-    int32_t crt_transient_id = static_cast<int32_t>(str_list.size());
-    for (auto transient_pair : transient_map) {
-      ARROW_THROW_NOT_OK(str_array_builder.Append(transient_pair.second));
-      CHECK(column_builder.transient_string_remapping
-                .insert(std::make_pair(transient_pair.first, crt_transient_id++))
+      // When we fetch the bulk dictionary, we need to also fetch
+      // the transient entries only contained in the proxy.
+      // These values are always negative (starting at -2), and so need
+      // to be remapped to point to the corresponding entries in the Arrow
+      // dictionary (they are placed at the end after the materialized
+      // string entries from StringDictionary)
+
+      const auto& transient_map = sdp->getTransientMapping();
+      int32_t crt_transient_id = static_cast<int32_t>(str_list.size());
+      for (auto transient_pair : transient_map) {
+        ARROW_THROW_NOT_OK(str_array_builder.Append(transient_pair.second));
+        CHECK(column_builder.string_remapping
+                  .insert(std::make_pair(transient_pair.first, crt_transient_id++))
+                  .second);
+      }
+    } else {
+      // Pluck unique dictionary values from ResultSet column
+      VLOG(1) << "Arrow dictionary creation: serializing unique result set dictionary "
+              << " entries for column at offset " << results_col_slot_idx << ". "
+              << "Column has " << dictionary_proxy_entries << " string entries"
+              << " for a result set with " << result_set_rows << " rows.";
+      column_builder.string_remap_mode = ArrowStringRemapMode::ALL_STRINGS_REMAPPED;
+
+      // ResultSet::getUniqueStringsForDictEncodedTargetCol returns a pair of two vectors,
+      // the first of int32_t values containing the unique string ids found for
+      // results_col_slot_idx in the result set, the second containing the associated
+      // unique strings. Note that the unique string for a unique string id are both
+      // placed at the same offset in their respective vectors
+
+      auto unique_ids_and_strings =
+          results_->getUniqueStringsForDictEncodedTargetCol(results_col_slot_idx);
+      const auto& unique_ids = unique_ids_and_strings.first;
+      const auto& unique_strings = unique_ids_and_strings.second;
+      ARROW_THROW_NOT_OK(str_array_builder.AppendValues(unique_strings));
+      const int32_t num_unique_strings = unique_strings.size();
+      CHECK_EQ(num_unique_strings, unique_ids.size());
+      // We need to remap ALL string id values given the Arrow dictionary
+      // will have "holes", i.e. it is a sparse representation of the underlying
+      // StringDictionary
+      for (int32_t unique_string_idx = 0; unique_string_idx < num_unique_strings;
+           ++unique_string_idx) {
+        CHECK(
+            column_builder.string_remapping
+                .insert(std::make_pair(unique_ids[unique_string_idx], unique_string_idx))
                 .second);
+      }
+      // Note we don't need to get transients from proxy as they are already handled in
+      // ResultSet::getUniqueStringsForDictEncodedTargetCol
     }
 
     std::shared_ptr<arrow::StringArray> string_array;
@@ -1514,11 +1593,15 @@ void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
   CHECK(typed_builder);
 
   std::vector<int32_t> vals = boost::get<std::vector<int32_t>>(values);
-  // remap negative values
+  // remap negative values if ArrowStringRemapMode == ONLY_TRANSIENT_STRINGS_REMAPPED or
+  // everything if ALL_STRINGS_REMAPPED
+  CHECK(column_builder.string_remap_mode != ArrowStringRemapMode::INVALID);
   for (size_t i = 0; i < vals.size(); i++) {
     auto& val = vals[i];
-    if (val < 0 && (*is_valid)[i]) {
-      vals[i] = column_builder.transient_string_remapping.at(val);
+    if ((column_builder.string_remap_mode == ArrowStringRemapMode::ALL_STRINGS_REMAPPED ||
+         val < 0) &&
+        (*is_valid)[i]) {
+      vals[i] = column_builder.string_remapping.at(val);
     }
   }
 
