@@ -55,15 +55,7 @@
 #include "Shared/Restriction.h"
 #include "Shared/mapd_shared_mutex.h"
 
-inline const std::string OMNISCI_SYSTEM_CATALOG = "omnisci_system_catalog";
-inline const std::string OMNISCI_DEFAULT_DB = "omnisci";
-inline const std::string OMNISCI_ROOT_USER = "admin";
-inline const int OMNISCI_ROOT_USER_ID = 0;
-inline const std::string OMNISCI_ROOT_USER_ID_STR = "0";
-inline const std::string OMNISCI_ROOT_PASSWD_DEFAULT = "HyperInteractive";
-inline const int32_t OMNISCI_TEMPORARY_USER_ID_RANGE = 1000000000;
-inline const std::string INFORMATION_SCHEMA_DB = "information_schema";
-inline const std::string INFORMATION_SCHEMA_MIGRATION = "information_schema_db_created";
+#include "Catalog/SysDefinitions.h"
 
 class Calcite;
 

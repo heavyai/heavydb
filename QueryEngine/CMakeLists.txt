@@ -193,6 +193,11 @@ else ()
     set(RT_OPT_FLAGS -O3)
 endif ()
 
+if(MSVC)
+  message(STATUS "MSVC BUILD removing RT_OPT_FLAGS")
+  unset(RT_OPT_FLAGS)
+endif()
+
 add_custom_command(
         DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
