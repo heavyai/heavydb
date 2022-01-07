@@ -631,6 +631,36 @@ TEST_F(ArrowIpcBasic, IpcGpuWithCpuQuery) {
       "SELECT * FROM arrow_ipc_test;", ExecutorDeviceType::GPU, device_id));
 }
 
+void check_empty_result_validity(const std::string& query,
+                                 const std::vector<std::string>& expected_fields) {
+  // Make following an int32_t type to match ArrowOutput::num_fields()
+  const int32_t num_expected_fields = static_cast<int32_t>(expected_fields.size());
+  {  // wire transport
+    auto data_frame =
+        execute_arrow_ipc(query, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::WIRE);
+
+    auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::WIRE);
+
+    ASSERT_EQ(df.schema->num_fields(), num_expected_fields);
+
+    EXPECT_THAT(df.schema->field_names(),
+                ::testing::UnorderedElementsAreArray(expected_fields));
+  }
+
+  {  // shared memory transport
+    auto data_frame = execute_arrow_ipc(
+        query, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::SHARED_MEMORY);
+
+    auto df =
+        ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+
+    ASSERT_EQ(df.schema->num_fields(), num_expected_fields);
+
+    EXPECT_THAT(df.schema->field_names(),
+                ::testing::UnorderedElementsAreArray(expected_fields));
+  }
+}
+
 TEST_F(ArrowIpcBasic, EmptyResultSet) {
   char const* drop_flights = "DROP TABLE IF EXISTS flights;";
   run_ddl_statement(drop_flights);
@@ -653,67 +683,44 @@ TEST_F(ArrowIpcBasic, EmptyResultSet) {
 
   // group by
   {
-    char const* select =
+    const std::string query =
         "SELECT plane_model, COUNT(*) FROM flights WHERE id < -1 GROUP BY plane_model;";
 
-    std::array expected_fields{"plane_model"s, "EXPR$1"s};
+    std::vector<std::string> expected_fields{"plane_model", "EXPR$1"};
 
-    {  // wire transport
-      auto data_frame = execute_arrow_ipc(
-          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::WIRE);
-
-      auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::WIRE);
-
-      ASSERT_EQ(df.schema->num_fields(), 2);
-
-      EXPECT_THAT(df.schema->field_names(),
-                  ::testing::UnorderedElementsAreArray(expected_fields));
-    }
-
-    {  // shared memory transport
-      auto data_frame = execute_arrow_ipc(
-          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::SHARED_MEMORY);
-
-      auto df = ArrowOutput(
-          data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
-
-      ASSERT_EQ(df.schema->num_fields(), 2);
-
-      EXPECT_THAT(df.schema->field_names(),
-                  ::testing::UnorderedElementsAreArray(expected_fields));
-    }
+    check_empty_result_validity(query, expected_fields);
   }
 
   // projection
   {
-    char const* select = "SELECT * FROM flights WHERE id < -1";
+    const std::string query = "SELECT * FROM flights WHERE id < -1;";
 
-    std::array expected_fields{"plane_model"s, "id"s, "dest_city"s};
+    const std::vector<std::string> expected_fields{"plane_model", "id", "dest_city"};
 
-    {  // wire transport
-      auto data_frame = execute_arrow_ipc(
-          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::WIRE);
+    check_empty_result_validity(query, expected_fields);
+  }
 
-      auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::WIRE);
+  // non-empty projection result, but empty when offset is taken into account
+  {
+    const std::string query =
+        "SELECT * FROM flights WHERE id > 5 ORDER BY id LIMIT 50 OFFSET 50;";
 
-      ASSERT_EQ(df.schema->num_fields(), 3);
+    const std::vector<std::string> expected_fields{"plane_model", "id", "dest_city"};
 
-      EXPECT_THAT(df.schema->field_names(),
-                  ::testing::UnorderedElementsAreArray(expected_fields));
-    }
+    check_empty_result_validity(query, expected_fields);
+  }
 
-    {  // shared memory transport
-      auto data_frame = execute_arrow_ipc(
-          select, ExecutorDeviceType::CPU, 0, -1, TArrowTransport::SHARED_MEMORY);
+  // non-empty group by result, but empty when offset is taken into account
+  {
+    const std::string query =
+        "SELECT dest_city, COUNT(*) AS n, AVG(id) AS avg_id FROM flights GROUP BY "
+        "dest_city "
+        "ORDER "
+        "BY n DESC LIMIT 5 OFFSET 50;";
 
-      auto df = ArrowOutput(
-          data_frame, ExecutorDeviceType::CPU, TArrowTransport::SHARED_MEMORY);
+    const std::vector<std::string> expected_fields{"dest_city", "n", "avg_id"};
 
-      ASSERT_EQ(df.schema->num_fields(), 3);
-
-      EXPECT_THAT(df.schema->field_names(),
-                  ::testing::UnorderedElementsAreArray(expected_fields));
-    }
+    check_empty_result_validity(query, expected_fields);
   }
 }
 
