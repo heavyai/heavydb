@@ -684,6 +684,7 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
   }
   int8_t compact_width{0};
   auto col_it = ra_exe_unit.input_col_descs.begin();
+  auto const end = ra_exe_unit.input_col_descs.end();
   int unnest_array_col_id{std::numeric_limits<int>::min()};
   for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
     const auto uoper = dynamic_cast<Analyzer::UOper*>(groupby_expr.get());
@@ -698,7 +699,9 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
         break;
       }
     }
-    ++col_it;
+    if (col_it != end) {
+      ++col_it;
+    }
   }
   if (!compact_width &&
       (ra_exe_unit.groupby_exprs.size() != 1 || !ra_exe_unit.groupby_exprs.front())) {
@@ -718,13 +721,17 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
       if (agg) {
         CHECK_EQ(kCOUNT, agg->get_aggtype());
         CHECK(!agg->get_is_distinct());
-        ++col_it;
+        if (col_it != end) {
+          ++col_it;
+        }
         continue;
       }
 
       if (is_int_and_no_bigger_than(ti, 4) ||
           (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
-        ++col_it;
+        if (col_it != end) {
+          ++col_it;
+        }
         continue;
       }
 
@@ -735,7 +742,9 @@ int8_t QueryMemoryDescriptor::pick_target_compact_width(
         CHECK(arg_ti.is_array());
         const auto& elem_ti = arg_ti.get_elem_type();
         if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
-          ++col_it;
+          if (col_it != end) {
+            ++col_it;
+          }
           continue;
         }
       }

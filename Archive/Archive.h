@@ -17,6 +17,7 @@
 #ifndef ARCHIVE_ARCHIVE_H_
 #define ARCHIVE_ARCHIVE_H_
 
+#include <map>
 #include <regex>
 #include <string>
 
