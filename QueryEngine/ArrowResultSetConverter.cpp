@@ -812,7 +812,7 @@ size_t convert_rowwise(
   const auto col_count = results->colCount();
   CHECK_EQ(value_seg.size(), col_count);
   CHECK_EQ(null_bitmap_seg.size(), col_count);
-  const auto entry_count = end_entry - start_entry;
+  const auto local_entry_count = end_entry - start_entry;
   size_t seg_row_count = 0;
   for (size_t i = start_entry; i < end_entry; ++i) {
     auto row = results->getRowAtNoTranslations(i, non_lazy_cols);
@@ -831,71 +831,73 @@ size_t convert_rowwise(
       const auto& column = builders[j];
       switch (column.physical_type) {
         case kBOOLEAN:
-          create_or_append_value<bool, int64_t>(*scalar_value, value_seg[j], entry_count);
+          create_or_append_value<bool, int64_t>(
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kTINYINT:
           create_or_append_value<int8_t, int64_t>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kSMALLINT:
           create_or_append_value<int16_t, int64_t>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kINT:
           create_or_append_value<int32_t, int64_t>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kBIGINT:
           create_or_append_value<int64_t, int64_t>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kDECIMAL:
           create_or_append_value<int64_t, int64_t>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kFLOAT:
-          create_or_append_value<float, float>(*scalar_value, value_seg[j], entry_count);
+          create_or_append_value<float, float>(
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<float>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kDOUBLE:
           create_or_append_value<double, double>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<double>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kTIME:
           create_or_append_value<int32_t, int64_t>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kDATE:
           device_type == ExecutorDeviceType::GPU
               ? create_or_append_value<int64_t, int64_t>(
-                    *scalar_value, value_seg[j], entry_count)
+                    *scalar_value, value_seg[j], local_entry_count)
               : create_or_append_value<int32_t, int64_t>(
-                    *scalar_value, value_seg[j], entry_count);
+                    *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         case kTIMESTAMP:
           create_or_append_value<int64_t, int64_t>(
-              *scalar_value, value_seg[j], entry_count);
+              *scalar_value, value_seg[j], local_entry_count);
           create_or_append_validity<int64_t>(
-              *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
+              *scalar_value, column.col_type, null_bitmap_seg[j], local_entry_count);
           break;
         default:
           // TODO(miyu): support more scalar types.
@@ -1351,10 +1353,9 @@ std::shared_ptr<arrow::Schema> ArrowResultSetConverter::makeSchema() const {
   return arrow::schema(fields);
 }
 
-void ArrowResultSet::deallocateArrowResultBuffer(
-    const ArrowResult& result,
-    const ExecutorDeviceType device_type,
-    const size_t device_id) {
+void ArrowResultSet::deallocateArrowResultBuffer(const ArrowResult& result,
+                                                 const ExecutorDeviceType device_type,
+                                                 const size_t device_id) {
 #ifndef _MSC_VER
   // CPU buffers skip the sm handle, serializing the entire RecordBatch to df.
   // Remove shared memory on sysmem
