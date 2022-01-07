@@ -202,6 +202,11 @@ else()
   set(RT_OPT_FLAGS -O3)
 endif()
 
+if(MSVC)
+  message(STATUS "MSVC BUILD removing RT_OPT_FLAGS")
+  unset(RT_OPT_FLAGS)
+endif()
+
 add_custom_command(
     DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp GeoOpsRuntime.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp ${CMAKE_SOURCE_DIR}/Geospatial/Utm.h
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
