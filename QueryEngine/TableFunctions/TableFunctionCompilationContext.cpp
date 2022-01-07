@@ -255,6 +255,7 @@ bool TableFunctionCompilationContext::passColumnsByValue(
 void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(entry_point_func_);
   CHECK_EQ(entry_point_func_->arg_size(), 5);
   auto arg_it = entry_point_func_->arg_begin();
@@ -436,6 +437,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
 }
 
 void TableFunctionCompilationContext::generateGpuKernel() {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(entry_point_func_);
   std::vector<llvm::Type*> arg_types;
   arg_types.reserve(entry_point_func_->arg_size());

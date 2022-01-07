@@ -102,6 +102,7 @@ std::string add_line_numbers(const std::string& text) {
 CubinResult ptx_to_cubin(const std::string& ptx,
                          const unsigned block_size,
                          const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(!ptx.empty());
   CHECK(cuda_mgr && cuda_mgr->getDeviceCount() > 0);
   cuda_mgr->setContext(0);

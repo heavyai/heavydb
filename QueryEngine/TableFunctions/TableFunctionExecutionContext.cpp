@@ -122,6 +122,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     const ColumnFetcher& column_fetcher,
     const ExecutorDeviceType device_type,
     Executor* executor) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(compilation_context);
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<std::unique_ptr<char[]>> literals_owner;
@@ -297,6 +298,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     std::vector<int64_t>& col_sizes,
     const size_t elem_count,  // taken from first source only currently
     Executor* executor) {
+  auto timer = DEBUG_TIMER(__func__);
   int64_t output_row_count = 0;
 
   // If TableFunctionManager must be a singleton but it has been
@@ -331,7 +333,6 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   }
 
   // execute
-  auto timer = DEBUG_TIMER(__func__);
   const auto err =
       compilation_context->getFuncPtr()(reinterpret_cast<const int8_t*>(mgr.get()),
                                         byte_stream_ptr,  // input columns buffer
@@ -414,6 +415,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
     const int device_id,
     Executor* executor) {
 #ifdef HAVE_CUDA
+  auto timer = DEBUG_TIMER(__func__);
   if (exe_unit.table_func.hasTableFunctionSpecifiedParameter()) {
     throw QueryMustRunOnCpu();
   }

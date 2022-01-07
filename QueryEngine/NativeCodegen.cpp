@@ -242,6 +242,7 @@ void eliminate_dead_self_recursive_funcs(
 // check if linking with libdevice is required
 // libdevice functions have a __nv_* prefix
 bool check_module_requires_libdevice(llvm::Module* module) {
+  auto timer = DEBUG_TIMER(__func__);
   for (llvm::Function& F : *module) {
     if (F.hasName() && F.getName().startswith("__nv_")) {
       LOG(INFO) << "Module requires linking with libdevice: " << std::string(F.getName());
@@ -279,7 +280,9 @@ void optimize_ir(llvm::Function* query_func,
                  const std::unordered_set<llvm::Function*>& live_funcs,
                  const bool is_gpu_smem_used,
                  const CompilationOptions& co) {
+  auto timer = DEBUG_TIMER(__func__);
   // the always inliner legacy pass must always run first
+  pass_manager.add(llvm::createVerifierPass());
   pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
 
   pass_manager.add(new AnnotateInternalFunctionsPass());
@@ -409,7 +412,8 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     llvm::Function* func,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
-  auto llvm_module = func->getParent();
+  auto timer = DEBUG_TIMER(__func__);
+  llvm::Module* llvm_module = func->getParent();
   // run optimizations
 #ifndef WITH_JIT_DEBUG
   llvm::legacy::PassManager pass_manager;
@@ -479,6 +483,7 @@ void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_mod
                                     llvm::Module& module,
                                     CgenState* cgen_state,
                                     llvm::Linker::Flags flags) {
+  auto timer = DEBUG_TIMER(__func__);
   // throw a runtime error if the target module contains functions
   // with the same name as in module of UDF functions.
   for (auto& f : *udf_module.get()) {
@@ -960,7 +965,98 @@ bool is_udf_module_present(bool cpu_only = false) {
   return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
 }
 
+std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
+    llvm::Module& module,
+    const std::vector<llvm::Function*>& roots) {
+  std::queue<llvm::Function*> queue;
+  std::unordered_set<llvm::Function*> visited;
+  for (llvm::Function* F : roots) {
+    queue.push(F);
+  }
+
+  while (!queue.empty()) {
+    llvm::Function* F = queue.front();
+    queue.pop();
+    if (visited.find(F) != visited.end()) {
+      continue;
+    }
+    visited.insert(F);
+
+    for (llvm::inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      if (llvm::CallInst* CI = llvm::dyn_cast<llvm::CallInst>(&*I)) {
+        if (CI->isInlineAsm())  // libdevice calls inline assembly code
+          continue;
+        llvm::Function* called = CI->getCalledFunction();
+        if (!called || visited.find(called) != visited.end()) {
+          continue;
+        }
+        queue.push(called);
+      }
+    }
+  }
+  return visited;
+}
+
 }  // namespace
+
+void CodeGenerator::linkModuleWithLibdevice(
+    llvm::Module& module,
+    llvm::PassManagerBuilder& pass_manager_builder,
+    const GPUTarget& gpu_target) {
+#ifdef HAVE_CUDA
+  auto timer = DEBUG_TIMER(__func__);
+  if (g_rt_libdevice_module == nullptr) {
+    // raise error
+    throw std::runtime_error(
+        "libdevice library is not available but required by the UDF module");
+  }
+
+  // Saves functions \in module
+  std::vector<llvm::Function*> roots;
+  for (llvm::Function& fn : module) {
+    if (!fn.isDeclaration())
+      roots.emplace_back(&fn);
+  }
+
+  // Bind libdevice to the current module
+  CodeGenerator::link_udf_module(g_rt_libdevice_module,
+                                 module,
+                                 gpu_target.cgen_state,
+                                 llvm::Linker::Flags::OverrideFromSrc);
+
+  std::unordered_set<llvm::Function*> live_funcs = findAliveRuntimeFuncs(module, roots);
+
+  std::vector<llvm::Function*> funcs_to_delete;
+  for (llvm::Function& fn : module) {
+    if (!live_funcs.count(&fn)) {
+      // deleting the function were would invalidate the iterator
+      funcs_to_delete.emplace_back(&fn);
+    }
+  }
+
+  for (llvm::Function* f : funcs_to_delete) {
+    f->eraseFromParent();
+  }
+
+  // activate nvvm-reflect-ftz flag on the module
+  module.addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", (int)1);
+  for (llvm::Function& fn : module) {
+    fn.addFnAttr("nvptx-f32ftz", "true");
+  }
+
+  // add nvvm reflect pass replacing any NVVM conditionals with constants
+  gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
+  llvm::legacy::FunctionPassManager FPM(&module);
+  pass_manager_builder.populateFunctionPassManager(FPM);
+
+  // Run the NVVMReflectPass here rather than inside optimize_ir
+  FPM.doInitialization();
+  for (auto& F : module) {
+    FPM.run(F);
+  }
+  FPM.doFinalization();
+#endif
+}
 
 std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     llvm::Function* func,
@@ -970,6 +1066,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     const CompilationOptions& co,
     const GPUTarget& gpu_target) {
 #ifdef HAVE_CUDA
+  auto timer = DEBUG_TIMER(__func__);
   auto module = func->getParent();
   /*
     `func` is one of the following generated functions:
@@ -999,7 +1096,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   module->setTargetTriple("nvptx64-nvidia-cuda");
   CHECK(gpu_target.nvptx_target_machine);
-  auto pass_manager_builder = llvm::PassManagerBuilder();
+  llvm::PassManagerBuilder pass_manager_builder = llvm::PassManagerBuilder();
 
   pass_manager_builder.OptLevel = 0;
   llvm::legacy::PassManager module_pass_manager;
@@ -1008,17 +1105,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   bool requires_libdevice = check_module_requires_libdevice(module);
 
   if (requires_libdevice) {
-    // add nvvm reflect pass replacing any NVVM conditionals with constants
-    gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
-    llvm::legacy::FunctionPassManager FPM(module);
-    pass_manager_builder.populateFunctionPassManager(FPM);
-
-    // Run the NVVMReflectPass here rather than inside optimize_ir
-    FPM.doInitialization();
-    for (auto& F : *module) {
-      FPM.run(F);
-    }
-    FPM.doFinalization();
+    linkModuleWithLibdevice(*module, pass_manager_builder, gpu_target);
   }
 
   // run optimizations
@@ -1177,6 +1264,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
     const bool is_gpu_smem_used,
     const CompilationOptions& co) {
 #ifdef HAVE_CUDA
+  auto timer = DEBUG_TIMER(__func__);
   auto module = multifrag_query_func->getParent();
 
   CHECK(cuda_mgr);
@@ -1268,6 +1356,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
 std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
                                        llvm::TargetMachine* nvptx_target_machine,
                                        llvm::LLVMContext& context) {
+  auto timer = DEBUG_TIMER(__func__);
   auto mem_buff = llvm::MemoryBuffer::getMemBuffer(cuda_llir, "", false);
 
   llvm::SMDiagnostic parse_error;
@@ -1304,6 +1393,7 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
 
 std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
     const CudaMgr_Namespace::NvidiaDeviceArch arch) {
+  auto timer = DEBUG_TIMER(__func__);
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
   llvm::InitializeAllAsmPrinters();
@@ -1756,6 +1846,7 @@ std::unordered_set<llvm::Function*> CodeGenerator::markDeadRuntimeFuncs(
     llvm::Module& module,
     const std::vector<llvm::Function*>& roots,
     const std::vector<llvm::Function*>& leaves) {
+  auto timer = DEBUG_TIMER(__func__);
   std::unordered_set<llvm::Function*> live_funcs;
   live_funcs.insert(roots.begin(), roots.end());
   live_funcs.insert(leaves.begin(), leaves.end());
