@@ -3,11 +3,10 @@ project(NvidiaComputeCapability)
 
 include_directories(..)
 
-find_package(CUDA REQUIRED)
-include_directories(${CUDA_INCLUDE_DIRS})
-list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
+enable_language(CUDA)
 
 add_executable(get_nvidia_compute_capability get_nvidia_compute_capability.cpp)
+set_source_files_properties(get_nvidia_compute_capability.cpp PROPERTIES LANGUAGE CUDA)
 target_link_libraries(get_nvidia_compute_capability ${CUDA_LIBRARIES})
 add_custom_command(
   COMMENT

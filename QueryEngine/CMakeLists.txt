@@ -195,22 +195,7 @@ else()
 endif()
 
 if(ENABLE_CUDA)
-  message(DEBUG "QueryEngine CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
-  set(MAPD_DEFINITIONS "-DHAVE_CUDA")
-  set(NVCC_BUILD_TYPE_ARGS)
   set(CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp)
-  string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
-  if(ENABLE_UTM_TRANSFORM )
-    list(APPEND NVCC_BUILD_TYPE_ARGS -DENABLE_UTM_TRANSFORM)
-  endif()
-  if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
-    list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG --debug)
-    if (ENABLE_CUDA_KERNEL_DEBUG)
-        list(APPEND NVCC_BUILD_TYPE_ARGS --device-debug)
-    endif()
-  else()
-    list(APPEND NVCC_BUILD_TYPE_ARGS -O3)
-  endif()
 endif()
 
 set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctionsTesting.hpp)
@@ -247,45 +232,6 @@ if(ENABLE_CUDA)
 else()
   add_library(QueryEngine ${query_engine_source_files})
   add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
-endif()
-
-if(ENABLE_CUDA)
-  if("${CMAKE_CUDA_COMPILER_ID}" STREQUAL "NVIDIA")
-    include(ProcessorCount)
-    ProcessorCount(N)
-    if (CMAKE_CUDA_COMPILER_VERSION GREATER_EQUAL 11.3 AND NOT N EQUAL 0)
-      target_compile_options(QueryEngine PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-          --threads ${N};>)
-      set(NVCC_THREADS --threads ${N})
-    endif()
-  endif()
-
-  if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.0")
-    message(STATUS "CMake 3.18+, Setting CUDA_ARCHITECTURES.")
-    set_target_properties(QueryEngine PROPERTIES CUDA_ARCHITECTURES
-        35-virtual
-        50-virtual
-        60-virtual
-        70-virtual
-        75-virtual)
-  else()
-    message(STATUS "CMake 3.17 or under, setting CUDA architecture flags manually.")
-    target_compile_options(QueryEngine PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-      -gencode=arch=compute_35,code=compute_35;
-      -gencode=arch=compute_50,code=compute_50;
-      -gencode=arch=compute_60,code=compute_60;
-      -gencode=arch=compute_70,code=compute_70;
-      -gencode=arch=compute_75,code=compute_75;
-      -Wno-deprecated-gpu-targets>)
-  endif()
-
-  target_compile_options(QueryEngine PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
-      ${MAPD_HOST_COMPILER_FLAG};
-      -Xcompiler -fPIC;
-      -std=c++17;
-      -D_FORCE_INLINES;
-      ${MAPD_DEFINITIONS};
-      ${NVCC_BUILD_TYPE_ARGS};>)
 endif()
 
 add_custom_command(
@@ -369,9 +315,9 @@ list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp GeoOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp  ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsTesting.hpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
+    DEPENDS cuda_mapd_rt.cu JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp GeoOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp  ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsTesting.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
-    COMMAND nvcc
+    COMMAND ${CMAKE_CUDA_COMPILER}
     ARGS
         -I ${CMAKE_SOURCE_DIR}
         -I ${CMAKE_CURRENT_BINARY_DIR}
@@ -424,6 +370,17 @@ add_custom_target(QueryEngineCudaTargets
         ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
     )
 if(ENABLE_CUDA)
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
+  if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
+    if (ENABLE_CUDA_KERNEL_DEBUG)
+        target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:
+        --device-debug>)
+    endif()
+  endif()
+  if(ENABLE_UTM_TRANSFORM )
+    target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:
+      -DENABLE_UTM_TRANSFORM>)
+  endif()
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")
 endif()
 
