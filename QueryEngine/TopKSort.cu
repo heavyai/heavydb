@@ -23,6 +23,7 @@
 #include "BufferEntryUtils.h"
 #include "GpuMemUtils.h"
 #include "ResultSetBufferAccessors.h"
+#include "ResultSetSortImpl.h"
 #include "SortUtils.cuh"
 #include "StreamingTopN.h"
 #include "TopKSort.h"

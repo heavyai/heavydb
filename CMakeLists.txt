@@ -153,10 +153,6 @@ if(ENABLE_CUDA)
   set(CUDA_LIBRARIES "${CUDA_LIBRARY}" "${CUDART_LIBRARY}")
   add_definitions("-DHAVE_CUDA")
 
-  set(MAPD_HOST_COMPILER "" CACHE STRING "Host compiler to use with nvcc")
-  if(NOT "${MAPD_HOST_COMPILER}" STREQUAL "")
-      set(MAPD_HOST_COMPILER_FLAG "-ccbin=${MAPD_HOST_COMPILER}")
-  endif()
 else()
   set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
@@ -169,6 +165,17 @@ else()
   option(ENABLE_ONLY_ONE_ARCH "Enable quicker building for only one GPU arch" OFF)
 endif()
 if(ENABLE_CUDA)
+  set(MAPD_CUDA_OPTIONS)
+  # Set Thrust debug mode for CUDA compilation project-wide
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
+  if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
+    list(APPEND MAPD_CUDA_OPTIONS -DTHRUST_DEBUG --debug)
+  else()
+    list(APPEND MAPD_CUDA_OPTIONS -O3)
+  endif()
+
+  list(APPEND MAPD_CUDA_OPTIONS -Xcompiler -fPIC -D_FORCE_INLINES -std=c++17)
+
   if(ENABLE_ONLY_ONE_ARCH)
     execute_process(
       COMMAND cmake -S ${CMAKE_SOURCE_DIR}/NvidiaComputeCapability -B NvidiaComputeCapability
@@ -188,30 +195,63 @@ if(ENABLE_CUDA)
     endif()
   endif()
   if (ENABLE_ONLY_ONE_ARCH AND NOT "${NVIDIA_COMPUTE_CAPABILITY}" STREQUAL "")
-    set (CUDA_COMPILATION_ARCH
-      -gencode=arch=compute_${NVIDIA_COMPUTE_CAPABILITY},code=compute_${NVIDIA_COMPUTE_CAPABILITY}
-      -Wno-deprecated-gpu-targets
-    )
+    if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.0")
+      set(CMAKE_CUDA_ARCHITECTURES ${NVIDIA_COMPUTE_CAPABILITY}-virtual)
+      list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
+      message(STATUS "CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES}")
+    else()
+      set (CUDA_COMPILATION_ARCH
+        -gencode=arch=compute_${NVIDIA_COMPUTE_CAPABILITY},code=compute_${NVIDIA_COMPUTE_CAPABILITY}
+        -Wno-deprecated-gpu-targets
+      )
+      message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
+      add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${CUDA_COMPILATION_ARCH}>")
+    endif()
     add_custom_target(clean_nvidia_compute_capability
       COMMAND ${CMAKE_BUILD_TOOL} clean
       WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/NvidiaComputeCapability
     )
     add_dependencies(clean-all clean_nvidia_compute_capability)
-    message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
   else()
-    set (CUDA_COMPILATION_ARCH
-      -gencode=arch=compute_35,code=compute_35
-      -gencode=arch=compute_50,code=compute_50
-      -gencode=arch=compute_60,code=compute_60
-      -gencode=arch=compute_70,code=compute_70
-      -gencode=arch=compute_75,code=compute_75
-      -Wno-deprecated-gpu-targets
-    )
+    if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18.0")
+      message(STATUS "CMake 3.18+, Setting CUDA_ARCHITECTURES.")
+      set(CMAKE_CUDA_ARCHITECTURES
+          35-virtual
+          50-virtual
+          60-virtual
+          70-virtual
+          75-virtual
+          80-virtual)
+      list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
+      message(STATUS "CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES}")
+    else()
+      message(STATUS "CMake 3.17 or under, setting CUDA architecture flags manually.")
+      set(CUDA_COMPILATION_ARCH
+        -gencode=arch=compute_35,code=compute_35;
+        -gencode=arch=compute_50,code=compute_50;
+        -gencode=arch=compute_60,code=compute_60;
+        -gencode=arch=compute_70,code=compute_70;
+        -gencode=arch=compute_75,code=compute_75;
+        -gencode=arch=compute_80,code=compute_80;
+        -Wno-deprecated-gpu-targets)
+      message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
+      list(APPEND MAPD_CUDA_OPTIONS ${CUDA_COMPILATION_ARCH})
+    endif()
     if(ENABLE_ONLY_ONE_ARCH)
       message(STATUS "ENABLE_ONLY_ONE_ARCH ignored because NvidiaComputeCapability.txt not found or not readable")
-      message(STATUS "CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
     endif()
   endif()
+  if("${CMAKE_CUDA_COMPILER_ID}" STREQUAL "NVIDIA")
+    include(ProcessorCount)
+    ProcessorCount(N)
+    if(CMAKE_CUDA_COMPILER_VERSION GREATER_EQUAL 11.3 AND NOT N EQUAL 0)
+      message(STATUS "Enabling NVCC multi-threaded compilation with ${N} threads.")
+      list(APPEND MAPD_CUDA_OPTIONS --threads ${N})
+      set(NVCC_THREADS --threads ${N})
+    endif()
+  endif()
+
+  add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:${MAPD_CUDA_OPTIONS}>")
 endif()
 
 option(ENABLE_NVTX "Enable NVidia Tools Extension library" OFF)
@@ -323,7 +363,7 @@ if(MSVC)
     # disable 4702 unreachable code warning
     # with /Qspectre set, disable the warning C5045
     add_compile_options(/W0 /wd4702 /wd5045)
-  else() 
+  else()
     add_compile_options(/W4 /permisive-)
   endif()
   add_compile_options(/EHsc /std:c++17 /Qspectre)

@@ -145,21 +145,6 @@ set(group_by_hash_test_files
         RuntimeFunctions.cpp
         )
 
-if (ENABLE_CUDA)
-    message(DEBUG "QueryEngine CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
-    set(MAPD_DEFINITIONS "-DHAVE_CUDA")
-    set(NVCC_BUILD_TYPE_ARGS)
-    string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
-    if (CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
-        list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG --debug)
-        if (ENABLE_CUDA_KERNEL_DEBUG)
-            list(APPEND NVCC_BUILD_TYPE_ARGS --device-debug)
-        endif ()
-    else ()
-        list(APPEND NVCC_BUILD_TYPE_ARGS -O3)
-    endif ()
-endif ()
-
 if (ENABLE_DECODERS_BOUNDS_CHECKING)
     list(APPEND MAPD_DEFINITIONS "-DWITH_DECODERS_BOUNDS_CHECKING")
 endif ()
@@ -381,6 +366,16 @@ add_custom_target(QueryEngineCudaTargets
         ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
         ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
         )
+
+if(ENABLE_CUDA)
+  string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
+  if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
+    if (ENABLE_CUDA_KERNEL_DEBUG)
+        target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:
+        --device-debug>)
+    endif()
+  endif()
+endif()
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest Logger Shared ${Boost_LIBRARIES} ${PROFILER_LIBS})
