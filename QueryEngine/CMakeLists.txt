@@ -194,6 +194,11 @@ else()
   set(RT_OPT_FLAGS -O3)
 endif()
 
+if(MSVC)
+  message(STATUS "MSVC BUILD removing RT_OPT_FLAGS")
+  unset(RT_OPT_FLAGS)
+endif()
+
 if(ENABLE_CUDA)
   set(CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init_gpu.hpp)
 endif()
