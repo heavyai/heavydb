@@ -916,6 +916,7 @@ struct GetTargetInfo {
 
 ResultSetPtr Executor::resultsUnion(SharedKernelContext& shared_context,
                                     const RelAlgExecutionUnit& ra_exe_unit) {
+  auto timer = DEBUG_TIMER(__func__);
   auto& results_per_device = shared_context.getFragmentResults();
   auto const targets = shared::transform<std::vector<TargetInfo>>(
       ra_exe_unit.target_exprs, GetTargetInfo{});

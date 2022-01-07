@@ -187,7 +187,18 @@ class SQLiteComparator {
                             ? "CPU: " + sqlite_query_string
                             : "GPU: " + sqlite_query_string;
     connector_.query(sqlite_query_string);
-    ASSERT_EQ(connector_.getNumRows(), omnisci_results->rowCount()) << errmsg;
+
+    // Below added as a sanity check that the result set rowCount()
+    // equals the Sqlite result set size, and is less than the
+    // ResultSet entryCount(), and if equal to 0 that ResultSet::isEmpty()
+    // is true, and if not false
+    const size_t omni_row_count = omnisci_results->rowCount();
+    const size_t omni_entry_count = omnisci_results->entryCount();
+    const bool omni_is_empty = omnisci_results->isEmpty();
+    ASSERT_EQ(connector_.getNumRows(), omni_row_count) << errmsg;
+    CHECK(omni_row_count > 0 ? !omni_is_empty : omni_is_empty) << errmsg;
+    ASSERT_LE(omni_row_count, omni_entry_count) << errmsg;
+
     const int num_rows{static_cast<int>(connector_.getNumRows())};
     if (omnisci_results->definitelyHasNoRows()) {
       ASSERT_EQ(0, num_rows) << errmsg;
@@ -22020,7 +22031,11 @@ TEST(Select, UpdatePinnedBuffers) {
                    ExecutorDeviceType::CPU);
 
   // re-run select
-  rows->setCachedRowCount(-1);  // re-do row count
+
+  // We previously we're attempting to use rows->setCachedRowCount(-1), which wasn't
+  // having the desired effect as it takes a size_t argument, so a
+  // ResultSet::invalidateCachedRowCount method was added to achieve the intended goal
+  rows->invalidateCachedRowCount();  // re-do row count
   const auto rows_inserted = run_multiple_agg(
       "SELECT rowid, x, y FROM pinned_buffers_test WHERE x < 10 ORDER BY 1;",
       ExecutorDeviceType::GPU);

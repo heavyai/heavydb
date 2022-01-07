@@ -214,6 +214,18 @@ size_t ArrowResultSet::rowCount() const {
   return record_batch_->num_rows();
 }
 
+// Function is for parity with ResultSet interface
+// and associated tests
+size_t ArrowResultSet::entryCount() const {
+  return rowCount();
+}
+
+// Function is for parity with ResultSet interface
+// and associated tests
+bool ArrowResultSet::isEmpty() const {
+  return rowCount() == static_cast<size_t>(0);
+}
+
 void ArrowResultSet::resultSetArrowLoopback(const ExecutorDeviceType device_type) {
   std::vector<std::string> col_names;
 
