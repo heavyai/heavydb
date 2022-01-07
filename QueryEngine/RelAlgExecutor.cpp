@@ -220,6 +220,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
 
   auto run_query = [&](const CompilationOptions& co_in) {
     auto execution_result = executeRelAlgQueryNoRetry(co_in, eo, just_explain_plan);
+
+    constexpr bool vlog_result_set_summary{false};
+    if constexpr (vlog_result_set_summary) {
+      VLOG(1) << execution_result.getRows()->summaryToString();
+    }
+
     if (post_execution_callback_) {
       VLOG(1) << "Running post execution callback.";
       (*post_execution_callback_)();

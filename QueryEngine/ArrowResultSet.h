@@ -132,6 +132,9 @@ class ArrowResultSet {
   bool definitelyHasNoRows() const;
 
   size_t rowCount() const;
+  size_t entryCount() const;
+
+  bool isEmpty() const;
 
   static void deallocateArrowResultBuffer(const ArrowResult& result,
                                           const ExecutorDeviceType device_type,

@@ -872,6 +872,7 @@ TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
                                       bool merge,
                                       bool sort_by_table_id,
                                       const std::map<int, size_t>& order_map) {
+  auto timer = DEBUG_TIMER(__func__);
   auto& results_per_device = shared_context.getFragmentResults();
   if (results_per_device.empty()) {
     std::vector<TargetInfo> targets;
