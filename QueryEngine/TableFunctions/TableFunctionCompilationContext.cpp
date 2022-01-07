@@ -303,6 +303,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu,
     bool emit_only_preflight_fn) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(entry_point_func_);
   CHECK_EQ(entry_point_func_->arg_size(), 5);
   auto arg_it = entry_point_func_->arg_begin();
@@ -483,6 +484,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
 }
 
 void TableFunctionCompilationContext::generateGpuKernel() {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(entry_point_func_);
   std::vector<llvm::Type*> arg_types;
   arg_types.reserve(entry_point_func_->arg_size());
@@ -525,6 +527,7 @@ void TableFunctionCompilationContext::generateGpuKernel() {
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     const CompilationOptions& co,
     bool emit_only_preflight_fn) {
+  auto timer = DEBUG_TIMER(__func__);
   /*
     TODO 1: eliminate need for OverrideFromSrc
     TODO 2: detect and link only the udf's that are needed
