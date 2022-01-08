@@ -775,16 +775,6 @@ class DBHandler : public OmniSciIf {
       const bool just_calcite_explain,
       const std::vector<PushedDownFilterInfo>& filter_push_down_requests);
 
-  void execute_rel_alg_df(TDataFrame& _return,
-                          const std::string& query_ra,
-                          QueryStateProxy query_state_proxy,
-                          const Catalog_Namespace::SessionInfo& session_info,
-                          const ExecutorDeviceType executor_device_type,
-                          const ExecutorDeviceType results_device_type,
-                          const size_t device_id,
-                          const int32_t first_n,
-                          const TArrowTransport::type transport_method) const;
-
   void executeDdl(TQueryResult& _return,
                   const std::string& query_ra,
                   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);

@@ -1201,6 +1201,7 @@ void DBHandler::sql_execute_local(
       break;
     }
   }
+
   ExecutionResult result;
   _return.total_time_ms += measure<>::execution([&]() {
     DBHandler::sql_execute_impl(result,
@@ -1448,53 +1449,56 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
           std::string("Invalid device_id or unavailable GPU with this ID"));
     }
   }
-  _return.execution_time_ms = 0;
-
-  mapd_shared_lock<mapd_shared_mutex> executeReadLock(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-  auto query_state_proxy = query_state->createQueryStateProxy();
-  try {
-    ParserWrapper pw{query_str};
-    if (!pw.is_ddl && !pw.is_update_dml &&
-        !(pw.getExplainType() == ParserWrapper::ExplainType::Other)) {
-      std::string query_ra;
-      lockmgr::LockedTableDescriptors locks;
-      _return.execution_time_ms += measure<>::execution([&]() {
-        TPlanResult result;
-        std::tie(result, locks) =
-            parse_to_ra(query_state_proxy, query_str, {}, true, system_parameters_);
-        query_ra = result.plan_result;
-      });
-
-      if (pw.isCalciteExplain()) {
-        throw std::runtime_error("explain is not unsupported by current thrift API");
-      }
-      if (g_enable_runtime_query_interrupt && !pw.isSelectExplain()) {
-        auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-        executor->enrollQuerySession(session_ptr->get_session_id(),
-                                     query_str,
-                                     query_state->getQuerySubmittedTime(),
-                                     Executor::UNITARY_EXECUTOR_ID,
-                                     QuerySessionStatus::QueryStatus::PENDING_QUEUE);
-      }
-      execute_rel_alg_df(_return,
-                         query_ra,
-                         query_state_proxy,
-                         *session_ptr,
-                         executor_device_type,
-                         results_device_type == TDeviceType::CPU
-                             ? ExecutorDeviceType::CPU
-                             : ExecutorDeviceType::GPU,
-                         static_cast<size_t>(device_id),
-                         first_n,
-                         transport_method);
-      return;
-    }
-  } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(e.what());
+  ParserWrapper pw{query_str};
+  if (pw.getQueryType() != ParserWrapper::QueryType::Read) {
+    THROW_MAPD_EXCEPTION(std::string(
+        "Only read queries supported for the Arrow sql_execute_df endpoint."));
   }
-  THROW_MAPD_EXCEPTION("DDL or update DML are not unsupported by current thrift API");
+  if (pw.isCalciteExplain()) {
+    THROW_MAPD_EXCEPTION(std::string(
+        "Explain is currently unsupported by the Arrow sql_execute_df endpoint."));
+  }
+
+  ExecutionResult execution_result;
+  sql_execute_impl(execution_result,
+                   query_state->createQueryStateProxy(),
+                   true, /* column_format - does this do anything? */
+                   executor_device_type,
+                   first_n,
+                   -1, /* at_most_n */
+                   true);
+
+  const auto result_set = execution_result.getRows();
+  const auto executor_results_device_type = results_device_type == TDeviceType::CPU
+                                                ? ExecutorDeviceType::CPU
+                                                : ExecutorDeviceType::GPU;
+  _return.execution_time_ms =
+      execution_result.getExecutionTime() - result_set->getQueueTime();
+  const auto converter = std::make_unique<ArrowResultSetConverter>(
+      result_set,
+      data_mgr_,
+      executor_results_device_type,
+      device_id,
+      getTargetNames(execution_result.getTargetsMeta()),
+      first_n,
+      ArrowTransport(transport_method));
+  ArrowResult arrow_result;
+  _return.arrow_conversion_time_ms +=
+      measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
+  _return.sm_handle =
+      std::string(arrow_result.sm_handle.begin(), arrow_result.sm_handle.end());
+  _return.sm_size = arrow_result.sm_size;
+  _return.df_handle =
+      std::string(arrow_result.df_handle.begin(), arrow_result.df_handle.end());
+  _return.df_buffer =
+      std::string(arrow_result.df_buffer.begin(), arrow_result.df_buffer.end());
+  if (executor_results_device_type == ExecutorDeviceType::GPU) {
+    std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
+    CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
+    ipc_handle_to_dev_ptr_.insert(
+        std::make_pair(_return.df_handle, arrow_result.serialized_cuda_handle));
+  }
+  _return.df_size = arrow_result.df_size;
 }
 
 void DBHandler::sql_execute_gdf(TDataFrame& _return,
@@ -5935,90 +5939,6 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
     _return.setResultType(ExecutionResult::QueryResult);
   }
   return {};
-}
-
-void DBHandler::execute_rel_alg_df(TDataFrame& _return,
-                                   const std::string& query_ra,
-                                   QueryStateProxy query_state_proxy,
-                                   const Catalog_Namespace::SessionInfo& session_info,
-                                   const ExecutorDeviceType executor_device_type,
-                                   const ExecutorDeviceType results_device_type,
-                                   const size_t device_id,
-                                   const int32_t first_n,
-                                   const TArrowTransport::type transport_method) const {
-  const auto& cat = session_info.getCatalog();
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        system_parameters_);
-  RelAlgExecutor ra_executor(executor.get(),
-                             cat,
-                             query_ra,
-                             query_state_proxy.getQueryState().shared_from_this());
-  CompilationOptions co = {executor_device_type,
-                           /*hoist_literals=*/true,
-                           ExecutorOptLevel::Default,
-                           g_enable_dynamic_watchdog,
-                           /*allow_lazy_fetch=*/true,
-                           /*filter_on_deleted_column=*/true,
-                           ExecutorExplainType::Default,
-                           intel_jit_profile_};
-  ExecutionOptions eo = {
-      g_enable_columnar_output,
-      allow_multifrag_,
-      false,
-      allow_loop_joins_,
-      g_enable_watchdog,
-      jit_debug_,
-      false,
-      g_enable_dynamic_watchdog,
-      g_dynamic_watchdog_time_limit,
-      false,
-      false,
-      system_parameters_.gpu_input_mem_limit,
-      g_enable_runtime_query_interrupt && !query_state_proxy.getQueryState()
-                                               .getConstSessionInfo()
-                                               ->get_session_id()
-                                               .empty(),
-      g_running_query_interrupt_freq,
-      g_pending_query_interrupt_freq};
-  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     ExecutorDeviceType::CPU,
-                                                     QueryMemoryDescriptor(),
-                                                     nullptr,
-                                                     nullptr,
-                                                     0,
-                                                     0),
-                         {}};
-  _return.execution_time_ms += measure<>::execution(
-      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, false, nullptr); });
-  _return.execution_time_ms -= result.getRows()->getQueueTime();
-  const auto rs = result.getRows();
-  const auto converter =
-      std::make_unique<ArrowResultSetConverter>(rs,
-                                                data_mgr_,
-                                                results_device_type,
-                                                device_id,
-                                                getTargetNames(result.getTargetsMeta()),
-                                                first_n,
-                                                ArrowTransport(transport_method));
-  ArrowResult arrow_result;
-  _return.arrow_conversion_time_ms +=
-      measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
-  _return.sm_handle =
-      std::string(arrow_result.sm_handle.begin(), arrow_result.sm_handle.end());
-  _return.sm_size = arrow_result.sm_size;
-  _return.df_handle =
-      std::string(arrow_result.df_handle.begin(), arrow_result.df_handle.end());
-  _return.df_buffer =
-      std::string(arrow_result.df_buffer.begin(), arrow_result.df_buffer.end());
-  if (results_device_type == ExecutorDeviceType::GPU) {
-    std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
-    CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
-    ipc_handle_to_dev_ptr_.insert(
-        std::make_pair(_return.df_handle, arrow_result.serialized_cuda_handle));
-  }
-  _return.df_size = arrow_result.df_size;
 }
 
 std::vector<TargetMetaInfo> DBHandler::getTargetMetaInfo(
