@@ -151,3 +151,5 @@ geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo s
 --- | --- | --- |
 Canonical Raft | [LGPLv3](<https://github.com/canonical/raft/blob/master/LICENSE>) | Distributed consensus |
 libuv | [MIT](<https://github.com/libuv/libuv/blob/v1.x/LICENSE>) | Distributed consensus |
+--- | --- | --- |
+stb_image | [MIT](<https://github.com/nothings/stb/blob/master/LICENSE>) | Image file utils
