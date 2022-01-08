@@ -24,7 +24,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include <math.h>
+#include <cmath>
 #include "../Shared/math_consts.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
