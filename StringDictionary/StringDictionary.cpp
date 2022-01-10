@@ -17,6 +17,8 @@
 #include "StringDictionary/StringDictionary.h"
 
 #include <tbb/parallel_for.h>
+#include <tbb/task_arena.h>
+#include <tbb/task_group.h>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/sort/spreadsort/string_sort.hpp>
@@ -313,6 +315,16 @@ void throw_encoding_error(std::string_view str, std::string_view folder) {
   throw std::runtime_error(oss.str());
 }
 
+void throw_string_too_long_error(std::string_view str, std::string_view folder) {
+  std::ostringstream oss;
+  oss << "The string '" << str << " could not be inserted into the dictionary (" << folder
+      << " because it exceeded the maximum allowable length of "
+      << StringDictionary::MAX_STRLEN << " characters (string was " << str.size()
+      << " characters).";
+  LOG(ERROR) << oss.str();
+  throw std::runtime_error(oss.str());
+}
+
 }  // namespace
 
 template <class String>
@@ -353,6 +365,113 @@ void StringDictionary::hashStrings(
                       }
                     });
 }
+
+template <class T, class String>
+void StringDictionary::getBulk(const std::vector<String>& string_vec, T* encoded_vec) {
+  if (client_no_timeout_) {
+    getBulkRemote(string_vec, encoded_vec);
+    return;
+  }
+  constexpr size_t max_strings_per_thread{1000};
+  const size_t num_strings = string_vec.size();
+  const size_t max_thread_count = std::thread::hardware_concurrency();
+  const size_t num_threads =
+      std::min(max_thread_count,
+               ((num_strings + max_strings_per_thread - 1) / max_strings_per_thread));
+  CHECK_GE(num_threads, 1UL);
+  const size_t strings_per_thread = std::max(num_strings / num_threads, 1UL);
+  CHECK_GE(strings_per_thread, 1UL);
+
+  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+
+  tbb::task_arena limited_arena(num_threads);
+  tbb::task_group tg;
+  limited_arena.execute([&] {
+    tg.run([&] {
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(
+              0, num_strings, strings_per_thread /* tbb grain_size */),
+          [&](const tbb::blocked_range<size_t>& r) {
+            const size_t start_idx = r.begin();
+            const size_t end_idx = r.end();
+            for (size_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
+              const auto& input_string = string_vec[string_idx];
+              if (input_string.empty()) {
+                encoded_vec[string_idx] = inline_int_null_value<T>();
+                continue;
+              }
+              if (input_string.size() > MAX_STRLEN) {
+                throw_string_too_long_error(input_string, folder_);
+              }
+              if (str_count_ > 0) {
+                const string_dict_hash_t input_string_hash = hash_string(input_string);
+                uint32_t hash_bucket = computeBucket(
+                    input_string_hash, input_string, string_id_string_dict_hash_table_);
+                // Will either be legit id or INVALID_STR_ID
+                encoded_vec[string_idx] = string_id_string_dict_hash_table_[hash_bucket];
+              } else {
+                encoded_vec[string_idx] = INVALID_STR_ID;
+              }
+            }
+          },
+          tbb::simple_partitioner());
+    });
+  });
+
+  limited_arena.execute([&] { tg.wait(); });
+}
+
+template void StringDictionary::getBulk(const std::vector<std::string>& string_vec,
+                                        uint8_t* encoded_vec);
+template void StringDictionary::getBulk(const std::vector<std::string>& string_vec,
+                                        uint16_t* encoded_vec);
+template void StringDictionary::getBulk(const std::vector<std::string>& string_vec,
+                                        int32_t* encoded_vec);
+
+template void StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
+                                        uint8_t* encoded_vec);
+template void StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
+                                        uint16_t* encoded_vec);
+template void StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
+                                        int32_t* encoded_vec);
+
+template <class T, class String>
+void StringDictionary::getBulkRemote(const std::vector<String>& string_vec,
+                                     T* encoded_vec) {
+  CHECK(client_no_timeout_);
+  std::vector<int32_t> string_ids;
+  client_no_timeout_->get_bulk(string_ids, string_vec);
+  size_t out_idx{0};
+  for (size_t i = 0; i < string_ids.size(); ++i) {
+    const auto string_id = string_ids[i];
+    const bool invalid = string_id > max_valid_int_value<T>();
+    if (invalid || string_id == inline_int_null_value<int32_t>()) {
+      if (invalid) {
+        throw_encoding_error<T>(string_vec[i], folder_);
+      }
+      encoded_vec[out_idx++] = inline_int_null_value<T>();
+      continue;
+    }
+    encoded_vec[out_idx++] = string_id;
+  }
+}
+
+template void StringDictionary::getBulkRemote(const std::vector<std::string>& string_vec,
+                                              uint8_t* encoded_vec);
+template void StringDictionary::getBulkRemote(const std::vector<std::string>& string_vec,
+                                              uint16_t* encoded_vec);
+template void StringDictionary::getBulkRemote(const std::vector<std::string>& string_vec,
+                                              int32_t* encoded_vec);
+
+template void StringDictionary::getBulkRemote(
+    const std::vector<std::string_view>& string_vec,
+    uint8_t* encoded_vec);
+template void StringDictionary::getBulkRemote(
+    const std::vector<std::string_view>& string_vec,
+    uint16_t* encoded_vec);
+template void StringDictionary::getBulkRemote(
+    const std::vector<std::string_view>& string_vec,
+    int32_t* encoded_vec);
 
 template <class T, class String>
 void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,

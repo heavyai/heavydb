@@ -53,6 +53,8 @@ class StringDictionary {
 
   int32_t getOrAdd(const std::string_view& str) noexcept;
   template <class T, class String>
+  void getBulk(const std::vector<String>& string_vec, T* encoded_vec);
+  template <class T, class String>
   void getOrAddBulk(const std::vector<String>& string_vec, T* encoded_vec);
   template <class T, class String>
   void getOrAddBulkParallel(const std::vector<String>& string_vec, T* encoded_vec);
@@ -154,6 +156,8 @@ class StringDictionary {
   template <class String>
   void hashStrings(const std::vector<String>& string_vec,
                    std::vector<string_dict_hash_t>& hashes) const noexcept;
+  template <class T, class String>
+  void getBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
   template <class T, class String>
   void getOrAddBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
   int32_t getUnlocked(const std::string& str) const noexcept;

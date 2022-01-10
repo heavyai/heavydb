@@ -70,6 +70,11 @@ class StringDictionaryClient {
   };
 
   template <class String>
+  void get_bulk(std::vector<int32_t>& string_ids, const std::vector<String>& strings) {
+    CHECK(false);
+  }
+
+  template <class String>
   void get_or_add_bulk(std::vector<int32_t>& string_ids,
                        const std::vector<String>& strings) {
     CHECK(false);
