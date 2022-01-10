@@ -82,6 +82,24 @@ class StringDictionary {
 
   std::vector<std::string> copyStrings() const;
 
+  std::vector<std::string_view> getStringViews(const size_t generation) const;
+  std::vector<std::string_view> getStringViews() const;
+
+  std::vector<int32_t> buildDictionaryTranslationMap(
+      std::shared_ptr<StringDictionary> dest_dict,
+      const size_t generation) const;
+  std::vector<int32_t> buildDictionaryTranslationMap(
+      std::shared_ptr<StringDictionary> dest_dict) const;
+
+  template <typename T>
+  void buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
+                                     T* translated_ids,
+                                     const size_t generation) const;
+
+  template <typename T>
+  void buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
+                                     T* translated_ids) const;
+
   bool checkpoint() noexcept;
 
   /**
