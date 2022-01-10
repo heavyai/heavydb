@@ -296,7 +296,8 @@ TEST_F(OverlapsTest, InnerJoinPolyInPointIntersects) {
     } else {
       // Note(jclay): We return 0, postgis returns 4
       // Note(adb): Now we return 3. Progress?
-      ASSERT_EQ(static_cast<int64_t>(3), v<int64_t>(execSQL(sql, ctx.device_type)));
+      // Note(ds): After switching to cIntersects we return 0 again. Progress?
+      ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(sql, ctx.device_type)));
     }
   });
 }
@@ -1576,8 +1577,8 @@ TEST_F(MultiFragGeoOverlapsJoinTest, Nullable_Geo_Exhaustive) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 114;
     int64_t single_frag_res2 = 5163;
-    int64_t single_frag_res3 = 2178;
-    int64_t single_frag_res4 = 2178;
+    int64_t single_frag_res3 = 2144;
+    int64_t single_frag_res4 = 2144;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n_v2 r, mfgeo_n_v2 s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
@@ -1612,8 +1613,8 @@ TEST_F(ParallelLinearization, GeoJoin) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 1020;
     int64_t single_frag_res2 = 80940;
-    int64_t single_frag_res3 = 38378;
-    int64_t single_frag_res4 = 38378;
+    int64_t single_frag_res3 = 38080;
+    int64_t single_frag_res4 = 38080;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(r.pt, s.pt);";
     mq2 << "SELECT COUNT(1) FROM mfgeo_p r, mfgeo_p s WHERE ST_INTERSECTS(s.p, r.l);";
@@ -1636,8 +1637,8 @@ TEST_F(ParallelLinearization, GeoJoin) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 895;
     int64_t single_frag_res2 = 70115;
-    int64_t single_frag_res3 = 33096;
-    int64_t single_frag_res4 = 33096;
+    int64_t single_frag_res3 = 32820;
+    int64_t single_frag_res4 = 32820;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n_p r, mfgeo_n_p s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
@@ -1663,8 +1664,8 @@ TEST_F(ParallelLinearization, GeoJoin) {
   executeAllScenarios([](const ExecutionContext ctx) -> void {
     int64_t single_frag_res1 = 914;
     int64_t single_frag_res2 = 71556;
-    int64_t single_frag_res3 = 33905;
-    int64_t single_frag_res4 = 33905;
+    int64_t single_frag_res3 = 33619;
+    int64_t single_frag_res4 = 33619;
     std::ostringstream mq1, mq2, mq3, mq4;
     mq1 << "SELECT COUNT(1) FROM mfgeo_n2_p r, mfgeo_n2_p s WHERE ST_INTERSECTS(r.pt, "
            "s.pt);";
