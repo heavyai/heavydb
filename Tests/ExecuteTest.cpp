@@ -138,6 +138,86 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 #endif
 }
 
+void check_arrow_dictionaries(
+    const ArrowResultSet* arrow_result_set,
+    const ResultSetPtr omnisci_results,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
+  const size_t num_columns = arrow_result_set->colCount();
+  std::unordered_set<size_t> dictionary_encoded_col_idxs;
+  std::vector<std::unordered_set<std::string>> per_column_dictionary_sets(num_columns);
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    const auto column_typeinfo = arrow_result_set->getColType(col_idx);
+    if (column_typeinfo.get_type() != kTEXT) {
+      continue;
+    }
+    dictionary_encoded_col_idxs.emplace(col_idx);
+    ASSERT_EQ(column_typeinfo.get_compression(), kENCODING_DICT);
+
+    const auto dictionary_strings = arrow_result_set->getDictionaryStrings(col_idx);
+    auto& dictionary_set = per_column_dictionary_sets[col_idx];
+    for (const auto& dictionary_string : dictionary_strings) {
+      ASSERT_EQ(dictionary_set.emplace(dictionary_string).second, true);
+    }
+  }
+  const size_t row_count = arrow_result_set->rowCount();
+  auto row_iterator = arrow_result_set->rowIterator(true, true);
+  std::vector<std::unordered_set<std::string>> per_column_unique_strings(num_columns);
+  for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+    const auto crt_row = *row_iterator++;
+    for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+      if (dictionary_encoded_col_idxs.find(col_idx) ==
+          dictionary_encoded_col_idxs.end()) {
+        continue;
+      }
+      const auto omnisci_variant = crt_row[col_idx];
+      const auto scalar_omnisci_variant = boost::get<ScalarTargetValue>(&omnisci_variant);
+      CHECK(scalar_omnisci_variant);
+      const auto omnisci_as_str_ptr = boost::get<NullableString>(scalar_omnisci_variant);
+      ASSERT_NE(nullptr, omnisci_as_str_ptr);
+      const auto omnisci_str_notnull_ptr = boost::get<std::string>(omnisci_as_str_ptr);
+      if (omnisci_str_notnull_ptr) {
+        const auto omnisci_str = *omnisci_str_notnull_ptr;
+        CHECK(per_column_dictionary_sets[col_idx].find(omnisci_str) !=
+              per_column_dictionary_sets[col_idx].end())
+            << omnisci_str;
+        per_column_unique_strings[col_idx].emplace(omnisci_str);
+      }
+    }
+  }
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    if (dictionary_encoded_col_idxs.find(col_idx) == dictionary_encoded_col_idxs.end()) {
+      continue;
+    }
+    const auto omnisci_col_type = omnisci_results->getColType(col_idx);
+    const auto dict_id = omnisci_col_type.get_comp_param();
+    const auto str_dict_proxy = omnisci_results->getStringDictionaryProxy(dict_id);
+    const size_t omnisci_dict_proxy_size = str_dict_proxy->entryCount();
+
+    const auto col_dictionary_size = per_column_dictionary_sets[col_idx].size();
+    const auto col_unique_strings = per_column_unique_strings[col_idx].size();
+    const bool arrow_dictionary_definitely_sparse =
+        col_dictionary_size < omnisci_dict_proxy_size;
+    const bool arrow_dictionary_definitely_dense =
+        col_unique_strings < col_dictionary_size;
+    const double dictionary_to_result_size_ratio =
+        static_cast<double>(omnisci_dict_proxy_size) / row_count;
+
+    const bool arrow_dictionary_should_be_dense =
+        row_count > min_result_size_for_bulk_dictionary_fetch &&
+        dictionary_to_result_size_ratio <=
+            max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch;
+
+    if (arrow_dictionary_definitely_sparse) {
+      ASSERT_EQ(col_unique_strings, col_dictionary_size);
+      ASSERT_EQ(arrow_dictionary_should_be_dense, false);
+    } else if (arrow_dictionary_definitely_dense) {
+      ASSERT_EQ(col_dictionary_size, omnisci_dict_proxy_size);
+      ASSERT_EQ(arrow_dictionary_should_be_dense, true);
+    }
+  }
+}
+
 constexpr double EPS = 1.25e-5;
 
 class SQLiteComparator {
@@ -160,6 +240,32 @@ class SQLiteComparator {
         result_set_arrow_loopback(nullptr, results, device_type);
     compare_impl(
         arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
+  }
+
+  void compare_arrow_output_and_check_dictionaries(
+      const std::string& query_string,
+      const std::string& sqlite_query_string,
+      const ExecutorDeviceType device_type,
+      const size_t min_result_size_for_bulk_dictionary_fetch,
+      const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
+    const auto results =
+        QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
+    const auto arrow_omnisci_results = result_set_arrow_loopback(
+        nullptr,
+        results,
+        device_type,
+        min_result_size_for_bulk_dictionary_fetch,
+        max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
+    compare_impl(
+        arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
+    // Below we test the newly added sparse dictionary capability,
+    // where only entries in a dictionary-encoded arrow column should be in the
+    // corresponding dictionary (vs all the entries in the underlying OmniSci dictionary)
+    check_arrow_dictionaries(
+        arrow_omnisci_results.get(),
+        results,
+        min_result_size_for_bulk_dictionary_fetch,
+        max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
   }
 
   void compare(const std::string& query_string,
@@ -418,7 +524,26 @@ void cta(const std::string& query_string, const ExecutorDeviceType device_type) 
 }
 
 void c_arrow(const std::string& query_string, const ExecutorDeviceType device_type) {
-  g_sqlite_comparator.compare_arrow_output(query_string, query_string, device_type);
+  g_sqlite_comparator.compare_arrow_output_and_check_dictionaries(
+      query_string,
+      query_string,
+      device_type,
+      ArrowResultSetConverter::default_min_result_size_for_bulk_dictionary_fetch,
+      ArrowResultSetConverter::
+          default_max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
+}
+
+void c_arrow_dict_check(
+    const std::string& query_string,
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
+  g_sqlite_comparator.compare_arrow_output_and_check_dictionaries(
+      query_string,
+      query_string,
+      device_type,
+      min_result_size_for_bulk_dictionary_fetch,
+      max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
 }
 
 }  // namespace
@@ -12510,6 +12635,49 @@ TEST(Select, ArrowOutput) {
   }
 }
 
+TEST(Select, ArrowDictionaries) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // Projection - should be dense
+    c_arrow_dict_check(
+        "SELECT t FROM test_window_func_large_multi_frag WHERE i_1000 < 800 AND t <> 'e' "
+        "ORDER "
+        "BY "
+        "t ASC;",
+        dt,
+        10000L,
+        0.25);
+
+    // Projection - should be sparse
+    c_arrow_dict_check(
+        "SELECT t_unique FROM test_window_func_large_multi_frag WHERE i_1000 < 40 "
+        "AND t <> 'd' ORDER BY t_unique ASC;",
+        dt,
+        10000L,
+        0.25);
+
+    // Group by - should be dense
+    c_arrow_dict_check(
+        "SELECT t, COUNT(*) as n FROM test_window_func_large_multi_frag WHERE "
+        "i_1000 < 800 AND t <> 'd' GROUP by t ORDER BY n DESC;",
+        dt,
+        3L,
+        2.0);
+
+    // Group by - should be sparse
+    c_arrow_dict_check(
+        "SELECT t_unique, COUNT(*) as n FROM test_window_func_large_multi_frag WHERE "
+        "i_1000 < 40 and t <> 'd' GROUP by t_unique ORDER BY "
+        "t_unique ASC;",
+        dt,
+        10000L,
+        0.25);
+  }
+}
+
 TEST(Select, WatchdogTest) {
   const auto watchdog_state = g_enable_watchdog;
   g_enable_watchdog = true;
@@ -22176,7 +22344,8 @@ struct LargeWindowTableData {
                                           std::to_string(i_20[r]),
                                           std::to_string(d[r]),
                                           std::to_string(f[r]),
-                                          t[r]};
+                                          t[r],
+                                          std::to_string(i_unique[r])};
       insert_text_vals.emplace_back(row_values);
     }
     connector.batch_insert(table_name, insert_text_vals);
@@ -22204,6 +22373,7 @@ struct LargeWindowTableData {
       import_buffers[3]->addDouble(d[r]);
       import_buffers[4]->addFloat(f[r]);
       import_buffers[5]->addString(t[r]);
+      import_buffers[6]->addString(std::to_string(i_unique[r]));
     }
     loader->load(import_buffers, num_rows, nullptr);
   }
@@ -22215,7 +22385,8 @@ struct LargeWindowTableData {
                i_20[row_idx],
                d[row_idx],
                f[row_idx],
-               t[row_idx]);
+               t[row_idx],
+               std::to_string(i_unique[row_idx]));
   }
 };
 
@@ -22239,7 +22410,8 @@ int create_and_populate_large_window_func_table(const bool multi_frag,
   const std::string sqlite_create_test_table_prefix = "CREATE TABLE " + table_name;
   const std::string omni_create_test_table_prefix = "CREATE TABLE " + table_name;
   const std::string create_test_table_values_stmt =
-      " (i_unique BIGINT, i_1000 INTEGER, i_20 SMALLINT, d DOUBLE, f FLOAT, t TEXT";
+      " (i_unique BIGINT, i_1000 INTEGER, i_20 SMALLINT, d DOUBLE, f "
+      "FLOAT, t TEXT, t_unique TEXT ";
   try {
     const std::string drop_test_table{"DROP TABLE IF EXISTS " + table_name + ";"};
     run_ddl_statement(drop_test_table);
@@ -22252,7 +22424,6 @@ int create_and_populate_large_window_func_table(const bool multi_frag,
     large_window_table_data.batch_load_into_sqlite();
     large_window_table_data.batch_load_into_omnisci();
   } catch (std::runtime_error const& e) {
-    std::cout << "Error: " << e.what() << std::endl;
     LOG(ERROR) << "Failed to (re-)create table '" + table_name +
                       "' with error: " + e.what();
     return -EEXIST;

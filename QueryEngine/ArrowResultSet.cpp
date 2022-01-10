@@ -85,6 +85,25 @@ ArrowResultSet::ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
   }
 }
 
+ArrowResultSet::ArrowResultSet(
+    const std::shared_ptr<ResultSet>& rows,
+    const std::vector<TargetMetaInfo>& targets_meta,
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch)
+    : rows_(rows), targets_meta_(targets_meta), crt_row_idx_(0) {
+  resultSetArrowLoopback(device_type,
+                         min_result_size_for_bulk_dictionary_fetch,
+                         max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
+  auto schema = record_batch_->schema();
+  for (int i = 0; i < schema->num_fields(); ++i) {
+    std::shared_ptr<arrow::Field> field = schema->field(i);
+    SQLTypeInfo type_info = type_from_arrow_field(*schema->field(i));
+    column_metainfo_.emplace_back(field->name(), type_info);
+    columns_.emplace_back(record_batch_->column(i));
+  }
+}
+
 template <typename Type, typename ArrayType>
 void ArrowResultSet::appendValue(std::vector<TargetValue>& row,
                                  const arrow::Array& column,
@@ -92,6 +111,32 @@ void ArrowResultSet::appendValue(std::vector<TargetValue>& row,
                                  const size_t idx) const {
   const auto& col = static_cast<const ArrayType&>(column);
   row.emplace_back(col.IsNull(idx) ? null_val : static_cast<Type>(col.Value(idx)));
+}
+
+std::vector<std::string> ArrowResultSet::getDictionaryStrings(
+    const size_t col_idx) const {
+  if (col_idx >= colCount()) {
+    throw std::runtime_error("ArrowResultSet::getDictionaryStrings: col_idx is invalid.");
+  }
+  const auto& column_typeinfo = getColType(col_idx);
+  if (column_typeinfo.get_type() != kTEXT) {
+    throw std::runtime_error(
+        "ArrowResultSet::getDictionaryStrings: col_idx does not refer to column of type "
+        "TEXT.");
+  }
+  CHECK_EQ(kENCODING_DICT, column_typeinfo.get_compression());
+  const auto& column = *columns_[col_idx];
+  CHECK_EQ(arrow::Type::DICTIONARY, column.type_id());
+  const auto& dict_column = static_cast<const arrow::DictionaryArray&>(column);
+  const auto& dictionary =
+      static_cast<const arrow::StringArray&>(*dict_column.dictionary());
+  const size_t dictionary_size = dictionary.length();
+  std::vector<std::string> dictionary_strings;
+  dictionary_strings.reserve(dictionary_size);
+  for (size_t d = 0; d < dictionary_size; ++d) {
+    dictionary_strings.emplace_back(dictionary.GetString(d));
+  }
+  return dictionary_strings;
 }
 
 std::vector<TargetValue> ArrowResultSet::getRowAt(const size_t index) const {
@@ -227,6 +272,17 @@ bool ArrowResultSet::isEmpty() const {
 }
 
 void ArrowResultSet::resultSetArrowLoopback(const ExecutorDeviceType device_type) {
+  resultSetArrowLoopback(
+      device_type,
+      ArrowResultSetConverter::default_min_result_size_for_bulk_dictionary_fetch,
+      ArrowResultSetConverter::
+          default_max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
+}
+
+void ArrowResultSet::resultSetArrowLoopback(
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
   std::vector<std::string> col_names;
 
   if (!targets_meta_.empty()) {
@@ -241,7 +297,12 @@ void ArrowResultSet::resultSetArrowLoopback(const ExecutorDeviceType device_type
 
   // We convert the given rows to arrow, which gets serialized
   // into a buffer by Arrow Wire.
-  auto converter = ArrowResultSetConverter(rows_, col_names, -1);
+  auto converter = ArrowResultSetConverter(
+      rows_,
+      col_names,
+      -1,
+      min_result_size_for_bulk_dictionary_fetch,
+      max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
   converter.transport_method_ = ArrowTransport::WIRE;
   converter.device_type_ = device_type;
 
@@ -283,4 +344,25 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
   return results ? std::make_unique<ArrowResultSet>(
                        rows, results->getTargetsMeta(), device_type)
                  : std::make_unique<ArrowResultSet>(rows, device_type);
+}
+
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult* results,
+    const std::shared_ptr<ResultSet>& rows,
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
+  std::vector<TargetMetaInfo> dummy_targets_meta;
+  return results ? std::make_unique<ArrowResultSet>(
+                       rows,
+                       results->getTargetsMeta(),
+                       device_type,
+                       min_result_size_for_bulk_dictionary_fetch,
+                       max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch)
+                 : std::make_unique<ArrowResultSet>(
+                       rows,
+                       dummy_targets_meta,
+                       device_type,
+                       min_result_size_for_bulk_dictionary_fetch,
+                       max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
 }

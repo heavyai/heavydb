@@ -1205,13 +1205,16 @@ ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
   const size_t num_entries = entryCount();
   std::vector<bool> targets_to_skip(colCount(), true);
   targets_to_skip[col_idx] = false;
+  const auto null_val = inline_fixed_encoding_null_val(col_type_info);
 
   for (size_t row_idx = 0; row_idx < num_entries; ++row_idx) {
     const auto result_row = getRowAtNoTranslations(row_idx, targets_to_skip);
     if (!result_row.empty()) {
       const auto scalar_col_val = boost::get<ScalarTargetValue>(result_row[col_idx]);
       const int32_t string_id = static_cast<int32_t>(boost::get<int64_t>(scalar_col_val));
-      unique_string_ids_set.emplace(string_id);
+      if (string_id != null_val) {
+        unique_string_ids_set.emplace(string_id);
+      }
     }
   }
 
