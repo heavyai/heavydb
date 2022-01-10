@@ -1,0 +1,9 @@
+Class foreign_storage::MetadataScanInfeasibleFragmentSizeException
+==================================================================
+
+.. doxygenclass:: foreign_storage::MetadataScanInfeasibleFragmentSizeException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::FieldAnnotationTransformer
+=====================================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::FieldAnnotationTransformer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

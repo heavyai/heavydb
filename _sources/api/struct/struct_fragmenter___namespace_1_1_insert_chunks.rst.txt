@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::InsertChunks
+=========================================
+
+.. doxygenstruct:: Fragmenter_Namespace::InsertChunks
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

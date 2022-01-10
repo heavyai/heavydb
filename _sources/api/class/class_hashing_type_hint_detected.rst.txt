@@ -1,0 +1,9 @@
+Class HashingTypeHintDetected
+=============================
+
+.. doxygenclass:: HashingTypeHintDetected
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

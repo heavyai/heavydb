@@ -1,0 +1,9 @@
+Class foreign_storage::ChunkSizeValidator
+=========================================
+
+.. doxygenclass:: foreign_storage::ChunkSizeValidator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

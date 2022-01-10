@@ -1,0 +1,9 @@
+Class generate_TableFunctionsFactory_init::FixRowMultiplierPosArgTransformer
+============================================================================
+
+.. doxygenclass:: generate_TableFunctionsFactory_init::FixRowMultiplierPosArgTransformer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
