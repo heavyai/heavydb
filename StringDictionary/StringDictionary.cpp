@@ -374,12 +374,17 @@ void StringDictionary::getBulk(const std::vector<String>& string_vec, T* encoded
   }
   constexpr size_t max_strings_per_thread{1000};
   const size_t num_strings = string_vec.size();
-  const size_t max_thread_count = std::thread::hardware_concurrency();
+  if (num_strings == 0) {
+    return;
+  }
+  const size_t max_thread_count =
+      std::max(static_cast<size_t>(std::thread::hardware_concurrency()), 1UL);
   const size_t num_threads =
       std::min(max_thread_count,
                ((num_strings + max_strings_per_thread - 1) / max_strings_per_thread));
   CHECK_GE(num_threads, 1UL);
-  const size_t strings_per_thread = std::max(num_strings / num_threads, 1UL);
+  const size_t strings_per_thread =
+      std::max((num_strings + num_threads - 1) / num_threads, 1UL);
   CHECK_GE(strings_per_thread, 1UL);
 
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
@@ -1639,6 +1644,119 @@ void StringDictionary::populate_string_array_ids(
     processor(0);
   }
 }
+
+std::vector<std::string_view> StringDictionary::getStringViews(
+    const size_t generation) const {
+  auto timer = DEBUG_TIMER(__func__);
+  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  const size_t num_strings = generation;
+  CHECK_LE(num_strings, storageEntryCount());
+  const int32_t num_strings_int = static_cast<int32_t>(num_strings);
+  std::vector<std::string_view> string_views(num_strings);
+  constexpr size_t tbb_parallel_threshold{5000};
+  if (num_strings < tbb_parallel_threshold) {
+    for (int32_t string_idx = 0; string_idx < num_strings_int; ++string_idx) {
+      string_views[string_idx] = getStringFromStorageFast(string_idx);
+    }
+  } else {
+    constexpr size_t max_strings_per_thread{1000};
+    const size_t max_thread_count =
+        std::max(static_cast<size_t>(std::thread::hardware_concurrency()), 1UL);
+    const size_t num_threads =
+        std::min(max_thread_count,
+                 ((num_strings + max_strings_per_thread - 1) / max_strings_per_thread));
+    CHECK_GE(num_threads, 1UL);
+    const size_t strings_per_thread = std::max(num_strings / num_threads, 1UL);
+    CHECK_GE(strings_per_thread, 1UL);
+    tbb::task_arena limited_arena(num_threads);
+    tbb::task_group tg;
+    limited_arena.execute([&] {
+      tg.run([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<int32_t>(
+                0, num_strings, strings_per_thread /* tbb grain_size */),
+            [&](const tbb::blocked_range<int32_t>& r) {
+              const int32_t start_idx = r.begin();
+              const int32_t end_idx = r.end();
+              for (int32_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
+                string_views[string_idx] = getStringFromStorageFast(string_idx);
+              }
+            },
+            tbb::simple_partitioner());
+      });
+    });
+
+    limited_arena.execute([&] { tg.wait(); });
+  }
+  return string_views;
+}
+
+std::vector<std::string_view> StringDictionary::getStringViews() const {
+  return getStringViews(storageEntryCount());
+}
+
+std::vector<int32_t> StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    const size_t generation) const {
+  // Todo(todd): Implement for distributed
+  CHECK(!client_);
+  auto timer = DEBUG_TIMER(__func__);
+  const auto lookup_strings = getStringViews(generation);
+  std::vector<int32_t> translated_ids(lookup_strings.size());
+  dest_dict->getBulk(lookup_strings, translated_ids.data());
+  return translated_ids;
+}
+
+std::vector<int32_t> StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict) const {
+  return (buildDictionaryTranslationMap(dest_dict, storageEntryCount()));
+}
+
+template <typename T>
+void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    T* translated_ids,
+    const size_t generation) const {
+  // Todo(todd): Implement for distributed
+  CHECK(!client_);
+  auto timer = DEBUG_TIMER(__func__);
+  const auto lookup_strings = getStringViews(generation);
+  dest_dict->getBulk(lookup_strings, translated_ids);
+}
+
+template void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    int8_t* translated_string_ids,
+    const size_t generation) const;
+
+template void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    int16_t* translated_string_ids,
+    const size_t generation) const;
+
+template void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    int32_t* translated_string_ids,
+    const size_t generation) const;
+
+template <typename T>
+void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    T* translated_ids) const {
+  buildDictionaryTranslationMap(dest_dict, translated_ids, storageEntryCount());
+}
+
+template void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    int8_t* translated_string_ids) const;
+
+template void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    int16_t* translated_string_ids) const;
+
+template void StringDictionary::buildDictionaryTranslationMap(
+    std::shared_ptr<StringDictionary> dest_dict,
+    int32_t* translated_string_ids) const;
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,
