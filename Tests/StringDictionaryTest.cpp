@@ -101,6 +101,110 @@ TEST(StringDictionary, RecoverMany) {
   }
 }
 
+TEST(StringDictionary, GetOrAddBulk) {
+  StringDictionary string_dict(BASE_PATH, false, false, g_cache_string_hash);
+  {
+    // First insert all new strings
+    std::vector<int32_t> string_ids(g_op_count);
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(i * -1));
+      }
+    }
+    string_dict.getOrAddBulk(strings, string_ids.data());
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(std::to_string(string_ids[i] * -1), strings[i]);
+      }
+    }
+  }
+
+  {
+    // Now insert half new, half existing strings
+    // Even idxs are existing, odd are new
+    std::vector<int32_t> string_ids(g_op_count);
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(g_op_count + i / 2));
+      }
+    }
+    string_dict.getOrAddBulk(strings, string_ids.data());
+    for (int i = 0; i < g_op_count; ++i) {
+      // Even though the if and else branches result in the same test, both are
+      // left help diagnose the source of test failures
+      // (existing strings for the if branch and new strings for the else branch)
+      if (i % 2 == 0) {
+        // Existing strings
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        // New strings
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      }
+    }
+  }
+}
+
+TEST(StringDictionary, GetBulk) {
+  // Use existing dictionary from GetOrAddBulk
+  StringDictionary string_dict(BASE_PATH, false, true, g_cache_string_hash);
+  {
+    // First iteration is identical to first of GetOrAddBulk, and results should be the
+    // same
+    std::vector<int32_t> string_ids(g_op_count);
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(i * -1));
+      }
+    }
+    string_dict.getBulk(strings, string_ids.data());
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(std::to_string(string_ids[i] * -1), strings[i]);
+      }
+    }
+  }
+  {
+    // Second iteration - even idxs exist, odd do not and should return INVALID_STR_ID
+    std::vector<int32_t> string_ids(g_op_count);
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        // Won't exist in dictionary
+        strings.emplace_back(std::to_string(g_op_count * 2 + i));
+      }
+    }
+    string_dict.getBulk(strings, string_ids.data());
+    const std::string invalid_str_id_as_string =
+        std::to_string(StringDictionary::INVALID_STR_ID);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(string_ids[i], StringDictionary::INVALID_STR_ID);
+      }
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
