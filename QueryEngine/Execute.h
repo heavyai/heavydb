@@ -445,6 +445,7 @@ class Executor {
   void setSchemaProvider(SchemaProviderPtr provider) { schema_provider_ = provider; }
 
   int getDatabaseId() const { return db_id_; }
+  void setDatabaseId(int db_id) { db_id_ = db_id; }
 
   Data_Namespace::DataMgr* getDataMgr() const {
     CHECK(data_mgr_);

@@ -58,6 +58,7 @@ class RelAlgExecutor : private StorageIOFacility {
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
+      , db_id_(cat->getDatabaseId())
       , schema_provider_(schema_provider)
       , query_state_(std::move(query_state))
       , now_(0)
@@ -70,6 +71,7 @@ class RelAlgExecutor : private StorageIOFacility {
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
+      , db_id_(cat->getDatabaseId())
       , query_dag_(std::make_unique<RelAlgDagBuilder>(
             query_ra,
             cat_,
@@ -88,6 +90,7 @@ class RelAlgExecutor : private StorageIOFacility {
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
+      , db_id_(cat->getDatabaseId())
       , query_dag_(std::move(query_dag))
       , schema_provider_(
             std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
@@ -96,12 +99,14 @@ class RelAlgExecutor : private StorageIOFacility {
       , queue_time_ms_(0) {}
 
   RelAlgExecutor(Executor* executor,
+                 int db_id,
                  SchemaProviderPtr schema_provider,
                  std::unique_ptr<RelAlgDagBuilder> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, nullptr)
       , executor_(executor)
       , cat_(nullptr)
+      , db_id_(db_id)
       , query_dag_(std::move(query_dag))
       , schema_provider_(
             std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
@@ -410,6 +415,7 @@ class RelAlgExecutor : private StorageIOFacility {
 
   Executor* executor_;
   const Catalog_Namespace::Catalog* cat_;
+  int db_id_;
   std::unique_ptr<RelAlgDagBuilder> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;
   std::shared_ptr<const query_state::QueryState> query_state_;

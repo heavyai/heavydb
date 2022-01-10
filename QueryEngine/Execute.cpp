@@ -282,7 +282,9 @@ const Catalog_Namespace::Catalog* Executor::getCatalog() const {
 
 void Executor::setCatalog(const Catalog_Namespace::Catalog* catalog) {
   catalog_ = catalog;
-  db_id_ = catalog->getDatabaseId();
+  if (catalog) {
+    db_id_ = catalog->getDatabaseId();
+  }
 }
 
 const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {
