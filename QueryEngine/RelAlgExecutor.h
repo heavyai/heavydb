@@ -52,7 +52,7 @@ class RelAlgExecutor : private StorageIOFacility {
   using TargetInfoList = std::vector<TargetInfo>;
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 const Catalog_Namespace::Catalog* cat,
                  SchemaProviderPtr schema_provider,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
@@ -64,7 +64,7 @@ class RelAlgExecutor : private StorageIOFacility {
       , queue_time_ms_(0) {}
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 const Catalog_Namespace::Catalog* cat,
                  const std::string& query_ra,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
@@ -72,8 +72,8 @@ class RelAlgExecutor : private StorageIOFacility {
       , cat_(cat)
       , query_dag_(std::make_unique<RelAlgDagBuilder>(
             query_ra,
-            &cat_,
-            std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat),
+            cat_,
+            std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat),
             nullptr))
       , schema_provider_(
             std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
@@ -82,12 +82,26 @@ class RelAlgExecutor : private StorageIOFacility {
       , queue_time_ms_(0) {}
 
   RelAlgExecutor(Executor* executor,
-                 const Catalog_Namespace::Catalog& cat,
+                 const Catalog_Namespace::Catalog* cat,
                  std::unique_ptr<RelAlgDagBuilder> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
+      , query_dag_(std::move(query_dag))
+      , schema_provider_(
+            std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
+      , query_state_(std::move(query_state))
+      , now_(0)
+      , queue_time_ms_(0) {}
+
+  RelAlgExecutor(Executor* executor,
+                 SchemaProviderPtr schema_provider,
+                 std::unique_ptr<RelAlgDagBuilder> query_dag,
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+      : StorageIOFacility(executor, nullptr)
+      , executor_(executor)
+      , cat_(nullptr)
       , query_dag_(std::move(query_dag))
       , schema_provider_(
             std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
@@ -395,7 +409,7 @@ class RelAlgExecutor : private StorageIOFacility {
       const bool just_explain) const;
 
   Executor* executor_;
-  const Catalog_Namespace::Catalog& cat_;
+  const Catalog_Namespace::Catalog* cat_;
   std::unique_ptr<RelAlgDagBuilder> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;
   std::shared_ptr<const query_state::QueryState> query_state_;

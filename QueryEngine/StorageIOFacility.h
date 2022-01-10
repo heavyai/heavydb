@@ -187,7 +187,7 @@ class StorageIOFacility {
     bool varlen_update_required_ = false;
   };
 
-  StorageIOFacility(Executor* executor, Catalog_Namespace::Catalog const& catalog)
+  StorageIOFacility(Executor* executor, Catalog_Namespace::Catalog const* catalog)
       : executor_(executor), catalog_(catalog) {}
 
   StorageIOFacility::UpdateCallback yieldUpdateCallback(
@@ -205,18 +205,18 @@ class StorageIOFacility {
 
         for (size_t idx = 0; idx < update_parameters.getUpdateColumns().size(); idx++) {
           auto& column_name = update_parameters.getUpdateColumns()[idx]->name;
-          auto target_column =
-              catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
+          auto target_column = catalog_->getMetadataForColumn(
+              update_log.getPhysicalTableId(), column_name);
           columnDescriptors.push_back(target_column);
           sourceMetaInfos.push_back(update_parameters.getTargetsMetaInfo()[idx]);
         }
 
-        auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        auto td = catalog_->getMetadataForTable(update_log.getPhysicalTableId());
         auto* fragmenter = td->fragmenter.get();
         CHECK(fragmenter);
 
         fragmenter->updateColumns(
-            &catalog_,
+            catalog_,
             td,
             update_log.getFragmentId(),
             sourceMetaInfos,
@@ -242,26 +242,26 @@ class StorageIOFacility {
         // Temporary table updates require the full projected column
         CHECK_EQ(rs->rowCount(), update_log.getRowCount());
 
-        ChunkKey chunk_key_prefix{catalog_.getCurrentDB().dbId,
+        ChunkKey chunk_key_prefix{catalog_->getDatabaseId(),
                                   update_parameters.getTableDescriptor()->tableId};
         const auto table_lock =
             lockmgr::TableDataLockMgr::getWriteLockForTable(chunk_key_prefix);
 
         auto& fragment_info = update_log.getFragmentInfo();
-        const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        const auto td = catalog_->getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(td);
-        const auto cd = catalog_.getMetadataForColumn(
+        const auto cd = catalog_->getMetadataForColumn(
             td->tableId, update_parameters.getUpdateColumns().front()->name);
         CHECK(cd);
         auto chunk_metadata =
             fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
         CHECK(chunk_metadata != fragment_info.getChunkMetadataMapPhysical().end());
-        ChunkKey chunk_key{catalog_.getCurrentDB().dbId,
+        ChunkKey chunk_key{catalog_->getDatabaseId(),
                            td->tableId,
                            cd->columnId,
                            fragment_info.fragmentId};
-        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_.getDatabaseId()),
-                                               &catalog_.getDataMgr(),
+        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_->getDatabaseId()),
+                                               &catalog_->getDataMgr(),
                                                chunk_key,
                                                Data_Namespace::MemoryLevel::CPU_LEVEL,
                                                0,
@@ -296,7 +296,7 @@ class StorageIOFacility {
         fragment->shadowChunkMetadataMap =
             fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
 
-        auto& data_mgr = catalog_.getDataMgr();
+        auto& data_mgr = catalog_->getDataMgr();
         if (data_mgr.gpusPresent()) {
           // flush any GPU copies of the updated chunk
           data_mgr.deleteChunksWithPrefix(chunk_key,
@@ -367,7 +367,7 @@ class StorageIOFacility {
         };
 
         auto const* table_descriptor =
-            catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+            catalog_->getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(table_descriptor);
         auto fragment_id = update_log.getFragmentId();
 
@@ -418,10 +418,10 @@ class StorageIOFacility {
           const auto table_id = update_log.getPhysicalTableId();
           const auto fragmenter = table_descriptor->fragmenter;
           CHECK(fragmenter);
-          auto const* target_column = catalog_.getMetadataForColumn(
+          auto const* target_column = catalog_->getMetadataForColumn(
               table_id, update_parameters.getUpdateColumns()[column_index]->name);
           auto update_stats =
-              fragmenter->updateColumn(&catalog_,
+              fragmenter->updateColumn(catalog_,
                                        table_descriptor,
                                        target_column,
                                        fragment_id,
@@ -456,25 +456,25 @@ class StorageIOFacility {
         // Temporary table updates require the full projected column
         CHECK_EQ(rs->rowCount(), update_log.getRowCount());
 
-        const ChunkKey lock_chunk_key{catalog_.getCurrentDB().dbId, logical_table_id};
+        const ChunkKey lock_chunk_key{catalog_->getDatabaseId(), logical_table_id};
         const auto table_lock =
             lockmgr::TableDataLockMgr::getWriteLockForTable(lock_chunk_key);
 
         auto& fragment_info = update_log.getFragmentInfo();
-        const auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+        const auto td = catalog_->getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(td);
-        const auto cd = catalog_.getDeletedColumn(td);
+        const auto cd = catalog_->getDeletedColumn(td);
         CHECK(cd);
         CHECK(cd->columnType.get_type() == kBOOLEAN);
         auto chunk_metadata =
             fragment_info.getChunkMetadataMapPhysical().find(cd->columnId);
         CHECK(chunk_metadata != fragment_info.getChunkMetadataMapPhysical().end());
-        ChunkKey chunk_key{catalog_.getCurrentDB().dbId,
+        ChunkKey chunk_key{catalog_->getDatabaseId(),
                            td->tableId,
                            cd->columnId,
                            fragment_info.fragmentId};
-        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_.getDatabaseId()),
-                                               &catalog_.getDataMgr(),
+        auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog_->getDatabaseId()),
+                                               &catalog_->getDataMgr(),
                                                chunk_key,
                                                Data_Namespace::MemoryLevel::CPU_LEVEL,
                                                0,
@@ -508,7 +508,7 @@ class StorageIOFacility {
         fragment->shadowChunkMetadataMap =
             fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
 
-        auto& data_mgr = catalog_.getDataMgr();
+        auto& data_mgr = catalog_->getDataMgr();
         if (data_mgr.gpusPresent()) {
           // flush any GPU copies of the updated chunk
           data_mgr.deleteChunksWithPrefix(chunk_key,
@@ -596,14 +596,14 @@ class StorageIOFacility {
         }
 
         auto const* table_descriptor =
-            catalog_.getMetadataForTable(update_log.getPhysicalTableId());
+            catalog_->getMetadataForTable(update_log.getPhysicalTableId());
         CHECK(!table_is_temporary(table_descriptor));
         auto* fragmenter = table_descriptor->fragmenter.get();
         CHECK(fragmenter);
 
-        auto const* deleted_column_desc = catalog_.getDeletedColumn(table_descriptor);
+        auto const* deleted_column_desc = catalog_->getDeletedColumn(table_descriptor);
         CHECK(deleted_column_desc);
-        fragmenter->updateColumn(&catalog_,
+        fragmenter->updateColumn(catalog_,
                                  table_descriptor,
                                  deleted_column_desc,
                                  update_log.getFragmentId(),
@@ -664,5 +664,5 @@ class StorageIOFacility {
   }
 
   Executor* executor_;
-  Catalog_Namespace::Catalog const& catalog_;
+  Catalog_Namespace::Catalog const* catalog_;
 };

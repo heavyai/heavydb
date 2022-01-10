@@ -1930,7 +1930,7 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(
       executor.get(),
-      catalog,
+      &catalog,
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog));
 
   ra_executor.executeSimpleInsert(query);
@@ -2587,7 +2587,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
           ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
           .plan_result;
   RelAlgExecutor ra_executor(executor.get(),
-                             catalog,
+                             &catalog,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
@@ -2647,7 +2647,7 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
           ->process(
               query_state_proxy, pg_shim(sql_query_string), {}, true, false, false, true)
           .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
+  RelAlgExecutor ra_executor(executor.get(), &catalog, query_ra);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions

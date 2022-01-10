@@ -5662,7 +5662,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       jit_debug_ ? "mapdquery" : "",
       system_parameters_);
   RelAlgExecutor ra_executor(executor.get(),
-                             cat,
+                             &cat,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = {executor_device_type,
@@ -5733,7 +5733,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                         jit_debug_ ? "mapdquery" : "",
                                         system_parameters_);
   RelAlgExecutor ra_executor(executor.get(),
-                             cat,
+                             &cat,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = {executor_device_type,

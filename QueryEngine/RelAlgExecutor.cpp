@@ -107,7 +107,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setCatalog(&cat_);
+  executor_->setCatalog(cat_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(col_descs, phys_table_ids);
 
@@ -125,7 +125,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  executor_->setCatalog(&cat_);
+  executor_->setCatalog(cat_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
 
@@ -289,7 +289,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setCatalog(&cat_);
+  executor_->setCatalog(cat_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(col_descs, phys_table_ids);
 
@@ -519,7 +519,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   }
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
-  executor_->setCatalog(&cat_);
+  executor_->setCatalog(cat_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
 
@@ -602,7 +602,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     RenderInfo* render_info,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
-  executor_->setCatalog(&cat_);
+  executor_->setCatalog(cat_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
@@ -1551,20 +1551,20 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
                                          updated_table_desc,
                                          co_project,
                                          eo,
-                                         cat_,
+                                         *cat_,
                                          executor_->row_set_mem_owner_,
                                          update_callback,
                                          is_aggregate);
             post_execution_callback_ = [table_update_metadata, this]() {
-              dml_transaction_parameters_->finalizeTransaction(cat_);
+              dml_transaction_parameters_->finalizeTransaction(*cat_);
               // 'deleted' column might be created during execution (due to update
               // executed as delete + insert for varlen data) and it might be missing in
               // the current schema provider. Use Catalog based schema provider for
               // correct metadata update.
               executor_->setSchemaProvider(
-                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat_));
+                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat_));
               TableOptimizer table_optimizer{
-                  dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
+                  dml_transaction_parameters_->getTableDescriptor(), executor_, *cat_};
               table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
             };
           } catch (const QueryExecutionError& e) {
@@ -1589,11 +1589,11 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
             "Multi-column update is not yet supported for temporary tables.");
       }
 
-      auto cd = cat_.getMetadataForColumn(td->tableId, update_columns.front()->name);
+      auto cd = cat_->getMetadataForColumn(td->tableId, update_columns.front()->name);
       CHECK(cd);
       CHECK(!cd->isVirtualCol);
       auto projected_column_to_update =
-          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_.getDatabaseId()), 0);
+          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_->getDatabaseId()), 0);
       const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
           work_unit.exe_unit, projected_column_to_update);
       if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
@@ -1680,19 +1680,19 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
                                          table_descriptor,
                                          co_delete,
                                          eo,
-                                         cat_,
+                                         *cat_,
                                          executor_->row_set_mem_owner_,
                                          delete_callback,
                                          is_aggregate);
             post_execution_callback_ = [table_update_metadata, this]() {
-              dml_transaction_parameters_->finalizeTransaction(cat_);
+              dml_transaction_parameters_->finalizeTransaction(*cat_);
               // 'deleted' column might be created during execution and it might be
               // missing in the current schema provider. Use Catalog based schema provider
               // for correct metadata update.
               executor_->setSchemaProvider(
-                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat_));
+                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat_));
               TableOptimizer table_optimizer{
-                  dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
+                  dml_transaction_parameters_->getTableDescriptor(), executor_, *cat_};
               table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
             };
           } catch (const QueryExecutionError& e) {
@@ -1702,10 +1702,10 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
 
     if (table_is_temporary(table_descriptor)) {
       auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
-      auto cd = cat_.getDeletedColumn(table_descriptor);
+      auto cd = cat_->getDeletedColumn(table_descriptor);
       CHECK(cd);
       auto delete_column_expr =
-          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_.getDatabaseId()), 0);
+          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_->getDatabaseId()), 0);
       const auto rewritten_exe_unit =
           query_rewrite->rewriteColumnarDelete(work_unit.exe_unit, delete_column_expr);
       execute_delete_ra_exe_unit(rewritten_exe_unit, is_aggregate);
@@ -2246,7 +2246,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
 
   for (const int col_id : col_id_list) {
-    const auto cd = get_column_descriptor(col_id, table_id, cat_);
+    const auto cd = get_column_descriptor(col_id, table_id, *cat_);
     const auto col_enc = cd->columnType.get_compression();
     if (cd->columnType.is_string()) {
       switch (col_enc) {
@@ -2257,7 +2257,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           break;
         }
         case kENCODING_DICT: {
-          const auto dd = cat_.getMetadataForDict(cd->columnType.get_comp_param());
+          const auto dd = cat_->getMetadataForDict(cd->columnType.get_comp_param());
           CHECK(dd);
           const auto it_ok = col_buffers.emplace(
               col_id, std::make_unique<uint8_t[]>(cd->columnType.get_size()));
@@ -2288,7 +2288,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   }
   size_t col_idx = 0;
   Fragmenter_Namespace::InsertData insert_data;
-  insert_data.databaseId = cat_.getCurrentDB().dbId;
+  insert_data.databaseId = cat_->getDatabaseId();
   insert_data.tableId = table_id;
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
@@ -2368,15 +2368,15 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
             switch (cd->columnType.get_size()) {
               case 1:
                 insert_one_dict_str(
-                    reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, cat_);
+                    reinterpret_cast<uint8_t*>(col_data_bytes), cd, col_cv, *cat_);
                 break;
               case 2:
                 insert_one_dict_str(
-                    reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, cat_);
+                    reinterpret_cast<uint16_t*>(col_data_bytes), cd, col_cv, *cat_);
                 break;
               case 4:
                 insert_one_dict_str(
-                    reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, cat_);
+                    reinterpret_cast<int32_t*>(col_data_bytes), cd, col_cv, *cat_);
                 break;
               default:
                 CHECK(false);
@@ -2439,7 +2439,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           for (auto& e : l) {
             auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
             CHECK(c);
-            insert_one_dict_str(&p[elemIndex], cd->columnName, elem_ti, c.get(), cat_);
+            insert_one_dict_str(&p[elemIndex], cd->columnName, elem_ti, c.get(), *cat_);
             elemIndex++;
           }
           arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
@@ -2487,8 +2487,8 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
     insert_data.data.push_back(p);
   }
   insert_data.numRows = 1;
-  auto data_memory_holder = import_export::fill_missing_columns(&cat_, insert_data);
-  const auto table_descriptor = cat_.getMetadataForTable(table_id);
+  auto data_memory_holder = import_export::fill_missing_columns(cat_, insert_data);
+  const auto table_descriptor = cat_->getMetadataForTable(table_id);
   CHECK(table_descriptor);
   table_descriptor->fragmenter->insertDataNoCheckpoint(insert_data);
 
@@ -2496,7 +2496,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   // mode (aggregator handles checkpointing in distributed mode)
   if (!g_cluster &&
       table_descriptor->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-    const_cast<Catalog_Namespace::Catalog&>(cat_).checkpointWithAutoRollback(table_id);
+    const_cast<Catalog_Namespace::Catalog*>(cat_)->checkpointWithAutoRollback(table_id);
   }
 
   auto rs = std::make_shared<ResultSet>(TargetInfoList{},
