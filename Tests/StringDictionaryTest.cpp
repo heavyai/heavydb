@@ -17,6 +17,7 @@
 #include "TestHelpers.h"
 
 #include "../StringDictionary/StringDictionary.h"
+#include "../StringDictionary/StringDictionaryProxy.h"
 
 #include <cstdlib>
 #include <limits>
@@ -195,6 +196,173 @@ TEST(StringDictionary, GetBulk) {
     string_dict.getBulk(strings, string_ids.data());
     const std::string invalid_str_id_as_string =
         std::to_string(StringDictionary::INVALID_STR_ID);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(string_ids[i], StringDictionary::INVALID_STR_ID);
+      }
+    }
+  }
+}
+
+TEST(StringDictionaryProxy, GetOrAddTransient) {
+  // Use existing dictionary from StringDictionary GetBulk test
+  std::shared_ptr<StringDictionary> string_dict =
+      std::make_shared<StringDictionary>(BASE_PATH, false, true, g_cache_string_hash);
+  StringDictionaryProxy string_dict_proxy(
+      string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
+  {
+    // First iteration is identical to first of the StringDictionary GetOrAddBulk test,
+    // and results should be the same
+    std::vector<std::string> strings;
+    std::vector<int32_t> string_ids(g_op_count);
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(i * -1));
+      }
+    }
+
+    for (size_t i = 0; i < g_op_count; ++i) {
+      string_ids[i] = string_dict_proxy.getOrAddTransient(strings[i]);
+    }
+
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(std::to_string(string_ids[i] * -1), strings[i]);
+      }
+    }
+  }
+
+  {
+    // Now make the odd idx strings new, should get back transient string ids for those
+    std::vector<std::string> strings;
+    std::vector<int32_t> string_ids(g_op_count);
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(g_op_count * 4 + i));
+      }
+    }
+
+    for (size_t i = 0; i < g_op_count; ++i) {
+      string_ids[i] = string_dict_proxy.getOrAddTransient(strings[i]);
+    }
+
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(string_ids[i], -2 - (i / 2));
+      }
+    }
+  }
+}
+
+TEST(StringDictionaryProxy, GetOrAddTransientBulk) {
+  // Use existing dictionary from GetBulk
+  std::shared_ptr<StringDictionary> string_dict =
+      std::make_shared<StringDictionary>(BASE_PATH, false, true, g_cache_string_hash);
+  StringDictionaryProxy string_dict_proxy(
+      string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
+  {
+    // First iteration is identical to first of the StringDictionary GetOrAddBulk test,
+    // and results should be the same
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(i * -1));
+      }
+    }
+
+    const auto string_ids = string_dict_proxy.getOrAddTransientBulk(strings);
+
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(std::to_string(string_ids[i] * -1), strings[i]);
+      }
+    }
+  }
+
+  {
+    // Now make the odd idx strings new, should get back transient string ids for those
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(g_op_count * 6 + i));
+      }
+    }
+
+    const auto string_ids = string_dict_proxy.getOrAddTransientBulk(strings);
+
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(string_ids[i], -2 - (i / 2));
+      }
+    }
+  }
+}
+
+TEST(StringDictionaryProxy, GetTransientBulk) {
+  // Use existing dictionary from GetBulk
+  std::shared_ptr<StringDictionary> string_dict =
+      std::make_shared<StringDictionary>(BASE_PATH, false, true, g_cache_string_hash);
+  StringDictionaryProxy string_dict_proxy(
+      string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
+  {
+    // First iteration is identical to first of the StryingDictionaryProxy
+    // GetOrAddTransientBulk test, and results should be the same
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(i * -1));
+      }
+    }
+
+    const auto string_ids = string_dict_proxy.getTransientBulk(strings);
+
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
+      } else {
+        ASSERT_EQ(std::to_string(string_ids[i] * -1), strings[i]);
+      }
+    }
+  }
+  {
+    // Second iteration - even idxs exist, odd do not and should return INVALID_STR_ID
+    std::vector<std::string> strings;
+    strings.reserve(g_op_count);
+    for (int i = 0; i < g_op_count; ++i) {
+      if (i % 2 == 0) {
+        strings.emplace_back(std::to_string(i));
+      } else {
+        strings.emplace_back(std::to_string(g_op_count * 8 + i));
+      }
+    }
+
+    const auto string_ids = string_dict_proxy.getTransientBulk(strings);
+
     for (int i = 0; i < g_op_count; ++i) {
       if (i % 2 == 0) {
         ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
