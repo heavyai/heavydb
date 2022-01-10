@@ -161,6 +161,10 @@ class BufferMgr : public AbstractBufferMgr {  // implements
     UNREACHABLE();
   }
 
+  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
+    UNREACHABLE();
+  }
+
   // Buffer API
   AbstractBuffer* alloc(const size_t num_bytes = 0) override;
   void free(AbstractBuffer* buffer) override;

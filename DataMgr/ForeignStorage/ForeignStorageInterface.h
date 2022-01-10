@@ -214,6 +214,10 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     UNREACHABLE();
   }
 
+  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
+    UNREACHABLE();
+  }
+
  private:
   PersistentForeignStorageInterface* persistent_foreign_storage_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;

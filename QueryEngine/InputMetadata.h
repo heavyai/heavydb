@@ -101,7 +101,4 @@ std::vector<InputTableInfo> get_table_infos(
 std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit,
                                             Executor* executor);
 
-Fragmenter_Namespace::TableInfo build_table_info(
-    const std::vector<const TableDescriptor*>& shard_tables);
-
 #endif  // QUERYENGINE_INPUTMETADATA_H

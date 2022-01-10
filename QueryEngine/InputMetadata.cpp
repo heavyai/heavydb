@@ -36,24 +36,6 @@ Fragmenter_Namespace::TableInfo copy_table_info(
 
 }  // namespace
 
-Fragmenter_Namespace::TableInfo build_table_info(
-    const std::vector<const TableDescriptor*>& shard_tables) {
-  size_t total_number_of_tuples{0};
-  Fragmenter_Namespace::TableInfo table_info_all_shards;
-  for (const TableDescriptor* shard_table : shard_tables) {
-    CHECK(shard_table->fragmenter);
-    const auto& shard_metainfo = shard_table->fragmenter->getFragmentsForQuery();
-    total_number_of_tuples += shard_metainfo.getPhysicalNumTuples();
-    table_info_all_shards.fragments.reserve(table_info_all_shards.fragments.size() +
-                                            shard_metainfo.fragments.size());
-    table_info_all_shards.fragments.insert(table_info_all_shards.fragments.end(),
-                                           shard_metainfo.fragments.begin(),
-                                           shard_metainfo.fragments.end());
-  }
-  table_info_all_shards.setPhysicalNumTuples(total_number_of_tuples);
-  return table_info_all_shards;
-}
-
 size_t TemporaryTable::getLimit() const {
   size_t res = 0;
   for (auto& rs : results_) {
@@ -104,11 +86,9 @@ Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int tabl
     const auto& table_info = it->second;
     return copy_table_info(table_info);
   }
-  const auto cat = executor_->getCatalog();
-  CHECK(cat);
-  const auto td = cat->getMetadataForTable(table_id);
-  CHECK(td);
-  auto table_info = build_table_info({td});
+  const auto data_mgr = executor_->getDataMgr();
+  CHECK(data_mgr);
+  auto table_info = data_mgr->getTableInfo(executor_->getDatabaseId(), table_id);
   auto it_ok = cache_.emplace(table_id, copy_table_info(table_info));
   CHECK(it_ok.second);
   return copy_table_info(table_info);

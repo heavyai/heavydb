@@ -34,6 +34,7 @@
 #include "Catalog/Catalog.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+#include "QueryEngine/InputMetadata.h"
 #include "Shared/File.h"
 
 using namespace std;
@@ -341,6 +342,15 @@ const DictDescriptor* GlobalFileMgr::getDictMetadata(int db_id,
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   CHECK(catalog);
   return catalog->getMetadataForDict(dict_id, load_dict);
+}
+
+Fragmenter_Namespace::TableInfo GlobalFileMgr::getTableInfo(int db_id,
+                                                            int table_id) const {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  const auto td = catalog->getMetadataForTable(table_id);
+  CHECK(td);
+  return td->fragmenter->getFragmentsForQuery();
 }
 
 }  // namespace File_Namespace

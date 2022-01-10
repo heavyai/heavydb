@@ -814,8 +814,9 @@ class BucketSizeTest : public ::testing::Test {
     CHECK(pts_cd);
     auto pt_col_var = std::make_shared<Analyzer::ColumnVar>(
         pts_cd->makeInfo(catalog->getDatabaseId()), 0);
-    query_infos.emplace_back(InputTableInfo{
-        catalog->getDatabaseId(), pts_td->tableId, build_table_info({pts_td})});
+    query_infos.emplace_back(InputTableInfo{catalog->getDatabaseId(),
+                                            pts_td->tableId,
+                                            pts_td->fragmenter->getFragmentsForQuery()});
 
     const auto poly_td = catalog->getMetadataForTable("bucket_size_poly");
     CHECK(poly_td);
@@ -826,8 +827,9 @@ class BucketSizeTest : public ::testing::Test {
     CHECK(bounds_cd && bounds_cd->columnType.is_array());
     auto poly_col_var = std::make_shared<Analyzer::ColumnVar>(
         bounds_cd->makeInfo(catalog->getDatabaseId()), 1);
-    query_infos.emplace_back(InputTableInfo{
-        catalog->getDatabaseId(), poly_td->tableId, build_table_info({poly_td})});
+    query_infos.emplace_back(InputTableInfo{catalog->getDatabaseId(),
+                                            poly_td->tableId,
+                                            poly_td->fragmenter->getFragmentsForQuery()});
 
     auto condition = std::make_shared<Analyzer::BinOper>(
         kBOOLEAN, kOVERLAPS, kANY, pt_col_var, poly_col_var);

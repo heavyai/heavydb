@@ -194,6 +194,8 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                                         int dict_id,
                                         bool load_dict = true) override;
 
+  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override;
+
  protected:
   std::shared_ptr<ForeignStorageInterface> fsi_;
 

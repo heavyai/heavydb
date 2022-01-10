@@ -244,6 +244,8 @@ class DataMgr {
                                         int dict_id,
                                         bool load_dict = true) const;
 
+  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const;
+
  private:
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads,
