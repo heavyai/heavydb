@@ -31,6 +31,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <random>
 #include <regex>
 
 using namespace std;
@@ -1318,6 +1319,67 @@ class ExecuteTestBase {
                      " VALUES(NULL, NULL, 14, NULL, NULL, NULL);");
   }
 
+  static void createLargeWindowFuncTable(const bool multi_frag) {
+    const std::string table_name =
+        multi_frag ? "test_window_func_large_multi_frag" : "test_window_func_large";
+
+    createTable(table_name,
+                {{"i_unique", SQLTypeInfo(kBIGINT)},
+                 {"i_1000", SQLTypeInfo(kINT)},
+                 {"i_20", SQLTypeInfo(kSMALLINT)},
+                 {"d", SQLTypeInfo(kDOUBLE)},
+                 {"f", SQLTypeInfo(kFLOAT)},
+                 {"t", dictType()},
+                 {"t_unique", dictType()}},
+                {multi_frag ? 100ULL : 32000000ULL});
+
+    run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
+    run_sqlite_query("CREATE TABLE " + table_name +
+                     " (i_unique BIGINT, i_1000 INTEGER, i_20 SMALLINT, d DOUBLE, f "
+                     "FLOAT, t TEXT, t_unique TEXT);");
+
+    const size_t rand_seed = multi_frag ? 23 : 42;
+    const size_t num_rows = 40000;
+
+    std::mt19937 rand_gen(rand_seed);
+    std::vector<std::string> text_values{"a", "b", "c", "d", "e"};
+    std::uniform_int_distribution<> i_1000_dist(0, 999);
+    std::uniform_int_distribution<> i_20_dist(0, 19);
+    std::uniform_real_distribution<> d_dist(10.0, 10000.0);
+    std::uniform_real_distribution<> f_dist(10.0, 10000.0);
+    std::uniform_int_distribution<> t_dist(0, text_values.size() - 1);
+
+    std::vector<std::vector<std::string>> insert_text_vals;
+    std::string csv_file;
+
+    for (size_t r = 0; r != num_rows; ++r) {
+      const auto i_unique = r;
+      const auto i_1000 = i_1000_dist(rand_gen);
+      const auto i_20 = i_20_dist(rand_gen);
+      const auto d = d_dist(rand_gen);
+      const auto f = f_dist(rand_gen);
+      const auto t = text_values[t_dist(rand_gen)];
+
+      std::vector<std::string> row_values{std::to_string(i_unique),
+                                          std::to_string(i_1000),
+                                          std::to_string(i_20),
+                                          std::to_string(d),
+                                          std::to_string(f),
+                                          t,
+                                          std::to_string(i_unique)};
+      if (r > 0) {
+        csv_file += "\n";
+      }
+      csv_file += row_values[0] + "," + row_values[1] + "," + row_values[2] + "," +
+                  row_values[3] + "," + row_values[4] + "," + row_values[5] + "," +
+                  row_values[6];
+      insert_text_vals.emplace_back(row_values);
+    }
+
+    insertCsvValues(table_name, csv_file);
+    sqlite_batch_insert(table_name, insert_text_vals);
+  }
+
   static void createUnionAllTestsTable() {
     std::string sql;
 
@@ -1432,6 +1494,7 @@ class ExecuteTestBase {
     createRoundingTable();
     createWindowFuncTable(true);
     createWindowFuncTable(false);
+    createLargeWindowFuncTable(true);
     createUnionAllTestsTable();
     createVarlenLazyFetchTable();
   }
@@ -11020,6 +11083,47 @@ TEST_F(Select, ArrowOutput) {
     c_arrow("SELECT m,m_3,m_6,m_9 from test", dt);
     c_arrow("SELECT o, o1, o2 from test", dt);
     c_arrow("SELECT n from test", dt);
+  }
+}
+
+TEST_F(Select, ArrowDictionaries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // Projection - should be dense
+    c_arrow(
+        "SELECT t FROM test_window_func_large_multi_frag WHERE i_1000 < 800 AND t <> 'e' "
+        "ORDER "
+        "BY "
+        "t ASC;",
+        dt,
+        10000L,
+        0.25);
+
+    // Projection - should be sparse
+    c_arrow(
+        "SELECT t_unique FROM test_window_func_large_multi_frag WHERE i_1000 < 40 "
+        "AND t <> 'd' ORDER BY t_unique ASC;",
+        dt,
+        10000L,
+        0.25);
+
+    // Group by - should be dense
+    c_arrow(
+        "SELECT t, COUNT(*) as n FROM test_window_func_large_multi_frag WHERE "
+        "i_1000 < 800 AND t <> 'd' GROUP by t ORDER BY n DESC;",
+        dt,
+        3L,
+        2.0);
+
+    // Group by - should be sparse
+    c_arrow(
+        "SELECT t_unique, COUNT(*) as n FROM test_window_func_large_multi_frag WHERE "
+        "i_1000 < 40 and t <> 'd' GROUP by t_unique ORDER BY "
+        "t_unique ASC;",
+        dt,
+        10000L,
+        0.25);
   }
 }
 

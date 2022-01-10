@@ -23,6 +23,8 @@
 #include "SQLiteComparator.h"
 #include "SchemaJson.h"
 
+#include <gtest/gtest.h>
+
 extern bool g_enable_columnar_output;
 extern double g_gpu_mem_limit_percent;
 
@@ -182,6 +184,11 @@ class ArrowSQLRunnerImpl {
     sqlite_comparator_.query(query_string);
   }
 
+  void sqlite_batch_insert(const std::string& table_name,
+                           std::vector<std::vector<std::string>>& insert_vals) {
+    sqlite_comparator_.batch_insert(table_name, insert_vals);
+  }
+
   void c(const std::string& query_string, const ExecutorDeviceType device_type) {
     sqlite_comparator_.compare(
         run_multiple_agg(query_string, device_type), query_string, device_type);
@@ -200,11 +207,110 @@ class ArrowSQLRunnerImpl {
         run_multiple_agg(query_string, device_type), query_string, device_type);
   }
 
-  void c_arrow(const std::string& query_string, const ExecutorDeviceType device_type) {
+  void check_arrow_dictionaries(
+      const ArrowResultSet* arrow_result_set,
+      const ResultSetPtr omnisci_results,
+      const size_t min_result_size_for_bulk_dictionary_fetch,
+      const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
+    const size_t num_columns = arrow_result_set->colCount();
+    std::unordered_set<size_t> dictionary_encoded_col_idxs;
+    std::vector<std::unordered_set<std::string>> per_column_dictionary_sets(num_columns);
+    for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+      const auto column_typeinfo = arrow_result_set->getColType(col_idx);
+      if (column_typeinfo.get_type() != kTEXT) {
+        continue;
+      }
+      dictionary_encoded_col_idxs.emplace(col_idx);
+      ASSERT_EQ(column_typeinfo.get_compression(), kENCODING_DICT);
+
+      const auto dictionary_strings = arrow_result_set->getDictionaryStrings(col_idx);
+      auto& dictionary_set = per_column_dictionary_sets[col_idx];
+      for (const auto& dictionary_string : dictionary_strings) {
+        ASSERT_EQ(dictionary_set.emplace(dictionary_string).second, true);
+      }
+    }
+    const size_t row_count = arrow_result_set->rowCount();
+    auto row_iterator = arrow_result_set->rowIterator(true, true);
+    std::vector<std::unordered_set<std::string>> per_column_unique_strings(num_columns);
+    for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+      const auto crt_row = *row_iterator++;
+      for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+        if (dictionary_encoded_col_idxs.find(col_idx) ==
+            dictionary_encoded_col_idxs.end()) {
+          continue;
+        }
+        const auto omnisci_variant = crt_row[col_idx];
+        const auto scalar_omnisci_variant =
+            boost::get<ScalarTargetValue>(&omnisci_variant);
+        CHECK(scalar_omnisci_variant);
+        const auto omnisci_as_str_ptr =
+            boost::get<NullableString>(scalar_omnisci_variant);
+        ASSERT_NE(nullptr, omnisci_as_str_ptr);
+        const auto omnisci_str_notnull_ptr = boost::get<std::string>(omnisci_as_str_ptr);
+        if (omnisci_str_notnull_ptr) {
+          const auto omnisci_str = *omnisci_str_notnull_ptr;
+          CHECK(per_column_dictionary_sets[col_idx].find(omnisci_str) !=
+                per_column_dictionary_sets[col_idx].end())
+              << omnisci_str;
+          per_column_unique_strings[col_idx].emplace(omnisci_str);
+        }
+      }
+    }
+    for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+      if (dictionary_encoded_col_idxs.find(col_idx) ==
+          dictionary_encoded_col_idxs.end()) {
+        continue;
+      }
+      const auto omnisci_col_type = omnisci_results->getColType(col_idx);
+      const auto dict_id = omnisci_col_type.get_comp_param();
+      const auto str_dict_proxy = omnisci_results->getStringDictionaryProxy(dict_id);
+      const size_t omnisci_dict_proxy_size = str_dict_proxy->entryCount();
+
+      const auto col_dictionary_size = per_column_dictionary_sets[col_idx].size();
+      const auto col_unique_strings = per_column_unique_strings[col_idx].size();
+      const bool arrow_dictionary_definitely_sparse =
+          col_dictionary_size < omnisci_dict_proxy_size;
+      const bool arrow_dictionary_definitely_dense =
+          col_unique_strings < col_dictionary_size;
+      const double dictionary_to_result_size_ratio =
+          static_cast<double>(omnisci_dict_proxy_size) / row_count;
+
+      const bool arrow_dictionary_should_be_dense =
+          row_count > min_result_size_for_bulk_dictionary_fetch &&
+          dictionary_to_result_size_ratio <=
+              max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch;
+
+      if (arrow_dictionary_definitely_sparse) {
+        ASSERT_EQ(col_unique_strings, col_dictionary_size);
+        ASSERT_EQ(arrow_dictionary_should_be_dense, false);
+      } else if (arrow_dictionary_definitely_dense) {
+        ASSERT_EQ(col_dictionary_size, omnisci_dict_proxy_size);
+        ASSERT_EQ(arrow_dictionary_should_be_dense, true);
+      }
+    }
+  }
+
+  void c_arrow(const std::string& query_string,
+               const ExecutorDeviceType device_type,
+               size_t min_result_size_for_bulk_dictionary_fetch,
+               double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
     auto results = run_multiple_agg(query_string, device_type);
-    auto arrow_omnisci_results = result_set_arrow_loopback(nullptr, results, device_type);
+    auto arrow_omnisci_results = result_set_arrow_loopback(
+        nullptr,
+        results,
+        device_type,
+        min_result_size_for_bulk_dictionary_fetch,
+        max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
     sqlite_comparator_.compare_arrow_output(
         arrow_omnisci_results, query_string, device_type);
+    // Below we test the newly added sparse dictionary capability,
+    // where only entries in a dictionary-encoded arrow column should be in the
+    // corresponding dictionary (vs all the entries in the underlying OmniSci dictionary)
+    check_arrow_dictionaries(
+        arrow_omnisci_results.get(),
+        results,
+        min_result_size_for_bulk_dictionary_fetch,
+        max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
   }
 
   void clearCpuMemory() {
@@ -370,6 +476,11 @@ void run_sqlite_query(const std::string& query_string) {
   ArrowSQLRunnerImpl::get()->run_sqlite_query(query_string);
 }
 
+void sqlite_batch_insert(const std::string& table_name,
+                         std::vector<std::vector<std::string>>& insert_vals) {
+  ArrowSQLRunnerImpl::get()->sqlite_batch_insert(table_name, insert_vals);
+}
+
 void c(const std::string& query_string, const ExecutorDeviceType device_type) {
   ArrowSQLRunnerImpl::get()->c(query_string, device_type);
 }
@@ -384,8 +495,15 @@ void cta(const std::string& query_string, const ExecutorDeviceType device_type) 
   ArrowSQLRunnerImpl::get()->cta(query_string, device_type);
 }
 
-void c_arrow(const std::string& query_string, const ExecutorDeviceType device_type) {
-  ArrowSQLRunnerImpl::get()->c_arrow(query_string, device_type);
+void c_arrow(const std::string& query_string,
+             const ExecutorDeviceType device_type,
+             size_t min_result_size_for_bulk_dictionary_fetch,
+             double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {
+  ArrowSQLRunnerImpl::get()->c_arrow(
+      query_string,
+      device_type,
+      min_result_size_for_bulk_dictionary_fetch,
+      max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
 }
 
 void clearCpuMemory() {

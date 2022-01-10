@@ -31,6 +31,11 @@ class SQLiteComparator {
 
   void query(const std::string& query_string) { connector_.query(query_string); }
 
+  void batch_insert(const std::string& table_name,
+                    std::vector<std::vector<std::string>>& insert_vals) {
+    connector_.batch_insert(table_name, insert_vals);
+  }
+
   void compare(ResultSetPtr omnisci_results,
                const std::string& query_string,
                const ExecutorDeviceType device_type);

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "ArrowStorage/ArrowStorage.h"
+#include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/QueryHint.h"
@@ -81,6 +82,9 @@ TargetValue run_simple_agg(const std::string& query_str,
 
 void run_sqlite_query(const std::string& query_string);
 
+void sqlite_batch_insert(const std::string& table_name,
+                         std::vector<std::vector<std::string>>& insert_vals);
+
 void c(const std::string& query_string, const ExecutorDeviceType device_type);
 
 void c(const std::string& query_string,
@@ -90,7 +94,14 @@ void c(const std::string& query_string,
 /* timestamp approximate checking for NOW() */
 void cta(const std::string& query_string, const ExecutorDeviceType device_type);
 
-void c_arrow(const std::string& query_string, const ExecutorDeviceType device_type);
+void c_arrow(
+    const std::string& query_string,
+    const ExecutorDeviceType device_type,
+    size_t min_result_size_for_bulk_dictionary_fetch =
+        ArrowResultSetConverter::default_min_result_size_for_bulk_dictionary_fetch,
+    double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch =
+        ArrowResultSetConverter::
+            default_max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
 
 void clearCpuMemory();
 

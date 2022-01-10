@@ -1132,8 +1132,10 @@ std::shared_ptr<arrow::Table> ArrowResultSetConverter::getArrowTable(
 
   std::vector<ColumnBuilder> builders(col_count);
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-    initializeColumnBuilder(
-        builders[col_idx], results_->getColType(col_idx), schema->field(col_idx));
+    initializeColumnBuilder(builders[col_idx],
+                            results_->getColType(col_idx),
+                            col_idx,
+                            schema->field(col_idx));
   }
 
   bool columnar_conversion_possible =
@@ -1408,8 +1410,6 @@ void ArrowResultSetConverter::initializeColumnBuilder(
     column_builder.builder.reset(new arrow::StringDictionary32Builder());
     // add values to the builder
     const int dict_id = col_type.get_comp_param();
-    constexpr size_t min_result_size_for_bulk_dictionary_fetch{10000UL};
-    constexpr float max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch{0.1};
 
     // ResultSet::rowCount(), unlike ResultSet::entryCount(), will return
     // the actual number of rows in the result set, taking into account
@@ -1420,26 +1420,27 @@ void ArrowResultSetConverter::initializeColumnBuilder(
 
     auto sdp = results_->getStringDictionaryProxy(dict_id);
     const size_t dictionary_proxy_entries = sdp->entryCount();
-    const float dictionary_to_result_size_ratio =
-        static_cast<float>(dictionary_proxy_entries) / result_set_rows;
+    const double dictionary_to_result_size_ratio =
+        static_cast<double>(dictionary_proxy_entries) / result_set_rows;
 
     // We are conservative with when we do a bulk dictionary fetch,
     // even though it is generally more efficient than dictionary unique value "plucking",
     // for the following reasons:
     // 1) The number of actual distinct dictionary values can be much lower than the
     // number of result rows, but without getting the expression range (and that would
-    // only work in some cases), we don't know by how much 2) Regardless of the effect of
-    // #1, the size of the dictionary generated via the "pluck" method will always be at
-    // worst equal in size, and very likely significantly smaller, than the dictionary
-    // created by the bulk dictionary fetch method, and maller Arrow dictionaries are
-    // always a win when it comes to sending the Arrow results over the wire, and for
-    // lowering the processing load for clients (which often is a web browser with a lot
-    // less compute and memory resources than our server.)
+    // only work in some cases), we don't know by how much
+    // 2) Regardless of the effect of #1, the size of the dictionary generated via
+    // the "pluck" method will always be at worst equal in size, and very likely
+    // significantly smaller, than the dictionary created by the bulk dictionary
+    // fetch method, and smaller Arrow dictionaries are always a win when it comes to
+    // sending the Arrow results over the wire, and for lowering the processing load
+    // for clients (which often is a web browser with a lot less compute and memory
+    // resources than our server.)
 
     const bool do_dictionary_bulk_fetch =
-        result_set_rows > min_result_size_for_bulk_dictionary_fetch &&
+        result_set_rows > min_result_size_for_bulk_dictionary_fetch_ &&
         dictionary_to_result_size_ratio <=
-            max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch;
+            max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_;
 
     arrow::StringBuilder str_array_builder;
 

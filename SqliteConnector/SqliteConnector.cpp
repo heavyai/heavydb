@@ -149,3 +149,51 @@ void SqliteConnector::query_with_text_param(const std::string& queryString,
 void SqliteConnector::query(const std::string& queryString) {
   query_with_text_params(queryString, std::vector<std::string>{});
 }
+
+void SqliteConnector::batch_insert(const std::string& table_name,
+                                   std::vector<std::vector<std::string>>& insert_vals) {
+  const size_t num_rows = insert_vals.size();
+  if (!num_rows) {
+    return;
+  }
+  const size_t num_cols(insert_vals[0].size());
+  if (!num_cols) {
+    return;
+  }
+  std::string paramertized_query = "INSERT INTO " + table_name + " VALUES(";
+  for (size_t col_idx = 0; col_idx < num_cols - 1; ++col_idx) {
+    paramertized_query += "?, ";
+  }
+  paramertized_query += "?)";
+
+  query("BEGIN TRANSACTION");
+
+  sqlite3_stmt* stmt;
+  int returnCode =
+      sqlite3_prepare_v2(db_, paramertized_query.c_str(), -1, &stmt, nullptr);
+  if (returnCode != SQLITE_OK) {
+    throwError();
+  }
+
+  for (size_t r = 0; r < num_rows; ++r) {
+    const auto& row_insert_vals = insert_vals[r];
+    int num_params = 1;
+    for (const auto& insert_field : row_insert_vals) {
+      returnCode = sqlite3_bind_text(stmt,
+                                     num_params++,
+                                     insert_field.c_str(),
+                                     insert_field.size(),
+                                     SQLITE_TRANSIENT);
+      if (returnCode != SQLITE_OK) {
+        throwError();
+      }
+    }
+    returnCode = sqlite3_step(stmt);
+    if (returnCode != SQLITE_DONE) {
+      throwError();
+    }
+    sqlite3_reset(stmt);
+  }
+  sqlite3_finalize(stmt);
+  query("END TRANSACTION");
+}

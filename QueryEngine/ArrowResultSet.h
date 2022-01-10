@@ -100,6 +100,14 @@ class ArrowResultSet {
   ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
                  const std::vector<TargetMetaInfo>& targets_meta,
                  const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
+
+  ArrowResultSet(
+      const std::shared_ptr<ResultSet>& rows,
+      const std::vector<TargetMetaInfo>& targets_meta,
+      const ExecutorDeviceType device_type,
+      const size_t min_result_size_for_bulk_dictionary_fetch,
+      const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
+
   ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
                  const ExecutorDeviceType device_type = ExecutorDeviceType::CPU)
       : ArrowResultSet(rows, {}, device_type) {}
@@ -119,6 +127,8 @@ class ArrowResultSet {
                                         bool decimal_to_double) const {
     return rowIterator(0, translate_strings, decimal_to_double);
   }
+
+  std::vector<std::string> getDictionaryStrings(const size_t col_idx) const;
 
   std::vector<TargetValue> getRowAt(const size_t index) const;
 
@@ -143,6 +153,12 @@ class ArrowResultSet {
  private:
   void resultSetArrowLoopback(
       const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
+
+  void resultSetArrowLoopback(
+      const ExecutorDeviceType device_type,
+      const size_t min_result_size_for_bulk_dictionary_fetch,
+      const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
+
   template <typename Type, typename ArrayType>
   void appendValue(std::vector<TargetValue>& row,
                    const arrow::Array& column,
@@ -168,17 +184,28 @@ ArrowResultSetRowIterator::value_type ArrowResultSetRowIterator::operator*() con
 
 class ExecutionResult;
 
-// Take results from the executor, serializes them to Arrow and then deserialize
-// them to ArrowResultSet, which can then be used by the existing test framework.
+// The following result_set_arrow_loopback methods are used by our test
+// framework (ExecuteTest specifically) to take results from the executor,
+// serialize them to Arrow and then deserialize them to an ArrowResultSet,
+// which can then be used by the test framework.
+
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(const ExecutionResult& results);
 
-// QUERYENGINE_// Take results from the executor, serializes them to Arrow and then
-// deserialize them to ArrowResultSet, which can then be used by the existing test
-// framework.
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
     const ExecutionResult* results,
     const std::shared_ptr<ResultSet>& rows,
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU);
+
+// This version of result_set_arrow_loopback allows setting the parameters that
+// drive the choice between dense and sparse dictionary conversion, used for
+// Select.ArrowDictionaries tests in ExecuteTest
+
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult* results,
+    const std::shared_ptr<ResultSet>& rows,
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch);
 
 enum class ArrowStringRemapMode {
   ALL_STRINGS_REMAPPED,
@@ -188,6 +215,10 @@ enum class ArrowStringRemapMode {
 
 class ArrowResultSetConverter {
  public:
+  static constexpr size_t default_min_result_size_for_bulk_dictionary_fetch{10000UL};
+  static constexpr double
+      default_max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch{0.1};
+
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
                           const ExecutorDeviceType device_type,
                           const int32_t device_id,
@@ -199,7 +230,32 @@ class ArrowResultSetConverter {
       , device_id_(device_id)
       , col_names_(col_names)
       , top_n_(first_n)
-      , transport_method_(transport_method) {}
+      , transport_method_(transport_method)
+      , min_result_size_for_bulk_dictionary_fetch_(
+            ArrowResultSetConverter::default_min_result_size_for_bulk_dictionary_fetch)
+      , max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_(
+            ArrowResultSetConverter::
+                default_max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {}
+
+  ArrowResultSetConverter(
+      const std::shared_ptr<ResultSet>& results,
+      const ExecutorDeviceType device_type,
+      const int32_t device_id,
+      const std::vector<std::string>& col_names,
+      const int32_t first_n,
+      const ArrowTransport transport_method,
+      const size_t min_result_size_for_bulk_dictionary_fetch,
+      const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch)
+      : results_(results)
+      , device_type_(device_type)
+      , device_id_(device_id)
+      , col_names_(col_names)
+      , top_n_(first_n)
+      , transport_method_(transport_method)
+      , min_result_size_for_bulk_dictionary_fetch_(
+            min_result_size_for_bulk_dictionary_fetch)
+      , max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_(
+            max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {}
 
   ArrowResult getArrowResult() const;
 
@@ -220,7 +276,28 @@ class ArrowResultSetConverter {
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
                           const std::vector<std::string>& col_names,
                           const int32_t first_n)
-      : results_(results), col_names_(col_names), top_n_(first_n) {}
+      : results_(results)
+      , col_names_(col_names)
+      , top_n_(first_n)
+      , min_result_size_for_bulk_dictionary_fetch_(
+            ArrowResultSetConverter::default_min_result_size_for_bulk_dictionary_fetch)
+      , max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_(
+            ArrowResultSetConverter::
+                default_max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {}
+
+  ArrowResultSetConverter(
+      const std::shared_ptr<ResultSet>& results,
+      const std::vector<std::string>& col_names,
+      const int32_t first_n,
+      const size_t min_result_size_for_bulk_dictionary_fetch,
+      const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch)
+      : results_(results)
+      , col_names_(col_names)
+      , top_n_(first_n)
+      , min_result_size_for_bulk_dictionary_fetch_(
+            min_result_size_for_bulk_dictionary_fetch)
+      , max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_(
+            max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch) {}
 
   std::shared_ptr<arrow::RecordBatch> convertToArrow() const;
   std::shared_ptr<arrow::Table> convertToArrowTable() const;
@@ -260,7 +337,8 @@ class ArrowResultSetConverter {
   std::vector<std::string> col_names_;
   int32_t top_n_;
   ArrowTransport transport_method_;
-
+  const size_t min_result_size_for_bulk_dictionary_fetch_;
+  const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_;
   friend class ArrowResultSet;
 };
 
