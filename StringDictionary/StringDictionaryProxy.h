@@ -40,7 +40,9 @@ class StringDictionaryProxy {
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() const noexcept;
   int64_t getGeneration() const noexcept;
+  std::vector<int32_t> getTransientBulk(const std::vector<std::string>& strings);
   int32_t getOrAddTransient(const std::string& str);
+  std::vector<int32_t> getOrAddTransientBulk(const std::vector<std::string>& strings);
   int32_t getIdOfString(const std::string& str) const;
   int32_t getIdOfStringNoGeneration(
       const std::string& str) const;  // disregard generation, only used by QueryRenderer
@@ -66,6 +68,11 @@ class StringDictionaryProxy {
   }
 
  private:
+  int32_t transientLookupAndAddUnlocked(const std::string& str);
+  void transientLookupBulkUnlocked(const std::vector<std::string>& lookup_strings,
+                                   std::vector<int32_t>& string_ids);
+  void transientLookupBulkParallelUnlocked(const std::vector<std::string>& lookup_strings,
+                                           std::vector<int32_t>& string_ids);
   std::shared_ptr<StringDictionary> string_dict_;
   const int32_t string_dict_id_;
   std::map<int32_t, std::string> transient_int_to_str_;
