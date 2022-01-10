@@ -321,17 +321,16 @@ void DataMgr::convertDB(const std::string basePath) {
 
 void DataMgr::createTopLevelMetadata()
     const {  // create metadata shared by all tables of all DBs
-  ChunkKey chunkKey(2);
-  chunkKey[0] = 0;  // top level db_id
-  chunkKey[1] = 0;  // top level tb_id
+  auto gfm = getGlobalFileMgr();
+  if (gfm) {
+    ChunkKey chunkKey(2);
+    chunkKey[0] = 0;  // top level db_id
+    chunkKey[1] = 0;  // top level tb_id
 
-  File_Namespace::GlobalFileMgr* gfm{nullptr};
-  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  CHECK(gfm);
-
-  auto fm_top = gfm->getFileMgr(chunkKey);
-  if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
-    static_cast<File_Namespace::FileMgr*>(fm_top)->createTopLevelMetadata();
+    auto fm_top = gfm->getFileMgr(chunkKey);
+    if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
+      static_cast<File_Namespace::FileMgr*>(fm_top)->createTopLevelMetadata();
+    }
   }
 }
 
@@ -569,29 +568,24 @@ void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
 
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
   File_Namespace::GlobalFileMgr* gfm{nullptr};
-  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  gfm = getGlobalFileMgr();
   CHECK(gfm);
   gfm->setTableEpoch(db_id, tb_id, start_epoch);
 }
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   File_Namespace::GlobalFileMgr* gfm{nullptr};
-  gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  gfm = getGlobalFileMgr();
   CHECK(gfm);
   return gfm->getTableEpoch(db_id, tb_id);
 }
 
 File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
-  File_Namespace::GlobalFileMgr* global_file_mgr{nullptr};
-  global_file_mgr =
-      dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
-  CHECK(global_file_mgr);
-  return global_file_mgr;
+  return getPersistentStorageMgr()->getGlobalFileMgr();
 }
 
 std::shared_ptr<ForeignStorageInterface> DataMgr::getForeignStorageInterface() const {
-  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])
-      ->getForeignStorageInterface();
+  return getPersistentStorageMgr()->getForeignStorageInterface();
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {

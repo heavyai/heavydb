@@ -143,7 +143,10 @@ size_t PersistentStorageMgr::getNumChunks() {
 }
 
 File_Namespace::GlobalFileMgr* PersistentStorageMgr::getGlobalFileMgr() const {
-  return dynamic_cast<File_Namespace::GlobalFileMgr*>(mgr_by_schema_id_.at(0).get());
+  if (mgr_by_schema_id_.count(0)) {
+    return dynamic_cast<File_Namespace::GlobalFileMgr*>(mgr_by_schema_id_.at(0).get());
+  }
+  return nullptr;
 }
 
 void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table_id) {
