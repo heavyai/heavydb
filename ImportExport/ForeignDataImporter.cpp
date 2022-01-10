@@ -20,7 +20,6 @@
 #include "Importer.h"
 #include "Parser/ParserNode.h"
 #include "Shared/measure.h"
-#include "UserMapping.h"
 
 namespace import_export {
 
