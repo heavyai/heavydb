@@ -21,6 +21,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -466,6 +467,111 @@ TEST(StringDictionaryProxy, GetTransientBulk) {
         ASSERT_EQ(std::to_string(string_ids[i]), strings[i]);
       } else {
         ASSERT_EQ(string_ids[i], StringDictionary::INVALID_STR_ID);
+      }
+    }
+  }
+}
+
+TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
+  // Use existing dictionary from GetBulk
+  std::shared_ptr<StringDictionary> source_string_dict =
+      std::make_shared<StringDictionary>(BASE_PATH1, false, false, g_cache_string_hash);
+  std::shared_ptr<StringDictionary> dest_string_dict =
+      std::make_shared<StringDictionary>(BASE_PATH2, false, false, g_cache_string_hash);
+
+  // Prep: insert g_op_count strings into source_string_dict
+  std::vector<int32_t> string_ids(g_op_count);
+  std::vector<std::string> strings;
+  strings.reserve(g_op_count);
+  for (int i = 0; i < g_op_count; ++i) {
+    strings.emplace_back(std::to_string(i));
+  }
+  source_string_dict->getOrAddBulk(strings, string_ids.data());
+
+  {
+    // First try to translate to empty dictionary.
+    // Should get back all INVALID_STR_IDs
+    std::shared_ptr<StringDictionaryProxy> source_string_dict_proxy =
+        std::make_shared<StringDictionaryProxy>(source_string_dict,
+                                                1 /* string_dict_id */,
+                                                source_string_dict->storageEntryCount());
+    std::shared_ptr<StringDictionaryProxy> dest_string_dict_proxy =
+        std::make_shared<StringDictionaryProxy>(dest_string_dict,
+                                                2 /* string_dict_id */,
+                                                dest_string_dict->storageEntryCount());
+    const auto translated_ids =
+        source_string_dict_proxy->buildTranslationMapToOtherProxy(dest_string_dict_proxy);
+    const size_t num_ids = translated_ids.size();
+    ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount());
+    for (size_t idx = 0; idx < num_ids; ++idx) {
+      ASSERT_EQ(translated_ids[idx], StringDictionary::INVALID_STR_ID);
+    }
+  }
+
+  {
+    // Add transient entries to source proxy
+    constexpr int32_t num_missing_ids{10};
+    ASSERT_LE(num_missing_ids, g_op_count);
+    const int32_t num_dest_strings{g_op_count - num_missing_ids};
+    std::vector<int32_t> dest_string_ids(num_dest_strings);
+    std::vector<std::string> dest_strings;
+    dest_strings.reserve(num_dest_strings);
+    for (int i = 0; i < num_dest_strings; ++i) {
+      dest_strings.emplace_back(std::to_string(i));
+    }
+    dest_string_dict->getOrAddBulk(dest_strings, dest_string_ids.data());
+
+    std::shared_ptr<StringDictionaryProxy> source_string_dict_proxy =
+        std::make_shared<StringDictionaryProxy>(source_string_dict,
+                                                1 /* string_dict_id */,
+                                                source_string_dict->storageEntryCount());
+    std::shared_ptr<StringDictionaryProxy> dest_string_dict_proxy =
+        std::make_shared<StringDictionaryProxy>(dest_string_dict,
+                                                2 /* string_dict_id */,
+                                                dest_string_dict->storageEntryCount());
+
+    constexpr int32_t num_source_proxy_transient_ids{64};
+    constexpr int32_t num_dest_proxy_transient_ids{32};
+    constexpr int32_t proxy_transient_start{g_op_count * 2};
+    for (int i = proxy_transient_start;
+         i < proxy_transient_start + num_source_proxy_transient_ids;
+         ++i) {
+      source_string_dict_proxy->getOrAddTransient(std::to_string(i));
+    }
+    for (int i = proxy_transient_start;
+         i < proxy_transient_start + num_dest_proxy_transient_ids;
+         ++i) {
+      dest_string_dict_proxy->getOrAddTransient(std::to_string(i));
+    }
+
+    const auto translated_ids =
+        source_string_dict_proxy->buildTranslationMapToOtherProxy(dest_string_dict_proxy);
+    const size_t num_ids = translated_ids.size();
+    // Todo (todd): Expose transient start offset instead of having to use magic number
+    ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount() + 1);
+    const int32_t start_source_id =
+        source_string_dict_proxy->transientEntryCount() > 0
+            ? (source_string_dict_proxy->transientEntryCount() + 1) * -1
+            : 0;
+    for (int32_t idx = 0; idx < static_cast<int32_t>(num_ids); ++idx) {
+      const int32_t source_id = idx + start_source_id;
+      if (source_id == -1 || source_id == 0) {
+        continue;
+      }
+      const std::string source_string = source_string_dict_proxy->getString(source_id);
+      const int32_t source_string_as_int = std::stoi(source_string);
+      const bool should_be_missing =
+          !((source_string_as_int >= 0 && source_string_as_int < num_dest_strings) ||
+            (source_string_as_int >= (g_op_count * 2) &&
+             source_string_as_int < (g_op_count * 2 + num_dest_proxy_transient_ids)));
+      if (translated_ids[idx] != StringDictionary::INVALID_STR_ID) {
+        ASSERT_EQ(should_be_missing, false);
+        const std::string dest_string =
+            dest_string_dict_proxy->getString(translated_ids[idx]);
+        ASSERT_EQ(source_string, dest_string);
+
+      } else {
+        ASSERT_EQ(should_be_missing, true);
       }
     }
   }
