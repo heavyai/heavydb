@@ -54,7 +54,6 @@ InsertOrderFragmenter::InsertOrderFragmenter(
     Data_Namespace::DataMgr* dataMgr,
     Catalog_Namespace::Catalog* catalog,
     const int physicalTableId,
-    const int shard,
     const size_t maxFragmentRows,
     const size_t maxChunkSize,
     const size_t pageSize,
@@ -65,7 +64,6 @@ InsertOrderFragmenter::InsertOrderFragmenter(
     , dataMgr_(dataMgr)
     , catalog_(catalog)
     , physicalTableId_(physicalTableId)
-    , shard_(shard)
     , maxFragmentRows_(std::min<size_t>(maxFragmentRows, maxRows))
     , pageSize_(pageSize)
     , numTuples_(0)
@@ -163,7 +161,6 @@ void InsertOrderFragmenter::getChunkMetadata() {
         }
         new_fragment_info->shadowNumTuples = new_fragment_info->getPhysicalNumTuples();
         new_fragment_info->physicalTableId = physicalTableId_;
-        new_fragment_info->shard = shard_;
         fragmentInfoVec_.emplace_back(std::move(new_fragment_info));
       } else {
         if (chunk_itr->second->numElements !=
@@ -243,9 +240,6 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   // deleteFragments across physical tables. Because deleteFragments is a short in-memory
   // operation, the loss seems not a big deal.
   auto chunkKeyPrefix = chunkKeyPrefix_;
-  if (shard_ >= 0) {
-    chunkKeyPrefix[1] = catalog_->getLogicalTableId(chunkKeyPrefix[1]);
-  }
 
   // need to keep lock seq as TableLock >> fragmentInfoMutex_ or
   // SELECT and COPY may enter a deadlock
@@ -289,9 +283,6 @@ void InsertOrderFragmenter::updateChunkStats(
    * any table read or write during a chunk metadata update, since we need to modify
    * various buffers and metadata maps.
    */
-  if (shard_ >= 0) {
-    LOG(WARNING) << "Skipping chunk stats update for logical table " << physicalTableId_;
-  }
 
   CHECK(cd);
   const auto column_id = cd->columnId;
@@ -723,7 +714,6 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
         physicalTableId_, newFragmentInfo->fragmentId, levelSize));
   }
   newFragmentInfo->physicalTableId = physicalTableId_;
-  newFragmentInfo->shard = shard_;
 
   for (map<int, Chunk>::iterator colMapIt = columnMap_.begin();
        colMapIt != columnMap_.end();
@@ -766,7 +756,6 @@ TableInfo InsertOrderFragmenter::getFragmentsForQuery() {
     emptyFragmentInfo.setPhysicalNumTuples(0);
     emptyFragmentInfo.deviceIds.resize(dataMgr_->levelSizes_.size());
     emptyFragmentInfo.physicalTableId = physicalTableId_;
-    emptyFragmentInfo.shard = shard_;
     queryInfo.fragments.push_back(emptyFragmentInfo);
   } else {
     fragmentsExist = true;

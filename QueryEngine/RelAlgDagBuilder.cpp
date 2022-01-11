@@ -2138,7 +2138,7 @@ void add_window_function_pre_project(
 
     auto scan_node = std::dynamic_pointer_cast<RelScan>(prev_node);
     const bool has_multi_fragment_scan_input =
-        (scan_node && (scan_node->getNumShards() > 0 || scan_node->getNumFragments() > 1))
+        (scan_node && scan_node->getNumFragments() > 1)
             ? true
             : false;
 

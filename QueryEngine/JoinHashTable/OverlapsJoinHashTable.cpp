@@ -600,10 +600,7 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   const auto shard_count = shardCount();
   size_t total_num_tuples = 0;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+    const auto fragments = query_info.fragments;
     const size_t crt_num_tuples =
         std::accumulate(fragments.begin(),
                         fragments.end(),
@@ -1169,10 +1166,7 @@ void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per
                "extraction";
   }
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+    const auto fragments = query_info.fragments;
     init_threads.push_back(std::async(std::launch::async,
                                       &OverlapsJoinHashTable::reifyForDevice,
                                       this,
@@ -1664,7 +1658,6 @@ HashJoinMatchingSet OverlapsJoinHashTable::codegenMatchingSet(
     return HashJoin::codegenMatchingSet(
         std::vector<llvm::Value*>{
             one_to_many_ptr, key, LL_INT(int64_t(0)), LL_INT(getEntryCount() - 1)},
-        false,
         false,
         false,
         getComponentBufferSize(),

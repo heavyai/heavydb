@@ -105,8 +105,6 @@ const int MAPD_TEMP_TABLE_START_ID =
 const int MAPD_TEMP_DICT_START_ID =
     1073741824;  // 2^30, give room for over a billion non-temp dictionaries
 
-const std::string Catalog::physicalTableNameTag_("_shard_#");
-
 thread_local bool Catalog::thread_holds_read_lock = false;
 
 using sys_read_lock = read_lock<SysCatalog>;
@@ -585,48 +583,6 @@ void Catalog::updateDictionaryNames() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::updateLogicalToPhysicalTableLinkSchema() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query(
-        "CREATE TABLE IF NOT EXISTS mapd_logical_to_physical("
-        "logical_table_id integer, physical_table_id integer)");
-  } catch (const std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
-}
-
-void Catalog::updateLogicalToPhysicalTableMap(const int32_t logical_tb_id) {
-  /* this proc inserts/updates all pairs of (logical_tb_id, physical_tb_id) in
-   * sqlite mapd_logical_to_physical table for given logical_tb_id as needed
-   */
-
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
-    if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-      const auto physicalTables = physicalTableIt->second;
-      CHECK(!physicalTables.empty());
-      for (size_t i = 0; i < physicalTables.size(); i++) {
-        int32_t physical_tb_id = physicalTables[i];
-        sqliteConnector_.query_with_text_params(
-            "INSERT OR REPLACE INTO mapd_logical_to_physical (logical_table_id, "
-            "physical_table_id) VALUES (?1, ?2)",
-            std::vector<std::string>{std::to_string(logical_tb_id),
-                                     std::to_string(physical_tb_id)});
-      }
-    }
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
-}
-
 void Catalog::updateDictionarySchema() {
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -882,7 +838,6 @@ void Catalog::CheckAndExecuteMigrations() {
   updateFrontendViewSchema();
   updateLinkSchema();
   updateDictionaryNames();
-  updateLogicalToPhysicalTableLinkSchema();
   updateDictionarySchema();
   updatePageSize();
   updateDeletedColumnIndicator();
@@ -964,9 +919,9 @@ void Catalog::buildMaps() {
     td->fragPageSize = sqliteConnector_.getData<int>(r, 8);
     td->maxRows = sqliteConnector_.getData<int64_t>(r, 9);
     td->partitions = sqliteConnector_.getData<string>(r, 10);
-    td->shardedColumnId = sqliteConnector_.getData<int>(r, 11);
-    td->shard = sqliteConnector_.getData<int>(r, 12);
-    td->nShards = sqliteConnector_.getData<int>(r, 13);
+    CHECK_EQ(sqliteConnector_.getData<int>(r, 11), 0);
+    CHECK_EQ(sqliteConnector_.getData<int>(r, 12), -1);
+    CHECK_EQ(sqliteConnector_.getData<int>(r, 13), 0);
     td->keyMetainfo = sqliteConnector_.getData<string>(r, 14);
     td->userId = sqliteConnector_.getData<int>(r, 15);
     td->sortedColumnId =
@@ -1089,29 +1044,6 @@ void Catalog::buildMaps() {
     ld->viewMetadata = sqliteConnector_.getData<string>(r, 5);
     linkDescriptorMap_[std::to_string(currentDB_.dbId) + ld->link] = ld;
     linkDescriptorMapById_[ld->linkId] = ld;
-  }
-
-  /* rebuild map linking logical tables to corresponding physical ones */
-  string logicalToPhysicalTableMapQuery(
-      "SELECT logical_table_id, physical_table_id "
-      "FROM mapd_logical_to_physical");
-  sqliteConnector_.query(logicalToPhysicalTableMapQuery);
-  numRows = sqliteConnector_.getNumRows();
-  for (size_t r = 0; r < numRows; ++r) {
-    int32_t logical_tb_id = sqliteConnector_.getData<int>(r, 0);
-    int32_t physical_tb_id = sqliteConnector_.getData<int>(r, 1);
-    const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
-    if (physicalTableIt == logicalToPhysicalTableMapById_.end()) {
-      /* add new entity to the map logicalToPhysicalTableMapById_ */
-      std::vector<int32_t> physicalTables;
-      physicalTables.push_back(physical_tb_id);
-      const auto it_ok =
-          logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
-      CHECK(it_ok.second);
-    } else {
-      /* update map logicalToPhysicalTableMapById_ */
-      physicalTableIt->second.push_back(physical_tb_id);
-    }
   }
 
   buildCustomExpressionsMap();
@@ -1390,7 +1322,6 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
                                                                dataMgr_.get(),
                                                                const_cast<Catalog*>(this),
                                                                td->tableId,
-                                                               td->shard,
                                                                td->maxFragRows,
                                                                td->maxChunkSize,
                                                                td->fragPageSize,
@@ -1402,7 +1333,6 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
                                                                dataMgr_.get(),
                                                                const_cast<Catalog*>(this),
                                                                td->tableId,
-                                                               td->shard,
                                                                td->maxFragRows,
                                                                td->maxChunkSize,
                                                                td->fragPageSize,
@@ -1879,12 +1809,6 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   cat_write_lock write_lock(this);
   // caller must handle sqlite/chunk transaction TOGETHER
   cd.tableId = td.tableId;
-  if (td.nShards > 0 && td.shard < 0) {
-    for (const auto shard : getPhysicalTablesDescriptors(&td)) {
-      auto shard_cd = cd;
-      addColumn(*shard, shard_cd);
-    }
-  }
   if (cd.columnType.get_compression() == kENCODING_DICT) {
     addDictionary(cd);
   }
@@ -1960,14 +1884,6 @@ void Catalog::dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd) 
   columnDescriptorMap_.erase(columnDescIt);
   columnDescriptorMapById_.erase(ColumnIdKey(cd.tableId, cd.columnId));
   --tableDescriptorMapById_[td.tableId]->nColumns;
-  // for each shard
-  if (td.nShards > 0 && td.shard < 0) {
-    for (const auto shard : getPhysicalTablesDescriptors(&td)) {
-      const auto shard_cd = getMetadataForColumn(shard->tableId, cd.columnId);
-      CHECK(shard_cd);
-      dropColumn(*shard, *shard_cd);
-    }
-  }
 }
 
 void Catalog::roll(const bool forward) {
@@ -2206,9 +2122,9 @@ void Catalog::createTable(
                                    std::to_string(td.fragPageSize),
                                    std::to_string(td.maxRows),
                                    td.partitions,
-                                   std::to_string(td.shardedColumnId),
-                                   std::to_string(td.shard),
-                                   std::to_string(td.nShards),
+                                   "0",
+                                   "-1",
+                                   "0",
                                    std::to_string(td.sortedColumnId),
                                    td.storageType,
                                    std::to_string(td.maxRollbackEpochs),
@@ -2459,46 +2375,10 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
                                   << ") not found";
     throw std::runtime_error(table_not_found_error_message.str());
   }
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
-  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-    // check all shards have same checkpoint
-    const auto physicalTables = physicalTableIt->second;
-    CHECK(!physicalTables.empty());
-    size_t curr_epoch{0}, first_epoch{0};
-    int32_t first_table_id{0};
-    bool are_epochs_inconsistent{false};
-    for (size_t i = 0; i < physicalTables.size(); i++) {
-      int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id, false);
-      CHECK(phys_td);
-
-      curr_epoch = dataMgr_->getTableEpoch(db_id, physical_tb_id);
-      LOG(INFO) << "Got sharded table epoch for db id: " << db_id
-                << ", table id: " << physical_tb_id << ", epoch: " << curr_epoch;
-      if (i == 0) {
-        first_epoch = curr_epoch;
-        first_table_id = physical_tb_id;
-      } else if (first_epoch != curr_epoch) {
-        are_epochs_inconsistent = true;
-        LOG(ERROR) << "Epochs on shards do not all agree on table id: " << table_id
-                   << ", db id: " << db_id
-                   << ". First table (table id: " << first_table_id
-                   << ") has epoch: " << first_epoch << ". Table id: " << physical_tb_id
-                   << ", has inconsistent epoch: " << curr_epoch
-                   << ". See previous INFO logs for all epochs and their table ids.";
-      }
-    }
-    if (are_epochs_inconsistent) {
-      // oh dear the shards do not agree on the epoch for this table
-      return -1;
-    }
-    return curr_epoch;
-  } else {
-    auto epoch = dataMgr_->getTableEpoch(db_id, table_id);
-    LOG(INFO) << "Got table epoch for db id: " << db_id << ", table id: " << table_id
-              << ", epoch: " << epoch;
-    return epoch;
-  }
+  auto epoch = dataMgr_->getTableEpoch(db_id, table_id);
+  LOG(INFO) << "Got table epoch for db id: " << db_id << ", table id: " << table_id
+            << ", epoch: " << epoch;
+  return epoch;
 }
 
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
@@ -2521,28 +2401,10 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
   file_mgr_params.epoch = new_epoch;
   file_mgr_params.max_rollback_epochs = td->maxRollbackEpochs;
 
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(table_id);
-  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-    const auto physicalTables = physicalTableIt->second;
-    CHECK(!physicalTables.empty());
-    for (size_t i = 0; i < physicalTables.size(); i++) {
-      const int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id, false);
-      CHECK(phys_td);
-      LOG(INFO) << "Set sharded table epoch db:" << db_id << " Table ID  "
-                << physical_tb_id << " back to new epoch " << new_epoch;
-      // Should have table lock from caller so safe to do this after, avoids
-      // having to repopulate data on error
-      removeChunksUnlocked(physical_tb_id);
-      dataMgr_->getGlobalFileMgr()->setFileMgrParams(
-          db_id, physical_tb_id, file_mgr_params);
-    }
-  } else {  // not shared
-    // Should have table lock from caller so safe to do this after, avoids
-    // having to repopulate data on error
-    removeChunksUnlocked(table_id);
-    dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
-  }
+  // Should have table lock from caller so safe to do this after, avoids
+  // having to repopulate data on error
+  removeChunksUnlocked(table_id);
+  dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
 }
 
 void Catalog::alterPhysicalTableMetadata(
@@ -2578,17 +2440,6 @@ void Catalog::alterTableMetadata(const TableDescriptor* td,
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    const auto physical_table_it = logicalToPhysicalTableMapById_.find(td->tableId);
-    if (physical_table_it != logicalToPhysicalTableMapById_.end()) {
-      const auto physical_tables = physical_table_it->second;
-      CHECK(!physical_tables.empty());
-      for (size_t i = 0; i < physical_tables.size(); i++) {
-        int32_t physical_tb_id = physical_tables[i];
-        const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id, false);
-        CHECK(phys_td);
-        alterPhysicalTableMetadata(phys_td, table_update_params);
-      }
-    }
     alterPhysicalTableMetadata(td, table_update_params);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -2677,49 +2528,18 @@ void Catalog::setTableFileMgrParams(
     is_temp_table_error_message << "Cannot set storage params on temporary table";
     throw std::runtime_error(is_temp_table_error_message.str());
   }
-  const auto physical_table_it = logicalToPhysicalTableMapById_.find(table_id);
-  if (physical_table_it != logicalToPhysicalTableMapById_.end()) {
-    const auto physical_tables = physical_table_it->second;
-    CHECK(!physical_tables.empty());
-    for (size_t i = 0; i < physical_tables.size(); i++) {
-      const int32_t physical_tb_id = physical_tables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-      CHECK(phys_td);
-      removeChunksUnlocked(physical_tb_id);
-      dataMgr_->getGlobalFileMgr()->setFileMgrParams(
-          db_id, physical_tb_id, file_mgr_params);
-    }
-  } else {  // not shared
-    removeChunksUnlocked(table_id);
-    dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
-  }
+  removeChunksUnlocked(table_id);
+  dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
 }
 
 std::vector<TableEpochInfo> Catalog::getTableEpochs(const int32_t db_id,
                                                     const int32_t table_id) const {
   cat_read_lock read_lock(this);
   std::vector<TableEpochInfo> table_epochs;
-  const auto physical_table_it = logicalToPhysicalTableMapById_.find(table_id);
-  if (physical_table_it != logicalToPhysicalTableMapById_.end()) {
-    const auto physical_tables = physical_table_it->second;
-    CHECK(!physical_tables.empty());
-
-    for (const auto physical_tb_id : physical_tables) {
-      const auto phys_td = getMetadataForTableImpl(physical_tb_id, false);
-      CHECK(phys_td);
-
-      auto table_id = phys_td->tableId;
-      auto epoch = dataMgr_->getTableEpoch(db_id, phys_td->tableId);
-      table_epochs.emplace_back(table_id, epoch);
-      LOG(INFO) << "Got sharded table epoch for db id: " << db_id
-                << ", table id:  " << table_id << ", epoch: " << epoch;
-    }
-  } else {
-    auto epoch = dataMgr_->getTableEpoch(db_id, table_id);
-    LOG(INFO) << "Got table epoch for db id: " << db_id << ", table id:  " << table_id
-              << ", epoch: " << epoch;
-    table_epochs.emplace_back(table_id, epoch);
-  }
+  auto epoch = dataMgr_->getTableEpoch(db_id, table_id);
+  LOG(INFO) << "Got table epoch for db id: " << db_id << ", table id:  " << table_id
+            << ", epoch: " << epoch;
+  table_epochs.emplace_back(table_id, epoch);
   return table_epochs;
 }
 
@@ -2792,7 +2612,6 @@ const bool Catalog::checkMetadataForDeletedRecs(const TableDescriptor* td,
 
 const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
     const TableDescriptor* td) const {
-  std::vector<const TableDescriptor*> tds;
   const ColumnDescriptor* cd;
   {
     cat_read_lock read_lock(this);
@@ -2803,13 +2622,10 @@ const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
       return nullptr;
     }
     cd = it->second;
-    tds = getPhysicalTablesDescriptors(td, false);
   }
   // individual tables are still protected by higher level locks
-  for (auto tdd : tds) {
-    if (checkMetadataForDeletedRecs(tdd, cd->columnId)) {
-      return cd;
-    }
+  if (checkMetadataForDeletedRecs(td, cd->columnId)) {
+    return cd;
   }
   // no deletes so far recorded in metadata
   return nullptr;
@@ -2978,53 +2794,11 @@ void Catalog::createShardedTable(
     const list<ColumnDescriptor>& cols,
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
   cat_write_lock write_lock(this);
-
-  /* create logical table */
-  TableDescriptor* tdl = &td;
-  createTable(*tdl, cols, shared_dict_defs, true);  // create logical table
-  int32_t logical_tb_id = tdl->tableId;
-  std::string logical_table_name = tdl->tableName;
-
-  /* create physical tables and link them to the logical table */
-  std::vector<int32_t> physicalTables;
-  for (int32_t i = 1; i <= td.nShards; i++) {
-    TableDescriptor* tdp = &td;
-    tdp->tableName = generatePhysicalTableName(logical_table_name, i);
-    tdp->shard = i - 1;
-    createTable(*tdp, cols, shared_dict_defs, false);  // create physical table
-    int32_t physical_tb_id = tdp->tableId;
-
-    /* add physical table to the vector of physical tables */
-    physicalTables.push_back(physical_tb_id);
-  }
-
-  if (!physicalTables.empty()) {
-    /* add logical to physical tables correspondence to the map */
-    const auto it_ok =
-        logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
-    CHECK(it_ok.second);
-    /* update sqlite mapd_logical_to_physical in sqlite database */
-    if (!table_is_temporary(&td)) {
-      updateLogicalToPhysicalTableMap(logical_tb_id);
-    }
-  }
+  createTable(td, cols, shared_dict_defs, true);  // create logical table
 }
 
 void Catalog::truncateTable(const TableDescriptor* td) {
   cat_write_lock write_lock(this);
-
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-    // truncate all corresponding physical tables if this is a logical table
-    const auto physicalTables = physicalTableIt->second;
-    CHECK(!physicalTables.empty());
-    for (size_t i = 0; i < physicalTables.size(); i++) {
-      int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-      CHECK(phys_td);
-      doTruncateTable(phys_td);
-    }
-  }
   doTruncateTable(td);
 }
 
@@ -3133,26 +2907,8 @@ void Catalog::dropTable(const TableDescriptor* td) {
       DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-      // remove all corresponding physical tables if this is a logical table
-      const auto physicalTables = physicalTableIt->second;
-      CHECK(!physicalTables.empty());
-      for (size_t i = 0; i < physicalTables.size(); i++) {
-        int32_t physical_tb_id = physicalTables[i];
-        const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-        CHECK(phys_td);
-        doDropTable(phys_td);
-      }
-
-      // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
-      sqliteConnector_.query_with_text_param(
-          "DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
-          std::to_string(td->tableId));
-      logicalToPhysicalTableMapById_.erase(td->tableId);
-    }
     doDropTable(td);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -3229,20 +2985,6 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
   {
     cat_write_lock write_lock(this);
     cat_sqlite_lock sqlite_lock(getObjForLock());
-    // rename all corresponding physical tables if this is a logical table
-    const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-    if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-      const auto physicalTables = physicalTableIt->second;
-      CHECK(!physicalTables.empty());
-      for (size_t i = 0; i < physicalTables.size(); i++) {
-        int32_t physical_tb_id = physicalTables[i];
-        const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-        CHECK(phys_td);
-        std::string newPhysTableName =
-            generatePhysicalTableName(newTableName, static_cast<int32_t>(i + 1));
-        renamePhysicalTable(phys_td, newPhysTableName);
-      }
-    }
     renamePhysicalTable(td, newTableName);
   }
   {
@@ -3411,22 +3153,6 @@ void Catalog::renameTable(std::vector<std::pair<std::string, std::string>>& name
       std::string& curTableName = names[i].first;
       std::string& newTableName = names[i].second;
 
-      // rename all corresponding physical tables if this is a logical table
-      const auto physicalTableIt = logicalToPhysicalTableMapById_.find(tableId);
-      if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-        const auto physicalTables = physicalTableIt->second;
-        CHECK(!physicalTables.empty());
-        for (size_t k = 0; k < physicalTables.size(); k++) {
-          int32_t physical_tb_id = physicalTables[k];
-          const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-          CHECK(phys_td);
-          std::string newPhysTableName =
-              generatePhysicalTableName(newTableName, static_cast<int32_t>(k + 1));
-          allNames.push_back(
-              std::pair<std::string, std::string>(phys_td->tableName, newPhysTableName));
-          allTableIds.push_back(phys_td->tableId);
-        }
-      }
       allNames.push_back(std::pair<std::string, std::string>(curTableName, newTableName));
       allTableIds.push_back(tableId);
     }
@@ -3697,41 +3423,7 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
 
 const ColumnDescriptor* Catalog::getShardColumnMetadataForTable(
     const TableDescriptor* td) const {
-  cat_read_lock read_lock(this);
-
-  const auto column_descriptors =
-      getAllColumnMetadataForTable(td->tableId, false, true, true);
-
-  const ColumnDescriptor* shard_cd{nullptr};
-  int i = 1;
-  for (auto cd_itr = column_descriptors.begin(); cd_itr != column_descriptors.end();
-       ++cd_itr, ++i) {
-    if (i == td->shardedColumnId) {
-      shard_cd = *cd_itr;
-    }
-  }
-  return shard_cd;
-}
-
-std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
-    const TableDescriptor* logical_table_desc,
-    bool populate_fragmenter) const {
-  cat_read_lock read_lock(this);
-  const auto physicalTableIt =
-      logicalToPhysicalTableMapById_.find(logical_table_desc->tableId);
-  if (physicalTableIt == logicalToPhysicalTableMapById_.end()) {
-    return {logical_table_desc};
-  }
-
-  const auto physicalTablesIds = physicalTableIt->second;
-  CHECK(!physicalTablesIds.empty());
-  std::vector<const TableDescriptor*> physicalTables;
-  for (size_t i = 0; i < physicalTablesIds.size(); i++) {
-    physicalTables.push_back(
-        getMetadataForTable(physicalTablesIds[i], populate_fragmenter));
-  }
-
-  return physicalTables;
+  return nullptr;
 }
 
 const std::map<int, const ColumnDescriptor*> Catalog::getDictionaryToColumnMapping() {
@@ -3741,11 +3433,6 @@ const std::map<int, const ColumnDescriptor*> Catalog::getDictionaryToColumnMappi
 
   const auto tables = getAllTableMetadata();
   for (const auto td : tables) {
-    if (td->shard >= 0) {
-      // skip shards, they're not standalone tables
-      continue;
-    }
-
     for (auto& cd : getAllColumnMetadataForTable(td->tableId, false, false, true)) {
       const auto& ti = cd->columnType;
       if (ti.is_string()) {
@@ -3768,10 +3455,6 @@ const std::map<int, const ColumnDescriptor*> Catalog::getDictionaryToColumnMappi
 bool Catalog::filterTableByTypeAndUser(const TableDescriptor* td,
                                        const UserMetadata& user_metadata,
                                        const GetTablesType get_tables_type) const {
-  if (td->shard >= 0) {
-    // skip shards, they're not standalone tables
-    return false;
-  }
   switch (get_tables_type) {
     case GET_PHYSICAL_TABLES: {
       if (td->isView) {
@@ -3838,26 +3521,9 @@ std::vector<TableMetadata> Catalog::getTablesMetadataForUser(
   return tables_metadata;
 }
 
-int Catalog::getLogicalTableId(const int physicalTableId) const {
-  cat_read_lock read_lock(this);
-  for (const auto& l : logicalToPhysicalTableMapById_) {
-    if (l.second.end() != std::find_if(l.second.begin(),
-                                       l.second.end(),
-                                       [&](decltype(*l.second.begin()) tid) -> bool {
-                                         return physicalTableId == tid;
-                                       })) {
-      return l.first;
-    }
-  }
-  return physicalTableId;
-}
-
 void Catalog::checkpoint(const int logicalTableId) const {
   const auto td = getMetadataForTable(logicalTableId);
-  const auto shards = getPhysicalTablesDescriptors(td);
-  for (const auto shard : shards) {
-    getDataMgr().checkpoint(getCurrentDB().dbId, shard->tableId);
-  }
+  getDataMgr().checkpoint(getCurrentDB().dbId, td->tableId);
 }
 
 void Catalog::checkpointWithAutoRollback(const int logical_table_id) const {
@@ -3911,21 +3577,12 @@ void Catalog::eraseTablePhysicalData(const TableDescriptor* td) {
   }
 }
 
-std::string Catalog::generatePhysicalTableName(const std::string& logicalTableName,
-                                               const int32_t& shardNumber) {
-  std::string physicalTableName =
-      logicalTableName + physicalTableNameTag_ + std::to_string(shardNumber);
-  return (physicalTableName);
-}
-
 // prepare a fresh file reload on next table access
 void Catalog::setForReload(const int32_t tableId) {
   cat_read_lock read_lock(this);
   const auto td = getMetadataForTable(tableId);
-  for (const auto shard : getPhysicalTablesDescriptors(td)) {
-    const auto tableEpoch = getTableEpoch(currentDB_.dbId, shard->tableId);
-    setTableEpoch(currentDB_.dbId, shard->tableId, tableEpoch);
-  }
+  const auto tableEpoch = getTableEpoch(currentDB_.dbId, td->tableId);
+  setTableEpoch(currentDB_.dbId, td->tableId, tableEpoch);
 }
 
 // get a table's data dirs
@@ -3933,12 +3590,10 @@ std::vector<std::string> Catalog::getTableDataDirectories(
     const TableDescriptor* td) const {
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   std::vector<std::string> file_paths;
-  for (auto shard : getPhysicalTablesDescriptors(td)) {
-    const auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-        global_file_mgr->getFileMgr(currentDB_.dbId, shard->tableId));
-    boost::filesystem::path file_path(file_mgr->getFileMgrBasePath());
-    file_paths.push_back(file_path.filename().string());
-  }
+  const auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
+      global_file_mgr->getFileMgr(currentDB_.dbId, td->tableId));
+  boost::filesystem::path file_path(file_mgr->getFileMgrBasePath());
+  file_paths.push_back(file_path.filename().string());
   return file_paths;
 }
 
@@ -4056,14 +3711,6 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
                                               : "VACUUM='IMMEDIATE'");
   if (!td->partitions.empty()) {
     with_options.push_back("PARTITIONS='" + td->partitions + "'");
-  }
-  if (td->nShards > 0) {
-    const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
-    CHECK(shard_cd);
-    os << ", SHARD KEY(" << shard_cd->columnName << ")";
-    with_options.push_back(
-        "SHARD_COUNT=" +
-        std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
   }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
@@ -4221,13 +3868,6 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   if (!td->partitions.empty()) {
     with_options.push_back("PARTITIONS='" + td->partitions + "'");
   }
-  if (td->nShards > 0) {
-    const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
-    CHECK(shard_cd);
-    with_options.push_back(
-        "SHARD_COUNT=" +
-        std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
-  }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
     CHECK(sort_cd);
@@ -4271,13 +3911,6 @@ std::string Catalog::quoteIfRequired(const std::string& column_name) const {
 void Catalog::gatherAdditionalInfo(std::vector<std::string>& additional_info,
                                    std::set<std::string>& shared_dict_column_names,
                                    const TableDescriptor* td) const {
-  if (td->nShards > 0) {
-    ColumnIdKey columnIdKey(td->tableId, td->shardedColumnId);
-    auto scd = columnDescriptorMapById_.find(columnIdKey)->second;
-    CHECK(scd);
-    std::string txt = "SHARD KEY (" + quoteIfRequired(scd->columnName) + ")";
-    additional_info.emplace_back(txt);
-  }
   const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
   for (const auto cd : cds) {
     if (!(cd->isSystemCol || cd->isVirtualCol)) {

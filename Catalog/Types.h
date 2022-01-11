@@ -32,7 +32,6 @@ namespace Catalog_Namespace {
 
 using TableDescriptorMap = std::map<std::string, TableDescriptor*>;
 using TableDescriptorMapById = std::map<int, TableDescriptor*>;
-using LogicalToPhysicalTableMapById = std::map<int32_t, std::vector<int32_t>>;
 using ColumnKey = std::tuple<int, std::string>;
 using ColumnIdxMap = std::map<ColumnKey, int>;
 using ColumnDescriptorMap = std::map<ColumnKey, ColumnDescriptor*>;

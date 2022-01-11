@@ -114,11 +114,6 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     throw TooManyHashEntries();
   }
 
-  const auto shard_count = memory_level == Data_Namespace::GPU_LEVEL
-                               ? BaselineJoinHashTable::getShardCountForCondition(
-                                     condition.get(), executor, inner_outer_pairs)
-                               : 0;
-
   auto hashtable_cache_key_string =
       HashtableRecycler::getHashtableKeyString(inner_outer_pairs,
                                                condition->get_optype(),
@@ -142,7 +137,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                            hashtable_build_dag_map,
                                            table_id_to_node_map);
   HashJoin::checkHashJoinReplicationConstraint(
-      HashJoin::getInnerTableId(inner_outer_pairs), shard_count, executor);
+      HashJoin::getInnerTableId(inner_outer_pairs), executor);
   try {
     join_hash_table->reifyWithLayout(HashType::OneToMany);
   } catch (const HashJoinFail& e) {
@@ -188,10 +183,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   }
   const auto shard_count = shardCount();
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+    const auto fragments = query_info.fragments;
     const auto columns_for_device =
         fetchColumnsForDevice(fragments,
                               device_id,
@@ -229,10 +221,7 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
 
   std::vector<std::future<void>> init_threads;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+    const auto fragments = query_info.fragments;
     init_threads.push_back(
         std::async(std::launch::async,
                    &RangeJoinHashTable::reifyForDevice,
@@ -783,7 +772,6 @@ HashJoinMatchingSet RangeJoinHashTable::codegenMatchingSetWithOffset(
                                    key,
                                    LL_INT(int64_t(0)),
                                    LL_INT(getEntryCount() - 1)},
-      /* is_sharded            */ false,
       /* is_nullable           */ false,
       /* is_bw_eq              */ false,
       /* sub_buff_size         */ getComponentBufferSize(),

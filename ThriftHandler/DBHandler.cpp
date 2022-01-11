@@ -2382,7 +2382,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     _return.view_sql =
         (have_privileges_on_view_sources ? td->viewSQL
                                          : "[Not enough privileges to see the view SQL]");
-    _return.shard_count = td->nShards;
+    _return.shard_count = 0;
     _return.key_metainfo = td->keyMetainfo;
     _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
     _return.partition_detail =
@@ -2488,10 +2488,6 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
   _return.reserve(tables.size());
 
   for (const auto td : tables) {
-    if (td->shard >= 0) {
-      // skip shards, they're not standalone tables
-      continue;
-    }
     if (!hasTableAccessPrivileges(td, session_info)) {
       // skip table, as there are no privileges to access it
       continue;
@@ -2501,7 +2497,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
     ret.table_name = td->tableName;
     ret.is_view = td->isView;
     ret.is_replicated = table_is_replicated(td);
-    ret.shard_count = td->nShards;
+    ret.shard_count = 0;
     ret.max_rows = td->maxRows;
     ret.table_id = td->tableId;
 
@@ -2783,12 +2779,6 @@ void DBHandler::set_execution_mode(const TSessionId& session,
 }
 
 namespace {
-
-void check_table_not_sharded(const TableDescriptor* td) {
-  if (td && td->nShards) {
-    throw std::runtime_error("Cannot import a sharded table directly to a leaf");
-  }
-}
 
 void check_valid_column_names(const std::list<const ColumnDescriptor*>& descs,
                               const std::vector<std::string>& column_names) {
@@ -3075,10 +3065,6 @@ DBHandler::prepare_loader_generic(
   const auto td = (*td_with_lock)();
   CHECK(td);
 
-  if (g_cluster && !leaf_aggregator_.leafCount()) {
-    // Sharded table rows need to be routed to the leaf by an aggregator.
-    check_table_not_sharded(td);
-  }
   check_table_load_privileges(session_info, table_name);
 
   if (leaf_aggregator_.leafCount() > 0) {
@@ -6760,7 +6746,7 @@ void DBHandler::insert_data(const TSessionId& session,
       insert_data.data.push_back(p);
     }
     const ChunkKey lock_chunk_key{cat.getDatabaseId(),
-                                  cat.getLogicalTableId(insert_data.tableId)};
+                                  insert_data.tableId};
     auto table_read_lock =
         lockmgr::TableSchemaLockMgr::getReadLockForTable(lock_chunk_key);
     const auto td = cat.getMetadataForTable(insert_data.tableId);

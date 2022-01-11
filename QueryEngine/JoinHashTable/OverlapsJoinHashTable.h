@@ -225,13 +225,7 @@ class OverlapsJoinHashTable : public HashJoin {
     return hash_table->getEntryCount() * sizeof(int32_t);
   }
 
-  size_t shardCount() const {
-    if (memory_level_ != Data_Namespace::GPU_LEVEL) {
-      return 0;
-    }
-    return BaselineJoinHashTable::getShardCountForCondition(
-        condition_.get(), executor_, inner_outer_pairs_);
-  }
+  size_t shardCount() const { return 0; }
 
   Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
       const std::vector<InnerOuter>& inner_outer_pairs) const;

@@ -38,7 +38,6 @@ struct DataframeTableDescriptor : TableDescriptor {
 
   DataframeTableDescriptor(const TableDescriptor& td) {
     tableId = td.tableId;
-    shard = td.shard;
     tableName = td.tableName;
     userId = td.userId;
     nColumns = td.nColumns;
@@ -53,9 +52,6 @@ struct DataframeTableDescriptor : TableDescriptor {
     partitions = td.partitions;
     keyMetainfo = td.keyMetainfo;
     fragmenter = td.fragmenter;
-    nShards = td.nShards;
-    shardedColumnId = td.shardedColumnId;
-    sortedColumnId = td.sortedColumnId;
     persistenceLevel = td.persistenceLevel;
     hasDeletedCol = td.hasDeletedCol;
     columnIdBySpi_ = td.columnIdBySpi_;

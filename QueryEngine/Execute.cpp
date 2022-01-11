@@ -69,7 +69,6 @@
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
-#include "Shared/shard_key.h"
 #include "Shared/threading.h"
 #include "ThirdParty/robin_hood.h"
 
@@ -2393,56 +2392,7 @@ bool Executor::skipFragmentPair(
         inner_table_id_to_join_condition,
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType device_type) {
-  if (device_type != ExecutorDeviceType::GPU) {
-    return false;
-  }
-  CHECK(table_idx >= 0 &&
-        static_cast<size_t>(table_idx) < ra_exe_unit.input_descs.size());
-  const int inner_table_id = ra_exe_unit.input_descs[table_idx].getTableId();
-  // Both tables need to be sharded the same way.
-  if (outer_fragment_info.shard == -1 || inner_fragment_info.shard == -1 ||
-      outer_fragment_info.shard == inner_fragment_info.shard) {
-    return false;
-  }
-  const Analyzer::BinOper* join_condition{nullptr};
-  if (ra_exe_unit.join_quals.empty()) {
-    CHECK(!inner_table_id_to_join_condition.empty());
-    auto condition_it = inner_table_id_to_join_condition.find(inner_table_id);
-    CHECK(condition_it != inner_table_id_to_join_condition.end());
-    join_condition = condition_it->second;
-    CHECK(join_condition);
-  } else {
-    CHECK_EQ(plan_state_->join_info_.equi_join_tautologies_.size(),
-             plan_state_->join_info_.join_hash_tables_.size());
-    for (size_t i = 0; i < plan_state_->join_info_.join_hash_tables_.size(); ++i) {
-      if (plan_state_->join_info_.join_hash_tables_[i]->getInnerTableRteIdx() ==
-          table_idx) {
-        CHECK(!join_condition);
-        join_condition = plan_state_->join_info_.equi_join_tautologies_[i].get();
-      }
-    }
-  }
-  if (!join_condition) {
-    return false;
-  }
-  // TODO(adb): support fragment skipping based on the overlaps operator
-  if (join_condition->is_overlaps_oper()) {
-    return false;
-  }
-  size_t shard_count{0};
-  if (dynamic_cast<const Analyzer::ExpressionTuple*>(
-          join_condition->get_left_operand())) {
-    auto inner_outer_pairs = HashJoin::normalizeColumnPairs(
-        join_condition, getSchemaProvider(), getTemporaryTables());
-    shard_count = BaselineJoinHashTable::getShardCountForCondition(
-        join_condition, this, inner_outer_pairs);
-  } else {
-    shard_count = get_shard_count(join_condition, this);
-  }
-  if (shard_count && !ra_exe_unit.join_quals.empty()) {
-    plan_state_->join_info_.sharded_range_table_indices_.emplace(table_idx);
-  }
-  return shard_count;
+  return false;
 }
 
 std::map<size_t, std::vector<uint64_t>> get_table_id_to_frag_offsets(

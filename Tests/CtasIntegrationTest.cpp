@@ -736,12 +736,6 @@ TEST_P(Ctas, CreateTableFromSelectReplicated) {
   ctasTestBody(columnDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
 }
 
-TEST_P(Ctas, CreateTableFromSelectSharded) {
-  ctasTestBody(
-      columnDescriptors,
-      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')");
-}
-
 void exportTestBody(std::string sourcePartitionScheme = ")") {
   run_ddl_statement("DROP TABLE IF EXISTS EXPORT_SOURCE;");
 
@@ -807,11 +801,6 @@ TEST(Export, ExportFromSelectFragments) {
 
 TEST(Export, ExportFromSelectReplicated) {
   exportTestBody(") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
-}
-
-TEST(Export, ExportFromSelectSharded) {
-  exportTestBody(
-      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')");
 }
 
 void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
@@ -918,44 +907,13 @@ TEST_P(Itas, InsertIntoTableFromSelectReplicated) {
       columnDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
 }
 
-TEST_P(Itas, InsertIntoTableFromSelectSharded) {
-  itasTestBody(
-      columnDescriptors,
-      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')",
-      ")");
-}
-
 TEST_P(Itas, InsertIntoReplicatedTableFromSelect) {
   itasTestBody(columnDescriptors, ")", ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas, InsertIntoShardedTableFromSelect) {
-  itasTestBody(columnDescriptors,
-               ")",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
 TEST_P(Itas, InsertIntoReplicatedTableFromSelectReplicated) {
   itasTestBody(columnDescriptors,
                ") WITH (partitions='REPLICATED')",
-               ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas, InsertIntoReplicatedTableFromSelectSharded) {
-  itasTestBody(columnDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas, InsertIntoShardedTableFromSelectSharded) {
-  itasTestBody(columnDescriptors,
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas, InsertIntoShardedTableFromSelectReplicated) {
-  itasTestBody(columnDescriptors,
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
                ") WITH (partitions='REPLICATED')");
 }
 

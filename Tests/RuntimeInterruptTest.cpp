@@ -92,7 +92,6 @@ int create_and_populate_table() {
   try {
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large_agg;");
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large_parquet;");
-    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_sharded;");
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large_csv;");
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_large;");
@@ -100,9 +99,6 @@ int create_and_populate_table() {
     run_ddl_statement("DROP TABLE IF EXISTS t_small;");
     run_ddl_statement("DROP TABLE IF EXISTS t_geo");
     run_ddl_statement("DROP TABLE IF EXISTS t_gdal");
-    run_ddl_statement(
-        "CREATE TABLE t_very_large_sharded (x int not null, y int not null, z int not "
-        "null, SHARD KEY (x)) WITH (shard_count = 4);");
     run_ddl_statement(
         "CREATE TABLE t_very_large_csv (x int not null, y int not null, z int not "
         "null);");
@@ -312,7 +308,6 @@ int drop_table() {
   try {
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large_csv;");
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large_parquet;");
-    run_ddl_statement("DROP TABLE IF EXISTS t_very_large_sharded;");
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_medium;");
@@ -1084,93 +1079,6 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
                 << std::endl;
       std::shared_ptr<ResultSet> res =
           run_query("SELECT COUNT(1) FROM t_very_large_parquet",
-                    ExecutorDeviceType::CPU,
-                    session1,
-                    "session1");
-      CHECK_EQ(1, (int64_t)res.get()->rowCount());
-      auto crt_row = res.get()->getNextRow(false, false);
-      auto ret_val = v<int64_t>(crt_row[0]);
-      CHECK_EQ((int64_t)0, ret_val);
-      return;
-    }
-    if (detect_time_out.load()) {
-      return;
-    }
-  } catch (...) {
-    CHECK(false);
-  }
-}
-
-TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV_Sharded) {
-  std::atomic<bool> catchInterruption(false);
-  std::atomic<bool> detect_time_out(false);
-  std::string import_very_large_sharded_table_str{
-      "COPY t_very_large_sharded FROM "
-      "'../../Tests/Import/datafiles/interrupt_table_very_large.csv' WITH "
-      "(header='false')"};
-
-  auto check_interrup_msg = [&catchInterruption](const std::string& msg,
-                                                 bool is_pending_query) {
-    auto check_interrupted_msg = msg.find("interrupted");
-    CHECK(check_interrupted_msg != std::string::npos) << msg;
-    catchInterruption.store(true);
-  };
-
-  try {
-    std::string session1 = generate_random_string(32);
-    QR::get()->addSessionId(session1, "session1", ExecutorDeviceType::CPU);
-
-    auto interrupt_thread = std::async(std::launch::async, [&] {
-      // make sure our server recognizes a session for running query correctly
-      QuerySessionStatus::QueryStatus curRunningSessionStatus;
-      bool startQueryExec = false;
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-      int cnt = 0;
-      while (cnt < 6000) {
-        {
-          mapd_shared_lock<mapd_shared_mutex> session_read_lock(
-              executor->getSessionLock());
-          curRunningSessionStatus =
-              executor->getQuerySessionStatus(session1, session_read_lock);
-        }
-        if (curRunningSessionStatus == QuerySessionStatus::RUNNING_IMPORTER) {
-          startQueryExec = true;
-          break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        ++cnt;
-        if (cnt == 6000) {
-          std::cout << "Detect timeout while performing COPY stmt on csv table"
-                    << std::endl;
-          detect_time_out.store(true);
-          return;
-        }
-      }
-      CHECK(startQueryExec);
-      executor->interrupt(session1, session1);
-      return;
-    });
-
-    try {
-      QR::get()->runDDLStatement(import_very_large_sharded_table_str);
-    } catch (const QueryExecutionError& e) {
-      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
-        catchInterruption.store(true);
-      } else {
-        throw e;
-      }
-    } catch (const std::runtime_error& e) {
-      check_interrup_msg(e.what(), false);
-    } catch (...) {
-      throw;
-    }
-
-    if (catchInterruption.load()) {
-      std::cout << "Detect interrupt request while performing COPY stmt on the "
-                   "sharded csv table"
-                << std::endl;
-      std::shared_ptr<ResultSet> res =
-          run_query("SELECT COUNT(1) FROM t_very_large_sharded",
                     ExecutorDeviceType::CPU,
                     session1,
                     "session1");

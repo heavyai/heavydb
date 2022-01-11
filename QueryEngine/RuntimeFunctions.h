@@ -195,39 +195,6 @@ extern "C" int32_t* get_hash_slot(int32_t* buff,
                                   const int64_t key,
                                   const int64_t min_key);
 
-extern "C" int32_t* get_hash_slot_sharded(int32_t* buff,
-                                          const int64_t key,
-                                          const int64_t min_key,
-                                          const uint32_t entry_count_per_shard,
-                                          const uint32_t num_shards,
-                                          const uint32_t device_count);
-
-extern "C" int32_t* get_bucketized_hash_slot_sharded(int32_t* buff,
-                                                     const int64_t key,
-                                                     const int64_t min_key,
-                                                     const uint32_t entry_count_per_shard,
-                                                     const uint32_t num_shards,
-                                                     const uint32_t device_count,
-                                                     const int64_t bucket_normalization);
-
-extern "C" int32_t* get_hash_slot_sharded_opt(int32_t* buff,
-                                              const int64_t key,
-                                              const int64_t min_key,
-                                              const uint32_t entry_count_per_shard,
-                                              const uint32_t shard,
-                                              const uint32_t num_shards,
-                                              const uint32_t device_count);
-
-extern "C" int32_t* get_bucketized_hash_slot_sharded_opt(
-    int32_t* buff,
-    const int64_t key,
-    const int64_t min_key,
-    const uint32_t entry_count_per_shard,
-    const uint32_t shard,
-    const uint32_t num_shards,
-    const uint32_t device_count,
-    const int64_t bucket_normalization);
-
 extern "C" int fill_one_to_one_hashtable(size_t idx,
                                          int32_t* entry_ptr,
                                          const int32_t invalid_slot_val);

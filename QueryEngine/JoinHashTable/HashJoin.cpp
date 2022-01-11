@@ -165,7 +165,6 @@ std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s) {
 
 HashJoinMatchingSet HashJoin::codegenMatchingSet(
     const std::vector<llvm::Value*>& hash_join_idx_args_in,
-    const bool is_sharded,
     const bool col_is_nullable,
     const bool is_bw_eq,
     const int64_t sub_buff_size,
@@ -178,9 +177,6 @@ HashJoinMatchingSet HashJoin::codegenMatchingSet(
 
   if (is_bw_eq) {
     fname += "_bitwise";
-  }
-  if (is_sharded) {
-    fname += "_sharded";
   }
   if (!is_bw_eq && col_is_nullable) {
     fname += "_nullable";
@@ -585,7 +581,6 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
 }
 
 void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
-                                                  const size_t shard_count,
                                                   const Executor* executor) {
   if (!g_cluster) {
     return;
@@ -594,7 +589,7 @@ void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
     CHECK(executor);
     const auto inner_td = executor->getCatalog()->getMetadataForTable(table_id);
     CHECK(inner_td);
-    if (!shard_count && !table_is_replicated(inner_td)) {
+    if (!table_is_replicated(inner_td)) {
       throw TableMustBeReplicated(inner_td->tableName);
     }
   }
@@ -786,20 +781,3 @@ InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
 }
 
 }  // namespace
-
-size_t get_shard_count(const Analyzer::BinOper* join_condition,
-                       const Executor* executor) {
-  const Analyzer::ColumnVar* inner_col{nullptr};
-  const Analyzer::Expr* outer_col{nullptr};
-  std::shared_ptr<Analyzer::BinOper> redirected_bin_oper;
-  try {
-    std::tie(inner_col, outer_col) = get_cols(
-        join_condition, executor->getSchemaProvider(), executor->getTemporaryTables());
-  } catch (...) {
-    return 0;
-  }
-  if (!inner_col || !outer_col) {
-    return 0;
-  }
-  return get_shard_count({inner_col, outer_col}, executor);
-}

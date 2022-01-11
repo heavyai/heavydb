@@ -179,8 +179,6 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
     EXPECT_EQ(user_id, td->userId);
     EXPECT_EQ(Data_Namespace::MemoryLevel::DISK_LEVEL, td->persistenceLevel);
     EXPECT_FALSE(td->isView);
-    EXPECT_EQ(0, td->nShards);
-    EXPECT_EQ(0, td->shardedColumnId);
     EXPECT_EQ("[]", td->keyMetainfo);
     EXPECT_EQ("", td->fragments);
     EXPECT_EQ("", td->partitions);
@@ -1508,31 +1506,6 @@ class CreateShardedTableTest : public CreateAndDropTableDdlTest {
   }
 };
 
-TEST_F(CreateShardedTableTest, ShardedTableName) {
-  sql("CREATE TABLE test_table (i INT, SHARD KEY(i)) WITH "
-      "(shard_count = 2);");
-
-  auto& catalog = getCatalog();
-  auto logical_table = catalog.getMetadataForTable("test_table", false);
-  ASSERT_NE(logical_table, nullptr);
-  ASSERT_EQ(2, logical_table->nShards);
-  ASSERT_EQ(-1, logical_table->shard);
-  ASSERT_EQ("test_table", logical_table->tableName);
-
-  auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
-  ASSERT_EQ(static_cast<size_t>(2), physical_tables.size());
-
-  ASSERT_NE(physical_tables[0], nullptr);
-  ASSERT_EQ(2, physical_tables[0]->nShards);
-  ASSERT_EQ(0, physical_tables[0]->shard);
-  ASSERT_EQ("test_table_shard_#1", physical_tables[0]->tableName);
-
-  ASSERT_NE(physical_tables[1], nullptr);
-  ASSERT_EQ(2, physical_tables[1]->nShards);
-  ASSERT_EQ(1, physical_tables[1]->shard);
-  ASSERT_EQ("test_table_shard_#2", physical_tables[1]->tableName);
-}
-
 class MaxRollbackEpochsTest : public CreateAndDropTableDdlTest {
  protected:
   void SetUp() override {
@@ -1669,14 +1642,6 @@ TEST_F(DefaultValuesTest, InsertAfterAlter) {
   insertDefaultValues();
   insertNotDefaultValues();
   verifyData();
-}
-
-TEST_F(DefaultValuesTest, ProhibitDefaultOnShardedKey) {
-  queryAndAssertException(
-      "CREATE TABLE defval_tbl (i INTEGER default -1, key text "
-      "default 'default', shard key(i)) with (shard_count = 2)",
-      "Default values for shard "
-      "keys are not supported yet.");
 }
 
 TEST_F(DefaultValuesTest, DefaultAllowsNulls) {

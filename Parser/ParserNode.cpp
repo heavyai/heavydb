@@ -65,7 +65,6 @@
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
 #include "Shared/measure.h"
-#include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
 
 #include "gen-cpp/CalciteServer.h"
@@ -1671,101 +1670,11 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
     throw std::runtime_error("Cannot determine leaf on replicated table.");
   }
 
-  if (0 == td->nShards) {
-    std::random_device rd;
-    std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<size_t> dis;
-    const auto leaf_idx = dis(gen) % num_leafs;
-    return leaf_idx;
-  }
-
-  size_t indexOfShardColumn = 0;
-  const ColumnDescriptor* shardColumn = catalog.getShardColumnMetadataForTable(td);
-  CHECK(shardColumn);
-  auto shard_count = td->nShards * num_leafs;
-  int64_t shardId = 0;
-
-  if (column_list_.empty()) {
-    auto all_cols =
-        catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
-    auto iter = std::find(all_cols.begin(), all_cols.end(), shardColumn);
-    CHECK(iter != all_cols.end());
-    indexOfShardColumn = std::distance(all_cols.begin(), iter);
-  } else {
-    for (auto& c : column_list_) {
-      if (*c == shardColumn->columnName) {
-        break;
-      }
-      indexOfShardColumn++;
-    }
-
-    if (indexOfShardColumn == column_list_.size()) {
-      shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
-                              shard_count);
-      return shardId / td->nShards;
-    }
-  }
-
-  if (indexOfShardColumn >= value_list_.size()) {
-    throw std::runtime_error("No value defined for shard column.");
-  }
-
-  auto& shardColumnValueExpr = *(std::next(value_list_.begin(), indexOfShardColumn));
-
-  Analyzer::Query query;
-  auto e = shardColumnValueExpr->analyze(catalog, query);
-  e = e->add_cast(shardColumn->columnType);
-  const Analyzer::Constant* con = dynamic_cast<Analyzer::Constant*>(e.get());
-  if (!con) {
-    auto col_cast = dynamic_cast<const Analyzer::UOper*>(e.get());
-    CHECK(col_cast);
-    CHECK_EQ(kCAST, col_cast->get_optype());
-    con = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
-  }
-  CHECK(con);
-
-  Datum d = con->get_constval();
-  if (con->get_is_null()) {
-    shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
-                            shard_count);
-  } else if (shardColumn->columnType.is_string()) {
-    auto dictDesc =
-        catalog.getMetadataForDict(shardColumn->columnType.get_comp_param(), true);
-    auto str_id = dictDesc->stringDict->getOrAdd(*d.stringval);
-    bool invalid = false;
-
-    if (4 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<int32_t>();
-    } else if (2 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<uint16_t>();
-    } else if (1 == shardColumn->columnType.get_size()) {
-      invalid = str_id > max_valid_int_value<uint8_t>();
-    }
-
-    if (invalid || str_id == inline_int_null_value<int32_t>()) {
-      str_id = inline_fixed_encoding_null_val(shardColumn->columnType);
-    }
-    shardId = SHARD_FOR_KEY(str_id, shard_count);
-  } else {
-    switch (shardColumn->columnType.get_logical_size()) {
-      case 8:
-        shardId = SHARD_FOR_KEY(d.bigintval, shard_count);
-        break;
-      case 4:
-        shardId = SHARD_FOR_KEY(d.intval, shard_count);
-        break;
-      case 2:
-        shardId = SHARD_FOR_KEY(d.smallintval, shard_count);
-        break;
-      case 1:
-        shardId = SHARD_FOR_KEY(d.tinyintval, shard_count);
-        break;
-      default:
-        CHECK(false);
-    }
-  }
-
-  return shardId / td->nShards;
+  std::random_device rd;
+  std::mt19937_64 gen(rd());
+  std::uniform_int_distribution<size_t> dis;
+  const auto leaf_idx = dis(gen) % num_leafs;
+  return leaf_idx;
 }
 
 void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
@@ -2227,30 +2136,13 @@ decltype(auto) get_partions_def(TableDescriptor& td,
     if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
       throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
     }
-    if (td.shardedColumnId != 0 && partitions_uc == "REPLICATED") {
-      throw std::runtime_error(
-          "A table cannot be sharded and replicated at the same time");
-    };
     td.partitions = partitions_uc;
   });
 }
 decltype(auto) get_shard_count_def(TableDescriptor& td,
                                    const NameValueAssign* p,
                                    const std::list<ColumnDescriptor>& columns) {
-  if (!td.shardedColumnId) {
-    throw std::runtime_error("SHARD KEY must be defined.");
-  }
-  return get_property_value<IntLiteral>(p, [&td](const auto shard_count) {
-    if (g_leaf_count && shard_count % g_leaf_count) {
-      throw std::runtime_error(
-          "SHARD_COUNT must be a multiple of the number of leaves in the cluster.");
-    }
-    td.nShards = g_leaf_count ? shard_count / g_leaf_count : shard_count;
-    if (!td.shardedColumnId && !td.nShards) {
-      throw std::runtime_error(
-          "Must specify the number of shards through the SHARD_COUNT option");
-    };
-  });
+  throw std::runtime_error("SHARD_COUNT support was removed.");
 }
 
 decltype(auto) get_vacuum_def(TableDescriptor& td,
@@ -2538,13 +2430,7 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
 
   ddl_utils::set_default_table_attributes(*table_, td, columns.size());
 
-  if (shard_key_def) {
-    td.shardedColumnId = shard_column_index(shard_key_def->get_column(), columns);
-    if (!td.shardedColumnId) {
-      throw std::runtime_error("Specified shard column " + shard_key_def->get_column() +
-                               " doesn't exist");
-    }
-  }
+  CHECK(!shard_key_def);
   if (is_temporary_) {
     td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
   } else {
@@ -2554,9 +2440,6 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
     for (auto& p : storage_options_) {
       get_table_definitions(td, p, columns);
     }
-  }
-  if (td.shardedColumnId && !td.nShards) {
-    throw std::runtime_error("SHARD_COUNT needs to be specified with SHARD_KEY.");
   }
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
 }
@@ -4346,14 +4229,6 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
               });
 
     size_t nrows = td->fragmenter->getNumRows();
-    // if sharded, get total nrows from all sharded tables
-    if (td->nShards > 0) {
-      const auto physical_tds = catalog.getPhysicalTablesDescriptors(td);
-      nrows = 0;
-      std::for_each(physical_tds.begin(), physical_tds.end(), [&nrows](const auto& td) {
-        nrows += td->fragmenter->getNumRows();
-      });
-    }
     if (nrows > 0) {
       int skip_physical_cols = 0;
       for (const auto cit : cid_coldefs) {
@@ -4465,10 +4340,6 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     std::vector<int> columnIds;
     for (const auto& column : columns_) {
       ColumnDescriptor cd = *catalog.getMetadataForColumn(td->tableId, *column);
-      if (td->nShards > 0 && td->shardedColumnId == cd.columnId) {
-        throw std::runtime_error("Dropping sharding column " + cd.columnName +
-                                 " is not supported.");
-      }
       catalog.dropColumn(*td, cd);
       columnIds.push_back(cd.columnId);
       for (int i = 0; i < cd.columnType.get_physical_cols(); i++) {
@@ -4479,9 +4350,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
 
-    for (auto shard : catalog.getPhysicalTablesDescriptors(td)) {
-      shard->fragmenter->dropColumns(columnIds);
-    }
+    td->fragmenter->dropColumns(columnIds);
     // if test forces to rollback
     if (g_test_drop_column_rollback) {
       throw std::runtime_error("lol!");

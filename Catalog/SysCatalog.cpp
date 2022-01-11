@@ -1320,10 +1320,6 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
     /* revoke object privileges to all tables of the database being dropped */
     const auto tables = cat->getAllTableMetadata();
     for (const auto table : tables) {
-      if (table->shard >= 0) {
-        // skip shards, they're not standalone tables
-        continue;
-      }
       revokeDBObjectPrivilegesFromAll_unsafe(
           DBObject(table->tableName, TableDBObjectType), cat.get());
     }

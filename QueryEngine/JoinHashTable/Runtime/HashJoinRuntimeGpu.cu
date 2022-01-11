@@ -93,86 +93,6 @@ void fill_hash_join_buff_on_device(int32_t* buff,
                              dev_err_buff);
 }
 
-__global__ void fill_hash_join_buff_wrapper_sharded_bucketized(
-    int32_t* buff,
-    const int32_t invalid_slot_val,
-    const bool for_semi_join,
-    const JoinColumn join_column,
-    const JoinColumnTypeInfo type_info,
-    const ShardInfo shard_info,
-    int* err,
-    const int64_t bucket_normalization) {
-  int partial_err = SUFFIX(fill_hash_join_buff_sharded_bucketized)(buff,
-                                                                   invalid_slot_val,
-                                                                   for_semi_join,
-                                                                   join_column,
-                                                                   type_info,
-                                                                   shard_info,
-                                                                   NULL,
-                                                                   NULL,
-                                                                   -1,
-                                                                   -1,
-                                                                   bucket_normalization);
-  atomicCAS(err, 0, partial_err);
-}
-
-__global__ void fill_hash_join_buff_wrapper_sharded(int32_t* buff,
-                                                    const int32_t invalid_slot_val,
-                                                    const bool for_semi_join,
-                                                    const JoinColumn join_column,
-                                                    const JoinColumnTypeInfo type_info,
-                                                    const ShardInfo shard_info,
-                                                    int* err) {
-  int partial_err = SUFFIX(fill_hash_join_buff_sharded)(buff,
-                                                        invalid_slot_val,
-                                                        for_semi_join,
-                                                        join_column,
-                                                        type_info,
-                                                        shard_info,
-                                                        NULL,
-                                                        NULL,
-                                                        -1,
-                                                        -1);
-  atomicCAS(err, 0, partial_err);
-}
-
-void fill_hash_join_buff_on_device_sharded_bucketized(
-    int32_t* buff,
-    const int32_t invalid_slot_val,
-    const bool for_semi_join,
-    int* dev_err_buff,
-    const JoinColumn join_column,
-    const JoinColumnTypeInfo type_info,
-    const ShardInfo shard_info,
-    const int64_t bucket_normalization) {
-  cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper_sharded_bucketized,
-                             buff,
-                             invalid_slot_val,
-                             for_semi_join,
-                             join_column,
-                             type_info,
-                             shard_info,
-                             dev_err_buff,
-                             bucket_normalization);
-}
-
-void fill_hash_join_buff_on_device_sharded(int32_t* buff,
-                                           const int32_t invalid_slot_val,
-                                           const bool for_semi_join,
-                                           int* dev_err_buff,
-                                           const JoinColumn join_column,
-                                           const JoinColumnTypeInfo type_info,
-                                           const ShardInfo shard_info) {
-  cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper_sharded,
-                             buff,
-                             invalid_slot_val,
-                             for_semi_join,
-                             join_column,
-                             type_info,
-                             shard_info,
-                             dev_err_buff);
-}
-
 __global__ void init_hash_join_buff_wrapper(int32_t* buff,
                                             const int64_t hash_entry_count,
                                             const int32_t invalid_slot_val) {
@@ -314,39 +234,6 @@ void fill_one_to_many_hash_table_on_device_bucketized(
                                              type_info,
                                              count_matches_func,
                                              fill_row_ids_func);
-}
-
-void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
-                                                   const HashEntryInfo hash_entry_info,
-                                                   const int32_t invalid_slot_val,
-                                                   const JoinColumn& join_column,
-                                                   const JoinColumnTypeInfo& type_info,
-                                                   const ShardInfo& shard_info) {
-  auto hash_entry_count = hash_entry_info.hash_entry_count;
-  int32_t* pos_buff = buff;
-  int32_t* count_buff = buff + hash_entry_count;
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
-  cuda_kernel_launch_wrapper(SUFFIX(count_matches_sharded),
-                             count_buff,
-                             invalid_slot_val,
-                             join_column,
-                             type_info,
-                             shard_info);
-
-  cuda_kernel_launch_wrapper(set_valid_pos_flag, pos_buff, count_buff, hash_entry_count);
-
-  auto count_buff_dev_ptr = thrust::device_pointer_cast(count_buff);
-  thrust::inclusive_scan(
-      count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
-  cuda_kernel_launch_wrapper(set_valid_pos, pos_buff, count_buff, hash_entry_count);
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
-  cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids_sharded),
-                             buff,
-                             hash_entry_count,
-                             invalid_slot_val,
-                             join_column,
-                             type_info,
-                             shard_info);
 }
 
 template <typename T, typename KEY_HANDLER>

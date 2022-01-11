@@ -845,8 +845,6 @@ class RelScan : public RelAlgNode {
 
   const size_t getNumFragments() const { return table_info_->fragments; }
 
-  const size_t getNumShards() const { return table_info_->shards; }
-
   const std::string& getFieldName(const size_t i) const { return column_infos_[i]->name; }
 
   int32_t getDatabaseId() const { return table_info_->db_id; }
@@ -1953,15 +1951,6 @@ class RelModify : public RelAlgNode {
           index <= target_update_column_expr_end) {
         auto target_index = index - target_update_column_expr_start;
         auto& column_info = target_column_list_[target_index];
-
-        if (table_descriptor_->nShards) {
-          const auto shard_cd =
-              catalog_.getShardColumnMetadataForTable(table_descriptor_);
-          CHECK(shard_cd);
-          if ((column_info->name == shard_cd->columnName)) {
-            throw std::runtime_error("UPDATE of a shard key is currently unsupported.");
-          }
-        }
 
         // Check for valid types
         if (column_info->type.is_varlen()) {

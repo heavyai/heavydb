@@ -106,58 +106,30 @@ class PerfectJoinHashTableBuilder {
                                  col_range.getIntMax() + 1,
                                  get_join_column_type_kind(ti)};
     auto use_bucketization = inner_col->get_type_info().get_type() == kDATE;
-    if (shard_count) {
-      const size_t entries_per_shard =
-          get_entries_per_shard(hash_entry_info.hash_entry_count, shard_count);
-      CHECK_GT(device_count, 0);
-      for (size_t shard = device_id; shard < shard_count; shard += device_count) {
-        ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count};
-        if (layout == HashType::OneToOne) {
-          fill_hash_join_buff_on_device_sharded_bucketized(
-              reinterpret_cast<int32_t*>(gpu_hash_table_buff),
-              hash_join_invalid_val,
-              for_semi_anti_join(join_type),
-              reinterpret_cast<int*>(dev_err_buff),
-              join_column,
-              type_info,
-              shard_info,
-              hash_entry_info.bucket_normalization);
-        } else {
-          fill_one_to_many_hash_table_on_device_sharded(
-              reinterpret_cast<int32_t*>(gpu_hash_table_buff),
-              hash_entry_info,
-              hash_join_invalid_val,
-              join_column,
-              type_info,
-              shard_info);
-        }
-      }
+    if (layout == HashType::OneToOne) {
+      fill_hash_join_buff_on_device_bucketized(
+          reinterpret_cast<int32_t*>(gpu_hash_table_buff),
+          hash_join_invalid_val,
+          for_semi_anti_join(join_type),
+          reinterpret_cast<int*>(dev_err_buff),
+          join_column,
+          type_info,
+          hash_entry_info.bucket_normalization);
     } else {
-      if (layout == HashType::OneToOne) {
-        fill_hash_join_buff_on_device_bucketized(
+      if (use_bucketization) {
+        fill_one_to_many_hash_table_on_device_bucketized(
             reinterpret_cast<int32_t*>(gpu_hash_table_buff),
+            hash_entry_info,
             hash_join_invalid_val,
-            for_semi_anti_join(join_type),
-            reinterpret_cast<int*>(dev_err_buff),
             join_column,
-            type_info,
-            hash_entry_info.bucket_normalization);
+            type_info);
       } else {
-        if (use_bucketization) {
-          fill_one_to_many_hash_table_on_device_bucketized(
-              reinterpret_cast<int32_t*>(gpu_hash_table_buff),
-              hash_entry_info,
-              hash_join_invalid_val,
-              join_column,
-              type_info);
-        } else {
-          fill_one_to_many_hash_table_on_device(
-              reinterpret_cast<int32_t*>(gpu_hash_table_buff),
-              hash_entry_info,
-              hash_join_invalid_val,
-              join_column,
-              type_info);
-        }
+        fill_one_to_many_hash_table_on_device(
+            reinterpret_cast<int32_t*>(gpu_hash_table_buff),
+            hash_entry_info,
+            hash_join_invalid_val,
+            join_column,
+            type_info);
       }
     }
     copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);

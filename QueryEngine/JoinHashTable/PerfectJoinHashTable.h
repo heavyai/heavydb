@@ -207,7 +207,6 @@ class PerfectJoinHashTable : public HashJoin {
 
   std::vector<llvm::Value*> getHashJoinArgs(llvm::Value* hash_ptr,
                                             const Analyzer::Expr* key_col,
-                                            const int shard_count,
                                             const CompilationOptions& co);
 
   bool isBitwiseEq() const;
@@ -264,11 +263,6 @@ class PerfectJoinHashTable : public HashJoin {
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                   const Analyzer::Expr* outer_col,
                                   const Executor* executor);
-
-std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const int device_id,
-    const int device_count);
 
 const InputTableInfo& get_inner_query_info(
     const int inner_table_id,

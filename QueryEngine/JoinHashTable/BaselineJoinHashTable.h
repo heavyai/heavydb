@@ -58,11 +58,6 @@ class BaselineJoinHashTable : public HashJoin {
       const HashTableBuildDagMap& hashtable_build_dag_map,
       const TableIdToNodeMap& table_id_to_node_map);
 
-  static size_t getShardCountForCondition(
-      const Analyzer::BinOper* condition,
-      const Executor* executor,
-      const std::vector<InnerOuter>& inner_outer_pairs);
-
   std::string toString(const ExecutorDeviceType device_type,
                        const int device_id = 0,
                        bool raw = false) const override;

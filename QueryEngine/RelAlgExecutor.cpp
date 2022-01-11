@@ -40,7 +40,6 @@
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
-#include "Shared/shard_key.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 #include <boost/range/adaptor/reversed.hpp>
@@ -2217,28 +2216,6 @@ int64_t int_value_from_numbers_ptr(const SQLTypeInfo& type_info, const int8_t* d
   }
 }
 
-const TableDescriptor* get_shard_for_key(const TableDescriptor* td,
-                                         const Catalog_Namespace::Catalog& cat,
-                                         const Fragmenter_Namespace::InsertData& data) {
-  auto shard_column_md = cat.getShardColumnMetadataForTable(td);
-  CHECK(shard_column_md);
-  auto sharded_column_id = shard_column_md->columnId;
-  const TableDescriptor* shard{nullptr};
-  for (size_t i = 0; i < data.columnIds.size(); ++i) {
-    if (data.columnIds[i] == sharded_column_id) {
-      const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
-      const auto shard_count = shard_tables.size();
-      CHECK(data.data[i].numbersPtr);
-      auto value = int_value_from_numbers_ptr(shard_column_md->columnType,
-                                              data.data[i].numbersPtr);
-      const size_t shard_idx = SHARD_FOR_KEY(value, shard_count);
-      shard = shard_tables[shard_idx];
-      break;
-    }
-  }
-  return shard;
-}
-
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
@@ -2502,13 +2479,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   auto data_memory_holder = import_export::fill_missing_columns(&cat_, insert_data);
   const auto table_descriptor = cat_.getMetadataForTable(table_id);
   CHECK(table_descriptor);
-  if (table_descriptor->nShards > 0) {
-    auto shard = get_shard_for_key(table_descriptor, cat_, insert_data);
-    CHECK(shard);
-    shard->fragmenter->insertDataNoCheckpoint(insert_data);
-  } else {
-    table_descriptor->fragmenter->insertDataNoCheckpoint(insert_data);
-  }
+  table_descriptor->fragmenter->insertDataNoCheckpoint(insert_data);
 
   // Ensure checkpoint happens across all shards, if not in distributed
   // mode (aggregator handles checkpointing in distributed mode)

@@ -94,28 +94,6 @@ TEST_F(DBEngineSQLTest, InsertDecimal) {
   ASSERT_EQ(3, select_int("SELECT count(*) FROM dbe_test;"));
 }
 
-TEST_F(DBEngineSQLTest, InsertShardedTableWithGeo) {
-  EXPECT_NO_THROW(
-      SetUp("(x Int, poly POLYGON, b SMALLINT, SHARD KEY(b)) WITH (shard_count = 4)"));
-
-  EXPECT_NO_THROW(
-      run_dml("INSERT INTO dbe_test VALUES (1,'POLYGON((0 0, 1 1, 2 2, 3 3))', 0);"));
-  EXPECT_NO_THROW(
-      run_dml("INSERT INTO dbe_test (x, poly, b) VALUES (1, 'POLYGON((0 0, 1 1, 2 2, 3 "
-              "3))', 1);"));
-  EXPECT_NO_THROW(
-      run_dml("INSERT INTO dbe_test (b, poly, x) VALUES (2, 'POLYGON((0 0, 1 1, 2 2, 3 "
-              "3))', 1);"));
-  EXPECT_NO_THROW(
-      run_dml("INSERT INTO dbe_test (x, b, poly) VALUES (1, 3, 'POLYGON((0 0, 1 1, 2 2, "
-              "3 3))');"));
-  EXPECT_NO_THROW(
-      run_dml("INSERT INTO dbe_test (poly, x, b) VALUES ('POLYGON((0 0, 1 1, 2 2, 3 "
-              "3))', 1, 4);"));
-
-  ASSERT_EQ(5, select_int("SELECT count(*) FROM dbe_test;"));
-}
-
 TEST_F(DBEngineSQLTest, UpdateText) {
   SetUp("(t text encoding none)");
 

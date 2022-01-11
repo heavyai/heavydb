@@ -1533,19 +1533,6 @@ TEST_P(Ctas, CreateTableFromSelectReplicated) {
               ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
 }
 
-TEST_P(Ctas, CreateTableFromSelectSharded) {
-  // execute CTAS
-  std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
-  int num_rows = 25;
-  int num_rows_to_check = num_rows;
-  runCtasTest(
-      columnDescriptors,
-      create_ctas_sql,
-      num_rows,
-      num_rows_to_check,
-      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')");
-}
-
 TEST_P(Ctas, CreateTableAsSelectWithLimit) {
   // execute CTAS
   std::string create_ctas_sql =
@@ -1859,21 +1846,8 @@ TEST_P(Itas_P, InsertIntoTableFromSelectReplicated) {
       columnDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
 }
 
-TEST_P(Itas_P, InsertIntoTableFromSelectSharded) {
-  itasTestBody(
-      columnDescriptors,
-      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')",
-      ")");
-}
-
 TEST_P(Itas_P, InsertIntoReplicatedTableFromSelect) {
   itasTestBody(columnDescriptors, ")", ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas_P, InsertIntoShardedTableFromSelect) {
-  itasTestBody(columnDescriptors,
-               ")",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
 TEST_P(Itas_P, InsertIntoReplicatedTableFromSelectReplicated) {
@@ -1882,27 +1856,8 @@ TEST_P(Itas_P, InsertIntoReplicatedTableFromSelectReplicated) {
                ") WITH (partitions='REPLICATED')");
 }
 
-TEST_P(Itas_P, InsertIntoReplicatedTableFromSelectSharded) {
-  itasTestBody(columnDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas_P, InsertIntoShardedTableFromSelectSharded) {
-  itasTestBody(columnDescriptors,
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas_P, InsertIntoShardedTableFromSelectReplicated) {
-  itasTestBody(columnDescriptors,
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
-               ") WITH (partitions='REPLICATED')");
-}
-
 TEST_P(Itas_P, OmitNotNullableColumn) {
-  std::vector<std::string> partitioning_schemes = {
-      ")", ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')"};
+  std::vector<std::string> partitioning_schemes = {")"};
   for (auto target_partitioning : partitioning_schemes) {
     create_partial_itas_tables(target_partitioning);
     std::string itas_omitting_nullable_column =
@@ -1918,22 +1873,8 @@ TEST_P(Itas_P, OmitNotNullableColumn) {
   }
 }
 
-TEST_F(Itas, OmitShardingColumn) {
-  create_partial_itas_tables(
-      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-  std::string itas_omitting_nullable_column =
-      "INSERT INTO ITAS_TARGET(id, not_nullable_col, text_array) "
-      "SELECT id, not_nullable_col, text_array FROM ITAS_SOURCE";
-  std::string itas_omitting_sharding_column =
-      "INSERT INTO ITAS_TARGET(not_nullable_col, nullable_col, text_array) "
-      "SELECT not_nullable_col, nullable_col, text_array FROM ITAS_SOURCE";
-  EXPECT_NO_THROW(sql(itas_omitting_nullable_column));
-  EXPECT_NO_THROW(sql(itas_omitting_sharding_column));
-}
-
 TEST_F(Itas, OmitDictionaryEncodedArrayColumn) {
-  std::vector<std::string> partitioning_schemes = {
-      ")", ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')"};
+  std::vector<std::string> partitioning_schemes = {")"};
   for (auto target_partitioning : partitioning_schemes) {
     create_partial_itas_tables(target_partitioning);
     std::string itas_omitting_nullable_column =
@@ -2091,12 +2032,6 @@ TEST_F(Export, ExportFromSelectFragments) {
 
 TEST_F(Export, ExportFromSelectReplicated) {
   exportTestBody(") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
-}
-
-TEST_F(Export, ExportFromSelectSharded) {
-  exportTestBody(
-      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, "
-      "partitions='SHARDED')");
 }
 
 TEST_P(Update, InvalidTextArrayAssignment) {
@@ -2578,46 +2513,13 @@ TEST_P(Itas_P, PartialInsertIntoTableFromSelectReplicated) {
       partialDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
 }
 
-TEST_P(Itas_P, PartialInsertIntoTableFromSelectSharded) {
-  partial_itas_test_body(
-      partialDescriptors,
-      ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')",
-      ")");
-}
-
 TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelect) {
   partial_itas_test_body(partialDescriptors, ")", ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas_P, PartialInsertIntoShardedTableFromSelect) {
-  partial_itas_test_body(
-      partialDescriptors,
-      ")",
-      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
 TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelectReplicated) {
   partial_itas_test_body(partialDescriptors,
                          ") WITH (partitions='REPLICATED')",
-                         ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelectSharded) {
-  itasTestBody(partialDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas_P, PartialInsertIntoShardedTableFromSelectSharded) {
-  partial_itas_test_body(
-      partialDescriptors,
-      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
-      ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas_P, PartialInsertIntoShardedTableFromSelectReplicated) {
-  partial_itas_test_body(partialDescriptors,
-                         ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
                          ") WITH (partitions='REPLICATED')");
 }
 

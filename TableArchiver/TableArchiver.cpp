@@ -382,11 +382,6 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
     // dst doesn't, by simply discarding src $deleted column data.
     throw std::runtime_error("Incompatible table VACCUM option");
   }
-  if (src_td.nShards != td->nShards) {
-    // TODO: allow different shard numbers if they have a "GCD",
-    // by splitting/merging src data files before drop into dst.
-    throw std::runtime_error("Unmatched number of table shards");
-  }
   // - sanity check column-level compatibility (based on column names)
   const auto dst_columns =
       cat_->getAllColumnMetadataForTable(td->tableId, false, false, false);

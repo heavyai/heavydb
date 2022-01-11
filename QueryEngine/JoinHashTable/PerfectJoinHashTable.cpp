@@ -87,62 +87,6 @@ size_t get_hash_entry_count(const ExpressionRange& col_range, const bool is_bw_e
 
 }  // namespace
 
-namespace {
-
-bool shard_count_less_or_equal_device_count(const int inner_table_id,
-                                            const Executor* executor) {
-  const auto inner_table_info = executor->getTableInfo(inner_table_id);
-  std::unordered_set<int> device_holding_fragments;
-  auto cuda_mgr = executor->getDataMgr()->getCudaMgr();
-  const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 1;
-  for (const auto& fragment : inner_table_info.fragments) {
-    if (fragment.shard != -1) {
-      const auto it_ok = device_holding_fragments.emplace(fragment.shard % device_count);
-      if (!it_ok.second) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-}  // namespace
-
-size_t get_shard_count(
-    std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
-    const Executor* executor) {
-  const auto inner_col = equi_pair.first;
-  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(equi_pair.second);
-  if (!outer_col || inner_col->get_table_id() < 0 || outer_col->get_table_id() < 0) {
-    return 0;
-  }
-  if (outer_col->get_rte_idx()) {
-    return 0;
-  }
-  if (inner_col->get_type_info() != outer_col->get_type_info()) {
-    return 0;
-  }
-  const auto catalog = executor->getCatalog();
-  const auto inner_td = catalog->getMetadataForTable(inner_col->get_table_id());
-  CHECK(inner_td);
-  const auto outer_td = catalog->getMetadataForTable(outer_col->get_table_id());
-  CHECK(outer_td);
-  if (inner_td->shardedColumnId == 0 || outer_td->shardedColumnId == 0 ||
-      inner_td->nShards != outer_td->nShards) {
-    return 0;
-  }
-  if (!shard_count_less_or_equal_device_count(inner_td->tableId, executor)) {
-    return 0;
-  }
-  // The two columns involved must be the ones on which the tables have been sharded on.
-  return (inner_td->shardedColumnId == inner_col->get_column_id() &&
-          outer_td->shardedColumnId == outer_col->get_column_id()) ||
-                 (outer_td->shardedColumnId == inner_col->get_column_id() &&
-                  inner_td->shardedColumnId == inner_col->get_column_id())
-             ? inner_td->nShards
-             : 0;
-}
-
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -320,20 +264,6 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
   return *inner_str_dict_proxy != *outer_str_dict_proxy;
 }
 
-std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const int device_id,
-    const int device_count) {
-  std::vector<Fragmenter_Namespace::FragmentInfo> shards_for_device;
-  for (const auto& fragment : fragments) {
-    CHECK_GE(fragment.shard, 0);
-    if (fragment.shard % device_count == device_id) {
-      shards_for_device.push_back(fragment);
-    }
-  }
-  return shards_for_device;
-}
-
 void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
@@ -341,10 +271,7 @@ void PerfectJoinHashTable::reify() {
   const auto cols = get_cols(
       qual_bin_oper_.get(), executor_->getSchemaProvider(), executor_->temporary_tables_);
   const auto inner_col = cols.first;
-  HashJoin::checkHashJoinReplicationConstraint(
-      inner_col->get_table_id(),
-      get_shard_count(qual_bin_oper_.get(), executor_),
-      executor_);
+  HashJoin::checkHashJoinReplicationConstraint(inner_col->get_table_id(), executor_);
   const auto& query_info = getInnerQueryInfo(inner_col).info;
   if (query_info.fragments.empty()) {
     return;
@@ -354,7 +281,6 @@ void PerfectJoinHashTable::reify() {
     throw TooManyHashEntries();
   }
   std::vector<std::future<void>> init_threads;
-  const int shard_count = shardCount();
 
   inner_outer_pairs_.push_back(cols);
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
@@ -370,10 +296,7 @@ void PerfectJoinHashTable::reify() {
       }
     }
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments =
-          shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-              : query_info.fragments;
+      const auto fragments = query_info.fragments;
       const auto columns_for_device =
           fetchColumnsForDevice(fragments,
                                 device_id,
@@ -427,10 +350,7 @@ void PerfectJoinHashTable::reify() {
     }
     CHECK_EQ(columns_per_device.size(), size_t(device_count_));
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments =
-          shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-              : query_info.fragments;
+      const auto fragments = query_info.fragments;
       const auto chunk_key = genChunkKey(
           fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
       init_threads.push_back(std::async(std::launch::async,
@@ -784,7 +704,6 @@ llvm::Value* PerfectJoinHashTable::codegenHashTableLoad(const size_t table_idx) 
 std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
     llvm::Value* hash_ptr,
     const Analyzer::Expr* key_col,
-    const int shard_count,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CodeGenerator code_generator(executor_);
@@ -799,16 +718,6 @@ std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
       executor_->cgen_state_->castToTypeIn(key_lvs.front(), 64),
       executor_->cgen_state_->llInt(col_range_.getIntMin()),
       executor_->cgen_state_->llInt(col_range_.getIntMax())};
-  if (shard_count) {
-    const auto expected_hash_entry_count =
-        get_hash_entry_count(col_range_, isBitwiseEq());
-    const auto entry_count_per_shard =
-        (expected_hash_entry_count + shard_count - 1) / shard_count;
-    hash_join_idx_args.push_back(
-        executor_->cgen_state_->llInt<uint32_t>(entry_count_per_shard));
-    hash_join_idx_args.push_back(executor_->cgen_state_->llInt<uint32_t>(shard_count));
-    hash_join_idx_args.push_back(executor_->cgen_state_->llInt<uint32_t>(device_count_));
-  }
   auto key_col_logical_ti = get_logical_type_info(key_col->get_type_info());
   if (!key_col_logical_ti.get_notnull() || isBitwiseEq()) {
     hash_join_idx_args.push_back(executor_->cgen_state_->llInt(
@@ -844,7 +753,6 @@ HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOp
   CHECK(val_col);
   auto pos_ptr = codegenHashTableLoad(index);
   CHECK(pos_ptr);
-  const int shard_count = shardCount();
   const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(key_col);
   const auto val_col_var = dynamic_cast<const Analyzer::ColumnVar*>(val_col);
   if (key_col_var && val_col_var &&
@@ -860,13 +768,12 @@ HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOp
         "rewriting table order in "
         "FROM clause.");
   }
-  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
+  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, co);
   const int64_t sub_buff_size = getComponentBufferSize();
   const auto& key_col_ti = key_col->get_type_info();
 
   auto bucketize = (key_col_ti.get_type() == kDATE);
   return HashJoin::codegenMatchingSet(hash_join_idx_args,
-                                      shard_count,
                                       !key_col_ti.get_notnull(),
                                       isBitwiseEq(),
                                       sub_buff_size,
@@ -1006,8 +913,7 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
   CHECK_EQ(size_t(1), key_lvs.size());
   auto hash_ptr = codegenHashTableLoad(index);
   CHECK(hash_ptr);
-  const int shard_count = shardCount();
-  const auto hash_join_idx_args = getHashJoinArgs(hash_ptr, key_col, shard_count, co);
+  const auto hash_join_idx_args = getHashJoinArgs(hash_ptr, key_col, co);
 
   const auto& key_col_ti = key_col->get_type_info();
   std::string fname((key_col_ti.get_type() == kDATE) ? "bucketized_hash_join_idx"s
@@ -1015,9 +921,6 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
 
   if (isBitwiseEq()) {
     fname += "_bitwise";
-  }
-  if (shard_count) {
-    fname += "_sharded";
   }
 
   if (!isBitwiseEq() && !key_col_ti.get_notnull()) {
@@ -1061,9 +964,7 @@ size_t get_entries_per_device(const size_t total_entries,
 }
 
 size_t PerfectJoinHashTable::shardCount() const {
-  return memory_level_ == Data_Namespace::GPU_LEVEL
-             ? get_shard_count(qual_bin_oper_.get(), executor_)
-             : 0;
+  return 0;
 }
 
 bool PerfectJoinHashTable::isBitwiseEq() const {

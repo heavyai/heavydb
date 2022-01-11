@@ -108,8 +108,7 @@ Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int tabl
   CHECK(cat);
   const auto td = cat->getMetadataForTable(table_id);
   CHECK(td);
-  const auto shard_tables = cat->getPhysicalTablesDescriptors(td);
-  auto table_info = build_table_info(shard_tables);
+  auto table_info = build_table_info({td});
   auto it_ok = cache_.emplace(table_id, copy_table_info(table_info));
   CHECK(it_ok.second);
   return copy_table_info(table_info);

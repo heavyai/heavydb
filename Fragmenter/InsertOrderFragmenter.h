@@ -60,7 +60,6 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       Data_Namespace::DataMgr* dataMgr,
       Catalog_Namespace::Catalog* catalog,
       const int physicalTableId,
-      const int shard,
       const size_t maxFragmentRows = DEFAULT_FRAGMENT_ROWS,
       const size_t maxChunkSize = DEFAULT_MAX_CHUNK_SIZE,
       const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/,
@@ -193,7 +192,6 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   Data_Namespace::DataMgr* dataMgr_;
   Catalog_Namespace::Catalog* catalog_;
   const int physicalTableId_;
-  const int shard_;
   size_t maxFragmentRows_;
   size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to
                        BufferMgr in createChunk() */

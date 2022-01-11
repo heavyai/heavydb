@@ -66,23 +66,18 @@ static int nrow;
 
 void reset() {
   clear();
-  // preformat shard key phrases
-  std::string phrase_shard_key = nshard > 1 ? ", SHARD KEY (i)" : "";
-  std::string phrase_shard_count =
-      nshard > 1 ? ", SHARD_COUNT = " + std::to_string(nshard) : "";
   // create table s which has a encoded text column to be referenced by table t
-  EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE s(i int, j int, s text" +
-                                    phrase_shard_key + ") WITH (FRAGMENT_SIZE=2" +
-                                    phrase_shard_count + ");"));
+  EXPECT_NO_THROW(
+      run_ddl_statement("CREATE TABLE s(i int, j int, s text) WITH (FRAGMENT_SIZE=2);"));
   // create table t which has 3 encoded text columns:
   //	 column s: to be domestically referenced by column t.t
   //   column t: domestically references column t.s
   //   column f: foreignly references column s.s
-  EXPECT_NO_THROW(run_ddl_statement(
-      "CREATE TABLE t(i int, j int, s text, d text, f text" + phrase_shard_key +
-      ", SHARED DICTIONARY (d) REFERENCES t(s)"    // domestic ref
-      + ", SHARED DICTIONARY (f) REFERENCES s(s)"  // foreign ref
-      + ") WITH (FRAGMENT_SIZE=2" + phrase_shard_count + ");"));
+  EXPECT_NO_THROW(
+      run_ddl_statement("CREATE TABLE t(i int, j int, s text, d text, f text"
+                        ", SHARED DICTIONARY (d) REFERENCES t(s)"  // domestic ref
+                        ", SHARED DICTIONARY (f) REFERENCES s(s)"  // foreign ref
+                        ") WITH (FRAGMENT_SIZE=2);"));
   // insert nrow rows to tables s and t
   TestHelpers::ValuesGenerator gen_s("s");
   TestHelpers::ValuesGenerator gen_t("t");
@@ -99,12 +94,8 @@ void reset() {
 }  // namespace
 
 #define NROWS 20
-template <int NSHARDS, int NR = NROWS>
 class DumpRestoreTest : public ::testing::Test {
-  void SetUp() override {
-    nshard = NSHARDS;
-    nrow = NR;
-  }
+  void SetUp() override { nrow = NROWS; }
 
   void TearDown() override { clear(); }
 };
@@ -192,51 +183,37 @@ void dump_restore(const bool migrate, const bool alter, const bool rollback) {
   }
 }
 
-using DumpRestoreTest_Unsharded = DumpRestoreTest<1>;
-using DumpRestoreTest_Sharded = DumpRestoreTest<2>;
-
-#define BODY_F(test_class, test_name) test_class##_##test_name##_body()
-#define TEST_F1(test_class, test_name, sharded_or_not) \
-  TEST_F(test_class##_##sharded_or_not, test_name) { BODY_F(test_class, test_name); }
-#define TEST_UNSHARDED_AND_SHARDED(test_class, test_name) \
-  TEST_F1(test_class, test_name, Unsharded)               \
-  TEST_F1(test_class, test_name, Sharded)
-
-void BODY_F(DumpRestoreTest, DumpRestore) {
+TEST_F(DumpRestoreTest, DumpRestore) {
   dump_restore(false, false, false);
 }
-void BODY_F(DumpRestoreTest, DumpRestore_Rollback) {
+
+TEST_F(DumpRestoreTest, DumpRestore_Rollback) {
   dump_restore(false, false, true);
 }
-void BODY_F(DumpRestoreTest, DumpRestore_Altered) {
+
+TEST_F(DumpRestoreTest, DumpRestore_Altered) {
   dump_restore(false, true, false);
 }
-void BODY_F(DumpRestoreTest, DumpRestore_Altered_Rollback) {
+
+TEST_F(DumpRestoreTest, DumpRestore_Altered_Rollback) {
   dump_restore(false, true, true);
 }
-void BODY_F(DumpRestoreTest, DumpMigrate) {
+
+TEST_F(DumpRestoreTest, DumpMigrate) {
   dump_restore(true, false, false);
 }
-void BODY_F(DumpRestoreTest, DumpMigrate_Rollback) {
+
+TEST_F(DumpRestoreTest, DumpMigrate_Rollback) {
   dump_restore(true, false, true);
 }
-void BODY_F(DumpRestoreTest, DumpMigrate_Altered) {
+
+TEST_F(DumpRestoreTest, DumpMigrate_Altered) {
   dump_restore(true, true, false);
 }
-void BODY_F(DumpRestoreTest, DumpMigrate_Altered_Rollback) {
+
+TEST_F(DumpRestoreTest, DumpMigrate_Altered_Rollback) {
   dump_restore(true, true, true);
 }
-
-// restore table tests
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpRestore)
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpRestore_Rollback)
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpRestore_Altered)
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpRestore_Altered_Rollback)
-// migrate table tests
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate)
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Rollback)
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Altered)
-TEST_UNSHARDED_AND_SHARDED(DumpRestoreTest, DumpMigrate_Altered_Rollback)
 
 class DumpAndRestoreTest : public ::testing::Test {
  protected:

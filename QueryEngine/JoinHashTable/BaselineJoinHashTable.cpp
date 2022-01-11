@@ -140,19 +140,6 @@ BaselineJoinHashTable::BaselineJoinHashTable(
   hash_tables_for_device_.resize(std::max(device_count_, 1));
 }
 
-size_t BaselineJoinHashTable::getShardCountForCondition(
-    const Analyzer::BinOper* condition,
-    const Executor* executor,
-    const std::vector<InnerOuter>& inner_outer_pairs) {
-  for (const auto& inner_outer_pair : inner_outer_pairs) {
-    const auto pair_shard_count = get_shard_count(inner_outer_pair, executor);
-    if (pair_shard_count) {
-      return pair_shard_count;
-    }
-  }
-  return 0;
-}
-
 std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type,
                                             const int device_id,
                                             bool raw) const {
@@ -237,11 +224,8 @@ void BaselineJoinHashTable::reify(const HashType preferred_layout) {
   const auto composite_key_info =
       HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
 
-  HashJoin::checkHashJoinReplicationConstraint(
-      getInnerTableId(inner_outer_pairs_),
-      BaselineJoinHashTable::getShardCountForCondition(
-          condition_.get(), executor_, inner_outer_pairs_),
-      executor_);
+  HashJoin::checkHashJoinReplicationConstraint(getInnerTableId(inner_outer_pairs_),
+                                               executor_);
 
   if (condition_->is_overlaps_oper()) {
     CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
@@ -295,10 +279,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
       get_entries_per_device(total_entries, shard_count, device_count_, memory_level_);
 
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+    const auto fragments = query_info.fragments;
     const auto columns_for_device =
         fetchColumnsForDevice(fragments,
                               device_id,
@@ -339,10 +320,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   }
   std::vector<std::future<void>> init_threads;
   for (int device_id = 0; device_id < device_count_; ++device_id) {
-    const auto fragments =
-        shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-            : query_info.fragments;
+    const auto fragments = query_info.fragments;
     init_threads.push_back(std::async(std::launch::async,
                                       &BaselineJoinHashTable::reifyForDevice,
                                       this,
@@ -537,11 +515,7 @@ void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_d
 }
 
 size_t BaselineJoinHashTable::shardCount() const {
-  if (memory_level_ != Data_Namespace::GPU_LEVEL) {
-    return 0;
-  }
-  return BaselineJoinHashTable::getShardCountForCondition(
-      condition_.get(), executor_, inner_outer_pairs_);
+  return 0;
 }
 
 size_t BaselineJoinHashTable::getKeyComponentWidth() const {
@@ -802,7 +776,6 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
       LL_BUILDER.CreateAdd(one_to_many_ptr, LL_INT(composite_key_dict_size));
   return HashJoin::codegenMatchingSet(
       {one_to_many_ptr, key, LL_INT(int64_t(0)), LL_INT(hash_table->getEntryCount() - 1)},
-      false,
       false,
       false,
       getComponentBufferSize(),

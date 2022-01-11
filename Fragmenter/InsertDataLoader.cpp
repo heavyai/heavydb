@@ -18,7 +18,6 @@
 #include <numeric>
 #include <vector>
 
-#include "../Shared/shard_key.h"
 #include "Geospatial/Types.h"
 #include "InsertDataLoader.h"
 #include "TargetValueConvertersFactories.h"
@@ -30,36 +29,6 @@ struct ShardDataOwner {
   std::vector<std::vector<std::string>> stringData;
   std::vector<std::vector<ArrayDatum>> arrayData;
 };
-
-template <typename SRC>
-std::vector<std::vector<size_t>> computeRowIndicesOfShards(size_t shard_count,
-                                                           size_t leaf_count,
-                                                           size_t row_count,
-                                                           SRC* src,
-                                                           bool duplicated_key_value) {
-  const auto n_shard_tables = shard_count * leaf_count;
-  std::vector<std::vector<size_t>> row_indices_of_shards(n_shard_tables);
-  if (!duplicated_key_value) {
-    for (size_t row = 0; row < row_count; row++) {
-      // expecting unsigned data
-      // thus, no need for double remainder
-      auto shard_id = (std::is_unsigned<SRC>::value)
-                          ? src[row] % n_shard_tables
-                          : SHARD_FOR_KEY(src[row], n_shard_tables);
-      row_indices_of_shards[shard_id].push_back(row);
-    }
-  } else {
-    auto shard_id = (std::is_unsigned<SRC>::value)
-                        ? src[0] % n_shard_tables
-                        : SHARD_FOR_KEY(src[0], n_shard_tables);
-    row_indices_of_shards[shard_id].reserve(row_count);
-    for (size_t row = 0; row < row_count; row++) {
-      row_indices_of_shards[shard_id].push_back(row);
-    }
-  }
-
-  return row_indices_of_shards;
-}
 
 template <typename T>
 size_t indexOf(std::vector<T>& vec, T val) {
@@ -114,55 +83,6 @@ size_t sizeOfRawColumn(const Catalog_Namespace::Catalog& cat,
       throw std::runtime_error("not supported column type: " + cd->columnName + " (" +
                                cd->columnType.get_type_name() + ")");
   }
-}
-
-std::vector<std::vector<size_t>> computeRowIndicesOfShards(
-    const Catalog_Namespace::Catalog& cat,
-    size_t leafCount,
-    InsertData& insert_data) {
-  const auto* td = cat.getMetadataForTable(insert_data.tableId);
-  const auto* shard_cd = cat.getShardColumnMetadataForTable(td);
-  auto shardDataBlockIndex = indexOf(insert_data.columnIds, shard_cd->columnId);
-  DataBlockPtr& shardDataBlock = insert_data.data[shardDataBlockIndex];
-  auto rowCount = insert_data.numRows;
-  auto shardCount = td->nShards;
-
-  CHECK(!isStringVectorData(shard_cd));
-  CHECK(!isDatumVectorData(shard_cd));
-
-  CHECK(insert_data.is_default.size() == insert_data.columnIds.size());
-  bool is_default = insert_data.is_default[shardDataBlockIndex];
-  switch (sizeOfRawColumn(cat, shard_cd)) {
-    case 1:
-      return computeRowIndicesOfShards(
-          shardCount,
-          leafCount,
-          rowCount,
-          reinterpret_cast<uint8_t*>(shardDataBlock.numbersPtr),
-          is_default);
-    case 2:
-      return computeRowIndicesOfShards(
-          shardCount,
-          leafCount,
-          rowCount,
-          reinterpret_cast<uint16_t*>(shardDataBlock.numbersPtr),
-          is_default);
-    case 4:
-      return computeRowIndicesOfShards(
-          shardCount,
-          leafCount,
-          rowCount,
-          reinterpret_cast<uint32_t*>(shardDataBlock.numbersPtr),
-          is_default);
-    case 8:
-      return computeRowIndicesOfShards(
-          shardCount,
-          leafCount,
-          rowCount,
-          reinterpret_cast<uint64_t*>(shardDataBlock.numbersPtr),
-          is_default);
-  }
-  throw std::runtime_error("Unexpected data block element size");
 }
 
 template <typename T>
@@ -247,11 +167,11 @@ InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
                            int shardTableIndex,
                            const std::vector<size_t>& rowIndices) {
   const auto* td = cat.getMetadataForTable(insert_data.tableId);
-  const auto* ptd = cat.getPhysicalTablesDescriptors(td)[shardTableIndex];
+  CHECK_EQ(shardTableIndex, 0);
 
   InsertData shardData;
   shardData.databaseId = insert_data.databaseId;
-  shardData.tableId = ptd->tableId;
+  shardData.tableId = td->tableId;
   shardData.numRows = rowIndices.size();
 
   std::vector<const ColumnDescriptor*> pCols;
@@ -264,7 +184,7 @@ InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
     }
 
     auto physicalColumns =
-        cat.getAllColumnMetadataForTable(ptd->tableId, true, true, true);
+        cat.getAllColumnMetadataForTable(td->tableId, true, true, true);
     for (const auto& cd : physicalColumns) {
       pCols.push_back(cd);
     }
@@ -313,42 +233,7 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
   const auto* td = cat.getMetadataForTable(insert_data.tableId);
 
   CHECK(td);
-  if (td->nShards == 0) {
-    connector_.insertDataToLeaf(session_info, current_leaf_index_, insert_data);
-  } else {
-    // we have a sharded target table, start spreading to physical tables
-    auto rowIndicesOfShards =
-        computeRowIndicesOfShards(cat, connector_.leafCount(), insert_data);
-
-    auto insertShardData =
-        [this, &session_info, &insert_data, &cat, &td, &rowIndicesOfShards](
-            size_t shardId) {
-          const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
-          auto stardTableIdx = shardId % td->nShards;
-          auto shardLeafIdx = shardId / td->nShards;
-
-          const auto& rowIndicesOfShard = rowIndicesOfShards[shardId];
-          ShardDataOwner shardDataOwner;
-
-          InsertData shardData = copyDataOfShard(
-              cat, shardDataOwner, insert_data, stardTableIdx, rowIndicesOfShard);
-          connector_.insertDataToLeaf(session_info, shardLeafIdx, shardData);
-        };
-
-    std::vector<std::future<void>> worker_threads;
-    for (size_t shardId = 0; shardId < rowIndicesOfShards.size(); shardId++) {
-      if (rowIndicesOfShards[shardId].size() > 0) {
-        worker_threads.push_back(
-            std::async(std::launch::async, insertShardData, shardId));
-      }
-    }
-    for (auto& child : worker_threads) {
-      child.wait();
-    }
-    for (auto& child : worker_threads) {
-      child.get();
-    }
-  }
+  connector_.insertDataToLeaf(session_info, current_leaf_index_, insert_data);
 
   moveToNextLeaf();
 }

@@ -100,14 +100,11 @@ void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
                          const TableDescriptor* td,
                          FUNC f,
                          Args&&... args) {
-  const auto shards = catalog.getPhysicalTablesDescriptors(td);
-  for (const auto shard : shards) {
-    auto* fragmenter = shard->fragmenter.get();
-    CHECK(fragmenter);
-    const auto table_info = fragmenter->getFragmentsForQuery();
-    for (const auto& fragment : table_info.fragments) {
-      f(fragment, std::forward<Args>(args)...);
-    }
+  auto* fragmenter = td->fragmenter.get();
+  CHECK(fragmenter);
+  const auto table_info = fragmenter->getFragmentsForQuery();
+  for (const auto& fragment : table_info.fragments) {
+    f(fragment, std::forward<Args>(args)...);
   }
 }
 
@@ -269,21 +266,14 @@ class MetadataUpdate : public DBHandlerTestFixture,
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     auto is_sharded = GetParam();
+    CHECK(!is_sharded);
     int shard_count{1};
-    if (is_sharded) {
-      shard_count = 4;
-    }
-    std::string phrase_shard_key = (is_sharded ? ", SHARD KEY (skey)" : "");
-    std::string phrase_shard_count =
-        (is_sharded ? ", SHARD_COUNT = " + std::to_string(shard_count) : "");
     EXPECT_NO_THROW(sql("DROP TABLE IF EXISTS " + g_table_name + ";"));
     EXPECT_NO_THROW(sql("CREATE TABLE " + g_table_name +
                         " (x INT, y INT NOT NULL, z INT "
                         "ENCODING FIXED(8), a DOUBLE, b FLOAT, d DATE, dd DATE "
-                        "ENCODING FIXED(16), c TEXT ENCODING DICT(32), skey int" +
-                        phrase_shard_key +
-                        ") WITH (FRAGMENT_SIZE=5, max_rollback_epochs = 25" +
-                        phrase_shard_count + ");"));
+                        "ENCODING FIXED(16), c TEXT ENCODING DICT(32), skey int"
+                        ") WITH (FRAGMENT_SIZE=5, max_rollback_epochs = 25);"));
 
     TestHelpers::ValuesGenerator gen(g_table_name);
     for (int sh = 0; sh < shard_count; ++sh) {
@@ -451,15 +441,11 @@ TEST_P(MetadataUpdate, EncodedStringNull) {
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   TestHelpers::ValuesGenerator gen(g_table_name);
-  for (int sh = 0; sh < std::max(1, td->nShards); ++sh) {
-    sql(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'abc'", sh));
-  }
+  sql(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'abc'", 0));
   vacuum_and_recompute_metadata(td, cat);
   run_op_per_fragment(cat, td, check_fragment_metadata(8, 0, 1, false));
 
-  for (int sh = 0; sh < std::max(1, td->nShards); ++sh) {
-    sql(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "null", sh));
-  }
+  sql(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "null", 0));
   vacuum_and_recompute_metadata(td, cat);
   run_op_per_fragment(cat, td, check_fragment_metadata(8, 0, 1, true));
 }
@@ -524,7 +510,7 @@ TEST_P(MetadataUpdate, AlterAfterEmptied) {
 
 INSTANTIATE_TEST_SUITE_P(ShardedAndNonShardedTable,
                          MetadataUpdate,
-                         testing::Values(true, false),
+                         testing::Values(false),
                          [](const auto& param_info) {
                            return (param_info.param ? "ShardedTable" : "NonShardedTable");
                          });
@@ -743,79 +729,6 @@ TEST_F(OptimizeTableVacuumTest, InsertAndCompactTableData) {
   sqlAndCompareResult("select * from test_table;", {{i(3)}});
   sql("insert into test_table values(5);");
   sqlAndCompareResult("select * from test_table;", {{i(3)}, {i(5)}});
-}
-
-TEST_F(OptimizeTableVacuumTest, UpdateAndCompactShardedTableData) {
-  // Each page write creates a new file
-  File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
-  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
-
-  sql("create table test_table (i int, f float, shard key(i)) with (shard_count = 4, "
-      "max_rollback_epochs = 25);");
-  insertRange(1, 4, 2);
-  // 12 chunk page writes and 12 metadata page writes. Each shard with
-  // 3 metadata/data page writes for columns "i", "f", and "$deleted".
-  assertFileAndFreePageCount(12, 0, 12, 0);
-
-  // 2 additional pages/files for the "i" chunk per shard
-  sql("update test_table set f = f + 10;");
-  assertFileAndFreePageCount(16, 0, 16, 0);
-
-  // 2 additional pages/files for the "i" chunk per shard
-  sql("update test_table set f = f + 10;");
-  assertFileAndFreePageCount(20, 0, 20, 0);
-
-  // Rolls off/frees oldest 2 "f" chunk/metadata pages per shard
-  sql("alter table test_table set max_rollback_epochs = 0;");
-  assertFileAndFreePageCount(20, 8, 20, 8);
-
-  // Compaction deletes the 16 free pages from above.
-  sql("optimize table test_table with (vacuum = 'true');");
-  assertFileAndFreePageCount(12, 0, 12, 0);
-
-  // Verify that subsequent queries work as expected
-  sqlAndCompareResult("select * from test_table order by i;",
-                      {{i(1), 21.0f}, {i(2), 22.0f}, {i(3), 23.0f}, {i(4), 24.0f}});
-  sql("update test_table set f = f - 5;");
-  sqlAndCompareResult("select * from test_table order by i;",
-                      {{i(1), 16.0f}, {i(2), 17.0f}, {i(3), 18.0f}, {i(4), 19.0f}});
-}
-
-TEST_F(OptimizeTableVacuumTest, InsertAndCompactShardedTableData) {
-  // Each page write creates a new file
-  File_Namespace::FileMgr::setNumPagesPerMetadataFile(1);
-  File_Namespace::FileMgr::setNumPagesPerDataFile(1);
-
-  sql("create table test_table (i int, shard key(i)) with (fragment_size = 2, "
-      "shard_count = 4, max_rollback_epochs = 25);");
-  insertRange(1, 12, 1);
-  // 4 chunk page writes per shard. 2 for the "i" column and "$deleted"
-  // column each. 6 metadata page writes per shard for each insert.
-  assertFileAndFreePageCount(24, 0, 16, 0);
-
-  // 1 chunk page write per shard and 1 metadata page write per shard
-  // for the updated "$deleted" chunk.
-  sql("delete from test_table where i <= 8;");
-  assertFileAndFreePageCount(28, 0, 20, 0);
-
-  // Rolls off/frees oldest "$deleted" chunk page per shard and 3
-  // metadata pages per shard (2 from initial insert and 1 from
-  // "$deleted" chunk update).
-  sql("alter table test_table set max_rollback_epochs = 0;");
-  assertFileAndFreePageCount(28, 12, 20, 4);
-
-  // Optimize frees up pages for the deleted 2 chunks per shard
-  // (8 total). Compaction deletes the 16 free pages from above
-  // in addition to the 8 freed pages.
-  sql("optimize table test_table with (vacuum = 'true');");
-  assertFileAndFreePageCount(16, 0, 8, 0);
-
-  // Verify that subsequent queries work as expected
-  sqlAndCompareResult("select * from test_table order by i;",
-                      {{i(9)}, {i(10)}, {i(11)}, {i(12)}});
-  sql("insert into test_table values(15);");
-  sqlAndCompareResult("select * from test_table order by i;",
-                      {{i(9)}, {i(10)}, {i(11)}, {i(12)}, {i(15)}});
 }
 
 TEST_F(OptimizeTableVacuumTest, MultiplePagesPerFile) {
@@ -1254,28 +1167,8 @@ class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
     EXPECT_EQ(has_nulls, chunk_metadata->chunkStats.has_nulls);
   }
 
-  void assertShardChunkContentAndMetadata(int32_t shard_index,
-                                          int32_t fragment_id,
-                                          const std::vector<int32_t>& values) {
-    assertChunkContentAndMetadata(
-        fragment_id, values, false, getShardTableName(shard_index));
-  }
-
-  void assertShardTextChunkContent(int32_t shard_index,
-                                   int32_t fragment_id,
-                                   const std::vector<std::string>& values) {
-    assertTextChunkContentAndMetadata(
-        fragment_id, values, false, getShardTableName(shard_index));
-  }
-
   void assertFragmentRowCount(size_t row_count) {
     auto td = getCatalog().getMetadataForTable("test_table");
-    ASSERT_TRUE(td->fragmenter != nullptr);
-    ASSERT_EQ(row_count, td->fragmenter->getNumRows());
-  }
-
-  void assertShardFragmentRowCount(int32_t shard_index, size_t row_count) {
-    auto td = getCatalog().getMetadataForTable(getShardTableName(shard_index));
     ASSERT_TRUE(td->fragmenter != nullptr);
     ASSERT_EQ(row_count, td->fragmenter->getNumRows());
   }
@@ -1447,17 +1340,6 @@ class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
     }
     return {min, max};
   }
-
-  std::string getShardTableName(int32_t shard_index) {
-    auto& catalog = getCatalog();
-    auto td = catalog.getMetadataForTable("test_table");
-    CHECK_GT(td->nShards, 0);
-    CHECK_LT(shard_index, td->nShards);
-
-    auto shards = catalog.getPhysicalTablesDescriptors(td);
-    CHECK_EQ(static_cast<size_t>(td->nShards), shards.size());
-    return shards[shard_index]->tableName;
-  }
 };
 
 TEST_F(OpportunisticVacuumingTest, DeletedFragment) {
@@ -1531,30 +1413,6 @@ TEST_F(OpportunisticVacuumingTest,
   assertFragmentRowCount(10);
   sqlAndCompareResult("select * from test_table;",
                       {{i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}});
-}
-
-TEST_F(OpportunisticVacuumingTest, DeleteOnShardedTable) {
-  sql("create table test_table (i int, shard key(i)) with (fragment_size = 2, "
-      "shard_count = 2, max_rollback_epochs = 25);");
-  OptimizeTableVacuumTest::insertRange(1, 6);
-
-  assertShardChunkContentAndMetadata(0, 0, {2, 4});
-  assertShardChunkContentAndMetadata(0, 1, {6});
-
-  assertShardChunkContentAndMetadata(1, 0, {1, 3});
-  assertShardChunkContentAndMetadata(1, 1, {5});
-
-  sql("delete from test_table where i <= 4;");
-
-  assertShardChunkContentAndMetadata(0, 0, {});
-  assertShardChunkContentAndMetadata(0, 1, {6});
-  assertShardFragmentRowCount(0, 1);
-
-  assertShardChunkContentAndMetadata(1, 0, {});
-  assertShardChunkContentAndMetadata(1, 1, {5});
-  assertShardFragmentRowCount(1, 1);
-
-  sqlAndCompareResult("select * from test_table;", {{i(6)}, {i(5)}});
 }
 
 TEST_F(OpportunisticVacuumingTest, VarLenColumnUpdateAndEntireFragmentUpdated) {
@@ -1665,50 +1523,6 @@ TEST_F(OpportunisticVacuumingTest,
                        {i(2), "test_val"},
                        {i(9), "test_val"},
                        {i(10), "test_val"}});
-}
-
-TEST_F(OpportunisticVacuumingTest, VarlenColumnUpdateOnShardedTable) {
-  sql("create table test_table (i int, t text encoding none, shard key(i)) with "
-      "(fragment_size = 2, shard_count = 2, max_rollback_epochs = 25);");
-  insertRange(1, 6, "abc");
-
-  assertShardChunkContentAndMetadata(0, 0, {2, 4});
-  assertShardChunkContentAndMetadata(0, 1, {6});
-  assertShardTextChunkContent(0, 0, {"abc2", "abc4"});
-  assertShardTextChunkContent(0, 1, {"abc6"});
-
-  assertShardChunkContentAndMetadata(1, 0, {1, 3});
-  assertShardChunkContentAndMetadata(1, 1, {5});
-  assertShardTextChunkContent(1, 0, {"abc1", "abc3"});
-  assertShardTextChunkContent(1, 1, {"abc5"});
-
-  sql("update test_table set t = 'test_val' where i <= 4;");
-
-  // When a variable length column is updated, the entire row is marked as deleted and a
-  // new row with updated values is appended to the end of the table.
-  assertShardChunkContentAndMetadata(0, 0, {});
-  assertShardChunkContentAndMetadata(0, 1, {6, 2});
-  assertShardChunkContentAndMetadata(0, 2, {4});
-  assertShardTextChunkContent(0, 0, {});
-  assertShardTextChunkContent(0, 1, {"abc6", "test_val"});
-  assertShardTextChunkContent(0, 2, {"test_val"});
-  assertShardFragmentRowCount(0, 3);
-
-  assertShardChunkContentAndMetadata(1, 0, {});
-  assertShardChunkContentAndMetadata(1, 1, {5, 1});
-  assertShardChunkContentAndMetadata(1, 2, {3});
-  assertShardTextChunkContent(1, 0, {});
-  assertShardTextChunkContent(1, 1, {"abc5", "test_val"});
-  assertShardTextChunkContent(1, 2, {"test_val"});
-  assertShardFragmentRowCount(1, 3);
-
-  sqlAndCompareResult("select * from test_table;",
-                      {{i(6), "abc6"},
-                       {i(2), "test_val"},
-                       {i(4), "test_val"},
-                       {i(5), "abc5"},
-                       {i(1), "test_val"},
-                       {i(3), "test_val"}});
 }
 
 TEST_F(OpportunisticVacuumingTest, DifferentDataTypesMetadataUpdate) {

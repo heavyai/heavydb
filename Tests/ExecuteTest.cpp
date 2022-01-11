@@ -78,18 +78,10 @@ using QR = QueryRunner::QueryRunner;
 namespace {
 
 bool g_hoist_literals{true};
-size_t g_shard_count{0};
 bool g_use_row_iterator{true};
 size_t g_num_leafs{1};
 bool g_keep_test_data{false};
 bool g_use_temporary_tables{false};
-
-size_t choose_shard_count() {
-  auto session = QR::get()->getSession();
-  const auto cuda_mgr = session->getCatalog().getDataMgr().getCudaMgr();
-  const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
-  return g_num_leafs * (device_count > 1 ? device_count : 1);
-}
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
@@ -475,12 +467,6 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     return;                                                       \
   }
 
-#define SKIP_IF_SHARDED()                                       \
-  if (g_shard_count) {                                          \
-    LOG(ERROR) << "Tests not valid when using sharded tables."; \
-    return;                                                     \
-  }
-
 bool validate_statement_syntax(const std::string& statement) {
   auto stmt = QR::get()->createDDLStatement(statement);
   return (stmt.get() != nullptr);
@@ -542,70 +528,30 @@ TEST(Errors, InvalidQueries) {
 TEST(Create, StorageOptions) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    const auto shard_count = choose_shard_count();
     static const std::map<std::pair<std::string, bool>,
                           std::pair<std::string, std::vector<std::string>>>
-        params{
-            {{"fragment_size"s, true}, {"", {"-1", "0"}}},
-            {{"fragment_size"s, false},
-             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
-            {{"max_rows"s, true}, {"", {"-1", "0"}}},
-            {{"max_rows"s, false},
-             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
-            {{"page_size"s, true}, {"", {"-1", "0"}}},
-            {{"page_size"s, false},
-             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
-            {{"max_chunk_size"s, true}, {"", {"-1", "0"}}},
-            {{"max_chunk_size"s, false},
-             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
-            {{"partitions"s, true}, {"", {"'No'", "'null'", "'-1'"}}},
-            {{"partitions"s, false}, {"", {"'SHARDED'", "'REPLICATED'"}}},
-            {{""s, true}, {", SHARD KEY(id)", {"2"}}},
-            {{"shard_count"s, true}, {"", {std::to_string(shard_count)}}},
-            {{"shard_count"s, false}, {", SHARD KEY(id)", {std::to_string(shard_count)}}},
-            {{"vacuum"s, true}, {"", {"'-1'", "'0'", "'null'"}}},
-            {{"vacuum"s, false}, {"", {"'IMMEDIATE'", "'delayed'"}}},
-            {{"sort_column"s, true}, {"", {"'arsenal'", "'barca'", "'city'"}}},
-            {{"sort_column"s, false}, {"", {"'id'", "'val'"}}}};
+        params{{{"fragment_size"s, true}, {"", {"-1", "0"}}},
+               {{"fragment_size"s, false},
+                {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+               {{"max_rows"s, true}, {"", {"-1", "0"}}},
+               {{"max_rows"s, false},
+                {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+               {{"page_size"s, true}, {"", {"-1", "0"}}},
+               {{"page_size"s, false},
+                {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+               {{"max_chunk_size"s, true}, {"", {"-1", "0"}}},
+               {{"max_chunk_size"s, false},
+                {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+               {{"partitions"s, true}, {"", {"'No'", "'null'", "'-1'"}}},
+               {{"partitions"s, false}, {"", {"'SHARDED'", "'REPLICATED'"}}},
+               {{"vacuum"s, true}, {"", {"'-1'", "'0'", "'null'"}}},
+               {{"vacuum"s, false}, {"", {"'IMMEDIATE'", "'delayed'"}}},
+               {{"sort_column"s, true}, {"", {"'arsenal'", "'barca'", "'city'"}}},
+               {{"sort_column"s, false}, {"", {"'id'", "'val'"}}}};
 
     for (auto& elem : params) {
       validate_storage_options(elem.first, elem.second);
     }
-  }
-}
-
-TEST(Insert, ShardedTableWithGeo) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    run_ddl_statement("DROP TABLE IF EXISTS table_with_geo_and_shard_key;");
-    EXPECT_NO_THROW(
-        run_ddl_statement("CREATE TABLE table_with_geo_and_shard_key (x Int, poly "
-                          "POLYGON, b SMALLINT, SHARD KEY(b)) WITH (shard_count = 4);"));
-
-    EXPECT_NO_THROW(
-        run_multiple_agg("INSERT INTO table_with_geo_and_shard_key VALUES (1, "
-                         "'POLYGON((0 0, 1 1, 2 2, 3 3))', 0);",
-                         dt));
-    EXPECT_NO_THROW(run_multiple_agg(
-        "INSERT INTO table_with_geo_and_shard_key (x, poly, b) VALUES (1, "
-        "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);",
-        dt));
-    EXPECT_NO_THROW(run_multiple_agg(
-        "INSERT INTO table_with_geo_and_shard_key (b, poly, x) VALUES (2, "
-        "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);",
-        dt));
-    EXPECT_NO_THROW(run_multiple_agg(
-        "INSERT INTO table_with_geo_and_shard_key (x, b, poly) VALUES (1, 3, "
-        "'POLYGON((0 0, 1 1, 2 2, 3 3))');",
-        dt));
-    EXPECT_NO_THROW(
-        run_multiple_agg("INSERT INTO table_with_geo_and_shard_key (poly, x, b) VALUES ("
-                         "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1, 4);",
-                         dt));
-
-    ASSERT_EQ(5,
-              v<int64_t>(run_simple_agg(
-                  "SELECT count(*) FROM table_with_geo_and_shard_key;", dt)));
   }
 }
 
@@ -844,18 +790,6 @@ TEST(Insert, OmitColumnsWithNulls) {
         "b boolean, dt text encoding dict, t text encoding none, ls linestring, "
         "ia int[]);"));
     simple_insert_test_omitting_columns("not_sharded_simple_inserts_table", dt);
-  }
-}
-
-TEST(Insert, OmitColumnsWithNullsSharded) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    run_ddl_statement("DROP TABLE IF EXISTS sharded_simple_inserts_table;");
-    EXPECT_NO_THROW(run_ddl_statement(
-        "create table sharded_simple_inserts_table(id integer, i integer not null, "
-        "b boolean, dt text encoding dict, t text encoding none, ls linestring, "
-        "ia int[], SHARD KEY (id)) WITH (shard_count = 2);"));
-    simple_insert_test_omitting_columns("sharded_simple_inserts_table", dt);
   }
 }
 
@@ -7727,15 +7661,13 @@ void import_join_test(bool with_delete_support) {
   g_sqlite_comparator.query(drop_old_test);
   std::string columns_definition{
       "x int not null, y int, str text encoding dict, dup_str text encoding dict"};
-  const auto create_test =
-      build_create_table_statement(columns_definition,
-                                   "join_test",
-                                   {g_shard_count ? "dup_str" : "", g_shard_count},
-                                   {},
-                                   2,
-                                   g_use_temporary_tables,
-                                   with_delete_support,
-                                   g_aggregator);
+  const auto create_test = build_create_table_statement(columns_definition,
+                                                        "join_test",
+                                                        {},
+                                                        2,
+                                                        g_use_temporary_tables,
+                                                        with_delete_support,
+                                                        g_aggregator);
   run_ddl_statement(create_test);
   g_sqlite_comparator.query(
       "CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
@@ -7847,7 +7779,6 @@ void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
       "date, t time, tz timestamp, dn decimal(5)"};
   const auto create_test = build_create_table_statement(columns_definition,
                                                         table_name,
-                                                        {"", g_shard_count},
                                                         {},
                                                         id == 2 ? 2 : 20,
                                                         g_use_temporary_tables,
@@ -8871,7 +8802,6 @@ TEST(Update, DecimalOverflow) {
     const auto create = build_create_table_statement(
         "d DECIMAL(" + std::to_string(precision) + ", " + std::to_string(scale) + ")",
         "decimal_overflow_test",
-        {"", 0},
         {},
         10,
         g_use_temporary_tables,
@@ -9323,7 +9253,6 @@ TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
   run_ddl_statement("DROP TABLE IF EXISTS mf_ti_arr");
   run_ddl_statement("DROP TABLE IF EXISTS mf_si_arr");
   run_ddl_statement("DROP TABLE IF EXISTS mf_t_arr");
-  run_ddl_statement("DROP TABLE IF EXISTS sharded_mf_i_arr");
 
   run_ddl_statement(
       "CREATE TABLE mf_f_arr (c2 FLOAT[2], c3 FLOAT[3], c4 FLOAT[4]) WITH (fragment_size "
@@ -9345,17 +9274,11 @@ TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
       "(fragment_size = 2);");
   run_ddl_statement(
       "CREATE TABLE mf_t_arr (t2 TEXT[2] ENCODING DICT(32)) with (fragment_size = 2);");
-  run_ddl_statement(
-      "CREATE TABLE sharded_mf_i_arr (x INT, c2 INT[2], c3 INT[3], c4 INT[4], SHARD KEY "
-      "(x)) WITH (shard_count = 2, fragment_size = 1);");
 
   auto insert_values = [&](const std::string& table_name) {
     for (int i = 1; i < 6; i++) {
       std::ostringstream oss;
       oss << "INSERT INTO " << table_name << " VALUES (";
-      if (table_name.compare("sharded_mf_i_arr") == 0) {
-        oss << i << ", ";
-      }
       oss << "{" << i << ", " << i + 1 << "}, ";
       oss << "{" << i << ", " << i + 1 << ", " << i + 2 << "}, ";
       oss << "{" << i << ", " << i + 1 << ", " << i + 2 << ", " << i + 3 << "});";
@@ -9369,7 +9292,6 @@ TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
   insert_values("mf_bi_arr");
   insert_values("mf_ti_arr");
   insert_values("mf_si_arr");
-  insert_values("sharded_mf_i_arr");
 
   run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'1', '22'});", ExecutorDeviceType::CPU);
   run_multiple_agg("INSERT INTO mf_t_arr VALUES ({'2', '33'});", ExecutorDeviceType::CPU);
@@ -9409,7 +9331,6 @@ TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
     test_query("mf_bi_arr", dt);
     test_query("mf_ti_arr", dt);
     test_query("mf_si_arr", dt);
-    test_query("sharded_mf_i_arr", dt);
     ASSERT_EQ(
         int64_t(5),
         v<int64_t>(run_simple_agg(
@@ -9423,16 +9344,7 @@ TEST(Select, Joins_Fixed_Size_Array_Multi_Frag) {
   run_ddl_statement("DROP TABLE IF EXISTS mf_bi_arr");
   run_ddl_statement("DROP TABLE IF EXISTS mf_ti_arr");
   run_ddl_statement("DROP TABLE IF EXISTS mf_si_arr");
-  run_ddl_statement("DROP TABLE IF EXISTS sharded_mf_i_arr");
   run_ddl_statement("DROP TABLE IF EXISTS mf_t_arr");
-}
-
-TEST(Select, Joins_ShardedEmptyTable) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    SKIP_ON_AGGREGATOR(
-        c("select count(*) from emptytab a, emptytab2 b where a.x = b.x;", dt));
-  }
 }
 
 TEST(Select, Joins_EmptyTable) {
@@ -9701,236 +9613,6 @@ void validate_shard_agg(const ResultSet& rows,
 }
 
 }  // namespace
-
-TEST(Select, AggregationOnAsymmetricShards) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    static const std::vector<std::pair<std::string, std::string>> params = {
-        {"shard1", "2"},
-        {"shard2", "4"},
-        {"shard3", "6"},
-        {"shard4", "10"},
-        {"shard5", "14"},
-        {"shard6", "16"}};
-
-    static const std::vector<std::pair<int64_t, int64_t>> expected = {
-        {9, 1}, {8, 1}, {7, 4}, {6, 1}, {5, 1}, {4, 2}, {3, 5}, {2, 4}, {1, 3}};
-
-    for (auto& p : params) {
-      run_ddl_statement("DROP TABLE IF EXISTS " + p.first + ";");
-      run_ddl_statement(
-          "CREATE TABLE " + p.first +
-          " (id INTEGER, num INTEGER, ts TIMESTAMP(0), SHARD KEY (id)) WITH "
-          "(SHARD_COUNT=" +
-          p.second + ");");
-      run_ddl_statement("COPY " + p.first +
-                        " FROM '../../Tests/Import/datafiles/shard_asymmetric_test.csv' "
-                        "WITH (header='true');");
-
-      const auto rows = run_multiple_agg("select id, count(*) from " + p.first +
-                                             " group by id order by id desc limit 11;",
-                                         dt);
-      validate_shard_agg(*rows, expected);
-    }
-  }
-}
-
-TEST(Select, Joins_InnerJoin_Sharded) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    // Sharded Inner Joins
-    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.i = st2.i ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.i = st2.i ORDER BY st1.i;", dt);
-    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > -1 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE st2.i > 0 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.s, st2.i, st2.s FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE "
-      "st2.i > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.i "
-      "= st2.i WHERE st2.i > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE "
-      "st2.i > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.i = st2.i WHERE "
-      "st2.i > 0 and st1.s <> 'foo' "
-      "and st2.s <> 'foo' ORDER BY st1.i;",
-      dt);
-
-    SKIP_ON_AGGREGATOR({
-      // Non-sharded inner join (single frag)
-      c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 "
-        "ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 "
-        "ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j "
-        "WHERE "
-        "st2.j > 0 ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON "
-        "st1.j "
-        "= st2.j WHERE st2.i > 0 ORDER "
-        "BY st1.i;",
-        dt);
-      c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON "
-        "st1.j "
-        "= st2.j WHERE st2.j > 0 ORDER "
-        "BY st1.i;",
-        dt);
-      c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j "
-        "WHERE "
-        "st2.j > 0 ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j "
-        "WHERE "
-        "st2.j > 0 and st1.s <> 'foo' "
-        "and st2.s <> 'foo' ORDER BY st1.i;",
-        dt);
-    });
-
-    SKIP_ON_AGGREGATOR({
-      // Non-sharded inner join (multi frag)
-      c("SELECT st1.i, st3.i FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > -1 "
-        "ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > 0 "
-        "ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st1.s, st3.j, st3.s FROM st1 INNER JOIN st3 ON st1.j = st3.j "
-        "WHERE "
-        "st3.j > 0 ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON "
-        "st1.j "
-        "= st3.j WHERE st3.i > 0 ORDER "
-        "BY st1.i;",
-        dt);
-      c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON "
-        "st1.j "
-        "= st3.j WHERE st3.j > 0 ORDER "
-        "BY st1.i;",
-        dt);
-      c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j "
-        "WHERE "
-        "st3.j > 0 ORDER BY st1.i;",
-        dt);
-      c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j "
-        "WHERE "
-        "st3.j > 0 and st1.s <> 'foo' "
-        "and st3.s <> 'foo' ORDER BY st1.i;",
-        dt);
-    });
-  }
-}
-
-TEST(Select, Joins_Sharded_Empty_Last_Appended_Storage) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    size_t num_shards = choose_shard_count();
-
-    // we make a query filtering out all tuples in the last shard
-    // and force project it
-
-    // id of the last shard
-    int id_filtered_shard = num_shards - 1;
-
-    std::stringstream query;
-    // i % num_shards != id_filtered_shard is a filter condition
-    // to remove all tuples in the last shard
-    query << "SELECT t1.i, t1.j, t1.s FROM (SELECT i, j, s FROM st4 WHERE i % "
-          << num_shards << " != " << id_filtered_shard
-          << ") t1, st4 t2 WHERE t1.i = t2.i ORDER BY t1.i, t1.j, t1.s;";
-    SKIP_ON_AGGREGATOR(c(query.str(), dt));
-  }
-}
-
-TEST(Select, Joins_Negative_ShardKey) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    size_t num_shards = 1 * g_num_leafs;
-    if (dt == ExecutorDeviceType::GPU && choose_shard_count() > 0) {
-      num_shards = choose_shard_count();
-    }
-
-    std::string drop_ddl_1 = "DROP TABLE IF EXISTS shard_test_negative_1;";
-    run_ddl_statement(drop_ddl_1);
-    std::string drop_ddl_2 = "DROP TABLE IF EXISTS shard_test_negative_2;";
-    run_ddl_statement(drop_ddl_2);
-
-    std::string table_ddl_1 =
-        "CREATE TABLE shard_test_negative_1 (i INTEGER, j TEXT ENCODING DICT(32), SHARD "
-        "KEY(i)) WITH (shard_count = " +
-        std::to_string(num_shards) + ");";
-    run_ddl_statement(table_ddl_1);
-
-    std::string table_ddl_2 =
-        "CREATE TABLE shard_test_negative_2 (i INTEGER, j TEXT ENCODING DICT(32), SHARD "
-        "KEY(i)) WITH (shard_count = " +
-        std::to_string(num_shards) + ");";
-    run_ddl_statement(table_ddl_2);
-
-    for (int i = 0; i < 5; i++) {
-      for (const auto table : {"shard_test_negative_1", "shard_test_negative_2"}) {
-        const std::string insert_query{"INSERT INTO " + std::string(table) + " VALUES(" +
-                                       std::to_string(i - 1) + ", " + std::to_string(i) +
-                                       ");"};
-        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      }
-    }
-
-    ASSERT_EQ(static_cast<int64_t>(-1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT i FROM shard_test_negative_1 WHERE i < 0;", dt)));
-    ASSERT_EQ(static_cast<int64_t>(-1),
-              v<int64_t>(run_simple_agg(
-                  "SELECT i FROM shard_test_negative_2 WHERE i < 0;", dt)));
-
-    ASSERT_EQ(static_cast<int64_t>(-1),
-              v<int64_t>(run_simple_agg("SELECT t1.i FROM shard_test_negative_1 t1 INNER "
-                                        "JOIN shard_test_negative_2 t2 "
-                                        "ON t1.i = t2.i WHERE t2.i < 0;",
-                                        dt)));
-    ASSERT_EQ(static_cast<int64_t>(-1),
-              v<int64_t>(run_simple_agg("SELECT t2.i FROM shard_test_negative_1 t1 INNER "
-                                        "JOIN shard_test_negative_2 t2 "
-                                        "ON t1.i = t2.i WHERE t1.i < 0;",
-                                        dt)));
-
-    ASSERT_EQ("0",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT t1.j FROM shard_test_negative_1 t1 INNER JOIN "
-                  "shard_test_negative_2 t2 ON t1.i = t2.i WHERE t2.i < 0;",
-                  dt))));
-    ASSERT_EQ(static_cast<int64_t>(3),
-              v<int64_t>(run_simple_agg("SELECT t1.i FROM shard_test_negative_1 t1 INNER "
-                                        "JOIN shard_test_negative_2 t2 "
-                                        "ON t1.i = t2.i WHERE t2.i > 2;",
-                                        dt)));
-    ASSERT_EQ("4",
-              boost::get<std::string>(v<NullableString>(run_simple_agg(
-                  "SELECT t1.j FROM shard_test_negative_1 t1 INNER JOIN "
-                  "shard_test_negative_2 t2 ON t1.i = t2.i WHERE t2.i > 2;",
-                  dt))));
-  }
-}
 
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -11204,14 +10886,8 @@ class JoinTest : public ::testing::Test {
 
       const std::string columns_definition{
           "x int not null, y int, str text encoding dict"};
-      const auto table_create = build_create_table_statement(columns_definition,
-                                                             table_name,
-                                                             {"", 0},
-                                                             {},
-                                                             50,
-                                                             g_use_temporary_tables,
-                                                             true,
-                                                             false);
+      const auto table_create = build_create_table_statement(
+          columns_definition, table_name, {}, 50, g_use_temporary_tables, true, false);
       run_ddl_statement(table_create);
 
       TestHelpers::ValuesGenerator gen(table_name);
@@ -16090,7 +15766,6 @@ TEST(Update, BasicVarlenUpdate) {
     run_ddl_statement("drop table if exists smartswitch;");
     run_ddl_statement(build_create_table_statement("x int, y int[], z text encoding none",
                                                    "smartswitch",
-                                                   {"", 0},
                                                    {},
                                                    10,
                                                    g_use_temporary_tables,
@@ -16215,7 +15890,6 @@ TEST(Update, SimpleFilter) {
     run_ddl_statement("DROP TABLE IF EXISTS simple_filter;");
     run_ddl_statement(build_create_table_statement("x int, y double, z decimal(18,2)",
                                                    "simple_filter",
-                                                   {"", 0},
                                                    {},
                                                    2,
                                                    g_use_temporary_tables,
@@ -16265,7 +15939,7 @@ TEST(Update, Text) {
 
     run_ddl_statement("drop table if exists text_default;");
     run_ddl_statement(build_create_table_statement(
-        "t text", "text_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "t text", "text_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into text_default values ('do');", dt);
     run_multiple_agg("insert into text_default values ('you');", dt);
@@ -16293,7 +15967,7 @@ TEST(Update, TextINVariant) {
 
     run_ddl_statement("drop table if exists text_default;");
     run_ddl_statement(build_create_table_statement(
-        "t text", "text_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "t text", "text_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into text_default values ('do');", dt);
     run_multiple_agg("insert into text_default values ('you');", dt);
@@ -16317,7 +15991,6 @@ TEST(Update, TextEncodingDict16) {
     run_ddl_statement("drop table if exists textenc16_default;");
     run_ddl_statement(build_create_table_statement("t text encoding dict(16)",
                                                    "textenc16_default",
-                                                   {"", 0},
                                                    {},
                                                    2,
                                                    g_use_temporary_tables,
@@ -16354,7 +16027,6 @@ TEST(Update, TextEncodingDict8) {
     run_ddl_statement("drop table if exists textenc8_default;");
     run_ddl_statement(build_create_table_statement("t text encoding dict(8)",
                                                    "textenc8_default",
-                                                   {"", 0},
                                                    {},
                                                    2,
                                                    g_use_temporary_tables,
@@ -16391,7 +16063,6 @@ TEST(Update, MultiColumnInteger) {
     run_ddl_statement("drop table if exists multicoltable;");
     run_ddl_statement(build_create_table_statement("x integer, y integer, z integer",
                                                    "multicoltable",
-                                                   {"", 0},
                                                    {},
                                                    2,
                                                    g_use_temporary_tables,
@@ -16429,14 +16100,8 @@ TEST(Update, TimestampUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists timestamp_default;");
-    run_ddl_statement(build_create_table_statement("t timestamp",
-                                                   "timestamp_default",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "t timestamp", "timestamp_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into timestamp_default values ('12/01/2013:000001');", dt);
     run_multiple_agg("insert into timestamp_default values ('12/01/2013:000002');", dt);
@@ -16464,7 +16129,7 @@ TEST(Update, TimeUpdate) {
 
     run_ddl_statement("drop table if exists time_default;");
     run_ddl_statement(build_create_table_statement(
-        "t time", "time_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "t time", "time_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into time_default values('00:00:01');", dt);
     run_multiple_agg("insert into time_default values('00:01:00');", dt);
@@ -16497,7 +16162,7 @@ TEST(Update, DateUpdate) {
 
     run_ddl_statement("drop table if exists date_default;");
     run_ddl_statement(build_create_table_statement(
-        "d date", "date_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "d date", "date_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into date_default values('01/01/1901');", dt);
     run_multiple_agg("insert into date_default values('02/02/1902');", dt);
@@ -16521,14 +16186,8 @@ TEST(Update, DateUpdateNull) {
     SKIP_NO_GPU();
 
     run_ddl_statement("Drop table IF EXISTS date_update;");
-    run_ddl_statement(build_create_table_statement("a text, b date",
-                                                   "date_update",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "a text, b date", "date_update", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into date_update values('1', '2018-01-04');", dt);
     run_multiple_agg("insert into date_update values('2', '2018-01-05');", dt);
@@ -16553,7 +16212,7 @@ TEST(Update, FloatUpdate) {
 
     run_ddl_statement("drop table if exists float_default;");
     run_ddl_statement(build_create_table_statement(
-        "f float", "float_default", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "f float", "float_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into float_default values(-0.01);", dt);
     run_multiple_agg("insert into float_default values( 0.02);", dt);
@@ -16577,14 +16236,8 @@ TEST(Update, IntegerUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists integer_default;");
-    run_ddl_statement(build_create_table_statement("i integer",
-                                                   "integer_default",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "i integer", "integer_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into integer_default values(-1);", dt);
     run_multiple_agg("insert into integer_default values( 2);", dt);
@@ -16607,14 +16260,8 @@ TEST(Update, DoubleUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists double_default;");
-    run_ddl_statement(build_create_table_statement("d double",
-                                                   "double_default",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "d double", "double_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into double_default values(-0.01);", dt);
     run_multiple_agg("insert into double_default values( 0.02);", dt);
@@ -16639,14 +16286,8 @@ TEST(Update, SmallIntUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists smallint_default;");
-    run_ddl_statement(build_create_table_statement("s smallint",
-                                                   "smallint_default",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "s smallint", "smallint_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into smallint_default values(-1);", dt);
     run_multiple_agg("insert into smallint_default values( 2);", dt);
@@ -16668,14 +16309,8 @@ TEST(Update, BigIntUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists bigint_default;");
-    run_ddl_statement(build_create_table_statement("b bigint",
-                                                   "bigint_default",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "b bigint", "bigint_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into bigint_default values(-1);", dt);
     run_multiple_agg("insert into bigint_default values( 2);", dt);
@@ -16695,14 +16330,8 @@ TEST(Update, DecimalUpdate) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists decimal_default;");
-    run_ddl_statement(build_create_table_statement("d decimal(5)",
-                                                   "decimal_default",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "d decimal(5)", "decimal_default", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into decimal_default values(-1);", dt);
     run_multiple_agg("insert into decimal_default values( 2);", dt);
@@ -16724,14 +16353,8 @@ TEST(Delete, WithoutVacuumAttribute) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists no_deletes;");
-    run_ddl_statement(build_create_table_statement("x integer",
-                                                   "no_deletes",
-                                                   {"", 0},
-                                                   {},
-                                                   10,
-                                                   g_use_temporary_tables,
-                                                   false,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "x integer", "no_deletes", {}, 10, g_use_temporary_tables, false, false));
     ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS no_deletes;"); };
     run_multiple_agg("insert into no_deletes values (10);", dt);
     run_multiple_agg("insert into no_deletes values (11);", dt);
@@ -16747,7 +16370,7 @@ TEST(Update, ImplicitCastToDate4) {
 
     run_ddl_statement("drop table if exists datetab;");
     run_ddl_statement(build_create_table_statement(
-        "d1 date", "datetab", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "d1 date", "datetab", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into datetab values ('2001-04-05');", dt);
 
@@ -16804,7 +16427,6 @@ TEST(Update, ImplicitCastToDate2) {
     run_ddl_statement("drop table if exists datetab4;");
     run_ddl_statement(build_create_table_statement("d1 date encoding fixed(16)",
                                                    "datetab4",
-                                                   {"", 0},
                                                    {},
                                                    2,
                                                    g_use_temporary_tables,
@@ -16869,7 +16491,6 @@ TEST(Update, ImplicitCastToEncodedString) {
         "s1 text encoding dict(32), s2 text encoding dict(16), s3 "
         "text encoding dict(8)",
         "textenc",
-        {"", 0},
         {},
         2,
         g_use_temporary_tables,
@@ -17084,31 +16705,31 @@ TEST(Update, ImplicitCastToNumericTypes) {
 
     run_ddl_statement("drop table if exists floattest;");
     run_ddl_statement(build_create_table_statement(
-        "f float", "floattest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "f float", "floattest", {}, 2, g_use_temporary_tables, true, false));
 
     run_ddl_statement("drop table if exists doubletest;");
     run_ddl_statement(build_create_table_statement(
-        "d double", "doubletest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "d double", "doubletest", {}, 2, g_use_temporary_tables, true, false));
 
     run_ddl_statement("drop table if exists inttest;");
     run_ddl_statement(build_create_table_statement(
-        "i integer", "inttest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "i integer", "inttest", {}, 2, g_use_temporary_tables, true, false));
 
     run_ddl_statement("drop table if exists sinttest;");
     run_ddl_statement(build_create_table_statement(
-        "i integer", "sinttest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "i integer", "sinttest", {}, 2, g_use_temporary_tables, true, false));
 
     run_ddl_statement("drop table if exists binttest;");
     run_ddl_statement(build_create_table_statement(
-        "i integer", "binttest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "i integer", "binttest", {}, 2, g_use_temporary_tables, true, false));
 
     run_ddl_statement("drop table if exists booltest;");
     run_ddl_statement(build_create_table_statement(
-        "b boolean", "booltest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "b boolean", "booltest", {}, 2, g_use_temporary_tables, true, false));
 
     run_ddl_statement("drop table if exists dectest;");
     run_ddl_statement(build_create_table_statement(
-        "d decimal(10)", "dectest", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "d decimal(10)", "dectest", {}, 2, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into floattest values ( 0.1234 );", dt);
     run_multiple_agg("insert into doubletest values ( 0.1234 );", dt);
@@ -17430,7 +17051,6 @@ TEST(Update, ImplicitCastToTime4) {
     run_ddl_statement("drop table if exists time4;");
     run_ddl_statement(build_create_table_statement("t1 time encoding fixed(32)",
                                                    "time4",
-                                                   {"", 0},
                                                    {},
                                                    10,
                                                    g_use_temporary_tables,
@@ -17480,7 +17100,7 @@ TEST(Update, ImplicitCastToTime8) {
 
     run_ddl_statement("drop table if exists timetab;");
     run_ddl_statement(build_create_table_statement(
-        "t1 time", "timetab", {"", 0}, {}, 10, g_use_temporary_tables, true, false));
+        "t1 time", "timetab", {}, 10, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into timetab values ('01:23:45');", dt);
 
@@ -17523,7 +17143,7 @@ TEST(Update, ImplicitCastToTimestamp8) {
 
     run_ddl_statement("drop table if exists tstamp;");
     run_ddl_statement(build_create_table_statement(
-        "t1 timestamp", "tstamp", {"", 0}, {}, 10, g_use_temporary_tables, true, false));
+        "t1 timestamp", "tstamp", {}, 10, g_use_temporary_tables, true, false));
 
     run_multiple_agg("insert into tstamp values ('2000-01-01 00:00:00');", dt);
 
@@ -17568,7 +17188,6 @@ TEST(Update, ImplicitCastToTimestamp4) {
     run_ddl_statement("drop table if exists tstamp4;");
     run_ddl_statement(build_create_table_statement("t1 timestamp encoding fixed(32)",
                                                    "tstamp4",
-                                                   {"", 0},
                                                    {},
                                                    10,
                                                    g_use_temporary_tables,
@@ -17614,44 +17233,6 @@ TEST(Update, ImplicitCastToTimestamp4) {
   }
 }
 
-TEST(Update, ShardedTableShardKeyTest) {
-  SKIP_WITH_TEMP_TABLES();
-
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("drop table if exists updateshardkey;");
-    run_ddl_statement(
-        "create table updateshardkey ( x integer, y integer, shard key (x) ) with "
-        "(vacuum='delayed', shard_count=4);");
-
-    run_multiple_agg("insert into updateshardkey values (1,2);", dt);
-    run_multiple_agg("insert into updateshardkey values (3,4);", dt);
-    run_multiple_agg("insert into updateshardkey values (5,6);", dt);
-    run_multiple_agg("insert into updateshardkey values (7,8);", dt);
-    run_multiple_agg("insert into updateshardkey values (9,10);", dt);
-    run_multiple_agg("insert into updateshardkey values (11,12);", dt);
-    run_multiple_agg("insert into updateshardkey values (13,14);", dt);
-    run_multiple_agg("insert into updateshardkey values (15,16);", dt);
-    run_multiple_agg("insert into updateshardkey values (17,18);", dt);
-
-    EXPECT_THROW(run_multiple_agg("update updateshardkey set x=x-1;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update updateshardkey set x=x-1,y=y-1;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update updateshardkey set x=x-1 where x > 0;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update updateshardkey set x=x-1,y=y-1 where x > 0;", dt),
-        std::runtime_error);
-
-    EXPECT_EQ(int64_t(2 + 4 + 6 + 8 + 10 + 12 + 14 + 16 + 18),
-              v<int64_t>(run_simple_agg("select sum(y) from updateshardkey;", dt)));
-
-    run_ddl_statement("drop table updateshardkey;");
-  }
-}
-
 TEST(Update, UsingDateColumns) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -17661,7 +17242,6 @@ TEST(Update, UsingDateColumns) {
         "col_dst date, col_dst_ts timestamp(0), col_dst_ts_32 timestamp encoding "
         "fixed(32)",
         "chelsea_updates",
-        {"", 0},
         {},
         2,
         g_use_temporary_tables,
@@ -17702,47 +17282,13 @@ TEST(Update, UsingDateColumns) {
   }
 }
 
-TEST(Delete, ShardedTableDeleteTest) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("DROP TABLE IF EXISTS shardkey;");
-    run_ddl_statement(build_create_table_statement("x integer, y integer",
-                                                   "shardkey",
-                                                   {"x", 4},
-                                                   {},
-                                                   20,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
-    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS shardkey;"); };
-
-    run_multiple_agg("insert into shardkey values (1,2);", dt);
-    run_multiple_agg("insert into shardkey values (3,4);", dt);
-    run_multiple_agg("insert into shardkey values (5,6);", dt);
-    run_multiple_agg("insert into shardkey values (7,8);", dt);
-    run_multiple_agg("insert into shardkey values (9,10);", dt);
-    run_multiple_agg("insert into shardkey values (11,12);", dt);
-    run_multiple_agg("insert into shardkey values (13,14);", dt);
-    run_multiple_agg("insert into shardkey values (15,16);", dt);
-    run_multiple_agg("insert into shardkey values (17,18);", dt);
-
-    run_multiple_agg("select * from shardkey;", dt);
-    run_multiple_agg("delete from shardkey where x <= 9;", dt);
-    run_multiple_agg("select sum(x) from shardkey;", dt);
-
-    ASSERT_EQ(int64_t(11 + 13 + 15 + 17),
-              v<int64_t>(run_simple_agg("select sum(x) from shardkey;", dt)));
-  }
-}
-
 TEST(Delete, ScanLimitOptimization) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
     run_ddl_statement(build_create_table_statement(
-        "i int", "test_scan_limit", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+        "i int", "test_scan_limit", {}, 2, g_use_temporary_tables, true, false));
     ScopeGuard drop_table = [] {
       run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
     };
@@ -17781,7 +17327,6 @@ TEST(Delete, IntraFragment) {
     run_ddl_statement("drop table if exists vacuum_test;");
     run_ddl_statement(build_create_table_statement("i1 integer, t1 text",
                                                    "vacuum_test",
-                                                   {"", 0},
                                                    {},
                                                    10,
                                                    g_use_temporary_tables,
@@ -18294,7 +17839,6 @@ TEST(Delete, ExtraFragment) {
     run_ddl_statement("DROP TABLE IF EXISTS vacuum_test;");
     run_ddl_statement(build_create_table_statement("i1 integer, t1 text",
                                                    "vacuum_test",
-                                                   {"", 0},
                                                    {},
                                                    10,
                                                    g_use_temporary_tables,
@@ -18319,14 +17863,8 @@ TEST(Delete, MultiDelete) {
     SKIP_NO_GPU();
 
     run_ddl_statement("DROP TABLE IF EXISTS multi_delete;");
-    run_ddl_statement(build_create_table_statement("x int, str text",
-                                                   "multi_delete",
-                                                   {"", 0},
-                                                   {},
-                                                   2,
-                                                   g_use_temporary_tables,
-                                                   true,
-                                                   false));
+    run_ddl_statement(build_create_table_statement(
+        "x int, str text", "multi_delete", {}, 2, g_use_temporary_tables, true, false));
     ScopeGuard drop_table = [] {
       run_ddl_statement("DROP TABLE IF EXISTS multi_delete;");
     };
@@ -19006,55 +18544,6 @@ TEST(Select, Sample) {
       ASSERT_EQ(int64_t(7), v<int64_t>(null_row[3]));
       ASSERT_NEAR(std::numeric_limits<double>::min(), v<double>(null_row[4]), 0.001);
     }
-  }
-}
-
-void shard_key_test_runner(const std::string& shard_key_col,
-                           const ExecutorDeviceType dt) {
-  run_ddl_statement("drop table if exists shard_key_ddl_test;");
-  run_ddl_statement(
-      "CREATE TABLE shard_key_ddl_test (x INTEGER, y TEXT ENCODING DICT(32), pt "
-      "POINT, z DOUBLE, a BIGINT NOT NULL, poly POLYGON, b SMALLINT, ts timestamp, t "
-      "time, dt date, SHARD KEY(" +
-      shard_key_col + ")) WITH (shard_count = 4)");
-
-  run_multiple_agg(
-      "INSERT INTO shard_key_ddl_test VALUES (1, 'foo', 'POINT(1 1)', 1.0, 1, "
-      "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1, '12-aug-83 06:14:23' , '05:15:43', "
-      "'11-07-1973')",
-      dt);
-  run_multiple_agg(
-      "INSERT INTO shard_key_ddl_test VALUES (2, 'bar', 'POINT(2 2)', 2.0, 2, "
-      "'POLYGON((0 0, 1 1, 20 20, 3 3))', 2,  '1-dec-93 07:23:23' , '06:15:43', "
-      "'10-07-1975')",
-      dt);
-  run_multiple_agg(
-      "INSERT INTO shard_key_ddl_test VALUES (3, 'hello', 'POINT(3 3)', 3.0, 3, "
-      "'POLYGON((0 0, 1 1, 2 2, 30 30))', 3,  '1-feb-65 05:15:27' , '13:15:43', "
-      "'9-07-1977')",
-      dt);
-}
-
-TEST(Select, ShardKeyDDL) {
-  for (auto dt : {ExecutorDeviceType::CPU}) {
-    // Table creation / single row inserts
-    EXPECT_NO_THROW(shard_key_test_runner("x", dt));
-    EXPECT_NO_THROW(shard_key_test_runner("y", dt));
-    EXPECT_NO_THROW(shard_key_test_runner("a", dt));
-    EXPECT_NO_THROW(shard_key_test_runner("b", dt));
-    EXPECT_NO_THROW(shard_key_test_runner("ts", dt));
-    EXPECT_NO_THROW(shard_key_test_runner("t", dt));
-    EXPECT_NO_THROW(shard_key_test_runner("dt", dt));
-
-    // Unsupported DDL
-    EXPECT_THROW(shard_key_test_runner("z", dt), std::runtime_error);
-    EXPECT_THROW(shard_key_test_runner("pt", dt), std::runtime_error);
-    EXPECT_THROW(shard_key_test_runner("poly", dt), std::runtime_error);
-
-    // Unsupported update
-    EXPECT_NO_THROW(shard_key_test_runner("a", dt));
-    EXPECT_THROW(run_multiple_agg("UPDATE shard_key_ddl_test SET a = 2;", dt),
-                 std::runtime_error);
   }
 }
 
@@ -19911,9 +19400,6 @@ TEST(Select, FilterNodeCoalesce) {
   // with clearCpuMemory(), which in turn means we can't properly measure what
   // chunks the query is pulling into memory
   SKIP_WITH_TEMP_TABLES();
-  // Do not run with sharded as we cannot measure the number of logical tables
-  // with getBufferPoolStats
-  SKIP_IF_SHARDED();
   // Do not run on distributed as getBufferPoolStats not implemented on distributed
   SKIP_ALL_ON_AGGREGATOR();
   // Running on GPU with new inter-mixed executon means memory is not all in one buffer
@@ -20243,14 +19729,8 @@ TEST(Select, GroupEmptyBlank) {
       g_sqlite_comparator.query(drop_old_test);
     };
     std::string columns_definition{"t1 TEXT NOT NULL, i1 INTEGER"};
-    const std::string create_test =
-        build_create_table_statement(columns_definition,
-                                     "blank_test",
-                                     {g_shard_count ? "i1" : "", g_shard_count},
-                                     {},
-                                     10,
-                                     g_use_temporary_tables,
-                                     true);
+    const std::string create_test = build_create_table_statement(
+        columns_definition, "blank_test", {}, 10, g_use_temporary_tables, true);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query("CREATE TABLE blank_test (t1 TEXT NOT NULL, i1 INTEGER);");
 
@@ -20780,8 +20260,6 @@ TEST(Select, OffsetInFragment) {
   // Skip test in sharded/distributed situations, as otherwise we have to replicate much
   // of logic of how we shard strings to compute the number rows of test table that will
   // be distributed to each shard
-  // TODO: consider creating simple integer sharded table specific for this test
-  SKIP_IF_SHARDED();
   SKIP_ALL_ON_AGGREGATOR();
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -20989,63 +20467,10 @@ TEST(Select, UpdatePinnedBuffers) {
 }
 
 namespace {
-int create_sharded_join_table(const std::string& table_name,
-                              size_t fragment_size,
-                              size_t num_rows,
-                              const TestHelpers::ShardInfo& shard_info,
-                              bool with_delete_support = true) {
-  std::string columns_definition{"i INTEGER, j INTEGER, s TEXT ENCODING DICT(32)"};
-
-  try {
-    std::string drop_ddl{"DROP TABLE IF EXISTS " + table_name + ";"};
-    run_ddl_statement(drop_ddl);
-    g_sqlite_comparator.query(drop_ddl);
-
-    const auto create_ddl = build_create_table_statement(columns_definition,
-                                                         table_name,
-                                                         shard_info,
-                                                         {},
-                                                         fragment_size,
-                                                         g_use_temporary_tables,
-                                                         with_delete_support);
-    run_ddl_statement(create_ddl);
-    g_sqlite_comparator.query("CREATE TABLE " + table_name + "(i int, j int, s text);");
-
-    const std::vector<std::string> alphabet{"a", "b", "c", "d", "e", "f", "g", "h", "i",
-                                            "j", "k", "l", "m", "n", "o", "p", "q", "r",
-                                            "s", "t", "u", "v", "w", "x", "y", "z"};
-    const auto alphabet_sz = alphabet.size();
-
-    int i = 0;
-    int j = num_rows;
-    for (size_t x = 0; x < num_rows; x++) {
-      const std::string insert_query{"INSERT INTO " + table_name + " VALUES(" +
-                                     std::to_string(i) + "," + std::to_string(j) + ",'" +
-                                     alphabet[i % alphabet_sz] + "');"};
-      LOG(INFO) << insert_query;
-
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      g_sqlite_comparator.query(insert_query);
-      i++;
-      j--;
-    }
-  } catch (const std::exception& e) {
-    LOG(ERROR) << "Failed to (re-)create tables for Inner Join sharded test: "
-               << e.what();
-    return -EEXIST;
-  }
-  return 0;
-}
-
-int create_and_populate_window_func_table(const bool multi_frag,
-                                          const size_t shard_count) {
+int create_and_populate_window_func_table(const bool multi_frag) {
   std::string create_table_suffix = " WITH (FRAGMENT_SIZE=";
   const std::string fragment_size = (multi_frag ? "2" : "32000000");
   create_table_suffix += fragment_size;
-  if (shard_count) {
-    create_table_suffix +=
-        ", SHARD_COUNT=" + std::to_string(static_cast<int32_t>(shard_count));
-  }
   create_table_suffix += ");";
 
   const std::string table_name =
@@ -21055,14 +20480,11 @@ int create_and_populate_window_func_table(const bool multi_frag,
     const std::string drop_test_table{"DROP TABLE IF EXISTS " + table_name + ";"};
     run_ddl_statement(drop_test_table);
     g_sqlite_comparator.query(drop_test_table);
-    const std::string shard_def = (shard_count ? ", SHARD KEY(y))" : ")");
     const std::string create_test_table =
         "CREATE TABLE " + table_name +
-        " (x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, "
-        "dd "
-        "DOUBLE";  //+ (shard_count ? ", SHARD KEY(y))" : ")");
-    run_ddl_statement(create_test_table + shard_def + create_table_suffix);
-    g_sqlite_comparator.query(create_test_table + ");");
+        " (x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, dd DOUBLE)";
+    run_ddl_statement(create_test_table + create_table_suffix);
+    g_sqlite_comparator.query(create_test_table + ";");
     {
       const std::string insert_query{"INSERT INTO " + table_name +
                                      " VALUES(1, 'aaa', 4, '2019-03-02', 1, 1);"};
@@ -21261,15 +20683,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "x int not null, y int, xx smallint, str text encoding dict, dt DATE, dt32 "
         "DATE "
         "ENCODING FIXED(32), dt16 DATE ENCODING FIXED(16), ts TIMESTAMP"};
-    const auto create_test_inner =
-        build_create_table_statement(columns_definition,
-                                     "test_inner",
-                                     {g_shard_count ? "str" : "", g_shard_count},
-                                     {},
-                                     2,
-                                     use_temporary_tables,
-                                     with_delete_support,
-                                     g_aggregator);
+    const auto create_test_inner = build_create_table_statement(columns_definition,
+                                                                "test_inner",
+                                                                {},
+                                                                2,
+                                                                use_temporary_tables,
+                                                                with_delete_support,
+                                                                g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
         "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text, dt "
@@ -21300,15 +20720,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
     g_sqlite_comparator.query(drop_old_bweq_test);
 
     auto column_definition = "x int"s;
-    auto create_bweq_test =
-        build_create_table_statement(column_definition,
-                                     "bweq_test",
-                                     {g_shard_count ? "x" : "", g_shard_count},
-                                     {},
-                                     2,
-                                     use_temporary_tables,
-                                     with_delete_support,
-                                     g_aggregator);
+    auto create_bweq_test = build_create_table_statement(column_definition,
+                                                         "bweq_test",
+                                                         {},
+                                                         2,
+                                                         use_temporary_tables,
+                                                         with_delete_support,
+                                                         g_aggregator);
     run_ddl_statement(create_bweq_test);
     g_sqlite_comparator.query("create table bweq_test (x int);");
   } catch (...) {
@@ -21425,15 +20843,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int"};
-    const auto create_vacuum_test_alt =
-        build_create_table_statement(columns_definition,
-                                     "vacuum_test_alt",
-                                     {g_shard_count ? "x" : "", g_shard_count},
-                                     {},
-                                     2,
-                                     use_temporary_tables,
-                                     with_delete_support,
-                                     g_aggregator);
+    const auto create_vacuum_test_alt = build_create_table_statement(columns_definition,
+                                                                     "vacuum_test_alt",
+                                                                     {},
+                                                                     2,
+                                                                     use_temporary_tables,
+                                                                     with_delete_support,
+                                                                     g_aggregator);
     run_ddl_statement(create_vacuum_test_alt);
     g_sqlite_comparator.query("CREATE TABLE vacuum_test_alt(x int not null, y int );");
 
@@ -21464,7 +20880,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     std::string columns_definition{"x int not null, y int, str text encoding dict, deleted boolean"};
 
     const auto create_test_inner_deleted =
-        build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2, use_temporary_tables, with_delete_support);
+        build_create_table_statement(columns_definition, "test_inner_deleted", {}, 2, use_temporary_tables, with_delete_support);
     run_ddl_statement(create_test_inner_deleted);
     auto& cat = QR::get()->getSession()->getCatalog();
     const auto td = cat.getMetadataForTable("test_inner_deleted");
@@ -21490,15 +20906,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner =
-        build_create_table_statement(columns_definition,
-                                     "test_inner_x",
-                                     {g_shard_count ? "x" : "", g_shard_count},
-                                     {},
-                                     2,
-                                     use_temporary_tables,
-                                     with_delete_support,
-                                     g_aggregator);
+    const auto create_test_inner = build_create_table_statement(columns_definition,
+                                                                "test_inner_x",
+                                                                {},
+                                                                2,
+                                                                use_temporary_tables,
+                                                                with_delete_support,
+                                                                g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
         "CREATE TABLE test_inner_x(x int not null, y int, str text);");
@@ -21516,15 +20930,13 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner =
-        build_create_table_statement(columns_definition,
-                                     "test_inner_y",
-                                     {g_shard_count ? "x" : "", g_shard_count},
-                                     {},
-                                     2,
-                                     use_temporary_tables,
-                                     with_delete_support,
-                                     g_aggregator);
+    const auto create_test_inner = build_create_table_statement(columns_definition,
+                                                                "test_inner_y",
+                                                                {},
+                                                                2,
+                                                                use_temporary_tables,
+                                                                with_delete_support,
+                                                                g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
         "CREATE TABLE test_inner_y(x int not null, y int, str text);");
@@ -21549,7 +20961,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     std::string columns_definition{"str text encoding dict"};
     const auto create_bar = build_create_table_statement(columns_definition,
                                                          "bar",
-                                                         {"", 0},
                                                          {},
                                                          2,
                                                          use_temporary_tables,
@@ -21615,7 +21026,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string create_test = build_create_table_statement(
         columns_definition,
         "test",
-        {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
         use_temporary_tables,
@@ -21705,7 +21115,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string create_test = build_create_table_statement(
         columns_definition,
         "test_empty",
-        {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
         use_temporary_tables,
@@ -21751,7 +21160,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string create_test = build_create_table_statement(
         columns_definition,
         "test_one_row",
-        {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
         use_temporary_tables,
@@ -21796,7 +21204,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     std::string columns_definition{"dt DATE"};
     const std::string create_test = build_create_table_statement(columns_definition,
                                                                  "test_date_time",
-                                                                 {"", 0},
                                                                  {},
                                                                  2,
                                                                  use_temporary_tables,
@@ -21824,7 +21231,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     std::string columns_definition{"i INT, b BIGINT"};
     const std::string create_test = build_create_table_statement(columns_definition,
                                                                  "test_ranges",
-                                                                 {"", 0},
                                                                  {},
                                                                  2,
                                                                  use_temporary_tables,
@@ -21862,14 +21268,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "ufd "
         "int not null, ofq bigint, ufq "
         "bigint not null"};
-    const std::string create_test =
-        build_create_table_statement(columns_definition,
-                                     "test_x",
-                                     {g_shard_count ? "x" : "", g_shard_count},
-                                     {},
-                                     2,
-                                     use_temporary_tables,
-                                     with_delete_support);
+    const std::string create_test = build_create_table_statement(
+        columns_definition, "test_x", {}, 2, use_temporary_tables, with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test_x(x int not null, y int, z smallint, t bigint, b boolean, f "
@@ -21941,7 +21341,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string create_array_test =
         build_create_table_statement(columns_definition,
                                      "array_test",
-                                     {"", 0},
                                      {},
                                      32000000,
                                      use_temporary_tables,
@@ -21971,33 +21370,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   import_array_test("array_test_inner");
-  try {
-    size_t num_shards = choose_shard_count();
-    // check if the oversubscriptions to GPU for multiple Shard is correctly
-    // functional or not.
-    const size_t single_node_shard_multiplier = 10;
-
-    TestHelpers::ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
-    size_t fragment_size = 2;
-    bool delete_support = false;
-
-    create_sharded_join_table(
-        "st1",
-        fragment_size,
-        g_aggregator ? num_shards : single_node_shard_multiplier * num_shards,
-        shard_info,
-        delete_support);
-    create_sharded_join_table(
-        "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
-    create_sharded_join_table(
-        "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
-    create_sharded_join_table(
-        "st4", fragment_size, num_shards, shard_info, delete_support);
-
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
-    return -EEXIST;
-  }
   try {
     const std::string drop_old_unnest_join_test{"DROP TABLE IF EXISTS unnest_join_test;"};
     run_ddl_statement(drop_old_unnest_join_test);
@@ -22154,18 +21526,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
-    const std::string drop_old_empty2{"DROP TABLE IF EXISTS emptytab2;"};
-    run_ddl_statement(drop_old_empty2);
-    g_sqlite_comparator.query(drop_old_empty2);
-
-    run_ddl_statement(
-        "CREATE TABLE emptytab2(x int, shard key (x)) WITH (shard_count=4);");
-    g_sqlite_comparator.query("CREATE TABLE emptytab2(x int);");
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'emptytab2'";
-    return -EEXIST;
-  }
-  try {
     const std::string drop_old_test_in_bitmap{"DROP TABLE IF EXISTS test_in_bitmap;"};
     run_ddl_statement(drop_old_test_in_bitmap);
     g_sqlite_comparator.query(drop_old_test_in_bitmap);
@@ -22226,7 +21586,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
   }
 
   for (auto is_multi_frag : {false, true}) {
-    int err = create_and_populate_window_func_table(is_multi_frag, g_shard_count);
+    int err = create_and_populate_window_func_table(is_multi_frag);
     if (err) {
       return err;
     }
@@ -22402,8 +21762,6 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_subquery_test);
   const std::string drop_empty_test{"DROP TABLE emptytab;"};
   run_ddl_statement(drop_empty_test);
-  const std::string drop_empty_test2{"DROP TABLE emptytab2;"};
-  run_ddl_statement(drop_empty_test2);
   g_sqlite_comparator.query(drop_empty_test);
   run_ddl_statement("DROP TABLE text_group_by_test;");
   const std::string drop_join_test{"DROP TABLE join_test;"};
@@ -22505,7 +21863,6 @@ int main(int argc, char** argv) {
   desc.add_options()("gtest_filter", "filters tests, use --help for details");
 
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
-  desc.add_options()("with-sharding", "Create sharded tables");
   desc.add_options()("from-table-reordering",
                      po::value<bool>(&g_from_table_reordering)
                          ->default_value(g_from_table_reordering)
@@ -22586,10 +21943,6 @@ int main(int argc, char** argv) {
   }
 
   QR::init(&disk_cache_config, BASE_PATH);
-  if (vm.count("with-sharding")) {
-    g_shard_count = choose_shard_count();
-  }
-
   if (vm.count("keep-data")) {
     g_keep_test_data = true;
   }

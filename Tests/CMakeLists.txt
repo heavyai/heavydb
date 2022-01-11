@@ -23,7 +23,6 @@ add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
 add_executable(EncoderTest EncoderTest.cpp)
 add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
 add_executable(PersistentStorageTest PersistentStorageTest.cpp)
-add_executable(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest.cpp)
 add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
 add_executable(CachingFileMgrTest CachingFileMgrTest.cpp)
 add_executable(JSONTest JSONTest.cpp)
@@ -179,7 +178,6 @@ target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES})
-target_link_libraries(ShardedTableEpochConsistencyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CachingFileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -269,7 +267,6 @@ add_test(EncoderTest EncoderTest ${TEST_ARGS})
 add_test(SQLHintTest SQLHintTest ${TEST_ARGS})
 add_test(ForeignStorageCacheTest ForeignStorageCacheTest ${TEST_ARGS})
 add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
-add_test(ShardedTableEpochConsistencyTest ShardedTableEpochConsistencyTest ${TEST_ARGS})
 add_test(DiskCacheQueryTest DiskCacheQueryTest ${TEST_ARGS})
 add_test(CachingFileMgrTest CachingFileMgrTest ${TEST_ARGS})
 add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
@@ -365,7 +362,6 @@ set(TEST_PROGRAMS
   SQLHintTest
   ForeignStorageCacheTest
   PersistentStorageTest
-  ShardedTableEpochConsistencyTest
   DataRecyclerTest
   DiskCacheQueryTest
   CachingFileMgrTest

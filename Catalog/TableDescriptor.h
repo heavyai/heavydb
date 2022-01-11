@@ -41,8 +41,7 @@ struct StorageType {
 
 #define DEFAULT_MAX_ROLLBACK_EPOCHS 3
 struct TableDescriptor {
-  int32_t tableId; /**< tableId starts at 0 for valid tables. */
-  int32_t shard;
+  int32_t tableId;       /**< tableId starts at 0 for valid tables. */
   std::string tableName; /**< tableName is the name of the table table -must be unique */
   int32_t userId;
   int32_t nColumns;
@@ -62,10 +61,7 @@ struct TableDescriptor {
   std::shared_ptr<Fragmenter_Namespace::AbstractFragmenter>
       fragmenter;  // point to fragmenter object for the table.  it's instantiated upon
                    // first use.
-  int32_t
-      nShards;  // # of shards, i.e. physical tables for this logical table (default: 0)
-  int shardedColumnId;  // Id of the column to be sharded on
-  int sortedColumnId;   // Id of the column to be sorted on
+  int sortedColumnId;  // Id of the column to be sorted on
   Data_Namespace::MemoryLevel persistenceLevel;
   bool hasDeletedCol;  // Does table has a delete col, Yes (VACUUM = DELAYED)
                        //                              No  (VACUUM = IMMEDIATE)
@@ -81,9 +77,6 @@ struct TableDescriptor {
 
   TableDescriptor()
       : tableId(-1)
-      , shard(-1)
-      , nShards(0)
-      , shardedColumnId(0)
       , sortedColumnId(0)
       , persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL)
       , hasDeletedCol(true)
@@ -98,14 +91,8 @@ struct TableDescriptor {
 
   TableInfoPtr makeInfo(int db_id = -1) const {
     CHECK(fragmenter);
-    return std::make_shared<TableInfo>(db_id,
-                                       tableId,
-                                       tableName,
-                                       isView,
-                                       nShards,
-                                       shardedColumnId,
-                                       storageType,
-                                       fragmenter->getNumFragments());
+    return std::make_shared<TableInfo>(
+        db_id, tableId, tableName, isView, storageType, fragmenter->getNumFragments());
   }
 };
 

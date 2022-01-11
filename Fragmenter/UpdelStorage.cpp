@@ -277,7 +277,7 @@ void InsertOrderFragmenter::updateColumns(
     Executor* executor) {
   updelRoll.is_varlen_update = true;
   updelRoll.catalog = catalog;
-  updelRoll.logicalTableId = catalog->getLogicalTableId(td->tableId);
+  updelRoll.logicalTableId = td->tableId;
   updelRoll.memoryLevel = memoryLevel;
 
   size_t num_entries = sourceDataProvider.getEntryCount();
@@ -641,7 +641,7 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
     const Data_Namespace::MemoryLevel memory_level,
     UpdelRoll& updel_roll) {
   updel_roll.catalog = catalog;
-  updel_roll.logicalTableId = catalog->getLogicalTableId(td->tableId);
+  updel_roll.logicalTableId = td->tableId;
   updel_roll.memoryLevel = memory_level;
 
   const size_t ncore = cpu_threads();
@@ -681,15 +681,6 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
         std::launch::async, [=, &update_stats_per_thread, &frag_offsets, &rhs_values] {
           SQLTypeInfo lhs_type = cd->columnType;
 
-          // !! not sure if this is a undocumented convention or a bug, but for a sharded
-          // table the dictionary id of a encoded string column is not specified by
-          // comp_param in physical table but somehow in logical table :) comp_param in
-          // physical table is always 0, so need to adapt accordingly...
-          auto cdl = (shard_ < 0)
-                         ? cd
-                         : catalog->getMetadataForColumn(
-                               catalog->getLogicalTableId(td->tableId), cd->columnId);
-          CHECK(cdl);
           DecimalOverflowValidator decimalOverflowValidator(lhs_type);
           NullAwareValidator<DecimalOverflowValidator> nullAwareDecimalOverflowValidator(
               lhs_type, &decimalOverflowValidator);
@@ -701,7 +692,7 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
           if (lhs_type.is_string()) {
             CHECK(kENCODING_DICT == lhs_type.get_compression());
             auto dictDesc = const_cast<DictDescriptor*>(
-                catalog->getMetadataForDict(cdl->columnType.get_comp_param()));
+                catalog->getMetadataForDict(cd->columnType.get_comp_param()));
             CHECK(dictDesc);
             stringDict = dictDesc->stringDict.get();
             CHECK(stringDict);

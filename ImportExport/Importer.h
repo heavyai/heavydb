@@ -577,12 +577,6 @@ class Loader {
       const Catalog_Namespace::SessionInfo* session_info);
 
   using OneShardBuffers = std::vector<std::unique_ptr<TypedImportBuffer>>;
-  void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
-                          std::vector<size_t>& all_shard_row_counts,
-                          const OneShardBuffers& import_buffers,
-                          const size_t row_count,
-                          const size_t shard_count,
-                          const Catalog_Namespace::SessionInfo* session_info);
 
   Catalog_Namespace::Catalog& catalog_;
   const TableDescriptor* table_desc_;
@@ -597,20 +591,6 @@ class Loader {
                    const TableDescriptor* shard_table,
                    bool checkpoint,
                    const Catalog_Namespace::SessionInfo* session_info);
-  void distributeToShardsNewColumns(
-      std::vector<OneShardBuffers>& all_shard_import_buffers,
-      std::vector<size_t>& all_shard_row_counts,
-      const OneShardBuffers& import_buffers,
-      const size_t row_count,
-      const size_t shard_count,
-      const Catalog_Namespace::SessionInfo* session_info);
-  void distributeToShardsExistingColumns(
-      std::vector<OneShardBuffers>& all_shard_import_buffers,
-      std::vector<size_t>& all_shard_row_counts,
-      const OneShardBuffers& import_buffers,
-      const size_t row_count,
-      const size_t shard_count,
-      const Catalog_Namespace::SessionInfo* session_info);
   void fillShardRow(const size_t row_index,
                     OneShardBuffers& shard_output_buffers,
                     const OneShardBuffers& import_buffers);

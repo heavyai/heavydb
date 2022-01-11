@@ -126,13 +126,7 @@ void TableOptimizer::recomputeMetadata() const {
   CHECK_GE(td_->tableId, 0);
 
   std::vector<const TableDescriptor*> table_descriptors;
-  if (td_->nShards > 0) {
-    const auto physical_tds = cat_.getPhysicalTablesDescriptors(td_);
-    table_descriptors.insert(
-        table_descriptors.begin(), physical_tds.begin(), physical_tds.end());
-  } else {
-    table_descriptors.push_back(td_);
-  }
+  table_descriptors.push_back(td_);
 
   auto& data_mgr = cat_.getDataMgr();
 
@@ -417,22 +411,17 @@ void TableOptimizer::vacuumDeletedRows() const {
   const auto table_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable({db_id, table_id});
   const auto table_epochs = cat_.getTableEpochs(db_id, table_id);
-  const auto shards = cat_.getPhysicalTablesDescriptors(td_);
   try {
-    for (const auto shard : shards) {
-      vacuumFragments(shard);
-    }
+    vacuumFragments(td_);
     cat_.checkpoint(table_id);
   } catch (...) {
     cat_.setTableEpochsLogExceptions(db_id, table_epochs);
     throw;
   }
 
-  for (auto shard : shards) {
-    cat_.removeFragmenterForTable(shard->tableId);
-    cat_.getDataMgr().getGlobalFileMgr()->compactDataFiles(cat_.getDatabaseId(),
-                                                           shard->tableId);
-  }
+  cat_.removeFragmenterForTable(td_->tableId);
+  cat_.getDataMgr().getGlobalFileMgr()->compactDataFiles(cat_.getDatabaseId(),
+                                                         td_->tableId);
 }
 
 void TableOptimizer::vacuumFragments(const TableDescriptor* td,
@@ -454,7 +443,7 @@ void TableOptimizer::vacuumFragments(const TableDescriptor* td,
         (fragment_ids.empty() || shared::contains(fragment_ids, fragment_id))) {
       UpdelRoll updel_roll;
       updel_roll.catalog = &cat_;
-      updel_roll.logicalTableId = cat_.getLogicalTableId(td->tableId);
+      updel_roll.logicalTableId = td->tableId;
       updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
       updel_roll.table_descriptor = td;
       CHECK_EQ(cd->columnId, chunk_key[CHUNK_KEY_COLUMN_IDX]);

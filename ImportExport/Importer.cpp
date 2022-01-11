@@ -71,7 +71,6 @@
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
-#include "Shared/shard_key.h"
 #include "Shared/thread_count.h"
 #include "Utils/ChunkAccessorTable.h"
 
@@ -2915,98 +2914,6 @@ void Loader::fillShardRow(const size_t row_index,
   }
 }
 
-void Loader::distributeToShardsExistingColumns(
-    std::vector<OneShardBuffers>& all_shard_import_buffers,
-    std::vector<size_t>& all_shard_row_counts,
-    const OneShardBuffers& import_buffers,
-    const size_t row_count,
-    const size_t shard_count,
-    const Catalog_Namespace::SessionInfo* session_info) {
-  int col_idx{0};
-  const ColumnDescriptor* shard_col_desc{nullptr};
-  for (const auto col_desc : column_descs_) {
-    ++col_idx;
-    if (col_idx == table_desc_->shardedColumnId) {
-      shard_col_desc = col_desc;
-      break;
-    }
-  }
-  CHECK(shard_col_desc);
-  CHECK_LE(static_cast<size_t>(table_desc_->shardedColumnId), import_buffers.size());
-  auto& shard_column_input_buffer = import_buffers[table_desc_->shardedColumnId - 1];
-  const auto& shard_col_ti = shard_col_desc->columnType;
-  CHECK(shard_col_ti.is_integer() ||
-        (shard_col_ti.is_string() && shard_col_ti.get_compression() == kENCODING_DICT) ||
-        shard_col_ti.is_time());
-  if (shard_col_ti.is_string()) {
-    const auto payloads_ptr = shard_column_input_buffer->getStringBuffer();
-    CHECK(payloads_ptr);
-    shard_column_input_buffer->addDictEncodedString(*payloads_ptr);
-  }
-
-  for (size_t i = 0; i < row_count; ++i) {
-    const size_t shard =
-        SHARD_FOR_KEY(int_value_at(*shard_column_input_buffer, i), shard_count);
-    auto& shard_output_buffers = all_shard_import_buffers[shard];
-    fillShardRow(i, shard_output_buffers, import_buffers);
-    ++all_shard_row_counts[shard];
-  }
-}
-
-void Loader::distributeToShardsNewColumns(
-    std::vector<OneShardBuffers>& all_shard_import_buffers,
-    std::vector<size_t>& all_shard_row_counts,
-    const OneShardBuffers& import_buffers,
-    const size_t row_count,
-    const size_t shard_count,
-    const Catalog_Namespace::SessionInfo* session_info) {
-  const auto shard_tds = catalog_.getPhysicalTablesDescriptors(table_desc_);
-  CHECK(shard_tds.size() == shard_count);
-
-  for (size_t shard = 0; shard < shard_count; ++shard) {
-    auto& shard_output_buffers = all_shard_import_buffers[shard];
-    if (row_count != 0) {
-      fillShardRow(0, shard_output_buffers, import_buffers);
-    }
-    // when replicating a column, row count of a shard == replicate count of the column
-    // on the shard
-    all_shard_row_counts[shard] = shard_tds[shard]->fragmenter->getNumRows();
-  }
-}
-
-void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
-                                std::vector<size_t>& all_shard_row_counts,
-                                const OneShardBuffers& import_buffers,
-                                const size_t row_count,
-                                const size_t shard_count,
-                                const Catalog_Namespace::SessionInfo* session_info) {
-  all_shard_row_counts.resize(shard_count);
-  for (size_t shard_idx = 0; shard_idx < shard_count; ++shard_idx) {
-    all_shard_import_buffers.emplace_back();
-    for (const auto& typed_import_buffer : import_buffers) {
-      all_shard_import_buffers.back().emplace_back(
-          new TypedImportBuffer(typed_import_buffer->getColumnDesc(),
-                                typed_import_buffer->getStringDictionary()));
-    }
-  }
-  CHECK_GT(table_desc_->shardedColumnId, 0);
-  if (isAddingColumns()) {
-    distributeToShardsNewColumns(all_shard_import_buffers,
-                                 all_shard_row_counts,
-                                 import_buffers,
-                                 row_count,
-                                 shard_count,
-                                 session_info);
-  } else {
-    distributeToShardsExistingColumns(all_shard_import_buffers,
-                                      all_shard_row_counts,
-                                      import_buffers,
-                                      row_count,
-                                      shard_count,
-                                      session_info);
-  }
-}
-
 bool Loader::loadImpl(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
@@ -3015,26 +2922,6 @@ bool Loader::loadImpl(
   if (load_callback_) {
     auto data_blocks = TypedImportBuffer::get_data_block_pointers(import_buffers);
     return load_callback_(import_buffers, data_blocks, row_count);
-  }
-  if (table_desc_->nShards) {
-    std::vector<OneShardBuffers> all_shard_import_buffers;
-    std::vector<size_t> all_shard_row_counts;
-    const auto shard_tables = catalog_.getPhysicalTablesDescriptors(table_desc_);
-    distributeToShards(all_shard_import_buffers,
-                       all_shard_row_counts,
-                       import_buffers,
-                       row_count,
-                       shard_tables.size(),
-                       session_info);
-    bool success = true;
-    for (size_t shard_idx = 0; shard_idx < shard_tables.size(); ++shard_idx) {
-      success = success && loadToShard(all_shard_import_buffers[shard_idx],
-                                       all_shard_row_counts[shard_idx],
-                                       shard_tables[shard_idx],
-                                       checkpoint,
-                                       session_info);
-    }
-    return success;
   }
   return loadToShard(import_buffers, row_count, table_desc_, checkpoint, session_info);
 }
@@ -3158,13 +3045,7 @@ bool Loader::loadToShard(
 }
 
 void Loader::dropColumns(const std::vector<int>& columnIds) {
-  std::vector<const TableDescriptor*> table_descs(1, table_desc_);
-  if (table_desc_->nShards) {
-    table_descs = catalog_.getPhysicalTablesDescriptors(table_desc_);
-  }
-  for (auto table_desc : table_descs) {
-    table_desc->fragmenter->dropColumns(columnIds);
-  }
+  table_desc_->fragmenter->dropColumns(columnIds);
 }
 
 void Loader::init(const bool use_catalog_locks) {

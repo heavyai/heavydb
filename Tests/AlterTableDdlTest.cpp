@@ -268,14 +268,6 @@ TEST(AlterColumnTest2, Drop_after_fail_to_add) {
   EXPECT_NO_THROW(run_ddl_statement("drop table t;"););
 }
 
-TEST(AlterColumnTest3, Add_col_to_sharded_table) {
-  EXPECT_NO_THROW(run_ddl_statement("drop table if exists x;"););
-  EXPECT_NO_THROW(run_ddl_statement(
-                      "create table x (i text,SHARD KEY (i)) WITH (SHARD_COUNT = 2);"););
-  EXPECT_NO_THROW(run_ddl_statement("alter table x add column j int;"););
-  EXPECT_NO_THROW(run_query("insert into x values('0',0);"););
-}
-
 void drop_columns(const bool rollback, const std::vector<std::string>&& dropped_columns) {
   g_test_drop_column_rollback = rollback;
   std::vector<std::string> drop_column_phrases;
@@ -365,14 +357,6 @@ TEST_F(AlterColumnTest4, Alter_inexistent_table_column) {
 TEST(AlterColumnTest5, Drop_the_only_column) {
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists x;"););
   EXPECT_NO_THROW(run_ddl_statement("create table x (i int);"););
-  EXPECT_THROW(run_ddl_statement("alter table x drop column i;"), std::runtime_error);
-}
-
-TEST(AlterColumnTest5, Drop_sharding_column) {
-  EXPECT_NO_THROW(run_ddl_statement("drop table if exists x;"););
-  EXPECT_NO_THROW(
-      run_ddl_statement(
-          "create table x (i int, j int, SHARD KEY (i)) WITH (SHARD_COUNT = 2);"););
   EXPECT_THROW(run_ddl_statement("alter table x drop column i;"), std::runtime_error);
 }
 

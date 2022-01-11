@@ -1608,23 +1608,6 @@ class OpportunisticMetadataUpdateTest : public testing::TestWithParam<SQLTypeInf
     query("insert into test_table values (5.5, 'e');");
   }
 
-  void setupShardedTable() {
-    run_ddl_statement(
-        "create table test_table (i integer, i2 integer, shard key(i)) with (shard_count "
-        "= "
-        "2, fragment_size = 2);");
-
-    query("insert into test_table values (1, 1);");
-    query("insert into test_table values (1, 2);");
-    query("insert into test_table values (1, 3);");
-    query("insert into test_table values (1, 4);");
-
-    query("insert into test_table values (2, 1);");
-    query("insert into test_table values (2, 2);");
-    query("insert into test_table values (2, 3);");
-    query("insert into test_table values (2, 4);");
-  }
-
   // Variables storing test row content for data type parameterized tests.
   // Values are stored as strings in all cases for simplicity.
   inline static const std::array<std::string, 5> int_rows_{"1", "2", "3", "4", "5"};
@@ -1790,23 +1773,6 @@ TEST_F(OpportunisticMetadataUpdateTest, MultipleTables) {
       "update test_table set i = (select count(i) from test_table_2 where test_table.i < "
       "test_table_2.i);");
   assertExpectedChunkMetadata(5U, false, 0, 4);
-}
-
-TEST_F(OpportunisticMetadataUpdateTest, ShardedTable) {
-  setupShardedTable();
-
-  query("update test_table set i2 = i2 + 1 where i2 = 1 or i2 = 3;");
-  auto metadata_vec = get_metadata_vec("test_table_shard_#1", "i2");
-  ASSERT_EQ(2U, metadata_vec.size());
-
-  assertExpectedChunkMetadata(metadata_vec[0].second, 2U, false, 2, 2);
-  assertExpectedChunkMetadata(metadata_vec[1].second, 2U, false, 4, 4);
-
-  metadata_vec = get_metadata_vec("test_table_shard_#2", "i2");
-  ASSERT_EQ(2U, metadata_vec.size());
-
-  assertExpectedChunkMetadata(metadata_vec[0].second, 2U, false, 2, 2);
-  assertExpectedChunkMetadata(metadata_vec[1].second, 2U, false, 4, 4);
 }
 
 int main(int argc, char** argv) {

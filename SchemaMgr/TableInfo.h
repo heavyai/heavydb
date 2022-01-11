@@ -37,22 +37,16 @@ struct TableInfo : public TableRef {
             int table_id,
             const std::string name_,
             bool is_view_,
-            int shards_,
-            int sharded_column_id_,
             std::string storage_type_,
             size_t fragments_)
       : TableRef(db_id, table_id)
       , name(name_)
       , is_view(is_view_)
-      , shards(shards_)
-      , sharded_column_id(sharded_column_id_)
       , storage_type(storage_type_)
       , fragments(fragments_) {}
 
   std::string name;
   bool is_view;
-  int shards;
-  int sharded_column_id;
   // For QueryPlanDagChecker.
   std::string storage_type;
   // For add_window_function_pre_project in RelAlgDagBuilder.

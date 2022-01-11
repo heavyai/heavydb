@@ -22,8 +22,6 @@ struct TableMetadata {
   std::string owner_name;
   bool is_temp_table;
   int32_t num_columns;
-  bool is_sharded;
-  int32_t num_shards;
   int64_t max_rows;
   int32_t fragment_size;
   int32_t max_rollback_epochs;
@@ -40,8 +38,6 @@ struct TableMetadata {
       , owner_id(td->userId)
       , is_temp_table(td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL)
       , num_columns(td->nColumns)
-      , is_sharded(td->nShards > 0)
-      , num_shards(td->nShards)
       , max_rows(td->maxRows)
       , fragment_size(td->maxFragRows)
       , max_rollback_epochs(td->maxRollbackEpochs) {}

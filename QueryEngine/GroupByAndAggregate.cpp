@@ -1964,23 +1964,5 @@ void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
 size_t GroupByAndAggregate::shard_count_for_top_groups(
     const RelAlgExecutionUnit& ra_exe_unit,
     const SchemaProvider& schema_provider) {
-  if (ra_exe_unit.sort_info.order_entries.size() != 1 || !ra_exe_unit.sort_info.limit) {
-    return 0;
-  }
-  for (const auto& group_expr : ra_exe_unit.groupby_exprs) {
-    const auto grouped_col_expr =
-        dynamic_cast<const Analyzer::ColumnVar*>(group_expr.get());
-    if (!grouped_col_expr) {
-      continue;
-    }
-    if (grouped_col_expr->get_table_id() <= 0) {
-      return 0;
-    }
-    const auto tinfo = schema_provider.getTableInfo(grouped_col_expr->get_db_id(),
-                                                    grouped_col_expr->get_table_id());
-    if (tinfo->sharded_column_id == grouped_col_expr->get_column_id()) {
-      return tinfo->shards;
-    }
-  }
   return 0;
 }

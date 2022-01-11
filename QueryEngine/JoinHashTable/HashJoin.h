@@ -138,7 +138,6 @@ class HashJoin {
 
   static HashJoinMatchingSet codegenMatchingSet(
       const std::vector<llvm::Value*>& hash_join_idx_args_in,
-      const bool is_sharded,
       const bool col_is_nullable,
       const bool is_bw_eq,
       const int64_t sub_buff_size,
@@ -220,7 +219,6 @@ class HashJoin {
   }
 
   static void checkHashJoinReplicationConstraint(const int table_id,
-                                                 const size_t shard_count,
                                                  const Executor* executor);
 
   // Swap the columns if needed and make the inner column the first component.
@@ -302,9 +300,3 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
                                                            std::string_view column,
                                                            int rte_idx,
                                                            Executor* executor);
-
-size_t get_shard_count(const Analyzer::BinOper* join_condition, const Executor* executor);
-
-size_t get_shard_count(
-    std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
-    const Executor* executor);

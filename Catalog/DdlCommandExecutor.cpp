@@ -103,23 +103,8 @@ AggregratedStorageStats get_agg_storage_stats(const TableDescriptor* td,
                                               const Catalog_Namespace::Catalog* catalog) {
   const auto global_file_mgr = catalog->getDataMgr().getGlobalFileMgr();
   std::optional<AggregratedStorageStats> agg_storage_stats;
-  if (td->nShards > 0) {
-    const auto physical_tables = catalog->getPhysicalTablesDescriptors(td, false);
-    CHECK_EQ(static_cast<size_t>(td->nShards), physical_tables.size());
-
-    for (const auto physical_table : physical_tables) {
-      auto storage_stats = global_file_mgr->getStorageStats(catalog->getDatabaseId(),
-                                                            physical_table->tableId);
-      if (agg_storage_stats) {
-        agg_storage_stats.value().aggregate(storage_stats);
-      } else {
-        agg_storage_stats = storage_stats;
-      }
-    }
-  } else {
-    agg_storage_stats =
-        global_file_mgr->getStorageStats(catalog->getDatabaseId(), td->tableId);
-  }
+  agg_storage_stats =
+      global_file_mgr->getStorageStats(catalog->getDatabaseId(), td->tableId);
   CHECK(agg_storage_stats.has_value());
   return agg_storage_stats.value();
 }
@@ -163,13 +148,12 @@ void set_headers_with_type(
 void add_table_details(std::vector<RelLogicalValues::RowValues>& logical_values,
                        const TableDescriptor* logical_table,
                        const AggregratedStorageStats& agg_storage_stats) {
-  bool is_sharded_table = (logical_table->nShards > 0);
   logical_values.emplace_back(RelLogicalValues::RowValues{});
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->tableId));
   logical_values.back().emplace_back(genLiteralStr(logical_table->tableName));
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->nColumns));
-  logical_values.back().emplace_back(genLiteralBoolean(is_sharded_table));
-  logical_values.back().emplace_back(genLiteralBigInt(logical_table->nShards));
+  logical_values.back().emplace_back(genLiteralBoolean(false)); // sharded
+  logical_values.back().emplace_back(genLiteralBigInt(0)); // nShards
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxRows));
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxFragRows));
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxRollbackEpochs));

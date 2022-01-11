@@ -174,30 +174,6 @@ void fill_hash_join_buff_on_device_bucketized(int32_t* buff,
                                               const JoinColumnTypeInfo type_info,
                                               const int64_t bucket_normalization);
 
-struct ShardInfo {
-  const size_t shard;
-  const size_t entry_count_per_shard;
-  const size_t num_shards;
-  const int device_count;
-};
-
-void fill_hash_join_buff_on_device_sharded(int32_t* buff,
-                                           const int32_t invalid_slot_val,
-                                           const bool for_semi_join,
-                                           int* dev_err_buff,
-                                           const JoinColumn join_column,
-                                           const JoinColumnTypeInfo type_info,
-                                           const ShardInfo shard_info);
-
-void fill_hash_join_buff_on_device_sharded_bucketized(int32_t* buff,
-                                                      const int32_t invalid_slot_val,
-                                                      const bool for_semi_join,
-                                                      int* dev_err_buff,
-                                                      const JoinColumn join_column,
-                                                      const JoinColumnTypeInfo type_info,
-                                                      const ShardInfo shard_info,
-                                                      const int64_t bucket_normalization);
-
 void fill_one_to_many_hash_table(int32_t* buff,
                                  const HashEntryInfo hash_entry_info,
                                  const int32_t invalid_slot_val,
@@ -216,16 +192,6 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
                                             const void* sd_outer_proxy,
                                             const unsigned cpu_thread_count);
 
-void fill_one_to_many_hash_table_sharded_bucketized(int32_t* buff,
-                                                    const HashEntryInfo hash_entry_info,
-                                                    const int32_t invalid_slot_val,
-                                                    const JoinColumn& join_column,
-                                                    const JoinColumnTypeInfo& type_info,
-                                                    const ShardInfo& shard_info,
-                                                    const void* sd_inner_proxy,
-                                                    const void* sd_outer_proxy,
-                                                    const unsigned cpu_thread_count);
-
 void fill_one_to_many_hash_table_on_device(int32_t* buff,
                                            const HashEntryInfo hash_entry_info,
                                            const int32_t invalid_slot_val,
@@ -238,13 +204,6 @@ void fill_one_to_many_hash_table_on_device_bucketized(
     const int32_t invalid_slot_val,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info);
-
-void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
-                                                   const HashEntryInfo hash_entry_info,
-                                                   const int32_t invalid_slot_val,
-                                                   const JoinColumn& join_column,
-                                                   const JoinColumnTypeInfo& type_info,
-                                                   const ShardInfo& shard_info);
 
 int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
                                     const int64_t entry_count,

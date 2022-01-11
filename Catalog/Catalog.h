@@ -233,10 +233,6 @@ class Catalog final {
 
   const ColumnDescriptor* getShardColumnMetadataForTable(const TableDescriptor* td) const;
 
-  std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
-      const TableDescriptor* logical_table_desc,
-      bool populate_fragmenter = true) const;
-
   /**
    * Get names of all tables accessible to user.
    *
@@ -290,7 +286,6 @@ class Catalog final {
 
   void setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd);
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
-  int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
   void checkpointWithAutoRollback(const int logical_table_id) const;
   std::string name() const { return getCurrentDB().dbName; }
@@ -414,8 +409,6 @@ class Catalog final {
   void updateFrontendViewSchema();
   void updateLinkSchema();
   void updateFrontendViewAndLinkUsers();
-  void updateLogicalToPhysicalTableLinkSchema();
-  void updateLogicalToPhysicalTableMap(const int32_t logical_tb_id);
   void updateDictionarySchema();
   void updatePageSize();
   void updateDeletedColumnIndicator();
@@ -461,8 +454,6 @@ class Catalog final {
                                         const bool fetchVirtualColumns,
                                         const bool fetchPhysicalColumns) const;
   std::string calculateSHA1(const std::string& data);
-  std::string generatePhysicalTableName(const std::string& logicalTableName,
-                                        const int32_t& shardNumber);
   std::vector<DBObject> parseDashboardObjects(const std::string& view_meta,
                                               const int& user_id);
   void createOrUpdateDashboardSystemRole(const std::string& view_meta,
@@ -493,9 +484,6 @@ class Catalog final {
   const std::vector<LeafHostInfo> string_dict_hosts_;
   std::shared_ptr<Calcite> calciteMgr_;
 
-  LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
-  static const std::string
-      physicalTableNameTag_;  // extra component added to the name of each physical table
   int nextTempTableId_;
   int nextTempDictId_;
 
