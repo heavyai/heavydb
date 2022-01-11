@@ -53,7 +53,11 @@ class StringDictionary {
 
   int32_t getOrAdd(const std::string_view& str) noexcept;
   template <class T, class String>
-  void getBulk(const std::vector<String>& string_vec, T* encoded_vec);
+  size_t getBulk(const std::vector<String>& string_vec, T* encoded_vec);
+  template <class T, class String>
+  size_t getBulk(const std::vector<String>& string_vec,
+                 T* encoded_vec,
+                 const int64_t generation);
   template <class T, class String>
   void getOrAddBulk(const std::vector<String>& string_vec, T* encoded_vec);
   template <class T, class String>
@@ -82,23 +86,24 @@ class StringDictionary {
 
   std::vector<std::string> copyStrings() const;
 
-  std::vector<std::string_view> getStringViews(const size_t generation) const;
   std::vector<std::string_view> getStringViews() const;
+  std::vector<std::string_view> getStringViews(const size_t generation) const;
 
-  std::vector<int32_t> buildDictionaryTranslationMap(
-      std::shared_ptr<StringDictionary> dest_dict,
-      const size_t generation) const;
   std::vector<int32_t> buildDictionaryTranslationMap(
       std::shared_ptr<StringDictionary> dest_dict) const;
 
-  template <typename T>
-  void buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
-                                     T* translated_ids,
-                                     const size_t generation) const;
+  std::vector<int32_t> buildDictionaryTranslationMap(
+      std::shared_ptr<StringDictionary> dest_dict,
+      const int64_t generation) const;
 
   template <typename T>
-  void buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
-                                     T* translated_ids) const;
+  size_t buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
+                                       T* translated_ids,
+                                       const int64_t generation) const;
+
+  template <typename T>
+  size_t buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
+                                       T* translated_ids) const;
 
   bool checkpoint() noexcept;
 
@@ -175,9 +180,16 @@ class StringDictionary {
   void hashStrings(const std::vector<String>& string_vec,
                    std::vector<string_dict_hash_t>& hashes) const noexcept;
   template <class T, class String>
-  void getBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
-  template <class T, class String>
   void getOrAddBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
+
+  template <class T, class String>
+  size_t getBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
+
+  template <class T, class String>
+  size_t getBulkRemote(const std::vector<String>& string_vec,
+                       T* encoded_vec,
+                       const int64_t generation);
+
   int32_t getUnlocked(const std::string& str) const noexcept;
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;

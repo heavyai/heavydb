@@ -22,6 +22,7 @@
 
 #include <map>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -49,8 +50,63 @@ class StringDictionaryProxy {
   std::string getString(int32_t string_id) const;
   std::vector<std::string> getStrings(const std::vector<int32_t>& string_ids) const;
   std::pair<const char*, size_t> getStringBytes(int32_t string_id) const noexcept;
-  size_t entryCount() const;
+
+  /**
+   * @brief Builds a vectorized string_id translation map from this proxy to dest_proxy
+   *
+   * @param dest_proxy StringDictionaryProxy that we are to map this proxy's string ids to
+   *
+   * @return std::vector<int32_t> linear dense vector map, where index 0
+   * corresponds to the lowest (negative) transient id in this proxy,
+   * and with each increasing index corresponding to the next string_id
+   * I.e. if there are 3 transient entries in this proxy, and 20 in the underlying
+   * string dictionary, there will be 25 total entries, mapping transient id -5
+   * (as -1 and -0 are reserved, transients start at -2 (transient_id_ceil)
+   * and descend downward). Entries corresponding to -1 and 0 may contain garbage,
+   * it is expected that these entries are never accessed. The payload of
+   * the vector map are the string ids in the dest_proxy corresponding to the indexed
+   * string ids from this proxy
+   *
+   */
+  std::vector<int32_t> buildTranslationMapToOtherProxy(
+      std::shared_ptr<StringDictionaryProxy> dest_proxy) const;
+
+  /**
+   * @brief Returns the number of string entries in the underlying string dictionary,
+   * at this proxy's generation_ if it is set/valid, otherwise just the current
+   * size of the dictionary
+   *
+   * @return size_t Number of entries in the string dictionary
+   * (at this proxy's generation if set)
+   *
+   */
   size_t storageEntryCount() const;
+
+  /**
+   * @brief
+   *
+   * @return size_t
+   */
+
+  /**
+   * @brief Returns the number of transient string entries for this proxy,
+   *
+   * @return size_t Number of transient string entries for this proxy
+   *
+   */
+  size_t transientEntryCount() const;
+
+  /**
+   * @brief Returns the number of total string entries for this proxy, both stored
+   * in the underlying dictionary and in the transient map. Equal to
+   * storageEntryCount() + transientEntryCount()
+   *
+   * @return size_t Number of total string entries for this proxy
+   *
+   */
+
+  size_t entryCount() const;
+
   void updateGeneration(const int64_t generation) noexcept;
 
   std::vector<int32_t> getLike(const std::string& pattern,
@@ -69,10 +125,17 @@ class StringDictionaryProxy {
 
  private:
   int32_t transientLookupAndAddUnlocked(const std::string& str);
-  void transientLookupBulkUnlocked(const std::vector<std::string>& lookup_strings,
-                                   std::vector<int32_t>& string_ids);
-  void transientLookupBulkParallelUnlocked(const std::vector<std::string>& lookup_strings,
-                                           std::vector<int32_t>& string_ids);
+  template <typename String>
+  int32_t lookupStringUnlocked(const String& lookup_string) const;
+  template <typename String>
+  void transientLookupBulk(const std::vector<String>& lookup_strings,
+                           int32_t* string_ids) const;
+  template <typename String>
+  void transientLookupBulkUnlocked(const std::vector<String>& lookup_strings,
+                                   int32_t* string_ids) const;
+  template <typename String>
+  void transientLookupBulkParallelUnlocked(const std::vector<String>& lookup_strings,
+                                           int32_t* string_ids) const;
   std::shared_ptr<StringDictionary> string_dict_;
   const int32_t string_dict_id_;
   std::map<int32_t, std::string> transient_int_to_str_;
