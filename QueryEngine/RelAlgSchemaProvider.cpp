@@ -83,3 +83,21 @@ ColumnInfoPtr RelAlgSchemaProvider::getColumnInfo(int db_id,
   }
   return nullptr;
 }
+
+std::string RelAlgSchemaProvider::toString() const {
+  std::ostringstream oss;
+  oss << "Tables:";
+  for (auto& pr : table_infos_) {
+    oss << " " << ::toString(*pr.second);
+  }
+  oss << std::endl << "Columns:";
+  for (auto& pr : column_infos_) {
+    oss << " " << ::toString(*pr.second);
+  }
+  oss << std::endl;
+  return oss.str();
+}
+
+void RelAlgSchemaProvider::dump() const {
+  std::cerr << toString();
+}

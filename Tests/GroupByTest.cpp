@@ -77,6 +77,8 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
   executor->setCatalog(cat);
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
 
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);

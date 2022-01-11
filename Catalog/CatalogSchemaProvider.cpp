@@ -27,7 +27,7 @@ TableInfoList CatalogSchemaProvider::listTables(int db_id) const {
   TableInfoList res;
   res.resize(tds.size());
   for (auto& td : tds) {
-    res.emplace_back(td->makeInfo(db_id));
+    res.emplace_back(catalog_->makeInfo(td));
   }
 
   return res;
@@ -50,7 +50,7 @@ TableInfoPtr CatalogSchemaProvider::getTableInfo(int db_id, int table_id) const 
   CHECK_EQ(catalog_->getDatabaseId(), db_id);
   auto td = catalog_->getMetadataForTable(table_id);
   CHECK(td);
-  return td->makeInfo(db_id);
+  return catalog_->makeInfo(td);
 }
 
 TableInfoPtr CatalogSchemaProvider::getTableInfo(int db_id,
@@ -58,7 +58,7 @@ TableInfoPtr CatalogSchemaProvider::getTableInfo(int db_id,
   CHECK_EQ(catalog_->getDatabaseId(), db_id);
   auto td = catalog_->getMetadataForTable(table_name);
   CHECK(td);
-  return td->makeInfo(db_id);
+  return catalog_->makeInfo(td);
 }
 
 ColumnInfoPtr CatalogSchemaProvider::getColumnInfo(int db_id,

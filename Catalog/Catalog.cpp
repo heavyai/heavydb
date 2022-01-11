@@ -4371,4 +4371,21 @@ void Catalog::restoreOldOwnersInMemory(
   }
 }
 
+TableInfoPtr Catalog::makeInfo(const TableDescriptor* td) const {
+  int del_col_id = -1;
+  if (td->hasDeletedCol) {
+    auto cd = getDeletedColumnIfRowsDeleted(td);
+    if (cd) {
+      del_col_id = cd->columnId;
+    }
+  }
+  return std::make_shared<TableInfo>(getDatabaseId(),
+                                     td->tableId,
+                                     td->tableName,
+                                     td->isView,
+                                     del_col_id,
+                                     td->storageType,
+                                     td->fragmenter->getNumFragments());
+}
+
 }  // namespace Catalog_Namespace

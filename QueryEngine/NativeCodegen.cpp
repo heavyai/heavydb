@@ -3048,15 +3048,15 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
   if (outer_input_desc.getSourceType() != InputSourceType::TABLE) {
     return nullptr;
   }
-  const auto deleted_cd =
+  const auto deleted_cinfo =
       plan_state_->getDeletedColForTable(outer_input_desc.getTableId());
-  if (!deleted_cd) {
+  if (!deleted_cinfo) {
     return nullptr;
   }
-  CHECK(deleted_cd->columnType.is_boolean());
-  CHECK(!deleted_cd->isVirtualCol);
-  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
-      deleted_cd->makeInfo(db_id_), outer_input_desc.getNestLevel());
+  CHECK(deleted_cinfo->type.is_boolean());
+  CHECK(!deleted_cinfo->is_rowid);
+  const auto deleted_expr =
+      makeExpr<Analyzer::ColumnVar>(deleted_cinfo, outer_input_desc.getNestLevel());
   CodeGenerator code_generator(this);
   const auto is_deleted =
       code_generator.toBool(code_generator.codegen(deleted_expr.get(), true, co).front());

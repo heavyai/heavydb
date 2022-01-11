@@ -37,6 +37,9 @@ class RelAlgSchemaProvider : public SchemaProvider {
                               int table_id,
                               const std::string& col_name) const override;
 
+  std::string toString() const;
+  void dump() const;
+
  private:
   using TableByNameMap = std::unordered_map<std::string, TableInfoPtr>;
   using ColumnByNameMap = std::unordered_map<std::string, ColumnInfoPtr>;

@@ -17,6 +17,7 @@
 #include "TestHelpers.h"
 
 #include "Catalog/Catalog.h"
+#include "Catalog/CatalogSchemaProvider.h"
 #include "DBHandlerTestHelpers.h"
 #include "QueryEngine/TableOptimizer.h"
 
@@ -131,6 +132,8 @@ void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
 void recompute_metadata(const TableDescriptor* td,
                         const Catalog_Namespace::Catalog& cat) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat));
   TableOptimizer optimizer(td, executor.get(), cat);
   EXPECT_NO_THROW(optimizer.recomputeMetadata());
 }

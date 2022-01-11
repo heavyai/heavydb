@@ -2316,8 +2316,13 @@ class RelAlgDispatcher {
     infos.reserve(field_names.size());
     for (auto& col_name : field_names) {
       infos.emplace_back(schema_provider_->getColumnInfo(*tinfo, col_name));
+      CHECK(infos.back());
     }
     auto scan_node = std::make_shared<RelScan>(tinfo, std::move(infos));
+    if (tinfo->delete_column_id >= 0) {
+      scan_node->setDeleteColumnInfo(
+          schema_provider_->getColumnInfo(*tinfo, tinfo->delete_column_id));
+    }
     if (scan_ra.HasMember("hints")) {
       getRelAlgHints(scan_ra, scan_node);
     }

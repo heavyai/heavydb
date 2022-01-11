@@ -399,6 +399,8 @@ class Catalog final {
   void reassignOwners(const std::set<std::string>& old_owners,
                       const std::string& new_owner);
 
+  TableInfoPtr makeInfo(const TableDescriptor* td) const;
+
  protected:
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();

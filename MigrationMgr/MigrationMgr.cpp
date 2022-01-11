@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "Catalog/CatalogSchemaProvider.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -109,6 +110,8 @@ void MigrationMgr::migrateDateInDaysMetadata(
         // TODO(adb): Could have the TableOptimizer get the Executor and avoid including
         // Execute.h
         auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+        executor->setSchemaProvider(
+            std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
         auto table_desc_itr = table_descriptors_by_id.find(id_names.first);
         if (table_desc_itr == table_descriptors_by_id.end()) {
           throw std::runtime_error("Table descriptor does not exist for table " +

@@ -41,7 +41,7 @@ struct JoinInfo {
 struct PlanState {
   using TableId = int;
   using ColumnId = int;
-  using DeletedColumnsMap = std::unordered_map<TableId, const ColumnDescriptor*>;
+  using DeletedColumnsMap = std::unordered_map<TableId, ColumnInfoPtr>;
   using HoistedFiltersSet = std::unordered_set<std::shared_ptr<Analyzer::Expr>>;
 
   struct CompareInputColDescId {
@@ -90,7 +90,7 @@ struct PlanState {
     return isLazyFetchColumn(&column);
   }
 
-  const ColumnDescriptor* getDeletedColForTable(const TableId table_id) {
+  ColumnInfoPtr getDeletedColForTable(const TableId table_id) {
     auto deleted_cols_it = deleted_columns_.find(table_id);
     if (deleted_cols_it != deleted_columns_.end()) {
       return deleted_cols_it->second;

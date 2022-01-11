@@ -18,6 +18,7 @@
 #include <string>
 
 #include "Catalog/Catalog.h"
+#include "Catalog/CatalogSchemaProvider.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryRunner/QueryRunner.h"
@@ -1594,6 +1595,8 @@ class OpportunisticMetadataUpdateTest : public testing::TestWithParam<SQLTypeInf
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     auto catalog = QR::get()->getCatalog();
     auto td = catalog->getMetadataForTable("test_table");
+    executor->setSchemaProvider(
+        std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
     TableOptimizer optimizer(td, executor.get(), *catalog);
     optimizer.recomputeMetadata();
   }

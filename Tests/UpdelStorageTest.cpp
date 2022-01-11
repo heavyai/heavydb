@@ -520,6 +520,8 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
       const auto td = cat->getMetadataForTable(table,
                                                /*populateFragmenter=*/true);
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      executor->setSchemaProvider(
+          std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
       TableOptimizer optimizer(td, executor.get(), *cat);
       optimizer.vacuumDeletedRows();
       optimizer.recomputeMetadata();

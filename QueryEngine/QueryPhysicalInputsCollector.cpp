@@ -185,33 +185,54 @@ class RexPhysicalInputsVisitor
   }
 };
 
-class RexPhysicalInfoVisitor
-    : public RexInputVisitorBase<RexPhysicalInfoVisitor, ColumnInfoMap> {
+template <typename RelAlgVisitor, typename ResultType>
+class RexSubqueryVisitorBase : public RexVisitor<ResultType> {
  public:
-  RexPhysicalInfoVisitor() {}
+  RexSubqueryVisitorBase() {}
 
-  ColumnInfoMap visitInput(const RexInput* input) const override {
-    const auto source_ra = input->getSourceNode();
-    const auto scan_ra = dynamic_cast<const RelScan*>(source_ra);
-    if (!scan_ra) {
-      const auto join_ra = dynamic_cast<const RelJoin*>(source_ra);
-      if (join_ra) {
-        const auto node_inputs = get_node_output(join_ra);
-        CHECK_LT(input->getIndex(), node_inputs.size());
-        return visitInput(&node_inputs[input->getIndex()]);
+  ResultType visitSubQuery(const RexSubQuery* subquery) const override {
+    const auto ra = subquery->getRelAlg();
+    CHECK(ra);
+    RelAlgVisitor visitor;
+    return visitor.visit(ra);
+  }
+
+ protected:
+  ResultType aggregateResult(const ResultType& aggregate,
+                             const ResultType& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+class RelAlgPhysicalColumnInfosVisitor
+    : public RelAlgPhysicalInputsVisitor<
+          RexSubqueryVisitorBase<RelAlgPhysicalColumnInfosVisitor, ColumnInfoMap>,
+          ColumnInfoMap> {
+ public:
+  RelAlgPhysicalColumnInfosVisitor() {}
+
+  ColumnInfoMap visitScan(const RelScan* scan) const override {
+    ColumnInfoMap res;
+
+    for (size_t col_idx = 0; col_idx < scan->size(); ++col_idx) {
+      auto col_info = scan->getColumnInfoBySpi(col_idx + 1);
+      res.insert({*col_info, col_info});
+
+      // Add physical geo columns if any.
+      for (auto geo_idx = 0; geo_idx < col_info->type.get_physical_cols(); ++geo_idx) {
+        auto geo_col_info =
+            scan->getColumnInfoBySpi(SPIMAP_GEO_PHYSICAL_INPUT(col_idx, geo_idx + 1));
+        res.insert({*geo_col_info, geo_col_info});
       }
-      return ColumnInfoMap{};
     }
 
-    ColumnInfoMap res;
-    auto col_info = scan_ra->getColumnInfoBySpi(input->getIndex() + 1);
-    CHECK_GT(col_info->table_id, 0);
-    res.insert({*col_info, col_info});
-
-    for (auto i = 0; i < col_info->type.get_physical_cols(); i++) {
-      auto geo_col_info = scan_ra->getColumnInfoBySpi(
-          SPIMAP_GEO_PHYSICAL_INPUT(input->getIndex(), i + 1));
-      res.insert({*geo_col_info, geo_col_info});
+    // Add 'delete' column if exists.
+    if (scan->getTableInfo()->delete_column_id >= 0) {
+      auto del_col_info = scan->getDeleteColumnInfo();
+      CHECK(del_col_info);
+      res.insert({*del_col_info, del_col_info});
     }
 
     return res;
@@ -236,7 +257,10 @@ class RelAlgPhysicalTableInputsVisitor : public RelAlgVisitor<std::unordered_set
   }
 };
 
-class RelAlgPhysicalTableInfosVisitor : public RelAlgVisitor<TableInfoMap> {
+class RelAlgPhysicalTableInfosVisitor
+    : public RelAlgPhysicalInputsVisitor<
+          RexSubqueryVisitorBase<RelAlgPhysicalTableInfosVisitor, TableInfoMap>,
+          TableInfoMap> {
  public:
   RelAlgPhysicalTableInfosVisitor() {}
 
@@ -245,14 +269,6 @@ class RelAlgPhysicalTableInfosVisitor : public RelAlgVisitor<TableInfoMap> {
     auto info = scan->getTableInfo();
     res.insert(std::make_pair(TableRef(info->db_id, info->table_id), info));
     return res;
-  }
-
- protected:
-  TableInfoMap aggregateResult(const TableInfoMap& aggregate,
-                               const TableInfoMap& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
   }
 };
 
@@ -270,7 +286,7 @@ std::unordered_set<int> get_physical_table_inputs(const RelAlgNode* ra) {
 }
 
 ColumnInfoMap get_physical_column_infos(const RelAlgNode* ra) {
-  RelAlgPhysicalInputsVisitor<RexPhysicalInfoVisitor, ColumnInfoMap> visitor;
+  RelAlgPhysicalColumnInfosVisitor visitor;
   return visitor.visit(ra);
 }
 

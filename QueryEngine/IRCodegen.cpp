@@ -900,13 +900,13 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
     return nullptr;
   }
 
-  const auto deleted_cd = plan_state_->getDeletedColForTable(input_desc.getTableId());
-  if (!deleted_cd) {
+  const auto deleted_cinfo = plan_state_->getDeletedColForTable(input_desc.getTableId());
+  if (!deleted_cinfo) {
     return nullptr;
   }
-  CHECK(deleted_cd->columnType.is_boolean());
-  const auto deleted_expr = makeExpr<Analyzer::ColumnVar>(
-      deleted_cd->makeInfo(catalog_->getDatabaseId()), input_desc.getNestLevel());
+  CHECK(deleted_cinfo->type.is_boolean());
+  const auto deleted_expr =
+      makeExpr<Analyzer::ColumnVar>(deleted_cinfo, input_desc.getNestLevel());
   return [this, deleted_expr, level_idx, &co](const std::vector<llvm::Value*>& prev_iters,
                                               llvm::Value* have_more_inner_rows) {
     const auto matching_row_index = addJoinLoopIterator(prev_iters, level_idx + 1);

@@ -88,12 +88,6 @@ struct TableDescriptor {
   inline bool isTemporaryTable() const {
     return persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   }
-
-  TableInfoPtr makeInfo(int db_id = -1) const {
-    CHECK(fragmenter);
-    return std::make_shared<TableInfo>(
-        db_id, tableId, tableName, isView, storageType, fragmenter->getNumFragments());
-  }
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {

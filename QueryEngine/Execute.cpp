@@ -3483,13 +3483,12 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 
 namespace {
 void add_deleted_col_to_map(PlanState::DeletedColumnsMap& deleted_cols_map,
-                            const ColumnDescriptor* deleted_cd) {
-  auto deleted_cols_it = deleted_cols_map.find(deleted_cd->tableId);
+                            ColumnInfoPtr col_info) {
+  auto deleted_cols_it = deleted_cols_map.find(col_info->table_id);
   if (deleted_cols_it == deleted_cols_map.end()) {
-    CHECK(
-        deleted_cols_map.insert(std::make_pair(deleted_cd->tableId, deleted_cd)).second);
+    CHECK(deleted_cols_map.insert(std::make_pair(col_info->table_id, col_info)).second);
   } else {
-    CHECK_EQ(deleted_cd, deleted_cols_it->second);
+    CHECK_EQ(col_info, deleted_cols_it->second);
   }
 }
 }  // namespace
@@ -3506,29 +3505,31 @@ std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDelet
     if (input_table.getSourceType() != InputSourceType::TABLE) {
       continue;
     }
-    const auto td = catalog_->getMetadataForTable(input_table.getTableId());
-    CHECK(td);
-    const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
-    if (!deleted_cd) {
+    auto table_info = schema_provider_->getTableInfo(db_id_, input_table.getTableId());
+    CHECK(table_info);
+    if (table_info->delete_column_id < 0) {
       continue;
     }
-    CHECK(deleted_cd->columnType.is_boolean());
+    auto col_info =
+        schema_provider_->getColumnInfo(*table_info, table_info->delete_column_id);
+    CHECK(col_info);
+    CHECK(col_info->type.is_boolean());
     // check deleted column is not already present
     bool found = false;
     for (const auto& input_col : ra_exe_unit_with_deleted.input_col_descs) {
-      if (input_col.get()->getColId() == deleted_cd->columnId &&
-          input_col.get()->getTableId() == deleted_cd->tableId &&
+      if (input_col.get()->getColId() == col_info->column_id &&
+          input_col.get()->getTableId() == col_info->table_id &&
           input_col.get()->getNestLevel() == input_table.getNestLevel()) {
         found = true;
-        add_deleted_col_to_map(deleted_cols_map, deleted_cd);
+        add_deleted_col_to_map(deleted_cols_map, col_info);
         break;
       }
     }
     if (!found) {
       // add deleted column
-      ra_exe_unit_with_deleted.input_col_descs.emplace_back(new InputColDescriptor(
-          deleted_cd->makeInfo(db_id_), input_table.getNestLevel()));
-      add_deleted_col_to_map(deleted_cols_map, deleted_cd);
+      ra_exe_unit_with_deleted.input_col_descs.emplace_back(
+          new InputColDescriptor(col_info, input_table.getNestLevel()));
+      add_deleted_col_to_map(deleted_cols_map, col_info);
     }
   }
   return std::make_tuple(ra_exe_unit_with_deleted, deleted_cols_map);
@@ -3581,23 +3582,22 @@ bool Executor::isFragmentFullyDeleted(
     return false;
   }
 
-  const auto td = catalog_->getMetadataForTable(fragment.physicalTableId);
-  CHECK(td);
-  const auto deleted_cd = catalog_->getDeletedColumnIfRowsDeleted(td);
-  if (!deleted_cd) {
+  auto table_info = schema_provider_->getTableInfo(db_id_, fragment.physicalTableId);
+  CHECK(table_info);
+  if (table_info->delete_column_id < 0) {
     return false;
   }
+  auto col_info =
+      schema_provider_->getColumnInfo(*table_info, table_info->delete_column_id);
+  CHECK(col_info);
+  CHECK(col_info->type.is_boolean());
 
-  const auto& chunk_type = deleted_cd->columnType;
-  CHECK(chunk_type.is_boolean());
-
-  const auto deleted_col_id = deleted_cd->columnId;
-  auto chunk_meta_it = fragment.getChunkMetadataMap().find(deleted_col_id);
+  auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_info->column_id);
   if (chunk_meta_it != fragment.getChunkMetadataMap().end()) {
     const int64_t chunk_min =
-        extract_min_stat(chunk_meta_it->second->chunkStats, chunk_type);
+        extract_min_stat(chunk_meta_it->second->chunkStats, col_info->type);
     const int64_t chunk_max =
-        extract_max_stat(chunk_meta_it->second->chunkStats, chunk_type);
+        extract_max_stat(chunk_meta_it->second->chunkStats, col_info->type);
     if (chunk_min == 1 && chunk_max == 1) {  // Delete chunk if metadata says full bytemap
       // is true (signifying all rows deleted)
       return true;

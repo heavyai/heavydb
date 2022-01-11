@@ -66,7 +66,7 @@ struct ColumnInfo : public ColumnRef {
   std::string toString() const {
     return name + "(db_id=" + std::to_string(db_id) +
            ", table_id=" + std::to_string(table_id) +
-           ", column_id=" + std::to_string(column_id) + "type=" + type.toString() +
+           ", column_id=" + std::to_string(column_id) + " type=" + type.toString() +
            (is_rowid ? " [rowid])" : "") + (is_delete ? " [del])" : "") + ")";
   }
 };

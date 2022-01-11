@@ -244,7 +244,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
         const auto deleted_cd = executor->plan_state_->getDeletedColForTable(table_id);
         if (deleted_cd) {
           ChunkKey chunk_key_prefix = {
-              catalog->getCurrentDB().dbId, table_id, deleted_cd->columnId};
+              catalog->getCurrentDB().dbId, table_id, deleted_cd->column_id};
           data_mgr->getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
                                                     chunk_key_prefix);
         }
@@ -293,11 +293,15 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   outer_fragments_size_ = outer_fragments->size();
 
   const auto& catalog = executor->getCatalog();
+  auto schema_provider = executor->getSchemaProvider();
 
   ChunkMetadataVector deleted_chunk_metadata_vec;
 
   bool is_temporary_table = false;
   if (outer_table_id > 0) {
+    auto table_info =
+        schema_provider->getTableInfo(executor->getDatabaseId(), outer_table_id);
+    CHECK(table_info);
     // Temporary tables will not have a table descriptor and not have deleted rows.
     const auto td = catalog->getMetadataForTable(outer_table_id);
     CHECK(td);
@@ -307,20 +311,19 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
       // layers that we can disregard the early out select * optimization
       is_temporary_table = true;
     } else {
-      const auto deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
-      if (deleted_cd) {
+      if (table_info->delete_column_id >= 0) {
         // 01 Apr 2021 MAT TODO this code is called on logical tables (ie not the shards)
         // I wonder if this makes sense in those cases
         td->fragmenter->getFragmenterId();
         auto frags = td->fragmenter->getFragmentsForQuery().fragments;
         for (auto frag : frags) {
           auto chunk_meta_it =
-              frag.getChunkMetadataMapPhysical().find(deleted_cd->columnId);
+              frag.getChunkMetadataMapPhysical().find(table_info->delete_column_id);
           if (chunk_meta_it != frag.getChunkMetadataMapPhysical().end()) {
             const auto& chunk_meta = chunk_meta_it->second;
             ChunkKey chunk_key_prefix = {catalog->getCurrentDB().dbId,
                                          outer_table_id,
-                                         deleted_cd->columnId,
+                                         table_info->delete_column_id,
                                          frag.fragmentId};
             deleted_chunk_metadata_vec.emplace_back(
                 std::pair{chunk_key_prefix, chunk_meta});

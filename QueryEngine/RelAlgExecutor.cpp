@@ -1557,6 +1557,12 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
                                          is_aggregate);
             post_execution_callback_ = [table_update_metadata, this]() {
               dml_transaction_parameters_->finalizeTransaction(cat_);
+              // 'deleted' column might be created during execution (due to update
+              // executed as delete + insert for varlen data) and it might be missing in
+              // the current schema provider. Use Catalog based schema provider for
+              // correct metadata update.
+              executor_->setSchemaProvider(
+                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat_));
               TableOptimizer table_optimizer{
                   dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
               table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
@@ -1680,6 +1686,11 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
                                          is_aggregate);
             post_execution_callback_ = [table_update_metadata, this]() {
               dml_transaction_parameters_->finalizeTransaction(cat_);
+              // 'deleted' column might be created during execution and it might be
+              // missing in the current schema provider. Use Catalog based schema provider
+              // for correct metadata update.
+              executor_->setSchemaProvider(
+                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat_));
               TableOptimizer table_optimizer{
                   dml_transaction_parameters_->getTableDescriptor(), executor_, cat_};
               table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
