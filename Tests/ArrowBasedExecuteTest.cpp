@@ -4497,6 +4497,22 @@ TEST_F(Select, Case) {
   }
 }
 
+TEST_F(Select, CaseSubQuery) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT CASE WHEN (SELECT COUNT(*) FROM test) < 10"
+      "       THEN (SELECT 2*COUNT(*) FROM test) + 5"
+      "       ELSE (SELECT 3*COUNT(*) FROM test) - 5"
+      "       END;",
+      dt);
+    c("SELECT CASE WHEN (SELECT COUNT(*) FROM test) >= 10"
+      "       THEN (SELECT 2*COUNT(*) FROM test) - 4"
+      "       ELSE (SELECT 3*COUNT(*) FROM test) + 4"
+      "       END;",
+      dt);
+  }
+}
+
 TEST_F(Select, Strings) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

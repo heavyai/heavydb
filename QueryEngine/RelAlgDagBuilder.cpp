@@ -1172,9 +1172,14 @@ std::unique_ptr<const RexScalar> disambiguate_rex(const RexScalar* rex_scalar,
   if (rex_case) {
     return disambiguate_case(rex_case, ra_output);
   }
-  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar);
-  CHECK(rex_literal);
-  return std::unique_ptr<const RexLiteral>(new RexLiteral(*rex_literal));
+  if (auto const rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar)) {
+    return rex_literal->deepCopy();
+  } else if (auto const rex_subquery = dynamic_cast<const RexSubQuery*>(rex_scalar)) {
+    return rex_subquery->deepCopy();
+  } else {
+    throw QueryNotSupported("Unable to disambiguate expression of type " +
+                            std::string(typeid(*rex_scalar).name()));
+  }
 }
 
 void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) noexcept {
