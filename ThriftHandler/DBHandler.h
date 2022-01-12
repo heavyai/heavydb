@@ -1037,7 +1037,7 @@ class DBHandler : public OmniSciIf {
 
   enum class AssignRenderGroupsMode { kNone, kAssign, kCleanUp };
 
-  void load_table_binary_columnar_internal(
+  void loadTableBinaryColumnarInternal(
       const TSessionId& session,
       const std::string& table_name,
       const std::vector<TColumn>& cols,
@@ -1057,10 +1057,17 @@ class DBHandler : public OmniSciIf {
   std::mutex render_group_assignment_mutex_;
   mapd_shared_mutex custom_expressions_mutex_;
 
-  void import_geo_table_internal(const TSessionId& session,
-                                 const std::string& table_name,
-                                 const std::string& file_name,
-                                 const TCopyParams& copy_params,
-                                 const TRowDescriptor& row_desc,
-                                 const TCreateParams& create_params);
+  void importGeoTableGlobFilterSort(const TSessionId& session,
+                                    const std::string& table_name,
+                                    const std::string& file_name,
+                                    const import_export::CopyParams& copy_params,
+                                    const TRowDescriptor& row_desc,
+                                    const TCreateParams& create_params);
+
+  void importGeoTableSingle(const TSessionId& session,
+                            const std::string& table_name,
+                            const std::string& file_name,
+                            const import_export::CopyParams& copy_params,
+                            const TRowDescriptor& row_desc,
+                            const TCreateParams& create_params);
 };

@@ -1412,12 +1412,12 @@ int64_t DBHandler::process_deferred_copy_from(const TSessionId& session_id) {
 
     // now do (and time) the import
     total_time_ms = measure<>::execution([&]() {
-      import_geo_table(session_id,
-                       deferred_copy_from_state->table,
-                       deferred_copy_from_state->file_name,
-                       copyparams_to_thrift(deferred_copy_from_state->copy_params),
-                       TRowDescriptor(),
-                       create_params);
+      importGeoTableGlobFilterSort(session_id,
+                                   deferred_copy_from_state->table,
+                                   deferred_copy_from_state->file_name,
+                                   deferred_copy_from_state->copy_params,
+                                   TRowDescriptor(),
+                                   create_params);
     });
   }
   return total_time_ms;
@@ -3194,7 +3194,7 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session,
                                            const std::string& table_name,
                                            const std::vector<TColumn>& cols,
                                            const std::vector<std::string>& column_names) {
-  load_table_binary_columnar_internal(
+  loadTableBinaryColumnarInternal(
       session, table_name, cols, column_names, AssignRenderGroupsMode::kNone);
 }
 
@@ -3204,16 +3204,16 @@ void DBHandler::load_table_binary_columnar_polys(
     const std::vector<TColumn>& cols,
     const std::vector<std::string>& column_names,
     const bool assign_render_groups) {
-  load_table_binary_columnar_internal(session,
-                                      table_name,
-                                      cols,
-                                      column_names,
-                                      assign_render_groups
-                                          ? AssignRenderGroupsMode::kAssign
-                                          : AssignRenderGroupsMode::kCleanUp);
+  loadTableBinaryColumnarInternal(session,
+                                  table_name,
+                                  cols,
+                                  column_names,
+                                  assign_render_groups
+                                      ? AssignRenderGroupsMode::kAssign
+                                      : AssignRenderGroupsMode::kCleanUp);
 }
 
-void DBHandler::load_table_binary_columnar_internal(
+void DBHandler::loadTableBinaryColumnarInternal(
     const TSessionId& session,
     const std::string& table_name,
     const std::vector<TColumn>& cols,
@@ -5054,28 +5054,48 @@ void DBHandler::import_geo_table(const TSessionId& session,
                                  const TCopyParams& cp,
                                  const TRowDescriptor& row_desc,
                                  const TCreateParams& create_params) {
+  // this is the direct Thrift endpoint
+  // it does NOT support the separate FSI regex/filter/sort options
+  // but it DOES support basic globbing specified in the filename itself
+  importGeoTableGlobFilterSort(
+      session, table_name, file_name, thrift_to_copyparams(cp), row_desc, create_params);
+}
+
+void DBHandler::importGeoTableGlobFilterSort(const TSessionId& session,
+                                             const std::string& table_name,
+                                             const std::string& file_name,
+                                             const import_export::CopyParams& copy_params,
+                                             const TRowDescriptor& row_desc,
+                                             const TCreateParams& create_params) {
+  // this is called by the above direct Thrift endpoint
+  // and also for a deferred COPY FROM for geo/raster
+  // it DOES support the full FSI regex/filter/sort options
   std::vector<std::string> file_names;
   try {
-    // find matching local files (no recursion into directories)
-    file_names = shared::local_glob_filter_sort_files(
-        file_name, std::nullopt, std::nullopt, std::nullopt, false);
+    shared::validate_sort_options(copy_params.file_sort_order_by,
+                                  copy_params.file_sort_regex);
+    file_names = shared::local_glob_filter_sort_files(file_name,
+                                                      copy_params.regex_path_filter,
+                                                      copy_params.file_sort_order_by,
+                                                      copy_params.file_sort_regex,
+                                                      false);
   } catch (const shared::FileNotFoundException& e) {
     // no files match, just try the original filename, might be remote
     file_names.push_back(file_name);
   }
   // import whatever we found
   for (auto const& file_name : file_names) {
-    import_geo_table_internal(
-        session, table_name, file_name, cp, row_desc, create_params);
+    importGeoTableSingle(
+        session, table_name, file_name, copy_params, row_desc, create_params);
   }
 }
 
-void DBHandler::import_geo_table_internal(const TSessionId& session,
-                                          const std::string& table_name,
-                                          const std::string& file_name_in,
-                                          const TCopyParams& cp,
-                                          const TRowDescriptor& row_desc,
-                                          const TCreateParams& create_params) {
+void DBHandler::importGeoTableSingle(const TSessionId& session,
+                                     const std::string& table_name,
+                                     const std::string& file_name_in,
+                                     const import_export::CopyParams& copy_params,
+                                     const TRowDescriptor& row_desc,
+                                     const TCreateParams& create_params) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
@@ -5098,8 +5118,6 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
       executor->clearQuerySessionStatus(session, start_time);
     }
   };
-
-  import_export::CopyParams copy_params = thrift_to_copyparams(cp);
 
   std::string file_name{file_name_in};
 
@@ -5319,7 +5337,7 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
       // we don't have a RowDescriptor
       // we have to detect the file ourselves
       TDetectResult cds;
-      TCopyParams cp_copy = cp;
+      TCopyParams cp_copy = copyparams_to_thrift(copy_params);
       cp_copy.geo_layer_name = layer_name;
       try {
         detect_column_types(cds, session, file_name_in, cp_copy);
@@ -5335,7 +5353,7 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
       const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
       if (!td) {
         try {
-          create_table(session, this_table_name, rd, cp.file_type, create_params);
+          create_table(session, this_table_name, rd, cp_copy.file_type, create_params);
         } catch (const std::exception& e) {
           // capture the error and abort this layer
           caught_exception_messages.emplace_back("Failed to create table for Layer '" +
@@ -5527,7 +5545,8 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
 
     try {
       // import this layer only?
-      copy_params.geo_layer_name = layer_name;
+      import_export::CopyParams copy_params_copy = copy_params;
+      copy_params_copy.geo_layer_name = layer_name;
 
       // create an importer
       std::unique_ptr<import_export::Importer> importer;
@@ -5538,7 +5557,7 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
             copy_params));
       } else {
         importer.reset(
-            new import_export::Importer(cat, td, file_path.string(), copy_params));
+            new import_export::Importer(cat, td, file_path.string(), copy_params_copy));
       }
 
       // import
