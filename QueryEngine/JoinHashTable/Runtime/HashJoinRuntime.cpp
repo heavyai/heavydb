@@ -34,6 +34,8 @@
 #include "StringDictionary/StringDictionaryProxy.h"
 
 #include <x86intrin.h>
+
+#include <tbb/parallel_for.h>
 #include <future>
 #endif
 
@@ -182,6 +184,24 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
   init_hash_join_buff_cpu(groups_buffer, invalid_slot_val, start, end);
 #endif
 }
+
+#ifndef __CUDACC__
+
+void SUFFIX(init_hash_join_buff_tbb)(int32_t* groups_buffer,
+                                     const int64_t hash_entry_count,
+                                     const int32_t invalid_slot_val) {
+  tbb::parallel_for(tbb::blocked_range<int64_t>(0, hash_entry_count),
+                    [=](const tbb::blocked_range<int64_t>& r) {
+                      const auto start_idx = r.begin();
+                      const auto end_idx = r.end();
+                      for (auto entry_idx = start_idx; entry_idx != end_idx;
+                           ++entry_idx) {
+                        groups_buffer[entry_idx] = invalid_slot_val;
+                      }
+                    });
+}
+
+#endif
 
 #ifdef __CUDACC__
 #define mapd_cas(address, compare, val) atomicCAS(address, compare, val)
