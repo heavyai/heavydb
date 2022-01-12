@@ -36,6 +36,7 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t num_elems,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     return fill_baseline_hash_join_buff_32(hash_buff,
                                            entry_count,
@@ -85,6 +86,7 @@ int fill_baseline_hash_join_buff(int8_t* hash_buff,
                                  const size_t num_elems,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     return fill_baseline_hash_join_buff_64(hash_buff,
                                            entry_count,
@@ -133,6 +135,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_32(hash_buff,
                                               entry_count,
@@ -164,6 +167,7 @@ void fill_baseline_hash_join_buff_on_device(int8_t* hash_buff,
                                             int* dev_err_buff,
                                             const KEY_HANDLER* key_handler,
                                             const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_baseline_hash_join_buff_on_device_64(hash_buff,
                                               entry_count,
@@ -207,6 +211,7 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_32(buff,
                                                       composite_key_dict,
@@ -233,6 +238,7 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
+  auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
     fill_one_to_many_baseline_hash_table_on_device_64(buff,
                                                       composite_key_dict,

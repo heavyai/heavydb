@@ -41,7 +41,7 @@ class StringDictionaryProxy {
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() const noexcept;
   int64_t getGeneration() const noexcept;
-  std::vector<int32_t> getTransientBulk(const std::vector<std::string>& strings);
+  std::vector<int32_t> getTransientBulk(const std::vector<std::string>& strings) const;
   int32_t getOrAddTransient(const std::string& str);
   std::vector<int32_t> getOrAddTransientBulk(const std::vector<std::string>& strings);
   int32_t getIdOfString(const std::string& str) const;
@@ -69,7 +69,9 @@ class StringDictionaryProxy {
    *
    */
   std::vector<int32_t> buildTranslationMapToOtherProxy(
-      std::shared_ptr<StringDictionaryProxy> dest_proxy) const;
+      const std::shared_ptr<StringDictionaryProxy> dest_proxy) const;
+  std::vector<int32_t> buildTranslationMapToOtherProxy(
+      const StringDictionaryProxy* dest_proxy) const;
 
   /**
    * @brief Returns the number of string entries in the underlying string dictionary,

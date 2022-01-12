@@ -224,6 +224,21 @@ class PerfectJoinHashTableBuilder {
 
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
     const auto inner_outer_str_dict_proxies = getStrDictProxies(cols, executor);
+    const bool translate_dictionary =
+        inner_outer_str_dict_proxies.first && inner_outer_str_dict_proxies.second;
+    const auto inner_to_outer_translation_map =
+        translate_dictionary
+            ? inner_outer_str_dict_proxies.first->buildTranslationMapToOtherProxy(
+                  inner_outer_str_dict_proxies.second)
+            : std::vector<int32_t>();
+    const int32_t* inner_to_outer_translation_map_ptr =
+        translate_dictionary ? inner_to_outer_translation_map.data() : nullptr;
+
+    // if (inner_outer_str_dict_proxies.first) { // inner proxy
+    //  CHECK(inner_outer_str_dict_proxies.second);
+    //  sd_inner_dict_proxy->buildTranslationMapToOtherProxy(inner_outer_str_dict_proxies.second);
+    //}
+
     int thread_count = cpu_threads();
     std::vector<std::thread> init_cpu_buff_threads;
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
@@ -246,10 +261,12 @@ class PerfectJoinHashTableBuilder {
 
     const bool for_semi_join = for_semi_anti_join(join_type);
     std::atomic<int> err{0};
+
+    auto timer2 = DEBUG_TIMER("Init of hash table buffer - CPU");
     for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
       init_cpu_buff_threads.emplace_back([hash_join_invalid_val,
                                           &join_column,
-                                          inner_outer_str_dict_proxies,
+                                          inner_to_outer_translation_map_ptr,
                                           thread_idx,
                                           thread_count,
                                           &ti,
@@ -259,23 +276,25 @@ class PerfectJoinHashTableBuilder {
                                           &for_semi_join,
                                           cpu_hash_table_buff,
                                           hash_entry_info] {
-        int partial_err = fill_hash_join_buff_bucketized(
-            cpu_hash_table_buff,
-            hash_join_invalid_val,
-            for_semi_join,
-            join_column,
-            {static_cast<size_t>(ti.get_size()),
-             col_range.getIntMin(),
-             col_range.getIntMax(),
-             inline_fixed_encoding_null_val(ti),
-             is_bitwise_eq,
-             col_range.getIntMax() + 1,
-             get_join_column_type_kind(ti)},
-            inner_outer_str_dict_proxies.first,   // inner proxy
-            inner_outer_str_dict_proxies.second,  // outer proxy
-            thread_idx,
-            thread_count,
-            hash_entry_info.bucket_normalization);
+        auto timer = DEBUG_TIMER("fill_hash_join_buff_bucketized");
+        int partial_err =
+            fill_hash_join_buff_bucketized(cpu_hash_table_buff,
+                                           hash_join_invalid_val,
+                                           for_semi_join,
+                                           join_column,
+                                           {static_cast<size_t>(ti.get_size()),
+                                            col_range.getIntMin(),
+                                            col_range.getIntMax(),
+                                            inline_fixed_encoding_null_val(ti),
+                                            is_bitwise_eq,
+                                            col_range.getIntMax() + 1,
+                                            get_join_column_type_kind(ti)},
+                                           inner_to_outer_translation_map_ptr,
+                                           0,
+                                           0,
+                                           thread_idx,
+                                           thread_count,
+                                           hash_entry_info.bucket_normalization);
         int zero{0};
         err.compare_exchange_strong(zero, partial_err);
       });
@@ -312,6 +331,15 @@ class PerfectJoinHashTableBuilder {
 
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
     const auto inner_outer_str_dict_proxies = getStrDictProxies(cols, executor);
+    const bool translate_dictionary =
+        inner_outer_str_dict_proxies.first && inner_outer_str_dict_proxies.second;
+    const auto inner_to_outer_translation_map =
+        translate_dictionary
+            ? inner_outer_str_dict_proxies.first->buildTranslationMapToOtherProxy(
+                  inner_outer_str_dict_proxies.second)
+            : std::vector<int32_t>();
+    const int32_t* inner_to_outer_translation_map_ptr =
+        translate_dictionary ? inner_to_outer_translation_map.data() : nullptr;
     int thread_count = cpu_threads();
     std::vector<std::future<void>> init_threads;
     {
@@ -334,22 +362,23 @@ class PerfectJoinHashTableBuilder {
       }
     }
     if (ti.get_type() == kDATE) {
-      fill_one_to_many_hash_table_bucketized(
-          cpu_hash_table_buff,
-          hash_entry_info,
-          hash_join_invalid_val,
-          join_column,
-          {static_cast<size_t>(ti.get_size()),
-           col_range.getIntMin(),
-           col_range.getIntMax(),
-           inline_fixed_encoding_null_val(ti),
-           is_bitwise_eq,
-           col_range.getIntMax() + 1,
-           get_join_column_type_kind(ti)},
-          inner_outer_str_dict_proxies.first,   // inner proxy
-          inner_outer_str_dict_proxies.second,  // outer proxy
-          thread_count);
+      fill_one_to_many_hash_table_bucketized(cpu_hash_table_buff,
+                                             hash_entry_info,
+                                             hash_join_invalid_val,
+                                             join_column,
+                                             {static_cast<size_t>(ti.get_size()),
+                                              col_range.getIntMin(),
+                                              col_range.getIntMax(),
+                                              inline_fixed_encoding_null_val(ti),
+                                              is_bitwise_eq,
+                                              col_range.getIntMax() + 1,
+                                              get_join_column_type_kind(ti)},
+                                             inner_to_outer_translation_map_ptr,
+                                             0,
+                                             0,
+                                             thread_count);
     } else {
+      auto timer = DEBUG_TIMER("fill_one_to_many_hash_table");
       fill_one_to_many_hash_table(cpu_hash_table_buff,
                                   hash_entry_info,
                                   hash_join_invalid_val,
@@ -361,8 +390,9 @@ class PerfectJoinHashTableBuilder {
                                    is_bitwise_eq,
                                    col_range.getIntMax() + 1,
                                    get_join_column_type_kind(ti)},
-                                  inner_outer_str_dict_proxies.first,   // inner proxy
-                                  inner_outer_str_dict_proxies.second,  // outer proxy
+                                  inner_to_outer_translation_map_ptr,
+                                  0,
+                                  0,
                                   thread_count);
     }
   }

@@ -86,6 +86,21 @@ inline int64_t translate_str_id_to_outer_dict(const int64_t elem,
   return outer_id;
 }
 
+inline int64_t map_str_id_to_outer_dict(const int64_t inner_elem,
+                                        const int64_t min_inner_elem,
+                                        const int64_t max_inner_elem,
+                                        const int64_t min_outer_elem,
+                                        const int64_t max_outer_elem,
+                                        const int32_t* inner_to_outer_translation_map) {
+  // CHECK(inner_to_outer_translation_map);
+  // CHECK_GE(inner_elem, min_inner_elem);
+  const auto outer_id = inner_to_outer_translation_map[inner_elem - min_inner_elem];
+  if (outer_id > max_outer_elem || outer_id < min_outer_elem) {
+    return StringDictionary::INVALID_STR_ID;
+  }
+  return outer_id;
+}
+
 }  // namespace
 #endif
 
@@ -122,8 +137,9 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
                                      const int32_t invalid_slot_val,
                                      const JoinColumn join_column,
                                      const JoinColumnTypeInfo type_info,
-                                     const void* sd_inner_proxy,
-                                     const void* sd_outer_proxy,
+                                     const int32_t* sd_inner_to_outer_translation_map,
+                                     const int32_t min_inner_elem,
+                                     const int32_t max_inner_elem,
                                      const int32_t cpu_thread_idx,
                                      const int32_t cpu_thread_count,
                                      HASHTABLE_FILLING_FUNC filling_func) {
@@ -146,17 +162,21 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy &&
+    if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      const auto outer_id = translate_str_id_to_outer_dict(
-          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
+      const auto outer_id = map_str_id_to_outer_dict(elem,
+                                                     min_inner_elem,
+                                                     max_inner_elem,
+                                                     type_info.min_val,
+                                                     type_info.max_val,
+                                                     sd_inner_to_outer_translation_map);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
       elem = outer_id;
     }
-    CHECK_GE(elem, type_info.min_val)
-        << "Element " << elem << " less than min val " << type_info.min_val;
+    // CHECK_GE(elem, type_info.min_val)
+    //    << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     if (filling_func(elem, index)) {
       return -1;
@@ -165,16 +185,18 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
   return 0;
 };
 
-DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(int32_t* buff,
-                                                  const int32_t invalid_slot_val,
-                                                  const bool for_semi_join,
-                                                  const JoinColumn join_column,
-                                                  const JoinColumnTypeInfo type_info,
-                                                  const void* sd_inner_proxy,
-                                                  const void* sd_outer_proxy,
-                                                  const int32_t cpu_thread_idx,
-                                                  const int32_t cpu_thread_count,
-                                                  const int64_t bucket_normalization) {
+DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(
+    int32_t* buff,
+    const int32_t invalid_slot_val,
+    const bool for_semi_join,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count,
+    const int64_t bucket_normalization) {
   auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
                                     : SUFFIX(fill_one_to_one_hashtable);
   auto hashtable_filling_func = [&](auto elem, size_t index) {
@@ -187,8 +209,9 @@ DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(int32_t* buff,
                                   invalid_slot_val,
                                   join_column,
                                   type_info,
-                                  sd_inner_proxy,
-                                  sd_outer_proxy,
+                                  sd_inner_to_outer_translation_map,
+                                  min_inner_elem,
+                                  max_inner_elem,
                                   cpu_thread_idx,
                                   cpu_thread_count,
                                   hashtable_filling_func);
@@ -199,8 +222,9 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
                                        const bool for_semi_join,
                                        const JoinColumn join_column,
                                        const JoinColumnTypeInfo type_info,
-                                       const void* sd_inner_proxy,
-                                       const void* sd_outer_proxy,
+                                       const int32_t* sd_inner_to_outer_translation_map,
+                                       const int32_t min_inner_elem,
+                                       const int32_t max_inner_elem,
                                        const int32_t cpu_thread_idx,
                                        const int32_t cpu_thread_count) {
   auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
@@ -214,24 +238,27 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
                                   invalid_slot_val,
                                   join_column,
                                   type_info,
-                                  sd_inner_proxy,
-                                  sd_outer_proxy,
+                                  sd_inner_to_outer_translation_map,
+                                  min_inner_elem,
+                                  max_inner_elem,
                                   cpu_thread_idx,
                                   cpu_thread_count,
                                   hashtable_filling_func);
 }
 
 template <typename HASHTABLE_FILLING_FUNC>
-DEVICE int fill_hash_join_buff_sharded_impl(int32_t* buff,
-                                            const int32_t invalid_slot_val,
-                                            const JoinColumn join_column,
-                                            const JoinColumnTypeInfo type_info,
-                                            const ShardInfo shard_info,
-                                            const void* sd_inner_proxy,
-                                            const void* sd_outer_proxy,
-                                            const int32_t cpu_thread_idx,
-                                            const int32_t cpu_thread_count,
-                                            HASHTABLE_FILLING_FUNC filling_func) {
+DEVICE int fill_hash_join_buff_sharded_impl(
+    int32_t* buff,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count,
+    HASHTABLE_FILLING_FUNC filling_func) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -255,17 +282,21 @@ DEVICE int fill_hash_join_buff_sharded_impl(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy &&
+    if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      const auto outer_id = translate_str_id_to_outer_dict(
-          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
+      const auto outer_id = map_str_id_to_outer_dict(elem,
+                                                     min_inner_elem,
+                                                     max_inner_elem,
+                                                     type_info.min_val,
+                                                     type_info.max_val,
+                                                     sd_inner_to_outer_translation_map);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
       elem = outer_id;
     }
-    CHECK_GE(elem, type_info.min_val)
-        << "Element " << elem << " less than min val " << type_info.min_val;
+    // CHECK_GE(elem, type_info.min_val)
+    //    << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     if (filling_func(elem, shard, index)) {
       return -1;
@@ -281,8 +312,9 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info,
     const ShardInfo shard_info,
-    const void* sd_inner_proxy,
-    const void* sd_outer_proxy,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count,
     const int64_t bucket_normalization) {
@@ -306,23 +338,26 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
                                           join_column,
                                           type_info,
                                           shard_info,
-                                          sd_inner_proxy,
-                                          sd_outer_proxy,
+                                          sd_inner_to_outer_translation_map,
+                                          min_inner_elem,
+                                          max_inner_elem,
                                           cpu_thread_idx,
                                           cpu_thread_count,
                                           hashtable_filling_func);
 }
 
-DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
-                                               const int32_t invalid_slot_val,
-                                               const bool for_semi_join,
-                                               const JoinColumn join_column,
-                                               const JoinColumnTypeInfo type_info,
-                                               const ShardInfo shard_info,
-                                               const void* sd_inner_proxy,
-                                               const void* sd_outer_proxy,
-                                               const int32_t cpu_thread_idx,
-                                               const int32_t cpu_thread_count) {
+DEVICE int SUFFIX(fill_hash_join_buff_sharded)(
+    int32_t* buff,
+    const int32_t invalid_slot_val,
+    const bool for_semi_join,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
   auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
                                     : SUFFIX(fill_one_to_one_hashtable);
   auto hashtable_filling_func = [&](auto elem, auto shard, size_t index) {
@@ -341,8 +376,9 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
                                           join_column,
                                           type_info,
                                           shard_info,
-                                          sd_inner_proxy,
-                                          sd_outer_proxy,
+                                          sd_inner_to_outer_translation_map,
+                                          min_inner_elem,
+                                          max_inner_elem,
                                           cpu_thread_idx,
                                           cpu_thread_count,
                                           hashtable_filling_func);
@@ -629,8 +665,9 @@ DEVICE void count_matches_impl(int32_t* count_buff,
                                const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
                                ,
-                               const void* sd_inner_proxy,
-                               const void* sd_outer_proxy,
+                               const int32_t* sd_inner_to_outer_translation_map,
+                               const int32_t min_inner_elem,
+                               const int32_t max_inner_elem,
                                const int32_t cpu_thread_idx,
                                const int32_t cpu_thread_count
 #endif
@@ -654,17 +691,21 @@ DEVICE void count_matches_impl(int32_t* count_buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy &&
+    if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      const auto outer_id = translate_str_id_to_outer_dict(
-          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
+      const auto outer_id = map_str_id_to_outer_dict(elem,
+                                                     min_inner_elem,
+                                                     max_inner_elem,
+                                                     type_info.min_val,
+                                                     type_info.max_val,
+                                                     sd_inner_to_outer_translation_map);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
       elem = outer_id;
     }
-    CHECK_GE(elem, type_info.min_val)
-        << "Element " << elem << " less than min val " << type_info.min_val;
+    // CHECK_GE(elem, type_info.min_val)
+    //    << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     auto* entry_ptr = slot_selector(count_buff, elem);
     mapd_add(entry_ptr, int32_t(1));
@@ -677,8 +718,9 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
                                   const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
                                   ,
-                                  const void* sd_inner_proxy,
-                                  const void* sd_outer_proxy,
+                                  const int32_t* sd_inner_to_outer_translation_map,
+                                  const int32_t min_inner_elem,
+                                  const int32_t max_inner_elem,
                                   const int32_t cpu_thread_idx,
                                   const int32_t cpu_thread_count
 #endif
@@ -692,8 +734,9 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
                      type_info
 #ifndef __CUDACC__
                      ,
-                     sd_inner_proxy,
-                     sd_outer_proxy,
+                     sd_inner_to_outer_translation_map,
+                     min_inner_elem,
+                     max_inner_elem,
                      cpu_thread_idx,
                      cpu_thread_count
 #endif
@@ -701,19 +744,21 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
                      slot_sel);
 }
 
-GLOBAL void SUFFIX(count_matches_bucketized)(int32_t* count_buff,
-                                             const int32_t invalid_slot_val,
-                                             const JoinColumn join_column,
-                                             const JoinColumnTypeInfo type_info
+GLOBAL void SUFFIX(count_matches_bucketized)(
+    int32_t* count_buff,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
-                                             ,
-                                             const void* sd_inner_proxy,
-                                             const void* sd_outer_proxy,
-                                             const int32_t cpu_thread_idx,
-                                             const int32_t cpu_thread_count
+    ,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count
 #endif
-                                             ,
-                                             const int64_t bucket_normalization) {
+    ,
+    const int64_t bucket_normalization) {
   auto slot_sel = [bucket_normalization, &type_info](auto count_buff, auto elem) {
     return SUFFIX(get_bucketized_hash_slot)(
         count_buff, elem, type_info.min_val, bucket_normalization);
@@ -724,8 +769,9 @@ GLOBAL void SUFFIX(count_matches_bucketized)(int32_t* count_buff,
                      type_info
 #ifndef __CUDACC__
                      ,
-                     sd_inner_proxy,
-                     sd_outer_proxy,
+                     sd_inner_to_outer_translation_map,
+                     min_inner_elem,
+                     max_inner_elem,
                      cpu_thread_idx,
                      cpu_thread_count
 #endif
@@ -733,17 +779,19 @@ GLOBAL void SUFFIX(count_matches_bucketized)(int32_t* count_buff,
                      slot_sel);
 }
 
-GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
-                                          const int32_t invalid_slot_val,
-                                          const JoinColumn join_column,
-                                          const JoinColumnTypeInfo type_info,
-                                          const ShardInfo shard_info
+GLOBAL void SUFFIX(count_matches_sharded)(
+    int32_t* count_buff,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info
 #ifndef __CUDACC__
-                                          ,
-                                          const void* sd_inner_proxy,
-                                          const void* sd_outer_proxy,
-                                          const int32_t cpu_thread_idx,
-                                          const int32_t cpu_thread_count
+    ,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count
 #endif
 ) {
 #ifdef __CUDACC__
@@ -764,17 +812,21 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy &&
+    if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      const auto outer_id = translate_str_id_to_outer_dict(
-          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
+      const auto outer_id = map_str_id_to_outer_dict(elem,
+                                                     min_inner_elem,
+                                                     max_inner_elem,
+                                                     type_info.min_val,
+                                                     type_info.max_val,
+                                                     sd_inner_to_outer_translation_map);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
       elem = outer_id;
     }
-    CHECK_GE(elem, type_info.min_val)
-        << "Element " << elem << " less than min val " << type_info.min_val;
+    // CHECK_GE(elem, type_info.min_val)
+    //    << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(count_buff,
                                                        elem,
@@ -870,8 +922,9 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
                               const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
                               ,
-                              const void* sd_inner_proxy,
-                              const void* sd_outer_proxy,
+                              const int32_t* sd_inner_to_outer_translation_map,
+                              const int32_t min_inner_elem,
+                              const int32_t max_inner_elem,
                               const int32_t cpu_thread_idx,
                               const int32_t cpu_thread_count
 #endif
@@ -900,21 +953,25 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy &&
+    if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      const auto outer_id = translate_str_id_to_outer_dict(
-          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
+      const auto outer_id = map_str_id_to_outer_dict(elem,
+                                                     min_inner_elem,
+                                                     max_inner_elem,
+                                                     type_info.min_val,
+                                                     type_info.max_val,
+                                                     sd_inner_to_outer_translation_map);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
       elem = outer_id;
     }
-    CHECK_GE(elem, type_info.min_val)
-        << "Element " << elem << " less than min val " << type_info.min_val;
+    // CHECK_GE(elem, type_info.min_val)
+    //    << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     auto pos_ptr = slot_selector(pos_buff, elem);
 #ifndef __CUDACC__
-    CHECK_NE(*pos_ptr, invalid_slot_val);
+    // CHECK_NE(*pos_ptr, invalid_slot_val);
 #endif
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
@@ -929,8 +986,9 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                                  const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
                                  ,
-                                 const void* sd_inner_proxy,
-                                 const void* sd_outer_proxy,
+                                 const int32_t* sd_inner_to_outer_translation_map,
+                                 const int32_t min_inner_elem,
+                                 const int32_t max_inner_elem,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count
 #endif
@@ -946,8 +1004,9 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                     type_info
 #ifndef __CUDACC__
                     ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
+                    sd_inner_to_outer_translation_map,
+                    min_inner_elem,
+                    max_inner_elem,
                     cpu_thread_idx,
                     cpu_thread_count
 #endif
@@ -955,20 +1014,22 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                     slot_sel);
 }
 
-GLOBAL void SUFFIX(fill_row_ids_bucketized)(int32_t* buff,
-                                            const int64_t hash_entry_count,
-                                            const int32_t invalid_slot_val,
-                                            const JoinColumn join_column,
-                                            const JoinColumnTypeInfo type_info
+GLOBAL void SUFFIX(fill_row_ids_bucketized)(
+    int32_t* buff,
+    const int64_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
-                                            ,
-                                            const void* sd_inner_proxy,
-                                            const void* sd_outer_proxy,
-                                            const int32_t cpu_thread_idx,
-                                            const int32_t cpu_thread_count
+    ,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count
 #endif
-                                            ,
-                                            const int64_t bucket_normalization) {
+    ,
+    const int64_t bucket_normalization) {
   auto slot_sel = [&type_info, bucket_normalization](auto pos_buff, auto elem) {
     return SUFFIX(get_bucketized_hash_slot)(
         pos_buff, elem, type_info.min_val, bucket_normalization);
@@ -980,8 +1041,9 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(int32_t* buff,
                     type_info
 #ifndef __CUDACC__
                     ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
+                    sd_inner_to_outer_translation_map,
+                    min_inner_elem,
+                    max_inner_elem,
                     cpu_thread_idx,
                     cpu_thread_count
 #endif
@@ -998,8 +1060,9 @@ DEVICE void fill_row_ids_sharded_impl(int32_t* buff,
                                       const ShardInfo shard_info
 #ifndef __CUDACC__
                                       ,
-                                      const void* sd_inner_proxy,
-                                      const void* sd_outer_proxy,
+                                      const int32_t* sd_inner_to_outer_translation_map,
+                                      const int32_t min_inner_elem,
+                                      const int32_t max_inner_elem,
                                       const int32_t cpu_thread_idx,
                                       const int32_t cpu_thread_count
 #endif
@@ -1029,21 +1092,25 @@ DEVICE void fill_row_ids_sharded_impl(int32_t* buff,
       }
     }
 #ifndef __CUDACC__
-    if (sd_inner_proxy &&
+    if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      const auto outer_id = translate_str_id_to_outer_dict(
-          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
+      const auto outer_id = map_str_id_to_outer_dict(elem,
+                                                     min_inner_elem,
+                                                     max_inner_elem,
+                                                     type_info.min_val,
+                                                     type_info.max_val,
+                                                     sd_inner_to_outer_translation_map);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
       elem = outer_id;
     }
-    CHECK_GE(elem, type_info.min_val)
-        << "Element " << elem << " less than min val " << type_info.min_val;
+    // CHECK_GE(elem, type_info.min_val)
+    //    << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     auto* pos_ptr = slot_selector(pos_buff, elem);
 #ifndef __CUDACC__
-    CHECK_NE(*pos_ptr, invalid_slot_val);
+    // CHECK_NE(*pos_ptr, invalid_slot_val);
 #endif
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
@@ -1059,8 +1126,9 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                                          const ShardInfo shard_info
 #ifndef __CUDACC__
                                          ,
-                                         const void* sd_inner_proxy,
-                                         const void* sd_outer_proxy,
+                                         const int32_t* sd_inner_to_outer_translation_map,
+                                         const int32_t min_inner_elem,
+                                         const int32_t max_inner_elem,
                                          const int32_t cpu_thread_idx,
                                          const int32_t cpu_thread_count
 #endif
@@ -1081,8 +1149,9 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                     type_info
 #ifndef __CUDACC__
                     ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
+                    sd_inner_to_outer_translation_map,
+                    min_inner_elem,
+                    max_inner_elem,
                     cpu_thread_idx,
                     cpu_thread_count
 #endif
@@ -1090,21 +1159,23 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                     slot_sel);
 }
 
-GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(int32_t* buff,
-                                                    const int64_t hash_entry_count,
-                                                    const int32_t invalid_slot_val,
-                                                    const JoinColumn join_column,
-                                                    const JoinColumnTypeInfo type_info,
-                                                    const ShardInfo shard_info
+GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
+    int32_t* buff,
+    const int64_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info
 #ifndef __CUDACC__
-                                                    ,
-                                                    const void* sd_inner_proxy,
-                                                    const void* sd_outer_proxy,
-                                                    const int32_t cpu_thread_idx,
-                                                    const int32_t cpu_thread_count
+    ,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count
 #endif
-                                                    ,
-                                                    const int64_t bucket_normalization) {
+    ,
+    const int64_t bucket_normalization) {
   auto slot_sel = [&shard_info, &type_info, bucket_normalization](auto pos_buff,
                                                                   auto elem) {
     return SUFFIX(get_bucketized_hash_slot_sharded)(pos_buff,
@@ -1123,8 +1194,9 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(int32_t* buff,
                     type_info
 #ifndef __CUDACC__
                     ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
+                    sd_inner_to_outer_translation_map,
+                    min_inner_elem,
+                    max_inner_elem,
                     cpu_thread_idx,
                     cpu_thread_count
 #endif
@@ -1179,7 +1251,7 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
     const auto entry_idx = (matching_group - composite_key_dict) / key_component_count;
     int32_t* pos_ptr = pos_buff + entry_idx;
 #ifndef __CUDACC__
-    CHECK_NE(*pos_ptr, invalid_slot_val);
+    // CHECK_NE(*pos_ptr, invalid_slot_val);
 #endif
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
@@ -1388,8 +1460,9 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
                                       const int32_t invalid_slot_val,
                                       const JoinColumn& join_column,
                                       const JoinColumnTypeInfo& type_info,
-                                      const void* sd_inner_proxy,
-                                      const void* sd_outer_proxy,
+                                      const int32_t* sd_inner_to_outer_translation_map,
+                                      const int32_t min_inner_elem,
+                                      const int32_t max_inner_elem,
                                       const unsigned cpu_thread_count,
                                       COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_func,
                                       FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_func) {
@@ -1450,24 +1523,27 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                  const int32_t invalid_slot_val,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
-                                 const void* sd_inner_proxy,
-                                 const void* sd_outer_proxy,
+                                 const int32_t* sd_inner_to_outer_translation_map,
+                                 const int32_t min_inner_elem,
+                                 const int32_t max_inner_elem,
                                  const unsigned cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
   auto launch_count_matches = [count_buff = buff + hash_entry_info.hash_entry_count,
                                invalid_slot_val,
                                &join_column,
                                &type_info,
-                               sd_inner_proxy,
-                               sd_outer_proxy](auto cpu_thread_idx,
+                               sd_inner_to_outer_translation_map,
+                               min_inner_elem,
+                               max_inner_elem](auto cpu_thread_idx,
                                                auto cpu_thread_count) {
     SUFFIX(count_matches)
     (count_buff,
      invalid_slot_val,
      join_column,
      type_info,
-     sd_inner_proxy,
-     sd_outer_proxy,
+     sd_inner_to_outer_translation_map,
+     min_inner_elem,
+     max_inner_elem,
      cpu_thread_idx,
      cpu_thread_count);
   };
@@ -1476,8 +1552,9 @@ void fill_one_to_many_hash_table(int32_t* buff,
                               invalid_slot_val,
                               &join_column,
                               &type_info,
-                              sd_inner_proxy,
-                              sd_outer_proxy](auto cpu_thread_idx,
+                              sd_inner_to_outer_translation_map,
+                              min_inner_elem,
+                              max_inner_elem](auto cpu_thread_idx,
                                               auto cpu_thread_count) {
     SUFFIX(fill_row_ids)
     (buff,
@@ -1485,8 +1562,9 @@ void fill_one_to_many_hash_table(int32_t* buff,
      invalid_slot_val,
      join_column,
      type_info,
-     sd_inner_proxy,
-     sd_outer_proxy,
+     sd_inner_to_outer_translation_map,
+     min_inner_elem,
+     max_inner_elem,
      cpu_thread_idx,
      cpu_thread_count);
   };
@@ -1496,21 +1574,24 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                    invalid_slot_val,
                                    join_column,
                                    type_info,
-                                   sd_inner_proxy,
-                                   sd_outer_proxy,
+                                   sd_inner_to_outer_translation_map,
+                                   min_inner_elem,
+                                   max_inner_elem,
                                    cpu_thread_count,
                                    launch_count_matches,
                                    launch_fill_row_ids);
 }
 
-void fill_one_to_many_hash_table_bucketized(int32_t* buff,
-                                            const HashEntryInfo hash_entry_info,
-                                            const int32_t invalid_slot_val,
-                                            const JoinColumn& join_column,
-                                            const JoinColumnTypeInfo& type_info,
-                                            const void* sd_inner_proxy,
-                                            const void* sd_outer_proxy,
-                                            const unsigned cpu_thread_count) {
+void fill_one_to_many_hash_table_bucketized(
+    int32_t* buff,
+    const HashEntryInfo hash_entry_info,
+    const int32_t invalid_slot_val,
+    const JoinColumn& join_column,
+    const JoinColumnTypeInfo& type_info,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
+    const unsigned cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
   auto bucket_normalization = hash_entry_info.bucket_normalization;
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
@@ -1519,16 +1600,18 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
                                invalid_slot_val,
                                &join_column,
                                &type_info,
-                               sd_inner_proxy,
-                               sd_outer_proxy](auto cpu_thread_idx,
+                               sd_inner_to_outer_translation_map,
+                               min_inner_elem,
+                               max_inner_elem](auto cpu_thread_idx,
                                                auto cpu_thread_count) {
     SUFFIX(count_matches_bucketized)
     (count_buff,
      invalid_slot_val,
      join_column,
      type_info,
-     sd_inner_proxy,
-     sd_outer_proxy,
+     sd_inner_to_outer_translation_map,
+     min_inner_elem,
+     max_inner_elem,
      cpu_thread_idx,
      cpu_thread_count,
      bucket_normalization);
@@ -1539,8 +1622,9 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
                               invalid_slot_val,
                               &join_column,
                               &type_info,
-                              sd_inner_proxy,
-                              sd_outer_proxy](auto cpu_thread_idx,
+                              sd_inner_to_outer_translation_map,
+                              min_inner_elem,
+                              max_inner_elem](auto cpu_thread_idx,
                                               auto cpu_thread_count) {
     SUFFIX(fill_row_ids_bucketized)
     (buff,
@@ -1548,8 +1632,9 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
      invalid_slot_val,
      join_column,
      type_info,
-     sd_inner_proxy,
-     sd_outer_proxy,
+     sd_inner_to_outer_translation_map,
+     min_inner_elem,
+     max_inner_elem,
      cpu_thread_idx,
      cpu_thread_count,
      bucket_normalization);
@@ -1560,8 +1645,9 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
                                    invalid_slot_val,
                                    join_column,
                                    type_info,
-                                   sd_inner_proxy,
-                                   sd_outer_proxy,
+                                   sd_inner_to_outer_translation_map,
+                                   min_inner_elem,
+                                   max_inner_elem,
                                    cpu_thread_count,
                                    launch_count_matches,
                                    launch_fill_row_ids);
@@ -1575,8 +1661,9 @@ void fill_one_to_many_hash_table_sharded_impl(
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info,
     const ShardInfo& shard_info,
-    const void* sd_inner_proxy,
-    const void* sd_outer_proxy,
+    const int32_t* sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const unsigned cpu_thread_count,
     COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_launcher,
     FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_launcher) {
@@ -1634,8 +1721,9 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                          const JoinColumn& join_column,
                                          const JoinColumnTypeInfo& type_info,
                                          const ShardInfo& shard_info,
-                                         const void* sd_inner_proxy,
-                                         const void* sd_outer_proxy,
+                                         const int32_t* sd_inner_to_outer_translation_map,
+                                         const int32_t min_inner_elem,
+                                         const int32_t max_inner_elem,
                                          const unsigned cpu_thread_count) {
   auto launch_count_matches = [count_buff = buff + hash_entry_count,
                                invalid_slot_val,
@@ -1644,8 +1732,9 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                &shard_info
 #ifndef __CUDACC__
                                ,
-                               sd_inner_proxy,
-                               sd_outer_proxy
+                               sd_inner_to_outer_translation_map,
+                               min_inner_elem,
+                               max_inner_elem
 #endif
   ](auto cpu_thread_idx, auto cpu_thread_count) {
     return SUFFIX(count_matches_sharded)(count_buff,
@@ -1655,8 +1744,9 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                          shard_info
 #ifndef __CUDACC__
                                          ,
-                                         sd_inner_proxy,
-                                         sd_outer_proxy,
+                                         sd_inner_to_outer_translation_map,
+                                         min_inner_elem,
+                                         max_inner_elem,
                                          cpu_thread_idx,
                                          cpu_thread_count
 #endif
@@ -1671,8 +1761,9 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                               &shard_info
 #ifndef __CUDACC__
                               ,
-                              sd_inner_proxy,
-                              sd_outer_proxy
+                              sd_inner_to_outer_translation_map,
+                              min_inner_elem,
+                              max_inner_elem
 #endif
   ](auto cpu_thread_idx, auto cpu_thread_count) {
     return SUFFIX(fill_row_ids_sharded)(buff,
@@ -1683,8 +1774,9 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                         shard_info
 #ifndef __CUDACC__
                                         ,
-                                        sd_inner_proxy,
-                                        sd_outer_proxy,
+                                        sd_inner_to_outer_translation_map,
+                                        min_inner_elem,
+                                        max_inner_elem,
                                         cpu_thread_idx,
                                         cpu_thread_count);
 #endif
@@ -1698,8 +1790,9 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                            shard_info
 #ifndef __CUDACC__
                                            ,
-                                           sd_inner_proxy,
-                                           sd_outer_proxy,
+                                           sd_inner_to_outer_translation_map,
+                                           min_inner_elem,
+                                           max_inner_elem,
                                            cpu_thread_count
 #endif
                                            ,
