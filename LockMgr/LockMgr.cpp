@@ -31,8 +31,9 @@ namespace helpers {
 
 ChunkKey chunk_key_for_table(const Catalog_Namespace::Catalog& cat,
                              const std::string& tableName) {
-  if (const auto tdp = cat.getMetadataForTable(tableName, false)) {
-    ChunkKey chunk_key{cat.getCurrentDB().dbId, tdp->tableId};
+  const auto table_id = cat.getTableId(tableName);
+  if (table_id.has_value()) {
+    ChunkKey chunk_key{cat.getCurrentDB().dbId, table_id.value()};
     return chunk_key;
   } else {
     throw std::runtime_error("Table/View " + tableName + " for catalog " +

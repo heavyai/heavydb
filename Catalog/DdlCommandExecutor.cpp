@@ -392,7 +392,6 @@ ExecutionResult DdlCommandExecutor::execute() {
     auto export_query_stmt = Parser::ExportQueryStmt(extractPayload(*ddl_data_));
     export_query_stmt.execute(*session_ptr_);
     return result;
-
   } else if (ddl_command_ == "CREATE_DB") {
     auto create_db_stmt = Parser::CreateDBStmt(extractPayload(*ddl_data_));
     create_db_stmt.execute(*session_ptr_);

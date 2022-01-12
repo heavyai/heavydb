@@ -181,6 +181,9 @@ class Catalog final {
   const TableDescriptor* getMetadataForTable(int tableId,
                                              bool populateFragmenter = true) const;
 
+  std::optional<std::string> getTableName(int32_t table_id) const;
+  std::optional<int32_t> getTableId(const std::string& table_name) const;
+
   const ColumnDescriptor* getMetadataForColumn(int tableId,
                                                const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
@@ -701,6 +704,8 @@ class Catalog final {
                                 const GetTablesType get_tables_type) const;
 
   TableDescriptor* getMutableMetadataForTableUnlocked(int table_id) const;
+  TableDescriptor* getMutableMetadataForTableUnlocked(
+      const std::string& table_name) const;
 
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called

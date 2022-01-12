@@ -2319,10 +2319,11 @@ TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
 
 void DBHandler::get_internal_table_details(TTableDetails& _return,
                                            const TSessionId& session,
-                                           const std::string& table_name) {
+                                           const std::string& table_name,
+                                           const bool include_system_columns) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  get_table_details_impl(_return, stdlog, table_name, true, false);
+  get_table_details_impl(_return, stdlog, table_name, include_system_columns, false);
 }
 
 void DBHandler::get_internal_table_details_for_database(
@@ -2340,6 +2341,10 @@ void DBHandler::get_table_details(TTableDetails& _return,
                                   const std::string& table_name) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+
+  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
   get_table_details_impl(_return, stdlog, table_name, false, false);
 }
 
@@ -2349,6 +2354,10 @@ void DBHandler::get_table_details_for_database(TTableDetails& _return,
                                                const std::string& database_name) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+
+  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
   get_table_details_impl(_return, stdlog, table_name, false, false, database_name);
 }
 
@@ -2375,22 +2384,20 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
       stdlog.setQueryState(query_state);
       try {
         if (hasTableAccessPrivileges(td, *session_info)) {
-          // TODO(adb): we should take schema read locks on all tables making up the
-          // view, at minimum
-          const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                                            query_state->getQueryStr(),
-                                            {},
-                                            false,
-                                            system_parameters_,
-                                            false);
+          const auto [query_ra, locks] = parse_to_ra(query_state->createQueryStateProxy(),
+                                                     query_state->getQueryStr(),
+                                                     {},
+                                                     true,
+                                                     system_parameters_,
+                                                     false);
           try {
             calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
-                                                     query_ra.first);
+                                                     query_ra);
           } catch (const std::runtime_error&) {
             have_privileges_on_view_sources = false;
           }
 
-          const auto result = validate_rel_alg(query_ra.first.plan_result,
+          const auto result = validate_rel_alg(query_ra.plan_result,
                                                query_state->createQueryStateProxy());
 
           _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
@@ -2534,36 +2541,38 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
                                      const Catalog_Namespace::SessionInfo& session_info,
                                      const bool with_table_locks) {
   const auto& cat = session_info.getCatalog();
-  const auto tables = cat.getAllTableMetadata();
+  // Get copies of table descriptors here in order to avoid possible use of dangling
+  // pointers, if tables are concurrently dropped.
+  const auto tables = cat.getAllTableMetadataCopy();
   _return.reserve(tables.size());
 
   for (const auto td : tables) {
-    if (td->shard >= 0) {
+    if (td.shard >= 0) {
       // skip shards, they're not standalone tables
       continue;
     }
-    if (!hasTableAccessPrivileges(td, session_info)) {
+    if (!hasTableAccessPrivileges(&td, session_info)) {
       // skip table, as there are no privileges to access it
       continue;
     }
 
     TTableMeta ret;
-    ret.table_name = td->tableName;
-    ret.is_view = td->isView;
-    ret.is_replicated = table_is_replicated(td);
-    ret.shard_count = td->nShards;
-    ret.max_rows = td->maxRows;
-    ret.table_id = td->tableId;
+    ret.table_name = td.tableName;
+    ret.is_view = td.isView;
+    ret.is_replicated = table_is_replicated(&td);
+    ret.shard_count = td.nShards;
+    ret.max_rows = td.maxRows;
+    ret.table_id = td.tableId;
 
     std::vector<TTypeInfo> col_types;
     std::vector<std::string> col_names;
     size_t num_cols = 0;
-    if (td->isView) {
+    if (td.isView) {
       try {
         TPlanResult parse_result;
         lockmgr::LockedTableDescriptors locks;
         std::tie(parse_result, locks) = parse_to_ra(
-            query_state_proxy, td->viewSQL, {}, with_table_locks, system_parameters_);
+            query_state_proxy, td.viewSQL, {}, with_table_locks, system_parameters_);
         const auto query_ra = parse_result.plan_result;
 
         ExecutionResult ex_result;
@@ -2590,14 +2599,14 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
           col_names.push_back(col.col_name);
         }
       } catch (std::exception& e) {
-        LOG(WARNING) << "get_tables_meta: Ignoring broken view: " << td->tableName;
+        LOG(WARNING) << "get_tables_meta: Ignoring broken view: " << td.tableName;
       }
     } else {
       try {
-        if (hasTableAccessPrivileges(td, session_info)) {
+        if (hasTableAccessPrivileges(&td, session_info)) {
           const auto col_descriptors =
-              cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
-          const auto deleted_cd = cat.getDeletedColumn(td);
+              cat.getAllColumnMetadataForTable(td.tableId, false, true, false);
+          const auto deleted_cd = cat.getDeletedColumn(&td);
           for (const auto cd : col_descriptors) {
             if (cd == deleted_cd) {
               continue;
@@ -3051,6 +3060,9 @@ void DBHandler::load_table_binary(const TSessionId& session,
       THROW_MAPD_EXCEPTION("No rows to insert");
     }
 
+    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     auto schema_read_lock = prepare_loader_generic(*session_ptr,
@@ -3236,6 +3248,9 @@ void DBHandler::load_table_binary_columnar_internal(
     return;
   }
 
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
   auto schema_read_lock = prepare_loader_generic(*session_ptr,
@@ -3371,6 +3386,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   if (batches.size() != 1) {
     THROW_MAPD_EXCEPTION("Expected a single Arrow record batch. Import aborted");
   }
+
   std::shared_ptr<arrow::RecordBatch> batch = batches[0];
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
@@ -3378,6 +3394,9 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session,
   if (use_column_names) {
     column_names = batch->schema()->field_names();
   }
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
   auto schema_read_lock =
       prepare_loader_generic(*session_ptr,
                              table_name,
@@ -3437,6 +3456,9 @@ void DBHandler::load_table(const TSessionId& session,
       THROW_MAPD_EXCEPTION("No rows to insert");
     }
 
+    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
     auto schema_read_lock =
@@ -4906,6 +4928,9 @@ void DBHandler::import_table(const TSessionId& session,
     check_read_only("import_table");
     LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
 
+    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
     auto& cat = session_ptr->getCatalog();
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
     auto start_time = ::toString(std::chrono::system_clock::now());
@@ -5321,7 +5346,7 @@ void DBHandler::import_geo_table_internal(const TSessionId& session,
     }
 
     // match locking sequence for CopyTableStmt::execute
-    mapd_unique_lock<mapd_shared_mutex> execute_read_lock(
+    mapd_shared_lock<mapd_shared_mutex> execute_read_lock(
         *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
             legacylockmgr::ExecutorOuterLock, true));
 
@@ -6996,12 +7021,17 @@ void DBHandler::set_table_epoch(const TSessionId& session,
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
-  auto& cat = session_ptr->getCatalog();
-
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+  ChunkKey table_key{db_id, table_id};
+  auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
+  auto table_data_write_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(table_key);
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.set_table_epochLeaf(*session_ptr, db_id, table_id, new_epoch);
   }
   try {
+    auto& cat = session_ptr->getCatalog();
     cat.setTableEpoch(db_id, table_id, new_epoch);
   } catch (const std::runtime_error& e) {
     THROW_MAPD_EXCEPTION(std::string(e.what()));
@@ -7018,7 +7048,15 @@ void DBHandler::set_table_epoch_by_name(const TSessionId& session,
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
   }
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
   auto& cat = session_ptr->getCatalog();
+  auto table_write_lock =
+      lockmgr::TableSchemaLockMgr::getWriteLockForTable(cat, table_name);
+  auto table_data_write_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable(cat, table_name);
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
@@ -7040,12 +7078,18 @@ int32_t DBHandler::get_table_epoch(const TSessionId& session,
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
-  auto const& cat = session_ptr->getCatalog();
 
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+  ChunkKey table_key{db_id, table_id};
+  auto table_read_lock = lockmgr::TableSchemaLockMgr::getReadLockForTable(table_key);
+  auto table_data_write_lock = lockmgr::TableDataLockMgr::getReadLockForTable(table_key);
   if (leaf_aggregator_.leafCount() > 0) {
     return leaf_aggregator_.get_table_epochLeaf(*session_ptr, db_id, table_id);
   }
   try {
+    auto const& cat = session_ptr->getCatalog();
     return cat.getTableEpoch(db_id, table_id);
   } catch (const std::runtime_error& e) {
     THROW_MAPD_EXCEPTION(std::string(e.what()));
@@ -7057,7 +7101,15 @@ int32_t DBHandler::get_table_epoch_by_name(const TSessionId& session,
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
   auto const& cat = session_ptr->getCatalog();
+  auto table_read_lock =
+      lockmgr::TableSchemaLockMgr::getReadLockForTable(cat, table_name);
+  auto table_data_read_lock =
+      lockmgr::TableDataLockMgr::getReadLockForTable(cat, table_name);
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
@@ -7079,12 +7131,19 @@ void DBHandler::get_table_epochs(std::vector<TTableEpochInfo>& _return,
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
-  auto const& cat = session_ptr->getCatalog();
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+  ChunkKey table_key{db_id, table_id};
+  auto table_read_lock = lockmgr::TableSchemaLockMgr::getReadLockForTable(table_key);
+  auto table_data_read_lock = lockmgr::TableDataLockMgr::getReadLockForTable(table_key);
 
   std::vector<Catalog_Namespace::TableEpochInfo> table_epochs;
   if (leaf_aggregator_.leafCount() > 0) {
     table_epochs = leaf_aggregator_.getLeafTableEpochs(*session_ptr, db_id, table_id);
   } else {
+    auto const& cat = session_ptr->getCatalog();
     table_epochs = cat.getTableEpochs(db_id, table_id);
   }
   CHECK(!table_epochs.empty());
@@ -7112,15 +7171,29 @@ void DBHandler::set_table_epochs(const TSessionId& session,
       THROW_MAPD_EXCEPTION("Only super users can set table epochs");
     }
   }
+  if (table_epochs.empty()) {
+    return;
+  }
+  auto& cat = session_ptr->getCatalog();
+  auto logical_table_id = cat.getLogicalTableId(table_epochs[0].table_id);
   std::vector<Catalog_Namespace::TableEpochInfo> table_epochs_vector;
   for (const auto& table_epoch : table_epochs) {
+    if (logical_table_id != cat.getLogicalTableId(table_epoch.table_id)) {
+      THROW_MAPD_EXCEPTION("Table epochs do not reference the same logical table");
+    }
     table_epochs_vector.emplace_back(
         table_epoch.table_id, table_epoch.table_epoch, table_epoch.leaf_index);
   }
+
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+  ChunkKey table_key{db_id, logical_table_id};
+  auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
+  auto table_data_write_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(table_key);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.setLeafTableEpochs(*session_ptr, db_id, table_epochs_vector);
   } else {
-    auto& cat = session_ptr->getCatalog();
     cat.setTableEpochs(db_id, table_epochs_vector);
   }
 }

@@ -674,16 +674,31 @@ class SetTableEpochsTest : public EpochConsistencyTest {
 
   static void TearDownTestSuite() { EpochConsistencyTest::TearDownTestSuite(); }
 
+  void SetUp() override {
+    EpochConsistencyTest::SetUp();
+    sql("drop table if exists test_table;");
+    sql("drop table if exists test_table_2;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists test_table;");
+    sql("drop table if exists test_table_2;");
+    EpochConsistencyTest::TearDown();
+  }
+
   std::pair<int32_t, std::vector<TTableEpochInfo>> getDbIdAndTableEpochs() {
     const auto& catalog = getCatalog();
-    auto table_id = catalog.getMetadataForTable("test_table", false)->tableId;
+    auto td = catalog.getMetadataForTable("test_table", false);
+    auto tables = catalog.getPhysicalTablesDescriptors(td, false);
     std::vector<TTableEpochInfo> table_epoch_info_vector;
-    for (size_t i = 0; i < 2; i++) {
-      TTableEpochInfo table_epoch_info;
-      table_epoch_info.table_epoch = 1;
-      table_epoch_info.table_id = table_id;
-      table_epoch_info.leaf_index = i;
-      table_epoch_info_vector.emplace_back(table_epoch_info);
+    for (auto table : tables) {
+      for (size_t i = 0; i < 2; i++) {
+        TTableEpochInfo table_epoch_info;
+        table_epoch_info.table_epoch = 1;
+        table_epoch_info.table_id = table->tableId;
+        table_epoch_info.leaf_index = i;
+        table_epoch_info_vector.emplace_back(table_epoch_info);
+      }
     }
     return {catalog.getDatabaseId(), table_epoch_info_vector};
   }
@@ -734,6 +749,32 @@ TEST_F(SetTableEpochsTest, NonSuperUser) {
         db_handler->set_table_epochs(session_id, db_id, epoch_vector);
       },
       "Only super users can set table epochs");
+}
+
+TEST_F(SetTableEpochsTest, ShardedTable) {
+  loginAdmin();
+  sql("create table test_table (a int, shard key(a)) with (shard_count = 4);");
+
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  auto [db_id, epoch_vector] = getDbIdAndTableEpochs();
+  db_handler->set_table_epochs(session_id, db_id, epoch_vector);
+}
+
+TEST_F(SetTableEpochsTest, EpochWithDifferentLogicalTable) {
+  loginAdmin();
+  sql("create table test_table (a int, shard key(a)) with (shard_count = 4);");
+  sql("create table test_table_2 (a int);");
+
+  executeLambdaAndAssertException(
+      [this] {
+        auto [db_handler, session_id] = getDbHandlerAndSessionId();
+        auto [db_id, epoch_vector] = getDbIdAndTableEpochs();
+        ASSERT_GT(epoch_vector.size(), static_cast<size_t>(1));
+        epoch_vector[0].table_id =
+            getCatalog().getMetadataForTable("test_table_2")->tableId;
+        db_handler->set_table_epochs(session_id, db_id, epoch_vector);
+      },
+      "Table epochs do not reference the same logical table");
 }
 
 TEST_F(SetTableEpochsTest, Capped) {
@@ -897,7 +938,6 @@ TEST_F(SetTableEpochsTest, DropColumn) {
 class EpochValidationTest : public EpochConsistencyTest {
  protected:
   static void SetUpTestSuite() {
-    g_enable_fsi = true;
     DBHandlerTestFixture::SetUpTestSuite();
     switchToAdmin();
     sql("DROP DATABASE IF EXISTS test_db;");
@@ -1099,6 +1139,7 @@ TEST_F(EmptyChunkRolloffTest, ShardedTable) {
 }
 
 int main(int argc, char** argv) {
+  g_enable_fsi = true;
   testing::InitGoogleTest(&argc, argv);
 
   po::options_description desc("Options");

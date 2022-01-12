@@ -597,7 +597,7 @@ service OmniSci {
   list<TTableMeta> get_tables_meta(1: TSessionId session) throws (1: TOmniSciException e)
   TTableDetails get_table_details(1: TSessionId session, 2: string table_name) throws (1: TOmniSciException e)
   TTableDetails get_table_details_for_database(1: TSessionId session, 2: string table_name, 3: string database_name) throws (1: TOmniSciException e)
-  TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name) throws (1: TOmniSciException e)
+  TTableDetails get_internal_table_details(1: TSessionId session, 2: string table_name, 3: bool include_system_columns = true) throws (1: TOmniSciException e)
   TTableDetails get_internal_table_details_for_database(1: TSessionId session, 2: string table_name, 3: string database_name) throws (1: TOmniSciException e)
   list<string> get_users(1: TSessionId session) throws (1: TOmniSciException e)
   list<TDBInfo> get_databases(1: TSessionId session) throws (1: TOmniSciException e)

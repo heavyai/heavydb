@@ -23,6 +23,7 @@ import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +51,11 @@ public class MapdTestClient {
 
   public TTableDetails get_table_details(String table_name) throws Exception {
     return client.get_table_details(sessionId, table_name);
+  }
+
+  public TTableDetails get_table_details_for_database(
+          String tableName, String databaseName) throws Exception {
+    return client.get_table_details_for_database(sessionId, tableName, databaseName);
   }
 
   public List<TTableMeta> get_tables_meta() throws TOmniSciException, Exception {
@@ -132,6 +138,98 @@ public class MapdTestClient {
 
   public List<TQueryInfo> get_queries_info() throws Exception {
     return client.get_queries_info(sessionId);
+  }
+
+  public void load_table(
+          String tableName, List<List<String>> rows, List<String> columnNames)
+          throws Exception {
+    List<TStringRow> load_rows = new ArrayList<>();
+    for (List<String> row : rows) {
+      TStringRow tStringRow = new TStringRow(new ArrayList<>());
+      for (String value : row) {
+        tStringRow.cols.add(new TStringValue(value, false));
+      }
+      load_rows.add(tStringRow);
+    }
+    client.load_table(sessionId, tableName, load_rows, columnNames);
+  }
+
+  public void load_table_binary(
+          String tableName, List<List<Object>> rows, List<String> columnNames)
+          throws Exception {
+    List<TRow> load_rows = new ArrayList<>();
+    for (List<Object> row : rows) {
+      TRow tRow = new TRow(new ArrayList<>());
+      for (Object value : row) {
+        tRow.cols.add(convertToTDatum(value));
+      }
+      load_rows.add(tRow);
+    }
+    client.load_table_binary(sessionId, tableName, load_rows, columnNames);
+  }
+
+  private TDatum convertToTDatum(Object value) {
+    TDatumVal tDatumVal = new TDatumVal();
+    if (value instanceof Long) {
+      tDatumVal.int_val = ((Long) value);
+    } else if (value instanceof Double) {
+      tDatumVal.real_val = ((Double) value);
+    } else if (value instanceof String) {
+      tDatumVal.str_val = ((String) value);
+    } else if (value instanceof List) {
+      tDatumVal.arr_val = new ArrayList<>();
+      for (Object arrayValue : ((List<Object>) value)) {
+        tDatumVal.arr_val.add(convertToTDatum(arrayValue));
+      }
+    } else {
+      throw new RuntimeException("Unexpected value type. Value: " + value);
+    }
+    return new TDatum(tDatumVal, false);
+  }
+
+  public void load_table_binary_columnar(
+          String tableName, List<List<Object>> columns, List<String> columnNames)
+          throws Exception {
+    List<TColumn> load_columns = convertToTColumns(columns);
+    client.load_table_binary_columnar(sessionId, tableName, load_columns, columnNames);
+  }
+
+  public void load_table_binary_columnar_polys(
+          String tableName, List<List<Object>> columns, List<String> columnNames)
+          throws Exception {
+    List<TColumn> load_columns = convertToTColumns(columns);
+    client.load_table_binary_columnar_polys(
+            sessionId, tableName, load_columns, columnNames, true);
+  }
+
+  private List<TColumn> convertToTColumns(List<List<Object>> columns) {
+    List<TColumn> load_columns = new ArrayList<>();
+    for (List<Object> column : columns) {
+      load_columns.add(convertToTColumn(column));
+    }
+    return load_columns;
+  }
+
+  private TColumn convertToTColumn(List<Object> column) {
+    TColumn tColumn = new TColumn();
+    tColumn.data = new TColumnData(
+            new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+    tColumn.nulls = new ArrayList<>();
+    for (Object value : column) {
+      if (value instanceof Long) {
+        tColumn.data.int_col.add((Long) value);
+      } else if (value instanceof Double) {
+        tColumn.data.real_col.add((Double) value);
+      } else if (value instanceof String) {
+        tColumn.data.str_col.add((String) value);
+      } else if (value instanceof List) {
+        tColumn.data.arr_col.add(convertToTColumn((List<Object>) value));
+      } else {
+        throw new RuntimeException("Unexpected value type. Value: " + value);
+      }
+      tColumn.nulls.add(false);
+    }
+    return tColumn;
   }
 
   public static MapdTestClient getClient(

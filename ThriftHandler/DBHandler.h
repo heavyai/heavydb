@@ -243,7 +243,8 @@ class DBHandler : public OmniSciIf {
                                       const std::string& database_name) override;
   void get_internal_table_details(TTableDetails& _return,
                                   const TSessionId& session,
-                                  const std::string& table_name) override;
+                                  const std::string& table_name,
+                                  const bool include_system_columns) override;
   void get_internal_table_details_for_database(TTableDetails& _return,
                                                const TSessionId& session,
                                                const std::string& table_name,
@@ -421,15 +422,6 @@ class DBHandler : public OmniSciIf {
                          const std::string& table_name,
                          const std::vector<TRow>& rows,
                          const std::vector<std::string>& column_names) override;
-
-  std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
-  prepare_columnar_loader(
-      const Catalog_Namespace::SessionInfo& session_info,
-      const std::string& table_name,
-      size_t num_cols,
-      std::unique_ptr<import_export::Loader>* loader,
-      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers,
-      const std::vector<std::string>& column_names);
 
   void load_table_binary_columnar(const TSessionId& session,
                                   const std::string& table_name,

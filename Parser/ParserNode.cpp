@@ -2031,28 +2031,25 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
 }
 
 void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
-
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          catalog, *table_);
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::INSERT_INTO_TABLE,
                                        *table_)) {
     throw std::runtime_error("User has no insert privileges on " + *table_ + ".");
   }
-
-  auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
-      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-          legacylockmgr::ExecutorOuterLock, true));
-
   Analyzer::Query query;
   analyze(catalog, query);
 
-  //  Acquire schema write lock -- leave data lock so the fragmenter can checkpoint. For
-  //  singleton inserts we just take a write lock on the schema, which prevents concurrent
-  //  inserts.
-  auto result_table_id = query.get_result_table_id();
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-          catalog, result_table_id);
+  // Take an insert data write lock, which prevents concurrent inserts.
+  const auto insert_data_lock =
+      lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, *table_);
+
   // NOTE(max): we do the same checks as below just a few calls earlier in analyze().
   // Do we keep those intentionally to make sure nothing changed in between w/o
   // catalog locks or is it just a duplicate work?
@@ -3466,6 +3463,64 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   }
 }
 
+namespace {
+int32_t get_table_id(const Catalog_Namespace::Catalog& catalog,
+                     const std::string& table_name) {
+  auto table_id = catalog.getTableId(table_name);
+  if (!table_id.has_value()) {
+    throw std::runtime_error{"Table \"" + table_name + "\" does not exist."};
+  }
+  return table_id.value();
+}
+
+lockmgr::LockedTableDescriptors acquire_query_table_locks(
+    const Catalog_Namespace::Catalog& catalog,
+    const std::string& query_str,
+    const QueryStateProxy& query_state_proxy,
+    const std::optional<std::string>& insert_table_name = {}) {
+  auto calcite_mgr = catalog.getCalciteMgr();
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto result = calcite_mgr->process(query_state_proxy,
+                                           pg_shim(query_str),
+                                           calciteQueryParsingOption,
+                                           calciteOptimizationOption);
+  // force sort into tableid order in case of name change to guarantee fixed order of
+  // mutex access
+  auto comparator = [&catalog](const std::string& table_1, const std::string& table_2) {
+    return get_table_id(catalog, table_1) < get_table_id(catalog, table_2);
+  };
+  std::set<std::string, decltype(comparator)> tables(comparator);
+  for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
+    tables.emplace(tab[0]);
+  }
+  if (insert_table_name.has_value()) {
+    tables.emplace(insert_table_name.value());
+  }
+  lockmgr::LockedTableDescriptors locks;
+  for (const auto& table : tables) {
+    locks.emplace_back(
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+                catalog, table)));
+    if (insert_table_name.has_value() && table == insert_table_name.value()) {
+      locks.emplace_back(
+          std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
+              lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
+                  catalog.getDatabaseId(), (*locks.back())())));
+    } else {
+      locks.emplace_back(
+          std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
+              lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
+                  catalog.getDatabaseId(), (*locks.back())())));
+    }
+  }
+  return locks;
+}
+}  // namespace
+
 void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto session_copy = session;
   auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
@@ -3482,58 +3537,8 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
     throw std::runtime_error("ITAS failed: table " + table_name_ + " does not exist.");
   }
 
-  lockmgr::LockedTableDescriptors locks;
-  std::vector<std::string> tables;
-
-  // get the table info
-  auto calcite_mgr = catalog.getCalciteMgr();
-
-  // TODO MAT this should actually get the global or the session parameter for
-  // view optimization
-  const auto calciteQueryParsingOption =
-      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
-  const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
-                                           pg_shim(select_query_),
-                                           calciteQueryParsingOption,
-                                           calciteOptimizationOption);
-
-  for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
-    tables.emplace_back(tab[0]);
-  }
-  tables.emplace_back(table_name_);
-
-  // force sort into tableid order in case of name change to guarantee fixed order of
-  // mutex access
-  std::sort(tables.begin(),
-            tables.end(),
-            [&catalog](const std::string& a, const std::string& b) {
-              return catalog.getMetadataForTable(a, false)->tableId <
-                     catalog.getMetadataForTable(b, false)->tableId;
-            });
-
-  tables.erase(unique(tables.begin(), tables.end()), tables.end());
-  for (const auto& table : tables) {
-    locks.emplace_back(
-        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
-            lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-                catalog, table)));
-    if (table == table_name_) {
-      // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
-      // table data lock will be aquired in the fragmenter during checkpoint.
-      locks.emplace_back(
-          std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
-              lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
-    } else {
-      locks.emplace_back(
-          std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
-              lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
-    }
-  }
-
+  auto locks = acquire_query_table_locks(
+      catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
   try {
     populateData(query_state->createQueryStateProxy(), td, true, false);
@@ -3588,26 +3593,6 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       }
       throw std::runtime_error("Table " + table_name_ +
                                " already exists and no data was loaded.");
-    }
-
-    // get the table info
-    auto calcite_mgr = catalog.getCalciteMgr();
-
-    // TODO MAT this should actually get the global or the session parameter for
-    // view optimization
-    const auto calciteQueryParsingOption =
-        calcite_mgr->getCalciteQueryParsingOption(true, false, true);
-    const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
-    const auto result = calcite_mgr->process(query_state->createQueryStateProxy(),
-                                             pg_shim(select_query_),
-                                             calciteQueryParsingOption,
-                                             calciteOptimizationOption);
-
-    // TODO 12 Apr 2021 MAT schema change need to keep schema in future
-    // just keeping it moving for now
-    for (auto& tab : result.resolved_accessed_objects.tables_selected_from) {
-      select_tables.insert(tab[0]);
     }
 
     // only validate the select query so we get the target types
@@ -3709,42 +3694,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
 
-  lockmgr::LockedTableDescriptors locks;
-  std::vector<std::string> tables;
-  tables.insert(tables.end(), select_tables.begin(), select_tables.end());
-  CHECK_EQ(tables.size(), select_tables.size());
-  tables.emplace_back(table_name_);
-  // force sort into tableid order in case of name change to guarantee fixed order of
-  // mutex access
-  std::sort(tables.begin(),
-            tables.end(),
-            [&catalog](const std::string& a, const std::string& b) {
-              return catalog.getMetadataForTable(a, false)->tableId <
-                     catalog.getMetadataForTable(b, false)->tableId;
-            });
-  tables.erase(unique(tables.begin(), tables.end()), tables.end());
-  for (const auto& table : tables) {
-    locks.emplace_back(
-        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
-            lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-                catalog, table)));
-    if (table == table_name_) {
-      // Aquire an insert data lock for updates/deletes, consistent w/ insert. The
-      // table data lock will be aquired in the fragmenter during checkpoint.
-      locks.emplace_back(
-          std::make_unique<lockmgr::TableInsertLockContainer<lockmgr::WriteLock>>(
-              lockmgr::TableInsertLockContainer<lockmgr::WriteLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
-    } else {
-      locks.emplace_back(
-          std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
-              lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
-                  catalog.getDatabaseId(), (*locks.back())())));
-    }
-  }
-
+  auto locks = acquire_query_table_locks(
+      catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
-
   try {
     populateData(query_state->createQueryStateProxy(), td, false, true);
   } catch (...) {
@@ -3769,16 +3721,12 @@ DropTableStmt::DropTableStmt(const rapidjson::Value& payload) {
 }
 
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.getCatalog();
-
-  // TODO(adb): the catalog should be handling this locking.
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
-
+  auto& catalog = session.getCatalog();
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
-
   try {
     td_with_lock =
         std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
@@ -3933,14 +3881,10 @@ TruncateTableStmt::TruncateTableStmt(const rapidjson::Value& payload) {
 }
 
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.getCatalog();
-
-  // TODO: Removal of the FileMgr is not thread safe. Take a global system write lock
-  // when truncating a table
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
-
+  auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table_, true);
@@ -4370,13 +4314,11 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
 }
 
 void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.getCatalog();
-
-  // TODO(adb): the catalog should be handling this locking.
+  // TODO: Review add and drop column implementation
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
-
+  auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table_, true);
@@ -4515,13 +4457,11 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.getCatalog();
-
-  // TODO(adb): the catalog should be handling this locking.
+  // TODO: Review add and drop column implementation
   const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
-
+  auto& catalog = session.getCatalog();
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table_, true);
@@ -4631,9 +4571,7 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
       {"max_rollback_epochs", TableParamType::MaxRollbackEpochs},
       {"epoch", TableParamType::Epoch},
       {"max_rows", TableParamType::MaxRows}};
-  // Below is to ensure that executor is not currently executing on table when we might be
-  // changing it's storage. Question: will/should catalog write lock take care of this?
-  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   auto& catalog = session.getCatalog();
@@ -5944,6 +5882,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
+  auto locks = acquire_query_table_locks(
+      session_ptr->getCatalog(), *select_stmt_, query_state_proxy);
 
   // get column info
   auto column_info_result =

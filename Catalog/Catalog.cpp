@@ -1510,12 +1510,10 @@ const TableDescriptor* Catalog::getMetadataForTable(const string& tableName,
   // we give option not to populate fragmenter (default true/yes) as it can be heavy for
   // pure metadata calls
   cat_read_lock read_lock(this);
-  auto tableDescIt = tableDescriptorMap_.find(to_upper(tableName));
-  if (tableDescIt == tableDescriptorMap_.end()) {  // check to make sure table exists
+  auto td = getMutableMetadataForTableUnlocked(tableName);
+  if (!td) {
     return nullptr;
   }
-  TableDescriptor* td = tableDescIt->second;
-  CHECK(td);
   read_lock.unlock();
   if (populateFragmenter) {
     std::unique_lock<std::mutex> td_lock(*td->mutex_.get());
@@ -1541,6 +1539,33 @@ const TableDescriptor* Catalog::getMetadataForTable(int table_id,
     }
   }
   return td;
+}
+
+std::optional<std::string> Catalog::getTableName(int32_t table_id) const {
+  cat_read_lock read_lock(this);
+  auto td = getMutableMetadataForTableUnlocked(table_id);
+  if (!td) {
+    return {};
+  }
+  return td->tableName;
+}
+
+std::optional<int32_t> Catalog::getTableId(const std::string& table_name) const {
+  cat_read_lock read_lock(this);
+  auto td = getMutableMetadataForTableUnlocked(table_name);
+  if (!td) {
+    return {};
+  }
+  return td->tableId;
+}
+
+TableDescriptor* Catalog::getMutableMetadataForTableUnlocked(
+    const std::string& table_name) const {
+  auto it = tableDescriptorMap_.find(to_upper(table_name));
+  if (it == tableDescriptorMap_.end()) {
+    return nullptr;
+  }
+  return it->second;
 }
 
 TableDescriptor* Catalog::getMutableMetadataForTableUnlocked(int table_id) const {
