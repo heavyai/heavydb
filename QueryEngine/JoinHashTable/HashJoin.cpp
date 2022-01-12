@@ -320,6 +320,47 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   return join_hash_table;
 }
 
+std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
+HashJoin::getStrDictProxies(const InnerOuter& cols, const Executor* executor) {
+  const auto inner_col = cols.first;
+  CHECK(inner_col);
+  const auto inner_ti = inner_col->get_type_info();
+  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+  std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
+      inner_outer_str_dict_proxies{nullptr, nullptr};
+  if (inner_ti.is_string() && outer_col) {
+    CHECK(outer_col->get_type_info().is_string());
+    inner_outer_str_dict_proxies.first =
+        executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
+    CHECK(inner_outer_str_dict_proxies.first);
+    inner_outer_str_dict_proxies.second =
+        executor->getStringDictionaryProxy(outer_col->get_comp_param(), true);
+    CHECK(inner_outer_str_dict_proxies.second);
+    if (*inner_outer_str_dict_proxies.first == *inner_outer_str_dict_proxies.second) {
+      // Dictionaries are the same - don't need to translate
+      CHECK(inner_col->get_comp_param() == outer_col->get_comp_param());
+      inner_outer_str_dict_proxies.first = nullptr;
+      inner_outer_str_dict_proxies.second = nullptr;
+    }
+  }
+  return inner_outer_str_dict_proxies;
+}
+
+std::shared_ptr<StringDictionaryProxyTranslationMap>
+HashJoin::translateInnerToOuterStrDictProxies(const InnerOuter& cols,
+                                              const Executor* executor) {
+  const auto inner_outer_proxies = HashJoin::getStrDictProxies(cols, executor);
+  const bool translate_dictionary =
+      inner_outer_proxies.first && inner_outer_proxies.second;
+  if (translate_dictionary) {
+    CHECK_NE(inner_outer_proxies.first->getDictId(),
+             inner_outer_proxies.second->getDictId());
+    return inner_outer_proxies.first->buildTranslationMapToOtherProxy(
+        inner_outer_proxies.second);
+  }
+  return std::make_shared<StringDictionaryProxyTranslationMap>();
+}
+
 CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const Executor* executor) {

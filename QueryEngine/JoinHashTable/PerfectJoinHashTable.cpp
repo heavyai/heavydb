@@ -306,7 +306,7 @@ void PerfectJoinHashTable::reify() {
       if (device_id == 0 && hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
           getInnerTableId() > 0) {
         // sometimes we cannot retrieve query plan dag, so try to recycler cache
-        // with the old-passioned cache key if we deal with hashtable of non-temporary
+        // with the old-fashioned cache key if we deal with hashtable of non-temporary
         // table
         auto outer_col =
             dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pairs_.front().second);
@@ -496,51 +496,80 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                                CacheItemType::PERFECT_HT,
                                                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     }
+    if (!hash_table) {
+      std::unique_lock<std::mutex> str_proxy_translation_lock(
+          str_proxy_translation_mutex_);
+      // It's not ideal to populate the str dict proxy translation map at the per device
+      // init func, but currently with the hash table cache lookup (above) at this level,
+      // if we do the translation in PerfectJoinHashTable::reify, we don't know if the
+      // hash table is cached and so needlessly compute a potentially expensive proxy
+      // translation even if we have the hash table already cached. Todo(todd/yoonmin):
+      // Hoist cache lookup to PerfectJoinHashTable::reify and then move this proxy
+      // translation to that level as well, conditioned on the hash table not being
+      // cached.
+      if (!str_proxy_translation_map_) {
+        CHECK_GE(inner_outer_pairs_.size(), 1UL);
+        str_proxy_translation_map_ = HashJoin::translateInnerToOuterStrDictProxies(
+            inner_outer_pairs_.front(), executor_);
+        CHECK(str_proxy_translation_map_);
+      }
+    }
     decltype(std::chrono::steady_clock::now()) ts1, ts2;
     ts1 = std::chrono::steady_clock::now();
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       if (!hash_table) {
-        PerfectJoinHashTableBuilder builder;
-        if (hashtable_layout == HashType::OneToOne) {
-          builder.initOneToOneHashTableOnCpu(join_column,
-                                             col_range_,
-                                             isBitwiseEq(),
-                                             cols,
-                                             join_type_,
-                                             hashtable_layout,
-                                             hash_entry_info,
-                                             hash_join_invalid_val,
-                                             executor_);
-          hash_table = builder.getHashTable();
-        } else {
-          builder.initOneToManyHashTableOnCpu(join_column,
-                                              col_range_,
-                                              isBitwiseEq(),
-                                              cols,
-                                              hash_entry_info,
-                                              hash_join_invalid_val,
-                                              executor_);
-          hash_table = builder.getHashTable();
-        }
-        ts2 = std::chrono::steady_clock::now();
-        auto build_time =
-            std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-        if (allow_hashtable_recycling && hash_table) {
-          // add ht-related items to cache iff we have a valid hashtable
-          hash_table_layout_cache_->putItemToCache(
-              hashtable_cache_key_,
-              hashtable_layout,
-              CacheItemType::HT_HASHING_SCHEME,
-              DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-              0,
-              0,
-              {});
-          putHashTableOnCpuToCache(hashtable_cache_key_,
-                                   CacheItemType::PERFECT_HT,
-                                   hash_table,
-                                   DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                   build_time);
+        // Try to get hash table from cache again, since if we are building
+        // for multiple devices, all devices except the first to take
+        // cpu_hash_table_buff_lock should find their hash table cached now
+        // from the first device to run
+        hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
+                                                 CacheItemType::PERFECT_HT,
+                                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+        if (!hash_table) {
+          PerfectJoinHashTableBuilder builder;
+          if (hashtable_layout == HashType::OneToOne) {
+            builder.initOneToOneHashTableOnCpu(join_column,
+                                               col_range_,
+                                               isBitwiseEq(),
+                                               cols,
+                                               str_proxy_translation_map_.get(),
+                                               join_type_,
+                                               hashtable_layout,
+                                               hash_entry_info,
+                                               hash_join_invalid_val,
+                                               executor_);
+            hash_table = builder.getHashTable();
+          } else {
+            builder.initOneToManyHashTableOnCpu(join_column,
+                                                col_range_,
+                                                isBitwiseEq(),
+                                                cols,
+                                                str_proxy_translation_map_.get(),
+                                                hash_entry_info,
+                                                hash_join_invalid_val,
+                                                executor_);
+            hash_table = builder.getHashTable();
+          }
+          ts2 = std::chrono::steady_clock::now();
+          auto build_time =
+              std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
+          if (allow_hashtable_recycling && hash_table) {
+            // add ht-related items to cache iff we have a valid hashtable
+            hash_table_layout_cache_->putItemToCache(
+                hashtable_cache_key_,
+                hashtable_layout,
+                CacheItemType::HT_HASHING_SCHEME,
+                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                0,
+                0,
+                {});
+            putHashTableOnCpuToCache(hashtable_cache_key_,
+                                     CacheItemType::PERFECT_HT,
+                                     hash_table,
+                                     DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                     build_time);
+          }
         }
       }
     }

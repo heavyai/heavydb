@@ -292,6 +292,12 @@ class HashJoin {
       const std::vector<InnerOuter>& inner_outer_pairs,
       const Executor* executor);
 
+  static std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
+  getStrDictProxies(const InnerOuter& cols, const Executor* executor);
+
+  static std::shared_ptr<StringDictionaryProxyTranslationMap>
+  translateInnerToOuterStrDictProxies(const InnerOuter& cols, const Executor* executor);
+
  protected:
   HashJoin(DataProvider* data_provider) : data_provider_(data_provider) {}
 

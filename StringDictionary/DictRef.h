@@ -9,7 +9,10 @@ struct dict_ref_t {
   int32_t dbId;
   int32_t dictId;
 
-  dict_ref_t() {}
+  static constexpr int32_t invalidDbId{-1};
+  static constexpr int32_t invalidDictId{-1};
+
+  dict_ref_t() : dbId(invalidDbId), dictId(invalidDictId) {}
   dict_ref_t(int32_t db_id, int32_t dict_id) : dbId(db_id), dictId(dict_id) {}
 
   inline bool operator==(const struct dict_ref_t& rhs) const {
@@ -32,6 +35,13 @@ struct dict_ref_t {
     std::hash<int32_t> int32_hash;
     return int32_hash(ref.dictId) ^ (int32_hash(ref.dbId) << 2);
   }
+
+  inline std::string toString() const {
+    return "(db_id: " + std::to_string(dbId) + ", dict_id: " + std::to_string(dictId) +
+           ")";
+  }
+
+  static dict_ref_t InvalidDictRef() { return dict_ref_t(); }
 };
 
 using DictRef = struct dict_ref_t;

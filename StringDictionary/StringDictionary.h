@@ -24,6 +24,7 @@
 #include <future>
 #include <map>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -41,15 +42,21 @@ class DictPayloadUnavailable : public std::runtime_error {
 
 using string_dict_hash_t = uint32_t;
 
+using StringLookupCallback = std::function<bool(std::string_view, int32_t string_id)>;
+
 class StringDictionary {
  public:
-  StringDictionary(const std::string& folder,
+  StringDictionary(const DictRef& dict_ref,
+                   const std::string& folder,
                    const bool isTemp,
                    const bool recover,
                    const bool materializeHashes = false,
                    size_t initial_capacity = 256);
   StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
   ~StringDictionary() noexcept;
+
+  int32_t getDbId() const noexcept;
+  int32_t getDictId() const noexcept;
 
   int32_t getOrAdd(const std::string_view& str) noexcept;
   template <class T, class String>
@@ -90,20 +97,16 @@ class StringDictionary {
   std::vector<std::string_view> getStringViews(const size_t generation) const;
 
   std::vector<int32_t> buildDictionaryTranslationMap(
-      std::shared_ptr<StringDictionary> dest_dict) const;
+      const std::shared_ptr<StringDictionary> dest_dict,
+      StringLookupCallback const& dest_transient_lookup_callback) const;
 
-  std::vector<int32_t> buildDictionaryTranslationMap(
-      std::shared_ptr<StringDictionary> dest_dict,
-      const int64_t generation) const;
-
-  template <typename T>
-  size_t buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
-                                       T* translated_ids,
-                                       const int64_t generation) const;
-
-  template <typename T>
-  size_t buildDictionaryTranslationMap(std::shared_ptr<StringDictionary> dest_dict,
-                                       T* translated_ids) const;
+  size_t buildDictionaryTranslationMap(
+      const StringDictionary* dest_dict,
+      int32_t* translated_ids,
+      const int64_t source_generation,
+      const int64_t dest_generation,
+      const bool dest_has_transients,
+      StringLookupCallback const& dest_transient_lookup_callback) const;
 
   bool checkpoint() noexcept;
 
@@ -183,12 +186,12 @@ class StringDictionary {
   void getOrAddBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
 
   template <class T, class String>
-  size_t getBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
+  size_t getBulkRemote(const std::vector<String>& string_vec, T* encoded_vec) const;
 
   template <class T, class String>
   size_t getBulkRemote(const std::vector<String>& string_vec,
                        T* encoded_vec,
-                       const int64_t generation);
+                       const int64_t generation) const;
 
   int32_t getUnlocked(const std::string& str) const noexcept;
   std::string getStringUnlocked(int32_t string_id) const noexcept;
@@ -237,6 +240,7 @@ class StringDictionary {
   void mergeSortedCache(std::vector<int32_t>& temp_sorted_cache);
   compare_cache_value_t* binary_search_cache(const std::string& pattern) const;
 
+  const DictRef dict_ref_;
   const std::string folder_;
   size_t str_count_;
   size_t collisions_;
@@ -260,8 +264,8 @@ class StringDictionary {
   mutable std::map<std::string, int32_t> equal_cache_;
   mutable DictionaryCache<std::string, compare_cache_value_t> compare_cache_;
   mutable std::shared_ptr<std::vector<std::string>> strings_cache_;
-  std::unique_ptr<StringDictionaryClient> client_;
-  std::unique_ptr<StringDictionaryClient> client_no_timeout_;
+  mutable std::unique_ptr<StringDictionaryClient> client_;
+  mutable std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 
   char* CANARY_BUFFER{nullptr};
   size_t canary_buffer_size = 0;

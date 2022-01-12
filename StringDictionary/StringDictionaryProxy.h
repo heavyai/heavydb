@@ -26,6 +26,39 @@
 #include <tuple>
 #include <vector>
 
+using StringDictionaryProxyRange = std::pair<int32_t, int32_t>;
+struct StringDictionaryProxyTranslationMap {
+  int32_t source_domain_min_{0};
+  std::vector<int32_t> translation_map_;
+
+  bool isEmpty() const { return translation_map_.empty(); }
+  size_t size() const { return translation_map_.size(); }
+  size_t numTransientEntries() const {
+    return static_cast<size_t>(source_domain_min_ < 0 ? -source_domain_min_ - 1 : 0);
+  }
+  size_t numStorageEntries() const { return static_cast<size_t>(domainEnd()); }
+  int32_t* dataPtr() { return !isEmpty() ? translation_map_.data() : nullptr; }
+  const int32_t* dataPtr() const {
+    return !isEmpty() ? translation_map_.data() : nullptr;
+  }
+  int32_t* storageEntriesPtr() {
+    return !isEmpty() ? translation_map_.data() +
+                            (numTransientEntries() ? numTransientEntries() + 1 : 0)
+                      : nullptr;
+  }
+  int32_t domainStart() const { return source_domain_min_; }
+  int32_t domainEnd() const { return source_domain_min_ + static_cast<int64_t>(size()); }
+  StringDictionaryProxyRange domain() const {
+    return std::make_pair(source_domain_min_, domainEnd());
+  }
+
+  StringDictionaryProxyTranslationMap(const StringDictionaryProxyRange source_domain)
+      : source_domain_min_(source_domain.first)
+      , translation_map_(std::max(source_domain.second - source_domain.first, 0)) {}
+  // Builds an
+  StringDictionaryProxyTranslationMap() = default;
+};
+
 // used to access a StringDictionary when transient strings are involved
 class StringDictionaryProxy {
   friend bool operator==(const StringDictionaryProxy& sdp1,
@@ -38,9 +71,31 @@ class StringDictionaryProxy {
                         const int32_t string_dict_id,
                         const int64_t generation);
 
+  int32_t getDictId() const noexcept { return string_dict_id_; };
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() const noexcept;
   int64_t getGeneration() const noexcept;
+
+  /**
+   * @brief Executes read-only lookup of a vector of strings and returns a vector of their
+   integer ids
+  *
+  * This function, unlike getOrAddTransientBulk, will not add strings to the dictionary.
+  * Use this function if strings that don't currently exist in the StringDictionaryProxy
+  * should not be added to the proxy as transient entries.
+  * This method also has performance advantages over getOrAddTransientBulk for read-only
+  * use cases, in that it can:
+  * 1) Take a read lock instead of a write lock for the transient lookups
+  * 2) Use a tbb::parallel_for implementation of the transient string lookups as
+  * we are guaranteed that the underlying map of strings to int ids cannot change
+
+  * @param strings - Vector of strings to perform string id lookups on
+  * @return A vector of string_ids of the same length as strings, containing
+  * the id of any strings for which were found in the underlying StringDictionary
+  * instance or in the proxy's tranient map, otherwise
+  * StringDictionary::INVALID_STRING_ID for strings not found.
+  */
+
   std::vector<int32_t> getTransientBulk(const std::vector<std::string>& strings) const;
   int32_t getOrAddTransient(const std::string& str);
   std::vector<int32_t> getOrAddTransientBulk(const std::vector<std::string>& strings);
@@ -50,13 +105,18 @@ class StringDictionaryProxy {
   std::string getString(int32_t string_id) const;
   std::vector<std::string> getStrings(const std::vector<int32_t>& string_ids) const;
   std::pair<const char*, size_t> getStringBytes(int32_t string_id) const noexcept;
+  StringDictionaryProxyRange getRange() const;
+  StringDictionaryProxyRange getRangeUnlocked() const;
 
   /**
    * @brief Builds a vectorized string_id translation map from this proxy to dest_proxy
    *
    * @param dest_proxy StringDictionaryProxy that we are to map this proxy's string ids to
    *
-   * @return std::vector<int32_t> linear dense vector map, where index 0
+   * @return A shared_ptr to a StringDictionaryProxyTranslationMap, which contains
+   * both the source domain range (i.e. the min/max string ids of this proxy), and
+   * a vector representing a lnear dense vector map of source proxy ids
+   * to destination proxy ids, where index 0
    * corresponds to the lowest (negative) transient id in this proxy,
    * and with each increasing index corresponding to the next string_id
    * I.e. if there are 3 transient entries in this proxy, and 20 in the underlying
@@ -68,9 +128,7 @@ class StringDictionaryProxy {
    * string ids from this proxy
    *
    */
-  std::vector<int32_t> buildTranslationMapToOtherProxy(
-      const std::shared_ptr<StringDictionaryProxy> dest_proxy) const;
-  std::vector<int32_t> buildTranslationMapToOtherProxy(
+  std::shared_ptr<StringDictionaryProxyTranslationMap> buildTranslationMapToOtherProxy(
       const StringDictionaryProxy* dest_proxy) const;
 
   /**
@@ -83,12 +141,6 @@ class StringDictionaryProxy {
    *
    */
   size_t storageEntryCount() const;
-
-  /**
-   * @brief
-   *
-   * @return size_t
-   */
 
   /**
    * @brief Returns the number of transient string entries for this proxy,
@@ -106,7 +158,6 @@ class StringDictionaryProxy {
    * @return size_t Number of total string entries for this proxy
    *
    */
-
   size_t entryCount() const;
 
   void updateGeneration(const int64_t generation) noexcept;
@@ -126,9 +177,11 @@ class StringDictionaryProxy {
   }
 
  private:
+  size_t transientEntryCountUnlocked() const;
+  size_t entryCountUnlocked() const;
   int32_t transientLookupAndAddUnlocked(const std::string& str);
   template <typename String>
-  int32_t lookupStringUnlocked(const String& lookup_string) const;
+  int32_t lookupTransientStringUnlocked(const String& lookup_string) const;
   template <typename String>
   void transientLookupBulk(const std::vector<String>& lookup_strings,
                            int32_t* string_ids) const;

@@ -22,6 +22,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/sort/spreadsort/string_sort.hpp>
+#include <functional>
 #include <future>
 #include <iostream>
 #include <string_view>
@@ -86,6 +87,21 @@ string_dict_hash_t hash_string(const std::string_view& str) {
   }
   return str_hash;
 }
+
+struct ThreadInfo {
+  int64_t num_threads{0};
+  int64_t num_elems_per_thread;
+
+  ThreadInfo(const int64_t max_thread_count,
+             const int64_t num_elems,
+             const int64_t target_elems_per_thread) {
+    num_threads =
+        std::min(std::max(max_thread_count, 1L),
+                 ((num_elems + target_elems_per_thread - 1) / target_elems_per_thread));
+    num_elems_per_thread = std::max(((num_elems + num_threads - 1) / num_threads), 1L);
+  }
+};
+
 }  // namespace
 
 bool g_enable_stringdict_parallel{false};
@@ -93,12 +109,14 @@ constexpr int32_t StringDictionary::INVALID_STR_ID;
 constexpr size_t StringDictionary::MAX_STRLEN;
 constexpr size_t StringDictionary::MAX_STRCOUNT;
 
-StringDictionary::StringDictionary(const std::string& folder,
+StringDictionary::StringDictionary(const DictRef& dict_ref,
+                                   const std::string& folder,
                                    const bool isTemp,
                                    const bool recover,
                                    const bool materializeHashes,
                                    size_t initial_capacity)
-    : folder_(folder)
+    : dict_ref_(dict_ref)
+    , folder_(folder)
     , str_count_(0)
     , string_id_string_dict_hash_table_(initial_capacity, INVALID_STR_ID)
     , hash_cache_(initial_capacity)
@@ -232,6 +250,14 @@ void StringDictionary::processDictionaryFutures(
   dictionary_futures.clear();
 }
 
+int32_t StringDictionary::getDbId() const noexcept {
+  return dict_ref_.dbId;
+}
+
+int32_t StringDictionary::getDictId() const noexcept {
+  return dict_ref_.dictId;
+}
+
 /**
  * Method to retrieve number of strings in storage via a binary search for the first
  * canary
@@ -263,7 +289,8 @@ size_t StringDictionary::getNumStringsFromStorage(
 }
 
 StringDictionary::StringDictionary(const LeafHostInfo& host, const DictRef dict_ref)
-    : folder_("DB_" + std::to_string(dict_ref.dbId) + "_DICT_" +
+    : dict_ref_(dict_ref)
+    , folder_("DB_" + std::to_string(dict_ref.dbId) + "_DICT_" +
               std::to_string(dict_ref.dictId))
     , strings_cache_(nullptr)
     , client_(new StringDictionaryClient(host, dict_ref, true))
@@ -304,23 +331,44 @@ int32_t StringDictionary::getOrAdd(const std::string_view& str) noexcept {
 namespace {
 
 template <class T>
-void throw_encoding_error(std::string_view str, std::string_view folder) {
+void throw_encoding_error(std::string_view str, const DictRef& dict_ref) {
   std::ostringstream oss;
-  oss << "The text encoded column stored at " << folder << ", has exceeded its limit of "
-      << sizeof(T) * 8 << " bits (" << static_cast<size_t>(max_valid_int_value<T>() + 1)
-      << " unique values)."
-      << " There was an attempt to add the new string '" << str
-      << "'. Table will need to be recreated with larger String Dictionary Capacity";
+  oss << "The text encoded column using dictionary " << dict_ref.toString()
+      << " has exceeded it's limit of " << sizeof(T) * 8 << " bits ("
+      << static_cast<size_t>(max_valid_int_value<T>() + 1) << " unique values) "
+      << "while attempting to add the new string '" << str << "'. ";
+
+  if (sizeof(T) < 4) {
+    // Todo: Implement automatic type widening for dictionary-encoded text
+    // columns/all fixed length columm types (at least if not defined
+    //  with fixed encoding size), or short of that, ALTER TABLE
+    // COLUMN TYPE to at least allow the user to do this manually
+    // without re-creating the table
+
+    oss << "To load more data, please re-create the table with "
+        << "this column as type TEXT ENCODING DICT(" << sizeof(T) * 2 * 8 << ") ";
+    if (sizeof(T) == 1) {
+      oss << "or TEXT ENCODING DICT(32) ";
+    }
+    oss << "and reload your data.";
+  } else {
+    // Todo: Implement TEXT ENCODING DICT(64) type which should essentially
+    // preclude overflows.
+    oss << "Currently dictionary-encoded text columns support a maximum of "
+        << StringDictionary::MAX_STRCOUNT
+        << " strings. Consider recreating the table with "
+        << "this column as type TEXT ENCODING NONE and reloading your data.";
+  }
   LOG(ERROR) << oss.str();
   throw std::runtime_error(oss.str());
 }
 
-void throw_string_too_long_error(std::string_view str, std::string_view folder) {
+void throw_string_too_long_error(std::string_view str, const DictRef& dict_ref) {
   std::ostringstream oss;
-  oss << "The string '" << str << " could not be inserted into the dictionary (" << folder
-      << " because it exceeded the maximum allowable length of "
-      << StringDictionary::MAX_STRLEN << " characters (string was " << str.size()
-      << " characters).";
+  oss << "The string '" << str << " could not be inserted into the dictionary "
+      << dict_ref.toString() << " because it exceeded the maximum allowable "
+      << "length of " << StringDictionary::MAX_STRLEN << " characters (string was "
+      << str.size() << " characters).";
   LOG(ERROR) << oss.str();
   throw std::runtime_error(oss.str());
 }
@@ -390,53 +438,59 @@ template <class T, class String>
 size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
                                  T* encoded_vec,
                                  const int64_t generation) const {
-  // if (client_no_timeout_) {
-  //  return getBulkRemote(string_vec, encoded_vec, generation);
-  //}
-  constexpr size_t max_strings_per_thread{1000};
-  const size_t num_strings = string_vec.size();
-  if (num_strings == 0) {
+  constexpr int64_t target_strings_per_thread{1000};
+  const int64_t num_lookup_strings = string_vec.size();
+  if (num_lookup_strings == 0) {
     return 0;
   }
-  const size_t max_thread_count =
-      std::max(static_cast<size_t>(std::thread::hardware_concurrency()), 1UL);
-  const size_t num_threads =
-      std::min(max_thread_count,
-               ((num_strings + max_strings_per_thread - 1) / max_strings_per_thread));
-  CHECK_GE(num_threads, 1UL);
-  const size_t strings_per_thread =
-      std::max((num_strings + num_threads - 1) / num_threads, 1UL);
-  CHECK_GE(strings_per_thread, 1UL);
+
+  const ThreadInfo thread_info(
+      std::thread::hardware_concurrency(), num_lookup_strings, target_strings_per_thread);
+  CHECK_GE(thread_info.num_threads, 1L);
+  CHECK_GE(thread_info.num_elems_per_thread, 1L);
+
+  std::vector<size_t> num_strings_not_found_per_thread(thread_info.num_threads, 0UL);
 
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   const int64_t num_dict_strings = generation >= 0 ? generation : storageEntryCount();
   const bool dictionary_is_empty = (num_dict_strings == 0);
-  std::vector<size_t> num_strings_not_found_per_thread(num_threads, 0UL);
-  tbb::task_arena limited_arena(num_threads);
+  if (dictionary_is_empty) {
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_lookup_strings),
+                      [&](const tbb::blocked_range<int64_t>& r) {
+                        const int64_t start_idx = r.begin();
+                        const int64_t end_idx = r.end();
+                        for (int64_t string_idx = start_idx; string_idx < end_idx;
+                             ++string_idx) {
+                          encoded_vec[string_idx] = StringDictionary::INVALID_STR_ID;
+                        }
+                      });
+    return num_lookup_strings;
+  }
+  // If we're here the generation-capped dictionary has strings in it
+  // that we need to look up against
+
+  tbb::task_arena limited_arena(thread_info.num_threads);
   tbb::task_group tg;
   limited_arena.execute([&] {
+    CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
     tg.run([&] {
       tbb::parallel_for(
-          tbb::blocked_range<size_t>(
-              0, num_strings, strings_per_thread /* tbb grain_size */),
-          [&](const tbb::blocked_range<size_t>& r) {
-            const size_t start_idx = r.begin();
-            const size_t end_idx = r.end();
+          tbb::blocked_range<int64_t>(
+              0,
+              num_lookup_strings,
+              thread_info.num_elems_per_thread /* tbb grain_size */),
+          [&](const tbb::blocked_range<int64_t>& r) {
+            const int64_t start_idx = r.begin();
+            const int64_t end_idx = r.end();
             size_t num_strings_not_found = 0;
-            for (size_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
-              if (dictionary_is_empty) {
-                // Should hoist this out of the loop
-                encoded_vec[string_idx] = StringDictionary::INVALID_STR_ID;
-                num_strings_not_found++;
-                continue;
-              }
+            for (int64_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
               const auto& input_string = string_vec[string_idx];
               if (input_string.empty()) {
                 encoded_vec[string_idx] = inline_int_null_value<T>();
                 continue;
               }
-              if (input_string.size() > MAX_STRLEN) {
-                throw_string_too_long_error(input_string, folder_);
+              if (input_string.size() > StringDictionary::MAX_STRLEN) {
+                throw_string_too_long_error(input_string, dict_ref_);
               }
               const string_dict_hash_t input_string_hash = hash_string(input_string);
               uint32_t hash_bucket = computeBucket(
@@ -452,7 +506,7 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
               encoded_vec[string_idx] = string_id;
             }
             const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
-            num_strings_not_found_per_thread[tbb_thread_idx]++;
+            num_strings_not_found_per_thread[tbb_thread_idx] = num_strings_not_found;
           },
           tbb::simple_partitioner());
     });
@@ -460,7 +514,7 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
 
   limited_arena.execute([&] { tg.wait(); });
   size_t num_strings_not_found = 0;
-  for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+  for (int64_t thread_idx = 0; thread_idx < thread_info.num_threads; ++thread_idx) {
     num_strings_not_found += num_strings_not_found_per_thread[thread_idx];
   }
   return num_strings_not_found;
@@ -487,97 +541,10 @@ template size_t StringDictionary::getBulk(const std::vector<std::string_view>& s
                                           const int64_t generation) const;
 
 template <class T, class String>
-size_t StringDictionary::getBulkRemote(const std::vector<String>& string_vec,
-                                       T* encoded_vec) {
-  return getBulkRemote(string_vec, encoded_vec, -1 /*generation*/);
-}
-
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string>& string_vec,
-    uint8_t* encoded_vec);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string>& string_vec,
-    uint16_t* encoded_vec);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string>& string_vec,
-    int32_t* encoded_vec);
-
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    uint8_t* encoded_vec);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    uint16_t* encoded_vec);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    int32_t* encoded_vec);
-
-template <class T, class String>
-size_t StringDictionary::getBulkRemote(const std::vector<String>& string_vec,
-                                       T* encoded_vec,
-                                       const int64_t generation) {
-  CHECK(client_no_timeout_);
-  std::vector<int32_t> string_ids;
-  client_no_timeout_->get_bulk(string_ids, string_vec);
-  size_t num_strings_not_found = 0;
-  const int32_t num_dict_strings = generation >= 0 ? generation : storageEntryCount();
-
-  for (size_t string_idx = 0; string_idx < string_ids.size(); ++string_idx) {
-    const auto string_id = string_ids[string_idx];
-    const bool invalid = string_id > max_valid_int_value<T>();
-    if (invalid) {
-      throw_encoding_error<T>(string_vec[string_idx], folder_);
-    }
-    if (string_id == inline_int_null_value<int32_t>()) {
-      encoded_vec[string_idx] = inline_int_null_value<T>();
-      continue;
-    }
-    if (string_id == StringDictionary::INVALID_STR_ID || string_id >= num_dict_strings) {
-      encoded_vec[string_idx] = StringDictionary::INVALID_STR_ID;
-      num_strings_not_found++;
-      continue;
-    }
-    encoded_vec[string_idx] = string_id;
-  }
-  return num_strings_not_found;
-}
-
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string>& string_vec,
-    uint8_t* encoded_vec,
-    const int64_t generation);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string>& string_vec,
-    uint16_t* encoded_vec,
-    const int64_t generation);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string>& string_vec,
-    int32_t* encoded_vec,
-    const int64_t generation);
-
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    uint8_t* encoded_vec,
-    const int64_t generation);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    uint16_t* encoded_vec,
-    const int64_t generation);
-template size_t StringDictionary::getBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    int32_t* encoded_vec,
-    const int64_t generation);
-
-template <class T, class String>
 void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
                                     T* output_string_ids) {
   if (g_enable_stringdict_parallel) {
     getOrAddBulkParallel(input_strings, output_string_ids);
-    return;
-  }
-  // Single-thread path.
-  if (client_no_timeout_) {
-    getOrAddBulkRemote(input_strings, output_string_ids);
     return;
   }
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
@@ -601,7 +568,7 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     // need to add record to dictionary
     // check there is room
     if (str_count_ > static_cast<size_t>(max_valid_int_value<T>())) {
-      throw_encoding_error<T>(input_string, folder_);
+      throw_encoding_error<T>(input_string, dict_ref_);
     }
     CHECK_LT(str_count_, MAX_STRCOUNT)
         << "Maximum number (" << str_count_
@@ -633,10 +600,6 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
 template <class T, class String>
 void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_strings,
                                             T* output_string_ids) {
-  if (client_no_timeout_) {
-    getOrAddBulkRemote(input_strings, output_string_ids);
-    return;
-  }
   // Compute hashes of the input strings up front, and in parallel,
   // as the string hashing does not need to be behind the subsequent write_lock
   std::vector<string_dict_hash_t> input_strings_hashes(input_strings.size());
@@ -689,7 +652,7 @@ void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_str
     // Did not find string, so need to add record to dictionary
     // First check there is room
     if (shadow_str_count > static_cast<size_t>(max_valid_int_value<T>())) {
-      throw_encoding_error<T>(input_string, folder_);
+      throw_encoding_error<T>(input_string, dict_ref_);
     }
     CHECK_LT(shadow_str_count, MAX_STRCOUNT)
         << "Maximum number (" << shadow_str_count
@@ -727,47 +690,6 @@ template void StringDictionary::getOrAddBulk(
     const std::vector<std::string_view>& string_vec,
     uint16_t* encoded_vec);
 template void StringDictionary::getOrAddBulk(
-    const std::vector<std::string_view>& string_vec,
-    int32_t* encoded_vec);
-
-template <class T, class String>
-void StringDictionary::getOrAddBulkRemote(const std::vector<String>& string_vec,
-                                          T* encoded_vec) {
-  CHECK(client_no_timeout_);
-  std::vector<int32_t> string_ids;
-  client_no_timeout_->get_or_add_bulk(string_ids, string_vec);
-  size_t out_idx{0};
-  for (size_t i = 0; i < string_ids.size(); ++i) {
-    const auto string_id = string_ids[i];
-    const bool invalid = string_id > max_valid_int_value<T>();
-    if (invalid || string_id == inline_int_null_value<int32_t>()) {
-      if (invalid) {
-        throw_encoding_error<T>(string_vec[i], folder_);
-      }
-      encoded_vec[out_idx++] = inline_int_null_value<T>();
-      continue;
-    }
-    encoded_vec[out_idx++] = string_id;
-  }
-}
-
-template void StringDictionary::getOrAddBulkRemote(
-    const std::vector<std::string>& string_vec,
-    uint8_t* encoded_vec);
-template void StringDictionary::getOrAddBulkRemote(
-    const std::vector<std::string>& string_vec,
-    uint16_t* encoded_vec);
-template void StringDictionary::getOrAddBulkRemote(
-    const std::vector<std::string>& string_vec,
-    int32_t* encoded_vec);
-
-template void StringDictionary::getOrAddBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    uint8_t* encoded_vec);
-template void StringDictionary::getOrAddBulkRemote(
-    const std::vector<std::string_view>& string_vec,
-    uint16_t* encoded_vec);
-template void StringDictionary::getOrAddBulkRemote(
     const std::vector<std::string_view>& string_vec,
     int32_t* encoded_vec);
 
@@ -1739,33 +1661,46 @@ std::vector<std::string_view> StringDictionary::getStringViews(
     const size_t generation) const {
   auto timer = DEBUG_TIMER(__func__);
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  const size_t num_strings = generation >= 0 ? generation : storageEntryCount();
-  CHECK_LE(num_strings, storageEntryCount());
-  const int32_t num_strings_int = static_cast<int32_t>(num_strings);
+  const int64_t num_strings = generation >= 0 ? generation : storageEntryCount();
+  CHECK_LE(num_strings, static_cast<int64_t>(StringDictionary::MAX_STRCOUNT));
+  // The CHECK_LE below is currently redundant with the check
+  // above against MAX_STRCOUNT, however given we iterate using
+  // int32_t types for efficiency (to match type expected by
+  // getStringFromStorageFast, check that the # of strings is also
+  // in the int32_t range in case MAX_STRCOUNT is changed
+
+  // Todo(todd): consider aliasing the max logical type width
+  // (currently int32_t) throughout StringDictionary
+  CHECK_LE(num_strings, std::numeric_limits<int32_t>::max());
+
   std::vector<std::string_view> string_views(num_strings);
-  constexpr size_t tbb_parallel_threshold{5000};
+  // We can bail early if the generation-specified dictionary is empty
+  if (num_strings == 0) {
+    return string_views;
+  }
+  constexpr int64_t tbb_parallel_threshold{1000};
   if (num_strings < tbb_parallel_threshold) {
-    for (int32_t string_idx = 0; string_idx < num_strings_int; ++string_idx) {
+    // Use int32_t to match type expected by getStringFromStorageFast
+    for (int32_t string_idx = 0; string_idx < num_strings; ++string_idx) {
       string_views[string_idx] = getStringFromStorageFast(string_idx);
     }
   } else {
-    constexpr size_t max_strings_per_thread{1000};
-    const size_t max_thread_count =
-        std::max(static_cast<size_t>(std::thread::hardware_concurrency()), 1UL);
-    const size_t num_threads =
-        std::min(max_thread_count,
-                 ((num_strings + max_strings_per_thread - 1) / max_strings_per_thread));
-    CHECK_GE(num_threads, 1UL);
-    const size_t strings_per_thread = std::max(num_strings / num_threads, 1UL);
-    CHECK_GE(strings_per_thread, 1UL);
-    tbb::task_arena limited_arena(num_threads);
+    constexpr int64_t target_strings_per_thread{1000};
+    const ThreadInfo thread_info(
+        std::thread::hardware_concurrency(), num_strings, target_strings_per_thread);
+    CHECK_GE(thread_info.num_threads, 1L);
+    CHECK_GE(thread_info.num_elems_per_thread, 1L);
+
+    tbb::task_arena limited_arena(thread_info.num_threads);
+    CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
     tbb::task_group tg;
     limited_arena.execute([&] {
       tg.run([&] {
         tbb::parallel_for(
-            tbb::blocked_range<int32_t>(
-                0, num_strings, strings_per_thread /* tbb grain_size */),
-            [&](const tbb::blocked_range<int32_t>& r) {
+            tbb::blocked_range<int64_t>(
+                0, num_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
+            [&](const tbb::blocked_range<int64_t>& r) {
+              // r should be in range of int32_t per CHECK above
               const int32_t start_idx = r.begin();
               const int32_t end_idx = r.end();
               for (int32_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
@@ -1786,67 +1721,167 @@ std::vector<std::string_view> StringDictionary::getStringViews() const {
 }
 
 std::vector<int32_t> StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict) const {
-  return buildDictionaryTranslationMap(dest_dict, storageEntryCount());
-}
-
-std::vector<int32_t> StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    const int64_t generation) const {
-  // Todo(todd): Implement for distributed
-  CHECK(!client_);
+    const std::shared_ptr<StringDictionary> dest_dict,
+    StringLookupCallback const& dest_transient_lookup_callback) const {
   auto timer = DEBUG_TIMER(__func__);
-  const auto lookup_strings = getStringViews(generation);
-  std::vector<int32_t> translated_ids(lookup_strings.size());
-  dest_dict->getBulk(lookup_strings, translated_ids.data());
+  const size_t num_source_strings = storageEntryCount();
+  const size_t num_dest_strings = dest_dict->storageEntryCount();
+  std::vector<int32_t> translated_ids(num_source_strings);
+  buildDictionaryTranslationMap(dest_dict.get(),
+                                translated_ids.data(),
+                                num_source_strings,
+                                num_dest_strings,
+                                true,  // Just assume true for dest_has_transients as this
+                                       // function is only used for testing currently
+                                dest_transient_lookup_callback);
   return translated_ids;
 }
 
-template <typename T>
 size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    T* translated_ids) const {
-  return buildDictionaryTranslationMap(dest_dict, translated_ids, storageEntryCount());
-}
-
-template size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    uint8_t* translated_string_ids) const;
-
-template size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    uint16_t* translated_string_ids) const;
-
-template size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    int32_t* translated_string_ids) const;
-
-template <typename T>
-size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    T* translated_ids,
-    const int64_t generation) const {
-  // Todo(todd): Implement for distributed
-  CHECK(!client_);
+    const StringDictionary* dest_dict,
+    int32_t* translated_ids,
+    const int64_t source_generation,
+    const int64_t dest_generation,
+    const bool dest_has_transients,
+    StringLookupCallback const& dest_transient_lookup_callback) const {
   auto timer = DEBUG_TIMER(__func__);
-  const auto lookup_strings = getStringViews(generation);
-  return dest_dict->getBulk(lookup_strings, translated_ids);
+  CHECK_GE(source_generation, 0L);
+  CHECK_GE(dest_generation, 0L);
+
+  // If here we should should have local dictionaries
+
+  if (dest_dict->client_no_timeout_) {
+    throw std::runtime_error(
+        "Cannot translate between a local source and remote destination dictionary.");
+  }
+
+  // Sort this/source dict and dest dict on folder_ so we can enforce
+  // lock ordering and avoid deadlocks
+
+  const int32_t dest_db_id = dest_dict->getDbId();
+  const int32_t dest_dict_id = dest_dict->getDictId();
+  if (getDbId() == dest_db_id && getDictId() == dest_dict_id) {
+    throw std::runtime_error("Cannot translate between a string dictionary and itself.");
+  }
+  const bool this_dict_is_locked_first =
+      getDbId() < dest_db_id || (getDbId() == dest_db_id && getDictId() < dest_dict_id);
+
+  mapd_shared_lock<mapd_shared_mutex> first_read_lock(
+      this_dict_is_locked_first ? rw_mutex_ : dest_dict->rw_mutex_);
+  mapd_shared_lock<mapd_shared_mutex> second_read_lock(
+      this_dict_is_locked_first ? dest_dict->rw_mutex_ : rw_mutex_);
+
+  // For both source and destination dictionaries we cap the max
+  // entries to be translated/translated to at the supplied
+  // generation arguments, if valid (i.e. >= 0), otherwise just the
+  // size of each dictionary
+
+  const int64_t num_source_strings = source_generation;
+  CHECK_LE(num_source_strings, static_cast<int64_t>(str_count_));
+  const int64_t num_dest_strings = dest_generation;
+  CHECK_LE(num_dest_strings, static_cast<int64_t>(dest_dict->str_count_));
+  const bool dest_dictionary_is_empty = (num_dest_strings == 0);
+
+  // We can bail early if there are no source strings to translate
+  if (num_source_strings == 0L) {
+    return 0;
+  }
+
+  constexpr int64_t target_strings_per_thread{1000};
+  const ThreadInfo thread_info(
+      std::thread::hardware_concurrency(), num_source_strings, target_strings_per_thread);
+  CHECK_GE(thread_info.num_threads, 1L);
+  CHECK_GE(thread_info.num_elems_per_thread, 1L);
+
+  // We use a tbb::task_arena to cap the number of threads, has been
+  // in other contexts been shown to exhibit better performance when low
+  // numbers of threads are needed than just letting tbb figure the number of threads,
+  // but should benchmark in this specific context
+
+  tbb::task_arena limited_arena(thread_info.num_threads);
+  tbb::task_group tg;
+  std::vector<size_t> num_strings_not_translated_per_thread(thread_info.num_threads, 0UL);
+  limited_arena.execute([&] {
+    CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
+    if (dest_dictionary_is_empty) {
+      tg.run([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<int32_t>(
+                0,
+                num_source_strings,
+                thread_info.num_elems_per_thread /* tbb grain_size */),
+            [&](const tbb::blocked_range<int32_t>& r) {
+              const int32_t start_idx = r.begin();
+              const int32_t end_idx = r.end();
+              for (int32_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
+                translated_ids[string_idx] = INVALID_STR_ID;
+              }
+            },
+            tbb::simple_partitioner());
+      });
+      num_strings_not_translated_per_thread[0] += num_source_strings;
+    } else {
+      // The below logic, by executing low-level private variable accesses on both
+      // dictionaries, is less clean than a previous variant that simply called
+      // `getStringViews` from the source dictionary and then called `getBulk` on the
+      // destination dictionary, but this version gets significantly better performance
+      // (~2X), likely due to eliminating the overhead of writing out the string views and
+      // then reading them back in (along with the associated cache misses)
+      tg.run([&] {
+        tbb::parallel_for(
+            tbb::blocked_range<int32_t>(
+                0,
+                num_source_strings,
+                thread_info.num_elems_per_thread /* tbb grain_size */),
+            [&](const tbb::blocked_range<int32_t>& r) {
+              const int32_t start_idx = r.begin();
+              const int32_t end_idx = r.end();
+              size_t num_strings_not_translated = 0;
+              for (int32_t source_string_id = start_idx; source_string_id != end_idx;
+                   ++source_string_id) {
+                const std::string_view source_str =
+                    getStringFromStorageFast(source_string_id);
+                // Get the hash from this/the source dictionary's cache, as the function
+                // will be the same for the dest_dict, sparing us having to recompute it
+
+                // Todo(todd): Remove option to turn string hash cache off or at least
+                // make a constexpr to avoid these branches when we expect it to be always
+                // on going forward
+                const string_dict_hash_t hash = materialize_hashes_
+                                                    ? hash_cache_[source_string_id]
+                                                    : hash_string(source_str);
+                uint32_t hash_bucket = dest_dict->computeBucket(
+                    hash, source_str, dest_dict->string_id_string_dict_hash_table_);
+                const auto translated_string_id =
+                    dest_dict->string_id_string_dict_hash_table_[hash_bucket];
+                translated_ids[source_string_id] = translated_string_id;
+
+                if (translated_string_id == StringDictionary::INVALID_STR_ID ||
+                    translated_string_id >= num_dest_strings) {
+                  if (dest_has_transients) {
+                    num_strings_not_translated +=
+                        dest_transient_lookup_callback(source_str, source_string_id);
+                  } else {
+                    num_strings_not_translated++;
+                  }
+                  continue;
+                }
+              }
+              const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
+              num_strings_not_translated_per_thread[tbb_thread_idx] =
+                  num_strings_not_translated;
+            },
+            tbb::simple_partitioner());
+      });
+    }
+  });
+  limited_arena.execute([&] { tg.wait(); });
+  size_t total_num_strings_not_translated = 0;
+  for (int64_t thread_idx = 0; thread_idx < thread_info.num_threads; ++thread_idx) {
+    total_num_strings_not_translated += num_strings_not_translated_per_thread[thread_idx];
+  }
+  return total_num_strings_not_translated;
 }
-
-template size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    uint8_t* translated_string_ids,
-    const int64_t generation) const;
-
-template size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    uint16_t* translated_string_ids,
-    const int64_t generation) const;
-
-template size_t StringDictionary::buildDictionaryTranslationMap(
-    std::shared_ptr<StringDictionary> dest_dict,
-    int32_t* translated_string_ids,
-    const int64_t generation) const;
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,

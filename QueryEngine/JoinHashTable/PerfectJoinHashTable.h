@@ -15,7 +15,7 @@
  */
 
 /*
- * @file    JoinHashTable.h
+ * @file    PerfectJoinHashTable.h
  * @author  Alex Suhan <alex@mapd.com>
  *
  */
@@ -246,8 +246,9 @@ class PerfectJoinHashTable : public HashJoin {
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   HashType hash_type_;
-
   std::mutex cpu_hash_table_buff_mutex_;
+  std::mutex str_proxy_translation_mutex_;
+  std::shared_ptr<StringDictionaryProxyTranslationMap> str_proxy_translation_map_;
   ExpressionRange col_range_;
   Executor* executor_;
   ColumnCacheMap& column_cache_;

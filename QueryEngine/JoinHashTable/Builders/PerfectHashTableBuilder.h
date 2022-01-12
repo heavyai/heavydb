@@ -152,42 +152,17 @@ class PerfectJoinHashTableBuilder {
   }
 #endif
 
-  std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*> getStrDictProxies(
+  void initOneToOneHashTableOnCpu(
+      const JoinColumn& join_column,
+      const ExpressionRange& col_range,
+      const bool is_bitwise_eq,
       const InnerOuter& cols,
-      const Executor* executor) const {
-    const auto inner_col = cols.first;
-    CHECK(inner_col);
-    const auto inner_ti = inner_col->get_type_info();
-    const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
-    std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
-        inner_outer_str_dict_proxies{nullptr, nullptr};
-    if (inner_ti.is_string() && outer_col) {
-      CHECK(outer_col->get_type_info().is_string());
-      inner_outer_str_dict_proxies.first =
-          executor->getStringDictionaryProxy(inner_col->get_comp_param(), true);
-      CHECK(inner_outer_str_dict_proxies.first);
-      inner_outer_str_dict_proxies.second =
-          executor->getStringDictionaryProxy(outer_col->get_comp_param(), true);
-      CHECK(inner_outer_str_dict_proxies.second);
-      if (*inner_outer_str_dict_proxies.first == *inner_outer_str_dict_proxies.second) {
-        // Dictionaries are the same - don't need to translate
-        CHECK(inner_col->get_comp_param() == outer_col->get_comp_param());
-        inner_outer_str_dict_proxies.first = nullptr;
-        inner_outer_str_dict_proxies.second = nullptr;
-      }
-    }
-    return inner_outer_str_dict_proxies;
-  }
-
-  void initOneToOneHashTableOnCpu(const JoinColumn& join_column,
-                                  const ExpressionRange& col_range,
-                                  const bool is_bitwise_eq,
-                                  const InnerOuter& cols,
-                                  const JoinType join_type,
-                                  const HashType hash_type,
-                                  const HashEntryInfo hash_entry_info,
-                                  const int32_t hash_join_invalid_val,
-                                  const Executor* executor) {
+      const StringDictionaryProxyTranslationMap* str_proxy_translation_map,
+      const JoinType join_type,
+      const HashType hash_type,
+      const HashEntryInfo hash_entry_info,
+      const int32_t hash_join_invalid_val,
+      const Executor* executor) {
     auto timer = DEBUG_TIMER(__func__);
     const auto inner_col = cols.first;
     CHECK(inner_col);
@@ -202,16 +177,12 @@ class PerfectJoinHashTableBuilder {
                                            0);
 
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
-    const auto inner_outer_str_dict_proxies = getStrDictProxies(cols, executor);
-    const bool translate_dictionary =
-        inner_outer_str_dict_proxies.first && inner_outer_str_dict_proxies.second;
-    const auto inner_to_outer_translation_map =
-        translate_dictionary
-            ? inner_outer_str_dict_proxies.first->buildTranslationMapToOtherProxy(
-                  inner_outer_str_dict_proxies.second)
-            : std::vector<int32_t>();
-    const int32_t* inner_to_outer_translation_map_ptr =
-        translate_dictionary ? inner_to_outer_translation_map.data() : nullptr;
+
+    // We always expect a non-null translation map (as we use this to in
+    // PerfectJoinHashTable to know if we need to fetch the map or not), but if it's
+    // invalid (i.e. we don't have string columns, or we do but the dictionaries are the
+    // same, isEmpty() will return true)
+    CHECK(str_proxy_translation_map);
 
     {
       auto timer_init =
@@ -232,7 +203,7 @@ class PerfectJoinHashTableBuilder {
       for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
         init_cpu_buff_threads.emplace_back([hash_join_invalid_val,
                                             &join_column,
-                                            inner_to_outer_translation_map_ptr,
+                                            str_proxy_translation_map,
                                             thread_idx,
                                             thread_count,
                                             &ti,
@@ -254,9 +225,8 @@ class PerfectJoinHashTableBuilder {
                                               is_bitwise_eq,
                                               col_range.getIntMax() + 1,
                                               get_join_column_type_kind(ti)},
-                                             inner_to_outer_translation_map_ptr,
-                                             0,
-                                             0,
+                                             str_proxy_translation_map->dataPtr(),
+                                             str_proxy_translation_map->domainStart(),
                                              thread_idx,
                                              thread_count,
                                              hash_entry_info.bucket_normalization);
@@ -280,6 +250,7 @@ class PerfectJoinHashTableBuilder {
       const ExpressionRange& col_range,
       const bool is_bitwise_eq,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
+      const StringDictionaryProxyTranslationMap* str_proxy_translation_map,
       const HashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val,
       const Executor* executor) {
@@ -296,16 +267,11 @@ class PerfectJoinHashTableBuilder {
                                            join_column.num_elems);
 
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
-    const auto inner_outer_str_dict_proxies = getStrDictProxies(cols, executor);
-    const bool translate_dictionary =
-        inner_outer_str_dict_proxies.first && inner_outer_str_dict_proxies.second;
-    const auto inner_to_outer_translation_map =
-        translate_dictionary
-            ? inner_outer_str_dict_proxies.first->buildTranslationMapToOtherProxy(
-                  inner_outer_str_dict_proxies.second)
-            : std::vector<int32_t>();
-    const int32_t* inner_to_outer_translation_map_ptr =
-        translate_dictionary ? inner_to_outer_translation_map.data() : nullptr;
+
+    // str_proxy_translation_map.is_valid() is used to control
+    // validilty and whether pointer exists or is nullptr
+    CHECK(str_proxy_translation_map);
+
     int thread_count = cpu_threads();
     {
       auto timer_init = DEBUG_TIMER(
@@ -318,37 +284,37 @@ class PerfectJoinHashTableBuilder {
       auto timer_fill = DEBUG_TIMER(
           "CPU One-To-Many Perfect Hash Table Builder: fill_hash_join_buff_bucketized");
       if (ti.get_type() == kDATE) {
-        fill_one_to_many_hash_table_bucketized(cpu_hash_table_buff,
-                                               hash_entry_info,
-                                               hash_join_invalid_val,
-                                               join_column,
-                                               {static_cast<size_t>(ti.get_size()),
-                                                col_range.getIntMin(),
-                                                col_range.getIntMax(),
-                                                inline_fixed_encoding_null_val(ti),
-                                                is_bitwise_eq,
-                                                col_range.getIntMax() + 1,
-                                                get_join_column_type_kind(ti)},
-                                               inner_to_outer_translation_map_ptr,
-                                               0,
-                                               0,
-                                               thread_count);
+        fill_one_to_many_hash_table_bucketized(
+            cpu_hash_table_buff,
+            hash_entry_info,
+            hash_join_invalid_val,
+            join_column,
+            {static_cast<size_t>(ti.get_size()),
+             col_range.getIntMin(),
+             col_range.getIntMax(),
+             inline_fixed_encoding_null_val(ti),
+             is_bitwise_eq,
+             col_range.getIntMax() + 1,
+             get_join_column_type_kind(ti)},
+            str_proxy_translation_map->dataPtr(),  // will return nullptr if !is_valid()
+            str_proxy_translation_map->domainStart(),
+            thread_count);
       } else {
-        fill_one_to_many_hash_table(cpu_hash_table_buff,
-                                    hash_entry_info,
-                                    hash_join_invalid_val,
-                                    join_column,
-                                    {static_cast<size_t>(ti.get_size()),
-                                     col_range.getIntMin(),
-                                     col_range.getIntMax(),
-                                     inline_fixed_encoding_null_val(ti),
-                                     is_bitwise_eq,
-                                     col_range.getIntMax() + 1,
-                                     get_join_column_type_kind(ti)},
-                                    inner_to_outer_translation_map_ptr,
-                                    0,
-                                    0,
-                                    thread_count);
+        fill_one_to_many_hash_table(
+            cpu_hash_table_buff,
+            hash_entry_info,
+            hash_join_invalid_val,
+            join_column,
+            {static_cast<size_t>(ti.get_size()),
+             col_range.getIntMin(),
+             col_range.getIntMax(),
+             inline_fixed_encoding_null_val(ti),
+             is_bitwise_eq,
+             col_range.getIntMax() + 1,
+             get_join_column_type_kind(ti)},
+            str_proxy_translation_map->dataPtr(),  // will return nullptr if !is_valid()
+            str_proxy_translation_map->domainStart(),
+            thread_count);
       }
     }
   }

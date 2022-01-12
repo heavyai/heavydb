@@ -35,16 +35,8 @@ __global__ void fill_hash_join_buff_wrapper(int32_t* buff,
                                             const JoinColumn join_column,
                                             const JoinColumnTypeInfo type_info,
                                             int* err) {
-  int partial_err = SUFFIX(fill_hash_join_buff)(buff,
-                                                invalid_slot_val,
-                                                for_semi_join,
-                                                join_column,
-                                                type_info,
-                                                NULL,
-                                                NULL,
-                                                NULL,
-                                                -1,
-                                                -1);
+  int partial_err = SUFFIX(fill_hash_join_buff)(
+      buff, invalid_slot_val, for_semi_join, join_column, type_info, NULL, NULL, -1, -1);
   atomicCAS(err, 0, partial_err);
 }
 
@@ -61,7 +53,6 @@ __global__ void fill_hash_join_buff_bucketized_wrapper(
                                                            for_semi_join,
                                                            join_column,
                                                            type_info,
-                                                           NULL,
                                                            NULL,
                                                            NULL,
                                                            -1,

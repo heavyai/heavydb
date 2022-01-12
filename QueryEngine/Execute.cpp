@@ -473,10 +473,11 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {
-    std::shared_ptr<StringDictionary> tsd =
-        std::make_shared<StringDictionary>("", false, true, g_cache_string_hash);
-    lit_str_dict_proxy_.reset(new StringDictionaryProxy(
-        tsd, 0, 0));  // use 0 string_dict_id to denote literal proxy
+    DictRef literal_dict_ref{DictRef::InvalidDictRef()};
+    std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>(
+        literal_dict_ref, "", false, true, g_cache_string_hash);
+    lit_str_dict_proxy_ =
+        std::make_shared<StringDictionaryProxy>(tsd, literal_dict_ref.dictId, 0);
   }
   return lit_str_dict_proxy_.get();
 }
