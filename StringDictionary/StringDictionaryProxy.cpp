@@ -67,7 +67,7 @@ int32_t truncate_to_generation(const int32_t id, const size_t generation) {
  */
 
 std::vector<int32_t> StringDictionaryProxy::getTransientBulk(
-    const std::vector<std::string>& strings) {
+    const std::vector<std::string>& strings) const {
   CHECK_GE(generation_, 0);
   const size_t num_strings = strings.size();
   std::vector<int32_t> string_ids(num_strings);
@@ -192,7 +192,13 @@ std::vector<std::string> StringDictionaryProxy::getStrings(
 }
 
 std::vector<int32_t> StringDictionaryProxy::buildTranslationMapToOtherProxy(
-    std::shared_ptr<StringDictionaryProxy> dest_proxy) const {
+    const std::shared_ptr<StringDictionaryProxy> dest_proxy) const {
+  return buildTranslationMapToOtherProxy(dest_proxy.get());
+}
+
+std::vector<int32_t> StringDictionaryProxy::buildTranslationMapToOtherProxy(
+    const StringDictionaryProxy* dest_proxy) const {
+  auto timer = DEBUG_TIMER(__func__);
   const size_t num_transient_entries = transientEntryCount();
   const size_t vec_map_size =
       entryCount() + (num_transient_entries > 0 ? (transient_id_ceil * -1) - 1 : 0UL);
@@ -500,7 +506,6 @@ void StringDictionaryProxy::transientLookupBulkParallelUnlocked(
     int32_t* string_ids) const {
   // std::vector<int32_t>& string_ids) {
   const size_t num_strings = lookup_strings.size();
-  const auto transient_str_to_int_end_itr = transient_str_to_int_.end();
   const size_t max_thread_count = std::thread::hardware_concurrency();
   const size_t max_inputs_per_thread = 20000;
   const size_t min_grain_size = max_inputs_per_thread / 2;

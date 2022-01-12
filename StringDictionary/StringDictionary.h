@@ -53,11 +53,11 @@ class StringDictionary {
 
   int32_t getOrAdd(const std::string_view& str) noexcept;
   template <class T, class String>
-  size_t getBulk(const std::vector<String>& string_vec, T* encoded_vec);
+  size_t getBulk(const std::vector<String>& string_vec, T* encoded_vec) const;
   template <class T, class String>
   size_t getBulk(const std::vector<String>& string_vec,
                  T* encoded_vec,
-                 const int64_t generation);
+                 const int64_t generation) const;
   template <class T, class String>
   void getOrAddBulk(const std::vector<String>& string_vec, T* encoded_vec);
   template <class T, class String>

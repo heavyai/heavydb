@@ -367,31 +367,32 @@ void StringDictionary::hashStrings(
 }
 
 template <class T, class String>
-size_t StringDictionary::getBulk(const std::vector<String>& string_vec, T* encoded_vec) {
+size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
+                                 T* encoded_vec) const {
   return getBulk(string_vec, encoded_vec, -1L /* generation */);
 }
 
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
-                                          uint8_t* encoded_vec);
+                                          uint8_t* encoded_vec) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
-                                          uint16_t* encoded_vec);
+                                          uint16_t* encoded_vec) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
-                                          int32_t* encoded_vec);
+                                          int32_t* encoded_vec) const;
 
 template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          uint8_t* encoded_vec);
+                                          uint8_t* encoded_vec) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          uint16_t* encoded_vec);
+                                          uint16_t* encoded_vec) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          int32_t* encoded_vec);
+                                          int32_t* encoded_vec) const;
 
 template <class T, class String>
 size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
                                  T* encoded_vec,
-                                 const int64_t generation) {
-  if (client_no_timeout_) {
-    return getBulkRemote(string_vec, encoded_vec, generation);
-  }
+                                 const int64_t generation) const {
+  // if (client_no_timeout_) {
+  //  return getBulkRemote(string_vec, encoded_vec, generation);
+  //}
   constexpr size_t max_strings_per_thread{1000};
   const size_t num_strings = string_vec.size();
   if (num_strings == 0) {
@@ -467,23 +468,23 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
 
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
                                           uint8_t* encoded_vec,
-                                          const int64_t generation);
+                                          const int64_t generation) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
                                           uint16_t* encoded_vec,
-                                          const int64_t generation);
+                                          const int64_t generation) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
                                           int32_t* encoded_vec,
-                                          const int64_t generation);
+                                          const int64_t generation) const;
 
 template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
                                           uint8_t* encoded_vec,
-                                          const int64_t generation);
+                                          const int64_t generation) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
                                           uint16_t* encoded_vec,
-                                          const int64_t generation);
+                                          const int64_t generation) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
                                           int32_t* encoded_vec,
-                                          const int64_t generation);
+                                          const int64_t generation) const;
 
 template <class T, class String>
 size_t StringDictionary::getBulkRemote(const std::vector<String>& string_vec,
@@ -518,7 +519,6 @@ size_t StringDictionary::getBulkRemote(const std::vector<String>& string_vec,
   CHECK(client_no_timeout_);
   std::vector<int32_t> string_ids;
   client_no_timeout_->get_bulk(string_ids, string_vec);
-  size_t out_idx{0};
   size_t num_strings_not_found = 0;
   const int32_t num_dict_strings = generation >= 0 ? generation : storageEntryCount();
 
