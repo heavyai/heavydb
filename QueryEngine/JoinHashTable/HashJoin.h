@@ -290,6 +290,12 @@ class HashJoin {
       const std::vector<InnerOuter>& inner_outer_pairs,
       const Executor* executor);
 
+  static std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
+  getStrDictProxies(const InnerOuter& cols, const Executor* executor);
+
+  static std::shared_ptr<StringDictionaryProxyTranslationMap>
+  translateInnerToOuterStrDictProxies(const InnerOuter& cols, const Executor* executor);
+
  protected:
   virtual size_t getComponentBufferSize() const noexcept = 0;
 

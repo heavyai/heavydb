@@ -1594,10 +1594,10 @@ const DictDescriptor* Catalog::getMetadataForDict(const int dict_id,
         if (string_dict_hosts_.empty()) {
           if (dd->dictIsTemp) {
             dd->stringDict = std::make_shared<StringDictionary>(
-                dd->dictFolderPath, true, true, g_cache_string_hash);
+                dd->dictRef, dd->dictFolderPath, true, true, g_cache_string_hash);
           } else {
             dd->stringDict = std::make_shared<StringDictionary>(
-                dd->dictFolderPath, false, true, g_cache_string_hash);
+                dd->dictRef, dd->dictFolderPath, false, true, g_cache_string_hash);
           }
         } else {
           dd->stringDict =

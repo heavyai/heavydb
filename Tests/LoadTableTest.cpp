@@ -260,9 +260,10 @@ TEST_F(LoadTableTest, DictOutOfBounds) {
   }
   executeLambdaAndAssertPartialException(
       [&]() { handler->load_table_binary(session, "load_test", rows, {}); },
-      "has exceeded its limit of 8 bits (255 unique values). There was an attempt to add "
-      "the new string '255'. Table will need to be recreated with larger String "
-      "Dictionary Capacity");
+      "has exceeded it's limit of 8 bits (255 unique values) while attempting to "
+      "add the new string '255'. To load more data, please re-create the table "
+      "with this column as type TEXT ENCODING DICT(16) or TEXT ENCODING DICT(32) "
+      "and reload your data.");
 
   sqlAndCompareResult("SELECT count(*) FROM load_test", {{i(0)}});
 }

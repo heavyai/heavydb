@@ -21,6 +21,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -37,7 +38,8 @@
 extern bool g_cache_string_hash;
 
 TEST(StringDictionary, AddAndGet) {
-  StringDictionary string_dict(BASE_PATH1, false, false, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
   auto id1 = string_dict.getOrAdd("foo bar");
   auto id2 = string_dict.getOrAdd("foo bar");
   ASSERT_EQ(id1, id2);
@@ -50,7 +52,8 @@ TEST(StringDictionary, AddAndGet) {
 }
 
 TEST(StringDictionary, Recover) {
-  StringDictionary string_dict(BASE_PATH1, false, true, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   auto id1 = string_dict.getOrAdd("baz");
   ASSERT_EQ(1, id1);
   auto id2 = string_dict.getOrAdd("baz");
@@ -65,7 +68,8 @@ TEST(StringDictionary, Recover) {
 }
 
 TEST(StringDictionary, HandleEmpty) {
-  StringDictionary string_dict(BASE_PATH1, false, false, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
   auto id1 = string_dict.getOrAdd("");
   auto id2 = string_dict.getOrAdd("");
   ASSERT_EQ(id1, id2);
@@ -73,12 +77,13 @@ TEST(StringDictionary, HandleEmpty) {
 }
 
 TEST(StringDictionary, RecoverZero) {
+  const DictRef dict_ref(-1, 1);
   {
-    StringDictionary string_dict(BASE_PATH1, false, false, g_cache_string_hash);
+    StringDictionary string_dict(dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
     size_t num_strings = string_dict.storageEntryCount();
     ASSERT_EQ(static_cast<size_t>(0), num_strings);
   }
-  StringDictionary string_dict(BASE_PATH1, false, true, g_cache_string_hash);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   size_t num_strings = string_dict.storageEntryCount();
   ASSERT_EQ(static_cast<size_t>(0), num_strings);
 }
@@ -86,7 +91,8 @@ TEST(StringDictionary, RecoverZero) {
 const int g_op_count{250000};
 
 TEST(StringDictionary, ManyAddsAndGets) {
-  StringDictionary string_dict(BASE_PATH1, false, false, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
   for (int i = 0; i < g_op_count; ++i) {
     CHECK_EQ(i, string_dict.getOrAdd(std::to_string(i)));
   }
@@ -99,7 +105,8 @@ TEST(StringDictionary, ManyAddsAndGets) {
 }
 
 TEST(StringDictionary, RecoverMany) {
-  StringDictionary string_dict(BASE_PATH1, false, true, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   size_t num_strings = string_dict.storageEntryCount();
   ASSERT_EQ(static_cast<size_t>(g_op_count), num_strings);
   for (int i = 0; i < g_op_count; ++i) {
@@ -111,8 +118,9 @@ TEST(StringDictionary, RecoverMany) {
 }
 
 TEST(StringDictionary, GetStringViews) {
-  std::shared_ptr<StringDictionary> string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH1, false, false, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
+      dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
   std::vector<std::string> strings;
   std::vector<int32_t> string_ids(g_op_count);
   for (int i = 0; i < g_op_count; ++i) {
@@ -128,7 +136,8 @@ TEST(StringDictionary, GetStringViews) {
 }
 
 TEST(StringDictionary, GetOrAddBulk) {
-  StringDictionary string_dict(BASE_PATH1, false, false, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
   {
     // First insert all new strings
     std::vector<int32_t> string_ids(g_op_count);
@@ -181,8 +190,9 @@ TEST(StringDictionary, GetOrAddBulk) {
 }
 
 TEST(StringDictionary, GetBulk) {
+  const DictRef dict_ref(-1, 1);
   // Use existing dictionary from GetOrAddBulk
-  StringDictionary string_dict(BASE_PATH1, false, true, g_cache_string_hash);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   {
     // First iteration is identical to first of GetOrAddBulk, and results should be the
     // same
@@ -232,10 +242,13 @@ TEST(StringDictionary, GetBulk) {
 }
 
 TEST(StringDictionary, BuildTranslationMap) {
+  const DictRef dict_ref1(-1, 1);
+  const DictRef dict_ref2(-1, 2);
   std::shared_ptr<StringDictionary> source_string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH1, false, false, g_cache_string_hash);
-  std::shared_ptr<StringDictionary> dest_string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH2, false, false, g_cache_string_hash);
+      std::make_shared<StringDictionary>(
+          dict_ref1, BASE_PATH1, false, false, g_cache_string_hash);
+  std::shared_ptr<StringDictionary> dest_string_dict = std::make_shared<StringDictionary>(
+      dict_ref2, BASE_PATH2, false, false, g_cache_string_hash);
 
   // Prep: insert g_op_count strings into source_string_dict
   std::vector<int32_t> string_ids(g_op_count);
@@ -245,13 +258,15 @@ TEST(StringDictionary, BuildTranslationMap) {
     strings.emplace_back(std::to_string(i));
   }
   source_string_dict->getOrAddBulk(strings, string_ids.data());
+  auto dummy_callback = [](const std::string_view& source_string,
+                           const int32_t source_string_id) { return false; };
 
   {
     // First try to translate to empty dictionary.
     // Should get back all INVALID_STR_IDs
 
-    const auto translated_ids =
-        source_string_dict->buildDictionaryTranslationMap(dest_string_dict);
+    const auto translated_ids = source_string_dict->buildDictionaryTranslationMap(
+        dest_string_dict, dummy_callback);
     const size_t num_ids = translated_ids.size();
     ASSERT_EQ(num_ids, source_string_dict->storageEntryCount());
     for (size_t idx = 0; idx < num_ids; ++idx) {
@@ -273,8 +288,8 @@ TEST(StringDictionary, BuildTranslationMap) {
     }
     dest_string_dict->getOrAddBulk(reversed_strings, reversed_string_ids.data());
     ASSERT_EQ(dest_string_dict->storageEntryCount(), reversed_strings.size());
-    const auto translated_ids =
-        source_string_dict->buildDictionaryTranslationMap(dest_string_dict);
+    const auto translated_ids = source_string_dict->buildDictionaryTranslationMap(
+        dest_string_dict, dummy_callback);
     const size_t num_ids = translated_ids.size();
     ASSERT_EQ(num_ids, static_cast<size_t>(g_op_count));
     ASSERT_EQ(num_ids,
@@ -290,8 +305,9 @@ TEST(StringDictionary, BuildTranslationMap) {
 }
 
 TEST(StringDictionaryProxy, GetOrAddTransient) {
-  std::shared_ptr<StringDictionary> string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH1, false, false, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
+      dict_ref, BASE_PATH1, false, false, g_cache_string_hash);
 
   // Prep underlying dictionary data
   std::vector<int32_t> string_ids(g_op_count);
@@ -367,8 +383,9 @@ TEST(StringDictionaryProxy, GetOrAddTransient) {
 
 TEST(StringDictionaryProxy, GetOrAddTransientBulk) {
   // Use existing dictionary from GetBulk
-  std::shared_ptr<StringDictionary> string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH1, false, true, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
+      dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   StringDictionaryProxy string_dict_proxy(
       string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
   {
@@ -421,8 +438,9 @@ TEST(StringDictionaryProxy, GetOrAddTransientBulk) {
 
 TEST(StringDictionaryProxy, GetTransientBulk) {
   // Use existing dictionary from GetBulk
-  std::shared_ptr<StringDictionary> string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH1, false, true, g_cache_string_hash);
+  const DictRef dict_ref(-1, 1);
+  std::shared_ptr<StringDictionary> string_dict = std::make_shared<StringDictionary>(
+      dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   StringDictionaryProxy string_dict_proxy(
       string_dict, 1 /* string_dict_id */, string_dict->storageEntryCount());
   {
@@ -474,10 +492,13 @@ TEST(StringDictionaryProxy, GetTransientBulk) {
 
 TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
   // Use existing dictionary from GetBulk
+  const DictRef dict_ref1(-1, 1);
+  const DictRef dict_ref2(-1, 2);
   std::shared_ptr<StringDictionary> source_string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH1, false, false, g_cache_string_hash);
-  std::shared_ptr<StringDictionary> dest_string_dict =
-      std::make_shared<StringDictionary>(BASE_PATH2, false, false, g_cache_string_hash);
+      std::make_shared<StringDictionary>(
+          dict_ref1, BASE_PATH1, false, false, g_cache_string_hash);
+  std::shared_ptr<StringDictionary> dest_string_dict = std::make_shared<StringDictionary>(
+      dict_ref2, BASE_PATH2, false, false, g_cache_string_hash);
 
   // Prep: insert g_op_count strings into source_string_dict
   std::vector<int32_t> string_ids(g_op_count);
@@ -499,10 +520,15 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
         std::make_shared<StringDictionaryProxy>(dest_string_dict,
                                                 2 /* string_dict_id */,
                                                 dest_string_dict->storageEntryCount());
-    const auto translated_ids =
-        source_string_dict_proxy->buildTranslationMapToOtherProxy(dest_string_dict_proxy);
+    const auto str_proxy_translation_map =
+        source_string_dict_proxy->buildTranslationMapToOtherProxy(
+            dest_string_dict_proxy.get());
+    CHECK(str_proxy_translation_map);
+    ASSERT_FALSE(str_proxy_translation_map->isEmpty());
+    const auto& translated_ids = str_proxy_translation_map->translation_map_;
     const size_t num_ids = translated_ids.size();
     ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount());
+    ASSERT_EQ(num_ids, str_proxy_translation_map->size());
     for (size_t idx = 0; idx < num_ids; ++idx) {
       ASSERT_EQ(translated_ids[idx], StringDictionary::INVALID_STR_ID);
     }
@@ -544,11 +570,16 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
       dest_string_dict_proxy->getOrAddTransient(std::to_string(i));
     }
 
-    const auto translated_ids =
-        source_string_dict_proxy->buildTranslationMapToOtherProxy(dest_string_dict_proxy);
+    const auto str_proxy_translation_map =
+        source_string_dict_proxy->buildTranslationMapToOtherProxy(
+            dest_string_dict_proxy.get());
+    CHECK(str_proxy_translation_map);
+    ASSERT_FALSE(str_proxy_translation_map->isEmpty());
+    const auto& translated_ids = str_proxy_translation_map->translation_map_;
     const size_t num_ids = translated_ids.size();
     // Todo (todd): Expose transient start offset instead of having to use magic number
     ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount() + 1);
+    ASSERT_EQ(num_ids, str_proxy_translation_map->size());
     const int32_t start_source_id =
         source_string_dict_proxy->transientEntryCount() > 0
             ? (source_string_dict_proxy->transientEntryCount() + 1) * -1
@@ -565,13 +596,13 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
             (source_string_as_int >= (g_op_count * 2) &&
              source_string_as_int < (g_op_count * 2 + num_dest_proxy_transient_ids)));
       if (translated_ids[idx] != StringDictionary::INVALID_STR_ID) {
-        ASSERT_EQ(should_be_missing, false);
+        ASSERT_FALSE(should_be_missing);
         const std::string dest_string =
             dest_string_dict_proxy->getString(translated_ids[idx]);
         ASSERT_EQ(source_string, dest_string);
 
       } else {
-        ASSERT_EQ(should_be_missing, true);
+        ASSERT_TRUE(should_be_missing);
       }
     }
   }
