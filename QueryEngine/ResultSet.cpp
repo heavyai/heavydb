@@ -28,10 +28,12 @@
 #include "InPlaceSort.h"
 #include "OutputBufferInitialization.h"
 #include "RuntimeFunctions.h"
+#include "Shared/InlineNullValues.h"
 #include "Shared/Intervals.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/likely.h"
+#include "Shared/parallel_sort.h"
 #include "Shared/thread_count.h"
 #include "Shared/threading.h"
 
@@ -559,6 +561,96 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
   return query_mem_desc_copy;
 }
 
+template <typename T>
+void sort_on_cpu(T* val_buff,
+                 PermutationView pv,
+                 const uint64_t entry_count,
+                 const Analyzer::OrderEntry& order_entry) {
+  int64_t begin = 0;
+  int64_t end = pv.size() - 1;
+
+  if (order_entry.nulls_first) {
+    while (end >= begin) {
+      auto val = val_buff[end];
+      if (val == inline_null_value<T>()) {
+        if (val_buff[begin] != inline_null_value<T>()) {
+          std::swap(val_buff[begin], val_buff[end]);
+          std::swap(pv[begin], pv[end]);
+          --end;
+        }
+        ++begin;
+      } else {
+        --end;
+      }
+    }
+    end = pv.size() - 1;
+  } else {
+    while (end >= begin) {
+      auto val = val_buff[begin];
+      if (val == inline_null_value<T>()) {
+        if (val_buff[end] != inline_null_value<T>()) {
+          std::swap(val_buff[end], val_buff[begin]);
+          std::swap(pv[end], pv[begin]);
+          ++begin;
+        }
+        --end;
+      } else {
+        ++begin;
+      }
+    }
+    begin = 0;
+  }
+
+  if (order_entry.is_desc) {
+    parallel_sort_by_key(val_buff + begin,
+                         pv.begin() + begin,
+                         (size_t)(end - begin + 1),
+                         std::greater<T>());
+  } else {
+    parallel_sort_by_key(
+        val_buff + begin, pv.begin() + begin, (size_t)(end - begin + 1), std::less<T>());
+  }
+}
+
+void sort_onecol_cpu(int8_t* val_buff,
+                     PermutationView pv,
+                     const uint64_t entry_count,
+                     const SQLTypeInfo& type_info,
+                     const size_t slot_width,
+                     const Analyzer::OrderEntry& order_entry) {
+  if (type_info.is_integer()) {
+    switch (slot_width) {
+      case 1:
+        sort_on_cpu(reinterpret_cast<int8_t*>(val_buff), pv, entry_count, order_entry);
+        break;
+      case 2:
+        sort_on_cpu(reinterpret_cast<int16_t*>(val_buff), pv, entry_count, order_entry);
+        break;
+      case 4:
+        sort_on_cpu(reinterpret_cast<int32_t*>(val_buff), pv, entry_count, order_entry);
+        break;
+      case 8:
+        sort_on_cpu(reinterpret_cast<int64_t*>(val_buff), pv, entry_count, order_entry);
+        break;
+      default:
+        CHECK(false);
+    }
+  } else if (type_info.is_fp()) {
+    switch (slot_width) {
+      case 4:
+        sort_on_cpu(reinterpret_cast<float*>(val_buff), pv, entry_count, order_entry);
+        break;
+      case 8:
+        sort_on_cpu(reinterpret_cast<double*>(val_buff), pv, entry_count, order_entry);
+        break;
+      default:
+        CHECK(false);
+    }
+  } else {
+    UNREACHABLE() << "Unsupported element type";
+  }
+}
+
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
                      size_t top_n,
                      const Executor* executor) {
@@ -602,6 +694,38 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   } else {
     if (g_enable_watchdog && Executor::baseline_threshold < entryCount()) {
       throw WatchdogException("Sorting the result would be too slow");
+    }
+
+    if (top_n == 0 && size_t(1) == order_entries.size() &&
+        isDirectColumnarConversionPossible() && query_mem_desc_.didOutputColumnar() &&
+        query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+      const auto& order_entry = order_entries.front();
+      const auto target_idx = order_entry.tle_no - 1;
+      const auto& lazy_fetch_info = getLazyFetchInfo();
+      bool is_not_lazy =
+          lazy_fetch_info.empty() || !lazy_fetch_info[target_idx].is_lazily_fetched;
+      const auto entry_ti = get_compact_type(targets_[target_idx]);
+      const auto slot_width = query_mem_desc_.getPaddedSlotWidthBytes(target_idx);
+      if (is_not_lazy && slot_width > 0 && (entry_ti.is_integer() || entry_ti.is_fp())) {
+        const size_t buf_size = query_mem_desc_.getEntryCount() * slot_width;
+        // std::vector<int8_t> sortkey_val_buff(buf_size);
+	std::unique_ptr<int8_t[]> sortkey_val_buff(new int8_t[buf_size]);
+        copyColumnIntoBuffer(target_idx, reinterpret_cast<int8_t*>(&sortkey_val_buff[0]), buf_size);
+        permutation_.resize(query_mem_desc_.getEntryCount());
+        PermutationView pv(permutation_.data(), 0, permutation_.size());
+        pv = initPermutationBuffer(pv, 0, permutation_.size());
+        sort_onecol_cpu(reinterpret_cast<int8_t*>(&sortkey_val_buff[0]),
+                        pv,
+                        query_mem_desc_.getEntryCount(),
+                        entry_ti,
+                        slot_width,
+                        order_entry);
+        if (pv.size() < permutation_.size()) {
+          permutation_.resize(pv.size());
+          permutation_.shrink_to_fit();
+        }
+        return;
+      }
     }
     permutation_.resize(query_mem_desc_.getEntryCount());
     // PermutationView is used to share common API with parallelTop().
@@ -1063,12 +1187,12 @@ void ResultSet::radixSortOnCpu(
     const auto target_idx = order_entry.tle_no - 1;
     const auto sortkey_val_buff = reinterpret_cast<int64_t*>(
         buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
-    const auto chosen_bytes = query_mem_desc_.getPaddedSlotWidthBytes(target_idx);
+    const auto slot_width = query_mem_desc_.getPaddedSlotWidthBytes(target_idx);
     sort_groups_cpu(sortkey_val_buff,
                     &idx_buff[0],
                     query_mem_desc_.getEntryCount(),
                     order_entry.is_desc,
-                    chosen_bytes);
+                    slot_width);
     apply_permutation_cpu(reinterpret_cast<int64_t*>(buffer_ptr),
                           &idx_buff[0],
                           query_mem_desc_.getEntryCount(),
@@ -1079,14 +1203,14 @@ void ResultSet::radixSortOnCpu(
       if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
         continue;
       }
-      const auto chosen_bytes = query_mem_desc_.getPaddedSlotWidthBytes(target_idx);
+      const auto slot_width = query_mem_desc_.getPaddedSlotWidthBytes(target_idx);
       const auto satellite_val_buff = reinterpret_cast<int64_t*>(
           buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
       apply_permutation_cpu(satellite_val_buff,
                             &idx_buff[0],
                             query_mem_desc_.getEntryCount(),
                             &tmp_buff[0],
-                            chosen_bytes);
+                            slot_width);
     }
   }
 }

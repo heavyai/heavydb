@@ -366,4 +366,16 @@ CONSTEXPR DEVICE inline void set_null(T& value) {
   *(TT*)(&value) = serialized_null_value<T, array>();
 }
 
+template <
+    typename V,
+    std::enable_if_t<!std::is_same_v<V, bool> && std::is_integral<V>::value, int> = 0>
+inline V inline_null_value() {
+  return inline_int_null_value<V>();
+}
+
+template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
+inline V inline_null_value() {
+  return inline_fp_null_value<V>();
+}
+
 #endif

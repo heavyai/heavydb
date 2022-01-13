@@ -20,7 +20,7 @@
 
 #include <gtest/gtest.h>
 
-using TestHelpers::inline_null_value;
+//using TestHelpers::inline_null_value;
 
 namespace ArrowTestHelpers {
 
