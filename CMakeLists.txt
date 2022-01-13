@@ -510,7 +510,7 @@ endif()
 add_subdirectory(ThirdParty/googlebenchmark)
 
 # aws-sdk
-option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
+option(ENABLE_AWS_S3 "Enable AWS S3 support" OFF)
 if(ENABLE_AWS_S3)
   find_package(LibAwsS3)
   if(NOT LibAwsS3_FOUND)
