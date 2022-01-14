@@ -71,6 +71,7 @@ unsigned connect_timeout{20000};
 unsigned recv_timeout{300000};
 unsigned send_timeout{300000};
 bool with_keepalive{false};
+bool g_enable_http_binary_server{true};
 
 void CommandLineOptions::init_logging() {
   if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
@@ -294,6 +295,10 @@ void CommandLineOptions::fillOptions() {
     help_desc.add_options()("http-port",
                             po::value<int>(&http_port)->default_value(http_port),
                             "HTTP port number.");
+    help_desc.add_options()(
+        "http-binary-port",
+        po::value<int>(&http_binary_port)->default_value(http_binary_port),
+        "HTTP binary port number.");
   }
   help_desc.add_options()(
       "idle-session-duration",
@@ -887,6 +892,11 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_allow_query_step_cpu_retry)
           ->implicit_value(true),
       R"(Allow certain query steps to retry on CPU, even when allow-cpu-retry is disabled)");
+  help_desc.add_options()("enable-http-binary-server",
+                          po::value<bool>(&g_enable_http_binary_server)
+                              ->default_value(g_enable_http_binary_server)
+                              ->implicit_value(true),
+                          "Enable binary over HTTP Thrift server");
 }
 
 namespace {

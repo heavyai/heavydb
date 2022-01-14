@@ -76,11 +76,14 @@ extern bool g_enable_thrift_logs;
 // Set g_running to false to trigger normal server shutdown.
 std::atomic<bool> g_running{true};
 
+extern bool g_enable_http_binary_server;
+
 namespace {  // anonymous
 
 std::atomic<int> g_saw_signal{-1};
 
 std::shared_ptr<TThreadedServer> g_thrift_http_server;
+std::shared_ptr<TThreadedServer> g_thrift_http_binary_server;
 std::shared_ptr<TThreadedServer> g_thrift_tcp_server;
 
 std::shared_ptr<DBHandler> g_warmup_handler;
@@ -292,6 +295,12 @@ void thrift_stop() {
   }
   g_thrift_http_server.reset();
 
+  if (auto thrift_http_binary_server = g_thrift_http_binary_server;
+      thrift_http_binary_server) {
+    thrift_http_binary_server->stop();
+  }
+  g_thrift_http_binary_server.reset();
+
   if (auto thrift_tcp_server = g_thrift_tcp_server; thrift_tcp_server) {
     thrift_tcp_server->stop();
   }
@@ -493,6 +502,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   // TCP port setup. We use Thrift both for a TCP socket and for an optional HTTP socket.
   std::shared_ptr<TServerSocket> tcp_socket;
   std::shared_ptr<TServerSocket> http_socket;
+  std::shared_ptr<TServerSocket> http_binary_socket;
 
   if (!prog_config_opts.system_parameters.ssl_cert_file.empty() &&
       !prog_config_opts.system_parameters.ssl_key_file.empty()) {
@@ -514,6 +524,10 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
       http_socket = std::make_shared<TSSLServerSocket>(prog_config_opts.http_port,
                                                        sslSocketFactory);
     }
+    if (g_enable_http_binary_server) {
+      http_binary_socket = std::make_shared<TSSLServerSocket>(
+          prog_config_opts.http_binary_port, sslSocketFactory);
+    }
     LOG(INFO) << " OmniSci server using encrypted connection. Cert file ["
               << prog_config_opts.system_parameters.ssl_cert_file << "], key file ["
               << prog_config_opts.system_parameters.ssl_key_file << "]";
@@ -525,6 +539,10 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
         prog_config_opts.system_parameters.omnisci_server_port);
     if (start_http_server) {
       http_socket = std::make_shared<TServerSocket>(prog_config_opts.http_port);
+    }
+    if (g_enable_http_binary_server) {
+      http_binary_socket =
+          std::make_shared<TServerSocket>(prog_config_opts.http_binary_port);
     }
   }
 
@@ -562,6 +580,24 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     g_thrift_http_server.reset(new TThreadedServer(processor, http_st, http_tf, http_pf));
     server_threads.insert(std::make_unique<std::thread>(
         start_server, g_thrift_http_server, prog_config_opts.http_port));
+  }
+
+  // Thrift HTTP binary protocol server launch.
+  if (g_enable_http_binary_server) {
+    std::shared_ptr<TServerTransport> http_binary_st = http_binary_socket;
+#ifdef HAVE_THRIFT_MESSAGE_LIMIT
+    std::shared_ptr<TTransportFactory> http_binary_tf{
+        std::make_shared<UnboundedTHttpServerTransportFactory>()};
+#else
+    std::shared_ptr<TTransportFactory> http_binary_tf{
+        std::make_shared<THttpServerTransportFactory>()};
+#endif
+    std::shared_ptr<TProtocolFactory> http_binary_pf{
+        std::make_shared<TBinaryProtocolFactory>()};
+    g_thrift_http_binary_server.reset(
+        new TThreadedServer(processor, http_binary_st, http_binary_tf, http_binary_pf));
+    server_threads.insert(std::make_unique<std::thread>(
+        start_server, g_thrift_http_binary_server, prog_config_opts.http_binary_port));
   }
 
   // Run warm up queries if any exist.

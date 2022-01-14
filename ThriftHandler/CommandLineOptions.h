@@ -44,6 +44,7 @@ class CommandLineOptions {
     fillAdvancedOptions();
   }
   int http_port = 6278;
+  int http_binary_port = 6276;
   size_t reserved_gpu_mem = 384 * 1024 * 1024;
   std::string base_path;
   File_Namespace::DiskCacheConfig disk_cache_config;
