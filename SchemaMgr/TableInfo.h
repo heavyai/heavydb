@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "DataMgr/MemoryLevel.h"
 #include "Shared/sqltypes.h"
 
 #include <memory>
@@ -43,19 +44,26 @@ struct TableInfo : public TableRef {
             const std::string name_,
             bool is_view_,
             int delete_column_id_,
+            Data_Namespace::MemoryLevel persistence_level_,
             size_t fragments_)
       : TableRef(db_id, table_id)
       , name(name_)
       , is_view(is_view_)
       , delete_column_id(delete_column_id_)
+      , persistence_level(persistence_level_)
       , fragments(fragments_) {}
 
   std::string name;
   bool is_view;
   // Id of 'delete' column or -1.
   int delete_column_id;
+  Data_Namespace::MemoryLevel persistence_level;
   // For add_window_function_pre_project in RelAlgDagBuilder.
   size_t fragments;
+
+  bool isTemporary() const {
+    return persistence_level == Data_Namespace::MemoryLevel::CPU_LEVEL;
+  }
 
   std::string toString() const {
     return name + "(db_id=" + std::to_string(db_id) +

@@ -4384,6 +4384,7 @@ TableInfoPtr Catalog::makeInfo(const TableDescriptor* td) const {
                                      td->tableName,
                                      td->isView,
                                      del_col_id,
+                                     td->persistenceLevel,
                                      td->fragmenter->getNumFragments());
 }
 

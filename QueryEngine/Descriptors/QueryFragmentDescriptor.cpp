@@ -292,36 +292,29 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   const auto outer_fragments = it->second;
   outer_fragments_size_ = outer_fragments->size();
 
-  const auto& catalog = executor->getCatalog();
-  auto schema_provider = executor->getSchemaProvider();
-
   ChunkMetadataVector deleted_chunk_metadata_vec;
-
   bool is_temporary_table = false;
   if (outer_table_id > 0) {
+    auto schema_provider = executor->getSchemaProvider();
     auto table_info =
         schema_provider->getTableInfo(executor->getDatabaseId(), outer_table_id);
     CHECK(table_info);
     // Temporary tables will not have a table descriptor and not have deleted rows.
-    const auto td = catalog->getMetadataForTable(outer_table_id);
-    CHECK(td);
-    if (table_is_temporary(td)) {
+    if (table_info->isTemporary()) {
       // for temporary tables, we won't have delete column metadata available. However, we
       // know the table fits in memory as it is a temporary table, so signal to the lower
       // layers that we can disregard the early out select * optimization
       is_temporary_table = true;
     } else {
       if (table_info->delete_column_id >= 0) {
-        // 01 Apr 2021 MAT TODO this code is called on logical tables (ie not the shards)
-        // I wonder if this makes sense in those cases
-        td->fragmenter->getFragmenterId();
-        auto frags = td->fragmenter->getFragmentsForQuery().fragments;
-        for (auto frag : frags) {
+        auto frag_info =
+            executor->getDataMgr()->getTableInfo(table_info->db_id, table_info->table_id);
+        for (auto frag : frag_info.fragments) {
           auto chunk_meta_it =
               frag.getChunkMetadataMapPhysical().find(table_info->delete_column_id);
           if (chunk_meta_it != frag.getChunkMetadataMapPhysical().end()) {
             const auto& chunk_meta = chunk_meta_it->second;
-            ChunkKey chunk_key_prefix = {catalog->getCurrentDB().dbId,
+            ChunkKey chunk_key_prefix = {table_info->db_id,
                                          outer_table_id,
                                          table_info->delete_column_id,
                                          frag.fragmentId};
