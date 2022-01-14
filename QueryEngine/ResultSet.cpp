@@ -564,7 +564,6 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 template <typename T>
 void sort_on_cpu(T* val_buff,
                  PermutationView pv,
-                 const uint64_t entry_count,
                  const Analyzer::OrderEntry& order_entry) {
   int64_t begin = 0;
   int64_t end = pv.size() - 1;
@@ -614,23 +613,22 @@ void sort_on_cpu(T* val_buff,
 
 void sort_onecol_cpu(int8_t* val_buff,
                      PermutationView pv,
-                     const uint64_t entry_count,
                      const SQLTypeInfo& type_info,
                      const size_t slot_width,
                      const Analyzer::OrderEntry& order_entry) {
-  if (type_info.is_integer()) {
+  if (type_info.is_integer()  || type_info.is_decimal()) {
     switch (slot_width) {
       case 1:
-        sort_on_cpu(reinterpret_cast<int8_t*>(val_buff), pv, entry_count, order_entry);
+        sort_on_cpu(reinterpret_cast<int8_t*>(val_buff), pv, order_entry);
         break;
       case 2:
-        sort_on_cpu(reinterpret_cast<int16_t*>(val_buff), pv, entry_count, order_entry);
+        sort_on_cpu(reinterpret_cast<int16_t*>(val_buff), pv, order_entry);
         break;
       case 4:
-        sort_on_cpu(reinterpret_cast<int32_t*>(val_buff), pv, entry_count, order_entry);
+        sort_on_cpu(reinterpret_cast<int32_t*>(val_buff), pv, order_entry);
         break;
       case 8:
-        sort_on_cpu(reinterpret_cast<int64_t*>(val_buff), pv, entry_count, order_entry);
+        sort_on_cpu(reinterpret_cast<int64_t*>(val_buff), pv, order_entry);
         break;
       default:
         CHECK(false);
@@ -638,10 +636,10 @@ void sort_onecol_cpu(int8_t* val_buff,
   } else if (type_info.is_fp()) {
     switch (slot_width) {
       case 4:
-        sort_on_cpu(reinterpret_cast<float*>(val_buff), pv, entry_count, order_entry);
+        sort_on_cpu(reinterpret_cast<float*>(val_buff), pv, order_entry);
         break;
       case 8:
-        sort_on_cpu(reinterpret_cast<double*>(val_buff), pv, entry_count, order_entry);
+        sort_on_cpu(reinterpret_cast<double*>(val_buff), pv, order_entry);
         break;
       default:
         CHECK(false);
@@ -706,7 +704,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
           lazy_fetch_info.empty() || !lazy_fetch_info[target_idx].is_lazily_fetched;
       const auto entry_ti = get_compact_type(targets_[target_idx]);
       const auto slot_width = query_mem_desc_.getPaddedSlotWidthBytes(target_idx);
-      if (is_not_lazy && slot_width > 0 && (entry_ti.is_integer() || entry_ti.is_fp())) {
+      if (is_not_lazy && slot_width > 0 && entry_ti.is_number()) {
         const size_t buf_size = query_mem_desc_.getEntryCount() * slot_width;
         // std::vector<int8_t> sortkey_val_buff(buf_size);
 	std::unique_ptr<int8_t[]> sortkey_val_buff(new int8_t[buf_size]);
@@ -716,7 +714,6 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
         pv = initPermutationBuffer(pv, 0, permutation_.size());
         sort_onecol_cpu(reinterpret_cast<int8_t*>(&sortkey_val_buff[0]),
                         pv,
-                        query_mem_desc_.getEntryCount(),
                         entry_ti,
                         slot_width,
                         order_entry);
