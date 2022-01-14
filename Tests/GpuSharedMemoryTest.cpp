@@ -207,6 +207,7 @@ std::vector<std::unique_ptr<ResultSet>> create_and_fill_input_result_sets(
                                                       query_mem_desc,
                                                       row_set_mem_owner,
                                                       nullptr,
+                                                      -1, /*fixme*/
                                                       0,
                                                       0));
     const auto storage = result_sets.back()->allocateStorage();
@@ -229,6 +230,7 @@ create_and_init_output_result_sets(std::shared_ptr<RowSetMemoryOwner> row_set_me
                                                     query_mem_desc,
                                                     row_set_mem_owner,
                                                     nullptr,
+                                                    -1, /*fixme*/
                                                     0,
                                                     0);
   auto cpu_storage_result = cpu_result_set->allocateStorage();
@@ -241,6 +243,7 @@ create_and_init_output_result_sets(std::shared_ptr<RowSetMemoryOwner> row_set_me
                                                     query_mem_desc,
                                                     row_set_mem_owner,
                                                     nullptr,
+                                                    -1, /*fixme*/
                                                     0,
                                                     0);
   auto gpu_storage_result = gpu_result_set->allocateStorage();

@@ -457,8 +457,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         shared_memory_size ? 1 : block_size_x * grid_size_x * num_fragments;
     const auto output_buffer_size_per_agg = num_results_per_agg_col * sizeof(int64_t);
     if (ra_exe_unit.estimator) {
-      estimator_result_set_.reset(new ResultSet(
-          ra_exe_unit.estimator, ExecutorDeviceType::GPU, device_id, data_mgr));
+      estimator_result_set_.reset(new ResultSet(ra_exe_unit.estimator,
+                                                ExecutorDeviceType::GPU,
+                                                device_id,
+                                                data_mgr,
+                                                -1 /*FIXME*/));
       out_vec_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(
           estimator_result_set_->getDeviceEstimatorBuffer()));
     } else {

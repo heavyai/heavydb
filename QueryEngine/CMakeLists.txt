@@ -283,6 +283,7 @@ set(QUERY_ENGINE_LIBS
   Utils
   Logger
   Shared
+  SchemaMgr
   Parser
   sqlite3
   ${Arrow_LIBRARIES}

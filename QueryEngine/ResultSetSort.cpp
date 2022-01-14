@@ -139,7 +139,8 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
           permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
     auto pv = PermutationView(permutation_.data(), permutation_.size());
-    topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false));
+    topPermutation(
+        pv, top_n, createComparator(order_entries, pv, executor, false), false);
     if (top_n < permutation_.size()) {
       permutation_.resize(top_n);
       permutation_.shrink_to_fit();
@@ -176,10 +177,7 @@ bool ResultSet::canUseFastBaselineSort(
 }
 
 Data_Namespace::DataMgr* ResultSet::getDataManager() const {
-  if (catalog_) {
-    return &catalog_->getDataMgr();
-  }
-  return nullptr;
+  return data_mgr_;
 }
 
 int ResultSet::getGpuCount() const {

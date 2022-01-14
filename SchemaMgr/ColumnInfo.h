@@ -33,11 +33,7 @@ struct ColumnRef {
            db_id == other.db_id;
   }
 
-  std::string toString() const {
-    return ::typeName(this) + "(db_id=" + std::to_string(db_id) +
-           ", table_id=" + std::to_string(table_id) +
-           ", column_id=" + std::to_string(column_id);
-  }
+  std::string toString() const;
 };
 
 using ColumnRefSet = std::unordered_set<ColumnRef>;
@@ -63,12 +59,7 @@ struct ColumnInfo : public ColumnRef {
   // Special column holding a bitmap for deleted rows.
   bool is_delete;
 
-  std::string toString() const {
-    return name + "(db_id=" + std::to_string(db_id) +
-           ", table_id=" + std::to_string(table_id) +
-           ", column_id=" + std::to_string(column_id) + " type=" + type.toString() +
-           (is_rowid ? " [rowid])" : "") + (is_delete ? " [del])" : "") + ")";
-  }
+  std::string toString() const;
 };
 
 using ColumnInfoPtr = std::shared_ptr<ColumnInfo>;
