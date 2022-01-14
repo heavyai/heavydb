@@ -43,29 +43,24 @@ struct TableInfo : public TableRef {
             const std::string name_,
             bool is_view_,
             int delete_column_id_,
-            std::string storage_type_,
             size_t fragments_)
       : TableRef(db_id, table_id)
       , name(name_)
       , is_view(is_view_)
       , delete_column_id(delete_column_id_)
-      , storage_type(storage_type_)
       , fragments(fragments_) {}
 
   std::string name;
   bool is_view;
   // Id of 'delete' column or -1.
   int delete_column_id;
-  // For QueryPlanDagChecker.
-  std::string storage_type;
   // For add_window_function_pre_project in RelAlgDagBuilder.
   size_t fragments;
 
   std::string toString() const {
     return name + "(db_id=" + std::to_string(db_id) +
            ", table_id=" + std::to_string(table_id) +
-           " fragments=" + std::to_string(fragments) + (is_view ? " [view]) " : "") +
-           storage_type + ")";
+           " fragments=" + std::to_string(fragments) + (is_view ? " [view]) " : ")");
   }
 };
 
