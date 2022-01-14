@@ -34,7 +34,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
   hoist_literals_ = co.hoist_literals;
   CHECK(executor);
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
-  const auto cat = executor->getCatalog();
   try {
     std::tie(compilation_result_, query_mem_desc) = executor->compileWorkUnit(
         table_infos,
@@ -42,7 +41,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         ra_exe_unit,
         co,
         eo,
-        cat->getDataMgr().getCudaMgr(),
+        executor->getDataMgr()->getCudaMgr(),
         g_enable_lazy_fetch &&
             co.allow_lazy_fetch,  // TODO(adb): remove param and just read from CO
         executor->row_set_mem_owner_,
@@ -61,7 +60,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
                                   ra_exe_unit,
                                   co,
                                   eo,
-                                  cat->getDataMgr().getCudaMgr(),
+                                  executor->getDataMgr()->getCudaMgr(),
                                   false,
                                   executor->row_set_mem_owner_,
                                   max_groups_buffer_entry_guess,
