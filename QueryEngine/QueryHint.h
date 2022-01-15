@@ -35,54 +35,9 @@ enum QueryHint {
   kOverlapsAllowGpuBuild,
   kOverlapsNoCache,
   kOverlapsKeysPerBin,
-  kHashJoin,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
-};
-
-enum class HashTableLayoutType : int { ONE, MANY };
-enum class HashTableHashingType : int { PERFECT, BASELINE };
-
-static const std::vector<std::string> QueryHintEnabler{"on", "true", "t"};
-static const std::vector<std::string> QueryHintDisabler{"off", "false", "f"};
-
-struct HashJoinHint {
-  /*
-   * Hash join hint allows us to control how we deal with hash join operation
-   * Currently, we provide three hint options to control hash table building
-   * especially its layout and hashing schemes (also enable/disable keeping hash table)
-   * Note that this provides preferred properties of hash tables we try to build while
-   * processing an input query
-   * This means we may see "ALL" hash tables have exactly the same hash table properties
-   * we want, but sometimes not, i.e., some hash tables may not have desired properties
-   * It also indicates us that we apply the given hint to "ALL" join quals listed in the
-   * query Note that we do not support selectively applying query hints
-   *
-   * The behavior of our hash join framework under hash join hint depends on the situation
-   * if no hint is provided, depending on whether we have a cached hash table for the
-   * given join operation (i.e., we classify cached hash table per join operation) Also
-   * note that we keep delivered hash join hint when adding hash table to the cache so as
-   * to determine the cache's behavior by comparing it against input query hint
-   *
-   * NO QUERY HINT - USE CACHED HASH TABLE IF EXISTS, OTHERWISE TRY TO KEEP IT INTO CACHE
-   *
-   * if a query hint is given, i.e., hash_join(layout='OneToMany'),
-   *    a) if input and cached query hints are not matched then:
-   *      - REPLACE the cached hash table with a new hash table
-   *    b) otherwise, i.e., two hints are matched:
-   *      - RECYCLE the cached hash table
-   *
-   * If we want to replace the cached hash table to the original hash table which is built
-   * based on our existing logic, we can give a query hint with only enabling caching
-   * option , i.e., hash_join(caching='true) but if we give no hash join hint, we try to
-   * recycle the cached hash table as in the above
-   */
-  std::optional<HashTableLayoutType> layout{std::nullopt};
-  std::optional<HashTableHashingType> hashing{std::nullopt};
-  bool caching{true};
-
-  bool hint_registered() const { return hashing || layout; }
 };
 
 static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
@@ -93,9 +48,7 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"overlaps_max_size", QueryHint::kOverlapsMaxSize},
     {"overlaps_allow_gpu_build", QueryHint::kOverlapsAllowGpuBuild},
     {"overlaps_no_cache", QueryHint::kOverlapsNoCache},
-    {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin},
-    {"hash_join", QueryHint::kHashJoin},
-};
+    {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -194,7 +147,6 @@ struct RegisteredQueryHint {
       : cpu_mode(false)
       , columnar_output(false)
       , rowwise_output(false)
-      , hash_join(std::nullopt)
       , overlaps_bucket_threshold(std::numeric_limits<double>::max())
       , overlaps_max_size(g_overlaps_max_table_size_bytes)
       , overlaps_allow_gpu_build(false)
@@ -223,10 +175,6 @@ struct RegisteredQueryHint {
           }
           case static_cast<int>(QueryHint::kRowwiseOutput): {
             updated_query_hints.rowwise_output = true;
-            break;
-          }
-          case static_cast<int>(QueryHint::kHashJoin): {
-            updated_query_hints.hash_join = global_hints.hash_join;
             break;
           }
           case static_cast<int>(QueryHint::kOverlapsBucketThreshold): {
@@ -262,9 +210,6 @@ struct RegisteredQueryHint {
   bool columnar_output;
   bool rowwise_output;
 
-  // hash join
-  std::optional<HashJoinHint> hash_join;
-
   // overlaps hash join
   double overlaps_bucket_threshold;  // defined in "OverlapsJoinHashTable.h"
   size_t overlaps_max_size;
@@ -291,11 +236,6 @@ struct RegisteredQueryHint {
   void registerHint(const QueryHint hint) {
     const auto hint_class = static_cast<int>(hint);
     registered_hint.at(hint_class) = true;
-  }
-
-  void unregisterHint(const QueryHint hint) {
-    const auto hint_class = static_cast<int>(hint);
-    registered_hint.at(hint_class) = false;
   }
 
   bool isHintRegistered(const QueryHint hint) const {

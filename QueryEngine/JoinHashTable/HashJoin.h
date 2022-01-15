@@ -25,7 +25,6 @@
 #include "DataMgr/Allocators/ThrustAllocator.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/CompilationOptions.h"
-#include "QueryEngine/DataRecycler/HashTablePropertyRecycler.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/InputMetadata.h"
 #include "QueryEngine/JoinHashTable/HashTable.h"
@@ -73,17 +72,6 @@ class OverlapsHashTableTooBig : public HashJoinFail {
       : HashJoinFail(
             "Could not create overlaps hash table with less than max allowed size of " +
             std::to_string(overlaps_hash_table_max_bytes) + " bytes") {}
-};
-
-class HashingTypeHintDetected : public std::runtime_error {
- public:
-  HashingTypeHintDetected(HashTableHashingType hashing_type)
-      : std::runtime_error("Detect hashing scheme query hint: " +
-                           HashTablePropertyRecycler::getHashingString(hashing_type)) {
-    hashing_type_ = hashing_type;
-  }
-
-  HashTableHashingType hashing_type_;
 };
 
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
@@ -138,10 +126,6 @@ class HashJoin {
   virtual int getInnerTableRteIdx() const noexcept = 0;
 
   virtual HashType getHashType() const noexcept = 0;
-
-  virtual const RegisteredQueryHint& getRegisteredQueryHint() = 0;
-
-  virtual void registerQueryHint(const RegisteredQueryHint& query_hint) = 0;
 
   static bool layoutRequiresAdditionalBuffers(HashType layout) noexcept {
     return (layout == HashType::ManyToMany || layout == HashType::OneToMany);
@@ -254,24 +238,6 @@ class HashJoin {
       const Catalog_Namespace::Catalog& cat,
       const TemporaryTables* temporary_tables);
 
-  static void invalidateCache() {
-    CHECK(hash_table_property_cache_);
-    hash_table_property_cache_->clearCache();
-  }
-
-  static void markCachedItemAsDirty(size_t table_key) {
-    CHECK(hash_table_property_cache_);
-    auto candidate_table_keys =
-        hash_table_property_cache_->getMappedQueryPlanDagsWithTableKey(table_key);
-    if (candidate_table_keys.has_value()) {
-      hash_table_property_cache_->markCachedItemAsDirty(
-          table_key,
-          *candidate_table_keys,
-          CacheItemType::HT_PROPERTY,
-          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-    }
-  }
-
   HashTable* getHashTableForDevice(const size_t device_id) const {
     CHECK_LT(device_id, hash_tables_for_device_.size());
     return hash_tables_for_device_[device_id].get();
@@ -324,16 +290,10 @@ class HashJoin {
       const std::vector<InnerOuter>& inner_outer_pairs,
       const Executor* executor);
 
-  static HashTablePropertyRecycler* getHashTablePropertyCache() {
-    CHECK(hash_table_property_cache_);
-    return hash_table_property_cache_.get();
-  }
-
  protected:
   virtual size_t getComponentBufferSize() const noexcept = 0;
 
   std::vector<std::shared_ptr<HashTable>> hash_tables_for_device_;
-  static std::unique_ptr<HashTablePropertyRecycler> hash_table_property_cache_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);

@@ -127,8 +127,8 @@ set(query_engine_source_files
     WindowFunctionIR.cpp
     QueryPlanDagCache.cpp
     QueryPlanDagExtractor.cpp
-    DataRecycler/HashTableRecycler.cpp
-    DataRecycler/HashTablePropertyRecycler.cpp
+    DataRecycler/HashtableRecycler.cpp
+    DataRecycler/HashingSchemeRecycler.cpp
     DataRecycler/OverlapsTuningParamRecycler.cpp
     Visitors/QueryPlanDagChecker.cpp
     Visitors/SQLOperatorDetector.cpp

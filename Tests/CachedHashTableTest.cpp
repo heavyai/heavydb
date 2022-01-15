@@ -398,7 +398,7 @@ void import_tables_cache_invalidation_for_CPU_one_to_many_join(bool reverse) {
 std::shared_ptr<HashTable> getCachedHashTable(std::set<QueryPlanHash>& already_visited,
                                               CacheItemType cache_item_type) {
   auto cached_ht = QR::get()->getCachedHashtableWithoutCacheKey(
-      already_visited, cache_item_type, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      already_visited, cache_item_type, 0 /* CPU_DEVICE_IDENTIFIER*/);
   auto cache_key = std::get<0>(cached_ht);
   already_visited.insert(cache_key);
   return std::get<1>(cached_ht);

@@ -1001,7 +1001,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     } else {
       fail_reasons.push_back(hash_table_or_error.fail_reason);
       if (!current_level_hash_table) {
-        VLOG(2) << "Building a hash table based on a qual " << qual_bin_oper->toString()
+        VLOG(2) << "Building a hashtable based on a qual " << qual_bin_oper->toString()
                 << " fails: " << hash_table_or_error.fail_reason;
       }
       handleNonHashtableQual(current_level_join_conditions.type, qual_bin_oper);

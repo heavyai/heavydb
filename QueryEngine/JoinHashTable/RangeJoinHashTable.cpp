@@ -127,7 +127,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
       InnerOuter{dynamic_cast<const Analyzer::ColumnVar*>(range_expr->get_left_operand()),
                  condition->get_left_operand()});
   auto hashtable_access_path_info =
-      HashTableRecycler::getHashtableAccessPathInfo(inner_outer_pairs_for_cache_access,
+      HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs_for_cache_access,
                                                     condition->get_optype(),
                                                     join_type,
                                                     hashtable_build_dag_map,
@@ -147,9 +147,6 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                                               table_id_to_node_map);
   HashJoin::checkHashJoinReplicationConstraint(
       HashJoin::getInnerTableId(inner_outer_pairs), shard_count, executor);
-  if (query_hint.isAnyQueryHintDelivered()) {
-    join_hash_table->registerQueryHint(query_hint);
-  }
   try {
     join_hash_table->reifyWithLayout(HashType::OneToMany);
   } catch (const HashJoinFail& e) {
@@ -401,7 +398,6 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
         composite_key_info_.cache_key_chunks.front()[1]};
     CHECK(!alternative_table_key.empty());
     table_keys = std::unordered_set<size_t>{boost::hash_value(alternative_table_key)};
-    VLOG(2) << "Use alternative hash table cache key";
   }
   hash_table_cache_->addQueryPlanDagForTableKeys(hashtable_cache_key_, table_keys);
 
@@ -452,13 +448,6 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
                        std::to_string(err) + std::string(")"));
   }
   std::shared_ptr<BaselineHashTable> hash_table = builder.getHashTable();
-  auto& query_hint = OverlapsJoinHashTable::getRegisteredQueryHint();
-  if (query_hint.isHintRegistered(QueryHint::kOverlapsNoCache) ||
-      (query_hint.isHintRegistered(QueryHint::kHashJoin) &&
-       !query_hint.hash_join->caching)) {
-    VLOG(1) << "User requests to skip caching range join hash table";
-    return hash_table;
-  }
   auto hashtable_build_time =
       std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
   putHashTableOnCpuToCache(hashtable_cache_key_,

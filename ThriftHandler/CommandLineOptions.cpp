@@ -165,12 +165,12 @@ void CommandLineOptions::fillOptions() {
       po::value<size_t>(&hashtable_cache_total_bytes)
           ->default_value(hashtable_cache_total_bytes)
           ->implicit_value(4294967296),
-      "Size of total memory space for hash table cache, in bytes (default: 4GB).");
+      "Size of total memory space for hashtable cache, in bytes (default: 4GB).");
   help_desc.add_options()("max-cacheable-hashtable-size-bytes",
                           po::value<size_t>(&max_cacheable_hashtable_size_bytes)
                               ->default_value(max_cacheable_hashtable_size_bytes)
                               ->implicit_value(2147483648),
-                          "The maximum size of hash table that is available to cache, in "
+                          "The maximum size of hashtable that is available to cache, in "
                           "bytes (default: 2GB).");
   help_desc.add_options()("enable-debug-timer",
                           po::value<bool>(&g_enable_debug_timer)

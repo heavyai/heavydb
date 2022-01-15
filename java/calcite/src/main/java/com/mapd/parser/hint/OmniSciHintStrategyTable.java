@@ -22,7 +22,6 @@ public class OmniSciHintStrategyTable {
     supportedHints.add("overlaps_allow_gpu_build");
     supportedHints.add("overlaps_no_cache");
     supportedHints.add("overlaps_keys_per_bin");
-    supportedHints.add("hash_join");
 
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode

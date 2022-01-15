@@ -2197,102 +2197,25 @@ class RelAlgDagBuilder : public boost::noncopyable {
           has_global_rowwise_output_hint = target.isGlobalHint();
           break;
         }
-        case QueryHint::kHashJoin: {
-          if (!target.getKVOptions().empty()) {
-          }
-          query_hint.registerHint(QueryHint::kHashJoin);
-          HashJoinHint hint;
-          for (const auto& [k, v] : target.getKVOptions()) {
-            auto k_l = boost::to_lower_copy(k);
-            auto v_l = boost::to_lower_copy(v);
-            if (k_l.compare("hashing") == 0) {
-              if (v_l.compare("perfect") == 0) {
-                hint.hashing = HashTableHashingType::PERFECT;
-              } else if (v_l.compare("baseline") == 0) {
-                hint.hashing = HashTableHashingType::BASELINE;
-              } else {
-                VLOG(1) << "Skipping the provided query hint \"hash_join::hashing\" "
-                           "(detected "
-                           "invalid hashing type: "
-                        << v_l << ")";
-              }
-            } else if (k_l.compare("layout") == 0) {
-              if (v_l.compare("onetoone") == 0) {
-                hint.layout = HashTableLayoutType::ONE;
-              } else if (v_l.compare("onetomany") == 0) {
-                hint.layout = HashTableLayoutType::MANY;
-              } else {
-                VLOG(1)
-                    << "Skipping the provided query hint \"hash_join::layout\" (detected "
-                       "invalid layout type: "
-                    << v_l << ")";
-              }
-            } else if (k_l.compare("caching") == 0) {
-              // we assume a hash table built by considering query hints is cached
-              // automatically unless we explicitly disallow it to be cached
-              if (std::any_of(
-                      QueryHintDisabler.begin(),
-                      QueryHintDisabler.end(),
-                      [&v_l](const std::string& opt) { return v_l.compare(opt) == 0; })) {
-                hint.caching = false;
-                VLOG(1) << "A user forces to disallow caching a hash table";
-              }
-            } else {
-              VLOG(1) << "Skipping the provided query hint of \"hash_join\": detected "
-                         "invalid "
-                         "hint option ("
-                      << k_l << ")";
-            }
-          }
-          query_hint.hash_join = hint;
-          if (target.isGlobalHint()) {
-            if (global_query_hint.isHintRegistered(QueryHint::kHashJoin)) {
-              VLOG(1)
-                  << "Skipping the provided global query hint \"hash_join\" (detected "
-                     "duplicated global hint)";
-              global_query_hint.unregisterHint(QueryHint::kHashJoin);
-              global_query_hint.hash_join = std::nullopt;
-            } else {
-              global_query_hint.registerHint(QueryHint::kHashJoin);
-              global_query_hint.hash_join = hint;
-            }
-          }
-          break;
-        }
         case QueryHint::kOverlapsBucketThreshold: {
-          if (target.getListOptions().size() != 1) {
-            VLOG(1) << "Skipping the provided query hint \"overlaps_bucket_threshold\": "
-                       "detected "
-                       "invalid hint option";
-          }
+          CHECK(target.getListOptions().size() == 1);
           double overlaps_bucket_threshold = std::stod(target.getListOptions()[0]);
           if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
             query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
             query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
             if (target.isGlobalHint()) {
-              if (global_query_hint.isHintRegistered(
-                      QueryHint::kOverlapsBucketThreshold)) {
-                VLOG(1) << "Skipping the provided global query hint "
-                           "\"overlaps_bucket_threshold\" "
-                           "(detected duplicated global hint)";
-                global_query_hint.unregisterHint(QueryHint::kOverlapsBucketThreshold);
-              }
               global_query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
               global_query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
             }
           } else {
-            VLOG(1) << "Skipping the provided query hint \"overlaps_bucket_threshold\" ("
+            VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
                     << overlaps_bucket_threshold
                     << ") : the hint value should be within 0.0 ~ 90.0";
           }
           break;
         }
         case QueryHint::kOverlapsMaxSize: {
-          if (target.getListOptions().size() != 1) {
-            VLOG(1) << "Skipping the provided query hint \"overlaps_max_size\": detected "
-                       "invalid "
-                       "hint option";
-          }
+          CHECK(target.getListOptions().size() == 1);
           std::stringstream ss(target.getListOptions()[0]);
           int overlaps_max_size;
           ss >> overlaps_max_size;
@@ -2300,12 +2223,6 @@ class RelAlgDagBuilder : public boost::noncopyable {
             query_hint.registerHint(QueryHint::kOverlapsMaxSize);
             query_hint.overlaps_max_size = (size_t)overlaps_max_size;
             if (target.isGlobalHint()) {
-              if (global_query_hint.isHintRegistered(QueryHint::kOverlapsMaxSize)) {
-                VLOG(1)
-                    << "Skipping the provided global query hint \"overlaps_max_size\" "
-                       "(detected duplicated global hint)";
-                global_query_hint.unregisterHint(QueryHint::kOverlapsMaxSize);
-              }
               global_query_hint.registerHint(QueryHint::kOverlapsMaxSize);
               global_query_hint.overlaps_max_size = (size_t)overlaps_max_size;
             }
@@ -2331,32 +2248,22 @@ class RelAlgDagBuilder : public boost::noncopyable {
             global_query_hint.registerHint(QueryHint::kOverlapsNoCache);
             global_query_hint.overlaps_no_cache = true;
           }
-          VLOG(1) << "Skipping auto tuner and hash table caching for overlaps join.";
+          VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
           break;
         }
         case QueryHint::kOverlapsKeysPerBin: {
-          if (target.getListOptions().size() != 1) {
-            VLOG(1)
-                << "Skipping the provided query hint \"overlaps_keys_per_bin\": detected "
-                   "invalid hint option";
-          }
+          CHECK(target.getListOptions().size() == 1);
           double overlaps_keys_per_bin = std::stod(target.getListOptions()[0]);
           if (overlaps_keys_per_bin > 0.0 &&
               overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
             query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
             query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
             if (target.isGlobalHint()) {
-              if (global_query_hint.isHintRegistered(QueryHint::kOverlapsKeysPerBin)) {
-                VLOG(1) << "Skipping the provided global query hint "
-                           "\"overlaps_keys_per_bin\" "
-                           "(detected duplicated global hint)";
-                global_query_hint.unregisterHint(QueryHint::kOverlapsKeysPerBin);
-              }
               global_query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
               global_query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
             }
           } else {
-            VLOG(1) << "Skipping the provided query hint \"overlaps_keys_per_bin\" ("
+            VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
                     << overlaps_keys_per_bin
                     << ") : the hint value should be larger than zero";
           }
