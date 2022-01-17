@@ -79,6 +79,7 @@ add_executable(CommandLineTest CommandLineTest.cpp)
 add_executable(SQLHintTest SQLHintTest.cpp)
 add_executable(LoadTableTest LoadTableTest.cpp)
 add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
+add_executable(NoCatalogRelAlgTest NoCatalogRelAlgTest.cpp)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
@@ -184,6 +185,7 @@ target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
 target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(NoCatalogRelAlgTest ${EXECUTE_TEST_LIBS})
 
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -273,6 +275,7 @@ add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
 add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
 add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
+add_test(NoCatalogRelAlgTest NoCatalogRelAlgTest ${TEST_ARGS})
 
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
