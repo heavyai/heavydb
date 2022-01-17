@@ -310,7 +310,8 @@ class OperExpr : public Expr {
       const SQLOps optype,
       const SQLQualifier qual,
       std::shared_ptr<Analyzer::Expr> left_expr,
-      std::shared_ptr<Analyzer::Expr> right_expr);
+      std::shared_ptr<Analyzer::Expr> right_expr,
+      const Executor* executor = nullptr);
   std::string to_string() const override;
 
  private:
