@@ -1870,7 +1870,7 @@ size_t StringDictionary::buildDictionaryTranslationMap(
                 }
               }
               const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
-              num_strings_not_translated_per_thread[tbb_thread_idx] =
+              num_strings_not_translated_per_thread[tbb_thread_idx] +=
                   num_strings_not_translated;
             },
             tbb::simple_partitioner());

@@ -1347,6 +1347,15 @@ key_for_string_encoded(const int32_t str_id) {
   return str_id;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int32_t
+map_string_dict_id(const int32_t string_id,
+                   const int64_t translation_map_handle,
+                   const int32_t min_source_id) {
+  const int32_t* translation_map =
+      reinterpret_cast<const int32_t*>(translation_map_handle);
+  return translation_map[string_id - min_source_id];
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool sample_ratio(
     const double proportion,
     const int64_t row_offset) {

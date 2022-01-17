@@ -455,6 +455,12 @@ class Executor {
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
 
+  StringDictionaryProxyTranslationMap* getStringProxyTranslationMap(
+      const int source_dict_id,
+      const int dest_dict_id,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      const bool with_generation) const;
+
   bool isCPUOnly() const;
 
   bool isArchMaxwell(const ExecutorDeviceType dt) const;
@@ -1309,6 +1315,7 @@ class Executor {
   friend class QueryExecutionContext;
   friend class ResultSet;
   friend class InValuesBitmap;
+  friend class StringDictionaryTranslationMgr;
   friend class LeafAggregator;
   friend class PerfectJoinHashTable;
   friend class QueryRewriter;

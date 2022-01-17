@@ -37,6 +37,8 @@
 #include <utility>
 #include <vector>
 
+class Executor;
+
 namespace Analyzer {
 class Expr;
 }
@@ -1818,7 +1820,8 @@ std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
     const SQLOps optype,
     const SQLQualifier qual,
     std::shared_ptr<Analyzer::Expr> left_expr,
-    std::shared_ptr<Analyzer::Expr> right_expr);
+    std::shared_ptr<Analyzer::Expr> right_expr,
+    const Executor* executor = nullptr);
 
 std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
     const std::list<

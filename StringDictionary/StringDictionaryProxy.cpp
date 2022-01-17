@@ -177,8 +177,10 @@ std::pair<int32_t, int32_t> StringDictionaryProxy::getRangeUnlocked() const {
   const int32_t transient_entry_count = transientEntryCountUnlocked();
   const int32_t min_elem =
       transient_entry_count > 0 ? transient_id_ceil + 1 - transient_entry_count : 0;
-  const int32_t max_elem = storage_entry_count;
-  return std::make_pair(min_elem, max_elem);
+  const int32_t max_plus_one_elem =
+      storage_entry_count > 0 ? storage_entry_count
+                              : (transient_entry_count ? transient_id_ceil + 1 : 0);
+  return std::make_pair(min_elem, max_plus_one_elem);
 }
 
 template <>

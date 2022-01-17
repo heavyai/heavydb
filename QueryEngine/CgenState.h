@@ -20,6 +20,7 @@
 #include "InValuesBitmap.h"
 #include "InputMetadata.h"
 #include "LLVMGlobalContext.h"
+#include "StringDictionaryTranslationMgr.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Shared/InsertionOrderedMap.h"
@@ -175,6 +176,12 @@ struct CgenState {
     str_constants_.push_back(str_lv);
     str_lv = ir_builder_.CreateBitCast(str_lv, i8_ptr);
     return str_lv;
+  }
+
+  const StringDictionaryTranslationMgr* moveStringDictionaryTranslationMgr(
+      std::unique_ptr<const StringDictionaryTranslationMgr>&& str_dict_translation_mgr) {
+    str_dict_translation_mgrs_.emplace_back(std::move(str_dict_translation_mgr));
+    return str_dict_translation_mgrs_.back().get();
   }
 
   const InValuesBitmap* addInValuesBitmap(
@@ -351,6 +358,8 @@ struct CgenState {
   std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
   InsertionOrderedMap filter_func_args_;
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
+  std::vector<std::unique_ptr<const StringDictionaryTranslationMgr>>
+      str_dict_translation_mgrs_;
   std::map<std::pair<llvm::Value*, llvm::Value*>, ArrayLoadCodegen>
       array_load_cache_;  // byte stream to array info
   bool needs_error_check_;

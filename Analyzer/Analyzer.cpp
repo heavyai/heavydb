@@ -24,6 +24,7 @@
 
 #include "Analyzer/Analyzer.h"
 #include "QueryEngine/DateTimeUtils.h"
+#include "QueryEngine/Execute.h"  // TODO: remove
 #include "Shared/DateConverters.h"
 #include "Shared/misc.h"
 #include "Shared/sqltypes.h"
@@ -3435,11 +3436,46 @@ std::shared_ptr<Analyzer::Expr> analyzeStringValue(const std::string& stringval)
   return makeExpr<Analyzer::Constant>(ti, false, d);
 }
 
+bool exprs_share_one_and_same_rte_idx(const std::shared_ptr<Analyzer::Expr>& lhs_expr,
+                                      const std::shared_ptr<Analyzer::Expr>& rhs_expr) {
+  std::set<int> lhs_rte_idx;
+  lhs_expr->collect_rte_idx(lhs_rte_idx);
+  CHECK(!lhs_rte_idx.empty());
+  std::set<int> rhs_rte_idx;
+  rhs_expr->collect_rte_idx(rhs_rte_idx);
+  CHECK(!rhs_rte_idx.empty());
+  return lhs_rte_idx.size() == 1UL && lhs_rte_idx == rhs_rte_idx;
+}
+
+SQLTypeInfo& get_str_dict_cast_dest_type(SQLTypeInfo& lhs_type_info,
+                                         SQLTypeInfo& rhs_type_info,
+                                         const Executor* executor) {
+  CHECK(lhs_type_info.is_string());
+  CHECK(lhs_type_info.get_compression() == kENCODING_DICT);
+  CHECK(rhs_type_info.is_string());
+  CHECK(rhs_type_info.get_compression() == kENCODING_DICT);
+  const auto lhs_comp_param = lhs_type_info.get_comp_param();
+  const auto rhs_comp_param = rhs_type_info.get_comp_param();
+  CHECK_NE(lhs_comp_param, rhs_comp_param);
+  if (lhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
+    return rhs_type_info;
+  }
+  if (rhs_type_info.get_comp_param() == TRANSIENT_DICT_ID) {
+    return lhs_type_info;
+  }
+  // If here then neither lhs or rhs type was transient, we should see which
+  // type has the largest dictionary and make that the destination type
+  const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_comp_param, true);
+  const auto rhs_sdp = executor->getStringDictionaryProxy(rhs_comp_param, true);
+  return lhs_sdp->entryCount() >= rhs_sdp->entryCount() ? lhs_type_info : rhs_type_info;
+}
+
 std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
     const SQLOps optype,
     const SQLQualifier qual,
     std::shared_ptr<Analyzer::Expr> left_expr,
-    std::shared_ptr<Analyzer::Expr> right_expr) {
+    std::shared_ptr<Analyzer::Expr> right_expr,
+    const Executor* executor) {
   if (left_expr->get_type_info().is_date_in_days() ||
       right_expr->get_type_info().is_date_in_days()) {
     // Do not propogate encoding
@@ -3480,9 +3516,47 @@ std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
 
   if (IS_COMPARISON(optype)) {
     if (new_left_type.get_compression() == kENCODING_DICT &&
-        new_right_type.get_compression() == kENCODING_DICT &&
-        new_left_type.get_comp_param() == new_right_type.get_comp_param()) {
-      // do nothing
+        new_right_type.get_compression() == kENCODING_DICT) {
+      if (new_left_type.get_comp_param() != new_right_type.get_comp_param()) {
+        // Join framework does its own string dictionary translation
+        // (at least partly since the rhs table projection does not use
+        // the normal runtime execution framework), do if we detect
+        // that the rte idxs of the two tables are different, bail
+        // on translating
+        const bool should_translate_strings =
+            exprs_share_one_and_same_rte_idx(left_expr, right_expr);
+        if (should_translate_strings && (optype == kEQ || optype == kNE)) {
+          CHECK(executor);
+          // Make the type we're casting to the transient dictionary, if it exists,
+          // otherwise the largest dictionary in terms of number of entries
+          auto& dest_type =
+              get_str_dict_cast_dest_type(new_left_type, new_right_type, executor);
+
+          auto& expr_to_cast = dest_type == new_left_type ? right_expr : left_expr;
+          SQLTypeInfo ti(dest_type);
+          ti.set_compression(dest_type.get_compression());
+          ti.set_comp_param(dest_type.get_comp_param());
+          ti.set_fixed_size();
+          expr_to_cast = expr_to_cast->add_cast(ti);
+        } else {  // Ordered comparison operator
+          // We do not currently support ordered (i.e. >, <=) comparisons between
+          // dictionary-encoded columns, and need to decompress when translation
+          // is turned off even for kEQ and KNE
+          left_expr = left_expr->decompress();
+          right_expr = right_expr->decompress();
+        }
+      } else {  // Strings shared comp param
+        if (!(optype == kEQ || optype == kNE)) {
+          // We do not currently support ordered (i.e. >, <=) comparisons between
+          // encoded columns, so try to decode (will only succeed with watchdog off)
+          left_expr = left_expr->decompress();
+          right_expr = right_expr->decompress();
+        } else {
+          // do nothing, can directly support equals/non-equals comparisons between two
+          // dictionary encoded columns sharing the same dictionary as these are
+          // effectively integer comparisons in the same dictionary space
+        }
+      }
     } else if (new_left_type.get_compression() == kENCODING_DICT &&
                new_right_type.get_compression() == kENCODING_NONE) {
       SQLTypeInfo ti(new_right_type);

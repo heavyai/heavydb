@@ -785,7 +785,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       rhs = translateScalarRex(rhs_op);
     }
     CHECK(rhs);
-    lhs = normalizeOperExpr(sql_op, sql_qual, lhs, rhs);
+    // Pass in executor to get string proxy info if cast needed between
+    // string columns
+    lhs = normalizeOperExpr(sql_op, sql_qual, lhs, rhs, executor_);
   }
   return lhs;
 }

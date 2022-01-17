@@ -16,6 +16,7 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "StringDictionaryTranslationMgr.h"
 
 extern bool g_enable_watchdog;
 
@@ -199,6 +200,28 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   if (operand_ti.get_compression() == kENCODING_NONE &&
       ti.get_compression() == kENCODING_NONE) {
     return operand_lv;
+  }
+  if (ti.get_compression() == kENCODING_DICT &&
+      operand_ti.get_compression() == kENCODING_DICT) {
+    if (ti.get_comp_param() == operand_ti.get_comp_param()) {
+      return operand_lv;
+    }
+
+    auto string_dictionary_translation_mgr =
+        std::make_unique<StringDictionaryTranslationMgr>(
+            operand_ti.get_comp_param(),
+            ti.get_comp_param(),
+            co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                      : Data_Namespace::CPU_LEVEL,
+            executor()->deviceCount(co.device_type),
+            executor(),
+            executor()->getDataMgr());
+    string_dictionary_translation_mgr->buildTranslationMap();
+    string_dictionary_translation_mgr->createKernelBuffers();
+
+    return cgen_state_
+        ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
+        ->codegenCast(operand_lv, operand_ti, true /* add_nullcheck */);
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {

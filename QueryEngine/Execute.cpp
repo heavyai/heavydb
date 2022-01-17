@@ -369,8 +369,16 @@ Executor::CgenStateManager::~CgenStateManager() {
   }
   executor_.cgen_state_->row_func_hoisted_literals_.clear();
 
-  // move generated In-Values bitmaps to the old CgenState instance as the
-  // execution of the generated code uses these bitmaps
+  // move generated StringDictionaryTranslationMgrs and InValueBitmaps
+  // to the old CgenState instance as the execution of the generated
+  // code uses these bitmaps
+
+  for (auto& str_dict_translation_mgr :
+       executor_.cgen_state_->str_dict_translation_mgrs_) {
+    cgen_state_->moveStringDictionaryTranslationMgr(std::move(str_dict_translation_mgr));
+  }
+  executor_.cgen_state_->str_dict_translation_mgrs_.clear();
+
   for (auto& bm : executor_.cgen_state_->in_values_bitmaps_) {
     cgen_state_->moveInValuesBitmap(bm);
   }
@@ -480,6 +488,30 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
         std::make_shared<StringDictionaryProxy>(tsd, literal_dict_ref.dictId, 0);
   }
   return lit_str_dict_proxy_.get();
+}
+
+StringDictionaryProxyTranslationMap* Executor::getStringProxyTranslationMap(
+    const int source_dict_id,
+    const int dest_dict_id,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool with_generation) const {
+  CHECK(row_set_mem_owner);
+  std::lock_guard<std::mutex> lock(
+      str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  return row_set_mem_owner->getOrAddStringProxyTranslationMap(
+      db_id_, source_dict_id, dest_dict_id, with_generation);
+}
+
+StringDictionaryProxyTranslationMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
+    const int db_id,
+    const int source_dict_id_in,
+    const int dest_dict_id_in,
+    const bool with_generation) {
+  const auto source_proxy =
+      getOrAddStringDictProxy(db_id, source_dict_id_in, with_generation);
+  const auto dest_proxy =
+      getOrAddStringDictProxy(db_id, dest_dict_id_in, with_generation);
+  return addStringProxyTranslationMap(source_proxy, dest_proxy);
 }
 
 quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {

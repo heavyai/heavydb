@@ -1342,7 +1342,8 @@ CodeGenerator::NullCheckCodegen::NullCheckCodegen(CgenState* cgen_state,
                                                   const std::string& name)
     : cgen_state(cgen_state), name(name) {
   AUTOMATIC_IR_METADATA(cgen_state);
-  CHECK(nullable_ti.is_number() || nullable_ti.is_time() || nullable_ti.is_boolean());
+  CHECK(nullable_ti.is_number() || nullable_ti.is_time() || nullable_ti.is_boolean() ||
+        nullable_ti.is_dict_encoded_string());
 
   llvm::Value* is_null_lv{nullptr};
   if (nullable_ti.is_fp()) {

@@ -116,6 +116,7 @@ set(query_engine_source_files
     TableGenerations.cpp
     TargetExprBuilder.cpp
     Utils/DiamondCodegen.cpp
+    StringDictionaryTranslationMgr.cpp
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp
