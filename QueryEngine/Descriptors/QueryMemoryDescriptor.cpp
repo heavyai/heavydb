@@ -60,7 +60,7 @@ std::vector<int64_t> target_expr_group_by_indices(
 }
 
 std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit,
-                                              const Catalog_Namespace::Catalog& cat) {
+                                              SchemaProviderPtr schema_provider) {
   if (ra_exe_unit.input_descs.size() > 1 ||
       !ra_exe_unit.sort_info.order_entries.empty()) {
     return {};
@@ -78,12 +78,8 @@ std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
   }
   for (const auto& target : ra_exe_unit.target_exprs) {
     const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target);
-    if (col_var) {
-      const auto cd = get_column_descriptor_maybe(
-          col_var->get_column_id(), col_var->get_table_id(), cat);
-      if (!cd || !cd->isVirtualCol) {
-        continue;
-      }
+    if (col_var && !col_var->is_virtual()) {
+      continue;
     }
     const auto crt_used_columns = columns_visitor.visit(target);
     used_columns.insert(crt_used_columns.begin(), crt_used_columns.end());
@@ -397,11 +393,10 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         }
       }
 
-      const auto catalog = executor->getCatalog();
-      CHECK(catalog);
-      target_groupby_indices = executor->plan_state_->allow_lazy_fetch_
-                                   ? target_expr_proj_indices(ra_exe_unit, *catalog)
-                                   : std::vector<int64_t>{};
+      target_groupby_indices =
+          executor->plan_state_->allow_lazy_fetch_
+              ? target_expr_proj_indices(ra_exe_unit, executor->getSchemaProvider())
+              : std::vector<int64_t>{};
 
       col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
       break;

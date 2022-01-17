@@ -16,14 +16,14 @@
 
 #pragma once
 
-#include "Catalog/Catalog.h"
 #include "RelAlgExecutionUnit.h"
 #include "ScalarExprVisitor.h"
+#include "SchemaMgr/SchemaProvider.h"
 
 class ScalarExprToSql : public ScalarExprVisitor<std::string> {
  public:
   ScalarExprToSql(const RelAlgExecutionUnit* ra_exe_unit,
-                  const Catalog_Namespace::Catalog* catalog);
+                  SchemaProviderPtr schema_provider);
 
   std::string visitVar(const Analyzer::Var*) const override;
 
@@ -65,15 +65,17 @@ class ScalarExprToSql : public ScalarExprVisitor<std::string> {
   static std::string binOpTypeToString(const SQLOps op_type);
 
   const RelAlgExecutionUnit* ra_exe_unit_;
-  const Catalog_Namespace::Catalog* catalog_;
+  SchemaProviderPtr schema_provider_;
 };
 
-std::string serialize_table_ref(const int table_id,
-                                const Catalog_Namespace::Catalog* catalog);
+std::string serialize_table_ref(int db_id,
+                                const int table_id,
+                                SchemaProviderPtr schema_provider);
 
-std::string serialize_column_ref(const int table_id,
+std::string serialize_column_ref(int db_id,
+                                 const int table_id,
                                  const int column_id,
-                                 const Catalog_Namespace::Catalog* catalog);
+                                 SchemaProviderPtr schema_provider);
 
 struct ExecutionUnitSql {
   std::string query;
@@ -81,4 +83,5 @@ struct ExecutionUnitSql {
 };
 
 ExecutionUnitSql serialize_to_sql(const RelAlgExecutionUnit* ra_exe_unit,
-                                  const Catalog_Namespace::Catalog* catalog);
+                                  int db_id,
+                                  SchemaProviderPtr schema_provider);

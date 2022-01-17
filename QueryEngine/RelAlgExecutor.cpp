@@ -2957,16 +2957,15 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       }
     }
   }
-  ExecutionResult result{
-      std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                  co.device_type,
-                                  QueryMemoryDescriptor(),
-                                  nullptr,
-                                  executor_->getDataMgr(),
-                                  executor_->getCatalog()->getDatabaseId(),
-                                  executor_->blockSize(),
-                                  executor_->gridSize()),
-      {}};
+  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                     co.device_type,
+                                                     QueryMemoryDescriptor(),
+                                                     nullptr,
+                                                     executor_->getDataMgr(),
+                                                     executor_->getDatabaseId(),
+                                                     executor_->blockSize(),
+                                                     executor_->gridSize()),
+                         {}};
 
   auto execute_and_handle_errors = [&](const auto max_groups_buffer_entry_guess_in,
                                        const bool has_cardinality_estimation,

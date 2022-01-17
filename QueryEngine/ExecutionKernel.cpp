@@ -173,9 +173,6 @@ void ExecutionKernel::runImpl(Executor* executor,
   CHECK_GE(chosen_device_id, 0);
   CHECK_LT(chosen_device_id, Executor::max_gpu_count);
 
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
-
   auto data_mgr = executor->getDataMgr();
 
   // need to own them while query executes
@@ -242,7 +239,8 @@ void ExecutionKernel::runImpl(Executor* executor,
     if (ra_exe_unit_.input_descs.size() > 1) {
       throw std::runtime_error("Joins not supported through external execution");
     }
-    const auto query = serialize_to_sql(&ra_exe_unit_, catalog);
+    const auto query = serialize_to_sql(
+        &ra_exe_unit_, executor->getDatabaseId(), executor->getSchemaProvider());
     GroupByAndAggregate group_by_and_aggregate(executor,
                                                ExecutorDeviceType::CPU,
                                                ra_exe_unit_,
@@ -503,8 +501,8 @@ void KernelSubtask::runImpl(Executor* executor) {
                                  ? kernel_.frag_list[0].table_id
                                  : kernel_.ra_exe_unit_.input_descs[0].getTableId();
   const auto& outer_tab_frag_ids = kernel_.frag_list[0].fragment_ids;
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
+  auto data_mgr = executor->getDataMgr();
+  CHECK(data_mgr);
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);
   int32_t err{0};
@@ -520,7 +518,7 @@ void KernelSubtask::runImpl(Executor* executor) {
                                               query_exe_context,
                                               fetch_result_->num_rows,
                                               fetch_result_->frag_offsets,
-                                              &catalog->getDataMgr(),
+                                              data_mgr,
                                               kernel_.chosen_device_id,
                                               start_rowid_,
                                               kernel_.ra_exe_unit_.input_descs.size(),
@@ -538,7 +536,7 @@ void KernelSubtask::runImpl(Executor* executor) {
                                            query_exe_context,
                                            fetch_result_->num_rows,
                                            fetch_result_->frag_offsets,
-                                           &catalog->getDataMgr(),
+                                           data_mgr,
                                            kernel_.chosen_device_id,
                                            outer_table_id,
                                            kernel_.ra_exe_unit_.scan_limit,

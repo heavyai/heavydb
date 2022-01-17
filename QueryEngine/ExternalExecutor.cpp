@@ -347,7 +347,8 @@ sqlite3_module omnisci_module = {
 
 std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
   std::map<size_t, TargetMetaInfo> schema_map;
-  const auto catalog = plan_state->executor_->getCatalog();
+  auto schema_provider = plan_state->executor_->getSchemaProvider();
+  int db_id = plan_state->executor_->getDatabaseId();
   for (const auto& kv : plan_state->global_to_local_col_ids_) {
     const int table_id = kv.first.getTableId();
     const int column_id = kv.first.getColId();
@@ -357,14 +358,15 @@ std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
           get_temporary_table(plan_state->executor_->getTemporaryTables(), table_id);
       column_type = table.getColType(column_id);
     } else {
-      const auto cd = catalog->getMetadataForColumn(table_id, column_id);
-      column_type = cd->columnType;
+      const auto col_info = schema_provider->getColumnInfo(db_id, table_id, column_id);
+      column_type = col_info->type;
     }
     if (!is_supported_type_for_extern_execution(column_type)) {
       throw std::runtime_error("Type not supported yet for extern execution: " +
                                column_type.get_type_name());
     }
-    const auto column_ref = serialize_column_ref(table_id, column_id, catalog);
+    const auto column_ref =
+        serialize_column_ref(db_id, table_id, column_id, schema_provider);
     const auto it_ok =
         schema_map.emplace(kv.second, TargetMetaInfo(column_ref, column_type));
     CHECK(it_ok.second);
