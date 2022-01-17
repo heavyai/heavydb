@@ -193,7 +193,31 @@ void compare_columns(const std::array<TYPE, len>& expected,
       }
     }
   }
-};
+}
+
+template <typename TYPE>
+void compare_columns(const std::vector<TYPE>& expected,
+                     const std::shared_ptr<arrow::ChunkedArray>& actual) {
+  using ArrowColType = arrow::NumericArray<typename arrow::CTypeTraits<TYPE>::ArrowType>;
+  const arrow::ArrayVector& chunks = actual->chunks();
+
+  TYPE null_val = null_builder<TYPE>();
+
+  for (int i = 0, k = 0; i < actual->num_chunks(); i++) {
+    auto chunk = chunks[i];
+    auto arrow_row_array = std::static_pointer_cast<ArrowColType>(chunk);
+
+    const TYPE* chunk_data = arrow_row_array->raw_values();
+    for (int64_t j = 0; j < arrow_row_array->length(); j++, k++) {
+      if (expected[k] == null_val) {
+        CHECK(chunk->IsNull(j));
+      } else {
+        CHECK(chunk->IsValid(j));
+        ASSERT_EQ(expected[k], chunk_data[j]);
+      }
+    }
+  }
+}
 
 //  Testing helper functions for 6x4 table contained in $TABLE6x4_CSV_FILE file.
 //  NOTE: load_table6x4_csv() creates table with Arrow types <dictionary, int32, int64,
@@ -251,6 +275,119 @@ void test_chunked_conversion(bool enable_columnar_output,
   test_arrow_table_conversion_table6x4(/*fragment_size=*/fragment_size);
 }
 
+template <typename T>
+struct ConversionTraits {};
+
+template <>
+struct ConversionTraits<int8_t> {
+  using arrow_type = arrow::Int8Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::int8(); }
+};
+
+template <>
+struct ConversionTraits<uint8_t> {
+  using arrow_type = arrow::UInt8Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::uint8(); }
+};
+
+template <>
+struct ConversionTraits<int16_t> {
+  using arrow_type = arrow::Int16Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::int16(); }
+};
+
+template <>
+struct ConversionTraits<uint16_t> {
+  using arrow_type = arrow::UInt16Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::uint16(); }
+};
+
+template <>
+struct ConversionTraits<int32_t> {
+  using arrow_type = arrow::Int32Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::int32(); }
+};
+
+template <>
+struct ConversionTraits<uint32_t> {
+  using arrow_type = arrow::UInt32Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::uint32(); }
+};
+
+template <>
+struct ConversionTraits<int64_t> {
+  using arrow_type = arrow::Int64Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::int64(); }
+};
+
+template <>
+struct ConversionTraits<uint64_t> {
+  using arrow_type = arrow::UInt64Type;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::uint64(); }
+};
+
+template <>
+struct ConversionTraits<float> {
+  using arrow_type = arrow::FloatType;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::float32(); }
+};
+
+template <>
+struct ConversionTraits<double> {
+  using arrow_type = arrow::DoubleType;
+  static std::shared_ptr<arrow::DataType> getSchemaValue() { return arrow::float64(); }
+};
+
+template <typename TYPE>
+void build_table(const std::vector<TYPE>& values,
+                 size_t fragments_count = 1,
+                 std::string table_name = "table1") {
+  if (!g_dbe) {
+    throw std::runtime_error("DBEngine is not initialized.  Aborting.\n");
+  }
+  size_t fragment_size =
+      fragments_count > 1
+          ? size_t((values.size() + fragments_count - 1) / fragments_count)
+          : 0;
+
+  std::string frag_size_param =
+      fragment_size > 0 ? "WITH (fragment_size=" + std::to_string(fragment_size) + ");"
+                        : "";
+
+  {
+    std::shared_ptr<arrow::Array> array;
+    arrow::NumericBuilder<typename ConversionTraits<TYPE>::arrow_type> builder;
+    builder.Resize(values.size());
+    builder.AppendValues(values);
+    builder.Finish(&array);
+
+    auto schema =
+        arrow::schema({arrow::field("value", ConversionTraits<TYPE>::getSchemaValue())});
+    std::shared_ptr<arrow::Table> table = arrow::Table::Make(schema, {array});
+    g_dbe->importArrowTable(table_name, table, fragment_size);
+  }
+}
+
+template <typename TYPE>
+void test_single_column_table(size_t N, size_t fragments_count) {
+  std::vector<TYPE> values(N, 0);
+
+  for (size_t i = 0; i < values.size(); i++) {
+    values[i] = (i % 2) == 0 ? 0 : null_builder<TYPE>();
+  }
+
+  build_table<TYPE>(values, fragments_count, "LargeTable");
+
+  auto cursor = g_dbe->executeDML("SELECT * FROM LargeTable;");
+  ASSERT_NE(cursor, nullptr);
+  auto table = cursor->getArrowTable();
+  ASSERT_NE(table, nullptr);
+  ASSERT_EQ(table->num_columns(), 1);
+  ASSERT_EQ(table->num_rows(), (int64_t)values.size());
+  compare_columns(values, table->column(0));
+  g_dbe->executeDDL("DROP TABLE LargeTable");
+}
+
 }  // anonymous namespace
 
 //  Tests `DBEngine::importArrowTable()'  functionality
@@ -281,9 +418,9 @@ TEST(DBEngine, ImportArrowTable) {
 
 TEST(DBEngine, SelectBool) {
   GTEST_SKIP();  //  `DBEngine::importArrowTable()' incorrectly imports bools so until
-                 //  that is fixed, this test will fail. Remove GTEST_SKIP(); after that 
+                 //  that is fixed, this test will fail. Remove GTEST_SKIP(); after that
                  //  bug is fixed.
-                 //  Cf: https://github.com/intel-ai/omniscidb/issues/218#issue-1070805451 
+                 //  Cf: https://github.com/intel-ai/omniscidb/issues/218#issue-1070805451
   auto cursor = g_dbe->executeDML("SELECT * FROM join_table;");
   ASSERT_NE(cursor, nullptr);
   auto table = cursor->getArrowTable();
@@ -467,6 +604,36 @@ TEST(DBEngine, ArrowTableChunked_NULLS2) {
   compare_columns(
       std::array<double, 6>{4 * 10.1, f64_null, f64_null, 4 * 40.4, 4 * 50.5, f64_null},
       table->column(2));
+}
+
+//  Tests for large tables
+TEST(DBEngine, LargeTables) {
+  bool prev_enable_columnar_output = g_enable_columnar_output;
+  bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
+
+  ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
+    g_enable_columnar_output = prev_enable_columnar_output;
+    g_enable_lazy_fetch = prev_enable_lazy_fetch;
+  };
+
+  g_enable_columnar_output = true;
+  g_enable_lazy_fetch = false;
+  test_single_column_table<int8_t>(30'000'000, 150);
+  // test_single_column_table<uint8_t>(30'000'000, 150);    // C++ exception with
+  // description "uint8 is not yet supported." thrown in the test body.
+
+  test_single_column_table<int16_t>(30'000'000, 150);
+  // test_single_column_table<uint16_t>(30'000'000, 150);   // C++ exception with
+  // description "uint16 is not yet supported." thrown in the test body.
+
+  test_single_column_table<int32_t>(30'000'000, 150);
+  // test_single_column_table<uint32_t>(30'000'000, 150);   // C++ exception with
+  // description "uint32 is not yet supported." thrown in the test body.
+  test_single_column_table<int64_t>(30'000'000, 150);
+  // test_single_column_table<uint64_t>(30'000'000, 150);     // C++ exception with
+  // description "uint64 is not yet supported." thrown in the test body.
+  test_single_column_table<float>(30'000'000, 150);
+  test_single_column_table<double>(30'000'000, 150);
 }
 
 int main(int argc, char* argv[]) try {

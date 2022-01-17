@@ -16,10 +16,12 @@
 
 //  project headers
 #include "ArrowResultSet.h"
+#include "BitmapGenerators.h"
 #include "Execute.h"
 #include "Shared/ArrowUtil.h"
 #include "Shared/DateConverters.h"
 #include "Shared/threading.h"
+#include "Shared/toString.h"
 
 //  arrow headers
 #include "arrow/api.h"
@@ -35,6 +37,7 @@
 #include <cstdlib>
 #include <future>
 #include <string>
+#include <tuple>
 
 //  TBB headers
 #include <tbb/parallel_for.h>
@@ -270,6 +273,92 @@ void convert_column(ResultSetPtr result,
   }
 }
 
+template <typename TYPE>
+size_t gen_bitmap(uint8_t* bitmap, const TYPE* data, size_t size) {
+  static_assert(
+      sizeof(TYPE) == 1 || sizeof(TYPE) == 2 || sizeof(TYPE) == 4 || sizeof(TYPE) == 8,
+      "gen_bitmap() -- Size of TYPE must be 1, 2, 4, or 8.");
+  TYPE nullval = inline_null_value<TYPE>();
+
+  size_t rv = 0;
+  if constexpr (sizeof(TYPE) == 1) {
+    rv = gen_null_bitmap_8(bitmap,
+                           reinterpret_cast<const uint8_t*>(data),
+                           size,
+                           reinterpret_cast<const uint8_t&>(nullval));
+  } else if constexpr (sizeof(TYPE) == 2) {
+    rv = gen_null_bitmap_16(bitmap,
+                            reinterpret_cast<const uint16_t*>(data),
+                            size,
+                            reinterpret_cast<const uint16_t&>(nullval));
+  } else if constexpr (sizeof(TYPE) == 4) {
+      uint32_t casted_nullval;
+      memcpy (&casted_nullval, &nullval, 4);
+      rv = gen_null_bitmap_32(bitmap,
+                            reinterpret_cast<const uint32_t*>(data),
+                            size,
+                            casted_nullval);
+  } else if constexpr (sizeof(TYPE) == 8) {
+      uint64_t casted_nullval;
+      memcpy (&casted_nullval, &nullval, 8);
+      rv = gen_null_bitmap_64(bitmap,
+                            reinterpret_cast<const uint64_t*>(data),
+                            size,
+                            casted_nullval);
+  }
+  return rv;
+}
+
+template <typename TYPE>
+int64_t create_bitmap_parallel_for_avx512(uint8_t* bitmap_data,
+                                          const TYPE* vals,
+                                          const size_t vals_size) {
+  static_assert(sizeof(TYPE) <= 64 && (64 % sizeof(TYPE) == 0),
+                "Size of type must not exceed 64 and should divide 64.");
+
+  std::atomic<int64_t> null_count = 0;
+
+  constexpr size_t min_block_size = 64ULL / sizeof(TYPE);
+  const size_t cpu_processing_count = vals_size % min_block_size;
+  const size_t avx512_processing_count = vals_size - cpu_processing_count;
+
+  auto br_par_processor = [&](const tbb::blocked_range<size_t>& r) {
+    size_t idx = min_block_size * r.begin();
+    size_t processing_count =
+        std::min(min_block_size * r.end() - idx, avx512_processing_count - idx);
+    uint8_t* bitmap_data_ptr = bitmap_data + idx / 8;
+    const TYPE* values_data_ptr = vals + idx;
+    null_count += gen_bitmap<TYPE>(
+        bitmap_data_ptr, const_cast<TYPE*>(values_data_ptr), processing_count);
+  };
+
+  threading::parallel_for(
+      tbb::blocked_range<size_t>(
+          0, (avx512_processing_count + min_block_size - 1) / min_block_size),
+      br_par_processor);
+
+  if (cpu_processing_count > 0) {
+    TYPE null_val = inline_null_value<TYPE>();
+
+    size_t remaining_bits = 0;
+    int64_t cpus_null_count = 0;
+    for (size_t i = 0; i < cpu_processing_count; ++i) {
+      size_t valid = vals[avx512_processing_count + i] != null_val;
+      remaining_bits |= valid << i;
+      cpus_null_count += !valid;
+    }
+
+    size_t left_bytes_encoded_count = (cpu_processing_count + 7) / 8;
+    for (size_t i = 0; i < left_bytes_encoded_count; i++) {
+      uint8_t encoded_byte = 0xFF & (remaining_bits >> (8 * i));
+      bitmap_data[avx512_processing_count / 8 + i] = encoded_byte;
+    }
+    null_count += cpus_null_count;
+  }
+
+  return null_count.load();
+}
+
 // convert_column() specialization for arrow::ChunkedArray output
 template <typename C_TYPE,
           typename ARROW_TYPE = typename arrow::CTypeTraits<C_TYPE>::ArrowType>
@@ -304,62 +393,13 @@ void convert_column(ResultSetPtr result,
 
     std::shared_ptr<arrow::Buffer> is_valid = std::move(res).ValueOrDie();
 
-    auto is_valid_data = is_valid->mutable_data();
+    uint8_t* bitmap = is_valid->mutable_data();
 
     const null_type_t<C_TYPE>* vals =
         reinterpret_cast<const null_type_t<C_TYPE>*>(values[idx]->data());
-    null_type_t<C_TYPE> null_val = null_type<C_TYPE>::value;
 
-    size_t unroll_count = chunk_rows_count & 0xFFFFFFFFFFFFFFF8ULL;
-    std::atomic<int64_t> null_count = 0;
-
-    threading::parallel_for(
-        threading::blocked_range<size_t>(static_cast<size_t>(0), unroll_count / 8),
-        [&](auto r) {
-          int64_t local_null_count = 0;
-          for (auto i = r.begin() * 8; i < r.end() * 8; i += 8) {
-            uint8_t valid_byte = 0;
-            uint8_t valid;
-            valid = vals[i + 0] != null_val;
-            valid_byte |= valid << 0;
-            local_null_count += !valid;
-            valid = vals[i + 1] != null_val;
-            valid_byte |= valid << 1;
-            local_null_count += !valid;
-            valid = vals[i + 2] != null_val;
-            valid_byte |= valid << 2;
-            local_null_count += !valid;
-            valid = vals[i + 3] != null_val;
-            valid_byte |= valid << 3;
-            local_null_count += !valid;
-            valid = vals[i + 4] != null_val;
-            valid_byte |= valid << 4;
-            local_null_count += !valid;
-            valid = vals[i + 5] != null_val;
-            valid_byte |= valid << 5;
-            local_null_count += !valid;
-            valid = vals[i + 6] != null_val;
-            valid_byte |= valid << 6;
-            local_null_count += !valid;
-            valid = vals[i + 7] != null_val;
-            valid_byte |= valid << 7;
-            local_null_count += !valid;
-            is_valid_data[i >> 3] = valid_byte;
-          }
-          null_count += local_null_count;
-        });
-
-    if (unroll_count != chunk_rows_count) {
-      uint8_t valid_byte = 0;
-      int64_t local_null_count = 0;
-      for (size_t i = unroll_count; i < chunk_rows_count; ++i) {
-        bool valid = vals[i] != null_val;
-        valid_byte |= valid << (i & 7);
-        local_null_count += !valid;
-      }
-      is_valid_data[unroll_count >> 3] = valid_byte;
-      null_count += local_null_count;
-    }
+    int64_t null_count = create_bitmap_parallel_for_avx512<null_type_t<C_TYPE>>(
+        bitmap, vals, chunk_rows_count);
 
     if (!null_count) {
       is_valid.reset();
@@ -367,7 +407,6 @@ void convert_column(ResultSetPtr result,
 
     // TODO: support date/time + scaling
     // TODO: support booleans
-
     using NumArray = arrow::NumericArray<ARROW_TYPE>;
     fragments[idx] = null_count
                          ? std::make_shared<NumArray>(
@@ -461,7 +500,7 @@ std::pair<key_t, std::shared_ptr<arrow::Buffer>> get_shm_buffer(size_t size) {
 #endif
 }
 
-}  // namespace
+}  // anonymous namespace
 
 namespace arrow {
 
