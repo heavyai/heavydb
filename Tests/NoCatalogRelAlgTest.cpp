@@ -23,6 +23,7 @@ constexpr int TEST_SCHEMA_ID = 1;
 constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 constexpr int TEST1_TABLE_ID = 1;
 constexpr int TEST2_TABLE_ID = 2;
+constexpr int TEST_AGG_TABLE_ID = 3;
 
 namespace {
 
@@ -66,85 +67,73 @@ void compare_res_data(const ExecutionResult& res, const std::vector<Ts>&... expe
 
 }  // anonymous namespace
 
+using TestHelpers::inline_null_value;
+
 class TestSchemaProvider : public SchemaProvider {
  public:
   TestSchemaProvider() {
     id_ = TEST_SCHEMA_ID;
     db_id_ = TEST_DB_ID;
 
-    auto t1_info = std::make_shared<TableInfo>(db_id_,
-                                               TEST1_TABLE_ID,
-                                               "test1",
-                                               false,
-                                               -1,
-                                               Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                               1);
-    auto t2_info = std::make_shared<TableInfo>(db_id_,
-                                               TEST2_TABLE_ID,
-                                               "test2",
-                                               false,
-                                               -1,
-                                               Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                               1);
-
-    table_infos_[*t1_info] = t1_info;
-    table_index_by_name_[t1_info->db_id][t1_info->name] = t1_info;
-    table_infos_[*t2_info] = t2_info;
-    table_index_by_name_[t2_info->db_id][t2_info->name] = t2_info;
-
-    auto t1_col1_info = std::make_shared<ColumnInfo>(db_id_,
-                                                     TEST1_TABLE_ID,
-                                                     1,
-                                                     "col_bi",
-                                                     SQLTypeInfo(SQLTypes::kBIGINT),
-                                                     false,
-                                                     false);
-    auto t1_col2_info = std::make_shared<ColumnInfo>(
+    // Table test1
+    addTableInfo(db_id_,
+                 TEST1_TABLE_ID,
+                 "test1",
+                 false,
+                 -1,
+                 Data_Namespace::MemoryLevel::CPU_LEVEL,
+                 1);
+    addColumnInfo(db_id_,
+                  TEST1_TABLE_ID,
+                  1,
+                  "col_bi",
+                  SQLTypeInfo(SQLTypes::kBIGINT),
+                  false,
+                  false);
+    addColumnInfo(
         db_id_, TEST1_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false, false);
-    auto t1_col3_info = std::make_shared<ColumnInfo>(
+    addColumnInfo(
         db_id_, TEST1_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false, false);
-    auto t1_col4_info = std::make_shared<ColumnInfo>(
+    addColumnInfo(
         db_id_, TEST1_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false, false);
+    addRowidColumn(db_id_, TEST1_TABLE_ID);
 
-    auto t2_col1_info = std::make_shared<ColumnInfo>(db_id_,
-                                                     TEST2_TABLE_ID,
-                                                     1,
-                                                     "col_bi",
-                                                     SQLTypeInfo(SQLTypes::kBIGINT),
-                                                     false,
-                                                     false);
-    auto t2_col2_info = std::make_shared<ColumnInfo>(
+    // Table test2
+    addTableInfo(db_id_,
+                 TEST2_TABLE_ID,
+                 "test2",
+                 false,
+                 -1,
+                 Data_Namespace::MemoryLevel::CPU_LEVEL,
+                 1);
+    addColumnInfo(db_id_,
+                  TEST2_TABLE_ID,
+                  1,
+                  "col_bi",
+                  SQLTypeInfo(SQLTypes::kBIGINT),
+                  false,
+                  false);
+    addColumnInfo(
         db_id_, TEST2_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false, false);
-    auto t2_col3_info = std::make_shared<ColumnInfo>(
+    addColumnInfo(
         db_id_, TEST2_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false, false);
-    auto t2_col4_info = std::make_shared<ColumnInfo>(
+    addColumnInfo(
         db_id_, TEST2_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false, false);
+    addRowidColumn(db_id_, TEST2_TABLE_ID);
 
-    column_infos_[*t1_col1_info] = t1_col1_info;
-    column_index_by_name_[{t1_col1_info->db_id, t1_col1_info->table_id}]
-                         [t1_col1_info->name] = t1_col1_info;
-    column_infos_[*t1_col2_info] = t1_col2_info;
-    column_index_by_name_[{t1_col2_info->db_id, t1_col2_info->table_id}]
-                         [t1_col2_info->name] = t1_col2_info;
-    column_infos_[*t1_col3_info] = t1_col3_info;
-    column_index_by_name_[{t1_col3_info->db_id, t1_col3_info->table_id}]
-                         [t1_col3_info->name] = t1_col3_info;
-    column_infos_[*t1_col4_info] = t1_col4_info;
-    column_index_by_name_[{t1_col4_info->db_id, t1_col4_info->table_id}]
-                         [t1_col4_info->name] = t1_col4_info;
-
-    column_infos_[*t2_col1_info] = t2_col1_info;
-    column_index_by_name_[{t2_col1_info->db_id, t2_col1_info->table_id}]
-                         [t2_col1_info->name] = t2_col1_info;
-    column_infos_[*t2_col2_info] = t2_col2_info;
-    column_index_by_name_[{t2_col2_info->db_id, t2_col2_info->table_id}]
-                         [t2_col2_info->name] = t2_col2_info;
-    column_infos_[*t2_col3_info] = t2_col3_info;
-    column_index_by_name_[{t2_col3_info->db_id, t2_col3_info->table_id}]
-                         [t2_col3_info->name] = t2_col3_info;
-    column_infos_[*t2_col4_info] = t2_col4_info;
-    column_index_by_name_[{t2_col4_info->db_id, t2_col4_info->table_id}]
-                         [t2_col4_info->name] = t2_col4_info;
+    // Table test_agg
+    addTableInfo(db_id_,
+                 TEST_AGG_TABLE_ID,
+                 "test_agg",
+                 false,
+                 -1,
+                 Data_Namespace::MemoryLevel::CPU_LEVEL,
+                 1);
+    addColumnInfo(
+        db_id_, TEST_AGG_TABLE_ID, 1, "id", SQLTypeInfo(SQLTypes::kINT), false, false);
+    addColumnInfo(
+        db_id_, TEST_AGG_TABLE_ID, 2, "val", SQLTypeInfo(SQLTypes::kINT), false, false);
+    addRowidColumn(db_id_, TEST_AGG_TABLE_ID);
   }
 
   ~TestSchemaProvider() override = default;
@@ -208,6 +197,34 @@ class TestSchemaProvider : public SchemaProvider {
   }
 
  private:
+  void addTableInfo(TableInfoPtr table_info) {
+    table_infos_[*table_info] = table_info;
+    table_index_by_name_[table_info->db_id][table_info->name] = table_info;
+  }
+
+  template <typename... Ts>
+  void addTableInfo(Ts... args) {
+    addTableInfo(std::make_shared<TableInfo>(args...));
+  }
+
+  void addColumnInfo(ColumnInfoPtr col_info) {
+    column_infos_[*col_info] = col_info;
+    column_index_by_name_[{col_info->db_id, col_info->table_id}][col_info->name] =
+        col_info;
+  }
+
+  template <typename... Ts>
+  void addColumnInfo(Ts... args) {
+    addColumnInfo(std::make_shared<ColumnInfo>(args...));
+  }
+
+  void addRowidColumn(int db_id, int table_id) {
+    CHECK_EQ(column_index_by_name_.count({db_id, table_id}), 1);
+    int col_id = static_cast<int>(column_index_by_name_[{db_id, table_id}].size() + 1);
+    addColumnInfo(
+        db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), false, false);
+  }
+
   using TableByNameMap = std::unordered_map<std::string, TableInfoPtr>;
   using ColumnByNameMap = std::unordered_map<std::string, ColumnInfoPtr>;
 
@@ -307,6 +324,14 @@ class TestDataProvider : public AbstractBufferMgr {
     test2.addColFragment<double>(4, {140.4, 150.5, 160.6});
     test2.addColFragment<double>(4, {170.7, 180.8, 190.9});
     tables_.emplace(std::make_pair(TEST2_TABLE_ID, test2));
+
+    TableTableData test_agg(TEST_DB_ID, TEST_AGG_TABLE_ID, 2, schema_provider_);
+    test_agg.addColFragment<int32_t>(1, {1, 2, 1, 2, 1});
+    test_agg.addColFragment<int32_t>(1, {2, 1, 3, 1, 3});
+    test_agg.addColFragment<int32_t>(2, {10, 20, 30, 40, 50});
+    test_agg.addColFragment<int32_t>(
+        2, {inline_null_value<int32_t>(), 70, inline_null_value<int32_t>(), 90, 100});
+    tables_.emplace(std::make_pair(TEST_AGG_TABLE_ID, test_agg));
   }
 
   // Chunk API
@@ -374,9 +399,6 @@ class TestDataProvider : public AbstractBufferMgr {
   Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
     CHECK_EQ(db_id, TEST_DB_ID);
     CHECK_EQ(tables_.count(table_id), 1);
-    std::cout << "TestDataProvider::getTableInfo return table info with "
-              << tables_.at(table_id).getTableInfo().fragments.size() << " fragments"
-              << std::endl;
     return tables_.at(table_id).getTableInfo();
   }
 
@@ -445,7 +467,11 @@ TEST_F(NoCatalogRelAlgTest, SelectSingleColumn) {
         "test1"
       ],
       "fieldNames": [
-        "col_i"
+        "col_bi",
+        "col_i",
+        "col_f",
+        "col_d",
+        "rowid"
       ],
       "inputs": []
     },
@@ -457,7 +483,7 @@ TEST_F(NoCatalogRelAlgTest, SelectSingleColumn) {
       ],
       "exprs": [
         {
-          "input": 0
+          "input": 1
         }
       ]
     }
@@ -482,7 +508,8 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumns) {
         "col_bi",
         "col_i",
         "col_f",
-        "col_d"
+        "col_d",
+        "rowid"
       ],
       "inputs": []
     },
@@ -535,7 +562,8 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
         "col_bi",
         "col_i",
         "col_f",
-        "col_d"
+        "col_d",
+        "rowid"
       ],
       "inputs": []
     },
@@ -573,6 +601,112 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
       std::vector<float>({101.1, 102.2, 103.3, 104.4, 105.5, 106.6, 107.7, 108.8, 109.9}),
       std::vector<double>(
           {110.1, 120.2, 130.3, 140.4, 150.5, 160.6, 170.7, 180.8, 190.9}));
+}
+
+TEST_F(NoCatalogRelAlgTest, GroupBySingleColumn) {
+  auto ra = R"""(
+{
+  "rels": [
+    {
+      "id": "0",
+      "relOp": "EnumerableTableScan",
+      "table": [
+        "omnisci",
+        "test_agg"
+      ],
+      "fieldNames": [
+        "id",
+        "val",
+        "rowid"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "1",
+      "relOp": "LogicalProject",
+      "fields": [
+        "id",
+        "val"
+      ],
+      "exprs": [
+        {
+          "input": 0
+        },
+        {
+          "input": 1
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "relOp": "LogicalAggregate",
+      "fields": [
+        "id",
+        "cnt1",
+        "cnt2",
+        "sum",
+        "avg"
+      ],
+      "group": [0],
+      "aggs": [
+        {
+          "agg": "COUNT",
+          "distinct" : false,
+          "operands": [],
+          "type": {
+            "type": "INTEGER",
+            "nullable": true
+          }
+        },
+        {
+          "agg": "COUNT",
+          "distinct" : false,
+          "operands": [1],
+          "type": {
+            "type": "INTEGER",
+            "nullable": true
+          }
+        },
+        {
+          "agg": "SUM",
+          "distinct" : false,
+          "operands": [1],
+          "type": {
+            "type": "BIGINT",
+            "nullable": true
+          }
+        },
+        {
+          "agg": "AVG",
+          "distinct" : false,
+          "operands": [1],
+          "type": {
+            "type": "INTEGER",
+            "nullable": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "relOp": "LogicalSort",
+      "collation": [
+        {
+          "field": 0,
+          "direction": "ASCENDING",
+          "nulls": "LAST"
+        }
+      ]
+    }
+  ]
+})""";
+  auto res = runRelAlgQuery(ra);
+  compare_res_data(res,
+                   std::vector<int32_t>({1, 2, 3}),
+                   std::vector<int32_t>({5, 3, 2}),
+                   std::vector<int32_t>({5, 2, 1}),
+                   std::vector<int64_t>({250, 60, 100}),
+                   std::vector<double>({50, 30, 100}));
 }
 
 int main(int argc, char** argv) {

@@ -82,18 +82,12 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
   return agg_count;
 }
 
-bool expr_is_rowid(const Analyzer::Expr* expr, const Catalog_Namespace::Catalog& cat) {
+bool expr_is_rowid(const Analyzer::Expr* expr) {
   const auto col = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (!col) {
     return false;
   }
-  const auto cd =
-      get_column_descriptor_maybe(col->get_column_id(), col->get_table_id(), cat);
-  if (!cd || !cd->isVirtualCol) {
-    return false;
-  }
-  CHECK_EQ("rowid", cd->columnName);
-  return true;
+  return col->is_virtual();
 }
 
 bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
@@ -283,8 +277,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
                 col_range_info.has_nulls};
       }
     }
-  } else if ((!expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(),
-                             *executor_->catalog_)) &&
+  } else if ((!expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get())) &&
              is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count) &&
              !col_range_info.bucket) {
     return {QueryDescriptionType::GroupByBaselineHash,

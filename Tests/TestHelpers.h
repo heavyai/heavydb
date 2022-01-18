@@ -318,6 +318,7 @@ inline V inline_null_value() {
 template <typename TYPE>
 void compare_arrow_array(const std::vector<TYPE>& expected,
                          const std::shared_ptr<arrow::ChunkedArray>& actual) {
+  ASSERT(actual->type()->Equals(arrow::CTypeTraits<TYPE>::type_singleton()));
   using ArrowColType = arrow::NumericArray<typename arrow::CTypeTraits<TYPE>::ArrowType>;
   const arrow::ArrayVector& chunks = actual->chunks();
 
