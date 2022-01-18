@@ -79,6 +79,14 @@ bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit) {
     // disable output columnar when we have top-sort node query
     return false;
   }
+  for (const auto& target_expr : ra_exe_unit.target_exprs) {
+    // We don't currently support varlen columnar projections, so
+    // return false if we find one
+    if (target_expr->get_type_info().is_varlen()) {
+      return false;
+    }
+  }
+
   return ra_exe_unit.scan_limit >= g_columnar_large_projections_threshold;
 }
 
