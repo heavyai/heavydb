@@ -2546,7 +2546,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
   const auto tables = cat.getAllTableMetadataCopy();
   _return.reserve(tables.size());
 
-  for (const auto td : tables) {
+  for (const auto& td : tables) {
     if (td.shard >= 0) {
       // skip shards, they're not standalone tables
       continue;
