@@ -49,7 +49,6 @@ struct DataframeTableDescriptor : TableDescriptor {
     maxChunkSize = td.maxChunkSize;
     fragPageSize = td.fragPageSize;
     maxRows = td.maxRows;
-    partitions = td.partitions;
     keyMetainfo = td.keyMetainfo;
     fragmenter = td.fragmenter;
     persistenceLevel = td.persistenceLevel;

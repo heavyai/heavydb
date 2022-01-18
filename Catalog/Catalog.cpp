@@ -918,7 +918,6 @@ void Catalog::buildMaps() {
     td->maxChunkSize = sqliteConnector_.getData<int64_t>(r, 7);
     td->fragPageSize = sqliteConnector_.getData<int>(r, 8);
     td->maxRows = sqliteConnector_.getData<int64_t>(r, 9);
-    td->partitions = sqliteConnector_.getData<string>(r, 10);
     CHECK_EQ(sqliteConnector_.getData<int>(r, 11), 0);
     CHECK_EQ(sqliteConnector_.getData<int>(r, 12), -1);
     CHECK_EQ(sqliteConnector_.getData<int>(r, 13), 0);
@@ -2121,7 +2120,7 @@ void Catalog::createTable(
                                    std::to_string(td.maxChunkSize),
                                    std::to_string(td.fragPageSize),
                                    std::to_string(td.maxRows),
-                                   td.partitions,
+                                   "",
                                    "0",
                                    "-1",
                                    "0",
@@ -3709,9 +3708,6 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
   with_options.emplace_back(td->hasDeletedCol ? "VACUUM='DELAYED'"
                                               : "VACUUM='IMMEDIATE'");
-  if (!td->partitions.empty()) {
-    with_options.push_back("PARTITIONS='" + td->partitions + "'");
-  }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
     CHECK(sort_cd);
@@ -3864,9 +3860,6 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
   }
   if (dump_defaults || !td->hasDeletedCol) {
     with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");
-  }
-  if (!td->partitions.empty()) {
-    with_options.push_back("PARTITIONS='" + td->partitions + "'");
   }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);

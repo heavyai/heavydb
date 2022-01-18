@@ -905,8 +905,6 @@ TEST_F(ShowCreateTableTest, Identity) {
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PAGE_SIZE=123);",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (MAX_ROWS=123);",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (VACUUM='IMMEDIATE');",
-    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PARTITIONS='SHARDED');",
-    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PARTITIONS='REPLICATED');",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (SORT_COLUMN='i');",
     "CREATE TABLE showcreatetabletest (\n  i1 INTEGER,\n  i2 INTEGER)\nWITH (MAX_ROWS=123, VACUUM='IMMEDIATE');",
     "CREATE TABLE showcreatetabletest (\n  id TEXT ENCODING DICT(32),\n  abbr TEXT ENCODING DICT(32),\n  name TEXT ENCODING DICT(32),\n  omnisci_geo GEOMETRY(MULTIPOLYGON, 4326) NOT NULL ENCODING COMPRESSED(32));",
@@ -1386,22 +1384,11 @@ class ShowTableDetailsTest : public ShowTest,
     }
     return with_page_size;
   }
-
-  std::string getPageSizeOption() {
-    std::string page_size_option;
-    auto page_size = GetParam();
-    if (page_size != -1) {
-      page_size_option = ", page_size = " + std::to_string(page_size);
-    }
-    return page_size_option;
-  }
 };
 
 TEST_F(ShowTableDetailsTest, EmptyTables) {
   sql("create table test_table_1 (c1 int, c2 text);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED', "
-      "fragment_size "
-      "= 5);");
+  sql("create table test_table_3 (c1 int) with (fragment_size= 5);");
 
   TQueryResult result;
   sql(result, "show table details;");
@@ -1456,8 +1443,7 @@ TEST_P(ShowTableDetailsTest, TablesWithContent) {
     sql("insert into test_table_1 values (10, 'abc');");
   }
 
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED'" +
-      getPageSizeOption() + ");");
+  sql("create table test_table_3 (c1 int) " + getWithPageSize() + ";");
   sql("insert into test_table_3 values (50);");
 
   TQueryResult result;
@@ -1485,11 +1471,7 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 TEST_F(ShowTableDetailsTest, MaxRollbackEpochsUpdates) {
-  // For distributed mode, a replicated table is used in this test case
-  // in order to simplify table storage assertions (since all tables
-  // will have the same content)
-  sql("create table test_table_1 (c1 int, c2 int) with (max_rollback_epochs = 15, "
-      "partitions = 'REPLICATED');");
+  sql("create table test_table_1 (c1 int, c2 int) with (max_rollback_epochs = 15);");
   sql("insert into test_table_1 values (1, 2);");
   sql("insert into test_table_1 values (10, 20);");
   for (int i = 0; i < 2; i++) {
@@ -1503,7 +1485,7 @@ TEST_F(ShowTableDetailsTest, MaxRollbackEpochsUpdates) {
 
 TEST_F(ShowTableDetailsTest, CommandWithTableNames) {
   sql("create table test_table_1 (c1 int, c2 text);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
 
   TQueryResult result;
   sql(result, "show table details test_table_1, test_table_3;");
@@ -1524,7 +1506,7 @@ TEST_F(ShowTableDetailsTest, CommandWithTableNames) {
 
 TEST_F(ShowTableDetailsTest, UserSpecificTables) {
   sql("create table test_table_1 (c1 int, c2 text);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
   sql("GRANT SELECT ON TABLE test_table_3 TO test_user;");
 
   loginTestUser();
@@ -1544,7 +1526,7 @@ TEST_F(ShowTableDetailsTest, UserSpecificTables) {
 
 TEST_F(ShowTableDetailsTest, InaccessibleTable) {
   sql("create table test_table_1 (c1 int, c2 text);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
 
   loginTestUser();
   queryAndAssertException("show table details test_table_1;",
@@ -1554,7 +1536,7 @@ TEST_F(ShowTableDetailsTest, InaccessibleTable) {
 
 TEST_F(ShowTableDetailsTest, NonExistentTable) {
   sql("create table test_table_1 (c1 int, c2 text);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
 
   queryAndAssertException("show table details test_table_4;",
                           "Unable to show table details for table: "

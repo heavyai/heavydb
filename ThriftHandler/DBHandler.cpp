@@ -2385,13 +2385,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     _return.shard_count = 0;
     _return.key_metainfo = td->keyMetainfo;
     _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
-    _return.partition_detail =
-        td->partitions.empty()
-            ? TPartitionDetail::DEFAULT
-            : (table_is_replicated(td)
-                   ? TPartitionDetail::REPLICATED
-                   : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
-                                                  : TPartitionDetail::OTHER));
+    _return.partition_detail = TPartitionDetail::DEFAULT;
   } catch (const std::runtime_error& e) {
     THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
@@ -2496,7 +2490,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
     TTableMeta ret;
     ret.table_name = td->tableName;
     ret.is_view = td->isView;
-    ret.is_replicated = table_is_replicated(td);
+    ret.is_replicated = false;
     ret.shard_count = 0;
     ret.max_rows = td->maxRows;
     ret.table_id = td->tableId;
@@ -6745,8 +6739,7 @@ void DBHandler::insert_data(const TSessionId& session,
       }
       insert_data.data.push_back(p);
     }
-    const ChunkKey lock_chunk_key{cat.getDatabaseId(),
-                                  insert_data.tableId};
+    const ChunkKey lock_chunk_key{cat.getDatabaseId(), insert_data.tableId};
     auto table_read_lock =
         lockmgr::TableSchemaLockMgr::getReadLockForTable(lock_chunk_key);
     const auto td = cat.getMetadataForTable(insert_data.tableId);

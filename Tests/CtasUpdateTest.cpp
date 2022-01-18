@@ -1521,18 +1521,6 @@ TEST_P(Ctas, CreateTableFromSelectFragments) {
               ") WITH (FRAGMENT_SIZE=3)");
 }
 
-TEST_P(Ctas, CreateTableFromSelectReplicated) {
-  // execute CTAS
-  std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
-  int num_rows = 25;
-  int num_rows_to_check = num_rows;
-  runCtasTest(columnDescriptors,
-              create_ctas_sql,
-              num_rows,
-              num_rows_to_check,
-              ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
-}
-
 TEST_P(Ctas, CreateTableAsSelectWithLimit) {
   // execute CTAS
   std::string create_ctas_sql =
@@ -1721,12 +1709,7 @@ TEST_F(Itas, SelectStar) {
   sql("DROP TABLE IF EXISTS ITAS_TARGET;");
 
   sql("CREATE TABLE ITAS_SOURCE_1 (id int);");
-
-  if (isDistributedMode()) {
-    sql("CREATE TABLE ITAS_SOURCE_2 (id int, val int) with (partitions = 'REPLICATED');");
-  } else {
-    sql("CREATE TABLE ITAS_SOURCE_2 (id int, val int);");
-  }
+  sql("CREATE TABLE ITAS_SOURCE_2 (id int, val int);");
 
   sql("CREATE TABLE ITAS_TARGET (id int, val int);");
 
@@ -1839,21 +1822,6 @@ TEST_P(Itas_P, InsertIntoFragmentsTableFromSelect) {
 
 TEST_P(Itas_P, InsertIntoFragmentsTableFromSelectFragments) {
   itasTestBody(columnDescriptors, ") WITH (FRAGMENT_SIZE=3)", ") WITH (FRAGMENT_SIZE=3)");
-}
-
-TEST_P(Itas_P, InsertIntoTableFromSelectReplicated) {
-  itasTestBody(
-      columnDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
-}
-
-TEST_P(Itas_P, InsertIntoReplicatedTableFromSelect) {
-  itasTestBody(columnDescriptors, ")", ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas_P, InsertIntoReplicatedTableFromSelectReplicated) {
-  itasTestBody(columnDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ") WITH (partitions='REPLICATED')");
 }
 
 TEST_P(Itas_P, OmitNotNullableColumn) {
@@ -2028,10 +1996,6 @@ TEST_F(Export, ExportFromSelect) {
 
 TEST_F(Export, ExportFromSelectFragments) {
   exportTestBody(") WITH (FRAGMENT_SIZE=3)");
-}
-
-TEST_F(Export, ExportFromSelectReplicated) {
-  exportTestBody(") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
 }
 
 TEST_P(Update, InvalidTextArrayAssignment) {
@@ -2507,22 +2471,6 @@ TEST_P(Itas_P, PartialInsertIntoFragmentsTableFromSelectFragments) {
   partial_itas_test_body(
       partialDescriptors, ") WITH (FRAGMENT_SIZE=3)", ") WITH (FRAGMENT_SIZE=3)");
 }
-
-TEST_P(Itas_P, PartialInsertIntoTableFromSelectReplicated) {
-  partial_itas_test_body(
-      partialDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
-}
-
-TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelect) {
-  partial_itas_test_body(partialDescriptors, ")", ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelectReplicated) {
-  partial_itas_test_body(partialDescriptors,
-                         ") WITH (partitions='REPLICATED')",
-                         ") WITH (partitions='REPLICATED')");
-}
-
 class Select : public DBHandlerTestFixture {
  public:
   void SetUp() override {

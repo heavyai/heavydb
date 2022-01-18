@@ -271,7 +271,6 @@ void PerfectJoinHashTable::reify() {
   const auto cols = get_cols(
       qual_bin_oper_.get(), executor_->getSchemaProvider(), executor_->temporary_tables_);
   const auto inner_col = cols.first;
-  HashJoin::checkHashJoinReplicationConstraint(inner_col->get_table_id(), executor_);
   const auto& query_info = getInnerQueryInfo(inner_col).info;
   if (query_info.fragments.empty()) {
     return;

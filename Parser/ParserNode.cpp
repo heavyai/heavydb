@@ -1666,9 +1666,6 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
   }
-  if (td->partitions == "REPLICATED") {
-    throw std::runtime_error("Cannot determine leaf on replicated table.");
-  }
 
   std::random_device rd;
   std::mt19937_64 gen(rd());
@@ -2132,12 +2129,7 @@ decltype(auto) get_skip_rows_def(DataframeTableDescriptor& df_td,
 decltype(auto) get_partions_def(TableDescriptor& td,
                                 const NameValueAssign* p,
                                 const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<StringLiteral>(p, [&td](const auto partitions_uc) {
-    if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
-      throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
-    }
-    td.partitions = partitions_uc;
-  });
+  throw std::runtime_error("PARTITIONS support has benn removed");
 }
 decltype(auto) get_shard_count_def(TableDescriptor& td,
                                    const NameValueAssign* p,

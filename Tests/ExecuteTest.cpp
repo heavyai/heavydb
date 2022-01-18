@@ -499,8 +499,7 @@ void validate_storage_options(
 
 TEST(Distributed50, FailOver) {
   run_ddl_statement("DROP TABLE IF EXISTS dist5;");
-  run_ddl_statement(
-      "create table dist5 (col1 TEXT ENCODING DICT) with (partitions='replicated');");
+  run_ddl_statement("create table dist5 (col1 TEXT ENCODING DICT);");
 
   auto dt = ExecutorDeviceType::CPU;
 
@@ -543,7 +542,6 @@ TEST(Create, StorageOptions) {
                {{"max_chunk_size"s, false},
                 {"", {"2097152", "4194304", "10485760", "2147483648"}}},
                {{"partitions"s, true}, {"", {"'No'", "'null'", "'-1'"}}},
-               {{"partitions"s, false}, {"", {"'SHARDED'", "'REPLICATED'"}}},
                {{"vacuum"s, true}, {"", {"'-1'", "'0'", "'null'"}}},
                {{"vacuum"s, false}, {"", {"'IMMEDIATE'", "'delayed'"}}},
                {{"sort_column"s, true}, {"", {"'arsenal'", "'barca'", "'city'"}}},
@@ -7695,12 +7693,9 @@ void import_hash_join_test() {
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
 
-  std::string replicated_dec{!g_aggregator ? "" : ", PARTITIONS='REPLICATED'"};
-
   const std::string create_test{
       "CREATE TABLE hash_join_test(x int not null, str text encoding dict, t BIGINT) "
-      "WITH (fragment_size=2" +
-      replicated_dec + ");"};
+      "WITH (fragment_size=2);"};
   run_ddl_statement(create_test);
   g_sqlite_comparator.query(
       "CREATE TABLE hash_join_test(x int not null, str text, t BIGINT);");
@@ -7727,12 +7722,9 @@ void import_hash_join_decimal_test() {
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
 
-  std::string replicated_dec{!g_aggregator ? "" : ", PARTITIONS='REPLICATED'"};
-
   const std::string create_test{
       "CREATE TABLE hash_join_decimal_test(x DECIMAL(18,2), y DECIMAL(18,3)) "
-      "WITH (fragment_size=2" +
-      replicated_dec + ");"};
+      "WITH (fragment_size=2);"};
   run_ddl_statement(create_test);
   g_sqlite_comparator.query(
       "CREATE TABLE hash_join_decimal_test(x DECIMAL(18,2), y DECIMAL(18,3));");
@@ -10503,8 +10495,7 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       run_ddl_statement(
           "CREATE TABLE BE_5764_a (text_ TEXT, days_ DATE ENCODING DAYS(16));");
       run_ddl_statement(
-          "CREATE TABLE BE_5764_b (text_ TEXT, days_ DATE ENCODING DAYS(16)) WITH "
-          "(PARTITIONS='REPLICATED');");
+          "CREATE TABLE BE_5764_b (text_ TEXT, days_ DATE ENCODING DAYS(16));");
       run_multiple_agg("INSERT INTO BE_5764_a VALUES ('A', '2021-01-01');",
                        ExecutorDeviceType::CPU);
       auto q1_res = run_multiple_agg(
@@ -10529,10 +10520,8 @@ TEST(Select, Joins_OuterJoin_OptBy_NullRejection) {
       g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_b;");
       g_sqlite_comparator.query("DROP TABLE IF EXISTS BE_6037_c;");
       run_ddl_statement("CREATE TABLE BE_6037_a (id INT);");
-      run_ddl_statement(
-          "CREATE TABLE BE_6037_b (id INT) WITH (PARTITIONS='REPLICATED');");
-      run_ddl_statement(
-          "CREATE TABLE BE_6037_c (id INT) WITH (PARTITIONS='REPLICATED');");
+      run_ddl_statement("CREATE TABLE BE_6037_b (id INT);");
+      run_ddl_statement("CREATE TABLE BE_6037_c (id INT);");
       g_sqlite_comparator.query("CREATE TABLE BE_6037_a (id INT);");
       g_sqlite_comparator.query("CREATE TABLE BE_6037_b (id INT);");
       g_sqlite_comparator.query("CREATE TABLE BE_6037_c (id INT);");
@@ -20781,13 +20770,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string drop_old_outer_join_bar{"DROP TABLE IF EXISTS outer_join_bar;"};
     run_ddl_statement(drop_old_outer_join_bar);
     g_sqlite_comparator.query(drop_old_outer_join_bar);
-    if (g_aggregator) {
-      run_ddl_statement(
-          "CREATE TABLE outer_join_bar (d int, e int, f int) WITH "
-          "(PARTITIONS='REPLICATED');");
-    } else {
-      run_ddl_statement("CREATE TABLE outer_join_bar (d int, e int, f int)");
-    }
+    run_ddl_statement("CREATE TABLE outer_join_bar (d int, e int, f int)");
     g_sqlite_comparator.query("CREATE TABLE outer_join_bar (d int, e int, f int)");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'outer_join_bar'";
@@ -20809,16 +20792,9 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string drop_old_outer_join_bar{"DROP TABLE IF EXISTS outer_join_bar2;"};
     run_ddl_statement(drop_old_outer_join_bar);
     g_sqlite_comparator.query(drop_old_outer_join_bar);
-    if (g_aggregator) {
-      run_ddl_statement(
-          "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
-          "int) WITH "
-          "(PARTITIONS='REPLICATED');");
-    } else {
-      run_ddl_statement(
-          "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
-          "int)");
-    }
+    run_ddl_statement(
+        "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
+        "int)");
     g_sqlite_comparator.query(
         "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
         "int)");
@@ -21363,7 +21339,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "dict, "
         "arr_float float[], arr_double double[], arr_bool boolean[], real_str text "
         "encoding none) WITH "
-        "(fragment_size=4000000, partitions='REPLICATED');"};
+        "(fragment_size=4000000);"};
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
@@ -21393,12 +21369,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_single_row_test);
     g_sqlite_comparator.query(drop_old_single_row_test);
 
-    if (g_aggregator) {
-      run_ddl_statement(
-          "CREATE TABLE single_row_test(x int) WITH (PARTITIONS='REPLICATED');");
-    } else {
-      run_ddl_statement("CREATE TABLE single_row_test(x int);");
-    }
+    run_ddl_statement("CREATE TABLE single_row_test(x int);");
 
     g_sqlite_comparator.query("CREATE TABLE single_row_test(x int);");
   } catch (...) {
@@ -21518,9 +21489,9 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string create_empty{
         "CREATE TABLE emptytab(x int not null, y int, t bigint not null, f float not "
         "null, d double not null, dd "
-        "decimal(10, 2) not null, ts timestamp)"};
-    run_ddl_statement(create_empty + " WITH (partitions='REPLICATED');");
-    g_sqlite_comparator.query(create_empty + ";");
+        "decimal(10, 2) not null, ts timestamp);"};
+    run_ddl_statement(create_empty);
+    g_sqlite_comparator.query(create_empty);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'emptytab'";
     return -EEXIST;

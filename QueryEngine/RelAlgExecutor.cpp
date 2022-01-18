@@ -3503,11 +3503,6 @@ std::vector<size_t> do_table_reordering(
     if (table_info.table_id < 0) {
       continue;
     }
-    const auto td = cat.getMetadataForTable(table_info.table_id);
-    CHECK(td);
-    if (table_is_replicated(td)) {
-      return {};
-    }
   }
   const auto input_permutation =
       get_node_input_permutation(left_deep_join_quals, query_infos, executor);

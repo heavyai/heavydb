@@ -181,7 +181,6 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
     EXPECT_FALSE(td->isView);
     EXPECT_EQ("[]", td->keyMetainfo);
     EXPECT_EQ("", td->fragments);
-    EXPECT_EQ("", td->partitions);
 
     EXPECT_EQ(column_count + 2, td->nColumns);  // +2 for rowid and $deleted$ columns
     EXPECT_TRUE(td->hasDeletedCol);

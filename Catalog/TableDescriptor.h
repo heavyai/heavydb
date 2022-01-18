@@ -49,12 +49,11 @@ struct TableDescriptor {
   std::string viewSQL;
   std::string fragments;  // placeholder for fragmentation information
   Fragmenter_Namespace::FragmenterType
-      fragType;            // fragmentation type. Only INSERT_ORDER is supported now.
-  int32_t maxFragRows;     // max number of rows per fragment
-  int64_t maxChunkSize;    // max number of rows per fragment
-  int32_t fragPageSize;    // page size
-  int64_t maxRows;         // max number of rows in the table
-  std::string partitions;  // distributed partition scheme
+      fragType;          // fragmentation type. Only INSERT_ORDER is supported now.
+  int32_t maxFragRows;   // max number of rows per fragment
+  int64_t maxChunkSize;  // max number of rows per fragment
+  int32_t fragPageSize;  // page size
+  int64_t maxRows;       // max number of rows in the table
   std::string
       keyMetainfo;  // meta-information about shard keys and shared dictionary, as JSON
 
@@ -89,10 +88,6 @@ struct TableDescriptor {
     return persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   }
 };
-
-inline bool table_is_replicated(const TableDescriptor* td) {
-  return td->partitions == "REPLICATED";
-}
 
 // compare for lowest id
 inline bool compare_td_id(const TableDescriptor* first, const TableDescriptor* second) {

@@ -136,8 +136,6 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                            hashtable_cache_key_string.second,
                                            hashtable_build_dag_map,
                                            table_id_to_node_map);
-  HashJoin::checkHashJoinReplicationConstraint(
-      HashJoin::getInnerTableId(inner_outer_pairs), executor);
   try {
     join_hash_table->reifyWithLayout(HashType::OneToMany);
   } catch (const HashJoinFail& e) {

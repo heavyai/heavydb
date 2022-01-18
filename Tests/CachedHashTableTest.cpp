@@ -696,9 +696,7 @@ TEST(Update, JoinCacheInvalidationTest) {
     run_ddl_statement("drop table if exists string_join1");
     run_ddl_statement("drop table if exists string_join2");
     run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement(
-        "create table string_join2 ( t text ) with (vacuum='delayed', "
-        "partitions='REPLICATED')");
+    run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
 
     run_query("insert into string_join1 values ('muffin')", ExecutorDeviceType::CPU);
     run_query("insert into string_join1 values ('pizza')", ExecutorDeviceType::CPU);
@@ -742,9 +740,7 @@ TEST(Delete, JoinCacheInvalidationTest) {
     run_ddl_statement("drop table if exists string_join1;");
     run_ddl_statement("drop table if exists string_join2;");
     run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement(
-        "create table string_join2 ( t text ) with (vacuum='delayed', "
-        "partitions='REPLICATED')");
+    run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
 
     run_query("insert into string_join1 values ('muffin')", ExecutorDeviceType::CPU);
     run_query("insert into string_join1 values ('pizza')", ExecutorDeviceType::CPU);

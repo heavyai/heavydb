@@ -218,9 +218,6 @@ class HashJoin {
     return first_inner_col->get_table_id();
   }
 
-  static void checkHashJoinReplicationConstraint(const int table_id,
-                                                 const Executor* executor);
-
   // Swap the columns if needed and make the inner column the first component.
   static InnerOuter normalizeColumnPair(const Analyzer::Expr* lhs,
                                         const Analyzer::Expr* rhs,

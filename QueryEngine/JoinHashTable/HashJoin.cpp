@@ -580,21 +580,6 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
   return std::make_pair(error_msg, hash_table);
 }
 
-void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
-                                                  const Executor* executor) {
-  if (!g_cluster) {
-    return;
-  }
-  if (table_id >= 0) {
-    CHECK(executor);
-    const auto inner_td = executor->getCatalog()->getMetadataForTable(table_id);
-    CHECK(inner_td);
-    if (!table_is_replicated(inner_td)) {
-      throw TableMustBeReplicated(inner_td->tableName);
-    }
-  }
-}
-
 InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
                                          const Analyzer::Expr* rhs,
                                          SchemaProviderPtr schema_provider,
