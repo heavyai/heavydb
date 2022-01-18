@@ -318,26 +318,30 @@ inline V inline_null_value() {
 template <typename TYPE>
 void compare_arrow_array(const std::vector<TYPE>& expected,
                          const std::shared_ptr<arrow::ChunkedArray>& actual) {
-  ASSERT(actual->type()->Equals(arrow::CTypeTraits<TYPE>::type_singleton()));
+  ASSERT_EQ(actual->type()->ToString(),
+            arrow::CTypeTraits<TYPE>::type_singleton()->ToString());
   using ArrowColType = arrow::NumericArray<typename arrow::CTypeTraits<TYPE>::ArrowType>;
   const arrow::ArrayVector& chunks = actual->chunks();
 
   TYPE null_val = inline_null_value<TYPE>();
+  size_t compared = 0;
 
-  for (int i = 0, k = 0; i < actual->num_chunks(); i++) {
+  for (int i = 0; i < actual->num_chunks(); i++) {
     auto chunk = chunks[i];
     auto arrow_row_array = std::static_pointer_cast<ArrowColType>(chunk);
 
     const TYPE* chunk_data = arrow_row_array->raw_values();
-    for (int64_t j = 0; j < arrow_row_array->length(); j++, k++) {
-      if (expected[k] == null_val) {
+    for (int64_t j = 0; j < arrow_row_array->length(); j++, compared++) {
+      if (expected[compared] == null_val) {
         CHECK(chunk->IsNull(j));
       } else {
         CHECK(chunk->IsValid(j));
-        ASSERT_EQ(expected[k], chunk_data[j]);
+        ASSERT_EQ(expected[compared], chunk_data[j]);
       }
     }
   }
+
+  ASSERT_EQ(compared, expected.size());
 }
 
 void compare_arrow_table_impl(std::shared_ptr<arrow::Table> at, int col_idx) {}

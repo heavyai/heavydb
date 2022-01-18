@@ -266,6 +266,8 @@ class TableTableData {
       frag_info.deviceIds.push_back(0);  // Data_Namespace::DISK_LEVEL
       frag_info.deviceIds.push_back(0);  // Data_Namespace::CPU_LEVEL
       frag_info.deviceIds.push_back(0);  // Data_Namespace::GPU_LEVEL
+
+      info_.setPhysicalNumTuples(info_.getPhysicalNumTuples() + vals.size());
     }
 
     auto chunk_meta = std::make_shared<ChunkMetadata>();
@@ -707,6 +709,112 @@ TEST_F(NoCatalogRelAlgTest, GroupBySingleColumn) {
                    std::vector<int32_t>({5, 2, 1}),
                    std::vector<int64_t>({250, 60, 100}),
                    std::vector<double>({50, 30, 100}));
+}
+
+TEST_F(NoCatalogRelAlgTest, InnerJoin) {
+  auto ra = R"""(
+{
+  "rels": [
+    {
+      "id": "0",
+      "relOp": "EnumerableTableScan",
+      "table": [
+        "omnisci",
+        "test1"
+      ],
+      "fieldNames": [
+        "col_bi",
+        "col_i",
+        "col_f",
+        "col_d",
+        "rowid"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "1",
+      "relOp": "EnumerableTableScan",
+      "table": [
+        "omnisci",
+        "test2"
+      ],
+      "fieldNames": [
+        "col_bi",
+        "col_i",
+        "col_f",
+        "col_d",
+        "rowid"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "2",
+      "relOp": "LogicalJoin",
+      "inputs": ["0", "1"],
+      "joinType": "inner",
+      "condition": {
+        "op": "=",
+        "operands": [
+          {
+            "input": 0
+          },
+          {
+            "input": 5
+          }
+        ],
+        "type": {
+          "type": "BOOLEAN",
+          "nullable": true
+        }
+      }
+    },
+    {
+      "id": "3",
+      "relOp": "LogicalProject",
+      "fields": [
+        "col_bi",
+        "col_i1",
+        "col_f1",
+        "col_d1",
+        "col_i2",
+        "col_f2",
+        "col_d2"
+      ],
+      "exprs": [
+        {
+          "input": 0
+        },
+        {
+          "input": 1
+        },
+        {
+          "input": 2
+        },
+        {
+          "input": 3
+        },
+        {
+          "input": 6
+        },
+        {
+          "input": 7
+        },
+        {
+          "input": 8
+        }
+      ]
+    }
+  ]
+})""";
+  auto res = runRelAlgQuery(ra);
+  compare_res_data(res,
+                   std::vector<int64_t>({1, 2, 3, 4, 5}),
+                   std::vector<int32_t>({10, 20, 30, 40, 50}),
+                   std::vector<float>({1.1, 2.2, 3.3, 4.4, 5.5}),
+                   std::vector<double>({10.1, 20.2, 30.3, 40.4, 50.5}),
+                   std::vector<int32_t>({110, 120, 130, 140, 150}),
+                   std::vector<float>({101.1, 102.2, 103.3, 104.4, 105.5}),
+                   std::vector<double>({110.1, 120.2, 130.3, 140.4, 150.5}));
 }
 
 int main(int argc, char** argv) {
