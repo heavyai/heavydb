@@ -71,14 +71,12 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
 }
 }  // namespace
 
-ParquetDataWrapper::ParquetDataWrapper()
-    : update_fragmenter_metadata_(false), db_id_(-1), foreign_table_(nullptr) {}
+ParquetDataWrapper::ParquetDataWrapper() : db_id_(-1), foreign_table_(nullptr) {}
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id,
                                        const ForeignTable* foreign_table,
                                        const UserMapping* user_mapping)
-    : update_fragmenter_metadata_(false)
-    , db_id_(db_id)
+    : db_id_(db_id)
     , foreign_table_(foreign_table)
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
@@ -96,8 +94,7 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id,
 }
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table)
-    : update_fragmenter_metadata_(true)
-    , db_id_(db_id)
+    : db_id_(db_id)
     , foreign_table_(foreign_table)
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
@@ -436,7 +433,6 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
   auto metadata = chunk_loader.loadChunk(
       row_group_intervals, parquet_column_index, chunks, string_dictionary);
-  auto fragmenter = foreign_table_->fragmenter;
 
   auto metadata_iter = metadata.begin();
   for (int column_id = column_interval.start; column_id <= column_interval.end;
@@ -462,7 +458,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
         shared::get_from_map(required_buffers, data_chunk_key)->size();
 
     // for certain types, update the metadata statistics
-    // should update the fragmenter, cache, and the internal chunk_metadata_map_
+    // should update the cache, and the internal chunk_metadata_map_
     if (is_dictionary_encoded_string_column || logical_column->columnType.is_geometry()) {
       CHECK(metadata_iter != metadata.end());
       auto& chunk_metadata_ptr = *metadata_iter;
@@ -473,10 +469,6 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       shared::get_from_map(required_buffers, data_chunk_key)
           ->getEncoder()
           ->resetChunkStats(cached_metadata->chunkStats);
-    }
-
-    if (update_fragmenter_metadata_ && fragmenter) {
-      fragmenter->updateColumnChunkMetadata(column, fragment_id, cached_metadata);
     }
   }
 }

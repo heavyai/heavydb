@@ -57,11 +57,11 @@ class ChunkSizeValidator {
                                    const int column_id = -1) const;
 
  private:
-  int column_id;
-  int64_t max_chunk_size;
-  std::shared_ptr<Catalog_Namespace::Catalog> catalog;
-  const ColumnDescriptor* column;
-  const ForeignTable* foreign_table;
+  int column_id_;
+  int64_t max_chunk_size_;
+  std::shared_ptr<Catalog_Namespace::Catalog> catalog_;
+  const ColumnDescriptor* column_;
+  const ForeignTable* foreign_table_;
 };
 
 bool set_comp(const ChunkKey& left, const ChunkKey& right);
@@ -130,6 +130,7 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   virtual bool hasMaxFetchSize() const;
 
  protected:
+  void updateFragmenterMetadata(const ChunkToBufferMap&) const;
   void createDataWrapperUnlocked(int32_t db, int32_t tb);
   void clearDataWrapper(const ChunkKey& table_key);
   bool fetchBufferIfTempBufferMapEntryExists(const ChunkKey& chunk_key,

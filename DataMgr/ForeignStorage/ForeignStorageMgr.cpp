@@ -58,18 +58,18 @@ void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
 
 ChunkSizeValidator::ChunkSizeValidator(const ChunkKey& chunk_key) {
   int table_id = chunk_key[CHUNK_KEY_TABLE_IDX];
-  column_id = chunk_key[CHUNK_KEY_COLUMN_IDX];
-  catalog =
+  column_id_ = chunk_key[CHUNK_KEY_COLUMN_IDX];
+  catalog_ =
       Catalog_Namespace::SysCatalog::instance().getCatalog(chunk_key[CHUNK_KEY_DB_IDX]);
-  column = catalog->getMetadataForColumn(table_id, column_id);
-  foreign_table = catalog->getForeignTable(table_id);
-  max_chunk_size = foreign_table->maxChunkSize;
+  column_ = catalog_->getMetadataForColumn(table_id, column_id_);
+  foreign_table_ = catalog_->getForeignTable(table_id);
+  max_chunk_size_ = foreign_table_->maxChunkSize;
 }
 
 void ChunkSizeValidator::validateChunkSize(const AbstractBuffer* buffer) const {
   CHECK(buffer);
   int64_t actual_chunk_size = buffer->size();
-  if (actual_chunk_size > max_chunk_size) {
+  if (actual_chunk_size > max_chunk_size_) {
     throwChunkSizeViolatedError(actual_chunk_size);
   }
 }
@@ -77,7 +77,7 @@ void ChunkSizeValidator::validateChunkSize(const AbstractBuffer* buffer) const {
 void ChunkSizeValidator::validateChunkSizes(const ChunkToBufferMap& buffers) const {
   for (const auto& [chunk_key, buffer] : buffers) {
     int64_t actual_chunk_size = buffer->size();
-    if (actual_chunk_size > max_chunk_size) {
+    if (actual_chunk_size > max_chunk_size_) {
       throwChunkSizeViolatedError(actual_chunk_size, chunk_key[CHUNK_KEY_COLUMN_IDX]);
     }
   }
@@ -85,15 +85,15 @@ void ChunkSizeValidator::validateChunkSizes(const ChunkToBufferMap& buffers) con
 
 void ChunkSizeValidator::throwChunkSizeViolatedError(const int64_t actual_chunk_size,
                                                      const int column_id) const {
-  std::string column_name = column->columnName;
+  std::string column_name = column_->columnName;
   if (column_id > 0) {
     column_name =
-        catalog->getMetadataForColumn(foreign_table->tableId, column_id)->columnName;
+        catalog_->getMetadataForColumn(foreign_table_->tableId, column_id)->columnName;
   }
   std::stringstream error_stream;
   error_stream << "Chunk populated by data wrapper which is " << actual_chunk_size
-               << " bytes exceeds maximum byte size limit of " << max_chunk_size << "."
-               << " Foreign table: " << foreign_table->tableName
+               << " bytes exceeds maximum byte size limit of " << max_chunk_size_ << "."
+               << " Foreign table: " << foreign_table_->tableName
                << ", column name : " << column_name;
   throw ForeignStorageException(error_stream.str());
 }
@@ -153,6 +153,32 @@ void ForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
   getDataWrapper(chunk_key)->populateChunkBuffers(required_buffers, optional_buffers);
   chunk_size_validator.validateChunkSizes(required_buffers);
   chunk_size_validator.validateChunkSizes(optional_buffers);
+  updateFragmenterMetadata(required_buffers);
+  updateFragmenterMetadata(optional_buffers);
+}
+
+void ForeignStorageMgr::updateFragmenterMetadata(const ChunkToBufferMap& buffers) const {
+  for (const auto& [key, buffer] : buffers) {
+    auto catalog =
+        Catalog_Namespace::SysCatalog::instance().getCatalog(key[CHUNK_KEY_DB_IDX]);
+    auto column = catalog->getMetadataForColumn(key[CHUNK_KEY_TABLE_IDX],
+                                                key[CHUNK_KEY_COLUMN_IDX]);
+    if (column->columnType.is_varlen_indeed() &&
+        key[CHUNK_KEY_VARLEN_IDX] == 2) {  // skip over index buffers
+      continue;
+    }
+    auto foreign_table = catalog->getForeignTable(key[CHUNK_KEY_TABLE_IDX]);
+    auto fragmenter = foreign_table->fragmenter;
+    if (!fragmenter) {
+      continue;
+    }
+    auto encoder = buffer->getEncoder();
+    CHECK(encoder);
+    auto chunk_metadata = std::make_shared<ChunkMetadata>();
+    encoder->getMetadata(chunk_metadata);
+    fragmenter->updateColumnChunkMetadata(
+        column, key[CHUNK_KEY_FRAGMENT_IDX], chunk_metadata);
+  }
 }
 
 bool ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(

@@ -36,6 +36,7 @@ bool is_s3_uri(const std::string& file_path) {
   const std::string s3_prefix = "s3://";
   return file_path.find(s3_prefix) != std::string::npos;
 }
+
 }  // namespace
 
 namespace foreign_storage {
@@ -53,7 +54,7 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralI
 #endif
 
   if (data_wrapper_type == DataWrapperType::CSV) {
-    return std::make_unique<CsvDataWrapper>(db_id, foreign_table, user_mapping);
+    return std::make_unique<CsvDataWrapper>(db_id, foreign_table, user_mapping, true);
   }
 #ifdef ENABLE_IMPORT_PARQUET
   else if (data_wrapper_type == DataWrapperType::PARQUET) {

@@ -189,12 +189,6 @@ void InternalSystemDataWrapper::populateChunkBuffers(
         column_id_to_data_blocks_map.find(chunk_key[CHUNK_KEY_COLUMN_IDX]);
     CHECK(data_block_entry != column_id_to_data_blocks_map.end());
     chunk.appendData(data_block_entry->second, row_count_, 0);
-    auto cd = chunk.getColumnDesc();
-    if (!cd->columnType.is_varlen_indeed()) {
-      CHECK(foreign_table_->fragmenter);
-      auto metadata = chunk.getBuffer()->getEncoder()->getMetadata(cd->columnType);
-      foreign_table_->fragmenter->updateColumnChunkMetadata(cd, fragment_id, metadata);
-    }
     chunk.setBuffer(nullptr);
     chunk.setIndexBuffer(nullptr);
   }

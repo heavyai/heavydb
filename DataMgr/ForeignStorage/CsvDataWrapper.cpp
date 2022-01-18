@@ -27,8 +27,9 @@ CsvDataWrapper::CsvDataWrapper(const int db_id, const ForeignTable* foreign_tabl
 
 CsvDataWrapper::CsvDataWrapper(const int db_id,
                                const ForeignTable* foreign_table,
-                               const UserMapping* user_mapping)
-    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping) {}
+                               const UserMapping* user_mapping,
+                               const bool disable_cache)
+    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping, disable_cache) {}
 
 void CsvDataWrapper::validateTableOptions(const ForeignTable* foreign_table) const {
   AbstractTextFileDataWrapper::validateTableOptions(foreign_table);

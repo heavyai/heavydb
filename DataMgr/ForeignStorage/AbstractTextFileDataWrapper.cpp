@@ -35,9 +35,8 @@ namespace foreign_storage {
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper()
     : db_id_(-1)
     , foreign_table_(nullptr)
-    , user_mapping_(std::nullopt)
-    , disable_cache_(false)
-    , update_fragmenter_metadata_(false) {}
+    , user_mapping_(nullptr)
+    , disable_cache_(false) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -45,9 +44,8 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     : db_id_(db_id)
     , foreign_table_(foreign_table)
     , is_restored_(false)
-    , user_mapping_(std::nullopt)
-    , disable_cache_(false)
-    , update_fragmenter_metadata_(true) {}
+    , user_mapping_(nullptr)
+    , disable_cache_(false) {}
 
 AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     const int db_id,
@@ -58,8 +56,7 @@ AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
     , foreign_table_(foreign_table)
     , is_restored_(false)
     , user_mapping_(user_mapping)
-    , disable_cache_(disable_cache)
-    , update_fragmenter_metadata_(false) {}
+    , disable_cache_(disable_cache) {}
 
 namespace {
 std::set<const ColumnDescriptor*> get_columns(const ChunkToBufferMap& buffers,
@@ -130,39 +127,32 @@ void AbstractTextFileDataWrapper::populateChunkBuffers(
 void AbstractTextFileDataWrapper::updateMetadata(
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
     int fragment_id) {
-  if (!update_fragmenter_metadata_) {
-    return;  // updating metadata in fragmenter is explicitly disbled
-  }
-  auto fragmenter = foreign_table_->fragmenter;
-  if (fragmenter) {
-    auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
-    CHECK(catalog);
-    for (auto& entry : column_id_to_chunk_map) {
-      const auto& column =
-          catalog->getMetadataForColumn(foreign_table_->tableId, entry.first);
-      if (skip_metadata_scan(column)) {
-        ChunkKey data_chunk_key = {
-            db_id_, foreign_table_->tableId, column->columnId, fragment_id};
-        if (column->columnType.is_varlen_indeed()) {
-          data_chunk_key.emplace_back(1);
-        }
-        CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
-        // Allocate new shared_ptr for metadata so we dont modify old one which may be
-        // used by executor
-        auto cached_metadata_previous =
-            shared::get_from_map(chunk_metadata_map_, data_chunk_key);
-        shared::get_from_map(chunk_metadata_map_, data_chunk_key) =
-            std::make_shared<ChunkMetadata>();
-        auto cached_metadata = shared::get_from_map(chunk_metadata_map_, data_chunk_key);
-        *cached_metadata = *cached_metadata_previous;
-        auto chunk_metadata =
-            entry.second.getBuffer()->getEncoder()->getMetadata(column->columnType);
-        cached_metadata->chunkStats.max = chunk_metadata->chunkStats.max;
-        cached_metadata->chunkStats.min = chunk_metadata->chunkStats.min;
-        cached_metadata->chunkStats.has_nulls = chunk_metadata->chunkStats.has_nulls;
-        cached_metadata->numBytes = entry.second.getBuffer()->size();
-        fragmenter->updateColumnChunkMetadata(column, fragment_id, cached_metadata);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
+  for (auto& entry : column_id_to_chunk_map) {
+    const auto& column =
+        catalog->getMetadataForColumn(foreign_table_->tableId, entry.first);
+    if (skip_metadata_scan(column)) {
+      ChunkKey data_chunk_key = {
+          db_id_, foreign_table_->tableId, column->columnId, fragment_id};
+      if (column->columnType.is_varlen_indeed()) {
+        data_chunk_key.emplace_back(1);
       }
+      CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
+      // Allocate new shared_ptr for metadata so we dont modify old one which may be
+      // used by executor
+      auto cached_metadata_previous =
+          shared::get_from_map(chunk_metadata_map_, data_chunk_key);
+      shared::get_from_map(chunk_metadata_map_, data_chunk_key) =
+          std::make_shared<ChunkMetadata>();
+      auto cached_metadata = shared::get_from_map(chunk_metadata_map_, data_chunk_key);
+      *cached_metadata = *cached_metadata_previous;
+      auto chunk_metadata =
+          entry.second.getBuffer()->getEncoder()->getMetadata(column->columnType);
+      cached_metadata->chunkStats.max = chunk_metadata->chunkStats.max;
+      cached_metadata->chunkStats.min = chunk_metadata->chunkStats.min;
+      cached_metadata->chunkStats.has_nulls = chunk_metadata->chunkStats.has_nulls;
+      cached_metadata->numBytes = entry.second.getBuffer()->size();
     }
   }
 }

@@ -30,6 +30,12 @@ RegexParserDataWrapper::RegexParserDataWrapper(const int db_id,
     : AbstractTextFileDataWrapper(db_id, foreign_table)
     , regex_file_buffer_parser_{foreign_table} {}
 
+RegexParserDataWrapper::RegexParserDataWrapper(const int db_id,
+                                               const ForeignTable* foreign_table,
+                                               const UserMapping* user_mapping)
+    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping, false)
+    , regex_file_buffer_parser_{foreign_table} {}
+
 namespace {
 void validate_regex(const std::string& regex, const std::string& option_name) {
   try {

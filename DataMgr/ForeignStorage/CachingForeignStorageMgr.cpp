@@ -53,7 +53,12 @@ void CachingForeignStorageMgr::populateChunkBuffersSafely(
     ChunkToBufferMap& optional_buffers) {
   CHECK_GT(required_buffers.size(), 0U) << "Must populate at least one buffer";
   try {
+    ChunkSizeValidator chunk_size_validator(required_buffers.begin()->first);
     data_wrapper.populateChunkBuffers(required_buffers, optional_buffers);
+    chunk_size_validator.validateChunkSizes(required_buffers);
+    chunk_size_validator.validateChunkSizes(optional_buffers);
+    updateFragmenterMetadata(required_buffers);
+    updateFragmenterMetadata(optional_buffers);
   } catch (const std::runtime_error& error) {
     // clear any partially loaded but failed chunks (there may be some
     // fully-loaded chunks as well but they will be cleared conservatively
@@ -122,8 +127,6 @@ void CachingForeignStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
     auto required_buffers = disk_cache_->getChunkBuffersForCaching(column_keys);
     CHECK(required_buffers.find(chunk_key) != required_buffers.end());
     populateChunkBuffersSafely(data_wrapper, required_buffers, optional_buffers);
-    chunk_size_validator.validateChunkSizes(required_buffers);
-    chunk_size_validator.validateChunkSizes(optional_buffers);
 
     AbstractBuffer* buffer = required_buffers.at(chunk_key);
     CHECK(buffer);
