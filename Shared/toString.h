@@ -165,6 +165,8 @@ template <typename T>
 std::string toString(const T& v) {
   if constexpr (std::is_same_v<T, std::string>) {
     return "\"" + v + "\"";
+  } else if constexpr (std::is_same_v<T, std::string_view>) {
+    return "\"" + std::string(v) + "\"";
 #ifdef ENABLE_TOSTRING_RAPIDJSON
   } else if constexpr (std::is_same_v<T, rapidjson::Value>) {
     rapidjson::StringBuffer buffer;
