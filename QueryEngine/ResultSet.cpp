@@ -48,13 +48,15 @@
 size_t g_parallel_top_min = 100e3;
 size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
 
+constexpr int64_t uninitialized_cached_row_count{-1};
+
 void ResultSet::keepFirstN(const size_t n) {
-  CHECK_EQ(-1, cached_row_count_);
+  invalidateCachedRowCount();
   keep_first_ = n;
 }
 
 void ResultSet::dropFirstN(const size_t n) {
-  CHECK_EQ(-1, cached_row_count_);
+  invalidateCachedRowCount();
   drop_first_ = n;
 }
 
@@ -82,7 +84,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
-    , cached_row_count_(-1)
+    , cached_row_count_(uninitialized_cached_row_count)
     , geo_return_type_(GeoReturnType::WktString) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
@@ -118,7 +120,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
-    , cached_row_count_(-1)
+    , cached_row_count_(uninitialized_cached_row_count)
     , geo_return_type_(GeoReturnType::WktString) {}
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
@@ -136,7 +138,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
-    , cached_row_count_(-1)
+    , cached_row_count_(uninitialized_cached_row_count)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
     device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
@@ -158,7 +160,7 @@ ResultSet::ResultSet(const std::string& explanation)
     , explanation_(explanation)
     , just_explain_(true)
     , for_validation_only_(false)
-    , cached_row_count_(-1)
+    , cached_row_count_(uninitialized_cached_row_count)
     , geo_return_type_(GeoReturnType::WktString) {}
 
 ResultSet::ResultSet(int64_t queue_time_ms,
@@ -172,7 +174,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , separate_varlen_storage_valid_(false)
     , just_explain_(true)
     , for_validation_only_(false)
-    , cached_row_count_(-1)
+    , cached_row_count_(uninitialized_cached_row_count)
     , geo_return_type_(GeoReturnType::WktString){};
 
 ResultSet::~ResultSet() {
@@ -195,6 +197,38 @@ ResultSet::~ResultSet() {
     CHECK(data_mgr_);
     data_mgr_->free(device_estimator_buffer_);
   }
+}
+
+std::string ResultSet::summaryToString() const {
+  std::ostringstream oss;
+  oss << "Result Set Info" << std::endl;
+  oss << "\tLayout: " << query_mem_desc_.queryDescTypeToString() << std::endl;
+  oss << "\tColumns: " << colCount() << std::endl;
+  oss << "\tRows: " << rowCount() << std::endl;
+  oss << "\tEntry count: " << entryCount() << std::endl;
+  const std::string is_empty = isEmpty() ? "True" : "False";
+  oss << "\tIs empty: " << is_empty << std::endl;
+  const std::string did_output_columnar = didOutputColumnar() ? "True" : "False;";
+  oss << "\tColumnar: " << did_output_columnar << std::endl;
+  oss << "\tLazy-fetched columns: " << getNumColumnsLazyFetched() << std::endl;
+  const std::string is_direct_columnar_conversion_possible =
+      isDirectColumnarConversionPossible() ? "True" : "False";
+  oss << "\tDirect columnar conversion possible: "
+      << is_direct_columnar_conversion_possible << std::endl;
+
+  size_t num_columns_zero_copy_columnarizable{0};
+  for (size_t target_idx = 0; target_idx < targets_.size(); target_idx++) {
+    if (isZeroCopyColumnarConversionPossible(target_idx)) {
+      num_columns_zero_copy_columnarizable++;
+    }
+  }
+  oss << "\tZero-copy columnar conversion columns: "
+      << num_columns_zero_copy_columnarizable << std::endl;
+
+  oss << "\tPermutation size: " << permutation_.size() << std::endl;
+  oss << "\tLimit: " << keep_first_ << std::endl;
+  oss << "\tOffset: " << drop_first_ << std::endl;
+  return oss.str();
 }
 
 ExecutorDeviceType ResultSet::getDeviceType() const {
@@ -247,7 +281,7 @@ size_t ResultSet::getCurrentRowBufferIndex() const {
 
 // Note: that.appended_storage_ does not get appended to this.
 void ResultSet::append(ResultSet& that) {
-  CHECK_EQ(-1, cached_row_count_);
+  invalidateCachedRowCount();
   if (!that.storage_) {
     return;
   }
@@ -311,30 +345,25 @@ size_t get_truncated_row_count(size_t total_row_count, size_t limit, size_t offs
 
 }  // namespace
 
-size_t ResultSet::rowCount(const bool force_parallel) const {
+size_t ResultSet::rowCountImpl(const bool force_parallel) const {
   if (just_explain_) {
     return 1;
   }
   if (!permutation_.empty()) {
-    if (drop_first_ > permutation_.size()) {
-      return 0;
-    }
-    const auto limited_row_count = keep_first_ + drop_first_;
-    return limited_row_count ? std::min(limited_row_count, permutation_.size())
-                             : permutation_.size();
-  }
-  if (cached_row_count_ != -1) {
-    CHECK_GE(cached_row_count_, 0);
-    return cached_row_count_;
+    // keep_first_ corresponds to SQL LIMIT
+    // drop_first_ corresponds to SQL OFFSET
+    return get_truncated_row_count(permutation_.size(), keep_first_, drop_first_);
   }
   if (!storage_) {
     return 0;
   }
-  if (permutation_.empty() &&
-      query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+  CHECK(permutation_.empty());
+  if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
     return binSearchRowCount();
   }
-  if (force_parallel || entryCount() > 20000) {
+
+  constexpr size_t auto_parallel_row_count_threshold{20000UL};
+  if (force_parallel || entryCount() >= auto_parallel_row_count_threshold) {
     return parallelRowCount();
   }
   std::lock_guard<std::mutex> lock(row_iteration_mutex_);
@@ -351,9 +380,27 @@ size_t ResultSet::rowCount(const bool force_parallel) const {
   return row_count;
 }
 
+size_t ResultSet::rowCount(const bool force_parallel) const {
+  // cached_row_count_ is atomic, so fetch it into a local variable first
+  // to avoid repeat fetches
+  const int64_t cached_row_count = cached_row_count_;
+  if (cached_row_count != uninitialized_cached_row_count) {
+    CHECK_GE(cached_row_count, 0);
+    return cached_row_count;
+  }
+  setCachedRowCount(rowCountImpl(force_parallel));
+  return cached_row_count_;
+}
+
+void ResultSet::invalidateCachedRowCount() const {
+  cached_row_count_ = uninitialized_cached_row_count;
+}
+
 void ResultSet::setCachedRowCount(const size_t row_count) const {
-  CHECK(cached_row_count_ == -1 || cached_row_count_ == static_cast<int64_t>(row_count));
-  cached_row_count_ = row_count;
+  const int64_t signed_row_count = static_cast<int64_t>(row_count);
+  const int64_t old_cached_row_count = cached_row_count_.exchange(signed_row_count);
+  CHECK(old_cached_row_count == uninitialized_cached_row_count ||
+        old_cached_row_count == signed_row_count);
 }
 
 size_t ResultSet::binSearchRowCount() const {
@@ -390,27 +437,26 @@ size_t ResultSet::parallelRowCount() const {
 }
 
 bool ResultSet::isEmpty() const {
-  if (entryCount() == 0) {
-    return true;
-  }
-  if (!storage_) {
-    return true;
-  }
+  // To simplify this function and de-dup logic with ResultSet::rowCount()
+  // (mismatches between the two were causing bugs), we modified this function
+  // to simply fetch rowCount(). The potential downside of this approach is that
+  // in some cases more work will need to be done, as we can't just stop at the first row.
+  // Mitigating that for most cases is the following:
+  // 1) rowCount() is cached, so the logic for actually computing row counts will run only
+  // once
+  //    per result set.
+  // 2) If the cache is empty (cached_row_count_ == -1), rowCount() will use parallel
+  //    methods if deemed appropriate, which in many cases could be faster for a sparse
+  //    large result set that single-threaded iteration from the beginning
+  // 3) Often where isEmpty() is needed, rowCount() is also needed. Since the first call
+  // to rowCount()
+  //    will be cached, there is no extra overhead in these cases
 
-  std::lock_guard<std::mutex> lock(row_iteration_mutex_);
-  moveToBegin();
-  while (true) {
-    auto crt_row = getNextRowUnlocked(false, false);
-    if (!crt_row.empty()) {
-      return false;
-    }
-  }
-  moveToBegin();
-  return true;
+  return rowCount() == size_t(0);
 }
 
 bool ResultSet::definitelyHasNoRows() const {
-  return !storage_ && !estimator_ && !just_explain_;
+  return (!storage_ && !estimator_ && !just_explain_) || cached_row_count_ == 0;
 }
 
 const QueryMemoryDescriptor& ResultSet::getQueryMemDesc() const {
@@ -518,7 +564,7 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   if (!storage_) {
     return;
   }
-  CHECK_EQ(-1, cached_row_count_);
+  invalidateCachedRowCount();
   CHECK(!targets_.empty());
 #ifdef HAVE_CUDA
   if (canUseFastBaselineSort(order_entries, top_n)) {

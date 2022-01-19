@@ -202,6 +202,8 @@ class ResultSet {
            ", query_mem_desc=" + ::toString(query_mem_desc_) + ")";
   }
 
+  std::string summaryToString() const;
+
   inline ResultSetRowIterator rowIterator(size_t from_logical_index,
                                           bool translate_strings,
                                           bool decimal_to_double) const {
@@ -279,20 +281,73 @@ class ResultSet {
 
   SQLTypeInfo getColType(const size_t col_idx) const;
 
+  /**
+   * @brief Returns the number of valid entries in the result set (i.e that will
+   * be returned from the SQL query or inputted into the next query step)
+   *
+   * Note that this can be less than or equal to the value returned by
+   * ResultSet::getEntries(), whether due to a SQL LIMIT/OFFSET applied or because
+   * the result set representation is inherently sparse (i.e. baseline hash group by).
+   *
+   * Internally this function references/sets a cached value (`cached_row_count_`)
+   * so that the cost of computing the result is only paid once per result set.
+   *
+   * If the actual row count is not cached and needs to be computed, in some cases
+   * that can be O(1) (i.e. if limits and offsets are present, or for the output
+   * of a table function). For projections, we use a binary search, so it is
+   * O(log n), otherwise it is O(n) (with n being ResultSet::entryCount()),
+   * which will be run in parallel if the entry count >= the default of 20000
+   * or if `force_parallel` is set to true
+   *
+   * Note that we currently do not invalidate the cache if the result set is changed
+   * (i.e appended to), so this function should only be called after the result
+   * set is finalized.
+   *
+   * @param force_parallel Forces the row count to be computed in parallel if
+   * the row count cannot be otherwise be computed from metadata or via a binary
+   * search (otherwise parallel search is automatically used for result sets
+   * with `entryCount() >= 20000`)
+   *
+   */
+
   size_t rowCount(const bool force_parallel = false) const;
+
+  void invalidateCachedRowCount() const;
 
   void setCachedRowCount(const size_t row_count) const;
 
+  /**
+   * @brief Returns a boolean signifying whether there are valid entries
+   * in the result set.
+   *
+   * Note a result set can be logically empty even if the value returned by
+   * `ResultSet::entryCount()` is > 0, whether due to a SQL LIMIT/OFFSET applied or
+   * because the result set representation is inherently sparse (i.e. baseline hash group
+   * by).
+   *
+   * Internally this function is just implemented as `ResultSet::rowCount() == 0`, which
+   * caches it's value so the row count will only be computed once per finalized result
+   * set.
+   *
+   */
+
   bool isEmpty() const;
 
-  /// Returns the count of entries we allocated for
-  /// the result set to hold.
-  /// Note that this is not representative of the number
-  /// of rows in the result set.
-  ///
-  /// More concretely:
-  /// entryCount() > 0 does not imply the result set is *not* empty.
-  /// For an empty check, use `isEmpty`
+  /**
+   * @brief Returns the number of entries the result set is allocated to hold.
+   *
+   * Note that this can be greater than or equal to the actual number of valid rows
+   * in the result set, whether due to a SQL LIMIT/OFFSET applied or because
+   * the result set representation is inherently sparse (i.e. baseline hash group by)
+   *
+   * For getting the number of valid rows in the result set (inclusive
+   * of any applied LIMIT and/or OFFSET), use `ResultSet::rowCount().` Or
+   * to just test if there are any valid rows, use `ResultSet::entryCount()`,
+   * as a return value from `entryCount()` greater than 0 does not neccesarily
+   * mean the result set is empty.
+   *
+   */
+
   size_t entryCount() const;
 
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
@@ -409,7 +464,6 @@ class ResultSet {
                             int8_t* output_buffer,
                             const size_t output_buffer_size) const;
 
-
   bool didOutputColumnar() const { return this->query_mem_desc_.didOutputColumnar(); }
 
   //  Columnar Conversion checker functions
@@ -421,8 +475,8 @@ class ResultSet {
   const int8_t* getColumnarBuffer(size_t column_idx) const;
 
   //  Returns vector of std::pair<chunk buffer ptr, chunk row count>
-  std::vector<std::pair<const int8_t*, size_t>>
-      getChunkedColumnarBuffer(size_t column_idx) const;
+  std::vector<std::pair<const int8_t*, size_t>> getChunkedColumnarBuffer(
+      size_t column_idx) const;
 
   QueryDescriptionType getQueryDescriptionType() const {
     return query_mem_desc_.getQueryDescriptionType();
@@ -441,6 +495,16 @@ class ResultSet {
 
   const std::vector<ColumnLazyFetchInfo>& getLazyFetchInfo() const {
     return lazy_fetch_info_;
+  }
+
+  bool areAnyColumnsLazyFetched() const {
+    auto is_lazy = [](auto const& info) { return info.is_lazily_fetched; };
+    return std::any_of(lazy_fetch_info_.begin(), lazy_fetch_info_.end(), is_lazy);
+  }
+
+  size_t getNumColumnsLazyFetched() const {
+    auto is_lazy = [](auto const& info) { return info.is_lazily_fetched; };
+    return std::count_if(lazy_fetch_info_.begin(), lazy_fetch_info_.end(), is_lazy);
   }
 
   void setSeparateVarlenStorageValid(const bool val) {
@@ -730,6 +794,8 @@ class ResultSet {
 
   bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                               const size_t top_n);
+
+  size_t rowCountImpl(const bool force_parallel) const;
 
   Data_Namespace::DataMgr* getDataManager() const;
 
