@@ -145,6 +145,13 @@ set(group_by_hash_test_files
         RuntimeFunctions.cpp
         )
 
+set(query_engine_cuda_source_files
+        TopKSort.cu
+        InPlaceSortImpl.cu
+        ResultSetSortImpl.cu
+        GpuInitGroups.cu
+        JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
+
 if (ENABLE_DECODERS_BOUNDS_CHECKING)
     list(APPEND MAPD_DEFINITIONS "-DWITH_DECODERS_BOUNDS_CHECKING")
 endif ()
@@ -227,13 +234,8 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFa
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine COMPONENT "QE")
 
-if (ENABLE_CUDA)
-    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
-    add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init QueryEngineCudaTargets)
-else ()
-    add_library(QueryEngine ${query_engine_source_files})
-    add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
-endif ()
+add_library(QueryEngine ${query_engine_source_files} $<$<BOOL:ENABLE_CUDA>:${query_engine_cuda_source_files}>)
+add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
 
 target_precompile_headers(QueryEngine PRIVATE
         [["QueryEngine/Execute.h"]]
@@ -357,7 +359,9 @@ add_custom_command(
         -c ${CMAKE_CURRENT_SOURCE_DIR}/JoinHashTable/Runtime/HashJoinRuntimeGpu.cu
 )
 
-add_custom_target(QueryEngineCudaTargets
+if(ENABLE_CUDA)
+  add_custom_target(QueryEngineCudaTargets
+        ALL
         DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
         ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
@@ -367,7 +371,6 @@ add_custom_target(QueryEngineCudaTargets
         ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
         )
 
-if(ENABLE_CUDA)
   string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
   if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
     if (ENABLE_CUDA_KERNEL_DEBUG)
