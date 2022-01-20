@@ -334,7 +334,7 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
   std::vector<const void*> sd_inner_proxy_per_key;
   std::vector<const void*> sd_outer_proxy_per_key;
   std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
-  const auto db_id = executor->getCatalog()->getCurrentDB().dbId;
+  const auto db_id = executor->getDatabaseId();
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
     const auto outer_col = inner_outer_pair.second;
@@ -368,42 +368,37 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
                                                            std::string_view column,
                                                            int rte_idx,
                                                            Executor* executor) {
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
+  auto schema_provider = executor->getSchemaProvider();
+  auto table_info =
+      schema_provider->getTableInfo(executor->getDatabaseId(), std::string(table));
+  CHECK(table_info);
+  auto col_info = schema_provider->getColumnInfo(*table_info, std::string(column));
+  CHECK(col_info);
 
-  auto tmeta = catalog->getMetadataForTable(std::string(table));
-  CHECK(tmeta);
-
-  auto cmeta = catalog->getMetadataForColumn(tmeta->tableId, std::string(column));
-  CHECK(cmeta);
-
-  auto ti = cmeta->columnType;
-
+  auto ti = col_info->type;
   if (ti.is_geometry() && ti.get_type() != kPOINT) {
     int geoColumnId{0};
     switch (ti.get_type()) {
       case kLINESTRING: {
-        geoColumnId = cmeta->columnId + 2;
+        geoColumnId = col_info->column_id + 2;
         break;
       }
       case kPOLYGON: {
-        geoColumnId = cmeta->columnId + 3;
+        geoColumnId = col_info->column_id + 3;
         break;
       }
       case kMULTIPOLYGON: {
-        geoColumnId = cmeta->columnId + 4;
+        geoColumnId = col_info->column_id + 4;
         break;
       }
       default:
         CHECK(false);
     }
-    cmeta = catalog->getMetadataForColumn(tmeta->tableId, geoColumnId);
-    CHECK(cmeta);
-    ti = cmeta->columnType;
+    col_info = schema_provider->getColumnInfo(*table_info, geoColumnId);
+    CHECK(col_info);
   }
 
-  auto cv = std::make_shared<Analyzer::ColumnVar>(
-      cmeta->makeInfo(catalog->getDatabaseId()), rte_idx);
+  auto cv = std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx);
   return cv;
 }
 
@@ -452,9 +447,6 @@ void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* e
 std::vector<InputTableInfo> getSyntheticInputTableInfo(
     std::set<const Analyzer::ColumnVar*> cvs,
     Executor* executor) {
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
-
   std::unordered_set<int> phys_table_ids;
   for (auto cv : cvs) {
     phys_table_ids.insert(cv->get_table_id());
@@ -466,9 +458,9 @@ std::vector<InputTableInfo> getSyntheticInputTableInfo(
   std::vector<InputTableInfo> query_infos(phys_table_ids.size());
   size_t i = 0;
   for (auto id : phys_table_ids) {
-    auto tmeta = catalog->getMetadataForTable(id);
     query_infos[i].table_id = id;
-    query_infos[i].info = tmeta->fragmenter->getFragmentsForQuery();
+    query_infos[i].info =
+        executor->getDataMgr()->getTableInfo(executor->getDatabaseId(), id);
     ++i;
   }
 
@@ -660,7 +652,7 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
       throw HashJoinFail("Cannot use hash join for given expression");
     }
   }
-  // We need to fetch the actual type information from the catalog since Analyzer
+  // We need to fetch the actual type information from the schema provider since Analyzer
   // always reports nullable as true for inner table columns in left joins.
   const auto inner_col_info =
       schema_provider->getColumnInfo(*inner_col->get_column_info());

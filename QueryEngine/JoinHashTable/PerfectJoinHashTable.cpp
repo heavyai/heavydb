@@ -69,6 +69,12 @@ HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
     return {size_t(*empty_range), 1};
   }
 
+  // size_t is not big enough for maximum possible range.
+  if (col_range.getIntMin() == std::numeric_limits<int64_t>::min() &&
+      col_range.getIntMax() == std::numeric_limits<int64_t>::max()) {
+    throw TooManyHashEntries();
+  }
+
   int64_t bucket_normalization =
       context_ti.get_type() == kDATE ? col_range.getBucket() : 1;
   CHECK_GT(bucket_normalization, 0);
@@ -267,7 +273,6 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
 void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
-  auto catalog = const_cast<Catalog_Namespace::Catalog*>(executor_->getCatalog());
   const auto cols = get_cols(
       qual_bin_oper_.get(), executor_->getSchemaProvider(), executor_->temporary_tables_);
   const auto inner_col = cols.first;
@@ -301,8 +306,7 @@ void PerfectJoinHashTable::reify() {
                                 device_id,
                                 memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
                                     ? dev_buff_owners[device_id].get()
-                                    : nullptr,
-                                *catalog);
+                                    : nullptr);
       columns_per_device.push_back(columns_for_device);
       const auto chunk_key = genChunkKey(
           fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
@@ -385,8 +389,7 @@ Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
 ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
-    DeviceAllocator* dev_buff_owner,
-    const Catalog_Namespace::Catalog& catalog) {
+    DeviceAllocator* dev_buff_owner) {
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
   std::vector<JoinColumn> join_columns;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
@@ -395,9 +398,7 @@ ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
   std::vector<std::shared_ptr<void>> malloc_owner;
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
-    const auto inner_cd = get_column_descriptor_maybe(
-        inner_col->get_column_id(), inner_col->get_table_id(), catalog);
-    if (inner_cd && inner_cd->isVirtualCol) {
+    if (inner_col->is_virtual()) {
       throw FailedToJoinOnVirtualColumn();
     }
     join_columns.emplace_back(fetchJoinColumn(inner_col,
@@ -636,9 +637,8 @@ ChunkKey PerfectJoinHashTable::genChunkKey(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Analyzer::Expr* outer_col_expr,
     const Analyzer::ColumnVar* inner_col) const {
-  ChunkKey chunk_key{executor_->getCatalog()->getCurrentDB().dbId,
-                     inner_col->get_table_id(),
-                     inner_col->get_column_id()};
+  ChunkKey chunk_key{
+      executor_->getDatabaseId(), inner_col->get_table_id(), inner_col->get_column_id()};
   const auto& ti = inner_col->get_type_info();
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());

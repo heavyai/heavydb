@@ -870,9 +870,7 @@ ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
   std::vector<std::shared_ptr<void>> malloc_owner;
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
-    const auto inner_cd = get_column_descriptor_maybe(
-        inner_col->get_column_id(), inner_col->get_table_id(), catalog);
-    if (inner_cd && inner_cd->isVirtualCol) {
+    if (inner_col->is_virtual()) {
       throw FailedToJoinOnVirtualColumn();
     }
     join_columns.emplace_back(fetchJoinColumn(inner_col,

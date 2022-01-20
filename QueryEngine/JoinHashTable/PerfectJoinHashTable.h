@@ -131,8 +131,7 @@ class PerfectJoinHashTable : public HashJoin {
   ColumnsForDevice fetchColumnsForDevice(
       const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
-      DeviceAllocator* dev_buff_owner,
-      const Catalog_Namespace::Catalog& catalog);
+      DeviceAllocator* dev_buff_owner);
 
   void reifyForDevice(const ChunkKey& hash_table_key,
                       const ColumnsForDevice& columns_for_device,

@@ -216,14 +216,6 @@ inline std::string numeric_type_name(const SQLTypeInfo& ti) {
   return ti.get_type() == kDOUBLE ? "double" : "float";
 }
 
-inline const ColumnDescriptor* get_column_descriptor_maybe(
-    const int col_id,
-    const int table_id,
-    const Catalog_Namespace::Catalog& cat) {
-  CHECK(table_id);
-  return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
-}
-
 inline const TemporaryTable& get_temporary_table(const TemporaryTables* temporary_tables,
                                                  const int table_id) {
   CHECK_LT(table_id, 0);
