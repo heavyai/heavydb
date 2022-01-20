@@ -7320,8 +7320,6 @@ void DBHandler::get_device_parameters(std::map<std::string, std::string>& _retur
   EXPOSE_THRIFT_MAP(TOutputBufferSizeType);
 }
 
-std::mutex register_runtime_extension_functions_mutex;
-
 void DBHandler::register_runtime_extension_functions(
     const TSessionId& session,
     const std::vector<TUserDefinedFunction>& udfs,
@@ -7337,32 +7335,35 @@ void DBHandler::register_runtime_extension_functions(
 
   // Lock registration to avoid
   // java.util.ConcurrentModificationException from calcite server
-  // when client registrations arrive too fast
-  std::lock_guard<std::mutex> register_lock(register_runtime_extension_functions_mutex);
+  // when client registrations arrive too fast. Also blocks
+  // Executor::get_rt_udf_module for retrieving runtime UDF/UDTF
+  // module until this registration has rebuild it via
+  // Executor::update_after_registration:
+  std::unique_lock lock(Executor::register_runtime_extension_functions_mutex_);
 
   // TODO: add UDF registration permission scheme. Currently, UDFs are
   // registered globally, that means that all users can use as well as
   // overwrite UDFs that was created possibly by anoher user.
 
-  /* Changing a UDF implementation (but not the signature) requires
-     cleaning code caches. Nuking executors does that but at the cost
-     of loosing all of the caches. TODO: implement more refined code
-     cache cleaning. */
-  Executor::nukeCacheOfExecutors();  // includes execution lock
+  Executor::resetAllExecutors(/*runtime_only=*/true);  // includes execution lock
 
   /* Parse LLVM/NVVM IR strings and store it as LLVM module. */
   auto it_cpu = device_ir_map.find(std::string{"cpu"});
   auto it_gpu = device_ir_map.find(std::string{"gpu"});
   if (it_cpu != device_ir_map.end() || it_gpu != device_ir_map.end()) {
-    // cpu/gpu LLVM IR strings are read into global LLVM
-    // rt_udf_cpu/gpu_module, so we'll need to block compilation when
-    // updating the LLVM modules.
-    std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
     if (it_cpu != device_ir_map.end()) {
-      read_rt_udf_cpu_module(it_cpu->second);
+      Executor::extension_module_sources[Executor::ExtModuleKinds::rt_udf_cpu_module] =
+          it_cpu->second;
+    } else {
+      Executor::extension_module_sources.erase(
+          Executor::ExtModuleKinds::rt_udf_cpu_module);
     }
     if (it_gpu != device_ir_map.end()) {
-      read_rt_udf_gpu_module(it_gpu->second);
+      Executor::extension_module_sources[Executor::ExtModuleKinds::rt_udf_gpu_module] =
+          it_gpu->second;
+    } else {
+      Executor::extension_module_sources.erase(
+          Executor::ExtModuleKinds::rt_udf_gpu_module);
     }
   } /* else avoid locking compilation if registration does not change
        the rt_udf_cpu/gpu_module instances */
@@ -7397,6 +7398,8 @@ void DBHandler::register_runtime_extension_functions(
           << whitelist;
   ExtensionFunctionsWhitelist::clearRTUdfs();
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
+
+  Executor::update_after_registration(/*runtime_only=*/true);
 }
 
 void DBHandler::convertResultSet(ExecutionResult& result,

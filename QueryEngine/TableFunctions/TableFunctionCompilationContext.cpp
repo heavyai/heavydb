@@ -23,9 +23,6 @@
 
 #include "QueryEngine/CodeGenerator.h"
 
-extern std::unique_ptr<llvm::Module> rt_udf_cpu_module;
-extern std::unique_ptr<llvm::Module> rt_udf_gpu_module;
-
 namespace {
 
 llvm::Function* generate_entry_point(const CgenState* cgen_state) {
@@ -224,8 +221,8 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
 
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
-  cgen_state->module_ = module.get();
+  CHECK(cgen_state->module_ == nullptr);
+  cgen_state->set_module_shallow_copy(executor_->get_rt_module());
 
   entry_point_func_ = generate_entry_point(cgen_state);
 
@@ -237,16 +234,13 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     CHECK(!emit_only_preflight_fn);
     generateGpuKernel();
   }
-  auto result = finalize(co, emit_only_preflight_fn);
-  module.release();
-  cgen_state->module_ = nullptr;
-  return result;
+  return finalize(co, emit_only_preflight_fn);
 }
 
 bool TableFunctionCompilationContext::passColumnsByValue(
     const TableFunctionExecutionUnit& exe_unit,
     bool is_gpu) {
-  llvm::Module* mod = (is_gpu ? rt_udf_gpu_module.get() : rt_udf_cpu_module.get());
+  auto mod = executor_->get_rt_udf_module(is_gpu).get();
   if (mod != nullptr) {
     auto* flag = mod->getModuleFlag("pass_column_arguments_by_value");
     if (auto* cnt = llvm::mdconst::extract_or_null<llvm::ConstantInt>(flag)) {
@@ -533,14 +527,9 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     TODO 2: detect and link only the udf's that are needed
   */
   auto cgen_state = executor_->getCgenStatePtr();
-  if (co.device_type == ExecutorDeviceType::GPU && rt_udf_gpu_module != nullptr) {
-    CodeGenerator::link_udf_module(rt_udf_gpu_module,
-                                   *(cgen_state->module_),
-                                   cgen_state,
-                                   llvm::Linker::Flags::OverrideFromSrc);
-  }
-  if (co.device_type == ExecutorDeviceType::CPU && rt_udf_cpu_module != nullptr) {
-    CodeGenerator::link_udf_module(rt_udf_cpu_module,
+  auto is_gpu = co.device_type == ExecutorDeviceType::GPU;
+  if (executor_->has_rt_udf_module(is_gpu)) {
+    CodeGenerator::link_udf_module(executor_->get_rt_udf_module(is_gpu),
                                    *(cgen_state->module_),
                                    cgen_state,
                                    llvm::Linker::Flags::OverrideFromSrc);
@@ -552,7 +541,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
                                      : "Table Function Entry Point IR\n")
           << serialize_llvm_object(entry_point_func_);
   std::shared_ptr<CompilationContext> code;
-  if (co.device_type == ExecutorDeviceType::GPU) {
+  if (is_gpu) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
 
     CHECK(executor_);
@@ -563,7 +552,8 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
                                         executor_->blockSize(),
                                         cgen_state,
                                         false};
-    code = CodeGenerator::generateNativeGPUCode(entry_point_func_,
+    code = CodeGenerator::generateNativeGPUCode(executor_,
+                                                entry_point_func_,
                                                 kernel_func_,
                                                 {entry_point_func_, kernel_func_},
                                                 /*is_gpu_smem_used=*/false,

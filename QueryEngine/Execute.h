@@ -149,10 +149,6 @@ class QuerySessionStatus {
 using QuerySessionMap =
     std::map<const QuerySessionId, std::map<std::string, QuerySessionStatus>>;
 
-extern void read_rt_udf_gpu_module(const std::string& udf_ir);
-extern void read_rt_udf_cpu_module(const std::string& udf_ir);
-extern bool is_rt_udf_module_present(bool cpu_only = false);
-
 class ColumnFetcher;
 
 class WatchdogException : public std::runtime_error {
@@ -375,6 +371,7 @@ class Executor {
  public:
   using ExecutorId = size_t;
   static const ExecutorId UNITARY_EXECUTOR_ID = 0;
+  static const ExecutorId INVALID_EXECUTOR_ID = SIZE_MAX;
 
   Executor(const ExecutorId id,
            Data_Namespace::DataMgr* data_mgr,
@@ -383,6 +380,18 @@ class Executor {
            const size_t max_gpu_slab_size,
            const std::string& debug_dir,
            const std::string& debug_file);
+
+  void clearCaches(bool runtime_only = false);
+  void reset(bool runtime_only = false);
+
+  static void resetAllExecutors(bool runtime_only = false) {
+    mapd_unique_lock<mapd_shared_mutex> flush_lock(
+        execute_mutex_);  // don't want native code to vanish while executing
+    mapd_unique_lock<mapd_shared_mutex> lock(executors_cache_mutex_);
+    for (auto& executor_item : Executor::executors_) {
+      executor_item.second->reset(runtime_only);
+    }
+  }
 
   static std::shared_ptr<Executor> getExecutor(
       const ExecutorId id,
@@ -402,6 +411,57 @@ class Executor {
   static size_t getArenaBlockSize();
 
   static void addUdfIrToModule(const std::string& udf_ir_filename, const bool is_cuda_ir);
+
+  enum class ExtModuleKinds {
+    template_module,     // RuntimeFunctions.bc
+    udf_cpu_module,      // Load-time UDFs for CPU execution
+    udf_gpu_module,      // Load-time UDFs for GPU execution
+    rt_udf_cpu_module,   // Run-time UDF/UDTFs for CPU execution
+    rt_udf_gpu_module,   // Run-time UDF/UDTFs for GPU execution
+    rt_geos_module,      // geos functions
+    rt_libdevice_module  // math library functions for GPU execution
+  };
+  // Globally available mapping of extension module sources. Not thread-safe.
+  static std::map<ExtModuleKinds, std::string> extension_module_sources;
+  static void initialize_extension_module_sources();
+
+  // Convenience functions for retrieving executor-local extension modules, thread-safe:
+  const std::unique_ptr<llvm::Module>& get_rt_module() const {
+    return get_extension_module(ExtModuleKinds::template_module);
+  }
+  const std::unique_ptr<llvm::Module>& get_udf_module(bool is_gpu = false) const {
+    return get_extension_module(
+        (is_gpu ? ExtModuleKinds::udf_gpu_module : ExtModuleKinds::udf_cpu_module));
+  }
+  const std::unique_ptr<llvm::Module>& get_rt_udf_module(bool is_gpu = false) const {
+    std::shared_lock lock(Executor::register_runtime_extension_functions_mutex_);
+    return get_extension_module(
+        (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
+  }
+  const std::unique_ptr<llvm::Module>& get_geos_module() const {
+    return get_extension_module(ExtModuleKinds::rt_geos_module);
+  }
+  const std::unique_ptr<llvm::Module>& get_libdevice_module() const {
+    return get_extension_module(ExtModuleKinds::rt_libdevice_module);
+  }
+
+  bool has_rt_module() const {
+    return has_extension_module(ExtModuleKinds::template_module);
+  }
+  bool has_udf_module(bool is_gpu = false) const {
+    return has_extension_module(
+        (is_gpu ? ExtModuleKinds::udf_gpu_module : ExtModuleKinds::udf_cpu_module));
+  }
+  bool has_rt_udf_module(bool is_gpu = false) const {
+    return has_extension_module(
+        (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
+  }
+  bool has_geos_module() const {
+    return has_extension_module(ExtModuleKinds::rt_geos_module);
+  }
+  bool has_libdevice_module() const {
+    return has_extension_module(ExtModuleKinds::rt_libdevice_module);
+  }
 
   /**
    * Returns pointer to the intermediate tables vector currently stored by this executor.
@@ -752,11 +812,11 @@ class Executor {
                                                    const size_t out_vec_sz,
                                                    const bool is_group_by,
                                                    const bool float_argument_input);
-
+  template <typename CC>
   static void addCodeToCache(const CodeCacheKey&,
-                             std::shared_ptr<CompilationContext>,
+                             std::shared_ptr<CC>,
                              llvm::Module*,
-                             CodeCache&);
+                             CodeCache<CC>&);
 
  private:
   ResultSetPtr resultsUnion(SharedKernelContext& shared_context,
@@ -1042,10 +1102,18 @@ class Executor {
                                      bool extract_only_col_id);
 
   CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
+  llvm::LLVMContext& getContext() { return *context_.get(); }
+  void update_extension_modules(bool runtime_only = false);
+
+  static void update_after_registration(bool runtime_only = false) {
+    for (auto executor_item : Executor::executors_) {
+      executor_item.second->update_extension_modules(runtime_only);
+    }
+  }
 
  private:
-  std::shared_ptr<CompilationContext> getCodeFromCache(const CodeCacheKey&,
-                                                       const CodeCache&);
+  template <typename CC>
+  std::shared_ptr<CC> getCodeFromCache(const CodeCacheKey&, const CodeCache<CC>&);
 
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, CgenState::LiteralValues>& literals,
@@ -1059,7 +1127,43 @@ class Executor {
     return off;
   }
 
+  const ExecutorId executor_id_;
+  std::unique_ptr<llvm::LLVMContext> context_;
+
+  // CgenStateManager uses RAII pattern to ensure that recursive code
+  // generation (e.g. as in multi-step multi-subqueries) uses a new
+  // CgenState instance for each recursion depth while restoring the
+  // old CgenState instances when returning from recursion.
+  class CgenStateManager {
+   public:
+    CgenStateManager(Executor& executor,
+                     const bool allow_lazy_fetch,
+                     const std::vector<InputTableInfo>& query_infos,
+                     const PlanState::DeletedColumnsMap& deleted_cols_map,
+                     const RelAlgExecutionUnit* ra_exe_unit);
+    ~CgenStateManager();
+
+   private:
+    Executor& executor_;
+    std::unique_ptr<CgenState> cgen_state_;
+  };
+
   std::unique_ptr<CgenState> cgen_state_;
+
+  const std::unique_ptr<llvm::Module>& get_extension_module(ExtModuleKinds kind) const {
+    auto it = extension_modules_.find(kind);
+    if (it != extension_modules_.end()) {
+      return it->second;
+    }
+    static const std::unique_ptr<llvm::Module> empty;
+    return empty;
+  }
+
+  bool has_extension_module(ExtModuleKinds kind) const {
+    return extension_modules_.find(kind) != extension_modules_.end();
+  }
+
+  std::map<ExtModuleKinds, std::unique_ptr<llvm::Module>> extension_modules_;
 
   class FetchCacheAnchor {
    public:
@@ -1090,8 +1194,13 @@ class Executor {
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
-  CodeCache cpu_code_cache_;
-  CodeCache gpu_code_cache_;
+ public:  // TODO: implement API for accessing these code caches
+  CodeCache<CpuCompilationContext> s_stubs_cache;
+  CodeCache<CpuCompilationContext> s_code_cache;
+
+ private:
+  CodeCache<CpuCompilationContext> cpu_code_cache_;
+  CodeCache<GpuCompilationContext> gpu_code_cache_;
 
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
@@ -1103,7 +1212,6 @@ class Executor {
   const std::string debug_dir_;
   const std::string debug_file_;
 
-  const ExecutorId executor_id_;
   const Catalog_Namespace::Catalog* catalog_;
   Data_Namespace::DataMgr* data_mgr_;
   const TemporaryTables* temporary_tables_;
@@ -1178,8 +1286,26 @@ class Executor {
   static const int32_t ERR_GEOS{16};
   static const int32_t ERR_WIDTH_BUCKET_INVALID_ARGUMENT{17};
 
-  static std::mutex compilation_mutex_;
-  static std::mutex kernel_mutex_;
+  // Although compilation is Executor-local, an executor may trigger
+  // threaded compilations (see executeWorkUnitPerFragment) that share
+  // executor cgen_state and LLVM context, for instance.
+  //
+  // Rule of thumb: when `executor->thread_id_ != logger::thread_id()`
+  // and executor LLVM Context is being modified (modules are cloned,
+  // etc), one should protect such a code with
+  //
+  //  std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
+  //
+  // to ensure thread safety.
+  std::mutex compilation_mutex_;
+  const logger::ThreadId thread_id_;
+
+  // Runtime extension function registration updates
+  // extension_modules_ that needs to be kept blocked from codegen
+  // until the update is complete.
+  static std::shared_mutex register_runtime_extension_functions_mutex_;
+
+  static std::mutex kernel_mutex_;  // TODO: should this be executor-local mutex?
 
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;
@@ -1252,5 +1378,26 @@ extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
                                                                  int8_t* buffer);
 
 const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr);
+
+inline std::string toString(const Executor::ExtModuleKinds& kind) {
+  switch (kind) {
+    case Executor::ExtModuleKinds::template_module:
+      return "template_module";
+    case Executor::ExtModuleKinds::rt_geos_module:
+      return "rt_geos_module";
+    case Executor::ExtModuleKinds::rt_libdevice_module:
+      return "rt_libdevice_module";
+    case Executor::ExtModuleKinds::udf_cpu_module:
+      return "udf_cpu_module";
+    case Executor::ExtModuleKinds::udf_gpu_module:
+      return "udf_gpu_module";
+    case Executor::ExtModuleKinds::rt_udf_cpu_module:
+      return "rt_udf_cpu_module";
+    case Executor::ExtModuleKinds::rt_udf_gpu_module:
+      return "rt_udf_gpu_module";
+  }
+  LOG(FATAL) << "Invalid LLVM module kind.";
+  return "";
+}
 
 #endif  // QUERYENGINE_EXECUTE_H

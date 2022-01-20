@@ -24049,7 +24049,6 @@ int main(int argc, char** argv) {
     drop_tables();
     drop_views();
   }
-  ResultSetReductionJIT::clearCache();
   QR::reset();
   return err;
 }

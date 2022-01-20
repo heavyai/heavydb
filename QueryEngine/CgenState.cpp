@@ -15,16 +15,51 @@
  */
 
 #include "CgenState.h"
+#include "CodeGenerator.h"
 #include "OutputBufferInitialization.h"
 
 #include <llvm/IR/InstIterator.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-extern std::unique_ptr<llvm::Module> g_rt_module;
-#ifdef ENABLE_GEOS
-extern std::unique_ptr<llvm::Module> g_rt_geos_module;
-#endif
+CgenState::CgenState(const size_t num_query_infos,
+                     const bool contains_left_deep_outer_join,
+                     Executor* executor)
+    : executor_id_(executor->getExecutorId())
+    , module_(nullptr)
+    , row_func_(nullptr)
+    , filter_func_(nullptr)
+    , current_func_(nullptr)
+    , row_func_bb_(nullptr)
+    , filter_func_bb_(nullptr)
+    , row_func_call_(nullptr)
+    , filter_func_call_(nullptr)
+    , context_(executor->getContext())
+    , ir_builder_(context_)
+    , contains_left_deep_outer_join_(contains_left_deep_outer_join)
+    , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
+    , needs_error_check_(false)
+    , needs_geos_(false)
+    , query_func_(nullptr)
+    , query_func_entry_ir_builder_(context_){};
+
+CgenState::CgenState(const size_t num_query_infos,
+                     const bool contains_left_deep_outer_join)
+    : CgenState(num_query_infos,
+                contains_left_deep_outer_join,
+                Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get()) {}
+
+CgenState::CgenState(llvm::LLVMContext& context)
+    : executor_id_(Executor::INVALID_EXECUTOR_ID)
+    , module_(nullptr)
+    , row_func_(nullptr)
+    , context_(context)
+    , ir_builder_(context_)
+    , contains_left_deep_outer_join_(false)
+    , needs_error_check_(false)
+    , needs_geos_(false)
+    , query_func_(nullptr)
+    , query_func_entry_ir_builder_(context_){};
 
 llvm::ConstantInt* CgenState::inlineIntNull(const SQLTypeInfo& type_info) {
   auto type = type_info.get_type();
@@ -148,7 +183,7 @@ void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn) {
   }
 
   // Get the implementation from the runtime module.
-  auto func_impl = g_rt_module->getFunction(fn->getName());
+  auto func_impl = getExecutor()->get_rt_module()->getFunction(fn->getName());
   CHECK(func_impl) << fn->getName().str();
 
   if (func_impl->isDeclaration()) {
@@ -319,4 +354,27 @@ void CgenState::replaceFunctionForGpu(const std::string& fcn_to_replace,
       }
     }
   }
+}
+
+std::shared_ptr<Executor> CgenState::getExecutor() const {
+  CHECK(executor_id_ != Executor::INVALID_EXECUTOR_ID);
+  return Executor::getExecutor(executor_id_);
+}
+
+llvm::LLVMContext& CgenState::getExecutorContext() const {
+  return getExecutor()->getContext();
+}
+
+void CgenState::set_module_shallow_copy(const std::unique_ptr<llvm::Module>& module,
+                                        bool always_clone) {
+  module_ =
+      llvm::CloneModule(*module, vmap_, [always_clone](const llvm::GlobalValue* gv) {
+        auto func = llvm::dyn_cast<llvm::Function>(gv);
+        if (!func) {
+          return true;
+        }
+        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
+                (always_clone && CodeGenerator::alwaysCloneRuntimeFunction(func)));
+      }).release();
 }

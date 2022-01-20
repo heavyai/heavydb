@@ -529,6 +529,8 @@ class ResultSet {
 
   void eachCellInColumn(RowIterationState&, std::function<void(int8_t const*)>);
 
+  const Executor* getExecutor() const { return query_mem_desc_.getExecutor(); }
+
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
@@ -903,7 +905,7 @@ inline ResultSetRowIterator& ResultSetRowIterator::operator++(void) {
 
 class ResultSetManager {
  public:
-  ResultSet* reduce(std::vector<ResultSet*>&);
+  ResultSet* reduce(std::vector<ResultSet*>&, const size_t executor_id);
 
   std::shared_ptr<ResultSet> getOwnResultSet();
 

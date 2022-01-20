@@ -61,7 +61,6 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #endif
 
 #include "CudaMgr/CudaMgr.h"
-#include "OSDependent/omnisci_path.h"
 #include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/GpuSharedMemoryUtils.h"
@@ -75,19 +74,9 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 float g_fraction_code_cache_to_evict = 0.2;
 
-std::unique_ptr<llvm::Module> udf_gpu_module;
-std::unique_ptr<llvm::Module> udf_cpu_module;
-std::unique_ptr<llvm::Module> rt_udf_gpu_module;
-std::unique_ptr<llvm::Module> rt_udf_cpu_module;
-
-extern std::unique_ptr<llvm::Module> g_rt_module;
-
-#ifdef HAVE_CUDA
-extern std::unique_ptr<llvm::Module> g_rt_libdevice_module;
-#endif
+static llvm::sys::Mutex g_ee_create_mutex;
 
 #ifdef ENABLE_GEOS
-extern std::unique_ptr<llvm::Module> g_rt_geos_module;
 
 #include <llvm/Support/DynamicLibrary.h>
 
@@ -404,23 +393,24 @@ void verify_function_ir(const llvm::Function* func) {
   }
 }
 
-std::shared_ptr<CompilationContext> Executor::getCodeFromCache(const CodeCacheKey& key,
-                                                               const CodeCache& cache) {
+template <typename CC>
+std::shared_ptr<CC> Executor::getCodeFromCache(const CodeCacheKey& key,
+                                               const CodeCache<CC>& cache) {
   auto it = cache.find(key);
   if (it != cache.cend()) {
-    delete cgen_state_->module_;
     cgen_state_->module_ = it->second.second;
     return it->second.first;
   }
   return {};
 }
 
+template <typename CC>
 void Executor::addCodeToCache(const CodeCacheKey& key,
-                              std::shared_ptr<CompilationContext> compilation_context,
+                              std::shared_ptr<CC> compilation_context,
                               llvm::Module* module,
-                              CodeCache& cache) {
+                              CodeCache<CC>& cache) {
   cache.put(key,
-            std::make_pair<std::shared_ptr<CompilationContext>, decltype(module)>(
+            std::make_pair<std::shared_ptr<CC>, decltype(module)>(
                 std::move(compilation_context), std::move(module)));
 }
 
@@ -478,6 +468,13 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     eb.setOptLevel(llvm::CodeGenOpt::None);
   }
 
+  // Avoids data race in
+  // llvm::sys::DynamicLibrary::getPermanentLibrary and
+  // GDBJITRegistrationListener::notifyObjectLoaded while creating a
+  // new ExecutionEngine instance. Unfortunately we have to use global
+  // mutex here.
+  std::lock_guard<llvm::sys::Mutex> lock(g_ee_create_mutex);
+
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
   // Force the module data layout to match the layout for the selected target
@@ -514,7 +511,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
 
     // Read geos runtime module and bind GEOS API function references to GEOS library
     auto rt_geos_module_copy = llvm::CloneModule(
-        *g_rt_geos_module.get(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
+        *get_geos_module(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
           auto func = llvm::dyn_cast<llvm::Function>(gv);
           if (!func) {
             return true;
@@ -539,7 +536,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
       std::make_shared<CpuCompilationContext>(std::move(execution_engine));
   cpu_compilation_context->setFunctionPointer(multifrag_query_func);
   addCodeToCache(key, cpu_compilation_context, module, cpu_code_cache_);
-  return cpu_compilation_context;
+  return std::dynamic_pointer_cast<CompilationContext>(cpu_compilation_context);
 }
 
 void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
@@ -549,7 +546,7 @@ void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_mod
   auto timer = DEBUG_TIMER(__func__);
   // throw a runtime error if the target module contains functions
   // with the same name as in module of UDF functions.
-  for (auto& f : *udf_module.get()) {
+  for (auto& f : *udf_module) {
     auto func = module.getFunction(f.getName());
     if (!(func == nullptr) && !f.isDeclaration() && flags == llvm::Linker::Flags::None) {
       LOG(ERROR) << "  Attempt to overwrite " << f.getName().str() << " in "
@@ -565,9 +562,7 @@ void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_mod
     }
   }
 
-  std::unique_ptr<llvm::Module> udf_module_copy;
-
-  udf_module_copy = llvm::CloneModule(*udf_module.get(), cgen_state->vmap_);
+  auto udf_module_copy = llvm::CloneModule(*udf_module, cgen_state->vmap_);
 
   udf_module_copy->setDataLayout(module.getDataLayout());
   udf_module_copy->setTargetTriple(module.getTargetTriple());
@@ -1028,10 +1023,7 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
 
 namespace {
 
-bool is_udf_module_present(bool cpu_only = false) {
-  return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
-}
-
+#ifdef HAVE_CUDA
 std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
     llvm::Module& module,
     const std::vector<llvm::Function*>& roots) {
@@ -1063,16 +1055,19 @@ std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
   }
   return visited;
 }
+#endif
 
 }  // namespace
 
 void CodeGenerator::linkModuleWithLibdevice(
+    Executor* executor,
     llvm::Module& module,
     llvm::PassManagerBuilder& pass_manager_builder,
     const GPUTarget& gpu_target) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
-  if (g_rt_libdevice_module == nullptr) {
+
+  if (!executor->has_libdevice_module()) {
     // raise error
     throw std::runtime_error(
         "libdevice library is not available but required by the UDF module");
@@ -1086,7 +1081,7 @@ void CodeGenerator::linkModuleWithLibdevice(
   }
 
   // Bind libdevice to the current module
-  CodeGenerator::link_udf_module(g_rt_libdevice_module,
+  CodeGenerator::link_udf_module(executor->get_libdevice_module(),
                                  module,
                                  gpu_target.cgen_state,
                                  llvm::Linker::Flags::OverrideFromSrc);
@@ -1106,7 +1101,15 @@ void CodeGenerator::linkModuleWithLibdevice(
   }
 
   // activate nvvm-reflect-ftz flag on the module
-  module.addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", (int)1);
+#if LLVM_VERSION_MAJOR >= 11
+  llvm::LLVMContext& ctx = module.getContext();
+  module.setModuleFlag(llvm::Module::Override,
+                       "nvvm-reflect-ftz",
+                       llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(
+                           llvm::Type::getInt32Ty(ctx), uint32_t(1))));
+#else
+  module.addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", uint32_t(1));
+#endif
   for (llvm::Function& fn : module) {
     fn.addFnAttr("nvptx-f32ftz", "true");
   }
@@ -1126,6 +1129,7 @@ void CodeGenerator::linkModuleWithLibdevice(
 }
 
 std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
+    Executor* executor,
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
@@ -1173,7 +1177,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
   bool requires_libdevice = check_module_requires_libdevice(module);
 
   if (requires_libdevice) {
-    linkModuleWithLibdevice(*module, pass_manager_builder, gpu_target);
+    linkModuleWithLibdevice(executor, *module, pass_manager_builder, gpu_target);
   }
 
   // run optimizations
@@ -1227,8 +1231,9 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
 
   // Prevent the udf function(s) from being removed the way the runtime functions are
   std::unordered_set<std::string> udf_declarations;
-  if (is_udf_module_present()) {
-    for (auto& f : udf_gpu_module->getFunctionList()) {
+
+  if (executor->has_udf_module(/*is_gpu=*/true)) {
+    for (auto& f : executor->get_udf_module(/*is_gpu=*/true)->getFunctionList()) {
       llvm::Function* udf_function = module->getFunction(f.getName());
 
       if (udf_function) {
@@ -1244,8 +1249,8 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     }
   }
 
-  if (is_rt_udf_module_present()) {
-    for (auto& f : rt_udf_gpu_module->getFunctionList()) {
+  if (executor->has_rt_udf_module(/*is_gpu=*/true)) {
+    for (auto& f : executor->get_rt_udf_module(/*is_gpu=*/true)->getFunctionList()) {
       llvm::Function* udf_function = module->getFunction(f.getName());
       if (udf_function) {
         legalize_nvvm_ir(udf_function);
@@ -1376,9 +1381,13 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   std::shared_ptr<GpuCompilationContext> compilation_context;
 
   try {
-    compilation_context = CodeGenerator::generateNativeGPUCode(
-        query_func, multifrag_query_func, live_funcs, is_gpu_smem_used, co, gpu_target);
-    addCodeToCache(key, compilation_context, module, gpu_code_cache_);
+    compilation_context = CodeGenerator::generateNativeGPUCode(this,
+                                                               query_func,
+                                                               multifrag_query_func,
+                                                               live_funcs,
+                                                               is_gpu_smem_used,
+                                                               co,
+                                                               gpu_target);
   } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
     if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
       // Thrown if memory not able to be allocated on gpu
@@ -1387,15 +1396,19 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                    << g_fraction_code_cache_to_evict * 100.
                    << "% of GPU code cache and re-trying.";
       gpu_code_cache_.evictFractionEntries(g_fraction_code_cache_to_evict);
-      compilation_context = CodeGenerator::generateNativeGPUCode(
-          query_func, multifrag_query_func, live_funcs, is_gpu_smem_used, co, gpu_target);
-      addCodeToCache(key, compilation_context, module, gpu_code_cache_);
+      compilation_context = CodeGenerator::generateNativeGPUCode(this,
+                                                                 query_func,
+                                                                 multifrag_query_func,
+                                                                 live_funcs,
+                                                                 is_gpu_smem_used,
+                                                                 co,
+                                                                 gpu_target);
     } else {
       throw;
     }
   }
-  CHECK(compilation_context);
-  return compilation_context;
+  addCodeToCache(key, compilation_context, module, gpu_code_cache_);
+  return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
 #else
   return nullptr;
 #endif
@@ -1490,68 +1503,76 @@ bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
          func->getName() == "init_shared_mem_nop" || func->getName() == "write_back_nop";
 }
 
-llvm::Module* read_template_module(llvm::LLVMContext& context) {
+std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
+    const std::string& bc_filename,
+    llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
-                                                     "/QueryEngine/RuntimeFunctions.bc");
-  CHECK(!buffer_or_error.getError()) << "root path=" << omnisci::get_root_abs_path();
+  auto buffer_or_error = llvm::MemoryBuffer::getFile(bc_filename);
+  CHECK(!buffer_or_error.getError()) << "bc_filename=" << bc_filename;
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
 
   auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
   CHECK(!owner.takeError());
-  auto module = owner.get().release();
-  CHECK(module);
-
-  return module;
+  CHECK(owner->get());
+  return std::move(owner.get());
 }
 
-#ifdef HAVE_CUDA
-llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
-  llvm::SMDiagnostic err;
-  const auto env = get_cuda_home();
+std::unique_ptr<llvm::Module> read_llvm_module_from_ir_file(
+    const std::string& udf_ir_filename,
+    llvm::LLVMContext& ctx,
+    bool is_gpu = false) {
+  llvm::SMDiagnostic parse_error;
 
-  boost::filesystem::path cuda_path{env};
-  cuda_path /= "nvvm";
-  cuda_path /= "libdevice";
-  cuda_path /= "libdevice.10.bc";
+  llvm::StringRef file_name_arg(udf_ir_filename);
 
-  if (!boost::filesystem::exists(cuda_path)) {
-    LOG(WARNING) << "Could not find CUDA libdevice; support for some UDF "
-                    "functions might not be available.";
-    return nullptr;
+  auto owner = llvm::parseIRFile(file_name_arg, parse_error, ctx);
+  if (!owner) {
+    throw_parseIR_error(parse_error, udf_ir_filename, is_gpu);
   }
 
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(cuda_path.c_str());
-  CHECK(!buffer_or_error.getError()) << "cuda_path=" << cuda_path.c_str();
-  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
-
-  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
-  CHECK(!owner.takeError());
-  auto module = owner.get().release();
-  CHECK(module);
-
-  return module;
+  if (is_gpu) {
+    llvm::Triple gpu_triple(owner->getTargetTriple());
+    if (!gpu_triple.isNVPTX()) {
+      LOG(WARNING)
+          << "Expected triple nvptx64-nvidia-cuda for NVVM IR of loadtime UDFs but got "
+          << gpu_triple.str() << ". Disabling the NVVM IR module.";
+      return std::unique_ptr<llvm::Module>();
+    }
+  }
+  return owner;
 }
-#endif
 
-#ifdef ENABLE_GEOS
-llvm::Module* read_geos_module(llvm::LLVMContext& context) {
-  llvm::SMDiagnostic err;
+std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
+    const std::string& udf_ir_string,
+    llvm::LLVMContext& ctx,
+    bool is_gpu = false) {
+  llvm::SMDiagnostic parse_error;
 
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
-                                                     "/QueryEngine/GeosRuntime.bc");
-  CHECK(!buffer_or_error.getError()) << "root path=" << omnisci::get_root_abs_path();
-  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
+  auto buf = std::make_unique<llvm::MemoryBufferRef>(udf_ir_string,
+                                                     "Runtime UDF/UDTF LLVM/NVVM IR");
 
-  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
-  CHECK(!owner.takeError());
-  auto module = owner.get().release();
-  CHECK(module);
+  auto owner = llvm::parseIR(*buf, parse_error, ctx);
+  if (!owner) {
+    LOG(IR) << "read_llvm_module_from_ir_string:\n"
+            << udf_ir_string << "\nEnd of LLVM/NVVM IR";
+    throw_parseIR_error(parse_error, "", /* is_gpu= */ is_gpu);
+  }
 
-  return module;
+  if (is_gpu) {
+    llvm::Triple gpu_triple(owner->getTargetTriple());
+    if (!gpu_triple.isNVPTX()) {
+      LOG(IR) << "read_llvm_module_from_ir_string:\n"
+              << udf_ir_string << "\nEnd of NNVM IR";
+      LOG(WARNING) << "Expected triple nvptx64-nvidia-cuda for NVVM IR but got "
+                   << gpu_triple.str()
+                   << ". Executing runtime UDF/UDTFs on GPU will be disabled.";
+      return std::unique_ptr<llvm::Module>();
+      ;
+    }
+  }
+  return owner;
 }
-#endif
 
 namespace {
 
@@ -1828,98 +1849,12 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 
 }  // namespace
 
-std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMContext()));
-
-#ifdef ENABLE_GEOS
-std::unique_ptr<llvm::Module> g_rt_geos_module(read_geos_module(getGlobalLLVMContext()));
-#endif
-
-#ifdef HAVE_CUDA
-std::unique_ptr<llvm::Module> g_rt_libdevice_module(
-    read_libdevice_module(getGlobalLLVMContext()));
-#endif
-
-bool is_rt_udf_module_present(bool cpu_only) {
-  return (cpu_only || rt_udf_gpu_module != nullptr) && (rt_udf_cpu_module != nullptr);
-}
-
-namespace {
-
-void read_udf_gpu_module(const std::string& udf_ir_filename) {
-  llvm::SMDiagnostic parse_error;
-
-  llvm::StringRef file_name_arg(udf_ir_filename);
-  udf_gpu_module = llvm::parseIRFile(file_name_arg, parse_error, getGlobalLLVMContext());
-
-  if (!udf_gpu_module) {
-    throw_parseIR_error(parse_error, udf_ir_filename, /* is_gpu= */ true);
-  }
-
-  llvm::Triple gpu_triple(udf_gpu_module->getTargetTriple());
-  if (!gpu_triple.isNVPTX()) {
-    LOG(WARNING)
-        << "Expected triple nvptx64-nvidia-cuda for NVVM IR of loadtime UDFs but got "
-        << gpu_triple.str() << ". Disabling the NVVM IR module.";
-    udf_gpu_module = nullptr;
-  }
-}
-
-void read_udf_cpu_module(const std::string& udf_ir_filename) {
-  llvm::SMDiagnostic parse_error;
-
-  llvm::StringRef file_name_arg(udf_ir_filename);
-
-  udf_cpu_module = llvm::parseIRFile(file_name_arg, parse_error, getGlobalLLVMContext());
-  if (!udf_cpu_module) {
-    throw_parseIR_error(parse_error, udf_ir_filename);
-  }
-}
-
-}  // namespace
-
 void Executor::addUdfIrToModule(const std::string& udf_ir_filename,
                                 const bool is_cuda_ir) {
-  if (is_cuda_ir) {
-    read_udf_gpu_module(udf_ir_filename);
-  } else {
-    read_udf_cpu_module(udf_ir_filename);
-  }
-}
-
-void read_rt_udf_gpu_module(const std::string& udf_ir_string) {
-  llvm::SMDiagnostic parse_error;
-
-  auto buf =
-      std::make_unique<llvm::MemoryBufferRef>(udf_ir_string, "Runtime UDF for GPU");
-
-  rt_udf_gpu_module = llvm::parseIR(*buf, parse_error, getGlobalLLVMContext());
-  if (!rt_udf_gpu_module) {
-    LOG(IR) << "read_rt_udf_gpu_module:NVVM IR:\n" << udf_ir_string << "\nEnd of NNVM IR";
-    throw_parseIR_error(parse_error, "", /* is_gpu= */ true);
-  }
-
-  llvm::Triple gpu_triple(rt_udf_gpu_module->getTargetTriple());
-  if (!gpu_triple.isNVPTX()) {
-    LOG(IR) << "read_rt_udf_gpu_module:NVVM IR:\n" << udf_ir_string << "\nEnd of NNVM IR";
-    LOG(WARNING) << "Expected triple nvptx64-nvidia-cuda for NVVM IR but got "
-                 << gpu_triple.str()
-                 << ". Executing runtime UDFs on GPU will be disabled.";
-    rt_udf_gpu_module = nullptr;
-    return;
-  }
-}
-
-void read_rt_udf_cpu_module(const std::string& udf_ir_string) {
-  llvm::SMDiagnostic parse_error;
-
-  auto buf =
-      std::make_unique<llvm::MemoryBufferRef>(udf_ir_string, "Runtime UDF for CPU");
-
-  rt_udf_cpu_module = llvm::parseIR(*buf, parse_error, getGlobalLLVMContext());
-  if (!rt_udf_cpu_module) {
-    LOG(IR) << "read_rt_udf_cpu_module:LLVM IR:\n" << udf_ir_string << "\nEnd of LLVM IR";
-    throw_parseIR_error(parse_error);
-  }
+  Executor::extension_module_sources[is_cuda_ir
+                                         ? Executor::ExtModuleKinds::udf_gpu_module
+                                         : Executor::ExtModuleKinds::udf_cpu_module] =
+      udf_ir_filename;
 }
 
 std::unordered_set<llvm::Function*> CodeGenerator::markDeadRuntimeFuncs(
@@ -2664,7 +2599,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   LOG(ASM) << "CODEGEN #" << counter << ":";
 #endif
 
-  nukeOldState(allow_lazy_fetch, query_infos, deleted_cols_map, &ra_exe_unit);
+  // cgenstate_manager uses RAII pattern to manage the live time of
+  // CgenState instances.
+  Executor::CgenStateManager cgenstate_manager(
+      *this, allow_lazy_fetch, query_infos, deleted_cols_map, &ra_exe_unit);
 
   addTransientStringLiterals(ra_exe_unit, row_set_mem_owner);
 
@@ -2729,37 +2667,23 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
-  auto rt_module_copy = llvm::CloneModule(
-      *g_rt_module.get(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
-        auto func = llvm::dyn_cast<llvm::Function>(gv);
-        if (!func) {
-          return true;
-        }
-        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
-                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
-                CodeGenerator::alwaysCloneRuntimeFunction(func));
-      });
-  if (co.device_type == ExecutorDeviceType::CPU) {
-    if (is_udf_module_present(true)) {
-      CodeGenerator::link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
-    }
-    if (is_rt_udf_module_present(true)) {
-      CodeGenerator::link_udf_module(
-          rt_udf_cpu_module, *rt_module_copy, cgen_state_.get());
-    }
-  } else {
-    rt_module_copy->setDataLayout(get_gpu_data_layout());
-    rt_module_copy->setTargetTriple(get_gpu_target_triple_string());
-    if (is_udf_module_present()) {
-      CodeGenerator::link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
-    }
-    if (is_rt_udf_module_present()) {
-      CodeGenerator::link_udf_module(
-          rt_udf_gpu_module, *rt_module_copy, cgen_state_.get());
-    }
+  CHECK(cgen_state_->module_ == nullptr);
+  cgen_state_->set_module_shallow_copy(get_rt_module(), /*always_clone=*/true);
+
+  auto is_gpu = co.device_type == ExecutorDeviceType::GPU;
+  if (is_gpu) {
+    cgen_state_->module_->setDataLayout(get_gpu_data_layout());
+    cgen_state_->module_->setTargetTriple(get_gpu_target_triple_string());
+  }
+  if (has_udf_module(/*is_gpu=*/is_gpu)) {
+    CodeGenerator::link_udf_module(
+        get_udf_module(/*is_gpu=*/is_gpu), *cgen_state_->module_, cgen_state_.get());
+  }
+  if (has_rt_udf_module(/*is_gpu=*/is_gpu)) {
+    CodeGenerator::link_udf_module(
+        get_rt_udf_module(/*is_gpu=*/is_gpu), *cgen_state_->module_, cgen_state_.get());
   }
 
-  cgen_state_->module_ = rt_module_copy.release();
   AUTOMATIC_IR_METADATA(cgen_state_.get());
 
   auto agg_fnames =
@@ -2918,7 +2842,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           cgen_state_->context_,
           *query_mem_desc,
           target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc),
-          plan_state_->init_agg_vals_);
+          plan_state_->init_agg_vals_,
+          executor_id_);
       gpu_smem_code.codegen();
       gpu_smem_code.injectFunctionsInto(query_func);
 
@@ -3257,18 +3182,6 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
     }
   }
   return ret;
-}
-
-std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
-  return llvm::CloneModule(
-      *g_rt_module.get(), cgen_state->vmap_, [](const llvm::GlobalValue* gv) {
-        auto func = llvm::dyn_cast<llvm::Function>(gv);
-        if (!func) {
-          return true;
-        }
-        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
-                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
-      });
 }
 
 std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,

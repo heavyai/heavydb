@@ -155,8 +155,6 @@ inline llvm::ConstantInt* ll_bool(const bool v, llvm::LLVMContext& context) {
       llvm::ConstantInt::get(get_int_type(1, context), v));
 }
 
-llvm::Module* read_template_module(llvm::LLVMContext& context);
-
 template <class T>
 std::string serialize_llvm_object(const T* llvm_obj) {
   std::string str;

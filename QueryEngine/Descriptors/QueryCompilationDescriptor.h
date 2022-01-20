@@ -35,6 +35,18 @@ struct CompilationResult {
   bool output_columnar;
   std::string llvm_ir;
   GpuSharedMemoryContext gpu_smem_context;
+
+ public:
+  std::string toString() const {
+    auto result = ::typeName(this) + "{";
+    result += ::toString(generated_code);
+    result += ", literal_values=" + ::toString(literal_values);
+    result += ", toString(output_columnar=" + ::toString(output_columnar);
+    result += ", llvm_ir='''\n" + ::toString(llvm_ir) + "\n'''";
+    result += ", " + ::toString(gpu_smem_context);
+    result += "}";
+    return result;
+  };
 };
 
 class QueryCompilationDescriptor {
@@ -77,6 +89,16 @@ class QueryCompilationDescriptor {
   ExecutorDeviceType getDeviceType() const { return compilation_device_type_; }
   bool hoistLiterals() const { return hoist_literals_; }
   int8_t getMinByteWidth() const { return actual_min_byte_width_; }
+
+  std::string toString() const {
+    auto result = ::typeName(this) + "{";
+    result += ::toString(compilation_result_);
+    result += ", " + ::toString(compilation_device_type_);
+    result += ", " + ::toString(hoist_literals_);
+    result += ", " + ::toString(actual_min_byte_width_);
+    result += "}";
+    return result;
+  };
 
  private:
   CompilationResult compilation_result_;

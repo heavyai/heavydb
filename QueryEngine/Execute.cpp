@@ -36,6 +36,7 @@
 #include "Catalog/Catalog.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
+#include "OSDependent/omnisci_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/AggregateUtils.h"
 #include "QueryEngine/AggregatedColRange.h"
@@ -155,6 +156,20 @@ int const Executor::max_gpu_count;
 
 const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
 
+std::map<Executor::ExtModuleKinds, std::string> Executor::extension_module_sources;
+
+extern std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
+    const std::string& udf_ir_filename,
+    llvm::LLVMContext& ctx);
+extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_file(
+    const std::string& udf_ir_filename,
+    llvm::LLVMContext& ctx,
+    bool is_gpu = false);
+extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
+    const std::string& udf_ir_string,
+    llvm::LLVMContext& ctx,
+    bool is_gpu = false);
+
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
                    const size_t block_size_x,
@@ -162,7 +177,11 @@ Executor::Executor(const ExecutorId executor_id,
                    const size_t max_gpu_slab_size,
                    const std::string& debug_dir,
                    const std::string& debug_file)
-    : cgen_state_(new CgenState({}, false))
+    : executor_id_(executor_id)
+    , context_(new llvm::LLVMContext())
+    , cgen_state_(new CgenState({}, false, this))
+    , s_stubs_cache(code_cache_size)
+    , s_code_cache(code_cache_size)
     , cpu_code_cache_(code_cache_size)
     , gpu_code_cache_(code_cache_size)
     , block_size_x_(block_size_x)
@@ -170,11 +189,201 @@ Executor::Executor(const ExecutorId executor_id,
     , max_gpu_slab_size_(max_gpu_slab_size)
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
-    , executor_id_(executor_id)
     , catalog_(nullptr)
     , data_mgr_(data_mgr)
     , temporary_tables_(nullptr)
-    , input_table_info_cache_(this) {}
+    , input_table_info_cache_(this)
+    , thread_id_(logger::thread_id()) {
+  Executor::initialize_extension_module_sources();
+  update_extension_modules();
+}
+
+void Executor::initialize_extension_module_sources() {
+  if (Executor::extension_module_sources.find(
+          Executor::ExtModuleKinds::template_module) ==
+      Executor::extension_module_sources.end()) {
+    auto root_path = omnisci::get_root_abs_path();
+    auto template_path = root_path + "/QueryEngine/RuntimeFunctions.bc";
+    CHECK(boost::filesystem::exists(template_path));
+    Executor::extension_module_sources[Executor::ExtModuleKinds::template_module] =
+        template_path;
+#ifdef ENABLE_GEOS
+    auto rt_geos_path = root_path + "/QueryEngine/GeosRuntime.bc";
+    CHECK(boost::filesystem::exists(rt_geos_path));
+    Executor::extension_module_sources[Executor::ExtModuleKinds::rt_geos_module] =
+        rt_geos_path;
+#endif
+#ifdef HAVE_CUDA
+    auto rt_libdevice_path = get_cuda_home() + "/nvvm/libdevice/libdevice.10.bc";
+    if (boost::filesystem::exists(rt_libdevice_path)) {
+      Executor::extension_module_sources[Executor::ExtModuleKinds::rt_libdevice_module] =
+          rt_libdevice_path;
+    } else {
+      LOG(WARNING) << "File " << rt_libdevice_path
+                   << " does not exist; support for some UDF "
+                      "functions might not be available.";
+    }
+#endif
+  }
+}
+
+void Executor::clearCaches(bool runtime_only) {
+  if (runtime_only) {
+    extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_cpu_module);
+#ifdef HAVE_CUDA
+    extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_gpu_module);
+#endif
+    // TODO: keep cached results that do not depend on runtime UDF/UDTFs
+    s_code_cache.clear();
+    s_stubs_cache.clear();
+    cpu_code_cache_.clear();
+    gpu_code_cache_.clear();
+  } else {
+    extension_modules_.clear();
+    s_code_cache.clear();
+    s_stubs_cache.clear();
+    cpu_code_cache_.clear();
+    gpu_code_cache_.clear();
+  }
+}
+
+void Executor::reset(bool runtime_only) {
+  clearCaches(runtime_only);
+  if (runtime_only) {
+    cgen_state_->module_ = nullptr;
+  } else {
+    cgen_state_.reset();
+    context_.reset(new llvm::LLVMContext());
+    cgen_state_.reset(new CgenState({}, false, this));
+  }
+}
+
+void Executor::update_extension_modules(bool runtime_only) {
+  auto read_module = [&](Executor::ExtModuleKinds module_kind,
+                         const std::string& source) {
+    /*
+      source can be either a filename of a LLVM IR
+      or LLVM BC source, or a string containing
+      LLVM IR code.
+     */
+    CHECK(!source.empty());
+    switch (module_kind) {
+      case Executor::ExtModuleKinds::template_module:
+      case Executor::ExtModuleKinds::rt_geos_module:
+      case Executor::ExtModuleKinds::rt_libdevice_module: {
+        return read_llvm_module_from_bc_file(source, getContext());
+      }
+      case Executor::ExtModuleKinds::udf_cpu_module: {
+        return read_llvm_module_from_ir_file(source, getContext(), /**is_gpu=*/false);
+      }
+      case Executor::ExtModuleKinds::udf_gpu_module: {
+        return read_llvm_module_from_ir_file(source, getContext(), /**is_gpu=*/true);
+      }
+      case Executor::ExtModuleKinds::rt_udf_cpu_module: {
+        return read_llvm_module_from_ir_string(source, getContext(), /**is_gpu=*/false);
+      }
+      case Executor::ExtModuleKinds::rt_udf_gpu_module: {
+        return read_llvm_module_from_ir_string(source, getContext(), /**is_gpu=*/true);
+      }
+      default: {
+        UNREACHABLE();
+        return std::unique_ptr<llvm::Module>();
+      }
+    }
+  };
+  auto update_module = [&](Executor::ExtModuleKinds module_kind,
+                           bool erase_not_found = false) {
+    auto it = Executor::extension_module_sources.find(module_kind);
+    if (it != Executor::extension_module_sources.end()) {
+      auto llvm_module = read_module(module_kind, it->second);
+      if (llvm_module) {
+        extension_modules_[module_kind] = std::move(llvm_module);
+      } else if (erase_not_found) {
+        extension_modules_.erase(module_kind);
+      } else {
+        if (extension_modules_.find(module_kind) == extension_modules_.end()) {
+          LOG(WARNING) << "Failed to update " << ::toString(module_kind)
+                       << " LLVM module. The module will be unavailable.";
+        } else {
+          LOG(WARNING) << "Failed to update " << ::toString(module_kind)
+                       << " LLVM module. Using the existing module.";
+        }
+      }
+    } else {
+      if (erase_not_found) {
+        extension_modules_.erase(module_kind);
+      } else {
+        if (extension_modules_.find(module_kind) == extension_modules_.end()) {
+          LOG(WARNING) << "Source of " << ::toString(module_kind)
+                       << " LLVM module is unavailable. The module will be unavailable.";
+        } else {
+          LOG(WARNING) << "Source of " << ::toString(module_kind)
+                       << " LLVM module is unavailable. Using the existing module.";
+        }
+      }
+    }
+  };
+
+  if (!runtime_only) {
+    // required compile-time modules, their requirements are enforced
+    // by Executor::initialize_extension_module_sources():
+    update_module(Executor::ExtModuleKinds::template_module);
+#ifdef ENABLE_GEOS
+    update_module(Executor::ExtModuleKinds::rt_geos_module);
+#endif
+    // load-time modules, these are optional:
+    update_module(Executor::ExtModuleKinds::udf_cpu_module);
+#ifdef HAVE_CUDA
+    update_module(Executor::ExtModuleKinds::udf_gpu_module);
+    update_module(Executor::ExtModuleKinds::rt_libdevice_module);
+#endif
+  }
+  // run-time modules, these are optional and erasable:
+  update_module(Executor::ExtModuleKinds::rt_udf_cpu_module, true);
+#ifdef HAVE_CUDA
+  update_module(Executor::ExtModuleKinds::rt_udf_gpu_module, true);
+#endif
+}
+
+Executor::CgenStateManager::CgenStateManager(
+    Executor& executor,
+    const bool allow_lazy_fetch,
+    const std::vector<InputTableInfo>& query_infos,
+    const PlanState::DeletedColumnsMap& deleted_cols_map,
+    const RelAlgExecutionUnit* ra_exe_unit)
+    : executor_(executor)
+    , cgen_state_(std::move(executor_.cgen_state_))  // store old CgenState instance
+
+{
+  // nukeOldState creates new CgenState and PlanState instances for
+  // the subsequent code generation.  It also resets
+  // kernel_queue_time_ms_ and compilation_queue_time_ms_ that we do
+  // not currently restore.. should we accumulate these timings?
+  executor_.nukeOldState(allow_lazy_fetch, query_infos, deleted_cols_map, ra_exe_unit);
+}
+
+Executor::CgenStateManager::~CgenStateManager() {
+  // prevent memory leak from hoisted literals
+  for (auto& p : executor_.cgen_state_->row_func_hoisted_literals_) {
+    auto inst = llvm::dyn_cast<llvm::LoadInst>(p.first);
+    if (inst && inst->getNumUses() == 0 && inst->getParent() == nullptr) {
+      // The llvm::Value instance stored in p.first is created by the
+      // CodeGenerator::codegenHoistedConstantsPlaceholders method.
+      p.first->deleteValue();
+    }
+  }
+  executor_.cgen_state_->row_func_hoisted_literals_.clear();
+
+  // move generated In-Values bitmaps to the old CgenState instance as the
+  // execution of the generated code uses these bitmaps
+  for (auto& bm : executor_.cgen_state_->in_values_bitmaps_) {
+    cgen_state_->moveInValuesBitmap(bm);
+  }
+  executor_.cgen_state_->in_values_bitmaps_.clear();
+
+  // restore the old CgenState instance
+  executor_.cgen_state_.reset(cgen_state_.release());
+}
 
 std::shared_ptr<Executor> Executor::getExecutor(
     const ExecutorId executor_id,
@@ -188,7 +397,6 @@ std::shared_ptr<Executor> Executor::getExecutor(
   if (it != executors_.end()) {
     return it->second;
   }
-
   auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
   auto executor = std::make_shared<Executor>(executor_id,
                                              &data_mgr,
@@ -972,15 +1180,17 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
 namespace {
 
 ReductionCode get_reduction_code(
+    const size_t executor_id,
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     int64_t* compilation_queue_time) {
   auto clock_begin = timer_start();
-  std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
+  // ResultSetReductionJIT::codegen compilation-locks if new code will be generated
   *compilation_queue_time = timer_stop(clock_begin);
   const auto& this_result_set = results_per_device[0].first;
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
-                                      this_result_set->getTargetInitVals());
+                                      this_result_set->getTargetInitVals(),
+                                      executor_id);
   return reduction_jit.codegen();
 };
 
@@ -1036,11 +1246,11 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
 
   int64_t compilation_queue_time = 0;
   const auto reduction_code =
-      get_reduction_code(results_per_device, &compilation_queue_time);
+      get_reduction_code(executor_id_, results_per_device, &compilation_queue_time);
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     reduced_results->getStorage()->reduce(
-        *(results_per_device[i].first->getStorage()), {}, reduction_code);
+        *(results_per_device[i].first->getStorage()), {}, reduction_code, executor_id_);
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);
   return reduced_results;
@@ -1748,7 +1958,8 @@ ResultSetPtr Executor::executeTableFunction(
       auto clock_begin = timer_start();
       std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
       compilation_queue_time_ms_ += timer_stop(clock_begin);
-      nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
+      Executor::CgenStateManager cgenstate_manager(
+          *this, false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
       TableFunctionCompilationContext tf_compilation_context(this);
       compilation_context =
           tf_compilation_context.compile(exe_unit,
@@ -1763,19 +1974,18 @@ ResultSetPtr Executor::executeTableFunction(
                         this,
                         true /* is_pre_launch_udtf */);
   }
-
   std::shared_ptr<CompilationContext> compilation_context;
   {
     auto clock_begin = timer_start();
     std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
     compilation_queue_time_ms_ += timer_stop(clock_begin);
 
-    nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
+    Executor::CgenStateManager cgenstate_manager(
+        *this, false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
     TableFunctionCompilationContext tf_compilation_context(this);
     compilation_context =
         tf_compilation_context.compile(exe_unit, co, false /* emit_only_preflight_fn */);
   }
-
   return exe_context.execute(exe_unit,
                              table_infos,
                              compilation_context,
@@ -3043,11 +3253,11 @@ int32_t Executor::executePlanWithoutGroupBy(
     throw QueryExecutionError(ERR_INTERRUPTED);
   }
   if (device_type == ExecutorDeviceType::CPU) {
-    auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
-        compilation_result.generated_code);
+    CpuCompilationContext* cpu_generated_code =
+        dynamic_cast<CpuCompilationContext*>(compilation_result.generated_code.get());
     CHECK(cpu_generated_code);
     out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
-                                               cpu_generated_code.get(),
+                                               cpu_generated_code,
                                                hoist_literals,
                                                hoist_buf,
                                                col_buffers,
@@ -3060,13 +3270,13 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                rows_to_process);
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
-    auto gpu_generated_code = std::dynamic_pointer_cast<GpuCompilationContext>(
-        compilation_result.generated_code);
+    GpuCompilationContext* gpu_generated_code =
+        dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
     CHECK(gpu_generated_code);
     try {
       out_vec = query_exe_context->launchGpuCode(
           ra_exe_unit,
-          gpu_generated_code.get(),
+          gpu_generated_code,
           hoist_literals,
           hoist_buf,
           col_buffers,
@@ -3308,12 +3518,11 @@ int32_t Executor::executePlanWithGroupBy(
     const int32_t max_matched = scan_limit_for_query == 0
                                     ? query_exe_context->query_mem_desc_.getEntryCount()
                                     : scan_limit_for_query;
-
-    auto cpu_generated_code = std::dynamic_pointer_cast<CpuCompilationContext>(
-        compilation_result.generated_code);
+    CpuCompilationContext* cpu_generated_code =
+        dynamic_cast<CpuCompilationContext*>(compilation_result.generated_code.get());
     CHECK(cpu_generated_code);
     query_exe_context->launchCpuCode(ra_exe_unit_copy,
-                                     cpu_generated_code.get(),
+                                     cpu_generated_code,
                                      hoist_literals,
                                      hoist_buf,
                                      col_buffers,
@@ -3326,12 +3535,12 @@ int32_t Executor::executePlanWithGroupBy(
                                      rows_to_process);
   } else {
     try {
-      auto gpu_generated_code = std::dynamic_pointer_cast<GpuCompilationContext>(
-          compilation_result.generated_code);
+      GpuCompilationContext* gpu_generated_code =
+          dynamic_cast<GpuCompilationContext*>(compilation_result.generated_code.get());
       CHECK(gpu_generated_code);
       query_exe_context->launchGpuCode(
           ra_exe_unit_copy,
-          gpu_generated_code.get(),
+          gpu_generated_code,
           hoist_literals,
           hoist_buf,
           col_buffers,
@@ -3423,7 +3632,8 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                                   [](const JoinCondition& join_condition) {
                                     return join_condition.type == JoinType::LEFT;
                                   }) != ra_exe_unit->join_quals.end();
-  cgen_state_.reset(new CgenState(query_infos.size(), contains_left_deep_outer_join));
+  cgen_state_.reset(
+      new CgenState(query_infos.size(), contains_left_deep_outer_join, this));
   plan_state_.reset(new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join,
                                   query_infos,
                                   deleted_cols_map,
@@ -4475,7 +4685,7 @@ std::mutex Executor::gpu_active_modules_mutex_;
 uint32_t Executor::gpu_active_modules_device_mask_{0x0};
 void* Executor::gpu_active_modules_[max_gpu_count];
 
-std::mutex Executor::compilation_mutex_;
+std::shared_mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
 
 QueryPlanDagCache Executor::query_plan_dag_cache_;
