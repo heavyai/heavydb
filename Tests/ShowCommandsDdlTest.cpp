@@ -35,6 +35,8 @@
 extern bool g_enable_fsi;
 extern bool g_enable_system_tables;
 
+bool g_run_odbc{false};
+
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -3222,6 +3224,18 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   DBHandlerTestFixture::initTestArgs(argc, argv);
+
+  po::options_description desc("Options");
+  desc.add_options()("run-odbc-tests", "Run ODBC related tests.");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(),
+            vm);
+  po::notify(vm);
+
+  if (vm.count("run-odbc-tests")) {
+    g_run_odbc = true;
+  }
 
   int err{0};
   try {

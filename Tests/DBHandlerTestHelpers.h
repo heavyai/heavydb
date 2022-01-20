@@ -189,7 +189,8 @@ class DBHandlerTestFixture : public testing::Test {
                        "Path to data leaves list JSON file.");
     desc.add_options()("use-disk-cache", "Enable disk cache for all tables.");
     po::variables_map vm;
-    po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+    po::store(
+        po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
     po::notify(vm);
 
     use_disk_cache_ = (vm.count("use-disk-cache"));

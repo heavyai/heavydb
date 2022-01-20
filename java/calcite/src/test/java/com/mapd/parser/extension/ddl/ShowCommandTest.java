@@ -107,4 +107,13 @@ public class ShowCommandTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
+  @Test
+  public void showSupportedDataSources() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("show_data_sources.json");
+    final TPlanResult result = processDdlCommand("SHOW SUPPORTED DATA SOURCES;");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
 }
