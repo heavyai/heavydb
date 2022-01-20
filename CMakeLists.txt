@@ -364,7 +364,6 @@ if(ENABLE_FOLLY)
   endif()
 endif()
 
-
 option(ENABLE_SYSTEM_TFS "Enable system table functions" ON)
 option(ENABLE_RF_PROP_TFS "Enable RF Propagation module" OFF)
 option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" OFF)
