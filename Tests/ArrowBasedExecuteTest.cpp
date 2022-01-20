@@ -17690,7 +17690,6 @@ int main(int argc, char** argv) {
   }
 
   Executor::nukeCacheOfExecutors();
-  ResultSetReductionJIT::clearCache();
 
   printStats();
   reset();

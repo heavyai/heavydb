@@ -159,14 +159,8 @@ class NoCatalogRelAlgTest : public ::testing::Test {
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
                                  std::make_shared<TestDataProvider>(schema_provider_));
 
-    executor_ = std::make_shared<Executor>(0,
-                                           data_mgr_.get(),
-                                           data_mgr_->getBufferProvider(),
-                                           system_parameters.cuda_block_size,
-                                           system_parameters.cuda_grid_size,
-                                           system_parameters.max_gpu_slab_size,
-                                           "",
-                                           "");
+    executor_ = Executor::getExecutor(
+        0, data_mgr_.get(), data_mgr_->getBufferProvider(), "", "", system_parameters);
   }
 
   static void TearDownTestSuite() {}

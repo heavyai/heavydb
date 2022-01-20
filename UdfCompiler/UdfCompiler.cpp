@@ -548,6 +548,7 @@ std::string UdfCompiler::compileToNVVMIR(const std::string& udf_file_name) const
                                         "-o",
                                         gpu_out_filename,
                                         "-std=c++14",
+                                        "-Wno-c++17-extensions",
                                         "-DNO_BOOST"};
 
   command_line.emplace_back("--cuda-gpu-arch=" +
@@ -586,6 +587,7 @@ std::string UdfCompiler::compileToLLVMIR(const std::string& udf_file_name) const
                                         "-o",
                                         cpu_out_filename,
                                         "-std=c++14",
+                                        "-Wno-c++17-extensions",
                                         "-DNO_BOOST",
                                         udf_file_name};
   auto res = compileFromCommandLine(command_line);

@@ -117,7 +117,7 @@ size_t get_output_row_count(const TableFunctionExecutionUnit& exe_unit,
 ResultSetPtr TableFunctionExecutionContext::execute(
     const TableFunctionExecutionUnit& exe_unit,
     const std::vector<InputTableInfo>& table_infos,
-    const TableFunctionCompilationContext* compilation_context,
+    const std::shared_ptr<CompilationContext>& compilation_context,
     DataProvider* data_provider,
     const ColumnFetcher& column_fetcher,
     const ExecutorDeviceType device_type,
@@ -270,20 +270,22 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   }
   switch (device_type) {
     case ExecutorDeviceType::CPU:
-      return launchCpuCode(exe_unit,
-                           compilation_context,
-                           col_buf_ptrs,
-                           col_sizes,
-                           *input_num_rows,
-                           executor);
+      return launchCpuCode(
+          exe_unit,
+          std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context),
+          col_buf_ptrs,
+          col_sizes,
+          *input_num_rows,
+          executor);
     case ExecutorDeviceType::GPU:
-      return launchGpuCode(exe_unit,
-                           compilation_context,
-                           col_buf_ptrs,
-                           col_sizes,
-                           *input_num_rows,
-                           /*device_id=*/0,
-                           executor);
+      return launchGpuCode(
+          exe_unit,
+          std::dynamic_pointer_cast<GpuCompilationContext>(compilation_context),
+          col_buf_ptrs,
+          col_sizes,
+          *input_num_rows,
+          /*device_id=*/0,
+          executor);
   }
   UNREACHABLE();
   return nullptr;
@@ -293,7 +295,7 @@ std::mutex TableFunctionManager_singleton_mutex;
 
 ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     const TableFunctionExecutionUnit& exe_unit,
-    const TableFunctionCompilationContext* compilation_context,
+    const std::shared_ptr<CpuCompilationContext>& compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
     std::vector<int64_t>& col_sizes,
     const size_t elem_count,  // taken from first source only currently
@@ -333,12 +335,12 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   }
 
   // execute
-  const auto err =
-      compilation_context->getFuncPtr()(reinterpret_cast<const int8_t*>(mgr.get()),
-                                        byte_stream_ptr,  // input columns buffer
-                                        col_sizes_ptr,    // input column sizes
-                                        nullptr,
-                                        &output_row_count);
+  const auto err = compilation_context->table_function_entry_point()(
+      reinterpret_cast<const int8_t*>(mgr.get()),
+      byte_stream_ptr,  // input columns buffer
+      col_sizes_ptr,    // input column sizes
+      nullptr,
+      &output_row_count);
 
   if (err == TableFunctionError::GenericError) {
     throw std::runtime_error("Error executing table function: " +
@@ -408,7 +410,7 @@ enum {
 
 ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
     const TableFunctionExecutionUnit& exe_unit,
-    const TableFunctionCompilationContext* compilation_context,
+    const std::shared_ptr<GpuCompilationContext>& compilation_context,
     std::vector<const int8_t*>& col_buf_ptrs,
     std::vector<int64_t>& col_sizes,
     const size_t elem_count,

@@ -136,6 +136,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
 }
 
 std::vector<void*> ScalarCodeGenerator::generateNativeCode(
+    Executor* executor,
     const CompiledExpression& compiled_expression,
     const CompilationOptions& co) {
   CHECK(module_ && !execution_engine_.get()) << "Invalid code generator state";
@@ -148,7 +149,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
     }
     case ExecutorDeviceType::GPU: {
       return generateNativeGPUCode(
-          compiled_expression.func, compiled_expression.wrapper_func, co);
+          executor, compiled_expression.func, compiled_expression.wrapper_func, co);
     }
     default: {
       LOG(FATAL) << "Invalid device type";
@@ -168,6 +169,7 @@ std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
 }
 
 std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
+    Executor* executor,
     llvm::Function* func,
     llvm::Function* wrapper_func,
     const CompilationOptions& co) {
@@ -187,7 +189,8 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
   gpu_compilation_context_ =
-      CodeGenerator::generateNativeGPUCode(func,
+      CodeGenerator::generateNativeGPUCode(executor,
+                                           func,
                                            wrapper_func,
                                            {func, wrapper_func},
                                            /*is_gpu_smem_used=*/false,

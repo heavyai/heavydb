@@ -28,37 +28,28 @@ class Executor;
 
 class TableFunctionCompilationContext {
  public:
-  TableFunctionCompilationContext();
+  TableFunctionCompilationContext(Executor* executor) : executor_(executor) {}
 
   // non-copyable
   TableFunctionCompilationContext(const TableFunctionCompilationContext&) = delete;
   TableFunctionCompilationContext& operator=(const TableFunctionCompilationContext&) =
       delete;
 
-  void compile(const TableFunctionExecutionUnit& exe_unit,
-               const CompilationOptions& co,
-               Executor* executor);
-
-  using FuncPtr = int32_t (*)(const int8_t* mgr_ptr,
-                              const int8_t** input_cols,
-                              const int64_t* input_row_count,
-                              int64_t** out,
-                              int64_t* output_row_count);
-  TableFunctionCompilationContext::FuncPtr getFuncPtr() const { return func_ptr; };
-
-  GpuCompilationContext* getGpuCode() const { return gpu_code_.get(); }
+  std::shared_ptr<CompilationContext> compile(const TableFunctionExecutionUnit& exe_unit,
+                                              const CompilationOptions& co);
 
  private:
   void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
+  void generateTableFunctionCall(const TableFunctionExecutionUnit& exe_unit,
+                                 const std::vector<llvm::Value*>& func_args,
+                                 llvm::BasicBlock* bb_exit,
+                                 llvm::Value* output_row_count_ptr);
   void generateGpuKernel();
   bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
-  void finalize(const CompilationOptions& co, Executor* executor);
 
-  std::unique_ptr<CgenState> cgen_state_;
-  std::unique_ptr<llvm::Module> module_;
-  ExecutionEngineWrapper own_execution_engine_;  // TODO: remove and replace with cache
-  std::shared_ptr<GpuCompilationContext> gpu_code_;
+  std::shared_ptr<CompilationContext> finalize(const CompilationOptions& co);
+
   llvm::Function* entry_point_func_;
   llvm::Function* kernel_func_;
-  FuncPtr func_ptr;
+  Executor* executor_;
 };

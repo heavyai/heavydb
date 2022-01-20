@@ -33,13 +33,8 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_os_ostream.h>
 
-extern std::unique_ptr<llvm::Module> g_rt_module;
 extern bool g_enable_dynamic_watchdog;
 extern bool g_enable_non_kernel_time_query_interrupt;
-
-CodeCache ResultSetReductionJIT::s_code_cache(10000);
-
-std::mutex ReductionCode::s_reduction_mutex;
 
 namespace {
 
@@ -519,8 +514,10 @@ extern "C" uint8_t check_interrupt_rt(const size_t sample_seed) {
 
 ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_mem_desc,
                                              const std::vector<TargetInfo>& targets,
-                                             const std::vector<int64_t>& target_init_vals)
-    : query_mem_desc_(query_mem_desc)
+                                             const std::vector<int64_t>& target_init_vals,
+                                             const size_t executor_id)
+    : executor_id_(executor_id)
+    , query_mem_desc_(query_mem_desc)
     , targets_(targets)
     , target_init_vals_(target_init_vals) {}
 
@@ -586,26 +583,22 @@ ReductionCode ResultSetReductionJIT::codegen() const {
       (!query_mem_desc_.getExecutor() || query_mem_desc_.blocksShareMemory())) {
     return reduction_code;
   }
-  std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
+  auto executor = Executor::getExecutorFromMap(executor_id_);
+  CHECK(executor) << executor_id_;
   CodeCacheKey key{cacheKey()};
+  std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
+  auto& s_code_cache = executor->s_code_cache;
   const auto compilation_context = s_code_cache.get(key);
   if (compilation_context) {
-    auto cpu_context =
-        std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context->first);
-    CHECK(cpu_context);
-    return {reinterpret_cast<ReductionCode::FuncPtr>(cpu_context->func()),
-            nullptr,
-            nullptr,
-            nullptr,
-            std::move(reduction_code.ir_is_empty),
-            std::move(reduction_code.ir_reduce_one_entry),
-            std::move(reduction_code.ir_reduce_one_entry_idx),
-            std::move(reduction_code.ir_reduce_loop)};
+    reduction_code.func_ptr =
+        reinterpret_cast<ReductionCode::FuncPtr>(compilation_context->first->func());
+    return reduction_code;
   }
-  reduction_code.cgen_state.reset(new CgenState({}, false));
-  auto cgen_state = reduction_code.cgen_state.get();
-  std::unique_ptr<llvm::Module> module = runtime_module_shallow_copy(cgen_state);
-  cgen_state->module_ = module.get();
+  auto cgen_state_ = std::unique_ptr<CgenState>(new CgenState({}, false, executor.get()));
+  auto cgen_state = reduction_code.cgen_state = cgen_state_.get();
+  cgen_state->set_module_shallow_copy(executor->get_rt_module());
+  reduction_code.module = cgen_state->module_;
+
   AUTOMATIC_IR_METADATA(cgen_state);
   auto ir_is_empty = create_llvm_function(reduction_code.ir_is_empty.get(), cgen_state);
   auto ir_reduce_one_entry =
@@ -629,21 +622,11 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   translate_function(
       reduction_code.ir_reduce_loop.get(), ir_reduce_loop, reduction_code, f);
   reduction_code.llvm_reduce_loop = ir_reduce_loop;
-  reduction_code.module = std::move(module);
   AUTOMATIC_IR_METADATA_DONE();
-  return finalizeReductionCode(std::move(reduction_code),
-                               ir_is_empty,
-                               ir_reduce_one_entry,
-                               ir_reduce_one_entry_idx,
-                               key);
-}
-
-void ResultSetReductionJIT::clearCache() {
-  // Clear stub cache to avoid crash caused by non-deterministic static destructor order
-  // of LLVM context and the cache.
-  StubGenerator::clearCache();
-  s_code_cache.clear();
-  g_rt_module = nullptr;
+  reduction_code.cgen_state = nullptr;
+  finalizeReductionCode(
+      reduction_code, ir_is_empty, ir_reduce_one_entry, ir_reduce_one_entry_idx, key);
+  return reduction_code;
 }
 
 void ResultSetReductionJIT::isEmpty(const ReductionCode& reduction_code) const {
@@ -1247,15 +1230,17 @@ void ResultSetReductionJIT::reduceOneApproxQuantileSlot(
       "");
 }
 
-ReductionCode ResultSetReductionJIT::finalizeReductionCode(
-    ReductionCode reduction_code,
+void ResultSetReductionJIT::finalizeReductionCode(
+    ReductionCode& reduction_code,
     const llvm::Function* ir_is_empty,
     const llvm::Function* ir_reduce_one_entry,
     const llvm::Function* ir_reduce_one_entry_idx,
     const CodeCacheKey& key) const {
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
-
+  auto executor = Executor::getExecutorFromMap(executor_id_);
+  CHECK(executor) << executor_id_;
+  auto& s_code_cache = executor->s_code_cache;
 #ifdef NDEBUG
   LOG(IR) << "Reduction Loop:\n"
           << serialize_llvm_object(reduction_code.llvm_reduce_loop);
@@ -1264,23 +1249,18 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
   LOG(IR) << "Reduction One Entry Idx Func:\n"
           << serialize_llvm_object(ir_reduce_one_entry_idx);
 #else
-  LOG(IR) << serialize_llvm_object(reduction_code.cgen_state->module_);
+  LOG(IR) << serialize_llvm_object(reduction_code.module);
 #endif
 
-  reduction_code.module.release();
   auto ee = CodeGenerator::generateNativeCPUCode(
       reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
-  reduction_code.func_ptr = reinterpret_cast<ReductionCode::FuncPtr>(
-      ee->getPointerToFunction(reduction_code.llvm_reduce_loop));
-
   auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
   cpu_compilation_context->setFunctionPointer(reduction_code.llvm_reduce_loop);
-  reduction_code.compilation_context = cpu_compilation_context;
-  Executor::addCodeToCache(key,
-                           reduction_code.compilation_context,
-                           reduction_code.llvm_reduce_loop->getParent(),
-                           s_code_cache);
-  return reduction_code;
+  reduction_code.func_ptr =
+      reinterpret_cast<ReductionCode::FuncPtr>(cpu_compilation_context->func());
+  CHECK(reduction_code.llvm_reduce_loop->getParent() == reduction_code.module);
+  Executor::addCodeToCache(
+      key, cpu_compilation_context, reduction_code.module, s_code_cache);
 }
 
 namespace {
@@ -1325,11 +1305,14 @@ ReductionCode GpuReductionHelperJIT::codegen() const {
   reduceOneEntryNoCollisions(reduction_code);
   reduceOneEntryNoCollisionsIdx(reduction_code);
   reduceLoop(reduction_code);
-  reduction_code.cgen_state.reset(new CgenState({}, false));
-  auto cgen_state = reduction_code.cgen_state.get();
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
+  auto executor = Executor::getExecutorFromMap(executor_id_);
+  CHECK(executor) << executor_id_;
+  auto cgen_state_ = std::unique_ptr<CgenState>(new CgenState({}, false, executor.get()));
+  auto cgen_state = reduction_code.cgen_state = cgen_state_.get();
+  // CHECK(executor->thread_id_ == logger::thread_id());  // do we need compilation mutex?
+  cgen_state->set_module_shallow_copy(executor->get_rt_module());
+  reduction_code.module = cgen_state->module_;
 
-  cgen_state->module_ = module.get();
   AUTOMATIC_IR_METADATA(cgen_state);
   auto ir_is_empty = create_llvm_function(reduction_code.ir_is_empty.get(), cgen_state);
   auto ir_reduce_one_entry =
@@ -1353,6 +1336,6 @@ ReductionCode GpuReductionHelperJIT::codegen() const {
   translate_function(
       reduction_code.ir_reduce_loop.get(), ir_reduce_loop, reduction_code, f);
   reduction_code.llvm_reduce_loop = ir_reduce_loop;
-  reduction_code.module = std::move(module);
+  reduction_code.cgen_state = nullptr;
   return reduction_code;
 }

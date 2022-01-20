@@ -28,7 +28,7 @@ FixedWidthInt::FixedWidthInt(const size_t byte_width) : byte_width_{byte_width} 
 llvm::Instruction* FixedWidthInt::codegenDecode(llvm::Value* byte_stream,
                                                 llvm::Value* pos,
                                                 llvm::Module* module) const {
-  auto& context = getGlobalLLVMContext();
+  auto& context = module->getContext();
   auto f = module->getFunction("fixed_width_int_decode");
   CHECK(f);
   llvm::Value* args[] = {
@@ -44,7 +44,7 @@ FixedWidthUnsigned::FixedWidthUnsigned(const size_t byte_width)
 llvm::Instruction* FixedWidthUnsigned::codegenDecode(llvm::Value* byte_stream,
                                                      llvm::Value* pos,
                                                      llvm::Module* module) const {
-  auto& context = getGlobalLLVMContext();
+  auto& context = module->getContext();
   auto f = module->getFunction("fixed_width_unsigned_decode");
   CHECK(f);
   llvm::Value* args[] = {
@@ -60,7 +60,7 @@ DiffFixedWidthInt::DiffFixedWidthInt(const size_t byte_width, const int64_t base
 llvm::Instruction* DiffFixedWidthInt::codegenDecode(llvm::Value* byte_stream,
                                                     llvm::Value* pos,
                                                     llvm::Module* module) const {
-  auto& context = getGlobalLLVMContext();
+  auto& context = module->getContext();
   auto f = module->getFunction("diff_fixed_width_int_decode");
   CHECK(f);
   llvm::Value* args[] = {
@@ -89,7 +89,7 @@ FixedWidthSmallDate::FixedWidthSmallDate(const size_t byte_width)
 llvm::Instruction* FixedWidthSmallDate::codegenDecode(llvm::Value* byte_stream,
                                                       llvm::Value* pos,
                                                       llvm::Module* module) const {
-  auto& context = getGlobalLLVMContext();
+  auto& context = module->getContext();
   auto f = module->getFunction("fixed_width_small_date_decode");
   CHECK(f);
   llvm::Value* args[] = {

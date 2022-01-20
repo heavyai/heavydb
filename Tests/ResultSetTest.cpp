@@ -1036,7 +1036,7 @@ void run_reduction(const std::vector<TargetInfo>& target_infos,
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  rs_manager.reduce(storage_set);
+  rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID);
 }
 
 void test_reduce(const std::vector<TargetInfo>& target_infos,
@@ -1076,7 +1076,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
       storage2->getUnderlyingBuffer(), target_infos, query_mem_desc, generator2, step);
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  auto result_rs = rs_manager.reduce(storage_set);
+  auto result_rs = rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID);
 
   if (sort) {
     std::list<Analyzer::OrderEntry> order_entries;
@@ -1223,7 +1223,7 @@ void test_reduce_random_groups(const std::vector<TargetInfo>& target_infos,
 
   ResultSetManager rs_manager;
   std::vector<ResultSet*> storage_set{rs1.get(), rs2.get()};
-  auto result_rs = rs_manager.reduce(storage_set);
+  auto result_rs = rs_manager.reduce(storage_set, Executor::UNITARY_EXECUTOR_ID);
   std::queue<std::vector<int64_t>> ref_table = rse->getReferenceTable();
   std::vector<bool> ref_group_map = rse->getReferenceGroupMap();
   const auto result = get_rows_sorted_by_col(*result_rs, 0);
@@ -1958,10 +1958,12 @@ TEST(MoreReduce, MissingValues) {
     buff2[1 * 3 + 2] = 0;
     buff2[2 * 3 + 2] = 5;
   }
-  ResultSetReductionJIT reduction_jit(
-      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  ResultSetReductionJIT reduction_jit(rs1->getQueryMemDesc(),
+                                      rs1->getTargetInfos(),
+                                      rs1->getTargetInitVals(),
+                                      Executor::UNITARY_EXECUTOR_ID);
   const auto reduction_code = reduction_jit.codegen();
-  storage1->reduce(*storage2, {}, reduction_code);
+  storage1->reduce(*storage2, {}, reduction_code, Executor::UNITARY_EXECUTOR_ID);
   {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
@@ -2028,10 +2030,12 @@ TEST(MoreReduce, MissingValuesKeyless) {
     buff2[1 * 2 + 1] = 0;
     buff2[2 * 2 + 1] = 5;
   }
-  ResultSetReductionJIT reduction_jit(
-      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  ResultSetReductionJIT reduction_jit(rs1->getQueryMemDesc(),
+                                      rs1->getTargetInfos(),
+                                      rs1->getTargetInitVals(),
+                                      Executor::UNITARY_EXECUTOR_ID);
   const auto reduction_code = reduction_jit.codegen();
-  storage1->reduce(*storage2, {}, reduction_code);
+  storage1->reduce(*storage2, {}, reduction_code, Executor::UNITARY_EXECUTOR_ID);
   {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
@@ -2116,10 +2120,13 @@ TEST(MoreReduce, OffsetRewrite) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
-  ResultSetReductionJIT reduction_jit(
-      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  ResultSetReductionJIT reduction_jit(rs1->getQueryMemDesc(),
+                                      rs1->getTargetInfos(),
+                                      rs1->getTargetInitVals(),
+                                      Executor::UNITARY_EXECUTOR_ID);
   const auto reduction_code = reduction_jit.codegen();
-  storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
+  storage1->reduce(
+      *storage2, serialized_varlen_buffer, reduction_code, Executor::UNITARY_EXECUTOR_ID);
   rs1->setSeparateVarlenStorageValid(true);
   {
     const auto row = rs1->getNextRow(false, false);
@@ -3037,13 +3044,16 @@ int main(int argc, char** argv) {
 
   g_data_provider = std::make_shared<DataMgrDataProvider>(getDataMgr());
 
+  // instantiate a single executor
+  Executor::getExecutor(
+      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+
   int err{0};
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  ResultSetReductionJIT::clearCache();
   reset();
   return err;
 }

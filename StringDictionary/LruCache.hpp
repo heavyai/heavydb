@@ -75,6 +75,8 @@ class LruCache {
     evictCommon(entries_to_evict);
   }
 
+  size_t size() const { return cache_items_list_.size(); }
+
  private:
   void putCommon(map_t_iterator& it, key_t const& key) {
     if (it != cache_items_map_.end()) {

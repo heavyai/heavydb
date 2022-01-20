@@ -92,11 +92,13 @@ class CodeGenerator {
     bool row_func_not_inlined;
   };
 
-  static void linkModuleWithLibdevice(llvm::Module& module,
+  static void linkModuleWithLibdevice(Executor* executor,
+                                      llvm::Module& module,
                                       llvm::PassManagerBuilder& pass_manager_builder,
                                       const GPUTarget& gpu_target);
 
   static std::shared_ptr<GpuCompilationContext> generateNativeGPUCode(
+      Executor* executor,
       llvm::Function* func,
       llvm::Function* wrapper_func,
       const std::unordered_set<llvm::Function*>& live_funcs,
@@ -500,8 +502,8 @@ class CodeGenerator {
 class ScalarCodeGenerator : public CodeGenerator {
  public:
   // Constructor which takes the runtime module.
-  ScalarCodeGenerator(std::unique_ptr<llvm::Module> module)
-      : CodeGenerator(nullptr, nullptr), module_(std::move(module)) {}
+  ScalarCodeGenerator(std::unique_ptr<llvm::Module> llvm_module)
+      : CodeGenerator(nullptr, nullptr), module_(std::move(llvm_module)) {}
 
   // Function generated for a given analyzer expression. For GPU, a wrapper which meets
   // the kernel signature constraints (returns void, takes all arguments as pointers) is
@@ -523,7 +525,8 @@ class ScalarCodeGenerator : public CodeGenerator {
   // NB: this is separated from the compile method to allow building higher level code
   // generators which can inline the IR for evaluating a single expression (for example
   // loops).
-  std::vector<void*> generateNativeCode(const CompiledExpression& compiled_expression,
+  std::vector<void*> generateNativeCode(Executor* executor,
+                                        const CompiledExpression& compiled_expression,
                                         const CompilationOptions& co);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cuda_mgr_.get(); }
@@ -540,7 +543,8 @@ class ScalarCodeGenerator : public CodeGenerator {
   // map to be used during code generation.
   ColumnMap prepare(const Analyzer::Expr*);
 
-  std::vector<void*> generateNativeGPUCode(llvm::Function* func,
+  std::vector<void*> generateNativeGPUCode(Executor* executor,
+                                           llvm::Function* func,
                                            llvm::Function* wrapper_func,
                                            const CompilationOptions& co);
 

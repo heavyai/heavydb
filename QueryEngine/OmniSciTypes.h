@@ -105,6 +105,11 @@ struct TextEncodingNone {
   DEVICE ALWAYS_INLINE bool isNull() const { return size_ == 0; }
 };
 
+#ifdef __CUDACC__
+template <typename T>
+static DEVICE __constant__ T Column_null_value;
+#endif
+
 template <typename T>
 struct Column {
   T* ptr_;        // row data
@@ -115,8 +120,8 @@ struct Column {
 #ifndef __CUDACC__
       throw std::runtime_error("column buffer index is out of range");
 #else
-      static DEVICE T null_value;
-      if constexpr (std::is_same_v<T, TextEncodingDict>) {
+      auto& null_value = Column_null_value<T>;
+      if constexpr (std::is_same<T, TextEncodingDict>::value) {
         set_null(null_value.value);
       } else {
         set_null(null_value);

@@ -23,7 +23,10 @@
 #include "StringDictionary/LruCache.hpp"
 
 using CodeCacheKey = std::vector<std::string>;
-using CodeCacheVal = std::shared_ptr<CompilationContext>;
-using CodeCacheValWithModule = std::pair<CodeCacheVal, llvm::Module*>;
+template <typename CC>
+using CodeCacheVal = std::shared_ptr<CC>;
+template <typename CC>
+using CodeCacheValWithModule = std::pair<CodeCacheVal<CC>, llvm::Module*>;
+template <typename CC>
 using CodeCache =
-    LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>;
+    LruCache<CodeCacheKey, CodeCacheValWithModule<CC>, boost::hash<CodeCacheKey>>;

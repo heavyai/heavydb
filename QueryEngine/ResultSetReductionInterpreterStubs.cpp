@@ -180,24 +180,24 @@ extern "C" RUNTIME_EXPORT void write_stub_result_int(void* output_handle,
 // NOTE: this is currently thread safe because only one interpreter reduction can run at a
 // time. If the interpreter allows multiple stubs to run at a time we will need to ensure
 // proper ownership of the compilation context.
-StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
+StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
+                                                const std::string& name,
                                                 const std::vector<Type>& arg_types,
                                                 const Type ret_type,
                                                 const bool is_external) {
+  auto executor = Executor::getExecutorFromMap(executor_id);
+  CHECK(executor);
   const auto stub_name = name + "_stub";
+  auto& s_stubs_cache = executor->s_stubs_cache;
   CodeCacheKey key{stub_name};
-  std::lock_guard<std::mutex> s_stubs_cache_lock(s_stubs_cache_mutex);
   const auto compilation_context = s_stubs_cache.get(key);
   if (compilation_context) {
-    auto cpu_context =
-        std::dynamic_pointer_cast<CpuCompilationContext>(compilation_context->first);
-    CHECK(cpu_context);
-    return reinterpret_cast<StubGenerator::Stub>(cpu_context->func());
+    return reinterpret_cast<StubGenerator::Stub>(compilation_context->first->func());
   }
   auto cgen_state = std::make_unique<CgenState>(/*num_query_infos=*/0,
-                                                /*contains_left_deep_outer_join=*/false);
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state.get()));
-  cgen_state->module_ = module.get();
+                                                /*contains_left_deep_outer_join=*/false,
+                                                executor.get());
+  cgen_state->set_module_shallow_copy(executor->get_rt_module());
   const auto function = create_stub_function(stub_name, cgen_state.get());
   CHECK(function);
   auto& ctx = cgen_state->context_;
@@ -253,22 +253,11 @@ StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
   verify_function_ir(function);
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
-  module.release();
   auto ee = CodeGenerator::generateNativeCPUCode(function, {function}, co);
-  auto func_ptr =
-      reinterpret_cast<StubGenerator::Stub>(ee->getPointerToFunction(function));
-
   auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
   cpu_compilation_context->setFunctionPointer(function);
+  auto func_ptr = reinterpret_cast<StubGenerator::Stub>(cpu_compilation_context->func());
   Executor::addCodeToCache(
       key, cpu_compilation_context, function->getParent(), s_stubs_cache);
   return func_ptr;
 }
-
-void StubGenerator::clearCache() {
-  std::lock_guard<std::mutex> s_stubs_cache_lock(s_stubs_cache_mutex);
-  s_stubs_cache.clear();
-}
-
-CodeCache StubGenerator::s_stubs_cache(10000);
-std::mutex StubGenerator::s_stubs_cache_mutex;

@@ -44,6 +44,8 @@
 
 #include <chrono>
 #include <iostream>
+#include <list>
+#include <map>
 #include <set>
 #include <sstream>
 #include <tuple>
@@ -76,13 +78,20 @@
 #endif
 #endif
 
+#include <mutex>
+inline static std::mutex toString_PRINT_mutex;
+
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-#define PRINT(EXPR)                                                                   \
-  std::cout << std::hex                                                               \
-            << ((std::hash<std::thread::id>()(std::this_thread::get_id())) & 0xffff)  \
-            << std::dec << " [" << __FILENAME__ << ":" << __func__ << "#" << __LINE__ \
-            << "]: " #EXPR "=" << ::toString(EXPR) << std::endl                       \
-            << std::flush;
+#define PRINT(...)                                                                      \
+  {                                                                                     \
+    std::lock_guard<std::mutex> print_lock(toString_PRINT_mutex);                       \
+    std::cout << std::hex                                                               \
+              << ((std::hash<std::thread::id>()(std::this_thread::get_id())) & 0xffff)  \
+              << std::dec << " [" << __FILENAME__ << ":" << __func__ << "#" << __LINE__ \
+              << "]: " #__VA_ARGS__ "=" << ::toString(std::make_tuple(__VA_ARGS__))     \
+              << std::endl                                                              \
+              << std::flush;                                                            \
+  }
 
 template <typename T>
 std::string typeName(const T* v) {
@@ -315,6 +324,21 @@ std::string toString(const std::unordered_map<T1, T2>& v) {
   return result;
 }
 
+template <typename T1, typename T2>
+std::string toString(const std::map<T1, T2>& v) {
+  auto result = std::string("{");
+  size_t i = 0;
+  for (const auto& p : v) {
+    if (i) {
+      result += ", ";
+    }
+    result += toString(p);
+    i++;
+  }
+  result += "}";
+  return result;
+}
+
 template <typename T>
 std::string toString(const std::list<T>& v) {
   auto result = std::string("[");
@@ -360,11 +384,20 @@ std::string toString(const std::set<T>& v) {
   return result;
 }
 
-template <typename T>
-std::string toString(const std::tuple<T, T>& v) {
-  T left, right;
-  std::tie(left, right) = v;
-  return std::string("(") + toString(left) + ", " + toString(right) + ")";
+template <typename... Ts, size_t... Is>
+std::string toStringImpl(const std::tuple<Ts...>& t,
+                         const std::index_sequence<0, Is...>) {
+  return (toString(std::get<0>(t)) + ... + (", " + toString(std::get<Is>(t))));
 }
 
-#endif  // __CUDACC__
+template <typename... T>
+std::string toStringImpl(const std::tuple<>& t, const std::index_sequence<>) {
+  return {};
+}
+
+template <typename... Ts>
+std::string toString(const std::tuple<Ts...>& t) {
+  return "(" + toStringImpl(t, std::index_sequence_for<Ts...>{}) + ")";
+}
+
+#endif  // ifndef __CUDACC__

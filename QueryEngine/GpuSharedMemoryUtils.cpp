@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <llvm/Transforms/Utils/Cloning.h>
+
 #include "GpuSharedMemoryUtils.h"
 #include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
@@ -23,8 +25,10 @@ GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder(
     llvm::LLVMContext& context,
     const QueryMemoryDescriptor& qmd,
     const std::vector<TargetInfo>& targets,
-    const std::vector<int64_t>& init_agg_values)
-    : module_(module)
+    const std::vector<int64_t>& init_agg_values,
+    const size_t executor_id)
+    : executor_id_(executor_id)
+    , module_(module)
     , context_(context)
     , reduction_func_(nullptr)
     , init_func_(nullptr)
@@ -136,17 +140,19 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
   auto rs_reduction_jit = std::make_unique<GpuReductionHelperJIT>(
       fixup_query_mem_desc,
       targets_,
-      result_set::initialize_target_values_for_storage(targets_));
+      result_set::initialize_target_values_for_storage(targets_),
+      executor_id_);
   auto reduction_code = rs_reduction_jit->codegen();
+  CHECK(reduction_code.module);
   reduction_code.module->setDataLayout(
       "e-p:64:64:64-i1:8:8-i8:8:8-"
       "i16:16:16-i32:32:32-i64:64:64-"
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   reduction_code.module->setTargetTriple("nvptx64-nvidia-cuda");
-
   llvm::Linker linker(*module_);
-  bool link_error = linker.linkInModule(std::move(reduction_code.module));
+  std::unique_ptr<llvm::Module> owner(reduction_code.module);
+  bool link_error = linker.linkInModule(std::move(owner));
   CHECK(!link_error);
 
   // go through the reduction code and replace all occurances of agg functions

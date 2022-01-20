@@ -133,7 +133,8 @@ inline int64_t get_component(const int8_t* group_by_buffer,
   return ret;
 }
 
-void run_reduction_code(const ReductionCode& reduction_code,
+void run_reduction_code(const size_t executor_id,
+                        const ReductionCode& reduction_code,
                         int8_t* this_buff,
                         const int8_t* that_buff,
                         const int32_t start_entry_index,
@@ -153,10 +154,8 @@ void run_reduction_code(const ReductionCode& reduction_code,
                                   that_qmd,
                                   serialized_varlen_buffer);
   } else {
-    // Calls LLVM methods that are not thread safe, ensure nothing else compiles while we
-    // run this reduction
-    std::lock_guard<std::mutex> compilation_lock(Executor::compilation_mutex_);
     auto ret = ReductionInterpreter::run(
+        executor_id,
         reduction_code.ir_reduce_loop.get(),
         {ReductionInterpreter::MakeEvalValue(this_buff),
          ReductionInterpreter::MakeEvalValue(that_buff),
@@ -207,7 +206,8 @@ void result_set::fill_empty_key(void* key_ptr,
 // Reduces the entries of `that` into the buffer of this ResultSetStorage object.
 void ResultSetStorage::reduce(const ResultSetStorage& that,
                               const std::vector<std::string>& serialized_varlen_buffer,
-                              const ReductionCode& reduction_code) const {
+                              const ReductionCode& reduction_code,
+                              const size_t executor_id) const {
   auto entry_count = query_mem_desc_.getEntryCount();
   CHECK_GT(entry_count, size_t(0));
   if (query_mem_desc_.didOutputColumnar()) {
@@ -239,20 +239,25 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
     }
     if (use_multithreaded_reduction(that_entry_count)) {
       if (reduction_code.ir_reduce_loop) {
-        threading::parallel_for(
-            threading::blocked_range<size_t>(0, that_entry_count),
-            [this, this_buff, that_buff, that_entry_count, &reduction_code, &that](
-                auto r) {
-              run_reduction_code(reduction_code,
+        threading::parallel_for(threading::blocked_range<size_t>(0, that_entry_count),
+                                [this,
                                  this_buff,
                                  that_buff,
-                                 r.begin(),
-                                 r.end(),
                                  that_entry_count,
-                                 &query_mem_desc_,
-                                 &that.query_mem_desc_,
-                                 nullptr);
-            });
+                                 executor_id,
+                                 &reduction_code,
+                                 &that](auto r) {
+                                  run_reduction_code(executor_id,
+                                                     reduction_code,
+                                                     this_buff,
+                                                     that_buff,
+                                                     r.begin(),
+                                                     r.end(),
+                                                     that_entry_count,
+                                                     &query_mem_desc_,
+                                                     &that.query_mem_desc_,
+                                                     nullptr);
+                                });
       } else {
         threading::parallel_for(
             threading::blocked_range<size_t>(0, that_entry_count),
@@ -265,7 +270,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
       }
     } else {
       if (reduction_code.ir_reduce_loop) {
-        run_reduction_code(reduction_code,
+        run_reduction_code(executor_id,
+                           reduction_code,
                            this_buff,
                            that_buff,
                            0,
@@ -282,13 +288,13 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
     }
     return;
   }
-  // NOTE: this may be a nullptr if this resultset exists outside of Executor scope
-  auto executor = query_mem_desc_.getExecutor();
+  auto executor = Executor::getExecutorFromMap(executor_id);
+  CHECK(executor);
   if (use_multithreaded_reduction(entry_count)) {
     if (query_mem_desc_.didOutputColumnar()) {
       threading::parallel_for(
           threading::blocked_range<size_t>(0, entry_count),
-          [this, this_buff, that_buff, &that, &serialized_varlen_buffer, executor](
+          [this, this_buff, that_buff, &that, &serialized_varlen_buffer, &executor](
               auto r) {
             reduceEntriesNoCollisionsColWise(this_buff,
                                              that_buff,
@@ -296,7 +302,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                              r.begin(),
                                              r.end(),
                                              serialized_varlen_buffer,
-                                             executor);
+                                             executor.get());
           });
     } else {
       CHECK(reduction_code.ir_reduce_loop);
@@ -305,10 +311,12 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                this_buff,
                                that_buff,
                                that_entry_count,
+                               executor_id,
                                &reduction_code,
                                &that,
                                &serialized_varlen_buffer](auto r) {
-                                run_reduction_code(reduction_code,
+                                run_reduction_code(executor_id,
+                                                   reduction_code,
                                                    this_buff,
                                                    that_buff,
                                                    r.begin(),
@@ -327,10 +335,11 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                        0,
                                        query_mem_desc_.getEntryCount(),
                                        serialized_varlen_buffer,
-                                       executor);
+                                       executor.get());
     } else {
       CHECK(reduction_code.ir_reduce_loop);
-      run_reduction_code(reduction_code,
+      run_reduction_code(executor_id,
+                         reduction_code,
                          this_buff,
                          that_buff,
                          0,
@@ -390,7 +399,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
         (agg_info.agg_kind == kAVG ||
          (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
       // Note that this assumes if one of the slot pairs in a given target is an array,
-      // all slot pairs are arrays. 
+      // all slot pairs are arrays.
       two_slot_target = true;
     }
     if (UNLIKELY(g_enable_non_kernel_time_query_interrupt && executor &&
@@ -987,7 +996,8 @@ void ResultSet::initializeStorage() const {
 // Driver for reductions. Needed because the result of a reduction on the baseline
 // layout, which can have collisions, cannot be done in place and something needs
 // to take the ownership of the new result set with the bigger underlying buffer.
-ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
+ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
+                                    const size_t executor_id) {
   CHECK(!result_sets.empty());
   auto result_rs = result_sets.front();
   CHECK(result_rs->storage_);
@@ -1054,16 +1064,19 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
 
   ResultSetReductionJIT reduction_jit(result_rs->getQueryMemDesc(),
                                       result_rs->getTargetInfos(),
-                                      result_rs->getTargetInitVals());
+                                      result_rs->getTargetInitVals(),
+                                      executor_id);
   auto reduction_code = reduction_jit.codegen();
   size_t ctr = 1;
   for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
        ++result_it) {
     if (!serialized_varlen_buffer.empty()) {
-      result->reduce(
-          *((*result_it)->storage_), serialized_varlen_buffer[ctr++], reduction_code);
+      result->reduce(*((*result_it)->storage_),
+                     serialized_varlen_buffer[ctr++],
+                     reduction_code,
+                     executor_id);
     } else {
-      result->reduce(*((*result_it)->storage_), {}, reduction_code);
+      result->reduce(*((*result_it)->storage_), {}, reduction_code, executor_id);
     }
   }
   return result_rs;

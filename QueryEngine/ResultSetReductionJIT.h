@@ -41,27 +41,24 @@ struct ReductionCode {
 
   FuncPtr func_ptr;
   llvm::Function* llvm_reduce_loop;
-  std::unique_ptr<CgenState> cgen_state;
-  std::unique_ptr<llvm::Module> module;
+  CgenState* cgen_state;
+  llvm::Module* module;
   std::unique_ptr<Function> ir_is_empty;
   std::unique_ptr<Function> ir_reduce_one_entry;
   std::unique_ptr<Function> ir_reduce_one_entry_idx;
   std::unique_ptr<Function> ir_reduce_loop;
-  std::shared_ptr<CompilationContext> compilation_context;
-
-  static std::mutex s_reduction_mutex;
 };
 
 class ResultSetReductionJIT {
  public:
   ResultSetReductionJIT(const QueryMemoryDescriptor& query_mem_desc,
                         const std::vector<TargetInfo>& targets,
-                        const std::vector<int64_t>& target_init_vals);
+                        const std::vector<int64_t>& target_init_vals,
+                        const size_t executor_id);
   virtual ~ResultSetReductionJIT() = default;
 
   // Generate the code for the result set reduction loop.
   virtual ReductionCode codegen() const;
-  static void clearCache();
 
  protected:
   // Generate a function which checks whether a row is empty.
@@ -77,6 +74,8 @@ class ResultSetReductionJIT {
 
   // Generate a function for the reduction of an entire result set chunk.
   void reduceLoop(const ReductionCode& reduction_code) const;
+
+  size_t executor_id_;
 
  private:
   // Used to implement 'reduceOneEntryNoCollisions'.
@@ -125,18 +124,17 @@ class ResultSetReductionJIT {
                                    const size_t target_logical_idx,
                                    Function* ir_reduce_one_entry) const;
 
-  ReductionCode finalizeReductionCode(ReductionCode reduction_code,
-                                      const llvm::Function* ir_is_empty,
-                                      const llvm::Function* ir_reduce_one_entry,
-                                      const llvm::Function* ir_reduce_one_entry_idx,
-                                      const CodeCacheKey& key) const;
+  void finalizeReductionCode(ReductionCode& reduction_code,
+                             const llvm::Function* ir_is_empty,
+                             const llvm::Function* ir_reduce_one_entry,
+                             const llvm::Function* ir_reduce_one_entry_idx,
+                             const CodeCacheKey& key) const;
 
   std::string cacheKey() const;
 
   const QueryMemoryDescriptor query_mem_desc_;
   const std::vector<TargetInfo> targets_;
   const std::vector<int64_t> target_init_vals_;
-  static CodeCache s_code_cache;
 };
 
 /**
@@ -148,8 +146,9 @@ class GpuReductionHelperJIT : public ResultSetReductionJIT {
  public:
   GpuReductionHelperJIT(const QueryMemoryDescriptor& query_mem_desc,
                         const std::vector<TargetInfo>& targets,
-                        const std::vector<int64_t>& target_init_vals)
-      : ResultSetReductionJIT(query_mem_desc, targets, target_init_vals)
+                        const std::vector<int64_t>& target_init_vals,
+                        const size_t executor_id)
+      : ResultSetReductionJIT(query_mem_desc, targets, target_init_vals, executor_id)
       , query_mem_desc_(query_mem_desc) {
     CHECK(query_mem_desc_.getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash);

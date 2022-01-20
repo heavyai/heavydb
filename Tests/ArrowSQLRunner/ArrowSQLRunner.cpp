@@ -354,14 +354,13 @@ class ArrowSQLRunnerImpl {
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
 
-    executor_ = std::make_shared<Executor>(0,
-                                           data_mgr_.get(),
-                                           data_mgr_->getBufferProvider(),
-                                           system_parameters.cuda_block_size,
-                                           system_parameters.cuda_grid_size,
-                                           system_parameters.max_gpu_slab_size,
-                                           "",
-                                           "");
+    executor_ = Executor::getExecutor(
+        /*executor_id=*/0,
+        data_mgr_.get(),
+        data_mgr_->getBufferProvider(),
+        "",
+        "",
+        system_parameters);
     executor_->setSchemaProvider(storage_);
     executor_->setDatabaseId(TEST_DB_ID);
 

@@ -21,6 +21,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 
 #include "Analyzer/Analyzer.h"
 #include "QueryEngine/CodeGenerator.h"
@@ -30,9 +31,10 @@
 #include "TestHelpers.h"
 
 TEST(CodeGeneratorTest, IntegerConstant) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -45,7 +47,7 @@ TEST(CodeGeneratorTest, IntegerConstant) {
 
   using FuncPtr = int (*)(int*);
   auto func_ptr = reinterpret_cast<FuncPtr>(
-      code_generator.generateNativeCode(compiled_expr, co).front());
+      code_generator.generateNativeCode(executor, compiled_expr, co).front());
   CHECK(func_ptr);
   int out;
   int err = func_ptr(&out);
@@ -54,9 +56,10 @@ TEST(CodeGeneratorTest, IntegerConstant) {
 }
 
 TEST(CodeGeneratorTest, IntegerAdd) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -71,7 +74,7 @@ TEST(CodeGeneratorTest, IntegerAdd) {
 
   using FuncPtr = int (*)(int*);
   auto func_ptr = reinterpret_cast<FuncPtr>(
-      code_generator.generateNativeCode(compiled_expr, co).front());
+      code_generator.generateNativeCode(executor, compiled_expr, co).front());
   CHECK(func_ptr);
   int out;
   int err = func_ptr(&out);
@@ -80,9 +83,10 @@ TEST(CodeGeneratorTest, IntegerAdd) {
 }
 
 TEST(CodeGeneratorTest, IntegerColumn) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -98,7 +102,7 @@ TEST(CodeGeneratorTest, IntegerColumn) {
 
   using FuncPtr = int (*)(int*, int);
   auto func_ptr = reinterpret_cast<FuncPtr>(
-      code_generator.generateNativeCode(compiled_expr, co).front());
+      code_generator.generateNativeCode(executor, compiled_expr, co).front());
   CHECK(func_ptr);
   int out;
   int err = func_ptr(&out, 17);
@@ -107,9 +111,10 @@ TEST(CodeGeneratorTest, IntegerColumn) {
 }
 
 TEST(CodeGeneratorTest, IntegerExpr) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
   co.hoist_literals = false;
 
@@ -129,7 +134,7 @@ TEST(CodeGeneratorTest, IntegerExpr) {
 
   using FuncPtr = int (*)(int*, int);
   auto func_ptr = reinterpret_cast<FuncPtr>(
-      code_generator.generateNativeCode(compiled_expr, co).front());
+      code_generator.generateNativeCode(executor, compiled_expr, co).front());
   CHECK(func_ptr);
   int out;
   int err = func_ptr(&out, 58);
@@ -148,9 +153,10 @@ void free_param_pointers(const std::vector<void*>& param_ptrs,
 }
 
 TEST(CodeGeneratorTest, IntegerConstantGPU) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 
@@ -162,7 +168,7 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
   ASSERT_TRUE(compiled_expr.inputs.empty());
 
   const auto native_function_pointers =
-      code_generator.generateNativeCode(compiled_expr, co);
+      code_generator.generateNativeCode(executor, compiled_expr, co);
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];
@@ -194,9 +200,10 @@ TEST(CodeGeneratorTest, IntegerConstantGPU) {
 }
 
 TEST(CodeGeneratorTest, IntegerAddGPU) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 
@@ -210,7 +217,7 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
   ASSERT_TRUE(compiled_expr.inputs.empty());
 
   const auto native_function_pointers =
-      code_generator.generateNativeCode(compiled_expr, co);
+      code_generator.generateNativeCode(executor, compiled_expr, co);
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];
@@ -242,9 +249,10 @@ TEST(CodeGeneratorTest, IntegerAddGPU) {
 }
 
 TEST(CodeGeneratorTest, IntegerColumnGPU) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 
@@ -259,7 +267,7 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
   ASSERT_TRUE(*compiled_expr.inputs.front() == *col);
 
   const auto native_function_pointers =
-      code_generator.generateNativeCode(compiled_expr, co);
+      code_generator.generateNativeCode(executor, compiled_expr, co);
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];
@@ -300,9 +308,10 @@ TEST(CodeGeneratorTest, IntegerColumnGPU) {
 }
 
 TEST(CodeGeneratorTest, IntegerExprGPU) {
-  auto& ctx = getGlobalLLVMContext();
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
-  ScalarCodeGenerator code_generator(std::move(module));
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, nullptr, nullptr).get();
+  auto llvm_module = llvm::CloneModule(*executor->get_rt_module());
+  ScalarCodeGenerator code_generator(std::move(llvm_module));
   CompilationOptions co = CompilationOptions::defaults(ExecutorDeviceType::GPU);
   co.hoist_literals = false;
 
@@ -321,7 +330,7 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
   ASSERT_TRUE(*compiled_expr.inputs.front() == *lhs);
 
   const auto native_function_pointers =
-      code_generator.generateNativeCode(compiled_expr, co);
+      code_generator.generateNativeCode(executor, compiled_expr, co);
 
   for (size_t gpu_idx = 0; gpu_idx < native_function_pointers.size(); ++gpu_idx) {
     const auto native_function_pointer = native_function_pointers[gpu_idx];

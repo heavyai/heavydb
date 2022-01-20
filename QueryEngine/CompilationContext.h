@@ -66,9 +66,19 @@ class CpuCompilationContext : public CompilationContext {
   void setFunctionPointer(llvm::Function* function) {
     func_ = execution_engine_->getPointerToFunction(function);
     CHECK(func_);
+    execution_engine_->removeModule(function->getParent());
   }
 
   void* func() const { return func_; }
+
+  using TableFunctionEntryPointPtr = int32_t (*)(const int8_t* mgr_ptr,
+                                                 const int8_t** input_cols,
+                                                 const int64_t* input_row_count,
+                                                 int64_t** out,
+                                                 int64_t* output_row_count);
+  TableFunctionEntryPointPtr table_function_entry_point() const {
+    return (TableFunctionEntryPointPtr)func_;
+  }
 
  private:
   void* func_{nullptr};

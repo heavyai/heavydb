@@ -46,7 +46,8 @@ class GpuSharedMemCodeBuilder {
                           llvm::LLVMContext& context,
                           const QueryMemoryDescriptor& qmd,
                           const std::vector<TargetInfo>& targets,
-                          const std::vector<int64_t>& init_agg_values);
+                          const std::vector<int64_t>& init_agg_values,
+                          const size_t executor_id);
   /**
    * generates code for both the reduction and initialization steps required for shared
    * memory usage
@@ -89,6 +90,7 @@ class GpuSharedMemCodeBuilder {
    */
   llvm::Function* getFunction(const std::string& func_name) const;
 
+  size_t executor_id_;
   llvm::Module* module_;
   llvm::LLVMContext& context_;
   llvm::Function* reduction_func_;

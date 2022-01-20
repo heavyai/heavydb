@@ -36,32 +36,11 @@ struct ArrayLoadCodegen {
 
 struct CgenState {
  public:
-  CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join)
-      : module_(nullptr)
-      , row_func_(nullptr)
-      , filter_func_(nullptr)
-      , current_func_(nullptr)
-      , row_func_bb_(nullptr)
-      , filter_func_bb_(nullptr)
-      , row_func_call_(nullptr)
-      , filter_func_call_(nullptr)
-      , context_(getGlobalLLVMContext())
-      , ir_builder_(context_)
-      , contains_left_deep_outer_join_(contains_left_deep_outer_join)
-      , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
-      , needs_error_check_(false)
-      , query_func_(nullptr)
-      , query_func_entry_ir_builder_(context_){};
-
-  CgenState(llvm::LLVMContext& context)
-      : module_(nullptr)
-      , row_func_(nullptr)
-      , context_(context)
-      , ir_builder_(context_)
-      , contains_left_deep_outer_join_(false)
-      , needs_error_check_(false)
-      , query_func_(nullptr)
-      , query_func_entry_ir_builder_(context_){};
+  CgenState(const size_t num_query_infos,
+            const bool contains_left_deep_outer_join,
+            Executor* executor);
+  CgenState(const size_t num_query_infos, const bool contains_left_deep_outer_join);
+  CgenState(llvm::LLVMContext& context);
 
   size_t getOrAddLiteral(const Analyzer::Constant* constant,
                          const EncodingType enc_type,
@@ -206,6 +185,11 @@ struct CgenState {
     in_values_bitmaps_.emplace_back(std::move(in_values_bitmap));
     return in_values_bitmaps_.back().get();
   }
+  void moveInValuesBitmap(std::unique_ptr<const InValuesBitmap>& in_values_bitmap) {
+    if (!in_values_bitmap->isEmpty()) {
+      in_values_bitmaps_.emplace_back(std::move(in_values_bitmap));
+    }
+  }
   // look up a runtime function based on the name, return type and type of
   // the arguments and call it; x64 only, don't call from GPU codegen
   llvm::Value* emitExternalCall(
@@ -309,6 +293,38 @@ struct CgenState {
 
   void replaceFunctionForGpu(const std::string& fcn_to_replace, llvm::Function* fn);
 
+  std::shared_ptr<Executor> getExecutor() const;
+  llvm::LLVMContext& getExecutorContext() const;
+  void set_module_shallow_copy(const std::unique_ptr<llvm::Module>& module,
+                               bool always_clone = false);
+
+  size_t executor_id_;
+  /*
+    Quoting https://groups.google.com/g/llvm-dev/c/kuil5XjasUs/m/7PBpOWZFDAAJ :
+    """
+    The state of Module/Context ownership is very muddled in the
+    codebase. As you have discovered: LLVMContext’s notionally own
+    their modules (via raw pointers deleted upon destruction of the
+    context), however in practice we always hold llvm Modules by
+    unique_ptr. Since the Module destructor removes the raw pointer
+    from the Context, this doesn’t usually blow up. It’s pretty broken
+    though.
+
+    I would argue that you should use unique_ptr and ignore
+    LLVMContext ownership.
+    """
+
+    Here we do the opposite to the last argument because we store
+    llvm::Module pointers in CodeCache and it is hard to sync the
+    destruction of LLVMContext and removing its modules from the
+    CodeCache. Instead, we'll never explicitly delete llvm::Module
+    instances and we'll let LLVMContext or unique_ptr to manage the
+    destruction of llvm::Modules. As a result, whenever LLVMContext is
+    destroyed, the corresponding llvm::Module pointers in CodeCache
+    become invalid and it is recommended to clear the CodeCache as
+    well.
+   */
+
   llvm::Module* module_;
   llvm::Function* row_func_;
   llvm::Function* filter_func_;
@@ -318,7 +334,7 @@ struct CgenState {
   llvm::CallInst* row_func_call_;
   llvm::CallInst* filter_func_call_;
   std::vector<llvm::Function*> helper_functions_;
-  llvm::LLVMContext& context_;
+  llvm::LLVMContext& context_;    // LLVMContext instance is held by an Executor instance.
   llvm::ValueToValueMapTy vmap_;  // used for cloning the runtime module
   llvm::IRBuilder<> ir_builder_;
   std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
