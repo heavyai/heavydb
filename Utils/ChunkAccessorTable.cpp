@@ -20,6 +20,10 @@
  */
 
 #include "ChunkAccessorTable.h"
+#include <exception>
+#include <memory>
+#include "Catalog/Catalog.h"
+#include "DataMgr/Chunk/Chunk.h"
 
 ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
                                          const TableDescriptor* td,

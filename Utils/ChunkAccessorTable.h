@@ -19,12 +19,13 @@
  * @author Simon Eves <simon.eves@mapd.com>
  *
  */
-#ifndef _CHUNK_ACCESSOR_TABLE_H_
-#define _CHUNK_ACCESSOR_TABLE_H_
 
-#include "Catalog/Catalog.h"
+#pragma once
+
+#include "Catalog/CatalogFwd.h"
 #include "DataMgr/Chunk/Chunk.h"
 
+#include <tuple>
 #include <vector>
 
 // convenience functions for multi-fragment support in multi-threaded worker functions
@@ -41,5 +42,3 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
 ChunkIterVector& getChunkItersAndRowOffset(ChunkAccessorTable& table,
                                            size_t rowid,
                                            size_t& rowOffset);
-
-#endif  // _CHUNK_ACCESSOR_TABLE_H_
