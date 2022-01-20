@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 16c4e03
+                6.0.0dev ae349be
               </div>
             
           
@@ -508,9 +508,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join.html">Class HashJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_property_recycler.html">Class HashTablePropertyRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_recycler.html">Class HashTableRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hashing_type_hint_detected.html">Class HashingTypeHintDetected</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashing_scheme_recycler.html">Class HashingSchemeRecycler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashtable_recycler.html">Class HashtableRecycler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -1278,7 +1277,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
@@ -1830,10 +1828,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_gpu_group_by_buffers.html">Struct GpuGroupByBuffers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_hint.html">Struct HashJoinHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_property.html">Struct HashTableProperty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
@@ -2228,7 +2224,55 @@
 <span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1af2fff2eaaef15534b03c4d6d88acd767"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.runTest(String db, String dbaUser, String dbaPassword, String dbUser, String dbPassword)</code></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1af87bebc3d9f129538a2eb7bc38b23224"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.ignoreMissingTable(final  VoidFunction function, final String tableName)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1af7c888fb80fdbc9ab3856eddc09f1bd9"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.logAndRunSql(String sql, MapdTestClient user, String logPrefix)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1ad4567c9b18f728e33b3e68a2d4971014"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.loadTable(MapdTestClient user, String logPrefix)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1a0891a2919b91a5e0c9e4589a93225cf5"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.loadTableBinaryColumnar(MapdTestClient user, String logPrefix)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1ab15cf7c0d27bc35aec8e890094f723ac"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.loadTableBinaryColumnarPolys(MapdTestClient user, String logPrefix)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1ab2e9cd19a92d9907e7a92579dd2bd4d9"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.getTableDetails(MapdTestClient user, String logPrefix)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1a61f863aa5ead9af9ffb756e694429ce9"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.getTablesMetadata(MapdTestClient user, String logPrefix)</code></dt>
+<dd></dd></dl>
+
 </div>
+<dl class="interface">
+<dt id="_CPPv4N3com4mapd5tests40ImportAlterValidateSelectConcurrencyTest12VoidFunctionE">
+<span id="_CPPv3N3com4mapd5tests40ImportAlterValidateSelectConcurrencyTest12VoidFunctionE"></span><span id="_CPPv2N3com4mapd5tests40ImportAlterValidateSelectConcurrencyTest12VoidFunctionE"></span><span id="com::mapd::tests::ImportAlterValidateSelectConcurrencyTest::VoidFunction"></span><span class="target" id="interfacecom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1_1_void_function"></span><em class="property">interface </em><code class="sig-name descname">VoidFunction</code><a class="headerlink" href="#_CPPv4N3com4mapd5tests40ImportAlterValidateSelectConcurrencyTest12VoidFunctionE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt>
+<span class="target" id="interfacecom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test_1_1_void_function_1a56dac20d4a3c565f086e4211cfed0595"></span><code class="sig-name descname">void com.mapd.tests.ImportAlterValidateSelectConcurrencyTest.VoidFunction.call()</code></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
 </dd></dl>
 
 </div>

@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                6.0.0dev 16c4e03
+                6.0.0dev ae349be
               </div>
             
           
@@ -507,9 +507,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_join.html">Class HashJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_table.html">Class HashTable</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_table_property_recycler.html">Class HashTablePropertyRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/class_hash_table_recycler.html">Class HashTableRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/class_hashing_type_hint_detected.html">Class HashingTypeHintDetected</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_hashing_scheme_recycler.html">Class HashingSchemeRecycler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_hashtable_recycler.html">Class HashtableRecycler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -1277,7 +1276,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
@@ -1829,10 +1827,8 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_gpu_group_by_buffers.html">Struct GpuGroupByBuffers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hash_join_hint.html">Struct HashJoinHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hash_table_property.html">Struct HashTableProperty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
@@ -4283,8 +4279,6 @@
 </li>
       <li><a href="api/class/class_baseline_hash_table.html#_CPPv4N17BaselineHashTable7layout_E">BaselineHashTable::layout_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_baseline_hash_table.html#_CPPv4N17BaselineHashTable9setLayoutE8HashType">BaselineHashTable::setLayout (C++ function)</a>
-</li>
       <li><a href="api/class/class_baseline_hash_table.html#_CPPv4N17BaselineHashTableD0Ev">BaselineHashTable::~BaselineHashTable (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv421BaselineJoinHashTable">BaselineJoinHashTable (C++ class)</a>
@@ -4335,11 +4329,11 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable23getEffectiveMemoryLevelERKNSt6vectorI10InnerOuterEE">BaselineJoinHashTable::getEffectiveMemoryLevel (C++ function)</a>
 </li>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable21getHashingSchemeCacheEv">BaselineJoinHashTable::getHashingSchemeCache (C++ function)</a>
+</li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable15getHashJoinTypeEv">BaselineJoinHashTable::getHashJoinType (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable17getHashTableCacheEv">BaselineJoinHashTable::getHashTableCache (C++ function)</a>
-</li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable25getHashtablePropertyCacheEv">BaselineJoinHashTable::getHashtablePropertyCache (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable11getHashTypeEv">BaselineJoinHashTable::getHashType (C++ function)</a>
 </li>
@@ -4347,7 +4341,7 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable19getInnerTableRteIdxEv">BaselineJoinHashTable::getInnerTableRteIdx (C++ function)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMapRK19RegisteredQueryHint">BaselineJoinHashTable::getInstance (C++ function)</a>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMap">BaselineJoinHashTable::getInstance (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable16getKeyBufferSizeEv">BaselineJoinHashTable::getKeyBufferSize (C++ function)</a>
 </li>
@@ -4357,11 +4351,11 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable14getMemoryLevelEv">BaselineJoinHashTable::getMemoryLevel (C++ function)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable22getRegisteredQueryHintEv">BaselineJoinHashTable::getRegisteredQueryHint (C++ function)</a>
-</li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable25getShardCountForConditionEPKN8Analyzer7BinOperEPK8ExecutorRKNSt6vectorI10InnerOuterEE">BaselineJoinHashTable::getShardCountForCondition (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable17hash_table_cache_E">BaselineJoinHashTable::hash_table_cache_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable24hash_table_layout_cache_E">BaselineJoinHashTable::hash_table_layout_cache_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable7hashPtrEK6size_t">BaselineJoinHashTable::hashPtr (C++ function)</a>
 </li>
@@ -4371,7 +4365,7 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable22initHashTableForDeviceERKNSt6vectorI10JoinColumnEERKNSt6vectorI18JoinColumnTypeInfoEERKNSt6vectorI14JoinBucketInfoEEK8HashTypeKN14Data_Namespace11MemoryLevelEK6size_tK6size_tKi">BaselineJoinHashTable::initHashTableForDevice (C++ function)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier8HashType">BaselineJoinHashTable::initHashTableOnCpuFromCache (C++ function)</a>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier">BaselineJoinHashTable::initHashTableOnCpuFromCache (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable18inner_outer_pairs_E">BaselineJoinHashTable::inner_outer_pairs_ (C++ member)</a>
 </li>
@@ -4395,11 +4389,7 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable24putHashTableOnCpuToCacheE13QueryPlanHash13CacheItemTypeNSt10shared_ptrI9HashTableEE16DeviceIdentifier6size_t">BaselineJoinHashTable::putHashTableOnCpuToCache (C++ function)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable11query_hint_E">BaselineJoinHashTable::query_hint_ (C++ member)</a>
-</li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable12query_infos_E">BaselineJoinHashTable::query_infos_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable17registerQueryHintERK19RegisteredQueryHint">BaselineJoinHashTable::registerQueryHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable5reifyEK8HashType">BaselineJoinHashTable::reify (C++ function)</a>
 </li>
@@ -4527,10 +4517,10 @@
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer4mem_E">Buffer_Namespace::Buffer::mem_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer10num_pages_E">Buffer_Namespace::Buffer::num_pages_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6BufferaSERK6Buffer">Buffer_Namespace::Buffer::operator= (C++ function)</a>
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer17page_dirty_flags_E">Buffer_Namespace::Buffer::page_dirty_flags_ (C++ member)</a>
@@ -5341,7 +5331,7 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog19getMetadataForTableERKNSt6stringEKb">Catalog_Namespace::Catalog::getMetadataForTable (C++ function)</a>, <a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog19getMetadataForTableEib">[1]</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedEi">Catalog_Namespace::Catalog::getMutableMetadataForTableUnlocked (C++ function)</a>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedERKNSt6stringE">Catalog_Namespace::Catalog::getMutableMetadataForTableUnlocked (C++ function)</a>, <a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedEi">[1]</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog13getObjForLockEv">Catalog_Namespace::Catalog::getObjForLock (C++ function)</a>
 </li>
@@ -5362,6 +5352,10 @@
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog13getTableEpochEK7int32_tK7int32_t">Catalog_Namespace::Catalog::getTableEpoch (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog14getTableEpochsEK7int32_tK7int32_t">Catalog_Namespace::Catalog::getTableEpochs (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog10getTableIdERKNSt6stringE">Catalog_Namespace::Catalog::getTableId (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog12getTableNameE7int32_t">Catalog_Namespace::Catalog::getTableName (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog20getTableNamesForUserERK12UserMetadataK13GetTablesType">Catalog_Namespace::Catalog::getTableNamesForUser (C++ function)</a>
 </li>
@@ -7123,6 +7117,8 @@
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test.html#_CPPv4N3com4mapd5tests40ImportAlterValidateSelectConcurrencyTestE">com::mapd::tests::ImportAlterValidateSelectConcurrencyTest (C++ class)</a>
 </li>
+      <li><a href="api/class/classcom_1_1mapd_1_1tests_1_1_import_alter_validate_select_concurrency_test.html#_CPPv4N3com4mapd5tests40ImportAlterValidateSelectConcurrencyTest12VoidFunctionE">com::mapd::tests::ImportAlterValidateSelectConcurrencyTest::VoidFunction (C++ class)</a>
+</li>
       <li><a href="api/class/classcom_1_1mapd_1_1tests_1_1_mapd_asserts.html#_CPPv4N3com4mapd5tests11MapdAssertsE">com::mapd::tests::MapdAsserts (C++ class)</a>
 </li>
       <li><a href="api/class/classcom_1_1mapd_1_1tests_1_1_mapd_asserts.html#_CPPv4N3com4mapd5tests11MapdAsserts7TestRunE">com::mapd::tests::MapdAsserts::TestRun (C++ class)</a>
@@ -7288,6 +7284,8 @@
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions27hashtable_cache_total_bytesE">CommandLineOptions::hashtable_cache_total_bytes (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions9help_descE">CommandLineOptions::help_desc (C++ member)</a>
+</li>
+      <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions16http_binary_portE">CommandLineOptions::http_binary_port (C++ member)</a>
 </li>
       <li><a href="api/class/class_command_line_options.html#_CPPv4N18CommandLineOptions9http_portE">CommandLineOptions::http_port (C++ member)</a>
 </li>
@@ -8509,7 +8507,7 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16get_heap_profileERNSt6stringERK10TSessionId">DBHandler::get_heap_profile (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler26get_internal_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringE">DBHandler::get_internal_table_details (C++ function)</a>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler26get_internal_table_detailsER13TTableDetailsRK10TSessionIdRKNSt6stringEKb">DBHandler::get_internal_table_details (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler39get_internal_table_details_for_databaseER13TTableDetailsRK10TSessionIdRKNSt6stringERKNSt6stringE">DBHandler::get_internal_table_details_for_database (C++ function)</a>
 </li>
@@ -8617,13 +8615,15 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler16import_geo_tableERK10TSessionIdRKNSt6stringERKNSt6stringERK11TCopyParamsRK14TRowDescriptorRK13TCreateParams">DBHandler::import_geo_table (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler25import_geo_table_internalERK10TSessionIdRKNSt6stringERKNSt6stringERK11TCopyParamsRK14TRowDescriptorRK13TCreateParams">DBHandler::import_geo_table_internal (C++ function)</a>
-</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler12import_path_E">DBHandler::import_path_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler12import_tableERK10TSessionIdRKNSt6stringERKNSt6stringERK11TCopyParams">DBHandler::import_table (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler19import_table_statusER13TImportStatusRK10TSessionIdRKNSt6stringE">DBHandler::import_table_status (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler28importGeoTableGlobFilterSortERK10TSessionIdRKNSt6stringERKNSt6stringERKN13import_export10CopyParamsERK14TRowDescriptorRK13TCreateParams">DBHandler::importGeoTableGlobFilterSort (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20importGeoTableSingleERK10TSessionIdRKNSt6stringERKNSt6stringERKN13import_export10CopyParamsERK14TRowDescriptorRK13TCreateParams">DBHandler::importGeoTableSingle (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler10initializeEKb">DBHandler::initialize (C++ function)</a>
 </li>
@@ -8673,9 +8673,9 @@
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler26load_table_binary_columnarERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEE">DBHandler::load_table_binary_columnar (C++ function)</a>
 </li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler35load_table_binary_columnar_internalERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEK22AssignRenderGroupsMode">DBHandler::load_table_binary_columnar_internal (C++ function)</a>
-</li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler32load_table_binary_columnar_polysERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEKb">DBHandler::load_table_binary_columnar_polys (C++ function)</a>
+</li>
+      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler31loadTableBinaryColumnarInternalERK10TSessionIdRKNSt6stringERKNSt6vectorI7TColumnEERKNSt6vectorINSt6stringEEEK22AssignRenderGroupsMode">DBHandler::loadTableBinaryColumnarInternal (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler20max_bytes_for_thriftEv">DBHandler::max_bytes_for_thrift (C++ function)</a>
 </li>
@@ -8690,8 +8690,6 @@
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler25parser_with_error_handlerERKNSt6stringERNSt4listINSt10unique_ptrIN6Parser4StmtEEEEE">DBHandler::parser_with_error_handler (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler24populateThriftColumnTypeEPKN17Catalog_Namespace7CatalogEPK16ColumnDescriptor">DBHandler::populateThriftColumnType (C++ function)</a>
-</li>
-      <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler23prepare_columnar_loaderERKN17Catalog_Namespace11SessionInfoERKNSt6stringE6size_tPNSt10unique_ptrIN13import_export6LoaderEEEPNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEERKNSt6vectorINSt6stringEEE">DBHandler::prepare_columnar_loader (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_handler.html#_CPPv4N9DBHandler22prepare_loader_genericERKN17Catalog_Namespace11SessionInfoERKNSt6stringE6size_tPNSt10unique_ptrIN13import_export6LoaderEEEPNSt6vectorINSt10unique_ptrIN13import_export17TypedImportBufferEEEEERKNSt6vectorINSt6stringEEENSt6stringE">DBHandler::prepare_loader_generic (C++ function)</a>
 </li>
@@ -11823,8 +11821,6 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_abstract_text_file_data_wrapper.html#_CPPv4N15foreign_storage27AbstractTextFileDataWrapper27restoreDataWrapperInternalsERKNSt6stringERK19ChunkMetadataVector">foreign_storage::AbstractTextFileDataWrapper::restoreDataWrapperInternals (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_abstract_text_file_data_wrapper.html#_CPPv4N15foreign_storage27AbstractTextFileDataWrapper27update_fragmenter_metadata_E">foreign_storage::AbstractTextFileDataWrapper::update_fragmenter_metadata_ (C++ member)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_abstract_text_file_data_wrapper.html#_CPPv4N15foreign_storage27AbstractTextFileDataWrapper14updateMetadataERNSt3mapIiN8Chunk_NS5ChunkEEEi">foreign_storage::AbstractTextFileDataWrapper::updateMetadata (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_abstract_text_file_data_wrapper.html#_CPPv4N15foreign_storage27AbstractTextFileDataWrapper13user_mapping_E">foreign_storage::AbstractTextFileDataWrapper::user_mapping_ (C++ member)</a>
@@ -11907,17 +11903,17 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidatorE">foreign_storage::ChunkSizeValidator (C++ class)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator7catalogE">foreign_storage::ChunkSizeValidator::catalog (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator8catalog_E">foreign_storage::ChunkSizeValidator::catalog_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator18ChunkSizeValidatorERK8ChunkKey">foreign_storage::ChunkSizeValidator::ChunkSizeValidator (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator6columnE">foreign_storage::ChunkSizeValidator::column (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator7column_E">foreign_storage::ChunkSizeValidator::column_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator9column_idE">foreign_storage::ChunkSizeValidator::column_id (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator10column_id_E">foreign_storage::ChunkSizeValidator::column_id_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator13foreign_tableE">foreign_storage::ChunkSizeValidator::foreign_table (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator14foreign_table_E">foreign_storage::ChunkSizeValidator::foreign_table_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator14max_chunk_sizeE">foreign_storage::ChunkSizeValidator::max_chunk_size (C++ member)</a>
+      <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4N15foreign_storage18ChunkSizeValidator15max_chunk_size_E">foreign_storage::ChunkSizeValidator::max_chunk_size_ (C++ member)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_chunk_size_validator.html#_CPPv4NK15foreign_storage18ChunkSizeValidator27throwChunkSizeViolatedErrorEK7int64_tKi">foreign_storage::ChunkSizeValidator::throwChunkSizeViolatedError (C++ function)</a>
 </li>
@@ -11981,7 +11977,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper18csv_table_options_E">foreign_storage::CsvDataWrapper::csv_table_options_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14CsvDataWrapperEKiPK12ForeignTable">foreign_storage::CsvDataWrapper::CsvDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14CsvDataWrapperEKiPK12ForeignTablePK11UserMapping">[1]</a>, <a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14CsvDataWrapperEv">[2]</a>
+      <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14CsvDataWrapperEKiPK12ForeignTable">foreign_storage::CsvDataWrapper::CsvDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14CsvDataWrapperEKiPK12ForeignTablePK11UserMappingKb">[1]</a>, <a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4N15foreign_storage14CsvDataWrapper14CsvDataWrapperEv">[2]</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_csv_data_wrapper.html#_CPPv4NK15foreign_storage14CsvDataWrapper21getAllCsvTableOptionsEv">foreign_storage::CsvDataWrapper::getAllCsvTableOptions (C++ function)</a>
 </li>
@@ -12355,6 +12351,8 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgr28temp_chunk_buffer_map_mutex_E">foreign_storage::ForeignStorageMgr::temp_chunk_buffer_map_mutex_ (C++ member)</a>
 </li>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4NK15foreign_storage17ForeignStorageMgr24updateFragmenterMetadataERK16ChunkToBufferMap">foreign_storage::ForeignStorageMgr::updateFragmenterMetadata (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_storage_mgr.html#_CPPv4N15foreign_storage17ForeignStorageMgrD0Ev">foreign_storage::ForeignStorageMgr::~ForeignStorageMgr (C++ function)</a>
 </li>
       <li><a href="api/struct/structforeign__storage_1_1_foreign_table.html#_CPPv4N15foreign_storage12ForeignTableE">foreign_storage::ForeignTable (C++ class)</a>
@@ -12455,10 +12453,10 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema15getForeignTableEv">foreign_storage::ForeignTableSchema::getForeignTable (C++ function)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28getLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::getLogicalAndPhysicalColumns (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema28getLogicalAndPhysicalColumnsEv">foreign_storage::ForeignTableSchema::getLogicalAndPhysicalColumns (C++ function)</a>
+</li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema16getLogicalColumnEKi">foreign_storage::ForeignTableSchema::getLogicalColumn (C++ function)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_foreign_table_schema.html#_CPPv4NK15foreign_storage18ForeignTableSchema26getLogicalColumnIdIteratorEKi">foreign_storage::ForeignTableSchema::getLogicalColumnIdIterator (C++ function)</a>
@@ -12973,8 +12971,6 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper16total_row_count_E">foreign_storage::ParquetDataWrapper::total_row_count_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_parquet_data_wrapper.html#_CPPv4N15foreign_storage18ParquetDataWrapper27update_fragmenter_metadata_E">foreign_storage::ParquetDataWrapper::update_fragmenter_metadata_ (C++ member)</a>
-</li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4I00_1T0EN15foreign_storage31ParquetDateFromTimestampEncoderE">foreign_storage::ParquetDateFromTimestampEncoder (C++ class)</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html#_CPPv4N15foreign_storage31ParquetDateFromTimestampEncoder31ParquetDateFromTimestampEncoderEPN14Data_Namespace14AbstractBufferEPK16ColumnDescriptorPKN7parquet16ColumnDescriptorE">foreign_storage::ParquetDateFromTimestampEncoder::ParquetDateFromTimestampEncoder (C++ function)</a>
@@ -13457,7 +13453,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper20regex_table_options_E">foreign_storage::RegexParserDataWrapper::regex_table_options_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEKiPK12ForeignTable">foreign_storage::RegexParserDataWrapper::RegexParserDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEv">[1]</a>
+      <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEKiPK12ForeignTable">foreign_storage::RegexParserDataWrapper::RegexParserDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEKiPK12ForeignTablePK11UserMapping">[1]</a>, <a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEv">[2]</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4NK15foreign_storage22RegexParserDataWrapper20validateTableOptionsEPK12ForeignTable">foreign_storage::RegexParserDataWrapper::validateTableOptions (C++ function)</a>
 </li>
@@ -15213,11 +15209,27 @@
 </li>
       <li><a href="api/struct/struct_hash_entry_info.html#_CPPv4NK13HashEntryInfontEv">HashEntryInfo::operator! (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hashing_type_hint_detected.html#_CPPv423HashingTypeHintDetected">HashingTypeHintDetected (C++ class)</a>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv421HashingSchemeRecycler">HashingSchemeRecycler (C++ class)</a>
 </li>
-      <li><a href="api/class/class_hashing_type_hint_detected.html#_CPPv4N23HashingTypeHintDetected13hashing_type_E">HashingTypeHintDetected::hashing_type_ (C++ member)</a>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI15EMPTY_META_INFOEE">HashingSchemeRecycler::cleanupCacheForInsertion (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hashing_type_hint_detected.html#_CPPv4N23HashingTypeHintDetected23HashingTypeHintDetectedE20HashTableHashingType">HashingTypeHintDetected::HashingTypeHintDetected (C++ function)</a>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecycler10clearCacheEv">HashingSchemeRecycler::clearCache (C++ function)</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecycler21HashingSchemeRecyclerEv">HashingSchemeRecycler::HashingSchemeRecycler (C++ function)</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4NK21HashingSchemeRecycler14hasItemInCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI15EMPTY_META_INFOEE">HashingSchemeRecycler::hasItemInCache (C++ function)</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecycler9initCacheEv">HashingSchemeRecycler::initCache (C++ function)</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier">HashingSchemeRecycler::markCachedItemAsDirty (C++ function)</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecycler14putItemToCacheE13QueryPlanHashNSt8optionalI8HashTypeEE13CacheItemType16DeviceIdentifier6size_t6size_tNSt8optionalI15EMPTY_META_INFOEE">HashingSchemeRecycler::putItemToCache (C++ function)</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecycler19removeItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI15EMPTY_META_INFOEE">HashingSchemeRecycler::removeItemFromCache (C++ function)</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecyclerSt14numeric_limitsEv">HashingSchemeRecycler::std::numeric_limits (C++ function)</a>, <a href="api/class/class_hashing_scheme_recycler.html#_CPPv4N21HashingSchemeRecyclerSt14numeric_limitsEv">[1]</a>
+</li>
+      <li><a href="api/class/class_hashing_scheme_recycler.html#_CPPv4NK21HashingSchemeRecycler8toStringEv">HashingSchemeRecycler::toString (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv48HashJoin">HashJoin (C++ class)</a>
 </li>
@@ -15245,8 +15257,6 @@
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin21getHashTableForDeviceEK6size_t">HashJoin::getHashTableForDevice (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin25getHashTablePropertyCacheEv">HashJoin::getHashTablePropertyCache (C++ function)</a>
-</li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin11getHashTypeEv">HashJoin::getHashType (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin17getHashTypeStringE8HashType">HashJoin::getHashTypeString (C++ function)</a>
@@ -15263,21 +15273,13 @@
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin14getMemoryLevelEv">HashJoin::getMemoryLevel (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin22getRegisteredQueryHintEv">HashJoin::getRegisteredQueryHint (C++ function)</a>
-</li>
       <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin20getSyntheticInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">HashJoin::getSyntheticInstance (C++ function)</a>, <a href="api/class/class_hash_join.html#_CPPv4N8HashJoin20getSyntheticInstanceENSt11string_viewENSt11string_viewENSt11string_viewENSt11string_viewEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">[1]</a>, <a href="api/class/class_hash_join.html#_CPPv4N8HashJoin20getSyntheticInstanceENSt6vectorINSt10shared_ptrIN8Analyzer7BinOperEEEEEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">[2]</a>
 </li>
-      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin26hash_table_property_cache_E">HashJoin::hash_table_property_cache_ (C++ member)</a>
-</li>
       <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin23hash_tables_for_device_E">HashJoin::hash_tables_for_device_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin15invalidateCacheEv">HashJoin::invalidateCache (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin11isBitwiseEqEv">HashJoin::isBitwiseEq (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin31layoutRequiresAdditionalBuffersE8HashType">HashJoin::layoutRequiresAdditionalBuffers (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin21markCachedItemAsDirtyE6size_t">HashJoin::markCachedItemAsDirty (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin19normalizeColumnPairEPKN8Analyzer4ExprEPKN8Analyzer4ExprERKN17Catalog_Namespace7CatalogEPK15TemporaryTablesKb">HashJoin::normalizeColumnPair (C++ function)</a>
 </li>
@@ -15286,8 +15288,6 @@
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin15offsetBufferOffEv">HashJoin::offsetBufferOff (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin16payloadBufferOffEv">HashJoin::payloadBufferOff (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_join.html#_CPPv4N8HashJoin17registerQueryHintERK19RegisteredQueryHint">HashJoin::registerQueryHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_join.html#_CPPv4NK8HashJoin5toSetEK18ExecutorDeviceTypeKi">HashJoin::toSet (C++ function)</a>
 </li>
@@ -15301,16 +15301,6 @@
 </li>
       <li><a href="api/class/class_hash_join_fail.html#_CPPv4N12HashJoinFail12HashJoinFailERKNSt6stringE">HashJoinFail::HashJoinFail (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_hash_join_hint.html#_CPPv412HashJoinHint">HashJoinHint (C++ class)</a>
-</li>
-      <li><a href="api/struct/struct_hash_join_hint.html#_CPPv4N12HashJoinHint7cachingE">HashJoinHint::caching (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_hash_join_hint.html#_CPPv4N12HashJoinHint7hashingE">HashJoinHint::hashing (C++ member)</a>
-</li>
-      <li><a href="api/struct/struct_hash_join_hint.html#_CPPv4NK12HashJoinHint15hint_registeredEv">HashJoinHint::hint_registered (C++ function)</a>
-</li>
-      <li><a href="api/struct/struct_hash_join_hint.html#_CPPv4N12HashJoinHint6layoutE">HashJoinHint::layout (C++ member)</a>
-</li>
       <li><a href="api/struct/struct_hash_join_matching_set.html#_CPPv419HashJoinMatchingSet">HashJoinMatchingSet (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_hash_join_matching_set.html#_CPPv4N19HashJoinMatchingSet5countE">HashJoinMatchingSet::count (C++ member)</a>
@@ -15321,6 +15311,8 @@
 </li>
       <li><a href="api/class/class_hash_table.html#_CPPv49HashTable">HashTable (C++ class)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_hash_table.html#_CPPv4N9HashTable12getCpuBufferEv">HashTable::getCpuBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_table.html#_CPPv4NK9HashTable19getEmittedKeysCountEv">HashTable::getEmittedKeysCount (C++ function)</a>
@@ -15333,8 +15325,6 @@
 </li>
       <li><a href="api/class/class_hash_table.html#_CPPv4NK9HashTable9getLayoutEv">HashTable::getLayout (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table.html#_CPPv4N9HashTable9setLayoutE8HashType">HashTable::setLayout (C++ function)</a>
-</li>
       <li><a href="api/class/class_hash_table.html#_CPPv4N9HashTable5toSetE6size_t6size_t6size_tPK6int8_tPK6int8_tPK6int8_tPK6int8_t6size_t">HashTable::toSet (C++ function)</a>
 </li>
       <li><a href="api/class/class_hash_table.html#_CPPv4N9HashTable8toStringERKNSt6stringERKNSt6stringE6size_t6size_t6size_tPK6int8_tPK6int8_tPK6int8_tPK6int8_t6size_tb">HashTable::toString (C++ function)</a>
@@ -15345,8 +15335,6 @@
 </li>
       <li><a href="api/struct/struct_hashtable_access_path_info.html#_CPPv4N23HashtableAccessPathInfo21hashed_query_plan_dagE">HashtableAccessPathInfo::hashed_query_plan_dag (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_hashtable_access_path_info.html#_CPPv4N23HashtableAccessPathInfo23HashtableAccessPathInfoEv">HashtableAccessPathInfo::HashtableAccessPathInfo (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_hashtable_access_path_info.html#_CPPv4N23HashtableAccessPathInfo9meta_infoE">HashtableAccessPathInfo::meta_info (C++ member)</a>
@@ -15377,97 +15365,43 @@
 </li>
       <li><a href="api/struct/struct_hashtable_cache_meta_info.html#_CPPv4N22HashtableCacheMetaInfo21registered_query_hintE">HashtableCacheMetaInfo::registered_query_hint (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_hash_table_property.html#_CPPv417HashTableProperty">HashTableProperty (C++ class)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv417HashtableRecycler">HashtableRecycler (C++ class)</a>
 </li>
-      <li><a href="api/struct/struct_hash_table_property.html#_CPPv4N17HashTableProperty7hashingE">HashTableProperty::hashing (C++ member)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler27addQueryPlanDagForTableKeysE6size_tRKNSt13unordered_setI6size_tEE">HashtableRecycler::addQueryPlanDagForTableKeys (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_hash_table_property.html#_CPPv4N17HashTableProperty17HashTablePropertyENSt8optionalI19HashTableLayoutTypeEENSt8optionalI20HashTableHashingTypeEE">HashTableProperty::HashTableProperty (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4NK17HashtableRecycler41checkOverlapsHashtableBucketCompatabilityERK25OverlapsHashTableMetaInfoRK25OverlapsHashTableMetaInfo">HashtableRecycler::checkOverlapsHashtableBucketCompatability (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_hash_table_property.html#_CPPv4N17HashTableProperty6layoutE">HashTableProperty::layout (C++ member)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE">HashtableRecycler::cleanupCacheForInsertion (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv425HashTablePropertyRecycler">HashTablePropertyRecycler (C++ class)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler10clearCacheEv">HashtableRecycler::clearCache (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler27addQueryPlanDagForTableKeysE6size_tRKNSt13unordered_setI6size_tEE">HashTablePropertyRecycler::addQueryPlanDagForTableKeys (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier">HashtableRecycler::getCachedHashtableWithoutCacheKey (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI15EMPTY_META_INFOEE">HashTablePropertyRecycler::cleanupCacheForInsertion (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler26getHashtableAccessPathInfoERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor">HashtableRecycler::getHashtableAccessPathInfo (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler10clearCacheEv">HashTablePropertyRecycler::clearCache (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler23getJoinColumnInfoStringERNSt6vectorIPKN8Analyzer9ColumnVarEEERNSt6vectorIPKN8Analyzer9ColumnVarEEEP8Executor">HashtableRecycler::getJoinColumnInfoString (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler16getHashingStringENSt8optionalI20HashTableHashingTypeEE">HashTablePropertyRecycler::getHashingString (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4NK17HashtableRecycler34getMappedQueryPlanDagsWithTableKeyE6size_t">HashtableRecycler::getMappedQueryPlanDagsWithTableKey (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler26getHashtablePropertyStringE17HashTableProperty">HashTablePropertyRecycler::getHashtablePropertyString (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler17HashtableRecyclerE13CacheItemTypei">HashtableRecycler::HashtableRecycler (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler15getLayoutStringENSt8optionalI19HashTableLayoutTypeEE">HashTablePropertyRecycler::getLayoutString (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4NK17HashtableRecycler14hasItemInCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE">HashtableRecycler::hasItemInCache (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4NK25HashTablePropertyRecycler34getMappedQueryPlanDagsWithTableKeyE6size_t">HashTablePropertyRecycler::getMappedQueryPlanDagsWithTableKey (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler9initCacheEv">HashtableRecycler::initCache (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler25HashTablePropertyRecyclerEv">HashTablePropertyRecycler::HashTablePropertyRecycler (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler22isSafeToCacheHashtableERK16TableIdToNodeMapbKi">HashtableRecycler::isSafeToCacheHashtable (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4NK25HashTablePropertyRecycler14hasItemInCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI15EMPTY_META_INFOEE">HashTablePropertyRecycler::hasItemInCache (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier">HashtableRecycler::markCachedItemAsDirty (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler9initCacheEv">HashTablePropertyRecycler::initCache (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler14putItemToCacheE13QueryPlanHashNSt10shared_ptrI9HashTableEE13CacheItemType16DeviceIdentifier6size_t6size_tNSt8optionalI22HashtableCacheMetaInfoEE">HashtableRecycler::putItemToCache (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier">HashTablePropertyRecycler::markCachedItemAsDirty (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler19removeItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE">HashtableRecycler::removeItemFromCache (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler14putItemToCacheE13QueryPlanHashNSt8optionalI17HashTablePropertyEE13CacheItemType16DeviceIdentifier6size_t6size_tNSt8optionalI15EMPTY_META_INFOEE">HashTablePropertyRecycler::putItemToCache (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler37removeTableKeyInfoFromQueryPlanDagMapE6size_t">HashtableRecycler::removeTableKeyInfoFromQueryPlanDagMap (C++ function)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler19removeItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI15EMPTY_META_INFOEE">HashTablePropertyRecycler::removeItemFromCache (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4N17HashtableRecycler32table_key_to_query_plan_dag_map_E">HashtableRecycler::table_key_to_query_plan_dag_map_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler37removeTableKeyInfoFromQueryPlanDagMapE6size_t">HashTablePropertyRecycler::removeTableKeyInfoFromQueryPlanDagMap (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecyclerSt14numeric_limitsEv">HashTablePropertyRecycler::std::numeric_limits (C++ function)</a>, <a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecyclerSt14numeric_limitsEv">[1]</a>
-</li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler32table_key_to_query_plan_dag_map_E">HashTablePropertyRecycler::table_key_to_query_plan_dag_map_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4NK25HashTablePropertyRecycler8toStringEv">HashTablePropertyRecycler::toString (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler17translateHashTypeE8HashType">HashTablePropertyRecycler::translateHashType (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler19translateLayoutTypeE19HashTableLayoutType">HashTablePropertyRecycler::translateLayoutType (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_property_recycler.html#_CPPv4N25HashTablePropertyRecycler28updateItemInCacheIfNecessaryE13QueryPlanHashNSt8optionalI17HashTablePropertyEE13CacheItemType16DeviceIdentifier">HashTablePropertyRecycler::updateItemInCacheIfNecessary (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv417HashTableRecycler">HashTableRecycler (C++ class)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler27addQueryPlanDagForTableKeysE6size_tRKNSt13unordered_setI6size_tEE">HashTableRecycler::addQueryPlanDagForTableKeys (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4NK17HashTableRecycler41checkOverlapsHashtableBucketCompatabilityERK25OverlapsHashTableMetaInfoRK25OverlapsHashTableMetaInfo">HashTableRecycler::checkOverlapsHashtableBucketCompatability (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler24cleanupCacheForInsertionE13CacheItemType16DeviceIdentifier6size_tRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE">HashTableRecycler::cleanupCacheForInsertion (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler10clearCacheEv">HashTableRecycler::clearCache (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler19compare_query_hintsERK12HashJoinHintRK12HashJoinHint">HashTableRecycler::compare_query_hints (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler33getCachedHashtableWithoutCacheKeyERNSt3setI6size_tEE13CacheItemType16DeviceIdentifier">HashTableRecycler::getCachedHashtableWithoutCacheKey (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler26getHashtableAccessPathInfoERKNSt6vectorI10InnerOuterEEK6SQLOpsK8JoinTypeRK20HashTableBuildDagMapP8Executor">HashTableRecycler::getHashtableAccessPathInfo (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler23getJoinColumnInfoStringERNSt6vectorIPKN8Analyzer9ColumnVarEEERNSt6vectorIPKN8Analyzer9ColumnVarEEEP8Executor">HashTableRecycler::getJoinColumnInfoString (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4NK17HashTableRecycler34getMappedQueryPlanDagsWithTableKeyE6size_t">HashTableRecycler::getMappedQueryPlanDagsWithTableKey (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler13has_join_hintENSt8optionalI22HashtableCacheMetaInfoEE">HashTableRecycler::has_join_hint (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler17HashTableRecyclerE13CacheItemTypei">HashTableRecycler::HashTableRecycler (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4NK17HashTableRecycler14hasItemInCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE">HashTableRecycler::hasItemInCache (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler9initCacheEv">HashTableRecycler::initCache (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler22isSafeToCacheHashtableERK16TableIdToNodeMapbKi">HashTableRecycler::isSafeToCacheHashtable (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler21markCachedItemAsDirtyE6size_tRNSt13unordered_setI13QueryPlanHashEE13CacheItemType16DeviceIdentifier">HashTableRecycler::markCachedItemAsDirty (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler14putItemToCacheE13QueryPlanHashNSt10shared_ptrI9HashTableEE13CacheItemType16DeviceIdentifier6size_t6size_tNSt8optionalI22HashtableCacheMetaInfoEE">HashTableRecycler::putItemToCache (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler19removeItemFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifierRNSt10lock_guardINSt5mutexEEENSt8optionalI22HashtableCacheMetaInfoEE">HashTableRecycler::removeItemFromCache (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler37removeTableKeyInfoFromQueryPlanDagMapE6size_t">HashTableRecycler::removeTableKeyInfoFromQueryPlanDagMap (C++ function)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4N17HashTableRecycler32table_key_to_query_plan_dag_map_E">HashTableRecycler::table_key_to_query_plan_dag_map_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_hash_table_recycler.html#_CPPv4NK17HashTableRecycler8toStringEv">HashTableRecycler::toString (C++ function)</a>
+      <li><a href="api/class/class_hashtable_recycler.html#_CPPv4NK17HashtableRecycler8toStringEv">HashtableRecycler::toString (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_hint_identifier.html#_CPPv414HintIdentifier">HintIdentifier (C++ class)</a>
 </li>
@@ -17097,24 +17031,16 @@
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html#_CPPv4IEN7lockmgr24TableInsertLockContainerI9WriteLockEE">lockmgr::TableInsertLockContainer&lt;WriteLock&gt; (C++ class)</a>
 </li>
-      <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4N7lockmgr22TableLockContainerImplE">lockmgr::TableLockContainerImpl (C++ class)</a>
-</li>
-      <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4NK7lockmgr22TableLockContainerImpl12getTableNameEv">lockmgr::TableLockContainerImpl::getTableName (C++ function)</a>
-</li>
-      <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4N7lockmgr22TableLockContainerImpl11table_name_E">lockmgr::TableLockContainerImpl::table_name_ (C++ member)</a>
-</li>
-      <li><a href="api/class/classlockmgr_1_1_table_lock_container_impl.html#_CPPv4N7lockmgr22TableLockContainerImpl22TableLockContainerImplERKNSt6stringE">lockmgr::TableLockContainerImpl::TableLockContainerImpl (C++ function)</a>
-</li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4I0EN7lockmgr16TableLockMgrImplE">lockmgr::TableLockMgrImpl (C++ class)</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4NK7lockmgr16TableLockMgrImpl15getLockedTablesEv">lockmgr::TableLockMgrImpl::getLockedTables (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl19getReadLockForTableEK8ChunkKey">lockmgr::TableLockMgrImpl::getReadLockForTable (C++ function)</a>, <a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl19getReadLockForTableERKN17Catalog_Namespace7CatalogERKNSt6stringE">[1]</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl13getTableMutexEK8ChunkKey">lockmgr::TableLockMgrImpl::getTableMutex (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl20getWriteLockForTableEK8ChunkKey">lockmgr::TableLockMgrImpl::getWriteLockForTable (C++ function)</a>, <a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl20getWriteLockForTableERKN17Catalog_Namespace7CatalogERKNSt6stringE">[1]</a>
 </li>
       <li><a href="api/class/classlockmgr_1_1_table_lock_mgr_impl.html#_CPPv4N7lockmgr16TableLockMgrImpl10map_mutex_E">lockmgr::TableLockMgrImpl::map_mutex_ (C++ member)</a>
@@ -19675,12 +19601,12 @@
 </li>
       <li><a href="api/class/class_parser_1_1_query_spec.html#_CPPv4NK6Parser9QuerySpec17get_having_clauseEv">Parser::QuerySpec::get_having_clause (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_query_spec.html#_CPPv4NK6Parser9QuerySpec15get_is_distinctEv">Parser::QuerySpec::get_is_distinct (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_query_spec.html#_CPPv4NK6Parser9QuerySpec17get_select_clauseEv">Parser::QuerySpec::get_select_clause (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_query_spec.html#_CPPv4NK6Parser9QuerySpec16get_where_clauseEv">Parser::QuerySpec::get_where_clause (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_query_spec.html#_CPPv4N6Parser9QuerySpec15groupby_clause_E">Parser::QuerySpec::groupby_clause_ (C++ member)</a>
@@ -20281,8 +20207,6 @@
 </li>
       <li><a href="api/class/class_perfect_hash_table.html#_CPPv4N16PerfectHashTable16PerfectHashTableEPN14Data_Namespace7DataMgrEK8HashTypeK18ExecutorDeviceTypeK6size_tK6size_t">PerfectHashTable::PerfectHashTable (C++ function)</a>
 </li>
-      <li><a href="api/class/class_perfect_hash_table.html#_CPPv4N16PerfectHashTable9setLayoutE8HashType">PerfectHashTable::setLayout (C++ function)</a>
-</li>
       <li><a href="api/class/class_perfect_hash_table.html#_CPPv4N16PerfectHashTableD0Ev">PerfectHashTable::~PerfectHashTable (C++ function)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv420PerfectJoinHashTable">PerfectJoinHashTable (C++ class)</a>
@@ -20335,6 +20259,8 @@
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4NK20PerfectJoinHashTable23getEffectiveMemoryLevelERKNSt6vectorI10InnerOuterEE">PerfectJoinHashTable::getEffectiveMemoryLevel (C++ function)</a>
 </li>
+      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable21getHashingSchemeCacheEv">PerfectJoinHashTable::getHashingSchemeCache (C++ function)</a>
+</li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable15getHashJoinArgsEPN4llvm5ValueEPKN8Analyzer4ExprEKiRK18CompilationOptions">PerfectJoinHashTable::getHashJoinArgs (C++ function)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4NK20PerfectJoinHashTable15getHashJoinTypeEv">PerfectJoinHashTable::getHashJoinType (C++ function)</a>
@@ -20342,8 +20268,6 @@
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable17getHashTableCacheEv">PerfectJoinHashTable::getHashTableCache (C++ function)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4NK20PerfectJoinHashTable21getHashTableForDeviceEK6size_t">PerfectJoinHashTable::getHashTableForDevice (C++ function)</a>
-</li>
-      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable25getHashtablePropertyCacheEv">PerfectJoinHashTable::getHashtablePropertyCache (C++ function)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4NK20PerfectJoinHashTable11getHashTypeEv">PerfectJoinHashTable::getHashType (C++ function)</a>
 </li>
@@ -20353,13 +20277,13 @@
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4NK20PerfectJoinHashTable19getInnerTableRteIdxEv">PerfectJoinHashTable::getInnerTableRteIdx (C++ function)</a>
 </li>
-      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMapRK19RegisteredQueryHint">PerfectJoinHashTable::getInstance (C++ function)</a>
+      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMap">PerfectJoinHashTable::getInstance (C++ function)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4NK20PerfectJoinHashTable14getMemoryLevelEv">PerfectJoinHashTable::getMemoryLevel (C++ function)</a>
 </li>
-      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable22getRegisteredQueryHintEv">PerfectJoinHashTable::getRegisteredQueryHint (C++ function)</a>
-</li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable17hash_table_cache_E">PerfectJoinHashTable::hash_table_cache_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable24hash_table_layout_cache_E">PerfectJoinHashTable::hash_table_layout_cache_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable10hash_type_E">PerfectJoinHashTable::hash_type_ (C++ member)</a>
 </li>
@@ -20369,7 +20293,7 @@
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable22initHashTableForDeviceERK8ChunkKeyRK10JoinColumnRK10InnerOuterK8HashTypeKN14Data_Namespace11MemoryLevelEKi">PerfectJoinHashTable::initHashTableForDevice (C++ function)</a>
 </li>
-      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier8HashType">PerfectJoinHashTable::initHashTableOnCpuFromCache (C++ function)</a>
+      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier">PerfectJoinHashTable::initHashTableOnCpuFromCache (C++ function)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable18inner_outer_pairs_E">PerfectJoinHashTable::inner_outer_pairs_ (C++ member)</a>
 </li>
@@ -20395,11 +20319,7 @@
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable14qual_bin_oper_E">PerfectJoinHashTable::qual_bin_oper_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable11query_hint_E">PerfectJoinHashTable::query_hint_ (C++ member)</a>
-</li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable12query_infos_E">PerfectJoinHashTable::query_infos_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable17registerQueryHintERK19RegisteredQueryHint">PerfectJoinHashTable::registerQueryHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_perfect_join_hash_table.html#_CPPv4N20PerfectJoinHashTable5reifyEv">PerfectJoinHashTable::reify (C++ function)</a>
 </li>
@@ -22031,8 +21951,6 @@
 </li>
       <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint8defaultsEv">RegisteredQueryHint::defaults (C++ function)</a>
 </li>
-      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint9hash_joinE">RegisteredQueryHint::hash_join (C++ member)</a>
-</li>
       <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4NK19RegisteredQueryHint23isAnyQueryHintDeliveredEv">RegisteredQueryHint::isAnyQueryHintDelivered (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4NK19RegisteredQueryHint16isHintRegisteredEK9QueryHint">RegisteredQueryHint::isHintRegistered (C++ function)</a>
@@ -22058,8 +21976,6 @@
       <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint14rowwise_outputE">RegisteredQueryHint::rowwise_output (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint18translateQueryHintERKNSt6stringE">RegisteredQueryHint::translateQueryHint (C++ function)</a>
-</li>
-      <li><a href="api/struct/struct_registered_query_hint.html#_CPPv4N19RegisteredQueryHint14unregisterHintEK9QueryHint">RegisteredQueryHint::unregisterHint (C++ function)</a>
 </li>
       <li><a href="api/class/class_rel_aggregate.html#_CPPv412RelAggregate">RelAggregate (C++ class)</a>
 </li>
@@ -23165,10 +23081,10 @@
 </li>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMapixE6size_t">RenderAllocatorMap::operator[] (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMap16prepForRenderingERKNSt10shared_ptrIN13QueryRenderer15QueryDataLayoutEEE">RenderAllocatorMap::prepForRendering (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMap21render_allocator_map_E">RenderAllocatorMap::render_allocator_map_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMap15render_manager_E">RenderAllocatorMap::render_manager_ (C++ member)</a>

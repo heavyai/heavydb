@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 16c4e03
+                6.0.0dev ae349be
               </div>
             
           
@@ -508,9 +508,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join.html">Class HashJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_property_recycler.html">Class HashTablePropertyRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_recycler.html">Class HashTableRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hashing_type_hint_detected.html">Class HashingTypeHintDetected</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashing_scheme_recycler.html">Class HashingSchemeRecycler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashtable_recycler.html">Class HashtableRecycler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -1278,7 +1277,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
@@ -1830,10 +1828,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_gpu_group_by_buffers.html">Struct GpuGroupByBuffers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_hint.html">Struct HashJoinHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_property.html">Struct HashTableProperty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
@@ -2263,16 +2259,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21BaselineJoinHashTable22getRegisteredQueryHintEv">
-<span id="_CPPv3N21BaselineJoinHashTable22getRegisteredQueryHintEv"></span><span id="_CPPv2N21BaselineJoinHashTable22getRegisteredQueryHintEv"></span><span id="BaselineJoinHashTable::getRegisteredQueryHint"></span><span class="target" id="class_baseline_join_hash_table_1a27aade2a8b25d1e4ec57b06aa45ffcfb"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> &amp;<code class="sig-name descname">getRegisteredQueryHint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable22getRegisteredQueryHintEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N21BaselineJoinHashTable17registerQueryHintERK19RegisteredQueryHint">
-<span id="_CPPv3N21BaselineJoinHashTable17registerQueryHintERK19RegisteredQueryHint"></span><span id="_CPPv2N21BaselineJoinHashTable17registerQueryHintERK19RegisteredQueryHint"></span><span id="BaselineJoinHashTable::registerQueryHint__RegisteredQueryHintCR"></span><span class="target" id="class_baseline_join_hash_table_1ad50db7ae33ec41d10d8bdc0da776b9b5"></span>void <code class="sig-name descname">registerQueryHint</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> &amp;<em>query_hint</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable17registerQueryHintERK19RegisteredQueryHint" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4NK21BaselineJoinHashTable15getHashJoinTypeEv">
 <span id="_CPPv3NK21BaselineJoinHashTable15getHashJoinTypeEv"></span><span id="_CPPv2NK21BaselineJoinHashTable15getHashJoinTypeEv"></span><span id="BaselineJoinHashTable::getHashJoinTypeC"></span><span class="target" id="class_baseline_join_hash_table_1a2a0a63c3d960bf83b5bc3bcc708e2da4"></span>std::string <code class="sig-name descname">getHashJoinType</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21BaselineJoinHashTable15getHashJoinTypeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2286,8 +2272,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMapRK19RegisteredQueryHint">
-<span id="_CPPv3N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMapRK19RegisteredQueryHint"></span><span id="_CPPv2N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMapRK19RegisteredQueryHint"></span><span id="BaselineJoinHashTable::getInstance__std::shared_ptr:Analyzer::BinOper:C.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.JoinTypeC.HashTypeC.iC.ColumnCacheMapR.ExecutorP.HashTableBuildDagMapCR.TableIdToNodeMapCR.RegisteredQueryHintCR"></span><span class="target" id="class_baseline_join_hash_table_1a0219fe9ffb6bf96a369d88a3575e1150"></span>std::shared_ptr&lt;<a class="reference internal" href="#_CPPv421BaselineJoinHashTable" title="BaselineJoinHashTable">BaselineJoinHashTable</a>&gt; <code class="sig-name descname">getInstance</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> HashType <em>preferred_hash_type</em>, <em class="property">const</em> int <em>device_count</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> HashTableBuildDagMap &amp;<em>hashtable_build_dag_map</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> &amp;<em>query_hint</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMapRK19RegisteredQueryHint" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMap">
+<span id="_CPPv3N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMap"></span><span id="_CPPv2N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMap"></span><span id="BaselineJoinHashTable::getInstance__std::shared_ptr:Analyzer::BinOper:C.std::vector:InputTableInfo:CR.Data_Namespace::MemoryLevelC.JoinTypeC.HashTypeC.iC.ColumnCacheMapR.ExecutorP.HashTableBuildDagMapCR.TableIdToNodeMapCR"></span><span class="target" id="class_baseline_join_hash_table_1af23c9207ec36d301d7c6a1c95d46f0f9"></span>std::shared_ptr&lt;<a class="reference internal" href="#_CPPv421BaselineJoinHashTable" title="BaselineJoinHashTable">BaselineJoinHashTable</a>&gt; <code class="sig-name descname">getInstance</code><span class="sig-paren">(</span><em class="property">const</em> std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_bin_oper.html#_CPPv4N8Analyzer7BinOperE" title="Analyzer::BinOper">BinOper</a>&gt; <em>condition</em>, <em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> Data_Namespace::MemoryLevel <em>memory_level</em>, <em class="property">const</em> JoinType <em>join_type</em>, <em class="property">const</em> HashType <em>preferred_hash_type</em>, <em class="property">const</em> int <em>device_count</em>, ColumnCacheMap &amp;<em>column_cache</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em>, <em class="property">const</em> HashTableBuildDagMap &amp;<em>hashtable_build_dag_map</em>, <em class="property">const</em> TableIdToNodeMap &amp;<em>table_id_to_node_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8JoinTypeK8HashTypeKiR14ColumnCacheMapP8ExecutorRK20HashTableBuildDagMapRK16TableIdToNodeMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Make hash table from an in-flight SQL query’s parse tree etc. </p>
 </dd></dl>
 
@@ -2308,12 +2294,12 @@
 
 <dl class="function">
 <dt id="_CPPv4N21BaselineJoinHashTable17getHashTableCacheEv">
-<span id="_CPPv3N21BaselineJoinHashTable17getHashTableCacheEv"></span><span id="_CPPv2N21BaselineJoinHashTable17getHashTableCacheEv"></span><span id="BaselineJoinHashTable::getHashTableCache"></span><span class="target" id="class_baseline_join_hash_table_1a00754becd73e88c868f573359c385e53"></span><em class="property">static</em> <a class="reference internal" href="class_hash_table_recycler.html#_CPPv417HashTableRecycler" title="HashTableRecycler">HashTableRecycler</a> *<code class="sig-name descname">getHashTableCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable17getHashTableCacheEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21BaselineJoinHashTable17getHashTableCacheEv"></span><span id="_CPPv2N21BaselineJoinHashTable17getHashTableCacheEv"></span><span id="BaselineJoinHashTable::getHashTableCache"></span><span class="target" id="class_baseline_join_hash_table_1ab66e37da5cf829ddd7da10534373018a"></span><em class="property">static</em> <a class="reference internal" href="class_hashtable_recycler.html#_CPPv417HashtableRecycler" title="HashtableRecycler">HashtableRecycler</a> *<code class="sig-name descname">getHashTableCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable17getHashTableCacheEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21BaselineJoinHashTable25getHashtablePropertyCacheEv">
-<span id="_CPPv3N21BaselineJoinHashTable25getHashtablePropertyCacheEv"></span><span id="_CPPv2N21BaselineJoinHashTable25getHashtablePropertyCacheEv"></span><span id="BaselineJoinHashTable::getHashtablePropertyCache"></span><span class="target" id="class_baseline_join_hash_table_1aac4d8c27a40e54b578376bf3b8e3ade5"></span><em class="property">static</em> <a class="reference internal" href="class_hash_table_property_recycler.html#_CPPv425HashTablePropertyRecycler" title="HashTablePropertyRecycler">HashTablePropertyRecycler</a> *<code class="sig-name descname">getHashtablePropertyCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable25getHashtablePropertyCacheEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21BaselineJoinHashTable21getHashingSchemeCacheEv">
+<span id="_CPPv3N21BaselineJoinHashTable21getHashingSchemeCacheEv"></span><span id="_CPPv2N21BaselineJoinHashTable21getHashingSchemeCacheEv"></span><span id="BaselineJoinHashTable::getHashingSchemeCache"></span><span class="target" id="class_baseline_join_hash_table_1ac6cb334f29abea023d1255c7a7839816"></span><em class="property">static</em> <a class="reference internal" href="class_hashing_scheme_recycler.html#_CPPv421HashingSchemeRecycler" title="HashingSchemeRecycler">HashingSchemeRecycler</a> *<code class="sig-name descname">getHashingSchemeCache</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable21getHashingSchemeCacheEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2395,8 +2381,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier8HashType">
-<span id="_CPPv3N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier8HashType"></span><span id="_CPPv2N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier8HashType"></span><span id="BaselineJoinHashTable::initHashTableOnCpuFromCache__QueryPlanHash.CacheItemType.DeviceIdentifier.HashType"></span><span class="target" id="class_baseline_join_hash_table_1ac6fbab157fabebd267c6be85121b832b"></span>std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt; <code class="sig-name descname">initHashTableOnCpuFromCache</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em>, HashType <em>expected_layout</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier8HashType" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier">
+<span id="_CPPv3N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier"></span><span id="_CPPv2N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier"></span><span id="BaselineJoinHashTable::initHashTableOnCpuFromCache__QueryPlanHash.CacheItemType.DeviceIdentifier"></span><span class="target" id="class_baseline_join_hash_table_1aa062917b913c01ebf7b658efe006dc5a"></span>std::shared_ptr&lt;<a class="reference internal" href="class_hash_table.html#_CPPv49HashTable" title="HashTable">HashTable</a>&gt; <code class="sig-name descname">initHashTableOnCpuFromCache</code><span class="sig-paren">(</span>QueryPlanHash <em>key</em>, CacheItemType <em>item_type</em>, DeviceIdentifier <em>device_identifier</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable27initHashTableOnCpuFromCacheE13QueryPlanHash13CacheItemType16DeviceIdentifier" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2478,11 +2464,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N21BaselineJoinHashTable11query_hint_E">
-<span id="_CPPv3N21BaselineJoinHashTable11query_hint_E"></span><span id="_CPPv2N21BaselineJoinHashTable11query_hint_E"></span><span id="BaselineJoinHashTable::query_hint___RegisteredQueryHint"></span><span class="target" id="class_baseline_join_hash_table_1a55d6ffdaef96b69b351807c39b2b663a"></span><a class="reference internal" href="../struct/struct_registered_query_hint.html#_CPPv419RegisteredQueryHint" title="RegisteredQueryHint">RegisteredQueryHint</a> <code class="sig-name descname">query_hint_</code><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable11query_hint_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N21BaselineJoinHashTable20hashtable_cache_key_E">
 <span id="_CPPv3N21BaselineJoinHashTable20hashtable_cache_key_E"></span><span id="_CPPv2N21BaselineJoinHashTable20hashtable_cache_key_E"></span><span id="BaselineJoinHashTable::hashtable_cache_key___QueryPlanHash"></span><span class="target" id="class_baseline_join_hash_table_1aecbadddb3ffaba5b8227a92e6ab26380"></span>QueryPlanHash <code class="sig-name descname">hashtable_cache_key_</code><a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable20hashtable_cache_key_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2520,7 +2501,12 @@
 <p class="breathe-sectiondef-title rubric">Protected Static Attributes</p>
 <dl class="member">
 <dt id="_CPPv4N21BaselineJoinHashTable17hash_table_cache_E">
-<span id="_CPPv3N21BaselineJoinHashTable17hash_table_cache_E"></span><span id="_CPPv2N21BaselineJoinHashTable17hash_table_cache_E"></span><span id="BaselineJoinHashTable::hash_table_cache___std::unique_ptr:HashTableRecycler:"></span><span class="target" id="class_baseline_join_hash_table_1ae425b5da9331405d79d1e4534d710770"></span>std::unique_ptr&lt;<a class="reference internal" href="class_hash_table_recycler.html#_CPPv417HashTableRecycler" title="HashTableRecycler">HashTableRecycler</a>&gt; <code class="sig-name descname">hash_table_cache_</code> = std::make_unique&lt;<a class="reference internal" href="class_hash_table_recycler.html#_CPPv417HashTableRecycler" title="HashTableRecycler">HashTableRecycler</a>&gt;(CacheItemType::BASELINE_HT, )<a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable17hash_table_cache_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21BaselineJoinHashTable17hash_table_cache_E"></span><span id="_CPPv2N21BaselineJoinHashTable17hash_table_cache_E"></span><span id="BaselineJoinHashTable::hash_table_cache___std::unique_ptr:HashtableRecycler:"></span><span class="target" id="class_baseline_join_hash_table_1a3785eafb43a6dc6b681193eea7da0665"></span>std::unique_ptr&lt;<a class="reference internal" href="class_hashtable_recycler.html#_CPPv417HashtableRecycler" title="HashtableRecycler">HashtableRecycler</a>&gt; <code class="sig-name descname">hash_table_cache_</code> = std::make_unique&lt;<a class="reference internal" href="class_hashtable_recycler.html#_CPPv417HashtableRecycler" title="HashtableRecycler">HashtableRecycler</a>&gt;(CacheItemType::BASELINE_HT, )<a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable17hash_table_cache_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21BaselineJoinHashTable24hash_table_layout_cache_E">
+<span id="_CPPv3N21BaselineJoinHashTable24hash_table_layout_cache_E"></span><span id="_CPPv2N21BaselineJoinHashTable24hash_table_layout_cache_E"></span><span id="BaselineJoinHashTable::hash_table_layout_cache___std::unique_ptr:HashingSchemeRecycler:"></span><span class="target" id="class_baseline_join_hash_table_1adcfdb80ab8c5fa8dc847a51fd6bf4281"></span>std::unique_ptr&lt;<a class="reference internal" href="class_hashing_scheme_recycler.html#_CPPv421HashingSchemeRecycler" title="HashingSchemeRecycler">HashingSchemeRecycler</a>&gt; <code class="sig-name descname">hash_table_layout_cache_</code> = std::make_unique&lt;<a class="reference internal" href="class_hashing_scheme_recycler.html#_CPPv421HashingSchemeRecycler" title="HashingSchemeRecycler">HashingSchemeRecycler</a>&gt;()<a class="headerlink" href="#_CPPv4N21BaselineJoinHashTable24hash_table_layout_cache_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

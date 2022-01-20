@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 16c4e03
+                6.0.0dev ae349be
               </div>
             
           
@@ -508,9 +508,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join.html">Class HashJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_property_recycler.html">Class HashTablePropertyRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_recycler.html">Class HashTableRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hashing_type_hint_detected.html">Class HashingTypeHintDetected</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashing_scheme_recycler.html">Class HashingSchemeRecycler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashtable_recycler.html">Class HashtableRecycler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -1278,7 +1277,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
@@ -1830,10 +1828,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_gpu_group_by_buffers.html">Struct GpuGroupByBuffers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_hint.html">Struct HashJoinHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_property.html">Struct HashTableProperty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
@@ -2229,6 +2225,11 @@
 
 <dl class="function">
 <dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a5ce2c22b9ddf3e7c71ea96dc74880e23"></span><code class="sig-name descname">TTableDetails com.mapd.tests.MapdTestClient.get_table_details_for_database(String tableName, String databaseName)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
 <span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a364911d85aa00b8fe4b3683c9ad2e5d7"></span><code class="sig-name descname">List&lt;TTableMeta&gt; com.mapd.tests.MapdTestClient.get_tables_meta()</code></dt>
 <dd></dd></dl>
 
@@ -2307,12 +2308,50 @@
 <span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1aeaab594594ef1d3468ebbb9f1410e504"></span><code class="sig-name descname">List&lt;TQueryInfo&gt; com.mapd.tests.MapdTestClient.get_queries_info()</code></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a398fb37648e36363004755642e070346"></span><code class="sig-name descname">void com.mapd.tests.MapdTestClient.load_table(String tableName, List&lt; List&lt; String &gt;&gt; rows, List&lt; String &gt; columnNames)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a3efd7812c596750d52ed2d3bda630619"></span><code class="sig-name descname">void com.mapd.tests.MapdTestClient.load_table_binary(String tableName, List&lt; List&lt; Object &gt;&gt; rows, List&lt; String &gt; columnNames)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a304659f4b7761532b79b5db3b2fb4d5d"></span><code class="sig-name descname">void com.mapd.tests.MapdTestClient.load_table_binary_columnar(String tableName, List&lt; List&lt; Object &gt;&gt; columns, List&lt; String &gt; columnNames)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a817ed252715331c9c63b2b8395c72a9f"></span><code class="sig-name descname">void com.mapd.tests.MapdTestClient.load_table_binary_columnar_polys(String tableName, List&lt; List&lt; Object &gt;&gt; columns, List&lt; String &gt; columnNames)</code></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
 <dt>
 <span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a4c774da933371b033fe8386b6ce33026"></span><code class="sig-name descname">static MapdTestClient com.mapd.tests.MapdTestClient.getClient(String host, int port, String db, String user, String password)</code></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Private Functions</p>
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a58b06d5294572ae341c0b65c24650e7e"></span><code class="sig-name descname">TDatum com.mapd.tests.MapdTestClient.convertToTDatum(Object value)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1a7279c5dbf22e28d7cb774fe920bd06ff"></span><code class="sig-name descname">List&lt;TColumn&gt; com.mapd.tests.MapdTestClient.convertToTColumns(List&lt; List&lt; Object &gt;&gt; columns)</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="classcom_1_1mapd_1_1tests_1_1_mapd_test_client_1afce018bf1ac9cfe4c0ea248cd5395159"></span><code class="sig-name descname">TColumn com.mapd.tests.MapdTestClient.convertToTColumn(List&lt; Object &gt; column)</code></dt>
 <dd></dd></dl>
 
 </div>

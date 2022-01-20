@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 16c4e03
+                6.0.0dev ae349be
               </div>
             
           
@@ -508,9 +508,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join.html">Class HashJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_join_fail.html">Class HashJoinFail</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_hash_table.html">Class HashTable</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_property_recycler.html">Class HashTablePropertyRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hash_table_recycler.html">Class HashTableRecycler</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_hashing_type_hint_detected.html">Class HashingTypeHintDetected</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashing_scheme_recycler.html">Class HashingSchemeRecycler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_hashtable_recycler.html">Class HashtableRecycler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_i_cmp.html">Class ICmp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_in_values_bitmap.html">Class InValuesBitmap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_input_col_descriptor.html">Class InputColDescriptor</a></li>
@@ -1278,7 +1277,6 @@
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container.html">Class lockmgr::TableInsertLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; ReadLock &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_insert_lock_container_3_01_write_lock_01_4.html">Class lockmgr::TableInsertLockContainer&lt; WriteLock &gt;</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_container_impl.html">Class lockmgr::TableLockContainerImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_lock_mgr_impl.html">Class lockmgr::TableLockMgrImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container.html">Class lockmgr::TableSchemaLockContainer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlockmgr_1_1_table_schema_lock_container_3_01_read_lock_01_4.html">Class lockmgr::TableSchemaLockContainer&lt; ReadLock &gt;</a></li>
@@ -1830,10 +1828,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_gpu_group_by_buffers.html">Struct GpuGroupByBuffers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_group_by_buffer_layout_info.html">Struct GroupByBufferLayoutInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_entry_info.html">Struct HashEntryInfo</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_hint.html">Struct HashJoinHint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_join_matching_set.html">Struct HashJoinMatchingSet</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_build_dag.html">Struct HashTableBuildDag</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_hash_table_property.html">Struct HashTableProperty</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_access_path_info.html">Struct HashtableAccessPathInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hashtable_cache_meta_info.html">Struct HashtableCacheMetaInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_hint_identifier.html">Struct HintIdentifier</a></li>
@@ -2319,6 +2315,16 @@
 <dl class="function">
 <dt id="_CPPv4NK17Catalog_Namespace7Catalog19getMetadataForTableEib">
 <span id="_CPPv3NK17Catalog_Namespace7Catalog19getMetadataForTableEib"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog19getMetadataForTableEib"></span><span id="Catalog_Namespace::Catalog::getMetadataForTable__i.bC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a8ec3b4957f5faf01ac2e40b23a905fae"></span><em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<code class="sig-name descname">getMetadataForTable</code><span class="sig-paren">(</span>int <em>tableId</em>, bool <em>populateFragmenter</em> = true<span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog19getMetadataForTableEib" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK17Catalog_Namespace7Catalog12getTableNameE7int32_t">
+<span id="_CPPv3NK17Catalog_Namespace7Catalog12getTableNameE7int32_t"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog12getTableNameE7int32_t"></span><span id="Catalog_Namespace::Catalog::getTableName__int32_tC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a6a81655ab0d10cacc398bf2ab4e7612b"></span>std::optional&lt;std::string&gt; <code class="sig-name descname">getTableName</code><span class="sig-paren">(</span>int32_t <em>table_id</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog12getTableNameE7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK17Catalog_Namespace7Catalog10getTableIdERKNSt6stringE">
+<span id="_CPPv3NK17Catalog_Namespace7Catalog10getTableIdERKNSt6stringE"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog10getTableIdERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::getTableId__ssCRC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a61b30cd28ce5a234fb66f3462edb4970"></span>std::optional&lt;int32_t&gt; <code class="sig-name descname">getTableId</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog10getTableIdERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -3467,6 +3473,11 @@
 <dl class="function">
 <dt id="_CPPv4NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedEi">
 <span id="_CPPv3NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedEi"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedEi"></span><span id="Catalog_Namespace::Catalog::getMutableMetadataForTableUnlocked__iC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a6b3d8cc0cda61b638a1cc0516744b24d"></span><a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<code class="sig-name descname">getMutableMetadataForTableUnlocked</code><span class="sig-paren">(</span>int <em>table_id</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedEi" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedERKNSt6stringE">
+<span id="_CPPv3NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedERKNSt6stringE"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::getMutableMetadataForTableUnlocked__ssCRC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ac99d6ac971afe250088b5b72b04ac2d4"></span><a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<code class="sig-name descname">getMutableMetadataForTableUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>table_name</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog34getMutableMetadataForTableUnlockedERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
