@@ -2703,6 +2703,19 @@ bool first_oe_is_desc(const std::list<Analyzer::OrderEntry>& order_entries) {
   return !order_entries.empty() && order_entries.front().is_desc;
 }
 
+void build_render_targets(RenderInfo& render_info,
+                          const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
+                          const std::vector<TargetMetaInfo>& targets_meta) {
+  CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
+  render_info.targets.clear();
+  for (size_t i = 0; i < targets_meta.size(); ++i) {
+    render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
+        targets_meta[i].get_resname(),
+        work_unit_target_exprs[i]->get_shared_ptr(),
+        false));
+  }
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
@@ -2735,8 +2748,20 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         result_rows->keepFirstN(limit);
       }
     }
+
+    if (render_info) {
+      // We've hit a sort step that is the very last step
+      // in a distributed render query. We'll fill in the render targets
+      // since we have all that data needed to do so. This is normally
+      // done in executeWorkUnit, but that is bypassed in this case.
+      build_render_targets(*render_info,
+                           source_work_unit.exe_unit.target_exprs,
+                           aggregated_result.targets_meta);
+    }
+
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
     sort->setOutputMetainfo(aggregated_result.targets_meta);
+
     return result;
   }
 
@@ -3032,19 +3057,6 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     }
   }
   return ra_exe_unit;
-}
-
-void build_render_targets(RenderInfo& render_info,
-                          const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
-                          const std::vector<TargetMetaInfo>& targets_meta) {
-  CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
-  render_info.targets.clear();
-  for (size_t i = 0; i < targets_meta.size(); ++i) {
-    render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
-        targets_meta[i].get_resname(),
-        work_unit_target_exprs[i]->get_shared_ptr(),
-        false));
-  }
 }
 
 inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
