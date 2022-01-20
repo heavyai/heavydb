@@ -231,13 +231,8 @@ if (ENABLE_SYSTEM_TFS)
   endif()
 endif()
 
-if(ENABLE_CUDA)
-  add_library(QueryEngine ${query_engine_source_files} ${query_engine_cuda_source_files})
-  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init QueryEngineCudaTargets)
-else()
-  add_library(QueryEngine ${query_engine_source_files})
-  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
-endif()
+add_library(QueryEngine ${query_engine_source_files} $<$<BOOL:ENABLE_CUDA>:${query_engine_cuda_source_files}>)
+add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineTableFunctionsFactory_init)
 
 add_custom_command(
     DEPENDS RuntimeFunctions.h RuntimeFunctions.cpp GeoOpsRuntime.cpp DecodersImpl.h JoinHashTable/Runtime/JoinHashTableQueryRuntime.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp TopKRuntime.cpp ${CMAKE_SOURCE_DIR}/Geospatial/Utm.h
@@ -369,12 +364,13 @@ add_custom_command(
       ${CUDA_TABLE_FUNCTION_FILES} -o ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
   )
 
-add_custom_target(QueryEngineCudaTargets
+if(ENABLE_CUDA)
+  add_custom_target(QueryEngineCudaTargets
+    ALL
     DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.fatbin
         ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a
     )
-if(ENABLE_CUDA)
   string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
   if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
     if (ENABLE_CUDA_KERNEL_DEBUG)
