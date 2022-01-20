@@ -363,10 +363,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
                                         int dict_id,
                                         bool load_dict = true) override {
     UNREACHABLE();
+    return nullptr;
   }
 
   Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
     UNREACHABLE();
+    return Fragmenter_Namespace::TableInfo();
   }
 
   static constexpr size_t DEFAULT_NUM_PAGES_PER_DATA_FILE{256};

@@ -31,14 +31,17 @@ RelAlgSchemaProvider::RelAlgSchemaProvider(const RelAlgNode& root) {
 
 std::vector<int> RelAlgSchemaProvider::listDatabases() const {
   UNREACHABLE();
+  return std::vector<int>{};
 }
 
 TableInfoList RelAlgSchemaProvider::listTables(int db_id) const {
   UNREACHABLE();
+  return TableInfoList{};
 }
 
 ColumnInfoList RelAlgSchemaProvider::listColumns(int db_id, int table_id) const {
   UNREACHABLE();
+  return ColumnInfoList{};
 }
 
 TableInfoPtr RelAlgSchemaProvider::getTableInfo(int db_id, int table_id) const {
