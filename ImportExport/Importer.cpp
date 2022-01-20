@@ -3541,23 +3541,38 @@ bool Detector::detect_headers(const std::vector<SQLTypes>& head_types,
 }
 
 std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
-  n = std::min(n, raw_rows.size());
-  size_t offset = (has_headers && raw_rows.size() > 1) ? 1 : 0;
-  std::vector<std::vector<std::string>> sample_rows(raw_rows.begin() + offset,
-                                                    raw_rows.begin() + n);
-  return sample_rows;
+  {
+    n = std::min(n, raw_rows.size());
+    size_t offset = (has_headers && raw_rows.size() > 1) ? 1 : 0;
+    std::vector<std::vector<std::string>> sample_rows(raw_rows.begin() + offset,
+                                                      raw_rows.begin() + n);
+    return sample_rows;
+  }
 }
 
 std::vector<std::string> Detector::get_headers() {
-  std::vector<std::string> headers(best_sqltypes.size());
-  for (size_t i = 0; i < best_sqltypes.size(); i++) {
-    if (has_headers && i < raw_rows[0].size()) {
-      headers[i] = raw_rows[0][i];
-    } else {
-      headers[i] = "column_" + std::to_string(i + 1);
+  {
+    std::vector<std::string> headers(best_sqltypes.size());
+    for (size_t i = 0; i < best_sqltypes.size(); i++) {
+      if (has_headers && i < raw_rows[0].size()) {
+        headers[i] = raw_rows[0][i];
+      } else {
+        headers[i] = "column_" + std::to_string(i + 1);
+      }
     }
+    return headers;
   }
-  return headers;
+}
+
+std::vector<SQLTypeInfo> Detector::getBestColumnTypes() const {
+  {
+    std::vector<SQLTypeInfo> types;
+    CHECK_EQ(best_sqltypes.size(), best_encodings.size());
+    for (size_t i = 0; i < best_sqltypes.size(); i++) {
+      types.emplace_back(best_sqltypes[i], false, best_encodings[i]);
+    }
+    return types;
+  }
 }
 
 void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
@@ -3673,6 +3688,12 @@ inline auto open_parquet_table(const std::string& file_path,
   LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
             << " columns in " << num_row_groups << " groups.";
   return std::make_tuple(num_row_groups, num_columns, num_rows);
+}
+
+Detector::Detector(const boost::filesystem::path& fp, CopyParams& cp)
+    : DataStreamSink(cp, fp.string()), file_path(fp) {
+  read_file();
+  init();
 }
 
 void Detector::import_local_parquet(const std::string& file_path,

@@ -18,6 +18,14 @@ enum TFileType {
   RASTER
 }
 
+enum TSourceType {
+  DELIMITED,
+  GEO,
+  PARQUET,
+  RASTER,
+  ODBC
+}
+
 enum TPartitionDetail {
   DEFAULT,
   REPLICATED,
@@ -217,6 +225,14 @@ struct TCopyParams {
   30: TRasterPointTransform raster_point_transform=TRasterPointTransform.AUTO;
   31: bool raster_point_compute_angle=false;
   32: string raster_import_dimensions;
+  33: bool use_source_type=false;
+  34: TSourceType source_type=TSourceType.DELIMITED;
+  35: string odbc_dsn;
+  36: string odbc_connection_string;
+  37: string odbc_sql_select;
+  38: string odbc_username;
+  39: string odbc_password;
+  40: string odbc_credential_string;
 }
 
 struct TCreateParams {

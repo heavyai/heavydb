@@ -177,7 +177,8 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
   TDetectResult _return;
 
   try {
-    context.client.detect_column_types(_return, context.session, file_name, copy_params);
+    context.client.detect_column_types(
+        _return, context.session, file_name ? file_name : "", copy_params);
     // print result only for verifying detect_column_types api
     // as this cmd seems never planned for public use
     for (const auto& tct : _return.row_set.row_desc) {
@@ -1453,23 +1454,54 @@ int main(int argc, char** argv) {
         print_status(context);
       }
     } else if (!strncmp(line, "\\detect", 7)) {
-      char* filepath = strtok(line + 8, " ");
+      char* token = strtok(line + 8, " ");
+      char* file_path{nullptr};
       TCopyParams copy_params;
+      copy_params.use_source_type = true;
 #ifdef ENABLE_IMPORT_PARQUET
       // users may give only a directory name which has no obvious connection to parquet.
       // need users to explicitly specify that they want to detect cols in parquet files
-      if (boost::iequals(filepath, "parquet")) {
-        copy_params.file_type = TFileType::PARQUET;
-        filepath = strtok(0, " ");
-      }
+      if (boost::iequals(token, "parquet")) {
+        copy_params.source_type = TSourceType::PARQUET;
+      } else
 #endif
-      // allow force interpretation as geo or raster file
-      if (boost::iequals(filepath, "geo")) {
-        copy_params.file_type = TFileType::GEO;
-        filepath = strtok(0, " ");
-      } else if (boost::iequals(filepath, "raster")) {
-        copy_params.file_type = TFileType::RASTER;
-        filepath = strtok(0, " ");
+          // allow force interpretation as geo or raster file
+          if (boost::iequals(token, "geo")) {
+        copy_params.source_type = TSourceType::GEO;
+      } else if (boost::iequals(token, "raster")) {
+        copy_params.source_type = TSourceType::RASTER;
+      } else if (boost::iequals(token, "odbc")) {
+        copy_params.source_type = TSourceType::ODBC;
+      } else {
+        file_path = token;
+      }
+      if (copy_params.source_type == TSourceType::ODBC) {
+        auto sql_select_start = strtok(0, "'");
+        auto sql_select_end = strtok(0, "'");
+        if (sql_select_start && sql_select_end) {
+          std::string sql_select(sql_select_start, sql_select_end - sql_select_start - 1);
+          copy_params.odbc_sql_select = sql_select;
+        } else {
+          std::cerr << "SQL select query must be provided";
+        }
+        copy_params.odbc_dsn = sql_select_end + 1;
+        if (copy_params.odbc_dsn.empty()) {
+          std::cerr << "Data source name must be provided";
+        }
+        char* env;
+        if (nullptr != (env = getenv("ODBC_USERNAME"))) {
+          copy_params.odbc_username = env;
+        }
+        if (nullptr != (env = getenv("ODBC_PASSWORD"))) {
+          copy_params.odbc_password = env;
+        }
+      } else {
+        if (!file_path) {
+          file_path = strtok(0, " ");
+        }
+        if (!file_path) {
+          std::cerr << "File path must be provided";
+        }
       }
       copy_params.delimiter = ",";
       char* env;
@@ -1485,7 +1517,7 @@ int main(int argc, char** argv) {
       if (nullptr != (env = getenv("AWS_SESSION_TOKEN"))) {
         copy_params.s3_session_token = env;
       }
-      detect_table(filepath, copy_params, context);
+      detect_table(file_path, copy_params, context);
     } else if (!strncmp(line, "\\historylen", 11)) {
       /* The "/historylen" command will change the history len. */
       int len = atoi(line + 11);

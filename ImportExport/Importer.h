@@ -709,11 +709,8 @@ class DataStreamSink {
 
 class Detector : public DataStreamSink {
  public:
-  Detector(const boost::filesystem::path& fp, CopyParams& cp)
-      : DataStreamSink(cp, fp.string()), file_path(fp) {
-    read_file();
-    init();
-  };
+  Detector(const boost::filesystem::path& fp, CopyParams& cp);
+
 #ifdef ENABLE_IMPORT_PARQUET
   void import_local_parquet(const std::string& file_path,
                             const Catalog_Namespace::SessionInfo* session_info) override;
@@ -722,9 +719,11 @@ class Detector : public DataStreamSink {
   std::vector<std::string> get_headers();
   std::vector<std::vector<std::string>> raw_rows;
   std::vector<std::vector<std::string>> get_sample_rows(size_t n);
-  std::vector<SQLTypes> best_sqltypes;
-  std::vector<EncodingType> best_encodings;
   bool has_headers = false;
+
+  std::vector<SQLTypeInfo> getBestColumnTypes() const;
+
+  static constexpr size_t kDefaultSampleRowsCount{100};
 
  private:
   void init();
@@ -758,6 +757,8 @@ class Detector : public DataStreamSink {
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
   std::string line1;
+  std::vector<SQLTypes> best_sqltypes;
+  std::vector<EncodingType> best_encodings;
 };
 
 class Importer : public DataStreamSink, public AbstractImporter {

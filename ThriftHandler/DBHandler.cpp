@@ -3654,26 +3654,52 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     copy_params.s3_session_token = server_credentials.GetSessionToken();
   }
 #endif
-  switch (cp.file_type) {
-    case TFileType::DELIMITED:
-      copy_params.source_type = import_export::SourceType::kDelimitedFile;
-      break;
-    case TFileType::GEO:
-      copy_params.source_type = import_export::SourceType::kGeoFile;
-      break;
-    case TFileType::PARQUET:
+  if (cp.use_source_type) {
+    switch (cp.source_type) {
+      case TSourceType::DELIMITED:
+        copy_params.source_type = import_export::SourceType::kDelimitedFile;
+        break;
+      case TSourceType::GEO:
+        copy_params.source_type = import_export::SourceType::kGeoFile;
+        break;
+      case TSourceType::PARQUET:
 #ifdef ENABLE_IMPORT_PARQUET
-      copy_params.source_type = import_export::SourceType::kParquetFile;
-      break;
+        copy_params.source_type = import_export::SourceType::kParquetFile;
+        break;
 #else
-      THROW_MAPD_EXCEPTION("Parquet not supported");
+        THROW_MAPD_EXCEPTION("Parquet not supported");
 #endif
-    case TFileType::RASTER:
-      copy_params.source_type = import_export::SourceType::kRasterFile;
-      break;
-    default:
-      CHECK(false);
+      case TSourceType::ODBC:
+        THROW_MAPD_EXCEPTION("ODBC source not supported");
+      case TSourceType::RASTER:
+        copy_params.source_type = import_export::SourceType::kRasterFile;
+        break;
+      default:
+        CHECK(false);
+    }
+  } else {
+    switch (cp.file_type) {
+      case TFileType::DELIMITED:
+        copy_params.source_type = import_export::SourceType::kDelimitedFile;
+        break;
+      case TFileType::GEO:
+        copy_params.source_type = import_export::SourceType::kGeoFile;
+        break;
+      case TFileType::PARQUET:
+#ifdef ENABLE_IMPORT_PARQUET
+        copy_params.source_type = import_export::SourceType::kParquetFile;
+        break;
+#else
+        THROW_MAPD_EXCEPTION("Parquet not supported");
+#endif
+      case TFileType::RASTER:
+        copy_params.source_type = import_export::SourceType::kRasterFile;
+        break;
+      default:
+        CHECK(false);
+    }
   }
+
   switch (cp.geo_coords_encoding) {
     case TEncodingType::GEOINT:
       copy_params.geo_coords_encoding = kENCODING_GEOINT;
@@ -3798,15 +3824,22 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   switch (cp.source_type) {
     case import_export::SourceType::kDelimitedFile:
       copy_params.file_type = TFileType::DELIMITED;
+      copy_params.source_type = TSourceType::DELIMITED;
       break;
     case import_export::SourceType::kGeoFile:
       copy_params.file_type = TFileType::GEO;
+      copy_params.source_type = TSourceType::GEO;
       break;
     case import_export::SourceType::kParquetFile:
       copy_params.file_type = TFileType::PARQUET;
+      copy_params.source_type = TSourceType::PARQUET;
       break;
     case import_export::SourceType::kRasterFile:
       copy_params.file_type = TFileType::RASTER;
+      copy_params.source_type = TSourceType::RASTER;
+      break;
+    case import_export::SourceType::kOdbc:
+      copy_params.source_type = TSourceType::ODBC;
       break;
     default:
       CHECK(false);
@@ -3881,6 +3914,12 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   }
   copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   copy_params.raster_import_dimensions = cp.raster_import_dimensions;
+  copy_params.odbc_dsn = cp.odbc_dsn;
+  copy_params.odbc_connection_string = cp.odbc_connection_string;
+  copy_params.odbc_sql_select = cp.odbc_sql_select;
+  copy_params.odbc_username = cp.odbc_username;
+  copy_params.odbc_password = cp.odbc_password;
+  copy_params.odbc_credential_string = cp.odbc_credential_string;
   return copy_params;
 }
 
@@ -4049,64 +4088,66 @@ void DBHandler::detect_column_types(TDetectResult& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   check_read_only("detect_column_types");
 
-  import_export::CopyParams copy_params = thrift_to_copyparams(cp);
-
-  std::string file_name{file_name_in};
-  if (path_is_relative(file_name)) {
-    // assume relative paths are relative to data_path / mapd_import / <session>
-    auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
-                     boost::filesystem::path(file_name).filename();
-    file_name = file_path.string();
-  }
-  validate_import_file_path_if_local(file_name);
-
-  // if it's a geo or raster import, handle alternative paths (S3, HTTP, archive etc.)
   bool is_raster = false;
-  if (copy_params.source_type == import_export::SourceType::kGeoFile) {
-    if (is_a_supported_archive_file(file_name)) {
-      // find the archive file
-      add_vsi_network_prefix(file_name);
-      if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
-        THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+  boost::filesystem::path file_path;
+  import_export::CopyParams copy_params = thrift_to_copyparams(cp);
+  if (copy_params.source_type != import_export::SourceType::kOdbc) {
+    std::string file_name{file_name_in};
+    if (path_is_relative(file_name)) {
+      // assume relative paths are relative to data_path / mapd_import / <session>
+      auto temp_file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                            boost::filesystem::path(file_name).filename();
+      file_name = temp_file_path.string();
+    }
+    validate_import_file_path_if_local(file_name);
+
+    // if it's a geo or raster import, handle alternative paths (S3, HTTP, archive etc.)
+    if (copy_params.source_type == import_export::SourceType::kGeoFile) {
+      if (is_a_supported_archive_file(file_name)) {
+        // find the archive file
+        add_vsi_network_prefix(file_name);
+        if (!import_export::Importer::gdalFileExists(file_name, copy_params)) {
+          THROW_MAPD_EXCEPTION("Archive does not exist: " + file_name_in);
+        }
+        // find geo file in archive
+        add_vsi_archive_prefix(file_name);
+        std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params);
+        // prepare to detect that geo file
+        if (geo_file.size()) {
+          file_name = file_name + std::string("/") + geo_file;
+        }
+      } else {
+        // prepare to detect geo file directly
+        add_vsi_network_prefix(file_name);
+        add_vsi_geo_prefix(file_name);
       }
-      // find geo file in archive
-      add_vsi_archive_prefix(file_name);
-      std::string geo_file = find_first_geo_file_in_archive(file_name, copy_params);
-      // prepare to detect that geo file
-      if (geo_file.size()) {
-        file_name = file_name + std::string("/") + geo_file;
-      }
-    } else {
-      // prepare to detect geo file directly
+    } else if (copy_params.source_type == import_export::SourceType::kRasterFile) {
+      // prepare to detect raster file directly
       add_vsi_network_prefix(file_name);
       add_vsi_geo_prefix(file_name);
-    }
-  } else if (copy_params.source_type == import_export::SourceType::kRasterFile) {
-    // prepare to detect raster file directly
-    add_vsi_network_prefix(file_name);
-    add_vsi_geo_prefix(file_name);
-    is_raster = true;
-  }
-
-  auto file_path = boost::filesystem::path(file_name);
-  // can be a s3 url
-  if (!boost::istarts_with(file_name, "s3://")) {
-    if (!boost::filesystem::path(file_name).is_absolute()) {
-      file_path = import_path_ / picosha2::hash256_hex_string(session) /
-                  boost::filesystem::path(file_name).filename();
-      file_name = file_path.string();
+      is_raster = true;
     }
 
-    if (copy_params.source_type == import_export::SourceType::kGeoFile ||
-        copy_params.source_type == import_export::SourceType::kRasterFile) {
-      // check for geo or raster file
-      if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
-        THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+    file_path = boost::filesystem::path(file_name);
+    // can be a s3 url
+    if (!boost::istarts_with(file_name, "s3://")) {
+      if (!boost::filesystem::path(file_name).is_absolute()) {
+        file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                    boost::filesystem::path(file_name).filename();
+        file_name = file_path.string();
       }
-    } else {
-      // check for regular file
-      if (!boost::filesystem::exists(file_path)) {
-        THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+
+      if (copy_params.source_type == import_export::SourceType::kGeoFile ||
+          copy_params.source_type == import_export::SourceType::kRasterFile) {
+        // check for geo or raster file
+        if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
+          THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+        }
+      } else {
+        // check for regular file
+        if (!boost::filesystem::exists(file_path)) {
+          THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+        }
       }
     }
   }
@@ -4118,8 +4159,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
 #endif
     ) {
       import_export::Detector detector(file_path, copy_params);
-      std::vector<SQLTypes> best_types = detector.best_sqltypes;
-      std::vector<EncodingType> best_encodings = detector.best_encodings;
+      auto best_types = detector.getBestColumnTypes();
       std::vector<std::string> headers = detector.get_headers();
       copy_params = detector.get_copy_params();
 
@@ -4127,10 +4167,10 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       _return.row_set.row_desc.resize(best_types.size());
       for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
         TColumnType col;
-        SQLTypes t = best_types[col_idx];
-        EncodingType encodingType = best_encodings[col_idx];
-        SQLTypeInfo ti(t, false, encodingType);
-        if (IS_GEO(t)) {
+        auto& ti = best_types[col_idx];
+        col.col_type.precision = ti.get_precision();
+        col.col_type.scale = ti.get_scale();
+        if (ti.is_geometry()) {
           // set this so encoding_to_thrift does the right thing
           ti.set_compression(copy_params.geo_coords_encoding);
           // fill in these directly
@@ -4148,8 +4188,8 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         col.is_reserved_keyword = ImportHelpers::is_reserved_name(col.col_name);
         _return.row_set.row_desc[col_idx] = col;
       }
-      size_t num_samples = 100;
-      auto sample_data = detector.get_sample_rows(num_samples);
+      auto sample_data =
+          detector.get_sample_rows(import_export::Detector::kDefaultSampleRowsCount);
 
       TRow sample_row;
       for (auto row : sample_data) {
@@ -4180,7 +4220,11 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         // @TODO(se) support for raster?
         std::map<std::string, std::vector<std::string>> sample_data;
         import_export::Importer::readMetadataSampleGDAL(
-            file_path.string(), geoColumnName, sample_data, 100, copy_params);
+            file_path.string(),
+            geoColumnName,
+            sample_data,
+            import_export::Detector::kDefaultSampleRowsCount,
+            copy_params);
         if (sample_data.size() > 0) {
           for (size_t i = 0; i < sample_data.begin()->second.size(); i++) {
             TRow sample_row;

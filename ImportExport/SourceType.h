@@ -30,7 +30,8 @@ enum class SourceType {
   kDelimitedFile,
   kGeoFile,
   kRasterFile,
-  kParquetFile
+  kParquetFile,
+  kOdbc
 };
 
 }  // namespace import_export

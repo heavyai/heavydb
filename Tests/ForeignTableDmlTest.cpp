@@ -326,7 +326,9 @@ class ForeignTableTest : public DBHandlerTestFixture {
                                     const std::string& table_schema,
                                     const std::string& src_file,
                                     const std::string& data_wrapper_type,
-                                    const bool is_odbc_geo = false) {}
+                                    const bool is_odbc_geo = false,
+                                    const std::string& username = "admin",
+                                    const std::string& password = "HyperInteractive") {}
 
   /**
    * Returns a query to create a foreign table.  Creates a source odbc table for odbc

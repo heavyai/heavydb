@@ -86,6 +86,12 @@ struct CopyParams {
   RasterPointTransform raster_point_transform;
   bool raster_point_compute_angle;
   std::string raster_import_dimensions;
+  std::string odbc_dsn;
+  std::string odbc_connection_string;
+  std::string odbc_sql_select;
+  std::string odbc_username;
+  std::string odbc_password;
+  std::string odbc_credential_string;
 
   CopyParams()
       : delimiter(',')
