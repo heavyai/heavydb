@@ -33,6 +33,7 @@
 // std headers
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <future>
@@ -292,19 +293,15 @@ size_t gen_bitmap(uint8_t* bitmap, const TYPE* data, size_t size) {
                             size,
                             reinterpret_cast<const uint16_t&>(nullval));
   } else if constexpr (sizeof(TYPE) == 4) {
-      uint32_t casted_nullval;
-      memcpy (&casted_nullval, &nullval, 4);
-      rv = gen_null_bitmap_32(bitmap,
-                            reinterpret_cast<const uint32_t*>(data),
-                            size,
-                            casted_nullval);
+    uint32_t casted_nullval;
+    memcpy(&casted_nullval, &nullval, 4);
+    rv = gen_null_bitmap_32(
+        bitmap, reinterpret_cast<const uint32_t*>(data), size, casted_nullval);
   } else if constexpr (sizeof(TYPE) == 8) {
-      uint64_t casted_nullval;
-      memcpy (&casted_nullval, &nullval, 8);
-      rv = gen_null_bitmap_64(bitmap,
-                            reinterpret_cast<const uint64_t*>(data),
-                            size,
-                            casted_nullval);
+    uint64_t casted_nullval;
+    memcpy(&casted_nullval, &nullval, 8);
+    rv = gen_null_bitmap_64(
+        bitmap, reinterpret_cast<const uint64_t*>(data), size, casted_nullval);
   }
   return rv;
 }
@@ -1129,6 +1126,8 @@ std::shared_ptr<arrow::Table> ArrowResultSetConverter::getArrowTable(
                                  ? results_->entryCount()
                                  : std::min(size_t(top_n_), results_->entryCount());
 
+  CHECK_GT(entry_count, 0);
+
   std::vector<ColumnBuilder> builders(col_count);
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
     initializeColumnBuilder(
@@ -1140,7 +1139,7 @@ std::shared_ptr<arrow::Table> ArrowResultSetConverter::getArrowTable(
       results_->getQueryMemDesc().getQueryDescriptionType() ==
           QueryDescriptionType::Projection;
 
-  std::vector<bool> columnar_conversion(col_count, false);
+  std::vector<bool> columnar_conversion_flags(col_count, false);
   const auto& lazy_fetch_info = results_->getLazyFetchInfo();
   if (columnar_conversion_possible) {
     for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
@@ -1169,7 +1168,7 @@ std::shared_ptr<arrow::Table> ArrowResultSetConverter::getArrowTable(
         use_columnar_conversion = false;
       }
 
-      columnar_conversion[col_idx] = use_columnar_conversion;
+      columnar_conversion_flags[col_idx] = use_columnar_conversion;
     }
   }
 
@@ -1178,7 +1177,7 @@ std::shared_ptr<arrow::Table> ArrowResultSetConverter::getArrowTable(
     tbb::parallel_for(tbb::blocked_range<size_t>(0, col_count),
                       [&](tbb::blocked_range<size_t> br) {
                         for (size_t col_idx = br.begin(); col_idx < br.end(); ++col_idx) {
-                          if (columnar_conversion[col_idx]) {
+                          if (columnar_conversion_flags[col_idx]) {
                             convert_column(builders[col_idx].physical_type,
                                            results_,
                                            col_idx,
@@ -1189,45 +1188,70 @@ std::shared_ptr<arrow::Table> ArrowResultSetConverter::getArrowTable(
                       });
   }
 
-  bool use_rowwise_conversion = std::any_of(std::begin(columnar_conversion),
-                                            std::end(columnar_conversion),
+  bool use_rowwise_conversion = std::any_of(std::begin(columnar_conversion_flags),
+                                            std::end(columnar_conversion_flags),
                                             [](bool val) { return val == false; });
 
   if (use_rowwise_conversion) {
     auto timer = DEBUG_TIMER("row-wise conversion");
-    std::vector<std::shared_ptr<ValueArray>> column_values(col_count, nullptr);
-    std::vector<std::shared_ptr<std::vector<bool>>> null_bitmaps(col_count, nullptr);
-    // TODO: add parallel for rowwise
-    {
-      auto timer = DEBUG_TIMER("fetch data single thread");
-      auto row_count = convert_rowwise(results_,
-                                       builders,
-                                       device_type_,
-                                       column_values,
-                                       null_bitmaps,
-                                       columnar_conversion,
-                                       size_t(0),
-                                       entry_count);
-      CHECK_LE(row_count, entry_count);
+
+    using ColumnValues = std::vector<std::shared_ptr<ValueArray>>;
+    using NullBitmaps = std::vector<std::shared_ptr<std::vector<bool>>>;
+
+    ColumnValues column_values(col_count, nullptr);
+    NullBitmaps null_bitmaps(col_count, nullptr);
+
+    size_t row_size_bytes = 0;
+    for (size_t i = 0; i < col_count; i++) {
+      row_size_bytes += results_->getColType(i).get_size();
     }
+    CHECK_GT(row_size_bytes, 0);
+
+    const size_t stride = std::clamp(entry_count / cpu_threads() / 2,
+                                     65536 / row_size_bytes,
+                                     8 * 1048576 / row_size_bytes);
+    const size_t segments_count = (entry_count + stride - 1) / stride;
+
+    std::vector<ColumnValues> column_value_segs(segments_count,
+                                                ColumnValues(col_count, nullptr));
+
+    std::vector<NullBitmaps> null_bitmap_segs(segments_count,
+                                              NullBitmaps(col_count, nullptr));
+
+    std::atomic<size_t> row_count = 0;
 
     {
-      auto timer = DEBUG_TIMER("append data single thread");
-      for (int i = 0; i < schema->num_fields(); ++i) {
-        if (!columnar_conversion[i]) {
-          append(builders[i], *column_values[i], null_bitmaps[i]);
-        }
-      }
+      auto timer = DEBUG_TIMER("fetch data in parallel_for");
+      threading::parallel_for(
+          static_cast<size_t>(0), entry_count, stride, [&](size_t start_entry) {
+            const size_t i = start_entry / stride;
+            const size_t end_entry = std::min(entry_count, start_entry + stride);
+            row_count += convert_rowwise(results_,
+                                         builders,
+                                         device_type_,
+                                         column_value_segs[i],
+                                         null_bitmap_segs[i],
+                                         columnar_conversion_flags,
+                                         start_entry,
+                                         end_entry);
+          });
     }
 
+    CHECK_LE(row_count.load(), entry_count);
+
     {
-      auto timer = DEBUG_TIMER("finish builders single thread");
-      for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-        if (!columnar_conversion[col_idx]) {
-          result_columns[col_idx] = std::make_shared<arrow::ChunkedArray>(
-              finishColumnBuilder(builders[col_idx]));
+      auto timer = DEBUG_TIMER("append rows to arrow, finish builders");
+      threading::parallel_for(static_cast<size_t>(0), col_count, [&](size_t i) {
+        if (!columnar_conversion_flags[i]) {
+          for (size_t j = 0; j < segments_count; ++j) {
+            if (column_value_segs[j][i]) {
+              append(builders[i], *column_value_segs[j][i], null_bitmap_segs[j][i]);
+            }
+          }
+          result_columns[i] =
+              std::make_shared<arrow::ChunkedArray>(finishColumnBuilder(builders[i]));
         }
-      }
+      });
     }
   }
 
@@ -1495,7 +1519,7 @@ void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
   }
 }
 
-}  // namespace
+}  // anonymous namespace
 
 void ArrowResultSetConverter::append(
     ColumnBuilder& column_builder,

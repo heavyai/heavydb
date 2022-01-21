@@ -618,22 +618,33 @@ TEST(DBEngine, LargeTables) {
 
   g_enable_columnar_output = true;
   g_enable_lazy_fetch = false;
-  test_single_column_table<int8_t>(30'000'000, 150);
-  // test_single_column_table<uint8_t>(30'000'000, 150);    // C++ exception with
-  // description "uint8 is not yet supported." thrown in the test body.
+  const size_t N = 500'000;
+  test_single_column_table<int8_t>(N, 150);
+  test_single_column_table<int16_t>(N, 150);
+  test_single_column_table<int32_t>(N, 150);
+  test_single_column_table<int64_t>(N, 150);
+  test_single_column_table<float>(N, 150);
+  test_single_column_table<double>(N, 150);
+}
 
-  test_single_column_table<int16_t>(30'000'000, 150);
-  // test_single_column_table<uint16_t>(30'000'000, 150);   // C++ exception with
-  // description "uint16 is not yet supported." thrown in the test body.
+TEST(DBEngine, LargeTablesRowWise) {
+  bool prev_enable_columnar_output = g_enable_columnar_output;
+  bool prev_enable_lazy_fetch = g_enable_lazy_fetch;
 
-  test_single_column_table<int32_t>(30'000'000, 150);
-  // test_single_column_table<uint32_t>(30'000'000, 150);   // C++ exception with
-  // description "uint32 is not yet supported." thrown in the test body.
-  test_single_column_table<int64_t>(30'000'000, 150);
-  // test_single_column_table<uint64_t>(30'000'000, 150);     // C++ exception with
-  // description "uint64 is not yet supported." thrown in the test body.
-  test_single_column_table<float>(30'000'000, 150);
-  test_single_column_table<double>(30'000'000, 150);
+  ScopeGuard reset = [prev_enable_columnar_output, prev_enable_lazy_fetch] {
+    g_enable_columnar_output = prev_enable_columnar_output;
+    g_enable_lazy_fetch = prev_enable_lazy_fetch;
+  };
+
+  g_enable_columnar_output = false;
+  g_enable_lazy_fetch = false;
+  const size_t N = 500'000;
+  test_single_column_table<int8_t>(N, 150);
+  test_single_column_table<int16_t>(N, 150);
+  test_single_column_table<int32_t>(N, 150);
+  test_single_column_table<int64_t>(N, 150);
+  test_single_column_table<float>(N, 150);
+  test_single_column_table<double>(N, 150);
 }
 
 int main(int argc, char* argv[]) try {
