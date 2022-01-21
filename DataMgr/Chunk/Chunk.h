@@ -40,15 +40,27 @@ namespace Chunk_NS {
 
 class Chunk {
  public:
-  Chunk() : buffer_(nullptr), index_buf_(nullptr), column_desc_(nullptr) {}
+  Chunk(bool pinnable = true)
+      : buffer_(nullptr)
+      , index_buf_(nullptr)
+      , column_desc_(nullptr)
+      , pinnable_(pinnable) {}
 
   explicit Chunk(const ColumnDescriptor* td)
-      : buffer_(nullptr), index_buf_(nullptr), column_desc_(td) {}
+      : buffer_(nullptr), index_buf_(nullptr), column_desc_(td), pinnable_(true) {}
 
-  Chunk(AbstractBuffer* b, AbstractBuffer* ib, const ColumnDescriptor* td)
-      : buffer_(b), index_buf_(ib), column_desc_(td){};
+  Chunk(const ColumnDescriptor* td, bool pinnable)
+      : buffer_(nullptr), index_buf_(nullptr), column_desc_(td), pinnable_(pinnable) {}
+
+  Chunk(AbstractBuffer* b,
+        AbstractBuffer* ib,
+        const ColumnDescriptor* td,
+        bool pinnable = true)
+      : buffer_(b), index_buf_(ib), column_desc_(td), pinnable_(pinnable) {}
 
   ~Chunk() { unpinBuffer(); }
+
+  void setPinnable(bool pinnable) { pinnable_ = pinnable; }
 
   const ColumnDescriptor* getColumnDesc() const { return column_desc_; }
 
@@ -105,7 +117,8 @@ class Chunk {
                                          const MemoryLevel mem_level,
                                          const int deviceId,
                                          const size_t num_bytes,
-                                         const size_t num_elems);
+                                         const size_t num_elems,
+                                         const bool pinnable = true);
 
   /**
    * @brief Compose a chunk from components and return it
@@ -149,6 +162,9 @@ class Chunk {
   AbstractBuffer* buffer_;
   AbstractBuffer* index_buf_;
   const ColumnDescriptor* column_desc_;
+  // When using Chunk as a buffer wrapper, disable pinnable_ to avoid assymetric pin/unPin
+  // of the buffers
+  bool pinnable_;
 
   void unpinBuffer();
 };

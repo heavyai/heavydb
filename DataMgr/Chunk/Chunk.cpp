@@ -33,8 +33,9 @@ std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
                                        const MemoryLevel memoryLevel,
                                        const int deviceId,
                                        const size_t numBytes,
-                                       const size_t numElems) {
-  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
+                                       const size_t numElems,
+                                       const bool pinnable) {
+  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd, pinnable));
   chunkp->getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes, numElems);
   return chunkp;
 }
@@ -268,11 +269,13 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
 }
 
 void Chunk::unpinBuffer() {
-  if (buffer_) {
-    buffer_->unPin();
-  }
-  if (index_buf_) {
-    index_buf_->unPin();
+  if (pinnable_) {
+    if (buffer_) {
+      buffer_->unPin();
+    }
+    if (index_buf_) {
+      index_buf_->unPin();
+    }
   }
 }
 

@@ -145,7 +145,7 @@ void ParquetDataWrapper::initializeChunkBuffers(
     const ChunkToBufferMap& required_buffers,
     const bool reserve_buffers_and_set_stats) {
   for (const auto column : getColumnsToInitialize(column_interval)) {
-    Chunk_NS::Chunk chunk{column};
+    Chunk_NS::Chunk chunk{column, false};
     ChunkKey data_chunk_key;
     if (column->columnType.is_varlen_indeed()) {
       data_chunk_key = {
@@ -412,7 +412,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
   for (int column_id = column_interval.start; column_id <= column_interval.end;
        ++column_id) {
     auto column_descriptor = schema_->getColumnDescriptor(column_id);
-    Chunk_NS::Chunk chunk{column_descriptor};
+    Chunk_NS::Chunk chunk{column_descriptor, false};
     if (column_descriptor->columnType.is_varlen_indeed()) {
       ChunkKey data_chunk_key = {
           db_id_, foreign_table_->tableId, column_id, fragment_id, 1};

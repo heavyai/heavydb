@@ -949,6 +949,52 @@ TEST_P(CacheControllingSelectQueryTest, RefreshDisabledCache) {
   bf::remove_all(temp_file);
 }
 
+class SqliteCacheControllingSelectQueryTest : public CacheControllingSelectQueryTest {
+  void SetUp() override {
+    wrapper_type_ = "sqlite";
+    skipIfOdbcDisabled();
+    CacheControllingSelectQueryTest::SetUp();
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(SqliteCacheOnOffSelectQueryTests,
+                         SqliteCacheControllingSelectQueryTest,
+                         ::testing::Values(File_Namespace::DiskCacheLevel::none,
+                                           File_Namespace::DiskCacheLevel::fsi),
+                         [](const auto& info) {
+                           switch (info.param) {
+                             case File_Namespace::DiskCacheLevel::none:
+                               return "NoCache";
+                             case File_Namespace::DiskCacheLevel::fsi:
+                               return "FsiCache";
+                             default:
+                               return "UNKNOWN";
+                           }
+                         });
+
+TEST_P(SqliteCacheControllingSelectQueryTest, NoDanglingChunkBuffersOnTableRecreate) {
+  auto create_table = createForeignTableQuery({{"txt", "TEXT"}, {"quoted_txt", "TEXT"}},
+                                              getDataFilesPath() + "non_quoted.csv",
+                                              wrapper_type_);
+  auto drop_table = "DROP FOREIGN TABLE IF EXISTS " + default_table_name + ";";
+  auto select_table = "SELECT * FROM " + default_table_name + ";";
+
+  for (int i = 0; i < 2; i++) {
+    sql(drop_table);
+    sql(create_table);
+    TQueryResult result;
+    sql(result, "SELECT * FROM " + default_table_name + " ORDER BY txt;");
+
+    // clang-format off
+    assertResultSetEqual({{"text_1","text_1"},
+                          {"text_2","text_2"},
+                          {"text_3","text_3"}},
+                        result);
+    // clang-format on
+  }
+  sql(drop_table);
+}
+
 TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
   const auto& query = getCreateForeignTableQuery(
       "( id INT, txt1 TEXT ENCODING NONE, txt2 TEXT ENCODING DICT (32), txt3 TEXT "

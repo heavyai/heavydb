@@ -543,8 +543,8 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
   auto merged_index_buffer = res.second;
 
   // prepare ChunkIter for the linearized chunk
-  auto merged_chunk =
-      std::make_shared<Chunk_NS::Chunk>(merged_data_buffer, merged_index_buffer, cd);
+  auto merged_chunk = std::make_shared<Chunk_NS::Chunk>(
+      merged_data_buffer, merged_index_buffer, cd, false);
   // to prepare chunk_iter for the merged chunk, we pass one of local chunk iter
   // to fill necessary metadata that is a common for all merged chunks
   auto merged_chunk_iter = prepareChunkIter(merged_data_buffer,

@@ -117,10 +117,6 @@ void AbstractTextFileDataWrapper::populateChunkBuffers(
   }
   populateChunks(column_id_to_chunk_map, fragment_id);
   updateMetadata(column_id_to_chunk_map, fragment_id);
-  for (auto& entry : column_id_to_chunk_map) {
-    entry.second.setBuffer(nullptr);
-    entry.second.setIndexBuffer(nullptr);
-  }
 }
 
 // if column was skipped during scan, update metadata now
@@ -482,7 +478,7 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
                           2};
     // Create actual data chunks to prepopulate cache
     if (cached_chunks.find(chunk_key) == cached_chunks.end()) {
-      cached_chunks[chunk_key] = Chunk_NS::Chunk{column};
+      cached_chunks[chunk_key] = Chunk_NS::Chunk{column, false};
       cached_chunks[chunk_key].setBuffer(
           cache->getChunkBufferForPrecaching(chunk_key, is_first_block));
       if (column->columnType.is_varlen_indeed()) {
