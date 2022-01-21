@@ -141,9 +141,15 @@ class TestSchemaProvider : public SchemaProvider {
   int getId() const override { return id_; }
   std::string_view getName() const override { return "test"; }
 
-  std::vector<int> listDatabases() const override { UNREACHABLE(); }
+  std::vector<int> listDatabases() const override {
+    UNREACHABLE();
+    return std::vector<int>{};
+  }
 
-  TableInfoList listTables(int db_id) const override { UNREACHABLE(); }
+  TableInfoList listTables(int db_id) const override {
+    UNREACHABLE();
+    return TableInfoList{};
+  }
 
   ColumnInfoList listColumns(int db_id, int table_id) const override {
     CHECK_EQ(column_index_by_name_.count({db_id, table_id}), 1);
@@ -196,7 +202,7 @@ class TestSchemaProvider : public SchemaProvider {
     return nullptr;
   }
 
- private:
+ protected:
   void addTableInfo(TableInfoPtr table_info) {
     table_infos_[*table_info] = table_info;
     table_index_by_name_[table_info->db_id][table_info->name] = table_info;
@@ -341,6 +347,7 @@ class TestDataProvider : public AbstractBufferMgr {
                                const size_t pageSize = 0,
                                const size_t initialSize = 0) override {
     UNREACHABLE();
+    return nullptr;
   }
 
   void deleteBuffer(const ChunkKey& key, const bool purge = true) override {
@@ -354,6 +361,7 @@ class TestDataProvider : public AbstractBufferMgr {
 
   AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override {
     UNREACHABLE();
+    return nullptr;
   }
 
   void fetchBuffer(const ChunkKey& key,
@@ -372,6 +380,7 @@ class TestDataProvider : public AbstractBufferMgr {
                             AbstractBuffer* srcBuffer,
                             const size_t numBytes = 0) override {
     UNREACHABLE();
+    return nullptr;
   }
 
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
@@ -379,12 +388,30 @@ class TestDataProvider : public AbstractBufferMgr {
     UNREACHABLE();
   }
 
-  bool isBufferOnDevice(const ChunkKey& key) override { UNREACHABLE(); }
-  std::string printSlabs() override { UNREACHABLE(); }
-  size_t getMaxSize() override { UNREACHABLE(); }
-  size_t getInUseSize() override { UNREACHABLE(); }
-  size_t getAllocated() override { UNREACHABLE(); }
-  bool isAllocationCapped() override { UNREACHABLE(); }
+  bool isBufferOnDevice(const ChunkKey& key) override {
+    UNREACHABLE();
+    return false;
+  }
+  std::string printSlabs() override {
+    UNREACHABLE();
+    return "";
+  }
+  size_t getMaxSize() override {
+    UNREACHABLE();
+    return 0;
+  }
+  size_t getInUseSize() override {
+    UNREACHABLE();
+    return 0;
+  }
+  size_t getAllocated() override {
+    UNREACHABLE();
+    return 0;
+  }
+  bool isAllocationCapped() override {
+    UNREACHABLE();
+    return false;
+  }
 
   void checkpoint() override { UNREACHABLE(); }
   void checkpoint(const int db_id, const int tb_id) override { UNREACHABLE(); }
@@ -396,6 +423,7 @@ class TestDataProvider : public AbstractBufferMgr {
                                         int dict_id,
                                         bool load_dict = true) override {
     UNREACHABLE();
+    return nullptr;
   }
 
   Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
@@ -405,11 +433,23 @@ class TestDataProvider : public AbstractBufferMgr {
   }
 
   // Buffer API
-  AbstractBuffer* alloc(const size_t numBytes = 0) override { UNREACHABLE(); }
+  AbstractBuffer* alloc(const size_t numBytes = 0) override {
+    UNREACHABLE();
+    return nullptr;
+  }
   void free(AbstractBuffer* buffer) override { UNREACHABLE(); }
-  MgrType getMgrType() override { UNREACHABLE(); }
-  std::string getStringMgrType() override { UNREACHABLE(); }
-  size_t getNumChunks() override { UNREACHABLE(); }
+  MgrType getMgrType() override {
+    UNREACHABLE();
+    return CPU_MGR;
+  }
+  std::string getStringMgrType() override {
+    UNREACHABLE();
+    return "";
+  }
+  size_t getNumChunks() override {
+    UNREACHABLE();
+    return 0;
+  }
 
  private:
   SchemaProviderPtr schema_provider_;
@@ -815,6 +855,820 @@ TEST_F(NoCatalogRelAlgTest, InnerJoin) {
                    std::vector<int32_t>({110, 120, 130, 140, 150}),
                    std::vector<float>({101.1, 102.2, 103.3, 104.4, 105.5}),
                    std::vector<double>({110.1, 120.2, 130.3, 140.4, 150.5}));
+}
+
+class TaxiSchemaProvider : public TestSchemaProvider {
+ public:
+  TaxiSchemaProvider() {
+    id_ = TEST_SCHEMA_ID;
+    db_id_ = TEST_DB_ID;
+
+    addTableInfo(db_id_,
+                 TEST1_TABLE_ID,
+                 "trips",
+                 false,
+                 -1,
+                 Data_Namespace::MemoryLevel::CPU_LEVEL,
+                 1);
+#define ADD_COLUMN_INFO(col_name, col_type) \
+  addColumnInfo(db_id_, TEST1_TABLE_ID, 1, col_name, col_type, false, false);
+
+    ADD_COLUMN_INFO("trip_id", SQLTypeInfo(SQLTypes::kINT));
+    // TODO: encode down to 8 bits?
+    ADD_COLUMN_INFO("vendor_id", SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_datetime",
+                    SQLTypeInfo(SQLTypes::kTIMESTAMP, kENCODING_FIXED, 32, false));
+    ADD_COLUMN_INFO("dropoff_datetime",
+                    SQLTypeInfo(SQLTypes::kTIMESTAMP, kENCODING_FIXED, 32, false));
+
+    ADD_COLUMN_INFO("store_and_fwd_flag",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("rate_code_id", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO(
+        "pickup_longitude",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "pickup_latitude",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "dropoff_longitude",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "dropoff_latitude",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO("passenger_count", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO(
+        "trip_distance",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "fare_amount",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "extra",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "mta_tax",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "tip_amount",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "tolls_amount",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "ehail_fee",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "improvement_surcharge",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO(
+        "total_amount",
+        SQLTypeInfo(
+            SQLTypes::kDECIMAL, 14, 2, false, kENCODING_NONE, 0, SQLTypes::kNULLT));
+    ADD_COLUMN_INFO("payment_type",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("trip_type", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("pickup", SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff", SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+
+    ADD_COLUMN_INFO("cab_type", SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+
+    ADD_COLUMN_INFO("precipitation", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("snow_depth", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("snowfall", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("max_temperature", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("min_temperature", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("average_wind_speed", SQLTypeInfo(SQLTypes::kSMALLINT));
+
+    ADD_COLUMN_INFO("pickup_nyct2010_gid", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("pickup_ctlabel",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_borocode", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("pickup_boroname",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_ct2010",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_boroct2010",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_cdeligibil",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_ntacode",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_ntaname",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("pickup_puma",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+
+    ADD_COLUMN_INFO("dropoff_nyct2010_gid", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("dropoff_ctlabel",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff_borocode", SQLTypeInfo(SQLTypes::kSMALLINT));
+    ADD_COLUMN_INFO("dropoff_boroname",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff_ct2010",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff_boroct2010",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff_cdeligibil",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff_ntacode",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff_ntaname",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    ADD_COLUMN_INFO("dropoff_puma",
+                    SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+  }
+};
+
+// TODO: de-dup with TestTableDataProvider
+class TaxiDataProvider : public AbstractBufferMgr {
+ public:
+  TaxiDataProvider(SchemaProviderPtr schema_provider)
+      : AbstractBufferMgr(0), schema_provider_(schema_provider) {
+    TableTableData trips(TEST_DB_ID, TEST1_TABLE_ID, 51, schema_provider_);
+    tables_.emplace(std::make_pair(TEST1_TABLE_ID, trips));
+  }
+
+  // Chunk API
+  AbstractBuffer* createBuffer(const ChunkKey& key,
+                               const size_t pageSize = 0,
+                               const size_t initialSize = 0) override {
+    UNREACHABLE();
+    return nullptr;
+  }
+
+  void deleteBuffer(const ChunkKey& key, const bool purge = true) override {
+    UNREACHABLE();
+  }  // purge param only used in FileMgr
+
+  void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
+                               const bool purge = true) override {
+    UNREACHABLE();
+  }
+
+  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override {
+    UNREACHABLE();
+    return nullptr;
+  }
+
+  void fetchBuffer(const ChunkKey& key,
+                   AbstractBuffer* destBuffer,
+                   const size_t numBytes = 0) override {
+    CHECK_EQ(key[CHUNK_KEY_DB_IDX], TEST_DB_ID);
+    CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), 1);
+    auto& data = tables_.at(key[CHUNK_KEY_TABLE_IDX]);
+    data.fetchData(key[CHUNK_KEY_COLUMN_IDX],
+                   key[CHUNK_KEY_FRAGMENT_IDX],
+                   destBuffer->getMemoryPtr(),
+                   numBytes);
+  }
+
+  AbstractBuffer* putBuffer(const ChunkKey& key,
+                            AbstractBuffer* srcBuffer,
+                            const size_t numBytes = 0) override {
+    UNREACHABLE();
+    return nullptr;
+  }
+
+  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
+                                       const ChunkKey& keyPrefix) override {
+    UNREACHABLE();
+  }
+
+  bool isBufferOnDevice(const ChunkKey& key) override {
+    UNREACHABLE();
+    return false;
+  }
+  std::string printSlabs() override {
+    UNREACHABLE();
+    return "";
+  }
+  size_t getMaxSize() override {
+    UNREACHABLE();
+    return 0;
+  }
+  size_t getInUseSize() override {
+    UNREACHABLE();
+    return 0;
+  }
+  size_t getAllocated() override {
+    UNREACHABLE();
+    return 0;
+  }
+  bool isAllocationCapped() override {
+    UNREACHABLE();
+    return false;
+  }
+
+  void checkpoint() override { UNREACHABLE(); }
+  void checkpoint(const int db_id, const int tb_id) override { UNREACHABLE(); }
+  void removeTableRelatedDS(const int db_id, const int table_id) override {
+    UNREACHABLE();
+  }
+
+  const DictDescriptor* getDictMetadata(int db_id,
+                                        int dict_id,
+                                        bool load_dict = true) override {
+    UNREACHABLE();
+    return nullptr;
+  }
+
+  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
+    CHECK_EQ(db_id, TEST_DB_ID);
+    CHECK_EQ(tables_.count(table_id), 1);
+    return tables_.at(table_id).getTableInfo();
+  }
+
+  // Buffer API
+  AbstractBuffer* alloc(const size_t numBytes = 0) override {
+    UNREACHABLE();
+    return nullptr;
+  }
+  void free(AbstractBuffer* buffer) override { UNREACHABLE(); }
+  MgrType getMgrType() override {
+    UNREACHABLE();
+    return CPU_MGR;
+  }
+  std::string getStringMgrType() override {
+    UNREACHABLE();
+    return "";
+  }
+  size_t getNumChunks() override {
+    UNREACHABLE();
+    return 0;
+  }
+
+ private:
+  SchemaProviderPtr schema_provider_;
+  std::unordered_map<int, TableTableData> tables_;
+};
+
+class Taxi : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() {
+    schema_provider_ = std::make_shared<TaxiSchemaProvider>();
+
+    SystemParameters system_parameters;
+    data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
+    auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
+    ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
+                                 std::make_unique<TaxiDataProvider>(schema_provider_));
+
+    executor_ = std::make_shared<Executor>(0,
+                                           data_mgr_.get(),
+                                           system_parameters.cuda_block_size,
+                                           system_parameters.cuda_grid_size,
+                                           system_parameters.max_gpu_slab_size,
+                                           "",
+                                           "");
+  }
+
+  static void TearDownTestSuite() {}
+
+  ExecutionResult runRelAlgQuery(const std::string& ra) {
+    auto dag =
+        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, nullptr);
+    auto ra_executor =
+        RelAlgExecutor(executor_.get(), TEST_DB_ID, schema_provider_, std::move(dag));
+    return ra_executor.executeRelAlgQuery(
+        CompilationOptions(), ExecutionOptions(), false, nullptr);
+  }
+
+ private:
+  static std::shared_ptr<DataMgr> data_mgr_;
+  static SchemaProviderPtr schema_provider_;
+  static std::shared_ptr<Executor> executor_;
+};
+
+std::shared_ptr<DataMgr> Taxi::data_mgr_;
+SchemaProviderPtr Taxi::schema_provider_;
+std::shared_ptr<Executor> Taxi::executor_;
+
+TEST_F(Taxi, Q1) {
+  // SELECT cab_type, count(*) FROM trips GROUP BY cab_type;
+  const auto ra = R"({
+  "rels": [
+    {
+      "id": "0",
+      "relOp": "LogicalTableScan",
+      "fieldNames": [
+        "trip_id",
+        "vendor_id",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "store_and_fwd_flag",
+        "rate_code_id",
+        "pickup_longitude",
+        "pickup_latitude",
+        "dropoff_longitude",
+        "dropoff_latitude",
+        "passenger_count",
+        "trip_distance",
+        "fare_amount",
+        "extra",
+        "mta_tax",
+        "tip_amount",
+        "tolls_amount",
+        "ehail_fee",
+        "improvement_surcharge",
+        "total_amount",
+        "payment_type",
+        "trip_type",
+        "pickup",
+        "dropoff",
+        "cab_type",
+        "precipitation",
+        "snow_depth",
+        "snowfall",
+        "max_temperature",
+        "min_temperature",
+        "average_wind_speed",
+        "pickup_nyct2010_gid",
+        "pickup_ctlabel",
+        "pickup_borocode",
+        "pickup_boroname",
+        "pickup_ct2010",
+        "pickup_boroct2010",
+        "pickup_cdeligibil",
+        "pickup_ntacode",
+        "pickup_ntaname",
+        "pickup_puma",
+        "dropoff_nyct2010_gid",
+        "dropoff_ctlabel",
+        "dropoff_borocode",
+        "dropoff_boroname",
+        "dropoff_ct2010",
+        "dropoff_boroct2010",
+        "dropoff_cdeligibil",
+        "dropoff_ntacode",
+        "dropoff_ntaname",
+        "dropoff_puma",
+        "rowid"
+      ],
+      "table": [
+        "omnisci",
+        "trips"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "1",
+      "relOp": "LogicalProject",
+      "fields": [
+        "cab_type"
+      ],
+      "exprs": [
+        {
+          "input": 24
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "relOp": "LogicalAggregate",
+      "fields": [
+        "cab_type",
+        "EXPR$1"
+      ],
+      "group": [
+        0
+      ],
+      "aggs": [
+        {
+          "agg": "COUNT",
+          "type": {
+            "type": "BIGINT",
+            "nullable": false
+          },
+          "distinct": false,
+          "operands": []
+        }
+      ]
+    }
+  ]
+}
+)";
+  auto res = runRelAlgQuery(ra);
+}
+
+TEST_F(Taxi, Q2) {
+  // SELECT passenger_count, avg(total_amount) FROM trips GROUP BY passenger_count;
+
+  const auto ra = R"(
+  {
+  "rels": [
+    {
+      "id": "0",
+      "relOp": "LogicalTableScan",
+      "fieldNames": [
+        "trip_id",
+        "vendor_id",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "store_and_fwd_flag",
+        "rate_code_id",
+        "pickup_longitude",
+        "pickup_latitude",
+        "dropoff_longitude",
+        "dropoff_latitude",
+        "passenger_count",
+        "trip_distance",
+        "fare_amount",
+        "extra",
+        "mta_tax",
+        "tip_amount",
+        "tolls_amount",
+        "ehail_fee",
+        "improvement_surcharge",
+        "total_amount",
+        "payment_type",
+        "trip_type",
+        "pickup",
+        "dropoff",
+        "cab_type",
+        "precipitation",
+        "snow_depth",
+        "snowfall",
+        "max_temperature",
+        "min_temperature",
+        "average_wind_speed",
+        "pickup_nyct2010_gid",
+        "pickup_ctlabel",
+        "pickup_borocode",
+        "pickup_boroname",
+        "pickup_ct2010",
+        "pickup_boroct2010",
+        "pickup_cdeligibil",
+        "pickup_ntacode",
+        "pickup_ntaname",
+        "pickup_puma",
+        "dropoff_nyct2010_gid",
+        "dropoff_ctlabel",
+        "dropoff_borocode",
+        "dropoff_boroname",
+        "dropoff_ct2010",
+        "dropoff_boroct2010",
+        "dropoff_cdeligibil",
+        "dropoff_ntacode",
+        "dropoff_ntaname",
+        "dropoff_puma",
+        "rowid"
+      ],
+      "table": [
+        "omnisci",
+        "trips"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "1",
+      "relOp": "LogicalProject",
+      "fields": [
+        "passenger_count",
+        "total_amount"
+      ],
+      "exprs": [
+        {
+          "input": 10
+        },
+        {
+          "input": 19
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "relOp": "LogicalAggregate",
+      "fields": [
+        "passenger_count",
+        "EXPR$1"
+      ],
+      "group": [
+        0
+      ],
+      "aggs": [
+        {
+          "agg": "AVG",
+          "type": {
+            "type": "DOUBLE",
+            "nullable": false
+          },
+          "distinct": false,
+          "operands": [
+            1
+          ]
+        }
+      ]
+    }
+  ]
+}
+)";
+  auto res = runRelAlgQuery(ra);
+}
+
+TEST_F(Taxi, Q3) {
+  const auto ra = R"(
+    {
+  "rels": [
+    {
+      "id": "0",
+      "relOp": "LogicalTableScan",
+      "fieldNames": [
+        "trip_id",
+        "vendor_id",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "store_and_fwd_flag",
+        "rate_code_id",
+        "pickup_longitude",
+        "pickup_latitude",
+        "dropoff_longitude",
+        "dropoff_latitude",
+        "passenger_count",
+        "trip_distance",
+        "fare_amount",
+        "extra",
+        "mta_tax",
+        "tip_amount",
+        "tolls_amount",
+        "ehail_fee",
+        "improvement_surcharge",
+        "total_amount",
+        "payment_type",
+        "trip_type",
+        "pickup",
+        "dropoff",
+        "cab_type",
+        "precipitation",
+        "snow_depth",
+        "snowfall",
+        "max_temperature",
+        "min_temperature",
+        "average_wind_speed",
+        "pickup_nyct2010_gid",
+        "pickup_ctlabel",
+        "pickup_borocode",
+        "pickup_boroname",
+        "pickup_ct2010",
+        "pickup_boroct2010",
+        "pickup_cdeligibil",
+        "pickup_ntacode",
+        "pickup_ntaname",
+        "pickup_puma",
+        "dropoff_nyct2010_gid",
+        "dropoff_ctlabel",
+        "dropoff_borocode",
+        "dropoff_boroname",
+        "dropoff_ct2010",
+        "dropoff_boroct2010",
+        "dropoff_cdeligibil",
+        "dropoff_ntacode",
+        "dropoff_ntaname",
+        "dropoff_puma",
+        "rowid"
+      ],
+      "table": [
+        "omnisci",
+        "trips"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "1",
+      "relOp": "LogicalProject",
+      "fields": [
+        "passenger_count",
+        "pickup_year"
+      ],
+      "exprs": [
+        {
+          "input": 10
+        },
+        {
+          "op": "PG_EXTRACT",
+          "operands": [
+            {
+              "literal": "year",
+              "type": "CHAR",
+              "target_type": "CHAR",
+              "scale": -2147483648,
+              "precision": 4,
+              "type_scale": -2147483648,
+              "type_precision": 4
+            },
+            {
+              "input": 2
+            }
+          ],
+          "type": {
+            "type": "BIGINT",
+            "nullable": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "relOp": "LogicalAggregate",
+      "fields": [
+        "passenger_count",
+        "pickup_year",
+        "EXPR$2"
+      ],
+      "group": [
+        0,
+        1
+      ],
+      "aggs": [
+        {
+          "agg": "COUNT",
+          "type": {
+            "type": "BIGINT",
+            "nullable": false
+          },
+          "distinct": false,
+          "operands": []
+        }
+      ]
+    }
+  ]
+}
+  )";
+  auto res = runRelAlgQuery(ra);
+}
+
+TEST_F(Taxi, Q4) {
+  const auto ra = R"(
+{
+  "rels": [
+    {
+      "id": "0",
+      "relOp": "LogicalTableScan",
+      "fieldNames": [
+        "trip_id",
+        "vendor_id",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "store_and_fwd_flag",
+        "rate_code_id",
+        "pickup_longitude",
+        "pickup_latitude",
+        "dropoff_longitude",
+        "dropoff_latitude",
+        "passenger_count",
+        "trip_distance",
+        "fare_amount",
+        "extra",
+        "mta_tax",
+        "tip_amount",
+        "tolls_amount",
+        "ehail_fee",
+        "improvement_surcharge",
+        "total_amount",
+        "payment_type",
+        "trip_type",
+        "pickup",
+        "dropoff",
+        "cab_type",
+        "precipitation",
+        "snow_depth",
+        "snowfall",
+        "max_temperature",
+        "min_temperature",
+        "average_wind_speed",
+        "pickup_nyct2010_gid",
+        "pickup_ctlabel",
+        "pickup_borocode",
+        "pickup_boroname",
+        "pickup_ct2010",
+        "pickup_boroct2010",
+        "pickup_cdeligibil",
+        "pickup_ntacode",
+        "pickup_ntaname",
+        "pickup_puma",
+        "dropoff_nyct2010_gid",
+        "dropoff_ctlabel",
+        "dropoff_borocode",
+        "dropoff_boroname",
+        "dropoff_ct2010",
+        "dropoff_boroct2010",
+        "dropoff_cdeligibil",
+        "dropoff_ntacode",
+        "dropoff_ntaname",
+        "dropoff_puma",
+        "rowid"
+      ],
+      "table": [
+        "omnisci",
+        "trips"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "1",
+      "relOp": "LogicalProject",
+      "fields": [
+        "passenger_count",
+        "pickup_year",
+        "distance"
+      ],
+      "exprs": [
+        {
+          "input": 10
+        },
+        {
+          "op": "PG_EXTRACT",
+          "operands": [
+            {
+              "literal": "year",
+              "type": "CHAR",
+              "target_type": "CHAR",
+              "scale": -2147483648,
+              "precision": 4,
+              "type_scale": -2147483648,
+              "type_precision": 4
+            },
+            {
+              "input": 2
+            }
+          ],
+          "type": {
+            "type": "BIGINT",
+            "nullable": true
+          }
+        },
+        {
+          "op": "CAST",
+          "operands": [
+            {
+              "input": 11
+            }
+          ],
+          "type": {
+            "type": "INTEGER",
+            "nullable": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "relOp": "LogicalAggregate",
+      "fields": [
+        "passenger_count",
+        "pickup_year",
+        "distance",
+        "the_count"
+      ],
+      "group": [
+        0,
+        1,
+        2
+      ],
+      "aggs": [
+        {
+          "agg": "COUNT",
+          "type": {
+            "type": "BIGINT",
+            "nullable": false
+          },
+          "distinct": false,
+          "operands": []
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "relOp": "LogicalSort",
+      "collation": [
+        {
+          "field": 1,
+          "direction": "ASCENDING",
+          "nulls": "LAST"
+        },
+        {
+          "field": 3,
+          "direction": "DESCENDING",
+          "nulls": "FIRST"
+        }
+      ]
+    }
+  ]
+}
+  )";
+  auto res = runRelAlgQuery(ra);
 }
 
 int main(int argc, char** argv) {
