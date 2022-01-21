@@ -3670,6 +3670,14 @@ ImportStatus DataStreamSink::archivePlumber(
   return import_status_;
 }
 
+Detector::Detector(const boost::filesystem::path& fp, CopyParams& cp)
+    : DataStreamSink(cp, fp.string()), file_path(fp) {
+  {
+    read_file();
+    init();
+  }
+}
+
 #ifdef ENABLE_IMPORT_PARQUET
 inline auto open_parquet_table(const std::string& file_path,
                                std::shared_ptr<arrow::io::ReadableFile>& infile,
@@ -3688,13 +3696,7 @@ inline auto open_parquet_table(const std::string& file_path,
   LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
             << " columns in " << num_row_groups << " groups.";
   return std::make_tuple(num_row_groups, num_columns, num_rows);
-}
-
-Detector::Detector(const boost::filesystem::path& fp, CopyParams& cp)
-    : DataStreamSink(cp, fp.string()), file_path(fp) {
-  read_file();
-  init();
-}
+}  // namespace import_export
 
 void Detector::import_local_parquet(const std::string& file_path,
                                     const Catalog_Namespace::SessionInfo* session_info) {
