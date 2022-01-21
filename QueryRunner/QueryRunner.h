@@ -245,7 +245,7 @@ class QueryRunner {
 
   std::shared_ptr<RelAlgTranslator> getRelAlgTranslator(const std::string&, Executor*);
 
-  ExtractedPlanDag extractQueryPlanDag(const std::string&);
+  ExtractedQueryPlanDag extractQueryPlanDag(const std::string&);
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 

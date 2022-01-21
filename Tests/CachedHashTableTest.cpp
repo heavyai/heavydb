@@ -563,7 +563,6 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{0, 0});
   baseline_hashtable_first_run.push_back(std::vector<int32_t>{1, 1});
-  auto q1_dag_info = QR::get()->extractQueryPlanDag(q1);
   CHECK(check_one_to_many_baseline_hashtable(baseline_hashtable_first_run,
                                              cached_q1_ht->getCpuBuffer(),
                                              cached_q1_ht->getEntryCount()));
@@ -575,7 +574,6 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q2_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  auto q2_dag_info = QR::get()->extractQueryPlanDag(q2);
   EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                              CacheItemType::PERFECT_HT),
             static_cast<size_t>(1));
@@ -589,7 +587,6 @@ TEST(Select, DropAndReCreate_OneToMany_HashTable_WithReversedTupleInsertion) {
   std::shared_ptr<PerfectHashTable> cached_q3_ht =
       std::dynamic_pointer_cast<PerfectHashTable>(
           getCachedHashTable(visited_hashtable_key, CacheItemType::PERFECT_HT));
-  auto q3_dag_info = QR::get()->extractQueryPlanDag(q3);
   EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                              CacheItemType::PERFECT_HT),
             static_cast<size_t>(2));

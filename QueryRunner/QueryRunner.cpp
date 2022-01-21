@@ -939,17 +939,11 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
                         defaultExecutionOptionsForRunSQL(allow_loop_joins, just_explain));
 }
 
-ExtractedPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) {
+ExtractedQueryPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) {
   auto query_dag_info = getQueryInfoForDataRecyclerTest(query_str);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  auto extracted_dag_info =
-      QueryPlanDagExtractor::extractQueryPlanDag(query_dag_info.root_node.get(),
-                                                 *getCatalog(),
-                                                 std::nullopt,
-                                                 query_dag_info.left_deep_trees_info,
-                                                 *executor->getTemporaryTables(),
-                                                 executor,
-                                                 *query_dag_info.rel_alg_translator);
+  auto extracted_dag_info = QueryPlanDagExtractor::extractQueryPlanDag(
+      query_dag_info.root_node.get(), executor);
   return extracted_dag_info;
 }
 

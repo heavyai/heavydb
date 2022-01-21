@@ -16,6 +16,7 @@
 
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/GroupByAndAggregate.h"
+#include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RelAlgDagBuilder.h"
 
 #include <boost/graph/topological_sort.hpp>
@@ -236,12 +237,14 @@ std::unordered_set<Vertex> get_join_vertices(const std::vector<Vertex>& vertices
 }  // namespace
 
 RaExecutionSequence::RaExecutionSequence(const RelAlgNode* sink,
+                                         Executor* executor,
                                          const bool build_sequence) {
   CHECK(sink);
+  CHECK(executor);
   if (dynamic_cast<const RelScan*>(sink) || dynamic_cast<const RelJoin*>(sink)) {
     throw std::runtime_error("Query not supported yet");
   }
-
+  executor_ = executor;
   graph_ = build_dag(sink);
 
   boost::topological_sort(graph_, std::back_inserter(ordering_));
@@ -274,6 +277,8 @@ RaExecutionDesc* RaExecutionSequence::next() {
       continue;
     }
     descs_.emplace_back(std::make_unique<RaExecutionDesc>(node));
+    auto extracted_query_plan_dag =
+        QueryPlanDagExtractor::extractQueryPlanDag(node, executor_);
     return descs_.back().get();
   }
   return nullptr;

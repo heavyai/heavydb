@@ -19,8 +19,7 @@
 
 #include <unordered_set>
 
-// an approximation of each rel node's size: 2 * sizeof(size_t): unique ID for node_map_
-// and for DAG graph
+// an approximation of DAG cache's size by considering an edge between two nodes
 constexpr size_t elem_size_ = 2 * sizeof(size_t);
 
 std::optional<RelNodeId> QueryPlanDagCache::addNodeIfAbsent(const RelAlgNode* node) {
@@ -28,15 +27,12 @@ std::optional<RelNodeId> QueryPlanDagCache::addNodeIfAbsent(const RelAlgNode* no
   auto key = node->toHash();
   auto const result = node_map_.emplace(key, getCurrentNodeMapCardinality());
   if (result.second) {
-    // key did not already exist in node_map_. Check max size wasn't hit.
     if (getCurrentNodeMapSize() > max_node_map_size_ ||
         getCurrentNodeMapCardinality() == SIZE_MAX) {
-      // unfortunately our DAG cache becomes full if we add this node to it
-      // so we skip to cache this plan DAG and clear cache map
-      // b/c this can be happen in a middle of dag extraction
+      // unfortunately our DAG cache becomes full
+      // so clear the internal status and skip the query plan DAG extraction
       node_map_.clear();
       cached_query_plan_dag_.graph().clear();
-      // assume we cannot keep 'InvalidQueryPlanHash' nodes for our DAG cache
       return std::nullopt;
     }
   }
@@ -56,7 +52,7 @@ void QueryPlanDagCache::setNodeMapMaxSize(const size_t map_size) {
   max_node_map_size_ = map_size;
 }
 
-JoinColumnsInfo QueryPlanDagCache::translateColVarsToInfoString(
+size_t QueryPlanDagCache::translateColVarsToInfoHash(
     std::vector<const Analyzer::ColumnVar*>& col_vars,
     bool col_id_only) const {
   // we need to sort col ids to prevent missing data reuse case in multi column qual
@@ -66,21 +62,22 @@ JoinColumnsInfo QueryPlanDagCache::translateColVarsToInfoString(
             [](const Analyzer::ColumnVar* lhs, const Analyzer::ColumnVar* rhs) {
               return lhs->get_column_id() < rhs->get_column_id();
             });
-  if (col_id_only) {
-    std::vector<int> sorted_col_ids;
-    for (auto cv : col_vars) {
-      sorted_col_ids.push_back(cv->get_column_id());
-    }
-    return ::toString(sorted_col_ids);
-  } else {
-    return ::toString(col_vars);
-  }
+  size_t col_vars_info_hash = EMPTY_HASHED_PLAN_DAG_KEY;
+  using Hasher = std::function<void(Analyzer::ColumnVar const*)>;
+  Hasher hash_col_id = [&col_vars_info_hash](auto const* cv) {
+    boost::hash_combine(col_vars_info_hash, cv->get_column_id());
+  };
+  Hasher hash_cv_string = [&col_vars_info_hash](auto const* cv) {
+    boost::hash_combine(col_vars_info_hash, cv->toString());
+  };
+  std::for_each(
+      col_vars.begin(), col_vars.end(), col_id_only ? hash_col_id : hash_cv_string);
+  return col_vars_info_hash;
 }
 
-JoinColumnsInfo QueryPlanDagCache::getJoinColumnsInfoString(
-    const Analyzer::Expr* join_expr,
-    JoinColumnSide target_side,
-    bool extract_only_col_id) {
+size_t QueryPlanDagCache::getJoinColumnsInfoHash(const Analyzer::Expr* join_expr,
+                                                 JoinColumnSide target_side,
+                                                 bool extract_only_col_id) {
   // this function returns qual_bin_oper's info depending on the requested context
   // such as extracted col_id of inner join cols
   // (target_side = JoinColumnSide::kInner, extract_only_col_id = true)
@@ -89,34 +86,37 @@ JoinColumnsInfo QueryPlanDagCache::getJoinColumnsInfoString(
   // todo (yoonmin): we may need to use a whole "EXPR" contents in a future
   // to support a join qual with more general expression like A.a + 1 = (B.b * 2) / 2
   if (!join_expr) {
-    return "";
+    return EMPTY_HASHED_PLAN_DAG_KEY;
   }
-  auto get_sorted_col_info = [&](const Analyzer::Expr* join_cols) -> JoinColumnsInfo {
+  auto get_sorted_col_info = [=](const Analyzer::Expr* join_cols) -> size_t {
     auto join_col_vars = collectColVars(join_cols);
-    if (join_col_vars.empty()) {
-      return "";
-    }
-    return translateColVarsToInfoString(join_col_vars, extract_only_col_id);
+    CHECK(!join_col_vars.empty())
+        << "Join expression should have at least one join column variable";
+    return translateColVarsToInfoHash(join_col_vars, extract_only_col_id);
   };
-
+  auto hashed_join_col_info = EMPTY_HASHED_PLAN_DAG_KEY;
   if (target_side == JoinColumnSide::kQual) {
     auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
-    auto inner_join_col_info = get_sorted_col_info(qual_bin_oper->get_left_operand());
-    auto outer_join_col_info = get_sorted_col_info(qual_bin_oper->get_right_operand());
-    return outer_join_col_info + "|" + inner_join_col_info;
+    boost::hash_combine(hashed_join_col_info,
+                        get_sorted_col_info(qual_bin_oper->get_left_operand()));
+    boost::hash_combine(hashed_join_col_info,
+                        get_sorted_col_info(qual_bin_oper->get_right_operand()));
   } else if (target_side == JoinColumnSide::kInner) {
     auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
-    return get_sorted_col_info(qual_bin_oper->get_left_operand());
+    boost::hash_combine(hashed_join_col_info,
+                        get_sorted_col_info(qual_bin_oper->get_left_operand()));
   } else if (target_side == JoinColumnSide::kOuter) {
     auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
-    return get_sorted_col_info(qual_bin_oper->get_right_operand());
+    boost::hash_combine(hashed_join_col_info,
+                        get_sorted_col_info(qual_bin_oper->get_right_operand()));
   } else {
     CHECK(target_side == JoinColumnSide::kDirect);
-    return get_sorted_col_info(join_expr);
+    boost::hash_combine(hashed_join_col_info, get_sorted_col_info(join_expr));
   }
+  return hashed_join_col_info;
 }
 
 void QueryPlanDagCache::printDag() {

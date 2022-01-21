@@ -133,7 +133,7 @@ using Vertex = DAG::vertex_descriptor;
  */
 class RaExecutionSequence {
  public:
-  RaExecutionSequence(const RelAlgNode*, const bool build_sequence = true);
+  RaExecutionSequence(const RelAlgNode*, Executor*, const bool build_sequence = true);
   RaExecutionSequence(std::unique_ptr<RaExecutionDesc> exec_desc);
 
   /**
@@ -172,6 +172,7 @@ class RaExecutionSequence {
 
  private:
   DAG graph_;
+  Executor* executor_;
 
   std::unordered_set<Vertex> joins_;
   std::vector<Vertex> ordering_;  // reverse order topological sort of graph_

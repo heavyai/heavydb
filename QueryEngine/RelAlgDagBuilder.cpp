@@ -1237,8 +1237,8 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
   }
 }
 
-void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                     RelAlgDagBuilder* dag_builder) noexcept {
+void handle_query_hint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+                       RelAlgDagBuilder* dag_builder) noexcept {
   // query hint is delivered by the above three nodes
   // when a query block has top-sort node, a hint is registered to
   // one of the node which locates at the nearest from the sort node
@@ -1268,6 +1268,20 @@ void handleQueryHint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     }
   }
   dag_builder->setGlobalQueryHints(global_query_hint);
+}
+
+void compute_node_hash(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  // compute each rel node's hash value in advance to avoid inconsistency of their hash
+  // values depending on the toHash's caller
+  // specifically, we manipulate our logical query plan before retrieving query step
+  // sequence but once we compute a hash value we cached it so there is no way to update
+  // it after the plan has been changed starting from the top node, we compute the hash
+  // value (top-down manner)
+  std::for_each(
+      nodes.rbegin(), nodes.rend(), [](const std::shared_ptr<RelAlgNode>& node) {
+        auto node_hash = node->toHash();
+        CHECK_NE(node_hash, static_cast<size_t>(0));
+      });
 }
 
 void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
@@ -2772,7 +2786,8 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
     alterRAForRender(nodes_, *render_info_);
   }
 
-  handleQueryHint(nodes_, this);
+  compute_node_hash(nodes_);
+  handle_query_hint(nodes_, this);
   mark_nops(nodes_);
   simplify_sort(nodes_);
   sink_projected_boolean_expr_to_join(nodes_);

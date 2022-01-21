@@ -308,16 +308,18 @@ bool HashtableRecycler::checkOverlapsHashtableBucketCompatability(
   return threshold_check && hashtable_size_check;
 }
 
-std::string HashtableRecycler::getJoinColumnInfoString(
+size_t HashtableRecycler::getJoinColumnInfoHash(
     std::vector<const Analyzer::ColumnVar*>& inner_cols,
     std::vector<const Analyzer::ColumnVar*>& outer_cols,
     Executor* executor) {
-  std::vector<std::string> join_cols_info;
-  join_cols_info.push_back(
-      executor->getQueryPlanDagCache().translateColVarsToInfoString(inner_cols, false));
-  join_cols_info.push_back(
-      executor->getQueryPlanDagCache().translateColVarsToInfoString(outer_cols, false));
-  return boost::join(join_cols_info, "|");
+  auto hashed_join_col_info = EMPTY_HASHED_PLAN_DAG_KEY;
+  boost::hash_combine(
+      hashed_join_col_info,
+      executor->getQueryPlanDagCache().translateColVarsToInfoHash(inner_cols, false));
+  boost::hash_combine(
+      hashed_join_col_info,
+      executor->getQueryPlanDagCache().translateColVarsToInfoHash(outer_cols, false));
+  return hashed_join_col_info;
 }
 
 bool HashtableRecycler::isSafeToCacheHashtable(
@@ -369,51 +371,43 @@ HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
     const HashTableBuildDagMap& hashtable_build_dag_map,
     Executor* executor) {
   std::vector<const Analyzer::ColumnVar*> inner_cols_vec, outer_cols_vec;
-  std::vector<std::string> join_qual_info;
+  size_t join_qual_info = EMPTY_HASHED_PLAN_DAG_KEY;
   for (auto& join_col_pair : inner_outer_pairs) {
     inner_cols_vec.push_back(join_col_pair.first);
     // extract inner join col's id
     // b/c when the inner col comes from a subquery's resulset,
     // table id / rte_index can be different even if we have the same
     // subquery's semantic, i.e., project col A from table T
-    join_qual_info.push_back(executor->getQueryPlanDagCache().getJoinColumnsInfoString(
-        join_col_pair.first, JoinColumnSide::kDirect, true));
-    join_qual_info.push_back(::toString(op_type));
-    join_qual_info.push_back(::toString(join_type));
+    boost::hash_combine(join_qual_info,
+                        executor->getQueryPlanDagCache().getJoinColumnsInfoHash(
+                            join_col_pair.first, JoinColumnSide::kDirect, true));
+    boost::hash_combine(join_qual_info, op_type);
+    boost::hash_combine(join_qual_info, join_type);
     auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(join_col_pair.second);
+    boost::hash_combine(join_qual_info, join_col_pair.first->get_type_info().toString());
     if (outer_col_var) {
       outer_cols_vec.push_back(outer_col_var);
-    } else {
-      auto cvs = executor->getQueryPlanDagCache().collectColVars(join_col_pair.second);
-      std::copy(cvs.begin(), cvs.end(), std::back_inserter(outer_cols_vec));
-    }
-    join_qual_info.push_back(join_col_pair.first->get_type_info().toString());
-    if (join_col_pair.first->get_type_info().is_dict_encoded_string() && outer_col_var) {
-      // add comp param for dict encoded string
-      join_qual_info.push_back(executor->getQueryPlanDagCache().getJoinColumnsInfoString(
-          outer_col_var, JoinColumnSide::kDirect, true));
-      join_qual_info.push_back(outer_col_var->get_type_info().toString());
+      if (join_col_pair.first->get_type_info().is_dict_encoded_string()) {
+        // add comp param for dict encoded string
+        boost::hash_combine(join_qual_info,
+                            executor->getQueryPlanDagCache().getJoinColumnsInfoHash(
+                                outer_col_var, JoinColumnSide::kDirect, true));
+        boost::hash_combine(join_qual_info, outer_col_var->get_type_info().toString());
+      }
     }
   }
-  auto inner_join_cols_info = boost::join(join_qual_info, "|");
-  auto join_cols_info = getJoinColumnInfoString(inner_cols_vec, outer_cols_vec, executor);
-  HashtableCacheMetaInfo meta_info;
+  auto join_cols_info = getJoinColumnInfoHash(inner_cols_vec, outer_cols_vec, executor);
   HashtableAccessPathInfo access_path_info;
   auto it = hashtable_build_dag_map.find(join_cols_info);
   if (it != hashtable_build_dag_map.end()) {
-    std::vector<std::string> hashtable_access_path_info;
-    hashtable_access_path_info.push_back(it->second.inner_cols_access_path);
-    hashtable_access_path_info.push_back(inner_join_cols_info);
+    size_t hashtable_access_path = EMPTY_HASHED_PLAN_DAG_KEY;
+    boost::hash_combine(hashtable_access_path, it->second.inner_cols_access_path);
+    boost::hash_combine(hashtable_access_path, join_qual_info);
     if (inner_cols_vec.front()->get_type_info().is_dict_encoded_string()) {
-      hashtable_access_path_info.push_back(it->second.outer_cols_access_path);
+      boost::hash_combine(hashtable_access_path, it->second.outer_cols_access_path);
     }
-    auto hashtable_access_path = boost::join(hashtable_access_path_info, "|");
-    QueryPlanMetaInfo query_plan_meta_info;
-    query_plan_meta_info.query_plan_dag = hashtable_access_path;
-    query_plan_meta_info.inner_col_info_string = inner_join_cols_info;
     HashtableCacheMetaInfo meta_info;
-    meta_info.query_plan_meta_info = query_plan_meta_info;
-    access_path_info.hashed_query_plan_dag = boost::hash_value(hashtable_access_path);
+    access_path_info.hashed_query_plan_dag = hashtable_access_path;
     access_path_info.meta_info = meta_info;
     access_path_info.table_keys = it->second.inputTableKeys;
   }

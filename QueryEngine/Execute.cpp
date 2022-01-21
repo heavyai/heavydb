@@ -1520,9 +1520,7 @@ std::string ra_exec_unit_desc_for_caching(const RelAlgExecutionUnit& ra_exe_unit
 }
 
 std::ostream& operator<<(std::ostream& os, const RelAlgExecutionUnit& ra_exe_unit) {
-  auto query_plan_dag =
-      ra_exe_unit.query_plan_dag == EMPTY_QUERY_PLAN ? "N/A" : ra_exe_unit.query_plan_dag;
-  os << "\n\tExtracted Query Plan Dag: " << query_plan_dag;
+  os << "\n\tExtracted Query Plan Dag Hash: " << ra_exe_unit.query_plan_dag_hash;
   os << "\n\tTable/Col/Levels: ";
   for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
     const auto& scan_desc = input_col_desc->getScanDesc();
@@ -1584,7 +1582,7 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.sort_info,
           new_scan_limit,
           ra_exe_unit_in.query_hint,
-          ra_exe_unit_in.query_plan_dag,
+          ra_exe_unit_in.query_plan_dag_hash,
           ra_exe_unit_in.hash_table_build_plan_dag,
           ra_exe_unit_in.table_id_to_node_map,
           ra_exe_unit_in.use_bump_allocator,
@@ -4281,13 +4279,6 @@ QueryPlanDagCache& Executor::getQueryPlanDagCache() {
   return query_plan_dag_cache_;
 }
 
-JoinColumnsInfo Executor::getJoinColumnsInfo(const Analyzer::Expr* join_expr,
-                                             JoinColumnSide target_side,
-                                             bool extract_only_col_id) {
-  return query_plan_dag_cache_.getJoinColumnsInfoString(
-      join_expr, target_side, extract_only_col_id);
-}
-
 mapd_shared_mutex& Executor::getSessionLock() {
   return executor_session_mutex_;
 }
@@ -4659,13 +4650,13 @@ bool Executor::checkNonKernelTimeInterrupted() const {
          flag_it->second;
 }
 
-void Executor::registerExtractedQueryPlanDag(const QueryPlan& query_plan_dag) {
+void Executor::registerExtractedQueryPlanDag(const QueryPlanDAG& query_plan_dag) {
   // this function is called under the recycler lock
   // e.g., QueryPlanDagExtractor::extractQueryPlanDagImpl()
   latest_query_plan_extracted_ = query_plan_dag;
 }
 
-const QueryPlan Executor::getLatestQueryPlanDagExtracted() const {
+const QueryPlanDAG Executor::getLatestQueryPlanDagExtracted() const {
   mapd_shared_lock<mapd_shared_mutex> lock(recycler_mutex_);
   return latest_query_plan_extracted_;
 }
@@ -4692,4 +4683,4 @@ std::mutex Executor::kernel_mutex_;
 QueryPlanDagCache Executor::query_plan_dag_cache_;
 mapd_shared_mutex Executor::recycler_mutex_;
 std::unordered_map<std::string, size_t> Executor::cardinality_cache_;
-QueryPlan Executor::latest_query_plan_extracted_{EMPTY_QUERY_PLAN};
+QueryPlanDAG Executor::latest_query_plan_extracted_{EMPTY_QUERY_PLAN};

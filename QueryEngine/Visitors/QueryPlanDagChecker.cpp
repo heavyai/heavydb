@@ -26,9 +26,8 @@ void QueryPlanDagChecker::detectNonSupportedNode(const std::string& node_tag) {
 }
 
 std::pair<bool, std::string> QueryPlanDagChecker::hasNonSupportedNodeInDag(
-    const RelAlgNode* rel_alg_node,
-    const RelAlgTranslator& rel_alg_translator) {
-  QueryPlanDagChecker checker(rel_alg_translator);
+    const RelAlgNode* rel_alg_node) {
+  QueryPlanDagChecker checker;
   checker.check(rel_alg_node);
   return std::make_pair(checker.getCheckResult(), checker.getNonSupportedNodeTag());
 }
@@ -108,17 +107,7 @@ void QueryPlanDagChecker::visit(RexOperator const* rex_node) {
 
 void QueryPlanDagChecker::visit(RexFunctionOperator const* rex_node) {
   if (non_supported_functions_.count(rex_node->getName())) {
-    detectNonSupportedNode("Detect non-supported function: " +
-                           non_supported_function_tag_);
-    if (rex_node->getName() == "DATETIME") {
-      const auto arg = rel_alg_translator_.translateScalarRex(rex_node->getOperand(0));
-      const auto arg_lit = std::dynamic_pointer_cast<Analyzer::Constant>(arg);
-      if (arg_lit && !arg_lit->get_is_null() && arg_lit->get_type_info().is_string()) {
-        if (*arg_lit->get_constval().stringval != "NOW"sv) {
-          reset();
-        }
-      }
-    }
+    detectNonSupportedNode("Detect non-supported function: " + rex_node->getName());
   }
   if (getCheckResult()) {
     return;

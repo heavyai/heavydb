@@ -20,11 +20,6 @@
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "QueryEngine/QueryHint.h"
 
-struct QueryPlanMetaInfo {
-  QueryPlan query_plan_dag;
-  std::string inner_col_info_string;
-};
-
 struct OverlapsHashTableMetaInfo {
   size_t overlaps_max_table_size_bytes;
   double overlaps_bucket_threshold;
@@ -32,14 +27,11 @@ struct OverlapsHashTableMetaInfo {
 };
 
 struct HashtableCacheMetaInfo {
-  std::optional<QueryPlanMetaInfo> query_plan_meta_info;
   std::optional<OverlapsHashTableMetaInfo> overlaps_meta_info;
   std::optional<RegisteredQueryHint> registered_query_hint;
 
   HashtableCacheMetaInfo()
-      : query_plan_meta_info(std::nullopt)
-      , overlaps_meta_info(std::nullopt)
-      , registered_query_hint(std::nullopt){};
+      : overlaps_meta_info(std::nullopt), registered_query_hint(std::nullopt){};
 };
 
 struct HashtableAccessPathInfo {
@@ -100,10 +92,9 @@ class HashtableRecycler
       const HashTableBuildDagMap& hashtable_build_dag_map,
       Executor* executor);
 
-  static std::string getJoinColumnInfoString(
-      std::vector<const Analyzer::ColumnVar*>& inner_cols,
-      std::vector<const Analyzer::ColumnVar*>& outer_cols,
-      Executor* executor);
+  static size_t getJoinColumnInfoHash(std::vector<const Analyzer::ColumnVar*>& inner_cols,
+                                      std::vector<const Analyzer::ColumnVar*>& outer_cols,
+                                      Executor* executor);
 
   static bool isSafeToCacheHashtable(const TableIdToNodeMap& table_id_to_node_map,
                                      bool need_dict_translation,

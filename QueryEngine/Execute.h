@@ -1087,8 +1087,8 @@ class Executor {
   // check whether the current session that this executor manages is interrupted
   // while performing non-kernel time task
   bool checkNonKernelTimeInterrupted() const;
-  void registerExtractedQueryPlanDag(const QueryPlan& query_plan_dag);
-  const QueryPlan getLatestQueryPlanDagExtracted() const;
+  void registerExtractedQueryPlanDag(const QueryPlanDAG& query_plan_dag);
+  const QueryPlanDAG getLatestQueryPlanDagExtracted() const;
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
@@ -1097,9 +1097,6 @@ class Executor {
 
   mapd_shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
-  JoinColumnsInfo getJoinColumnsInfo(const Analyzer::Expr* join_expr,
-                                     JoinColumnSide target_side,
-                                     bool extract_only_col_id);
 
   CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
   llvm::LLVMContext& getContext() { return *context_.get(); }
@@ -1266,7 +1263,7 @@ class Executor {
 
   // a variable used for testing query plan DAG extractor when a query has a table
   // function
-  static QueryPlan latest_query_plan_extracted_;
+  static QueryPlanDAG latest_query_plan_extracted_;
 
  public:
   static const int32_t ERR_DIV_BY_ZERO{1};

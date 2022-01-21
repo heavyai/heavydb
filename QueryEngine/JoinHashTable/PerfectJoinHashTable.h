@@ -244,8 +244,8 @@ class PerfectJoinHashTable : public HashJoin {
     }
     boost::hash_combine(hash, info.col_range.toString());
     boost::hash_combine(hash, info.num_elements);
-    boost::hash_combine(hash, ::toString(info.optype));
-    boost::hash_combine(hash, ::toString(info.join_type));
+    boost::hash_combine(hash, info.optype);
+    boost::hash_combine(hash, info.join_type);
     return hash;
   }
 

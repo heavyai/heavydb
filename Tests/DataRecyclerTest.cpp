@@ -259,15 +259,8 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q1_str = "SELECT x FROM T1 ORDER BY x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
   EXPECT_TRUE(q1_query_info.left_deep_trees_id.empty());
-  auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   // 1. a sort node becomes a root (dag_rel_id = 0)
   // 2. a project node becomes a child of the sort node (dag_rel_id = 1)
   // 3. a scan node (the leaf of the query plan) becomes a child of the project node
@@ -276,30 +269,16 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q2_str = "SELECT x FROM T1;";
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
   EXPECT_TRUE(q2_query_info.left_deep_trees_id.empty());
-  auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   // q2 is the same as q1 except sort node
   EXPECT_TRUE(q2_plan_dag.extracted_dag.compare("1|2|") == 0);
 
   auto q3_str = "SELECT x FROM T1 GROUP BY x;";
   auto q3_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q3_str);
   EXPECT_TRUE(q3_query_info.left_deep_trees_id.empty());
-  auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q3_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q3_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(), executor);
   // compound node becomes the root (dag_rel_id = 3), and the scan node
   // (that is the same node as both q1 and q2) is the leaf of the query plan
   EXPECT_TRUE(q3_plan_dag.extracted_dag.compare("3|2|") == 0);
@@ -307,37 +286,18 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
   auto q4_str = "SELECT x FROM T1 GROUP BY x ORDER BY x;";
   auto q4_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q4_str);
   EXPECT_TRUE(q4_query_info.left_deep_trees_id.empty());
-  auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q4_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q4_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(), executor);
   // this sort node has different input compared with that of q1
   // so we assign the new dag_rel_id (4) to the sort node
   EXPECT_TRUE(q4_plan_dag.extracted_dag.compare("4|3|2|") == 0);
 
   auto q1_dup_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   EXPECT_TRUE(q1_dup_plan_dag.extracted_dag.compare("0|1|2|") == 0);
 
   auto q4_dup_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q4_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q4_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(), executor);
   EXPECT_TRUE(q4_dup_plan_dag.extracted_dag.compare("4|3|2|") == 0);
 }
 
@@ -362,15 +322,8 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   auto q1_str = create_query_having_IN_expr("T1", "x", 20);
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
   EXPECT_TRUE(q1_query_info.left_deep_trees_id.empty());
-  auto rel_alg_translator_for_q1 = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *rel_alg_translator_for_q1);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   EXPECT_EQ(q1_plan_dag.contain_not_supported_rel_node, false);
   // but we skip to extract a DAG for q2 since it contains IN-expr having 21 elems in its
   // value list
@@ -378,15 +331,8 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   auto q2_str = create_query_having_IN_expr("T1", "x", 21);
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
   EXPECT_TRUE(q2_query_info.left_deep_trees_id.empty());
-  auto rel_alg_translator_for_q2 = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *rel_alg_translator_for_q2);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   EXPECT_EQ(q2_plan_dag.contain_not_supported_rel_node, true);
 }
 
@@ -396,71 +342,36 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q1_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
   EXPECT_TRUE(q1_query_info.left_deep_trees_id.size() == 1);
-  auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q1_query_info.left_deep_trees_id[0],
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
 
   auto q2_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.x = T2.x;";
   auto q2_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q2_str);
   EXPECT_TRUE(q2_query_info.left_deep_trees_id.size() == 1);
-  auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q2_query_info.left_deep_trees_id[0],
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
 
-  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare(q2_plan_dag.extracted_dag) == 0);
+  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare(q2_plan_dag.extracted_dag) != 0);
 
   auto q3_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x and T2.y = T1.y;";
   auto q3_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q3_str);
   EXPECT_TRUE(q3_query_info.left_deep_trees_id.size() == 1);
-  auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q3_query_info.left_deep_trees_id[0],
-                                                 q3_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q3_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(), executor);
 
   auto q4_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.x = T2.x and T1.y = T2.y;";
   auto q4_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q4_str);
   EXPECT_TRUE(q4_query_info.left_deep_trees_id.size() == 1);
-  auto q4_rel_alg_translator = QR::get()->getRelAlgTranslator(q4_str, executor);
   auto q4_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q4_query_info.left_deep_trees_id[0],
-                                                 q4_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q4_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(), executor);
 
   EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q4_plan_dag.extracted_dag) != 0);
 
   auto q5_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.y = T2.y and T1.x = T2.x;";
   auto q5_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q5_str);
   EXPECT_TRUE(q5_query_info.left_deep_trees_id.size() == 1);
-  auto q5_rel_alg_translator = QR::get()->getRelAlgTranslator(q5_str, executor);
   auto q5_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q5_query_info.left_deep_trees_id[0],
-                                                 q5_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q5_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(), executor);
   EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q5_plan_dag.extracted_dag) != 0);
 }
 
@@ -523,47 +434,25 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   // test: when DAG cache becomes full, it should skip the following query and clear the
   // cached plan
   DAG_CACHE.setNodeMapMaxSize(48);
-  auto q1_rel_alg_translator = QR::get()->getRelAlgTranslator(q1_str, executor);
   auto q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   // 1. a sort node becomes a root (dag_rel_id = 0)
   // 2. a project node becomes a child of the sort node (dag_rel_id = 1)
   // 3. a scan node (the leaf of the query plan) becomes a child of the project node
   EXPECT_TRUE(q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
   // 3 unique REL nodes in the cache --> 3 * 2 * 8 = 48
   EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 48u);
-  auto q2_rel_alg_translator = QR::get()->getRelAlgTranslator(q2_str, executor);
   auto q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   // we set the DAG cache size be 48, so when we try to cache the q2, it becomes full
   // so it skips to extract DAG plan of this query and also clear the cache itself
   EXPECT_TRUE(q2_plan_dag.extracted_dag.compare("") == 0);
-  // 2 unique REL nodes in the cache --> 2 * 2 * 8 = 32
   EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
   DAG_CACHE.clearQueryPlanCache();
 
   // test: when a query size is too large, we skip caching the query
-  auto q3_rel_alg_translator = QR::get()->getRelAlgTranslator(q3_str, executor);
   auto q3_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 q3_query_info.left_deep_trees_id[0],
-                                                 q3_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q3_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q3_query_info.root_node.get(), executor);
   // q3 has more than three nodes, so its size is beyond the limit of the DAG cache (48)
   // so we cannot keep it to our DAG cache
   EXPECT_EQ(DAG_CACHE.getCurrentNodeMapSize(), 0u);
@@ -571,22 +460,10 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
   // test: increase the cache size that is enough to hold both q1 and q2
   DAG_CACHE.setNodeMapMaxSize(80);
   auto new_q1_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q1_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q1_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q1_query_info.root_node.get(), executor);
   EXPECT_TRUE(new_q1_plan_dag.extracted_dag.compare("0|1|2|") == 0);
   auto new_q2_plan_dag =
-      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(),
-                                                 *executor->getCatalog(),
-                                                 std::nullopt,
-                                                 q2_query_info.left_deep_trees_info,
-                                                 {},
-                                                 executor,
-                                                 *q2_rel_alg_translator);
+      QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
   EXPECT_TRUE(new_q2_plan_dag.extracted_dag.compare("3|2|") == 0);
   EXPECT_GE(DAG_CACHE.getCurrentNodeMapSize(), 48u);
 }

@@ -27,23 +27,20 @@
 // a vector of explained join info
 using TranslatedJoinInfo = std::vector<std::shared_ptr<RelTranslatedJoin>>;
 
-struct ExtractedPlanDag {
-  // a root node of the query plan
-  const RelAlgNode* root_node;
+struct ExtractedQueryPlanDag {
   // extracted DAG starting from the root_node
-  const QueryPlan extracted_dag;
-  // join qual's info collected while converting calcite AST to logical query plan tree
-  const std::shared_ptr<TranslatedJoinInfo> translated_join_info;
-  // join condition info collected during converting calcite AST to logical query plan
-  // tree
-  const JoinQualsPerNestingLevel* per_nesting_level_join_quals_info;
+  const QueryPlanDAG extracted_dag;
+  // show whether this query plan is not available to extract a DAG
+  bool contain_not_supported_rel_node;
+};
+
+struct ExtractedJoinInfo {
   // a map btw. join qual to an access path (as a query plan DAG) to corresponding
   // hashtable
   const HashTableBuildDagMap hash_table_plan_dag;
   // a map btw. inner join col's input table id to corresponding rel node ptr
   const TableIdToNodeMap table_id_to_node_map;
   // show whether this query plan is not available to extract a DAG
-  bool contain_not_supported_rel_node;
 };
 
 // set the bool flag be true when the InnerOuter qual is for loop join
@@ -56,32 +53,29 @@ class QueryPlanDagExtractor {
  public:
   QueryPlanDagExtractor(
       QueryPlanDagCache& global_dag,
-      const Catalog_Namespace::Catalog& catalog,
-      std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
-      const TemporaryTables& temporary_tables)
+      std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_tree_infos,
+      Executor* executor,
+      bool analyze_join_ops)
       : global_dag_(global_dag)
-      , catalog_(catalog)
       , contain_not_supported_rel_node_(false)
       , left_deep_tree_infos_(left_deep_tree_infos)
-      , temporary_tables_(temporary_tables) {
-    translated_join_info_ = std::make_shared<TranslatedJoinInfo>();
+      , executor_(executor)
+      , analyze_join_ops_(analyze_join_ops) {
+    if (analyze_join_ops_) {
+      translated_join_info_ = std::make_shared<TranslatedJoinInfo>();
+    }
   }
 
-  // a function that try to extract query plan DAG
-  static ExtractedPlanDag extractQueryPlanDag(
-      const RelAlgNode* node,
-      const Catalog_Namespace::Catalog& catalog,
+  static ExtractedJoinInfo extractJoinInfo(
+      const RelAlgNode* top_node,
       std::optional<unsigned> left_deep_tree_id,
-      std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
-      const TemporaryTables& temporary_tables,
-      Executor* executor,
-      const RelAlgTranslator& rel_alg_translator);
+      std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_tree_infos,
+      Executor* executor);
 
-  HashTableBuildDagMap& getHashTableBuildDag() { return hash_table_query_plan_dag_; }
+  static ExtractedQueryPlanDag extractQueryPlanDag(const RelAlgNode* top_node,
+                                                   Executor* executor);
 
-  std::shared_ptr<TranslatedJoinInfo> getTranslatedJoinInfo() {
-    return translated_join_info_;
-  }
+  HashTableBuildDagMap getHashTableBuildDag() { return hash_table_query_plan_dag_; }
 
   const JoinQualsPerNestingLevel* getPerNestingJoinQualInfo(
       std::optional<unsigned> left_deep_join_tree_id) {
@@ -98,15 +92,14 @@ class QueryPlanDagExtractor {
 
   bool isDagExtractionAvailable() { return contain_not_supported_rel_node_; }
 
-  std::string getExtractedQueryPlanDagStr();
+  std::string getExtractedQueryPlanDagStr(size_t start_pos = 0);
 
   std::vector<InnerOuterOrLoopQual> normalizeColumnsPair(
-      const Analyzer::BinOper* condition,
-      const Catalog_Namespace::Catalog& cat);
+      const Analyzer::BinOper* condition);
 
   bool isEmptyQueryPlanDag(const std::string& dag) { return dag.compare("N/A") == 0; }
 
-  TableIdToNodeMap& getTableIdToNodeMap() { return table_id_to_node_map_; }
+  TableIdToNodeMap getTableIdToNodeMap() { return table_id_to_node_map_; }
 
   void addTableIdToNodeLink(const int table_id, const RelAlgNode* node) {
     auto it = table_id_to_node_map_.find(table_id);
@@ -124,27 +117,23 @@ class QueryPlanDagExtractor {
  private:
   void visit(const RelAlgNode*, const RelAlgNode*);
   std::vector<Analyzer::ColumnVar const*> getColVar(const Analyzer::Expr* col_info);
+  void register_and_visit(const RelAlgNode* parent_node, const RelAlgNode* child_node);
   void handleLeftDeepJoinTree(const RelAlgNode*, const RelLeftDeepInnerJoin*);
   void handleTranslatedJoin(const RelAlgNode*, const RelTranslatedJoin*);
   bool validateNodeId(const RelAlgNode* node, std::optional<RelNodeId> retrieved_node_id);
   bool registerNodeToDagCache(const RelAlgNode* parent_node,
                               const RelAlgNode* child_node,
                               std::optional<RelNodeId> retrieved_node_id);
-  static ExtractedPlanDag extractQueryPlanDagImpl(
-      const RelAlgNode* node,
-      const Catalog_Namespace::Catalog& catalog,
-      std::optional<unsigned> left_deep_tree_id,
-      std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos,
-      const TemporaryTables& temporary_tables,
-      Executor* executor);
+  static void extractQueryPlanDagImpl(const RelAlgNode* top_npde,
+                                      QueryPlanDagExtractor& dag_extractor);
 
   QueryPlanDagCache& global_dag_;
-  const Catalog_Namespace::Catalog& catalog_;
   bool contain_not_supported_rel_node_;
-  std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos_;
-  const TemporaryTables& temporary_tables_;
+  std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_tree_infos_;
+  Executor* executor_;
+  bool analyze_join_ops_;
   std::shared_ptr<TranslatedJoinInfo> translated_join_info_;
   HashTableBuildDagMap hash_table_query_plan_dag_;
   TableIdToNodeMap table_id_to_node_map_;
-  std::vector<size_t> extracted_dag_;
+  std::vector<std::string> extracted_dag_;
 };

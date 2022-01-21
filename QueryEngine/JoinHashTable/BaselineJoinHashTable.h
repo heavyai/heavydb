@@ -233,7 +233,7 @@ class BaselineJoinHashTable : public HashJoin {
       }
     }
     boost::hash_combine(hash, info.num_elements);
-    boost::hash_combine(hash, ::toString(info.join_type));
+    boost::hash_combine(hash, info.join_type);
     return hash;
   }
 

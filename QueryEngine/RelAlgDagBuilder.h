@@ -726,7 +726,9 @@ class RelAlgNode {
       : inputs_(std::move(inputs))
       , id_(crt_id_++)
       , context_data_(nullptr)
-      , is_nop_(false) {}
+      , is_nop_(false)
+      , query_plan_dag_("")
+      , query_plan_dag_hash_(0) {}
 
   virtual ~RelAlgNode() {}
 
@@ -743,6 +745,17 @@ class RelAlgNode {
   void setOutputMetainfo(const std::vector<TargetMetaInfo>& targets_metainfo) const {
     targets_metainfo_ = targets_metainfo;
   }
+
+  void setQueryPlanDag(const std::string& extracted_query_plan_dag) const {
+    if (!extracted_query_plan_dag.empty()) {
+      query_plan_dag_ = extracted_query_plan_dag;
+      query_plan_dag_hash_ = boost::hash_value(extracted_query_plan_dag);
+    }
+  }
+
+  std::string getQueryPlanDag() const { return query_plan_dag_; }
+
+  size_t getQueryPlanDagHash() const { return query_plan_dag_hash_; }
 
   const std::vector<TargetMetaInfo>& getOutputMetainfo() const {
     return targets_metainfo_;
@@ -826,6 +839,8 @@ class RelAlgNode {
   mutable std::vector<TargetMetaInfo> targets_metainfo_;
   static thread_local unsigned crt_id_;
   mutable size_t dag_node_id_;
+  mutable std::string query_plan_dag_;
+  mutable size_t query_plan_dag_hash_;
 };
 
 class RelScan : public RelAlgNode {

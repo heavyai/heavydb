@@ -334,10 +334,10 @@ class OverlapsJoinHashTable : public HashJoin {
       }
     }
     boost::hash_combine(hash, info.num_elements);
-    boost::hash_combine(hash, ::toString(info.optype));
+    boost::hash_combine(hash, info.optype);
     boost::hash_combine(hash, info.max_hashtable_size);
     boost::hash_combine(hash, info.bucket_threshold);
-    boost::hash_combine(hash, ::toString(info.inverse_bucket_sizes));
+    boost::hash_combine(hash, info.inverse_bucket_sizes);
     return hash;
   }
 
@@ -401,7 +401,7 @@ class OverlapsJoinHashTable : public HashJoin {
   static std::unique_ptr<OverlapsTuningParamRecycler> auto_tuner_cache_;
 
   RegisteredQueryHint query_hint_;
-  QueryPlan query_plan_dag_;
+  QueryPlanDAG query_plan_dag_;
   QueryPlanHash hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;

@@ -39,9 +39,6 @@ using RelNodeMap = std::unordered_map<RelNodeExplainedHash, RelNodeId>;
 // reuse and compiled kernel reuse by exploiting graph-centric computation like subgraph
 // matching and graph isomorphism
 using QueryPlanDag = boost::labeled_graph<AdjacentList, RelNodeId, boost::hash_mapS>;
-using TableKeyToHashTableAccessPathMap = std::unordered_map<size_t, size_t>;
-using QueryPlanDagToInputTableKeyMap =
-    std::unordered_map<size_t, std::unordered_set<size_t>>;
 
 class ColumnVarsVisitor
     : public ScalarExprVisitor<std::vector<const Analyzer::ColumnVar*>> {
@@ -132,13 +129,12 @@ class QueryPlanDagCache {
 
   size_t getCurrentNodeMapCardinality() const;
 
-  JoinColumnsInfo getJoinColumnsInfoString(const Analyzer::Expr* join_expr,
-                                           JoinColumnSide target_side,
-                                           bool extract_only_col_id);
+  size_t getJoinColumnsInfoHash(const Analyzer::Expr* join_expr,
+                                JoinColumnSide target_side,
+                                bool extract_only_col_id);
 
-  JoinColumnsInfo translateColVarsToInfoString(
-      std::vector<const Analyzer::ColumnVar*>& col_vars,
-      bool col_id_only) const;
+  size_t translateColVarsToInfoHash(std::vector<const Analyzer::ColumnVar*>& col_vars,
+                                    bool col_id_only) const;
 
   void clearQueryPlanCache();
 
@@ -152,10 +148,7 @@ class QueryPlanDagCache {
   // a limitation of the maximum size of DAG cache (to prevent unlimited usage of memory
   // for DAG maintanence)
   size_t max_node_map_size_;
-  // a map between a table's chunk key to hashtable access path map
-  TableKeyToHashTableAccessPathMap table_key_to_hashtable_access_path_map_;
-  // a map between a query plan dag and its input table keys
-  QueryPlanDagToInputTableKeyMap query_plan_dag_to_input_table_key_map_;
+
   // a lock to protect contentions while accessing internal data structure of DAG cache
   std::mutex cache_lock_;
   ColumnVarsVisitor col_var_visitor_;
