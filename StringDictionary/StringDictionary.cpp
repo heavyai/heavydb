@@ -97,9 +97,10 @@ struct ThreadInfo {
              const int64_t num_elems,
              const int64_t target_elems_per_thread) {
     num_threads =
-        std::min(std::max(max_thread_count, 1L),
+        std::min(std::max(max_thread_count, int64_t(1)),
                  ((num_elems + target_elems_per_thread - 1) / target_elems_per_thread));
-    num_elems_per_thread = std::max(((num_elems + num_threads - 1) / num_threads), 1L);
+    num_elems_per_thread =
+        std::max((num_elems + num_threads - 1) / num_threads, int64_t(1));
   }
 };
 
