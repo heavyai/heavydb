@@ -46,15 +46,32 @@ MUP_NAMESPACE_START
 //-----------------------------------------------------------------------------------------------
 
 OprtStrAdd::OprtStrAdd()
-:IOprtBin(_T("//"), (int)prADD_SUB, oaLEFT)
+:IOprtBin(_T("||"), (int)prADD_SUB, oaLEFT)
 {}
 
 //-----------------------------------------------------------------------------------------------
 void OprtStrAdd::Eval(ptr_val_type& ret, const ptr_val_type *arg, int argc)
 {
     MUP_VERIFY(argc == 2);
-    string_type a = arg[0]->GetString();
-    string_type b = arg[1]->GetString();
+    string_type a, b;
+    if (arg[0]->GetType() == 's') {
+      a = arg[0]->GetString();
+    } else if (arg[0]->GetType() == 'f') {
+      a = std::to_string(arg[0]->GetFloat());
+    } else if (arg[0]->GetType() == 'i') {
+      a = std::to_string(arg[0]->GetInteger());
+    } else {
+      throw ParserError(ErrorContext(ecTYPE_CONFLICT_FUN, -1, arg[0]->GetIdent(), arg[0]->GetType(), 's', 1));
+    }
+    if (arg[1]->GetType() == 's') {
+      b = arg[1]->GetString();
+    } else if (arg[1]->GetType() == 'f') {
+      b = std::to_string(arg[1]->GetFloat());
+    } else if (arg[1]->GetType() == 'i') {
+      b = std::to_string(arg[1]->GetInteger());
+    } else {
+      throw ParserError(ErrorContext(ecTYPE_CONFLICT_FUN, -1, arg[1]->GetIdent(), arg[1]->GetType(), 's', 2));
+    }
     *ret = a + b;
 }
 
@@ -334,8 +351,8 @@ IToken* OprtOr::Clone() const
 //
 //-----------------------------------------------------------------------------------------------
 
-OprtLOr::OprtLOr(const char_type *szIdent)
-    :IOprtBin(szIdent, (int)prLOGIC_OR, oaLEFT)
+OprtLOr::OprtLOr()
+    :IOprtBin(_T("or"), (int)prLOGIC_OR, oaLEFT)
 {}
 
 //-----------------------------------------------------------------------------------------------
@@ -363,8 +380,8 @@ IToken* OprtLOr::Clone() const
 //
 //-----------------------------------------------------------------------------------------------
 
-OprtLAnd::OprtLAnd(const char_type *szIdent)
-    :IOprtBin(szIdent, (int)prLOGIC_AND, oaLEFT)
+OprtLAnd::OprtLAnd()
+    :IOprtBin(_T("and"), (int)prLOGIC_AND, oaLEFT)
 {}
 
 //-----------------------------------------------------------------------------------------------

@@ -103,8 +103,6 @@ void PackageCommon::AddToParser(ParserXBase *pParser)
   pParser->DefineOprt(new OprtGT);
   pParser->DefineOprt(new OprtEQ);
   pParser->DefineOprt(new OprtNEQ);
-  pParser->DefineOprt(new OprtLAnd(_T("and")));  // add logic and with a different identifier
-  pParser->DefineOprt(new OprtLOr(_T("or")));    // add logic and with a different identifier
 //  pParser->DefineOprt(new OprtBXor);
 
   // assignement operators

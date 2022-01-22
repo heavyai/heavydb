@@ -265,7 +265,8 @@ void RasterImporter::detect(const std::string& file_name,
                             const PointType point_type,
                             const PointTransform point_transform,
                             const bool point_compute_angle,
-                            const bool throw_on_error) {
+                            const bool throw_on_error,
+                            const MetadataColumnInfos& metadata_column_infos) {
   // open base file to check for subdatasources
   bool has_spatial_reference{false};
   {
@@ -417,7 +418,8 @@ void RasterImporter::detect(const std::string& file_name,
   };
 
   // initialize filtering
-  initializeFiltering(specified_band_names, specified_band_dimensions);
+  initializeFiltering(
+      specified_band_names, specified_band_dimensions, metadata_column_infos);
 
   // process datasources
   uint32_t datasource_idx{0u};
@@ -876,8 +878,10 @@ void RasterImporter::getRawBandNamesForFormat(
   }
 }
 
-void RasterImporter::initializeFiltering(const std::string& specified_band_names,
-                                         const std::string& specified_band_dimensions) {
+void RasterImporter::initializeFiltering(
+    const std::string& specified_band_names,
+    const std::string& specified_band_dimensions,
+    const MetadataColumnInfos& metadata_column_infos) {
   // specified names?
   if (specified_band_names.length()) {
     // tokenize names
@@ -935,6 +939,17 @@ void RasterImporter::initializeFiltering(const std::string& specified_band_names
       throw std::runtime_error("Raster Importer: Out-of-range specified dimensions (" +
                                std::string(e.what()) + ")");
     }
+  }
+
+  // also any metadata column names
+  for (auto const& mci : metadata_column_infos) {
+    if (column_name_repeats_map_.find(mci.column_descriptor.columnName) !=
+        column_name_repeats_map_.end()) {
+      throw std::runtime_error("Invalid metadata column name '" +
+                               mci.column_descriptor.columnName +
+                               "' (clashes with existing column name)");
+    }
+    column_name_repeats_map_.emplace(mci.column_descriptor.columnName, 1);
   }
 }
 

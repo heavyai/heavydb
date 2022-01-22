@@ -92,6 +92,7 @@ struct CopyParams {
   std::string odbc_username;
   std::string odbc_password;
   std::string odbc_credential_string;
+  std::string add_metadata_columns;
 
   CopyParams()
       : delimiter(',')

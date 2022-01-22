@@ -788,14 +788,13 @@ else()
   include_directories(Distributed/os)
 endif()
 
+include_directories(ThirdParty/muparserx)
+add_subdirectory(ThirdParty/muparserx)
+
 set(MAPD_RENDERING_LIBRARIES "")
 if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   option(ENABLE_RENDERING "Build backend renderer" OFF)
   if(ENABLE_RENDERING)
-    # muparserx - currently render-only
-    include_directories(ThirdParty/muparserx)
-    add_subdirectory(ThirdParty/muparserx)
-
     option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
 
     add_definitions("-DHAVE_RENDERING")

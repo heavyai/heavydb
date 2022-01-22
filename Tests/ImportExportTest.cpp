@@ -67,6 +67,7 @@ extern bool g_enable_s3_fsi;
 extern bool g_enable_parquet_import_fsi;
 #endif
 extern bool g_enable_general_import_fsi;
+extern bool g_enable_add_metadata_columns;
 
 namespace {
 
@@ -3640,7 +3641,8 @@ class RasterImporterTest : public DBHandlerTestFixture {
                              point_type,
                              point_transform,
                              point_compute_angle,
-                             true);
+                             true,
+                             {});
 
 #if DEBUG_RASTER_TESTS
     auto const& band_names_and_sql_types = raster_importer_->getBandNamesAndSQLTypes();
@@ -4040,6 +4042,274 @@ TEST_F(RasterImportTest, ImportSpecifiedBandsRenameTest) {
       ", raster_import_bands='PressurePa=p,FrozenRainkgm2=r,TemperatureC=t'",
       "SELECT max(p), max(r), max(t) FROM raster;",
       {{86880.0, 0.0, 33.674859619140648}}));
+}
+
+//
+// Metadata Column Tests
+//
+
+class MetadataColumnsTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    g_enable_add_metadata_columns = true;
+    sql("drop table if exists metadata_geo;");
+    sql("drop table if exists metadata_raster;");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists metadata_geo;");
+    sql("drop table if exists metadata_raster;");
+    g_enable_add_metadata_columns = false;
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void metadataColumnsTestGeo(
+      const std::string& add_metadata_columns,
+      const std::string& select_metadata_columns = "",
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set = {}) {
+    auto const file_name = boost::filesystem::canonical(
+                               "../../Tests/Import/datafiles/geodatabase/"
+                               "S_USA.Experimental_Area_Locations.gdb.zip")
+                               .string();
+    auto const copy_str = "COPY metadata_geo FROM '" + file_name +
+                          "' WITH (source_type='geo_file', add_metadata_columns='" +
+                          add_metadata_columns + "');";
+    sql(copy_str);
+    if (select_metadata_columns.length()) {
+      auto const check_str =
+          "SELECT " + select_metadata_columns + " FROM metadata_geo WHERE STATE = 'HI';";
+      sqlAndCompareResult(check_str, expected_result_set);
+    }
+  }
+
+  void metadataColumnsTestRaster(
+      const std::string& add_metadata_columns,
+      const std::string& select_metadata_columns = "",
+      const std::vector<std::vector<NullableTargetValue>>& expected_result_set = {}) {
+    auto const file_name =
+        boost::filesystem::canonical("../../Tests/Import/datafiles/raster/beach.png")
+            .string();
+    auto const copy_str = "COPY metadata_raster FROM '" + file_name +
+                          "' WITH (source_type='raster_file', add_metadata_columns='" +
+                          add_metadata_columns + "');";
+    sql(copy_str);
+    if (select_metadata_columns.length()) {
+      auto const check_str =
+          "SELECT " + select_metadata_columns +
+          " FROM metadata_raster WHERE raster_x = 319 AND raster_y = 224;";
+      sqlAndCompareResult(check_str, expected_result_set);
+    }
+  }
+
+  // @TODO(se)
+  // add CSV and Parquet when they support metadata columns
+
+  void testPass(const std::string& add_metadata_columns,
+                const std::string& select_metadata_columns,
+                const std::vector<std::vector<NullableTargetValue>>& expected_result_set,
+                const bool raster_only = false) {
+    if (!raster_only) {
+      ASSERT_NO_THROW(metadataColumnsTestGeo(
+          add_metadata_columns, select_metadata_columns, expected_result_set));
+    }
+    ASSERT_NO_THROW(metadataColumnsTestRaster(
+        add_metadata_columns, select_metadata_columns, expected_result_set));
+  }
+
+  void testFail(const std::string& add_metadata_columns, const bool raster_only = false) {
+    if (!raster_only) {
+      EXPECT_THROW(metadataColumnsTestGeo(add_metadata_columns), TOmniSciException);
+    }
+    EXPECT_THROW(metadataColumnsTestRaster(add_metadata_columns), TOmniSciException);
+  }
+};
+
+TEST_F(MetadataColumnsTest, TypeTINYINTTest) {
+  testPass("a,tinyint,42", "a", {{42L}});
+}
+
+TEST_F(MetadataColumnsTest, TypeSMALLINTTest) {
+  testPass("a,smallint,42", "a", {{42L}});
+}
+
+TEST_F(MetadataColumnsTest, TypeINTTest) {
+  testPass("a,int,42", "a", {{42L}});
+}
+
+TEST_F(MetadataColumnsTest, TypeBIGINTTest) {
+  testPass("a,bigint,42", "a", {{42L}});
+}
+
+TEST_F(MetadataColumnsTest, TypeFLOATTest) {
+  testPass("a,float,2.0", "a", {{2.0}});
+}
+
+TEST_F(MetadataColumnsTest, TypeDOUBLETest) {
+  testPass("a,double,2.0", "a", {{2.0}});
+}
+
+TEST_F(MetadataColumnsTest, TypeTEXTTest) {
+  testPass("a,text,\"hello\"", "a", {{"hello"}});
+}
+
+TEST_F(MetadataColumnsTest, TypeTIMETest) {
+  testPass("a,time,\"12:34:56\"", "a", {{"12:34:56"}});
+}
+
+TEST_F(MetadataColumnsTest, TypeDATEest) {
+  testPass("a,date,\"2021-11-30\"", "a", {{"2021-11-30"}});
+}
+
+TEST_F(MetadataColumnsTest, TypeTIMESTAMPTest) {
+  testPass("a,timestamp,\"2021-11-30 12:34:56\"", "a", {{"2021-11-30 12:34:56"}});
+}
+
+TEST_F(MetadataColumnsTest, CastStringTest) {
+  testPass("a,text,str(42) || str(29)", "a", {{"4229"}});
+}
+
+TEST_F(MetadataColumnsTest, CastIntTest) {
+  testPass("a,int,int(\"42\")+int(\"29\")", "a", {{71L}});
+}
+
+TEST_F(MetadataColumnsTest, MultiTest) {
+  testPass("a,int,42;b,float,2.0;c,text,\"hello\"", "a, b, c", {{42L, 2.0, "hello"}});
+}
+
+TEST_F(MetadataColumnsTest, FunctionSubstrTest) {
+  testPass("a,text,substr(filename,1,5)", "a", {{"beach"}}, true);  // raster only
+}
+
+TEST_F(MetadataColumnsTest, FunctionSubstrRemainderTest) {
+  testPass("a,text,substr(filename,5)", "a", {{"h.png"}}, true);  // raster only
+}
+
+TEST_F(MetadataColumnsTest, FunctionSplitPartTest) {
+  testPass(
+      "a,text,split_part(filepath,\"/\",-2)", "a", {{"raster"}}, true);  // raster only
+}
+
+TEST_F(MetadataColumnsTest, FunctionSplitPartMultiTest) {
+  testPass("a,text,split_part(\"12abc34abc56abc78\",\"abc\",2)",
+           "a",
+           {{"34"}},
+           true);  // raster only
+}
+
+TEST_F(MetadataColumnsTest, FunctionRegexMatchTest) {
+  testPass("a,text,regex_match(filepath,\".*?/raster/(.+?).png\")",
+           "a",
+           {{"beach"}},
+           true);  // raster only
+}
+
+TEST_F(MetadataColumnsTest, MathAddTest) {
+  testPass("a,int,2+2", "a", {{4L}});
+}
+
+TEST_F(MetadataColumnsTest, MathSqrtTest) {
+  testPass("a,float,sqrt(49.0)", "a", {{7.0}});
+}
+
+TEST_F(MetadataColumnsTest, LogicGTIntTest) {
+  testPass("a,int,int(3 > 2)", "a", {{1L}});
+}
+
+TEST_F(MetadataColumnsTest, LogicLTIntTest) {
+  testPass("a,int,int(3 < 2)", "a", {{0L}});
+}
+
+TEST_F(MetadataColumnsTest, LogicGTTextTest) {
+  testPass("a,text,3 > 2", "a", {{"true"}});
+}
+
+TEST_F(MetadataColumnsTest, LogicLTTextTest) {
+  testPass("a,text,3 < 2", "a", {{"false"}});
+}
+
+TEST_F(MetadataColumnsTest, LogicMultiTest) {
+  testPass("a,text,(3 > 2) and not (3 < 2)", "a", {{"true"}});
+}
+
+TEST_F(MetadataColumnsTest, LogicTernaryTest) {
+  testPass("a,float,(3 > 2) ? 2.0 : 3.0", "a", {{2.0}});
+}
+
+TEST_F(MetadataColumnsTest, BadStringTest) {
+  testFail("badstring");
+}
+
+TEST_F(MetadataColumnsTest, BadNameTest) {
+  testFail("raster_x,int,42", true);  // raster only
+}
+
+TEST_F(MetadataColumnsTest, BadTypeTest) {
+  testFail("a,badtype,42");
+}
+
+TEST_F(MetadataColumnsTest, BadExpressionTest) {
+  testFail("a,int,badexpression");
+}
+
+TEST_F(MetadataColumnsTest, BadINTTest) {
+  testFail("a,int,\"badint\"");
+}
+
+TEST_F(MetadataColumnsTest, BadFLOATTest) {
+  testFail("a,float,\"badfloat\"");
+}
+
+TEST_F(MetadataColumnsTest, BadDOUBLETest) {
+  testFail("a,double,\"baddouble\"");
+}
+
+TEST_F(MetadataColumnsTest, BadDateTest) {
+  testFail("a,date,\"baddate\"");
+}
+
+TEST_F(MetadataColumnsTest, BadTimeTest) {
+  testFail("a,time,\"badtime\"");
+}
+
+TEST_F(MetadataColumnsTest, BadTimestampTest) {
+  testFail("a,timestamp,\"badtimestamp\"");
+}
+
+TEST_F(MetadataColumnsTest, BadSubstrTest) {
+  testFail("a,text,substr(\"only11chars\",11,3)");
+}
+
+TEST_F(MetadataColumnsTest, BadSplitPartPosTest) {
+  testFail("a,text,split_part(\"only-three-tokens\",\"-\",5)");
+}
+
+TEST_F(MetadataColumnsTest, BadSplitPartNegTest) {
+  testFail("a,text,split_part(\"only-three-tokens\",\"-\",-5)");
+}
+
+TEST_F(MetadataColumnsTest, BadRegexMatchTest) {
+  testFail("a,text,regex_match(\"foo\",\"@#!&$badregex@#!&$\")");
+}
+
+TEST_F(MetadataColumnsTest, OutOfRangeTINYINTTest) {
+  testFail("a,tinyint,128");
+}
+
+TEST_F(MetadataColumnsTest, OutOfRangeSMALLINTTest) {
+  testFail("a,smallint,32768");
+}
+
+TEST_F(MetadataColumnsTest, OutOfRangeINTTest) {
+  testFail("a,int,2147483648");
+}
+
+TEST_F(MetadataColumnsTest, OutOfRangeBIGINTTest) {
+  testFail("a,bigint,100000000000000000000");
+}
+
+TEST_F(MetadataColumnsTest, OutOfRangeFLOATTest) {
+  testFail("a,float,1.0E100");
 }
 
 }  // namespace

@@ -233,6 +233,7 @@ struct TCopyParams {
   38: string odbc_username;
   39: string odbc_password;
   40: string odbc_credential_string;
+  41: string add_metadata_columns;
 }
 
 struct TCreateParams {

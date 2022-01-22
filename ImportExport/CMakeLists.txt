@@ -8,12 +8,16 @@ if(ENABLE_IMPORT_PARQUET)
   list(APPEND IMPORT_EXPORT_LIBRARIES "${Parquet_LIBRARIES}")
 endif()
 
+list(APPEND IMPORT_EXPORT_LIBRARIES muparserx)
+
 set(IMPORT_SOURCES
   Importer.cpp
   ForeignDataImporter.cpp
   DistributedForeignDataImporter.cpp
   DelimitedParserUtils.cpp
-  RasterImporter.cpp)
+  RasterImporter.cpp
+  MetadataColumn.cpp
+  ExpressionParser.cpp)
 
 set(EXPORT_SOURCES
   QueryExporter.cpp

@@ -86,6 +86,8 @@ bool g_enable_parquet_import_fsi{false};
 
 bool g_enable_general_import_fsi{false};
 
+bool g_enable_add_metadata_columns{false};
+
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
 
@@ -5167,6 +5169,14 @@ void CopyTableStmt::execute(
         if (bool_from_string_literal(str_literal)) {
           copy_params.raster_point_compute_angle = true;
         }
+      } else if (boost::iequals(*p->get_name(), "add_metadata_columns") &&
+                 g_enable_add_metadata_columns) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("'add_metadata_columns' option must be a string.");
+        }
+        copy_params.add_metadata_columns = *str_literal->get_stringval();
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

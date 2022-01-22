@@ -412,6 +412,12 @@ void CommandLineOptions::fillOptions() {
                           "Enable foreign storage interface based parquet import.");
 #endif
 
+  help_desc.add_options()("enable-add-metadata-columns",
+                          po::value<bool>(&g_enable_add_metadata_columns)
+                              ->default_value(g_enable_add_metadata_columns)
+                              ->implicit_value(true),
+                          "Enable add_metadata_columns COPY FROM WITH option (Beta).");
+
   help_desc.add_options()("disk-cache-path",
                           po::value<std::string>(&disk_cache_config.path),
                           "Specify the path for the disk cache.");

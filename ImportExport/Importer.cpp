@@ -58,6 +58,8 @@
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
+#include "ImportExport/MetadataColumn.h"
+#include "ImportExport/RasterImporter.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
@@ -74,8 +76,6 @@
 #include "Shared/shard_key.h"
 #include "Shared/thread_count.h"
 #include "Utils/ChunkAccessorTable.h"
-
-#include "ImportExport/RasterImporter.h"
 
 #include "gen-cpp/OmniSci.h"
 
@@ -2384,7 +2384,8 @@ static ImportStatus import_thread_shapefile(
     const ColumnNameToSourceNameMapType& columnNameToSourceNameMap,
     const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
     const Catalog_Namespace::SessionInfo* session_info,
-    Executor* executor) {
+    Executor* executor,
+    const MetadataColumnInfos& metadata_column_infos) {
   ImportStatus thread_import_status;
   const CopyParams& copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
@@ -2464,6 +2465,10 @@ static ImportStatus import_thread_shapefile(
           thread_import_status.load_msg = "Table load was cancelled via Query Interrupt";
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
+
+        uint32_t field_column_count{0u};
+        uint32_t metadata_column_count{0u};
+
         for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
           auto cd = *cd_it;
 
@@ -2628,9 +2633,10 @@ static ImportStatus import_thread_shapefile(
               import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
               ++col_idx;
             }
-          } else {
-            // regular column
-            // pull from GDAL metadata
+          } else if (field_column_count < fieldNameToIndexMap.size()) {
+            //
+            // field column
+            //
             auto const cit = columnNameToSourceNameMap.find(cd->columnName);
             CHECK(cit != columnNameToSourceNameMap.end());
             auto const& field_name = cit->second;
@@ -2707,10 +2713,22 @@ static ImportStatus import_thread_shapefile(
                                          ")");
             }
 
-            static CopyParams default_copy_params;
-            import_buffers[col_idx]->add_value(
-                cd, value_string, false, default_copy_params);
+            import_buffers[col_idx]->add_value(cd, value_string, false, copy_params);
             ++col_idx;
+            field_column_count++;
+          } else if (metadata_column_count < metadata_column_infos.size()) {
+            //
+            // metadata column
+            //
+            auto const& mci = metadata_column_infos[metadata_column_count];
+            if (mci.column_descriptor.columnName != cd->columnName) {
+              throw std::runtime_error("Metadata column name mismatch");
+            }
+            import_buffers[col_idx]->add_value(cd, mci.value, false, copy_params);
+            ++col_idx;
+            metadata_column_count++;
+          } else {
+            throw std::runtime_error("Column count mismatch");
           }
         }
         thread_import_status.rows_completed++;
@@ -4627,79 +4645,100 @@ OGRLayer& getLayerWithSpecifiedName(const std::string& geo_layer_name,
 void Importer::readMetadataSampleGDAL(
     const std::string& file_name,
     const std::string& geo_column_name,
-    std::map<std::string, std::vector<std::string>>& metadata,
-    int rowLimit,
+    std::map<std::string, std::vector<std::string>>& sample_data,
+    int row_limit,
     const CopyParams& copy_params) {
-  Geospatial::GDAL::DataSourceUqPtr poDS(openGDALDataSource(file_name, copy_params));
-  if (poDS == nullptr) {
+  Geospatial::GDAL::DataSourceUqPtr datasource(
+      openGDALDataSource(file_name, copy_params));
+  if (datasource == nullptr) {
     throw std::runtime_error("openGDALDataSource Error: Unable to open geo file " +
                              file_name);
   }
 
   OGRLayer& layer =
-      getLayerWithSpecifiedName(copy_params.geo_layer_name, poDS, file_name);
+      getLayerWithSpecifiedName(copy_params.geo_layer_name, datasource, file_name);
 
-  OGRFeatureDefn* poFDefn = layer.GetLayerDefn();
-  CHECK(poFDefn);
+  auto const* feature_defn = layer.GetLayerDefn();
+  CHECK(feature_defn);
 
+  // metadata columns?
+  auto const metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_name);
+
+  // get limited feature count
   // typeof GetFeatureCount() is different between GDAL 1.x (int32_t) and 2.x (int64_t)
-  auto nFeats = layer.GetFeatureCount();
-  size_t numFeatures =
-      std::max(static_cast<decltype(nFeats)>(0),
-               std::min(static_cast<decltype(nFeats)>(rowLimit), nFeats));
-  for (auto iField = 0; iField < poFDefn->GetFieldCount(); iField++) {
-    OGRFieldDefn* poFieldDefn = poFDefn->GetFieldDefn(iField);
-    // FIXME(andrewseidl): change this to the faster one used by readVerticesFromGDAL
-    metadata.emplace(poFieldDefn->GetNameRef(), std::vector<std::string>(numFeatures));
+  auto const feature_count = static_cast<uint64_t>(layer.GetFeatureCount());
+  auto const num_features = std::min(static_cast<uint64_t>(row_limit), feature_count);
+
+  // prepare sample data map
+  for (int field_index = 0; field_index < feature_defn->GetFieldCount(); field_index++) {
+    auto const* column_name = feature_defn->GetFieldDefn(field_index)->GetNameRef();
+    CHECK(column_name);
+    sample_data[column_name] = {};
   }
-  metadata.emplace(geo_column_name, std::vector<std::string>(numFeatures));
+  sample_data[geo_column_name] = {};
+  for (auto const& mci : metadata_column_infos) {
+    sample_data[mci.column_descriptor.columnName] = {};
+  }
+
+  // prepare to read
   layer.ResetReading();
-  size_t iFeature = 0;
-  while (iFeature < numFeatures) {
-    Geospatial::GDAL::FeatureUqPtr poFeature(layer.GetNextFeature());
-    if (!poFeature) {
+
+  // read features (up to limited count)
+  uint64_t feature_index{0u};
+  while (feature_index < num_features) {
+    // get (and take ownership of) feature
+    Geospatial::GDAL::FeatureUqPtr feature(layer.GetNextFeature());
+    if (!feature) {
       break;
     }
 
-    OGRGeometry* poGeometry = poFeature->GetGeometryRef();
-    if (poGeometry != nullptr) {
-      // validate geom type (again?)
-      switch (wkbFlatten(poGeometry->getGeometryType())) {
-        case wkbPoint:
-        case wkbLineString:
-        case wkbPolygon:
-        case wkbMultiPolygon:
-          break;
-        case wkbMultiPoint:
-        case wkbMultiLineString:
-          // supported if geo_explode_collections is specified
-          if (!copy_params.geo_explode_collections) {
-            throw std::runtime_error("Unsupported geometry type: " +
-                                     std::string(poGeometry->getGeometryName()));
-          }
-          break;
-        default:
-          throw std::runtime_error("Unsupported geometry type: " +
-                                   std::string(poGeometry->getGeometryName()));
-      }
-
-      // populate metadata for regular fields
-      for (auto i : metadata) {
-        auto iField = poFeature->GetFieldIndex(i.first.c_str());
-        if (iField >= 0) {  // geom is -1
-          metadata[i.first].at(iFeature) =
-              std::string(poFeature->GetFieldAsString(iField));
-        }
-      }
-
-      // populate metadata for geo column with WKT string
-      char* wkts = nullptr;
-      poGeometry->exportToWkt(&wkts);
-      CHECK(wkts);
-      metadata[geo_column_name].at(iFeature) = wkts;
-      CPLFree(wkts);
+    // get feature geometry
+    auto const* geometry = feature->GetGeometryRef();
+    if (geometry == nullptr) {
+      break;
     }
-    iFeature++;
+
+    // validate geom type (again?)
+    switch (wkbFlatten(geometry->getGeometryType())) {
+      case wkbPoint:
+      case wkbLineString:
+      case wkbPolygon:
+      case wkbMultiPolygon:
+        break;
+      case wkbMultiPoint:
+      case wkbMultiLineString:
+        // supported if geo_explode_collections is specified
+        if (!copy_params.geo_explode_collections) {
+          throw std::runtime_error("Unsupported geometry type: " +
+                                   std::string(geometry->getGeometryName()));
+        }
+        break;
+      default:
+        throw std::runtime_error("Unsupported geometry type: " +
+                                 std::string(geometry->getGeometryName()));
+    }
+
+    // populate sample data for regular field columns
+    for (int field_index = 0; field_index < feature->GetFieldCount(); field_index++) {
+      auto const* column_name = feature_defn->GetFieldDefn(field_index)->GetNameRef();
+      sample_data[column_name].push_back(feature->GetFieldAsString(field_index));
+    }
+
+    // populate sample data for metadata columns?
+    for (auto const& mci : metadata_column_infos) {
+      sample_data[mci.column_descriptor.columnName].push_back(mci.value);
+    }
+
+    // populate sample data for geo column with WKT string
+    char* wkts = nullptr;
+    geometry->exportToWkt(&wkts);
+    CHECK(wkts);
+    sample_data[geo_column_name].push_back(wkts);
+    CPLFree(wkts);
+
+    // next feature
+    feature_index++;
   }
 }
 
@@ -4824,6 +4863,10 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
                                            copy_params.s3_secret_key,
                                            copy_params.s3_session_token);
 
+  // prepare for metadata column
+  auto metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_name);
+
   // create a raster importer and do the detect
   RasterImporter raster_importer;
   raster_importer.detect(
@@ -4833,7 +4876,8 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
       copy_params.raster_point_compute_angle,
-      false);
+      false,
+      metadata_column_infos);
 
   // prepare to capture column descriptors
   std::list<ColumnDescriptor> cds;
@@ -4867,6 +4911,11 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
     cd.columnType.set_type(sql_type);
     cd.columnType.set_fixed_size();
     cds.push_back(cd);
+  }
+
+  // metadata columns?
+  for (auto& mci : metadata_column_infos) {
+    cds.push_back(std::move(mci.column_descriptor));
   }
 
   // return the results
@@ -4964,6 +5013,13 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
     cd.columnType = ti;
 
     cds.push_back(cd);
+  }
+
+  // metadata columns?
+  auto metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_name);
+  for (auto& mci : metadata_column_infos) {
+    cds.push_back(std::move(mci.column_descriptor));
   }
 
   return cds;
@@ -5235,6 +5291,10 @@ ImportStatus Importer::importGDALGeo(
 #endif
   VLOG(1) << "GDAL import # threads: " << max_threads;
 
+  // metadata columns?
+  auto const metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_path);
+
   // import geo table is specifically handled in both DBHandler and QueryRunner
   // that is separate path against a normal SQL execution
   // so we here explicitly enroll the import session to allow interruption
@@ -5346,7 +5406,8 @@ ImportStatus Importer::importGDALGeo(
                                                      columnNameToSourceNameMap,
                                                      columnIdToRenderGroupAnalyzerMap,
                                                      session_info,
-                                                     executor.get());
+                                                     executor.get(),
+                                                     metadata_column_infos);
     import_status += ret_import_status;
     import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) *
                                    import_status.rows_completed;
@@ -5365,7 +5426,8 @@ ImportStatus Importer::importGDALGeo(
                                  columnNameToSourceNameMap,
                                  columnIdToRenderGroupAnalyzerMap,
                                  session_info,
-                                 executor.get()));
+                                 executor.get(),
+                                 metadata_column_infos));
 
     // let the threads run
     while (threads.size() > 0) {
@@ -5454,6 +5516,10 @@ ImportStatus Importer::importGDALRaster(
   // initial status
   set_import_status(import_id, import_status_);
 
+  // metadata columns?
+  auto const metadata_column_infos =
+      parse_add_metadata_columns(copy_params.add_metadata_columns, file_path);
+
   // create a raster importer and do the detect
   RasterImporter raster_importer;
   raster_importer.detect(
@@ -5463,17 +5529,31 @@ ImportStatus Importer::importGDALRaster(
       convert_raster_point_type(copy_params.raster_point_type),
       convert_raster_point_transform(copy_params.raster_point_transform),
       copy_params.raster_point_compute_angle,
-      true);
+      true,
+      metadata_column_infos);
 
   // get the table columns
   auto const& column_descs = loader->get_column_descs();
+
+  // how many bands do we have?
+  auto num_bands = raster_importer.getNumBands();
+
+  // get point columns info
+  auto const point_names_and_sql_types = raster_importer.getPointNamesAndSQLTypes();
+
+  // validate that the table column count matches
+  auto num_expected_cols = num_bands;
+  num_expected_cols += point_names_and_sql_types.size();
+  num_expected_cols += metadata_column_infos.size();
+  if (num_expected_cols != column_descs.size()) {
+    throw std::runtime_error("Raster Import aborted. Band/Column count mismatch.");
+  }
 
   // validate the point column names and types
   // if we're importing the coords as a POINT, then the first column
   // must be a POINT (two physical columns, POINT and TINYINT[])
   // if we're not, the first two columns must be the matching type
   // optionally followed by an angle column
-  auto const point_names_and_sql_types = raster_importer.getPointNamesAndSQLTypes();
   auto cd_itr = column_descs.begin();
   for (auto const& [col_name, sql_type] : point_names_and_sql_types) {
     if (sql_type == kPOINT) {
@@ -5482,7 +5562,8 @@ ImportStatus Importer::importGDALRaster(
         auto const* cd = *cd_itr++;
         if (cd->columnName != col_name) {
           throw std::runtime_error("Column '" + cd->columnName +
-                                   "' name invalid (must be '" + col_name + "')");
+                                   "' overridden name invalid (must be '" + col_name +
+                                   "')");
         }
         auto const cd_type = cd->columnType.get_type();
         if (cd_type != kPOINT) {
@@ -5506,7 +5587,8 @@ ImportStatus Importer::importGDALRaster(
       auto const* cd = *cd_itr++;
       if (cd->columnName != col_name) {
         throw std::runtime_error("Column '" + cd->columnName +
-                                 "' name invalid (must be '" + col_name + "')");
+                                 "' overridden name invalid (must be '" + col_name +
+                                 "')");
       }
       auto const cd_type = cd->columnType.get_type();
       if (cd_type != sql_type) {
@@ -5522,24 +5604,32 @@ ImportStatus Importer::importGDALRaster(
   // are compatible with the supported GDAL band data types
   // detection should only generate these types
   // any Immerse overriding to other types must be rejected
-  while (cd_itr != column_descs.end()) {
+  for (uint32_t i = 0; i < num_bands; i++) {
     auto const* cd = *cd_itr++;
     auto const cd_type = cd->columnType.get_type();
     if (cd_type != kSMALLINT && cd_type != kINT && cd_type != kBIGINT &&
         cd_type != kFLOAT && cd_type != kDOUBLE) {
-      throw std::runtime_error("Column '" + cd->columnName +
+      throw std::runtime_error("Band Column '" + cd->columnName +
                                "' overridden type invalid (must be SMALLINT, INT, "
                                "BIGINT, FLOAT, or DOUBLE)");
     }
   }
 
-  // validate that the table column count matches
-  auto const num_point_cols = (copy_params.raster_point_type != RasterPointType::kNone)
-                                  ? (copy_params.raster_point_compute_angle ? 3u : 2u)
-                                  : 0u;
-  auto const num_bands = raster_importer.getNumBands();
-  if (num_bands + num_point_cols != column_descs.size()) {
-    throw std::runtime_error("Raster Import aborted. Band/Column count mismatch.");
+  // validate metadata column
+  for (auto const& mci : metadata_column_infos) {
+    auto const* cd = *cd_itr++;
+    if (mci.column_descriptor.columnName != cd->columnName) {
+      throw std::runtime_error("Metadata Column '" + cd->columnName +
+                               "' overridden name invalid (must be '" +
+                               mci.column_descriptor.columnName + "')");
+    }
+    auto const cd_type = cd->columnType.get_type();
+    auto const md_type = mci.column_descriptor.columnType.get_type();
+    if (cd_type != md_type) {
+      throw std::runtime_error("Metadata Column '" + cd->columnName +
+                               "' overridden type invalid (must be " +
+                               to_string(md_type) + ")");
+    }
   }
 
   // import geo table is specifically handled in both DBHandler and QueryRunner
@@ -5823,6 +5913,16 @@ ImportStatus Importer::importGDALRaster(
       // next column
       col_idx++;
       col_itr++;
+    }
+
+    // metadata columns?
+    for (auto const& mci : metadata_column_infos) {
+      auto const* cd_band = *col_itr++;
+      CHECK(cd_band);
+      for (int i = 0; i < num_elems; i++) {
+        import_buffers[col_idx]->add_value(cd_band, mci.value, false, copy_params);
+      }
+      col_idx++;
     }
 
     // build status

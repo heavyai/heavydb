@@ -3788,6 +3788,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.raster_point_compute_angle = cp.raster_point_compute_angle;
   copy_params.raster_import_dimensions = cp.raster_import_dimensions;
+  copy_params.add_metadata_columns = cp.add_metadata_columns;
   return copy_params;
 }
 
@@ -3920,6 +3921,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.odbc_username = cp.odbc_username;
   copy_params.odbc_password = cp.odbc_password;
   copy_params.odbc_credential_string = cp.odbc_credential_string;
+  copy_params.add_metadata_columns = cp.add_metadata_columns;
   return copy_params;
 }
 
