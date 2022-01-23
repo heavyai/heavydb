@@ -20,7 +20,7 @@
 
 #ifndef __CUDACC__
 
-EXTENSION_NOINLINE
+EXTENSION_NOINLINE_HOST
 int32_t generate_series_parallel(const int64_t start,
                                  const int64_t stop,
                                  const int64_t step,
@@ -32,17 +32,30 @@ int32_t generate_series_parallel(const int64_t start,
 */
 // clang-format on
 
-EXTENSION_NOINLINE
+EXTENSION_NOINLINE_HOST
 int32_t generate_series__cpu_1(TableFunctionManager& mgr,
                                const int64_t start,
                                const int64_t stop,
                                const int64_t step,
                                Column<int64_t>& series_output);
 
-EXTENSION_NOINLINE
+EXTENSION_NOINLINE_HOST
 int32_t generate_series__cpu_2(TableFunctionManager& mgr,
                                const int64_t start,
                                const int64_t stop,
                                Column<int64_t>& series_output);
+
+// clang-format off
+/*
+  UDTF: generate_random_strings__cpu_(TableFunctionManager, int64_t num_strings, int64_t string_length) -> Column<int64_t> id, Column<TextEncodingDict> rand_str | input_id=args<>
+*/
+// clang-format on
+
+EXTENSION_NOINLINE_HOST
+int32_t generate_random_strings__cpu_(TableFunctionManager& mgr,
+                                      const int64_t num_strings,
+                                      const int64_t string_length,
+                                      Column<int64_t>& output_id,
+                                      Column<TextEncodingDict>& output_strings);
 
 #endif  // __CUDACC__

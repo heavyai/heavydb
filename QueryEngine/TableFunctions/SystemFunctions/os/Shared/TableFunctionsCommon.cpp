@@ -336,4 +336,4 @@ bool is_valid_tf_input(const T input,
   return false;  // To address compiler warning
 }
 
-#endif  // __CUDACC__
+#endif  // #ifndef __CUDACC__

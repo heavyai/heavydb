@@ -195,6 +195,55 @@ TEST_F(SystemTFs, GenerateSeries) {
   }
 }
 
+TEST_F(SystemTFs, GenerateRandomStrings) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // num_strings must be >= 0
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_random_strings(-3, 10));", dt),
+          UserTableFunctionError);
+    }
+
+    {
+      // string_length must be > 0 (to protect against our aliasing of empty strings to
+      // null strings)
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_random_strings(3, 0));", dt),
+          UserTableFunctionError);
+    }
+
+    {
+      // string_length must be <= StringDictionary::MAX_STRLEN (to protect against our
+      // aliasing of empty strings to null strings)
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_random_strings(3, 40000));", dt),
+          UserTableFunctionError);
+    }
+
+    for (size_t idx = 0; idx < 10; ++idx) {
+      const size_t num_strings = idx;
+      const size_t str_len = 10UL - idx;
+      const std::string query =
+          "SELECT id, rand_str FROM TABLE(generate_random_strings(" +
+          std::to_string(num_strings) + ", " + std::to_string(str_len) +
+          ")) ORDER BY id ASC;";
+      const auto rows = run_multiple_agg(query, dt);
+      const size_t num_rows = rows->rowCount();
+      const size_t num_cols = rows->colCount();
+      ASSERT_EQ(num_rows, num_strings);
+      ASSERT_EQ(num_cols, 2UL);
+
+      for (size_t row_idx = 0; row_idx < num_rows; ++row_idx) {
+        auto row = rows->getNextRow(true, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[0]), static_cast<int64_t>(row_idx));
+        auto str = boost::get<std::string>(TestHelpers::v<NullableString>(row[1]));
+        ASSERT_EQ(str.size(), str_len);
+      }
+    }
+  }
+}
+
 TEST_F(SystemTFs, Mandelbrot) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
