@@ -9358,6 +9358,15 @@ TEST_F(Select, Joins_ImplicitJoins) {
     c("SELECT test.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str "
       "GROUP BY test.str;",
       dt);
+    c("WITH transient_strings AS (SELECT CASE WHEN str = 'foo' THEN 'foo' ELSE 'other' "
+      "END AS str FROM test) SELECT COUNT(*) FROM test_inner, transient_strings WHERE "
+      "test_inner.str = transient_strings.str;",
+      dt);
+    c("WITH transient_strings AS (SELECT str FROM test_inner WHERE str IN ('foo', "
+      "'bars')) SELECT COUNT(*) FROM test_inner, transient_strings WHERE test_inner.str "
+      "= "
+      "transient_strings.str;",
+      dt);
     c("SELECT test_inner.str, COUNT(*) FROM test, test_inner WHERE test.str = "
       "test_inner.str GROUP BY test_inner.str;",
       dt);

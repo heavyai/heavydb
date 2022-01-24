@@ -1750,7 +1750,18 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   CHECK_GE(source_generation, 0L);
   CHECK_GE(dest_generation, 0L);
 
-  // If here we should should have local dictionaries
+  const int64_t num_source_strings = source_generation;
+  const int64_t num_dest_strings = dest_generation;
+
+  // We can bail early if there are no source strings to translate
+  if (num_source_strings == 0L) {
+    return 0;
+  }
+
+  // If here we should should have local dictionaries.
+  // Note case of transient source dictionaries that aren't
+  // seen as remote (they have no client_no_timeout_) is covered
+  // by early bail above on num_source_strings == 0
 
   if (dest_dict->client_no_timeout_) {
     throw std::runtime_error(
@@ -1778,16 +1789,9 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   // generation arguments, if valid (i.e. >= 0), otherwise just the
   // size of each dictionary
 
-  const int64_t num_source_strings = source_generation;
   CHECK_LE(num_source_strings, static_cast<int64_t>(str_count_));
-  const int64_t num_dest_strings = dest_generation;
   CHECK_LE(num_dest_strings, static_cast<int64_t>(dest_dict->str_count_));
   const bool dest_dictionary_is_empty = (num_dest_strings == 0);
-
-  // We can bail early if there are no source strings to translate
-  if (num_source_strings == 0L) {
-    return 0;
-  }
 
   constexpr int64_t target_strings_per_thread{1000};
   const ThreadInfo thread_info(
