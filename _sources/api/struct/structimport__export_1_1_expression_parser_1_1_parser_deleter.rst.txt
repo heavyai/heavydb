@@ -1,0 +1,9 @@
+Struct import_export::ExpressionParser::ParserDeleter
+=====================================================
+
+.. doxygenstruct:: import_export::ExpressionParser::ParserDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

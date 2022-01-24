@@ -1,0 +1,9 @@
+Struct anonymous_namespace{StringDictionary.cpp}::ThreadInfo
+============================================================
+
+.. doxygenstruct:: anonymous_namespace{StringDictionary.cpp}::ThreadInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

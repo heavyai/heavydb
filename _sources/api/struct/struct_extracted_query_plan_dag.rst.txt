@@ -1,0 +1,9 @@
+Struct ExtractedQueryPlanDag
+============================
+
+.. doxygenstruct:: ExtractedQueryPlanDag
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

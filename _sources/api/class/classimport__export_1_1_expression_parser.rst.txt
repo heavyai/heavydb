@@ -1,0 +1,9 @@
+Class import_export::ExpressionParser
+=====================================
+
+.. doxygenclass:: import_export::ExpressionParser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

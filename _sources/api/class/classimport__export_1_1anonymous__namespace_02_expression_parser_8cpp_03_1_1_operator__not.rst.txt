@@ -1,0 +1,9 @@
+Class import_export::anonymous_namespace{ExpressionParser.cpp}::Operator_not
+============================================================================
+
+.. doxygenclass:: import_export::anonymous_namespace{ExpressionParser.cpp}::Operator_not
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

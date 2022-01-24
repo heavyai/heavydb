@@ -1,0 +1,9 @@
+Class import_export::anonymous_namespace{ExpressionParser.cpp}::Function_regex_match
+====================================================================================
+
+.. doxygenclass:: import_export::anonymous_namespace{ExpressionParser.cpp}::Function_regex_match
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

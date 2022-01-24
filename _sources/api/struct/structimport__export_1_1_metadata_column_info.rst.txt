@@ -1,0 +1,9 @@
+Struct import_export::MetadataColumnInfo
+========================================
+
+.. doxygenstruct:: import_export::MetadataColumnInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
