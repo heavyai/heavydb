@@ -373,9 +373,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   CHECK_EQ(num_buffers_, size_t(1));
   auto group_by_buffer = alloc_group_by_buffer(
       total_group_by_buffer_size, nullptr, thread_idx_, row_set_mem_owner.get());
-  if (!query_mem_desc.lazyInitGroups(device_type)) {
-    initColumnarGroups(query_mem_desc, group_by_buffer, init_agg_vals_, executor);
-  }
   group_by_buffers_.push_back(group_by_buffer);
 
   const auto column_frag_offsets =
@@ -533,11 +530,7 @@ void QueryMemoryInitializer::initColumnarGroups(
     const std::vector<int64_t>& init_vals,
     const Executor* executor) {
   CHECK(groups_buffer);
-  if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::TableFunction) {
-    // As an optimization we don't init table function buffers as we expect outputs to be
-    // dense
-    return;
-  }
+
   for (const auto target_expr : executor->plan_state_->target_exprs_) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(!is_distinct_target(agg_info));
@@ -948,7 +941,8 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const int device_id,
     const unsigned block_size_x,
-    const unsigned grid_size_x) {
+    const unsigned grid_size_x,
+    const bool zero_initialize_buffers) {
   const size_t num_columns = query_mem_desc.getBufferColSlotCount();
   CHECK_GT(num_columns, size_t(0));
   size_t total_group_by_buffer_size{0};
@@ -968,6 +962,9 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
   int8_t* dev_buffers_allocation{nullptr};
   dev_buffers_allocation = device_allocator_->alloc(total_group_by_buffer_size);
   CHECK(dev_buffers_allocation);
+  if (zero_initialize_buffers) {
+    device_allocator_->zeroDeviceMem(dev_buffers_allocation, total_group_by_buffer_size);
+  }
 
   auto dev_buffers_mem = dev_buffers_allocation;
   std::vector<int8_t*> dev_buffers(num_columns);

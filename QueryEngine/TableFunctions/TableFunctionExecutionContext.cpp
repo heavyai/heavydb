@@ -582,8 +582,12 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   const unsigned grid_size_y = 1;
   const unsigned grid_size_z = 1;
 
-  auto gpu_output_buffers = query_buffers->setupTableFunctionGpuBuffers(
-      query_mem_desc, device_id, block_size_x, grid_size_x);
+  auto gpu_output_buffers =
+      query_buffers->setupTableFunctionGpuBuffers(query_mem_desc,
+                                                  device_id,
+                                                  block_size_x,
+                                                  grid_size_x,
+                                                  true /* zero_initialize_buffers */);
 
   kernel_params[OUTPUT_BUFFERS] = reinterpret_cast<CUdeviceptr>(gpu_output_buffers.ptrs);
 

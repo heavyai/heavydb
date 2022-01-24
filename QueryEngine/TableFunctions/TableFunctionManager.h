@@ -127,7 +127,8 @@ struct TableFunctionManager {
         return "Column{" + ::toString(ptr) + ", " + ::toString(size) + "}";
       }
     };
-
+    // We do not init output buffers for CPU currently, so CPU
+    // table functions are expected to handle their own initialization
     query_buffers = std::make_unique<QueryMemoryInitializer>(
         exe_unit_,
         query_mem_desc,

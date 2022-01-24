@@ -1016,6 +1016,17 @@ column_list_safe_row_sum__cpu_template(const ColumnList<T>& input, Column<T>& ou
 
 // clang-format off
 /*
+  UDTF: ct_gpu_default_init__gpu_(Constant<1>) -> Column<int32_t> output_buffer
+*/
+// clang-format on
+
+EXTENSION_NOINLINE int32_t ct_gpu_default_init__gpu_(Column<int32_t>& output_buffer) {
+  // output_buffer[0] should always be 0 due to default initialization for GPU
+  return 1;
+}
+
+// clang-format off
+/*
   UDTF: ct_hamming_distance(TextEncodingNone, TextEncodingNone, Constant<1>) -> Column<int32_t> hamming_distance
 */
 // clang-format on
@@ -1028,11 +1039,7 @@ EXTENSION_NOINLINE int32_t ct_hamming_distance(const TextEncodingNone& str1,
 #ifdef __CUDACC__
   const int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   const int32_t step = blockDim.x * gridDim.x;
-  if (start == 0) {
-    hamming_distance[0] = 0;
-  }
   int32_t* output_ptr = hamming_distance.ptr_;
-  __syncthreads();
 #else
   const int32_t start = 0;
   const int32_t step = 1;

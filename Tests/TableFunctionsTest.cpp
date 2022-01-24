@@ -525,6 +525,20 @@ TEST_F(TableFunctions, BasicProjection) {
   }
 }
 
+TEST_F(TableFunctions, GpuDefaultOutputInitializaiton) {
+  for (auto dt : {ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const std::string query = "SELECT * FROM TABLE(ct_gpu_default_init());";
+      const auto rows = run_multiple_agg(query, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      ASSERT_EQ(rows->colCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(0));
+    }
+  }
+}
+
 TEST_F(TableFunctions, GpuThreads) {
   for (auto dt : {ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
