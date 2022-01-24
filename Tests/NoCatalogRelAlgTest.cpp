@@ -24,6 +24,7 @@ constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 constexpr int TEST1_TABLE_ID = 1;
 constexpr int TEST2_TABLE_ID = 2;
 constexpr int TEST_AGG_TABLE_ID = 3;
+constexpr int TRIPS_TABLE_ID = 4;
 
 namespace {
 
@@ -864,14 +865,14 @@ class TaxiSchemaProvider : public TestSchemaProvider {
     db_id_ = TEST_DB_ID;
 
     addTableInfo(db_id_,
-                 TEST1_TABLE_ID,
+                 TRIPS_TABLE_ID,
                  "trips",
                  false,
                  -1,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
 #define ADD_COLUMN_INFO(col_name, col_type) \
-  addColumnInfo(db_id_, TEST1_TABLE_ID, 1, col_name, col_type, false, false);
+  addColumnInfo(db_id_, TRIPS_TABLE_ID, 1, col_name, col_type, false, false);
 
     ADD_COLUMN_INFO("trip_id", SQLTypeInfo(SQLTypes::kINT));
     // TODO: encode down to 8 bits?
@@ -989,6 +990,7 @@ class TaxiSchemaProvider : public TestSchemaProvider {
                     SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
     ADD_COLUMN_INFO("dropoff_puma",
                     SQLTypeInfo(SQLTypes::kTEXT, kENCODING_DICT, 0, kNULLT));
+    addRowidColumn(db_id_, TRIPS_TABLE_ID);
   }
 };
 
@@ -997,8 +999,8 @@ class TaxiDataProvider : public AbstractBufferMgr {
  public:
   TaxiDataProvider(SchemaProviderPtr schema_provider)
       : AbstractBufferMgr(0), schema_provider_(schema_provider) {
-    TableTableData trips(TEST_DB_ID, TEST1_TABLE_ID, 51, schema_provider_);
-    tables_.emplace(std::make_pair(TEST1_TABLE_ID, trips));
+    TableTableData trips(TEST_DB_ID, TRIPS_TABLE_ID, 51, schema_provider_);
+    tables_.emplace(std::make_pair(TRIPS_TABLE_ID, trips));
   }
 
   // Chunk API
