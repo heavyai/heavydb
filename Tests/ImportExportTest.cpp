@@ -23,6 +23,7 @@
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/regex.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -37,6 +38,7 @@
 #include "AwsHelpers.h"
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif  // HAVE_AWS_S3
+#include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
@@ -70,8 +72,35 @@ extern bool g_enable_general_import_fsi;
 extern bool g_enable_add_metadata_columns;
 
 namespace {
+std::string repeat_regex(size_t repeat_count, const std::string& regex) {
+  std::string repeated_regex;
+  for (size_t i = 0; i < repeat_count; i++) {
+    if (!repeated_regex.empty()) {
+      repeated_regex += "\\s*,\\s*";
+    }
+    repeated_regex += regex;
+  }
+  return repeated_regex;
+}
+
+std::string get_line_regex(size_t column_count) {
+  return repeat_regex(column_count, "\"?([^,\"]*)\"?");
+}
+
+std::string get_line_array_regex(size_t column_count) {
+  return repeat_regex(column_count, "(\\{[^\\}]+\\}|NULL|)");
+}
+
+std::string get_line_geo_regex(size_t column_count) {
+  return repeat_regex(column_count,
+                      "\"?((?:POINT|LINESTRING|POLYGON|MULTIPOLYGON)[^\"]+|\\\\N)\"?");
+}
+}  // namespace
+
+namespace {
 
 bool g_regenerate_export_test_reference_files = false;
+bool g_run_odbc{false};
 
 #define SKIP_ALL_ON_AGGREGATOR()                         \
   if (isDistributedMode()) {                             \
@@ -575,6 +604,39 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
   // clang-format on
 }
 
+class ImportConfigurationErrorHandling : public ImportExportTestBase {
+ protected:
+  void SetUp() override {
+    if (isDistributedMode()) {
+      GTEST_SKIP();  // TODO: enable once general import enabled for distributed
+    }
+    g_enable_fsi = true;
+    g_enable_general_import_fsi = true;
+    ImportExportTestBase::SetUp();
+    ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS test_table;"));
+    sql("CREATE TABLE test_table (t int);");
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS test_table;"));
+    ImportExportTestBase::TearDown();
+    g_enable_fsi = false;
+    g_enable_general_import_fsi = false;
+  }
+
+  const std::string fsi_file_base_dir_ = "../../Tests/FsiDataFiles/";
+};
+
+class RegexParserImportConfigurationErrorHandling
+    : public ImportConfigurationErrorHandling {};
+
+TEST_F(RegexParserImportConfigurationErrorHandling, NoLineRegex) {
+  queryAndAssertException("COPY test_table from '" + fsi_file_base_dir_ +
+                              "/example_2.csv' WITH "
+                              "(source_type='regex_parsed_file');",
+                          "Regex parser options must contain a line regex.");
+}
+
 #ifdef ENABLE_IMPORT_PARQUET
 class ParquetImportErrorHandling : public ImportExportTestBase {
  protected:
@@ -663,7 +725,7 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
 }
 #endif
 
-using ImportAndSelectTestParameters = std::tuple</*file_type=*/std::string,
+using ImportAndSelectTestParameters = std::tuple</*import_type=*/std::string,
                                                  /*data_source_type=*/std::string,
                                                  /*fragment_size=*/int32_t,
                                                  /*max_chunk_size=*/int32_t,
@@ -674,12 +736,101 @@ class ImportAndSelectTest
       public ::testing::WithParamInterface<ImportAndSelectTestParameters> {
  protected:
   struct Param {
-    std::string file_type, data_source_type;
+    std::string import_type, data_source_type;
     int32_t fragment_size;
     int32_t num_elements_per_chunk;
     std::string code_path;
   };
   Param param_;
+
+  static bool isOdbc(const std::string& import_type) {
+    return (import_type == "sqlite" || import_type == "postgres");
+  }
+
+  using SchemaPairs = std::vector<std::pair<std::string, std::string>>;
+
+  static std::string createSchemaString(const SchemaPairs& column_pairs,
+                                        std::string dbms_type = "") {
+    std::stringstream schema_stream;
+    schema_stream << "(";
+    size_t i = 0;
+    for (auto [name, type] : column_pairs) {
+      if (!dbms_type.empty()) {
+        if (std::string::npos != type.find("TEXT")) {
+          // remove encoding information
+          type = "TEXT";
+        }
+        if (dbms_type == "sqlite") {
+          if (type.substr(0, 7) == "DECIMAL") {
+            type = "double";
+          }
+        }
+        if (dbms_type == "postgres") {
+          if (type == "FLOAT") {
+            type = "real";
+          } else if (type == "TINYINT") {
+            type = "smallint";
+          } else if (type == "TIME") {
+            // Postgres times can include fractional elements
+            // Unless specified they will default to time(6).
+            type = "time(0)";
+          } else if (type == "TIMESTAMP") {
+            // Postgres times by default  are time(6).
+            type = "timestamp(0)";
+          } else if (type == "TIMESTAMP (6)") {
+            type = "timestamp";
+          } else if (type == "POINT") {
+            type = "geometry";
+          } else if (type == "LINESTRING") {
+            type = "geometry";
+          } else if (type == "POLYGON") {
+            type = "geometry";
+          } else if (type == "MULTIPOLYGON") {
+            type = "geometry";
+          }
+        }
+      }
+      schema_stream << name << " " << type;
+      if (dbms_type == "postgres" && type == "DOUBLE") {
+        schema_stream << " precision ";
+      }
+      schema_stream << ((++i < column_pairs.size()) ? ", " : ") ");
+    }
+    return schema_stream.str();
+  }
+
+  static std::vector<std::string> splitOnRegex(const std::string& in,
+                                               const std::string& regex) {
+    std::vector<std::string> tokens;
+    boost::split_regex(tokens, in, boost::regex{regex});
+    return tokens;
+  }
+
+  static SchemaPairs schemaStringToPairs(const std::string& schema,
+                                         const std::string dbms_type) {
+    auto schema_list = splitOnRegex(schema, ",\\s+");
+    SchemaPairs result;
+    for (const auto& token : schema_list) {
+      auto tokens = splitOnRegex(token, "\\s+");
+      if (tokens[0] == "shard" &&
+          tokens[1].substr(0, 3) == "key") {  // skip `shard key` specifier
+        continue;
+      }
+      result.push_back({tokens[0], tokens[1]});
+    }
+    return result;
+  }
+
+  static std::string createSchemaString(const std::string& schema,
+                                        const std::string dbms_type) {
+    return createSchemaString(schemaStringToPairs(schema, dbms_type), dbms_type);
+  }
+
+  static void createODBCSourceTable(const std::string& table_name,
+                                    const std::string& table_schema,
+                                    const std::string& src_file,
+                                    const std::string& import_type,
+                                    const bool is_odbc_geo = false) {}
 
   static void SetUpTestSuite() {
 #ifdef HAVE_AWS_S3
@@ -696,7 +847,7 @@ class ImportAndSelectTest
   }
 
   void SetUp() override {
-    std::tie(param_.file_type,
+    std::tie(param_.import_type,
              param_.data_source_type,
              param_.fragment_size,
              param_.num_elements_per_chunk,
@@ -714,6 +865,9 @@ class ImportAndSelectTest
       g_enable_general_import_fsi = true;
     } else {
       UNREACHABLE();
+    }
+    if (param_.import_type == "regex_parser") {
+      foreign_storage::RegexFileBufferParser::setSkipFirstLineForTesting(true);
     }
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
@@ -736,6 +890,9 @@ class ImportAndSelectTest
     } else {
       UNREACHABLE();
     }
+    if (param_.import_type == "regex_parser") {
+      foreign_storage::RegexFileBufferParser::setSkipFirstLineForTesting(false);
+    }
   }
 
 #ifdef HAVE_AWS_S3
@@ -746,6 +903,19 @@ class ImportAndSelectTest
 #endif
 
   bool testShouldBeSkipped() {
+    if (!g_run_odbc && isOdbc(param_.import_type)) {
+      return true;
+    }
+    if (param_.import_type != "parquet" &&
+        param_.code_path == "parquet_fsi") {  // these code paths generally do not test
+                                              // anything valuable and thus are skipped
+      return true;
+    }
+    if (param_.data_source_type != "local" &&
+        isOdbc(param_.import_type)) {  // ODBC tests only support populating tables from
+                                       // local files
+      return true;
+    }
     if (param_.data_source_type == "s3_private") {
 #ifdef HAVE_AWS_S3
       return insufficientPrivateCredentials();
@@ -760,18 +930,41 @@ class ImportAndSelectTest
     return false;
   }
 
-  TQueryResult createTableCopyFromAndSelect(const std::string& schema,
+  std::string applyOdbcSchemaModifications(const std::string& in_schema) {
+    std::string schema = in_schema;
+    if (param_.import_type ==
+        "postgres") {  // postgres has no TINYINT type, map all occurences to SMALLINT
+      schema = boost::regex_replace(schema, boost::regex{"TINYINT"}, "SMALLINT");
+    }
+    if (param_.import_type ==
+        "sqlite") {  // sqlite ODBC driver does not support FLOAT, map to DOUBLE
+      schema = boost::regex_replace(schema, boost::regex{"FLOAT"}, "DOUBLE");
+    }
+    if (param_.import_type ==
+        "sqlite") {  // sqlite ODBC driver does not support DECIMAL, map to DOUBLE
+      schema =
+          boost::regex_replace(schema, boost::regex{"DECIMAL\\(\\d+,\\d+\\)"}, "DOUBLE");
+    }
+    return schema;
+  }
+
+  TQueryResult createTableCopyFromAndSelect(const std::string& in_schema,
                                             const std::string& file_name_base,
                                             const std::string& select_query,
+                                            const std::string& line_regex,
+                                            const std::string& odbc_select,
                                             const int64_t max_byte_size_per_element,
                                             const std::string& table_options = {},
-                                            const bool is_dir = false) {
-    auto& file_type = param_.file_type;
+                                            const bool is_dir = false,
+                                            const bool is_odbc_geo = false) {
+    auto& import_type = param_.import_type;
     auto& data_source_type = param_.data_source_type;
     auto& fragment_size = param_.fragment_size;
     auto& num_elements_per_chunk = param_.num_elements_per_chunk;
 
     int64_t max_chunk_size = num_elements_per_chunk * max_byte_size_per_element;
+
+    auto schema = applyOdbcSchemaModifications(in_schema);
 
     std::string query = "CREATE TABLE import_test_new (" + schema + ")";
     std::string query_table_options = "fragment_size=" + std::to_string(fragment_size) +
@@ -782,32 +975,55 @@ class ImportAndSelectTest
     query += " WITH (" + query_table_options + ")";
     query += ";";
 
-    std::string base_name = file_name_base + "." + file_type;
+    std::string extension =
+        isOdbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
+    std::string base_name = file_name_base + "." + extension;
     if (is_dir) {
-      base_name = file_name_base + "_" + file_type + "_dir";
+      base_name = file_name_base + "_" + extension + "_dir";
     }
     std::string file_path;
     if (data_source_type == "local") {
-      file_path = "'../../Tests/FsiDataFiles/" + base_name + "'";
+      file_path = "../../Tests/FsiDataFiles/" + base_name;
     } else if (data_source_type == "s3_private") {
-      file_path = "'s3://omnisci-fsi-test/FsiDataFiles/" + base_name + "'";
+      file_path = "s3://omnisci-fsi-test/FsiDataFiles/" + base_name;
     } else if (data_source_type == "s3_public") {
-      file_path = "'s3://omnisci-fsi-test-public/FsiDataFiles/" + base_name + "'";
+      file_path = "s3://omnisci-fsi-test-public/FsiDataFiles/" + base_name;
+    }
+
+    auto copy_from_source = "'" + file_path + "'";
+
+    if (isOdbc(import_type)) {
+      createODBCSourceTable("import_test",
+                            createSchemaString(schema, import_type),
+                            file_path,
+                            import_type,
+                            is_odbc_geo);
+      copy_from_source = odbc_select;
     }
     EXPECT_NO_THROW(sql(query));
-    EXPECT_NO_THROW(sql("COPY import_test_new FROM " + file_path +
-                        getCopyFromOptions(file_type, data_source_type) + ";"));
+    EXPECT_NO_THROW(sql("COPY import_test_new FROM " + copy_from_source +
+                        getCopyFromOptions(import_type, data_source_type, line_regex) +
+                        ";"));
     TQueryResult result;
     sql(result, select_query);
     validateTableChunkSizeAndMaxFragRows();
     return result;
   }
 
-  std::string getCopyFromOptions(const std::string& file_type,
-                                 const std::string data_source_type) {
+  std::string getCopyFromOptions(const std::string& import_type,
+                                 const std::string& data_source_type,
+                                 const std::string& line_regex) {
     std::vector<std::string> options;
-    if (file_type == "parquet") {
+    if (import_type == "regex_parser") {
+      options.emplace_back("source_type='regex_parsed_file'");
+      options.emplace_back("line_regex='" + line_regex + "'");
+    }
+    if (import_type == "parquet") {
       options.emplace_back("source_type='parquet_file'");
+    }
+    if (isOdbc(import_type)) {
+      options.emplace_back("source_type='odbc'");
+      options.emplace_back("odbc_dsn='" + import_type + "'");
     }
     if (data_source_type == "s3_public" || data_source_type == "s3_private") {
       options.emplace_back("s3_region='us-west-1'");
@@ -868,11 +1084,20 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
+  if (param_.import_type == "sqlite") {
+    GTEST_SKIP() << "sqlite does not support geometry types";
+  }
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
       "geo_types",
       "SELECT * FROM import_test_new ORDER BY index;",
-      256);
+      "(\\d+),\\s*" + get_line_geo_regex(4),
+      "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
+      "ST_AsText(multipoly) as multipoly FROM import_test;'",
+      256,
+      {},
+      false,
+      /*is_odbc_geo=*/true);
   // clang-format off
     assertResultSetEqual({
     {
@@ -901,12 +1126,17 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
+  if (isOdbc(param_.import_type)) {
+    GTEST_SKIP() << " array types are not supported for ODBC";
+  }
   auto query = createTableCopyFromAndSelect(
       "index INT, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[], f "
       "FLOAT[], tm TIME[], tp TIMESTAMP[], d DATE[], txt TEXT[], fixedpoint "
       "DECIMAL(10,5)[]",
       "array_types",
       "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_array_regex(11),
+      "",  // unused odbc_select
       24);
   // clang-format off
   assertResultSetEqual({
@@ -936,12 +1166,17 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
+  if (isOdbc(param_.import_type)) {
+    GTEST_SKIP() << " array types are not supported for ODBC";
+  }
   auto query = createTableCopyFromAndSelect(
       "index INT, b BOOLEAN[2], t TINYINT[2], s SMALLINT[2], i INTEGER[2], bi BIGINT[2], "
       "f FLOAT[2], tm TIME[2], tp TIMESTAMP[2], d DATE[2], txt TEXT[2], fixedpoint "
       "DECIMAL(10,5)[2]",
       "array_fixed_len_types",
       "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_array_regex(11),
+      "",  // unused odbc_select
       24);
   // clang-format off
   assertResultSetEqual({
@@ -973,10 +1208,12 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
   }
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
       "txt_2 TEXT ENCODING NONE",
       "scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
+      get_line_regex(12),
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
       14);
 
   // clang-format off
@@ -1003,10 +1240,12 @@ TEST_P(ImportAndSelectTest, Sharded) {
   }
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
       "txt_2 TEXT ENCODING NONE, shard key(txt)",
       "scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
+      get_line_regex(12),
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
       14,
       "SHARD_COUNT=2");
 
@@ -1035,9 +1274,14 @@ TEST_P(ImportAndSelectTest, Multifile) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
+  if (isOdbc(param_.import_type)) {
+    GTEST_SKIP() << " multifile support not tested for ODBC";
+  }
   auto query = createTableCopyFromAndSelect("t TEXT, i INT, f FLOAT",
                                             "example_2",
                                             "SELECT * FROM import_test_new ORDER BY i,t;",
+                                            get_line_regex(3),
+                                            "",  // unused odbc_select
                                             4,
                                             /*table_options=*/{},
                                             /*is_dir=*/true);
@@ -4336,6 +4580,8 @@ int main(int argc, char** argv) {
           ->implicit_value(true),
       "Regenerate Export Test Reference Files (writes to source tree, use with care!)");
 
+  desc.add_options()("run-odbc-tests", "Run ODBC Import tests.");
+
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
   desc.add(log_options.get_options());
@@ -4348,6 +4594,10 @@ int main(int argc, char** argv) {
     std::cout << "Usage: ImportExportTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
+  }
+
+  if (vm.count("run-odbc-tests")) {
+    g_run_odbc = true;
   }
 
   if (g_regenerate_export_test_reference_files) {

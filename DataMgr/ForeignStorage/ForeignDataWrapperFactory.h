@@ -22,6 +22,14 @@
 
 namespace foreign_storage {
 class UserMapping;
+
+/**
+ * Verify if `source_type` is valid.
+ */
+bool is_valid_source_type(const import_export::CopyParams& copy_params);
+
+void validate_regex_parser_options(const import_export::CopyParams& copy_params);
+
 /**
  * @type DataWrapperType
  * @brief Encapsulates an enumeration of foreign data wrapper type strings

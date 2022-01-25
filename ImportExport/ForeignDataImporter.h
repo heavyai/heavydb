@@ -50,7 +50,7 @@ class ForeignDataImporter : public AbstractImporter {
 
   ImportStatus importGeneral(const Catalog_Namespace::SessionInfo* session_info);
 
-  std::string file_path_;
+  std::string copy_from_source_;
   CopyParams copy_params_;
   const TableDescriptor* table_;
 

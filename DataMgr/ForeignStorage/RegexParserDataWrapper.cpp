@@ -32,8 +32,9 @@ RegexParserDataWrapper::RegexParserDataWrapper(const int db_id,
 
 RegexParserDataWrapper::RegexParserDataWrapper(const int db_id,
                                                const ForeignTable* foreign_table,
-                                               const UserMapping* user_mapping)
-    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping, false)
+                                               const UserMapping* user_mapping,
+                                               const bool disable_cache)
+    : AbstractTextFileDataWrapper(db_id, foreign_table, user_mapping, disable_cache)
     , regex_file_buffer_parser_{foreign_table} {}
 
 namespace {

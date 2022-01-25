@@ -1505,7 +1505,7 @@ class CopyTableStmt : public DDLStmt {
 
  private:
   std::unique_ptr<std::string> table_;
-  std::unique_ptr<std::string> file_pattern_;
+  std::unique_ptr<std::string> copy_from_source_pattern_;
   bool success_;
   std::list<std::unique_ptr<NameValueAssign>> options_;
 

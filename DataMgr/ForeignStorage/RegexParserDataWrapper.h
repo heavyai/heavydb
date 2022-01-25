@@ -28,7 +28,8 @@ class RegexParserDataWrapper : public AbstractTextFileDataWrapper {
 
   RegexParserDataWrapper(const int db_id,
                          const ForeignTable* foreign_table,
-                         const UserMapping* user_mapping);
+                         const UserMapping* user_mapping,
+                         const bool disable_cache = false);
 
   void validateTableOptions(const ForeignTable* foreign_table) const override;
 

@@ -37,24 +37,47 @@ bool is_s3_uri(const std::string& file_path) {
   return file_path.find(s3_prefix) != std::string::npos;
 }
 
+
+bool is_valid_data_wrapper(const std::string& data_wrapper_type) {
+  return
+#ifdef ENABLE_IMPORT_PARQUET
+      data_wrapper_type == foreign_storage::DataWrapperType::PARQUET ||
+#endif
+      data_wrapper_type == foreign_storage::DataWrapperType::CSV ||
+      data_wrapper_type == foreign_storage::DataWrapperType::REGEX_PARSER;
+}
+
 }  // namespace
 
 namespace foreign_storage {
+
+void validate_regex_parser_options(const import_export::CopyParams& copy_params) {
+  if (copy_params.line_regex.empty()) {
+    throw std::runtime_error{"Regex parser options must contain a line regex."};
+  }
+}
+
+bool is_valid_source_type(const import_export::CopyParams& copy_params) {
+  return
+#ifdef ENABLE_IMPORT_PARQUET
+      copy_params.source_type == import_export::SourceType::kParquetFile ||
+#endif
+      copy_params.source_type == import_export::SourceType::kDelimitedFile ||
+      copy_params.source_type == import_export::SourceType::kRegexParsedFile;
+}
 
 std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralImport(
     const std::string& data_wrapper_type,
     const int db_id,
     const ForeignTable* foreign_table,
     const UserMapping* user_mapping) {
-#ifdef ENABLE_IMPORT_PARQUET
-  CHECK(data_wrapper_type == DataWrapperType::PARQUET ||
-        data_wrapper_type == DataWrapperType::CSV);
-#else
-  CHECK(data_wrapper_type == DataWrapperType::CSV);
-#endif
+  CHECK(is_valid_data_wrapper(data_wrapper_type));
 
   if (data_wrapper_type == DataWrapperType::CSV) {
     return std::make_unique<CsvDataWrapper>(db_id, foreign_table, user_mapping, true);
+  } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
+    return std::make_unique<RegexParserDataWrapper>(
+        db_id, foreign_table, user_mapping, true);
   }
 #ifdef ENABLE_IMPORT_PARQUET
   else if (data_wrapper_type == DataWrapperType::PARQUET) {
@@ -94,26 +117,28 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
     const int user_id,
     const std::string& file_path,
     const import_export::CopyParams& copy_params) {
-#ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
-        copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#else
-  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#endif
+  CHECK(is_valid_source_type(copy_params));
 
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>();
 
   foreign_server->id = -1;
   foreign_server->user_id = user_id;
-  if (copy_params.source_type == import_export::SourceType::kParquetFile) {
-    foreign_server->data_wrapper_type = DataWrapperType::PARQUET;
-  } else if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
     foreign_server->data_wrapper_type = DataWrapperType::CSV;
+  } else if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    foreign_server->data_wrapper_type = DataWrapperType::REGEX_PARSER;
+#ifdef ENABLE_IMPORT_PARQUET
+  } else if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+    foreign_server->data_wrapper_type = DataWrapperType::PARQUET;
+#endif
+  } else {
+    UNREACHABLE();
   }
   foreign_server->name = "import_proxy_server";
 
-  bool is_aws_s3_storage_type = is_s3_uri(file_path);
-  if (is_aws_s3_storage_type) {
+  if (copy_params.source_type == import_export::SourceType::kOdbc) {
+    throw std::runtime_error("ODBC storage not supported");
+  } else if (is_s3_uri(file_path)) {
     throw std::runtime_error("AWS storage not supported");
   } else {
     foreign_server->options[AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
@@ -126,15 +151,11 @@ std::unique_ptr<ForeignServer> ForeignDataWrapperFactory::createForeignServerPro
 std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy(
     const int db_id,
     const TableDescriptor* table,
-    const std::string& file_path,
+    const std::string& copy_from_source,
     const import_export::CopyParams& copy_params,
     const ForeignServer* server) {
-#ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params.source_type == import_export::SourceType::kParquetFile ||
-        copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#else
-  CHECK(copy_params.source_type == import_export::SourceType::kDelimitedFile);
-#endif
+  CHECK(is_valid_source_type(copy_params));
+
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   auto foreign_table = std::make_unique<ForeignTable>();
 
@@ -144,11 +165,23 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
   CHECK(server);
   foreign_table->foreign_server = server;
 
-  bool is_aws_s3_storage_type = is_s3_uri(file_path);
-  if (is_aws_s3_storage_type) {
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    CHECK(!copy_params.line_regex.empty());
+    foreign_table->options[RegexFileBufferParser::LINE_REGEX_KEY] =
+        copy_params.line_regex;
+    if (!copy_params.line_start_regex.empty()) {
+      foreign_table->options[RegexFileBufferParser::LINE_START_REGEX_KEY] =
+          copy_params.line_start_regex;
+    }
+  }
+
+  // setup data source options based on various criteria
+  if (copy_params.source_type == import_export::SourceType::kOdbc) {
+    throw std::runtime_error("ODBC storage not supported");
+  } else if (is_s3_uri(copy_from_source)) {
     throw std::runtime_error("AWS storage not supported");
   } else {
-    foreign_table->options["FILE_PATH"] = file_path;
+    foreign_table->options["FILE_PATH"] = copy_from_source;
   }
 
   foreign_table->initializeOptions();
@@ -250,6 +283,6 @@ void ForeignDataWrapperFactory::validateDataWrapperType(
   }
 }
 
-std::map<std::string, std::unique_ptr<ForeignDataWrapper>>
+std::map<std::string, std::unique_ptr<ForeignDataWrapper> >
     ForeignDataWrapperFactory::validation_data_wrappers_;
 }  // namespace foreign_storage

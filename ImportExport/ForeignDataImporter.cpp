@@ -29,12 +29,180 @@ extern bool g_enable_parquet_import_fsi;
 #endif
 extern bool g_enable_general_import_fsi;
 
+namespace {
+
+std::string get_data_wrapper_type(const import_export::CopyParams& copy_params) {
+  std::string data_wrapper_type;
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::CSV;
+  } else if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::REGEX_PARSER;
+#ifdef ENABLE_IMPORT_PARQUET
+  } else if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+    data_wrapper_type = foreign_storage::DataWrapperType::PARQUET;
+#endif
+  } else {
+    UNREACHABLE();
+  }
+  return data_wrapper_type;
+}
+
+ChunkMetadataVector metadata_scan(foreign_storage::ForeignDataWrapper* data_wrapper,
+                                  foreign_storage::ForeignTable* foreign_table) {
+  ChunkMetadataVector metadata_vector;
+  try {
+    data_wrapper->populateChunkMetadata(
+        metadata_vector);  // explicitly invoke a metadata scan on data wrapper
+  } catch (const foreign_storage::MetadataScanInfeasibleFragmentSizeException&
+               metadata_scan_exception) {
+    // if a metadata scan exception is thrown, check to see if we can adjust
+    // the fragment size and retry
+
+    auto min_feasible_fragment_size = metadata_scan_exception.min_feasible_fragment_size_;
+    if (min_feasible_fragment_size < 0) {
+      throw;  // no valid fragment size returned by exception
+    }
+    foreign_table->maxFragRows = min_feasible_fragment_size;
+    data_wrapper->populateChunkMetadata(
+        metadata_vector);  // attempt another metadata scan, note, we assume that the
+                           // metadata scan can be reentered safely after throwing the
+                           // exception
+  }
+  return metadata_vector;
+}
+
+void validate_copy_params(const import_export::CopyParams& copy_params) {
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    foreign_storage::validate_regex_parser_options(copy_params);
+  }
+}
+
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         Catalog_Namespace::Catalog& catalog,
+                         const TableDescriptor* table,
+                         const Catalog_Namespace::SessionInfo* session_info) {
+  auto& current_user = session_info->get_currentUser();
+  auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
+      catalog.getDatabaseId(), current_user.userId, copy_from_source, copy_params);
+
+  CHECK(server);
+  server->validate();
+
+  auto user_mapping =
+      foreign_storage::ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
+          catalog.getDatabaseId(),
+          current_user.userId,
+          copy_from_source,
+          copy_params,
+          server.get());
+
+  if (user_mapping) {
+    user_mapping->validate(server.get());
+  }
+
+  auto foreign_table =
+      foreign_storage::ForeignDataWrapperFactory::createForeignTableProxy(
+          catalog.getDatabaseId(), table, copy_from_source, copy_params, server.get());
+
+  CHECK(foreign_table);
+  foreign_table->validateOptionValues();
+
+  return {std::move(server), std::move(user_mapping), std::move(foreign_table)};
+}
+
+import_export::ImportStatus import_foreign_data(
+    const ChunkMetadataVector& metadata_vector,
+    Fragmenter_Namespace::InsertDataLoader::DistributedConnector* connector,
+    Catalog_Namespace::Catalog& catalog,
+    const TableDescriptor* table,
+    foreign_storage::ForeignDataWrapper* data_wrapper,
+    const Catalog_Namespace::SessionInfo* session_info) {
+  int32_t max_fragment_id = -1;
+  for (const auto& [key, _] : metadata_vector) {
+    max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);
+  }
+  CHECK_GE(max_fragment_id, 0);
+
+  Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector);
+  import_export::ImportStatus import_status;  // manually update
+  for (int32_t fragment_id = 0; fragment_id <= max_fragment_id; ++fragment_id) {
+    // gather applicable keys to load for fragment
+    std::set<ChunkKey> fragment_keys;
+    for (const auto& [key, _] : metadata_vector) {
+      if (key[CHUNK_KEY_FRAGMENT_IDX] == fragment_id) {
+        fragment_keys.insert(key);
+
+        const auto col_id = key[CHUNK_KEY_COLUMN_IDX];
+        const auto table_id = key[CHUNK_KEY_TABLE_IDX];
+        const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+        if (col_desc->columnType.is_varlen_indeed()) {
+          CHECK(key.size() > CHUNK_KEY_VARLEN_IDX);
+          if (key[CHUNK_KEY_VARLEN_IDX] == 1) {  // data chunk
+            auto index_key = key;
+            index_key[CHUNK_KEY_VARLEN_IDX] = 2;
+            fragment_keys.insert(index_key);
+          }
+        }
+      }
+    }
+
+    // create buffers
+    std::map<ChunkKey, std::unique_ptr<foreign_storage::ForeignStorageBuffer>>
+        fragment_buffers_owner;
+    foreign_storage::ChunkToBufferMap fragment_buffers;
+    for (const auto& key : fragment_keys) {
+      fragment_buffers_owner[key] =
+          std::make_unique<foreign_storage::ForeignStorageBuffer>();
+      fragment_buffers_owner[key]->resetToEmpty();
+      fragment_buffers[key] = shared::get_from_map(fragment_buffers_owner, key).get();
+    }
+
+    // get chunks for import
+    Fragmenter_Namespace::InsertChunks insert_chunks{
+        table->tableId, catalog.getDatabaseId(), {}};
+
+    // get the buffers
+    data_wrapper->populateChunkBuffers(fragment_buffers, {});
+
+    // create chunks from buffers
+    for (const auto& [key, buffer] : fragment_buffers) {
+      const auto col_id = key[CHUNK_KEY_COLUMN_IDX];
+      const auto table_id = key[CHUNK_KEY_TABLE_IDX];
+      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+
+      if (col_desc->columnType.is_varlen_indeed()) {
+        CHECK(key.size() > CHUNK_KEY_VARLEN_IDX);  // check for varlen key
+        if (key[CHUNK_KEY_VARLEN_IDX] == 1) {      // data key
+          auto index_key = key;
+          index_key[CHUNK_KEY_VARLEN_IDX] = 2;
+          insert_chunks.chunks[col_id] = Chunk_NS::Chunk::getChunk(
+              col_desc, buffer, shared::get_from_map(fragment_buffers, index_key));
+        }
+      } else {  // regular non-varlen case with no index buffer
+        insert_chunks.chunks[col_id] =
+            Chunk_NS::Chunk::getChunk(col_desc, buffer, nullptr);
+      }
+    }
+
+    // import chunks
+    insert_data_loader.insertChunks(*session_info, insert_chunks);
+  }
+  return {};  // TODO: update import status appropriately once error handling is
+              // implemented
+}
+
+}  // namespace
+
 namespace import_export {
 
-ForeignDataImporter::ForeignDataImporter(const std::string& file_path,
+ForeignDataImporter::ForeignDataImporter(const std::string& copy_from_source,
                                          const CopyParams& copy_params,
                                          const TableDescriptor* table)
-    : file_path_(file_path), copy_params_(copy_params), table_(table) {
+    : copy_from_source_(copy_from_source), copy_params_(copy_params), table_(table) {
   connector_ = std::make_unique<Parser::LocalConnector>();
 }
 
@@ -75,142 +243,35 @@ ImportStatus ForeignDataImporter::importGeneral(
     const Catalog_Namespace::SessionInfo* session_info) {
   auto& catalog = session_info->getCatalog();
 
-#ifdef ENABLE_IMPORT_PARQUET
-  CHECK(copy_params_.source_type == import_export::SourceType::kParquetFile ||
-        copy_params_.source_type == import_export::SourceType::kDelimitedFile);
-#else
-  CHECK(copy_params_.source_type == import_export::SourceType::kDelimitedFile);
-#endif
+  CHECK(foreign_storage::is_valid_source_type(copy_params_));
 
-  auto& current_user = session_info->get_currentUser();
-  auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
-      catalog.getDatabaseId(), current_user.userId, file_path_, copy_params_);
+  // validate copy params before import in order to print user friendly messages
+  validate_copy_params(copy_params_);
 
-  auto user_mapping =
-      foreign_storage::ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
-          catalog.getDatabaseId(),
-          current_user.userId,
-          file_path_,
-          copy_params_,
-          server.get());
+  auto [server, user_mapping, foreign_table] = create_proxy_fsi_objects(
+      copy_from_source_, copy_params_, catalog, table_, session_info);
 
-  auto foreign_table =
-      foreign_storage::ForeignDataWrapperFactory::createForeignTableProxy(
-          catalog.getDatabaseId(), table_, file_path_, copy_params_, server.get());
-
-  foreign_table->validateOptionValues();
+  // set fragment size for prox foreign table during import
   foreign_table->maxFragRows = proxy_foreign_table_fragment_size_;
 
-  std::string data_wrapper_type;
-  if (copy_params_.source_type == import_export::SourceType::kParquetFile) {
-    data_wrapper_type = foreign_storage::DataWrapperType::PARQUET;
-  } else if (copy_params_.source_type == import_export::SourceType::kDelimitedFile) {
-    data_wrapper_type = foreign_storage::DataWrapperType::CSV;
-  } else {
-    UNREACHABLE();
-  }
   auto data_wrapper = foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
-      data_wrapper_type,
+      get_data_wrapper_type(copy_params_),
       catalog.getDatabaseId(),
       foreign_table.get(),
       user_mapping.get());
 
-  ChunkMetadataVector metadata_vector;
-  try {
-    data_wrapper->populateChunkMetadata(
-        metadata_vector);  // explicitly invoke a metadata scan on data wrapper
-  } catch (const foreign_storage::MetadataScanInfeasibleFragmentSizeException&
-               metadata_scan_exception) {
-    // if a metadata scan exception is thrown, check to see if we can adjust
-    // the fragment size and retry
-
-    auto min_feasible_fragment_size = metadata_scan_exception.min_feasible_fragment_size_;
-    if (min_feasible_fragment_size < 0) {
-      throw;  // no valid fragment size returned by exception
-    }
-    foreign_table->maxFragRows = min_feasible_fragment_size;
-    data_wrapper->populateChunkMetadata(
-        metadata_vector);  // attempt another metadata scan, note, we assume that the
-                           // metadata scan can be reentered safely after throwing the
-                           // exception
-  }
-
+  ChunkMetadataVector metadata_vector =
+      metadata_scan(data_wrapper.get(), foreign_table.get());
   if (metadata_vector.empty()) {  // an empty data source
     return {};
   }
 
-  int32_t max_fragment_id = -1;
-  for (const auto& [key, _] : metadata_vector) {
-    max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);
-  }
-  CHECK_GE(max_fragment_id, 0);
-
-  Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector_);
-  ImportStatus import_status;  // manually update
-  for (int32_t fragment_id = 0; fragment_id <= max_fragment_id; ++fragment_id) {
-    // gather applicable keys to load for fragment
-    std::set<ChunkKey> fragment_keys;
-    for (const auto& [key, _] : metadata_vector) {
-      if (key[CHUNK_KEY_FRAGMENT_IDX] == fragment_id) {
-        fragment_keys.insert(key);
-
-        const auto col_id = key[CHUNK_KEY_COLUMN_IDX];
-        const auto table_id = key[CHUNK_KEY_TABLE_IDX];
-        const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
-        if (col_desc->columnType.is_varlen_indeed()) {
-          CHECK(key.size() > CHUNK_KEY_VARLEN_IDX);
-          if (key[CHUNK_KEY_VARLEN_IDX] == 1) {  // data chunk
-            auto index_key = key;
-            index_key[CHUNK_KEY_VARLEN_IDX] = 2;
-            fragment_keys.insert(index_key);
-          }
-        }
-      }
-    }
-
-    // create buffers
-    std::map<ChunkKey, std::unique_ptr<foreign_storage::ForeignStorageBuffer>>
-        fragment_buffers_owner;
-    foreign_storage::ChunkToBufferMap fragment_buffers;
-    for (const auto& key : fragment_keys) {
-      fragment_buffers_owner[key] =
-          std::make_unique<foreign_storage::ForeignStorageBuffer>();
-      fragment_buffers_owner[key]->resetToEmpty();
-      fragment_buffers[key] = shared::get_from_map(fragment_buffers_owner, key).get();
-    }
-
-    // get chunks for import
-    Fragmenter_Namespace::InsertChunks insert_chunks{
-        table_->tableId, catalog.getDatabaseId(), {}};
-
-    // get the buffers
-    data_wrapper->populateChunkBuffers(fragment_buffers, {});
-
-    // create chunks from buffers
-    for (const auto& [key, buffer] : fragment_buffers) {
-      const auto col_id = key[CHUNK_KEY_COLUMN_IDX];
-      const auto table_id = key[CHUNK_KEY_TABLE_IDX];
-      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
-
-      if (col_desc->columnType.is_varlen_indeed()) {
-        CHECK(key.size() > CHUNK_KEY_VARLEN_IDX);  // check for varlen key
-        if (key[CHUNK_KEY_VARLEN_IDX] == 1) {      // data key
-          auto index_key = key;
-          index_key[CHUNK_KEY_VARLEN_IDX] = 2;
-          insert_chunks.chunks[col_id] = Chunk_NS::Chunk::getChunk(
-              col_desc, buffer, shared::get_from_map(fragment_buffers, index_key));
-        }
-      } else {  // regular non-varlen case with no index buffer
-        insert_chunks.chunks[col_id] =
-            Chunk_NS::Chunk::getChunk(col_desc, buffer, nullptr);
-      }
-    }
-
-    // import chunks
-    insert_data_loader.insertChunks(*session_info, insert_chunks);
-  }
-
-  return {};
+  return import_foreign_data(metadata_vector,
+                             connector_.get(),
+                             catalog,
+                             table_,
+                             data_wrapper.get(),
+                             session_info);
 }
 
 #ifdef ENABLE_IMPORT_PARQUET
@@ -222,19 +283,19 @@ ImportStatus ForeignDataImporter::importParquet(
 
   auto& current_user = session_info->get_currentUser();
   auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
-      catalog.getDatabaseId(), current_user.userId, file_path_, copy_params_);
+      catalog.getDatabaseId(), current_user.userId, copy_from_source_, copy_params_);
 
   auto user_mapping =
       foreign_storage::ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
           catalog.getDatabaseId(),
           current_user.userId,
-          file_path_,
+          copy_from_source_,
           copy_params_,
           server.get());
 
   auto foreign_table =
       foreign_storage::ForeignDataWrapperFactory::createForeignTableProxy(
-          catalog.getDatabaseId(), table_, file_path_, copy_params_, server.get());
+          catalog.getDatabaseId(), table_, copy_from_source_, copy_params_, server.get());
 
   foreign_table->validateOptionValues();
 
