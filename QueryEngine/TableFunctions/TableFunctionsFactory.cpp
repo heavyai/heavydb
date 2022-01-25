@@ -290,7 +290,9 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "tf_geo_rasterize",
       "tf_geo_rasterize_slope",
       "tf_rf_prop",
-      "tf_rf_prop_max_signal"};
+      "tf_rf_prop_max_signal",
+      "tf_point_cloud_metadata",
+      "tf_load_point_cloud"};
 
   return (whitelisted_table_functions.find(function_name) !=
           whitelisted_table_functions.end());
