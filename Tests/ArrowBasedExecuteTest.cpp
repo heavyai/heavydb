@@ -1495,6 +1495,7 @@ class ExecuteTestBase {
     createWindowFuncTable(true);
     createWindowFuncTable(false);
     createLargeWindowFuncTable(true);
+    createLargeWindowFuncTable(false);
     createUnionAllTestsTable();
     createVarlenLazyFetchTable();
   }
@@ -16086,6 +16087,59 @@ TEST_F(Select, WindowFunctionLag) {
           c(part1, dt);
         }
       }
+    }
+  }
+}
+
+TEST_F(Select, WindowFunctionMultiOrderBy) {
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  for (std::string table_name :
+       {"test_window_func_large", "test_window_func_large_multi_frag"}) {
+    {
+      std::string query =
+          "SELECT LAG(f) OVER (ORDER BY f NULLS FIRST, d NULLS FIRST) AS f_lag FROM " +
+          table_name + " ORDER BY f_lag ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT LAG(f) OVER (ORDER BY d NULLS FIRST, f DESC NULLS FIRST) AS f_lag "
+          "FROM " +
+          table_name + " ORDER BY f_lag ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT LAG(d) OVER (ORDER BY f DESC NULLS FIRST, f ASC NULLS FIRST) AS d_lag "
+          "FROM " +
+          table_name + " ORDER BY d_lag ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT LAG(d) OVER (ORDER BY d DESC NULLS FIRST, d DESC NULLS FIRST) AS d_lag "
+          "FROM " +
+          table_name + " ORDER BY d_lag ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT LAG(i_unique) OVER (ORDER BY i_20 ASC NULLS FIRST, i_unique DESC NULLS "
+          "FIRST) AS i_unique_lag FROM " +
+          table_name + " ORDER BY i_unique_lag ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+
+    {
+      std::string query =
+          "SELECT LAG(i_unique) OVER (ORDER BY i_20 ASC NULLS FIRST, i_1000 DESC NULLS "
+          "FIRST, d ASC NULLS FIRST, i_unique DESC NULLS FIRST) AS i_unique_lag FROM " +
+          table_name + " ORDER BY i_unique_lag ASC NULLS FIRST;";
+      c(query, query, dt);
     }
   }
 }
