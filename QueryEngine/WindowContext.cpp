@@ -487,10 +487,19 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
   }
   const auto col_tuple_comparator = [&comparators](const int64_t lhs, const int64_t rhs) {
     for (const auto& comparator : comparators) {
-      if (comparator(lhs, rhs)) {
-        return true;
+      const auto comparator_result = comparator(lhs, rhs);
+      switch (comparator_result) {
+        case WindowFunctionContext::WindowComparatorResult::LT:
+          return true;
+        case WindowFunctionContext::WindowComparatorResult::GT:
+          return false;
+        default:
+          // WindowComparatorResult::EQ: continue to next comparator
+          continue;
       }
     }
+    // If here WindowFunctionContext::WindowComparatorResult::KEQ for all keys
+    // return false as sort algo must enforce weak ordering
     return false;
   };
 
@@ -631,35 +640,45 @@ size_t WindowFunctionContext::elementCount() const {
 namespace {
 
 template <class T>
-bool integer_comparator(const int8_t* order_column_buffer,
-                        const SQLTypeInfo& ti,
-                        const int32_t* partition_indices,
-                        const int64_t lhs,
-                        const int64_t rhs,
-                        const bool nulls_first) {
+WindowFunctionContext::WindowComparatorResult integer_comparator(
+    const int8_t* order_column_buffer,
+    const SQLTypeInfo& ti,
+    const int32_t* partition_indices,
+    const int64_t lhs,
+    const int64_t rhs,
+    const bool nulls_first) {
   const auto values = reinterpret_cast<const T*>(order_column_buffer);
   const auto lhs_val = values[partition_indices[lhs]];
   const auto rhs_val = values[partition_indices[rhs]];
   const auto null_val = inline_fixed_encoding_null_val(ti);
   if (lhs_val == null_val && rhs_val == null_val) {
-    return false;
+    return WindowFunctionContext::WindowComparatorResult::EQ;
   }
   if (lhs_val == null_val && rhs_val != null_val) {
-    return nulls_first;
+    return nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                       : WindowFunctionContext::WindowComparatorResult::GT;
   }
   if (rhs_val == null_val && lhs_val != null_val) {
-    return !nulls_first;
+    return !nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                        : WindowFunctionContext::WindowComparatorResult::GT;
   }
-  return lhs_val < rhs_val;
+  if (lhs_val < rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::LT;
+  }
+  if (lhs_val > rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  return WindowFunctionContext::WindowComparatorResult::EQ;
 }
 
 template <class T, class NullPatternType>
-bool fp_comparator(const int8_t* order_column_buffer,
-                   const SQLTypeInfo& ti,
-                   const int32_t* partition_indices,
-                   const int64_t lhs,
-                   const int64_t rhs,
-                   const bool nulls_first) {
+WindowFunctionContext::WindowComparatorResult fp_comparator(
+    const int8_t* order_column_buffer,
+    const SQLTypeInfo& ti,
+    const int32_t* partition_indices,
+    const int64_t lhs,
+    const int64_t rhs,
+    const bool nulls_first) {
   const auto values = reinterpret_cast<const T*>(order_column_buffer);
   const auto lhs_val = values[partition_indices[lhs]];
   const auto rhs_val = values[partition_indices[rhs]];
@@ -669,24 +688,32 @@ bool fp_comparator(const int8_t* order_column_buffer,
   const auto rhs_bit_pattern =
       *reinterpret_cast<const NullPatternType*>(may_alias_ptr(&rhs_val));
   if (lhs_bit_pattern == null_bit_pattern && rhs_bit_pattern == null_bit_pattern) {
-    return false;
+    return WindowFunctionContext::WindowComparatorResult::EQ;
   }
   if (lhs_bit_pattern == null_bit_pattern && rhs_bit_pattern != null_bit_pattern) {
-    return nulls_first;
+    return nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                       : WindowFunctionContext::WindowComparatorResult::GT;
   }
   if (rhs_bit_pattern == null_bit_pattern && lhs_bit_pattern != null_bit_pattern) {
-    return !nulls_first;
+    return !nulls_first ? WindowFunctionContext::WindowComparatorResult::LT
+                        : WindowFunctionContext::WindowComparatorResult::GT;
   }
-  return lhs_val < rhs_val;
+  if (lhs_val < rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::LT;
+  }
+  if (lhs_val > rhs_val) {
+    return WindowFunctionContext::WindowComparatorResult::GT;
+  }
+  return WindowFunctionContext::WindowComparatorResult::EQ;
 }
 
 }  // namespace
 
-std::function<bool(const int64_t lhs, const int64_t rhs)>
-WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
-                                      const int8_t* order_column_buffer,
-                                      const int32_t* partition_indices,
-                                      const bool nulls_first) {
+WindowFunctionContext::Comparator WindowFunctionContext::makeComparator(
+    const Analyzer::ColumnVar* col_var,
+    const int8_t* order_column_buffer,
+    const int32_t* partition_indices,
+    const bool nulls_first) {
   const auto& ti = col_var->get_type_info();
   if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
     switch (ti.get_size()) {

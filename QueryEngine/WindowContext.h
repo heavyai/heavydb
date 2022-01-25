@@ -116,7 +116,11 @@ class WindowFunctionContext {
   // Returns the element count in the columns used by the window function.
   size_t elementCount() const;
 
-  using Comparator = std::function<bool(const int64_t lhs, const int64_t rhs)>;
+  enum class WindowComparatorResult { LT, EQ, GT };
+
+  using Comparator =
+      std::function<WindowFunctionContext::WindowComparatorResult(const int64_t lhs,
+                                                                  const int64_t rhs)>;
 
  private:
   // State for a window aggregate. The count field is only used for average.
