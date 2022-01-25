@@ -704,6 +704,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       }
       LOG(INFO) << "Retrying current query step " << i << " / " << num_steps << " on CPU";
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
+      if (render_info && i == num_steps) {
+        render_info->setForceNonInSituData();
+      }
       executeRelAlgStep(
           seq, i, co_cpu, eo, (i == num_steps) ? render_info : nullptr, queue_time_ms);
     } catch (const NativeExecutionError&) {
@@ -758,6 +761,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
+      if (render_info && i == interval.second - 1) {
+        render_info->setForceNonInSituData();
+      }
       executeRelAlgStep(seq,
                         i,
                         co_cpu,
