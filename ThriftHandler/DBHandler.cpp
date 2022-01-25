@@ -5483,14 +5483,14 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
             legacylockmgr::ExecutorOuterLock, true));
 
     const TableDescriptor* td{nullptr};
-    std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
+    std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>> td_with_lock;
     std::unique_ptr<lockmgr::WriteLock> insert_data_lock;
 
     try {
       td_with_lock =
-          std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+          std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
               lockmgr::TableSchemaLockContainer<
-                  lockmgr::WriteLock>::acquireTableDescriptor(cat, this_table_name));
+                  lockmgr::ReadLock>::acquireTableDescriptor(cat, this_table_name));
       td = (*td_with_lock)();
       insert_data_lock = std::make_unique<lockmgr::WriteLock>(
           lockmgr::InsertDataLockMgr::getWriteLockForTable(cat, this_table_name));
