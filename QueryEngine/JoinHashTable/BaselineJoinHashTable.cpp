@@ -153,7 +153,7 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(executor_->getDataMgr(),
+    copy_from_gpu(executor->getDataMgr(),
                   buffer_copy.get(),
                   reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
                   buffer_size,

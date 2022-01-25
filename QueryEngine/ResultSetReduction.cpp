@@ -255,7 +255,8 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
       } else {
         threading::parallel_for(
             threading::blocked_range<size_t>(0, that_entry_count),
-            [this, this_buff, that_buff, that_entry_count, &that](auto r) {
+            [this, this_buff, that_buff, that_entry_count, &reduction_code, &that](
+                auto r) {
               for (size_t entry_idx = r.begin(); entry_idx < r.end(); ++entry_idx) {
                 reduceOneEntryBaseline(
                     this_buff, that_buff, entry_idx, that_entry_count, that);

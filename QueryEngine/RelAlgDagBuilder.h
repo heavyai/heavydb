@@ -1855,14 +1855,14 @@ class RelModify : public RelAlgNode {
         std::string("Unsupported logical modify operation encountered " + op_string));
   }
 
-  // TODO: remove catalog from constructor
   RelModify(Catalog_Namespace::Catalog const& cat,
             TableDescriptor const* const td,
             bool flattened,
             std::string const& op_string,
             TargetColumnList const& target_column_list,
             RelAlgNodeInputPtr input)
-      : table_descriptor_(td)
+      : catalog_(cat)
+      , table_descriptor_(td)
       , flattened_(flattened)
       , operation_(yieldModifyOperationEnum(op_string))
       , target_column_list_(target_column_list) {
@@ -1875,7 +1875,8 @@ class RelModify : public RelAlgNode {
             ModifyOperation op,
             TargetColumnList const& target_column_list,
             RelAlgNodeInputPtr input)
-      : table_descriptor_(td)
+      : catalog_(cat)
+      , table_descriptor_(td)
       , flattened_(flattened)
       , operation_(op)
       , target_column_list_(target_column_list) {
@@ -1978,6 +1979,7 @@ class RelModify : public RelAlgNode {
   }
 
  private:
+  Catalog_Namespace::Catalog const& catalog_;
   const TableDescriptor* table_descriptor_;
   bool flattened_;
   ModifyOperation operation_;

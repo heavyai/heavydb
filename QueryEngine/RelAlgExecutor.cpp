@@ -2194,6 +2194,46 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
   return {rs, empty_targets};
 }
 
+namespace {
+int64_t int_value_from_numbers_ptr(const SQLTypeInfo& type_info, const int8_t* data) {
+  size_t sz = 0;
+  switch (type_info.get_type()) {
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kTIMESTAMP:
+    case kTIME:
+    case kDATE:
+      sz = type_info.get_logical_size();
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      CHECK(type_info.get_compression() == kENCODING_DICT);
+      sz = type_info.get_size();
+      break;
+    default:
+      CHECK(false) << "Unexpected sharding key datatype";
+  }
+
+  switch (sz) {
+    case 1:
+      return *(reinterpret_cast<const int8_t*>(data));
+    case 2:
+      return *(reinterpret_cast<const int16_t*>(data));
+    case 4:
+      return *(reinterpret_cast<const int32_t*>(data));
+    case 8:
+      return *(reinterpret_cast<const int64_t*>(data));
+    default:
+      CHECK(false);
+      return 0;
+  }
+}
+
+}  // namespace
+
 ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
   // Note: We currently obtain an executor for this method, but we do not need it.
   // Therefore, we skip the executor state setup in the regular execution path. In the
@@ -3458,6 +3498,7 @@ std::vector<size_t> do_table_reordering(
     // information to break ties
     return {};
   }
+  const auto& cat = *executor->getCatalog();
   for (const auto& table_info : query_infos) {
     if (table_info.table_id < 0) {
       continue;

@@ -17,7 +17,6 @@
 #ifndef QUERYENGINE_COMPILATIONOPTIONS_H
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
-#include <cstdio>
 #include <vector>
 
 enum class ExecutorDeviceType { CPU, GPU };

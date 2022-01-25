@@ -54,7 +54,6 @@ struct InnerOuterOrLoopQual {
 
 class QueryPlanDagExtractor {
  public:
-  // TODO: remove executor from constructor
   QueryPlanDagExtractor(
       QueryPlanDagCache& global_dag,
       SchemaProviderPtr schema_provider,
@@ -65,7 +64,8 @@ class QueryPlanDagExtractor {
       , schema_provider_(schema_provider)
       , contain_not_supported_rel_node_(false)
       , left_deep_tree_infos_(left_deep_tree_infos)
-      , temporary_tables_(temporary_tables) {
+      , temporary_tables_(temporary_tables)
+      , executor_(executor) {
     translated_join_info_ = std::make_shared<TranslatedJoinInfo>();
   }
 
@@ -144,6 +144,7 @@ class QueryPlanDagExtractor {
   bool contain_not_supported_rel_node_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel>& left_deep_tree_infos_;
   const TemporaryTables& temporary_tables_;
+  Executor* executor_;
   std::shared_ptr<TranslatedJoinInfo> translated_join_info_;
   HashTableBuildDagMap hash_table_query_plan_dag_;
   TableIdToNodeMap table_id_to_node_map_;
