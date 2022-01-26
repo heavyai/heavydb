@@ -81,7 +81,7 @@ class RelAlgExecutor {
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
-                 std::unique_ptr<RelAlgDagBuilder> query_dag,
+                 std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : executor_(executor)
       , cat_(cat)
@@ -96,7 +96,7 @@ class RelAlgExecutor {
   RelAlgExecutor(Executor* executor,
                  int db_id,
                  SchemaProviderPtr schema_provider,
-                 std::unique_ptr<RelAlgDagBuilder> query_dag,
+                 std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : executor_(executor)
       , cat_(nullptr)
@@ -400,7 +400,7 @@ class RelAlgExecutor {
   Executor* executor_;
   const Catalog_Namespace::Catalog* cat_;
   int db_id_;
-  std::unique_ptr<RelAlgDagBuilder> query_dag_;
+  std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;

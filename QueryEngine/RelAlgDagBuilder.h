@@ -225,13 +225,14 @@ using TupleContentsArray = std::vector<RexLiteralArray>;
 class RexOperator : public RexScalar {
  public:
   RexOperator(const SQLOps op,
-              std::vector<std::unique_ptr<const RexScalar>>& operands,
+              std::vector<std::unique_ptr<const RexScalar>> operands,
               const SQLTypeInfo& type)
       : op_(op), operands_(std::move(operands)), type_(type) {}
 
   virtual std::unique_ptr<const RexOperator> getDisambiguated(
       std::vector<std::unique_ptr<const RexScalar>>& operands) const {
-    return std::unique_ptr<const RexOperator>(new RexOperator(op_, operands, type_));
+    return std::unique_ptr<const RexOperator>(
+        new RexOperator(op_, std::move(operands), type_));
   }
 
   size_t size() const { return operands_.size(); }
@@ -436,7 +437,7 @@ class RexFunctionOperator : public RexOperator {
   RexFunctionOperator(const std::string& name,
                       ConstRexScalarPtrVector& operands,
                       const SQLTypeInfo& ti)
-      : RexOperator(kFUNCTION, operands, ti), name_(name) {}
+      : RexOperator(kFUNCTION, std::move(operands), ti), name_(name) {}
 
   std::unique_ptr<const RexOperator> getDisambiguated(
       std::vector<std::unique_ptr<const RexScalar>>& operands) const override {
@@ -831,6 +832,8 @@ class RelAlgNode {
   mutable size_t dag_node_id_;
 };
 
+using RelAlgNodePtr = std::shared_ptr<RelAlgNode>;
+
 class RelScan : public RelAlgNode {
  public:
   RelScan(TableInfoPtr tinfo, std::vector<ColumnInfoPtr> column_infos)
@@ -1061,7 +1064,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
 
   // Takes memory ownership of the expressions.
-  RelProject(std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs,
+  RelProject(std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
       : ModifyManipulationTarget(false, false, false, nullptr)
@@ -1202,7 +1205,7 @@ class RelAggregate : public RelAlgNode {
  public:
   // Takes ownership of the aggregate expressions.
   RelAggregate(const size_t groupby_count,
-               std::vector<std::unique_ptr<const RexAgg>>& agg_exprs,
+               std::vector<std::unique_ptr<const RexAgg>> agg_exprs,
                const std::vector<std::string>& fields,
                std::shared_ptr<const RelAlgNode> input)
       : groupby_count_(groupby_count)
@@ -1317,7 +1320,7 @@ class RelJoin : public RelAlgNode {
  public:
   RelJoin(std::shared_ptr<const RelAlgNode> lhs,
           std::shared_ptr<const RelAlgNode> rhs,
-          std::unique_ptr<const RexScalar>& condition,
+          std::unique_ptr<const RexScalar> condition,
           const JoinType join_type)
       : condition_(std::move(condition))
       , join_type_(join_type)
@@ -1747,7 +1750,7 @@ class RelSort : public RelAlgNode {
           const size_t limit,
           const size_t offset,
           std::shared_ptr<const RelAlgNode> input)
-      : collation_(collation), limit_(limit), offset_(offset) {
+      : collation_(collation), limit_(limit), offset_(offset), empty_result_(false) {
     inputs_.push_back(input);
   }
 
@@ -2187,6 +2190,63 @@ class QueryNotSupported : public std::runtime_error {
   QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}
 };
 
+class RelAlgDag {
+ public:
+  RelAlgDag() = default;
+  virtual ~RelAlgDag() = default;
+
+  void eachNode(std::function<void(RelAlgNode const*)> const& callback) const;
+
+  /**
+   * Returns the root node of the DAG.
+   */
+  const RelAlgNode& getRootNode() const {
+    CHECK(root_);
+    return *root_;
+  }
+
+  std::shared_ptr<const RelAlgNode> getRootNodeShPtr() const { return root_; }
+
+  /**
+   * Registers a subquery with a root DAG builder. Should only be called during DAG
+   * building and registration should only occur on the root.
+   */
+  void registerSubquery(std::shared_ptr<RexSubQuery> subquery) {
+    subqueries_.push_back(subquery);
+  }
+
+  void registerQueryHints(RelAlgNodePtr node, Hints* hints_delivered);
+
+  /**
+   * Gets all registered subqueries. Only the root DAG can contain subqueries.
+   */
+  const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const {
+    return subqueries_;
+  }
+
+  std::optional<RegisteredQueryHint> getQueryHint(const RelAlgNode* node) const {
+    auto it = query_hint_.find(node->toHash());
+    return it != query_hint_.end() ? std::make_optional(it->second) : std::nullopt;
+  }
+
+  const std::unordered_map<size_t, RegisteredQueryHint>& getQueryHints() const {
+    return query_hint_;
+  }
+
+  /**
+   * Gets all registered subqueries. Only the root DAG can contain subqueries.
+   */
+  void resetQueryExecutionState();
+
+ protected:
+  // Root node of the query.
+  RelAlgNodePtr root_;
+  // All nodes including the root one.
+  std::vector<RelAlgNodePtr> nodes_;
+  std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
+  std::unordered_map<size_t, RegisteredQueryHint> query_hint_;
+};
+
 /**
  * Builder class to create an in-memory, easy-to-navigate relational algebra DAG
  * interpreted from a JSON representation from Calcite. Also, applies high level
@@ -2196,7 +2256,7 @@ class QueryNotSupported : public std::runtime_error {
  * intermediate buffers required to evaluate a query. Lower level optimizations are
  * taken care by lower levels, mainly RelAlgTranslator and the IR code generation.
  */
-class RelAlgDagBuilder : public boost::noncopyable {
+class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
  public:
   RelAlgDagBuilder() = delete;
 
@@ -2231,174 +2291,13 @@ class RelAlgDagBuilder : public boost::noncopyable {
                    SchemaProviderPtr schema_provider,
                    const RenderInfo* render_info);
 
-  void eachNode(std::function<void(RelAlgNode const*)> const&) const;
-
-  /**
-   * Returns the root node of the DAG.
-   */
-  const RelAlgNode& getRootNode() const {
-    CHECK(nodes_.size());
-    const auto& last_ptr = nodes_.back();
-    CHECK(last_ptr);
-    return *last_ptr;
-  }
-
-  std::shared_ptr<const RelAlgNode> getRootNodeShPtr() const {
-    CHECK(nodes_.size());
-    return nodes_.back();
-  }
-
-  /**
-   * Registers a subquery with a root DAG builder. Should only be called during DAG
-   * building and registration should only occur on the root.
-   */
-  void registerSubquery(std::shared_ptr<RexSubQuery> subquery) {
-    subqueries_.push_back(subquery);
-  }
-
-  /**
-   * Gets all registered subqueries. Only the root DAG can contain subqueries.
-   */
-  const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const {
-    return subqueries_;
-  }
-
-  void registerQueryHints(std::shared_ptr<RelAlgNode> node, Hints* hints_delivered) {
-    bool detect_columnar_output_hint = false;
-    bool detect_rowwise_output_hint = false;
-    RegisteredQueryHint query_hint;
-    for (auto it = hints_delivered->begin(); it != hints_delivered->end(); it++) {
-      auto target = it->second;
-      auto hint_type = it->first;
-      switch (hint_type) {
-        case QueryHint::kCpuMode: {
-          query_hint.registerHint(QueryHint::kCpuMode);
-          query_hint.cpu_mode = true;
-          break;
-        }
-        case QueryHint::kColumnarOutput: {
-          detect_columnar_output_hint = true;
-          break;
-        }
-        case QueryHint::kRowwiseOutput: {
-          detect_rowwise_output_hint = true;
-          break;
-        }
-        case QueryHint::kOverlapsBucketThreshold: {
-          CHECK(target.getListOptions().size() == 1);
-          double overlaps_bucket_threshold = std::stod(target.getListOptions()[0]);
-          if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
-            query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
-            query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
-          } else {
-            VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
-                    << overlaps_bucket_threshold
-                    << ") : the hint value should be within 0.0 ~ 90.0";
-          }
-          break;
-        }
-        case QueryHint::kOverlapsMaxSize: {
-          CHECK(target.getListOptions().size() == 1);
-          std::stringstream ss(target.getListOptions()[0]);
-          int overlaps_max_size;
-          ss >> overlaps_max_size;
-          if (overlaps_max_size >= 0) {
-            query_hint.registerHint(QueryHint::kOverlapsMaxSize);
-            query_hint.overlaps_max_size = (size_t)overlaps_max_size;
-          } else {
-            VLOG(1) << "Skip the query hint \"overlaps_max_size\" (" << overlaps_max_size
-                    << ") : the hint value should be larger than or equal to zero";
-          }
-          break;
-        }
-        case QueryHint::kOverlapsAllowGpuBuild: {
-          query_hint.registerHint(QueryHint::kOverlapsAllowGpuBuild);
-          query_hint.overlaps_allow_gpu_build = true;
-          break;
-        }
-        case QueryHint::kOverlapsNoCache: {
-          query_hint.registerHint(QueryHint::kOverlapsNoCache);
-          query_hint.overlaps_no_cache = true;
-          VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
-          break;
-        }
-        case QueryHint::kOverlapsKeysPerBin: {
-          CHECK(target.getListOptions().size() == 1);
-          double overlaps_keys_per_bin = std::stod(target.getListOptions()[0]);
-          if (overlaps_keys_per_bin > 0.0 &&
-              overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
-            query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
-            query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
-          } else {
-            VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
-                    << overlaps_keys_per_bin
-                    << ") : the hint value should be larger than zero";
-          }
-          break;
-        }
-        default:
-          break;
-      }
-    }
-    // we have four cases depending on 1) g_enable_columnar_output flag
-    // and 2) query hint status: columnar_output and rowwise_output
-    // case 1. g_enable_columnar_output = true
-    // case 1.a) columnar_output = true (so rowwise_output = false);
-    // case 1.b) rowwise_output = true (so columnar_output = false);
-    // case 2. g_enable_columnar_output = false
-    // case 2.a) columnar_output = true (so rowwise_output = false);
-    // case 2.b) rowwise_output = true (so columnar_output = false);
-    // case 1.a --> use columnar output
-    // case 1.b --> use rowwise output
-    // case 2.a --> use columnar output
-    // case 2.b --> use rowwise output
-    if (detect_columnar_output_hint && detect_rowwise_output_hint) {
-      VLOG(1)
-          << "Two hints 1) columnar output and 2) rowwise output are enabled together, "
-          << "so skip them and use the runtime configuration "
-             "\"g_enable_columnar_output\"";
-    } else if (detect_columnar_output_hint && !detect_rowwise_output_hint) {
-      if (g_enable_columnar_output) {
-        VLOG(1) << "We already enable columnar output by default "
-                   "(g_enable_columnar_output = true), so skip this columnar output hint";
-      } else {
-        query_hint.registerHint(QueryHint::kColumnarOutput);
-        query_hint.columnar_output = true;
-      }
-    } else if (!detect_columnar_output_hint && detect_rowwise_output_hint) {
-      if (!g_enable_columnar_output) {
-        VLOG(1) << "We already use the default rowwise output (g_enable_columnar_output "
-                   "= false), so skip this rowwise output hint";
-      } else {
-        query_hint.registerHint(QueryHint::kRowwiseOutput);
-        query_hint.rowwise_output = true;
-      }
-    }
-    query_hint_.emplace(node->toHash(), query_hint);
-  }
-
-  std::optional<RegisteredQueryHint> getQueryHint(const RelAlgNode* node) const {
-    auto it = query_hint_.find(node->toHash());
-    return it != query_hint_.end() ? std::make_optional(it->second) : std::nullopt;
-  }
-
-  std::unordered_map<size_t, RegisteredQueryHint>& getQueryHints() { return query_hint_; }
-
-  /**
-   * Gets all registered subqueries. Only the root DAG can contain subqueries.
-   */
-  void resetQueryExecutionState();
-
  private:
   void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
 
   const Catalog_Namespace::Catalog* cat_;
   int db_id_;
   SchemaProviderPtr schema_provider_;
-  std::vector<std::shared_ptr<RelAlgNode>> nodes_;
-  std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   const RenderInfo* render_info_;
-  std::unordered_map<size_t, RegisteredQueryHint> query_hint_;
 };
 
 using RANodeOutput = std::vector<RexInput>;

@@ -991,7 +991,7 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
   }
   return std::unique_ptr<RexOperator>(op == kFUNCTION
                                           ? new RexFunctionOperator(op_name, operands, ti)
-                                          : new RexOperator(op, operands, ti));
+                                          : new RexOperator(op, std::move(operands), ti));
 }
 
 std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr,
@@ -2065,7 +2065,7 @@ void separate_window_function_expressions(
       // Build the new project node and insert it into the list after the project node
       // containing the window function
       auto new_project =
-          std::make_shared<RelProject>(new_scalar_exprs,
+          std::make_shared<RelProject>(std::move(new_scalar_exprs),
                                        window_func_project_node->getFields(),
                                        window_func_project_node);
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
@@ -2138,9 +2138,7 @@ void add_window_function_pre_project(
 
     auto scan_node = std::dynamic_pointer_cast<RelScan>(prev_node);
     const bool has_multi_fragment_scan_input =
-        (scan_node && scan_node->getNumFragments() > 1)
-            ? true
-            : false;
+        (scan_node && scan_node->getNumFragments() > 1) ? true : false;
 
     // We currently add a preceding project node in one of two conditions:
     // 1. always_add_project_if_first_project_is_window_expr = true, which
@@ -2193,7 +2191,8 @@ void add_window_function_pre_project(
       fields.emplace_back("");
     }
 
-    auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, prev_node);
+    auto new_project =
+        std::make_shared<RelProject>(std::move(scalar_exprs), fields, prev_node);
     propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
     node_list.insert(node_itr, new_project);
     window_func_project_node->replaceInput(
@@ -2344,12 +2343,12 @@ class RelAlgDispatcher {
     const auto& fields = field(proj_ra, "fields");
     if (proj_ra.HasMember("hints")) {
       auto project_node = std::make_shared<RelProject>(
-          exprs, strings_from_json_array(fields), inputs.front());
+          std::move(exprs), strings_from_json_array(fields), inputs.front());
       getRelAlgHints(proj_ra, project_node);
       return project_node;
     }
     return std::make_shared<RelProject>(
-        exprs, strings_from_json_array(fields), inputs.front());
+        std::move(exprs), strings_from_json_array(fields), inputs.front());
   }
 
   std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra,
@@ -2383,12 +2382,13 @@ class RelAlgDispatcher {
       aggs.emplace_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
     if (agg_ra.HasMember("hints")) {
-      auto agg_node =
-          std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
+      auto agg_node = std::make_shared<RelAggregate>(
+          group.size(), std::move(aggs), fields, inputs.front());
       getRelAlgHints(agg_ra, agg_node);
       return agg_node;
     }
-    return std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
+    return std::make_shared<RelAggregate>(
+        group.size(), std::move(aggs), fields, inputs.front());
   }
 
   std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra,
@@ -2399,12 +2399,13 @@ class RelAlgDispatcher {
     auto filter_rex = parse_scalar_expr(
         field(join_ra, "condition"), cat_, schema_provider_, root_dag_builder);
     if (join_ra.HasMember("hints")) {
-      auto join_node =
-          std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
+      auto join_node = std::make_shared<RelJoin>(
+          inputs[0], inputs[1], std::move(filter_rex), join_type);
       getRelAlgHints(join_ra, join_node);
       return join_node;
     }
-    return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
+    return std::make_shared<RelJoin>(
+        inputs[0], inputs[1], std::move(filter_rex), join_type);
   }
 
   std::shared_ptr<RelSort> dispatchSort(const rapidjson::Value& sort_ra) {
@@ -2753,6 +2754,136 @@ class RelAlgDispatcher {
 
 }  // namespace details
 
+void RelAlgDag::eachNode(std::function<void(RelAlgNode const*)> const& callback) const {
+  for (auto const& node : nodes_) {
+    if (node) {
+      callback(node.get());
+    }
+  }
+}
+
+void RelAlgDag::registerQueryHints(std::shared_ptr<RelAlgNode> node,
+                                   Hints* hints_delivered) {
+  bool detect_columnar_output_hint = false;
+  bool detect_rowwise_output_hint = false;
+  RegisteredQueryHint query_hint;
+  for (auto it = hints_delivered->begin(); it != hints_delivered->end(); it++) {
+    auto target = it->second;
+    auto hint_type = it->first;
+    switch (hint_type) {
+      case QueryHint::kCpuMode: {
+        query_hint.registerHint(QueryHint::kCpuMode);
+        query_hint.cpu_mode = true;
+        break;
+      }
+      case QueryHint::kColumnarOutput: {
+        detect_columnar_output_hint = true;
+        break;
+      }
+      case QueryHint::kRowwiseOutput: {
+        detect_rowwise_output_hint = true;
+        break;
+      }
+      case QueryHint::kOverlapsBucketThreshold: {
+        CHECK(target.getListOptions().size() == 1);
+        double overlaps_bucket_threshold = std::stod(target.getListOptions()[0]);
+        if (overlaps_bucket_threshold >= 0.0 && overlaps_bucket_threshold <= 90.0) {
+          query_hint.registerHint(QueryHint::kOverlapsBucketThreshold);
+          query_hint.overlaps_bucket_threshold = overlaps_bucket_threshold;
+        } else {
+          VLOG(1) << "Skip the given query hint \"overlaps_bucket_threshold\" ("
+                  << overlaps_bucket_threshold
+                  << ") : the hint value should be within 0.0 ~ 90.0";
+        }
+        break;
+      }
+      case QueryHint::kOverlapsMaxSize: {
+        CHECK(target.getListOptions().size() == 1);
+        std::stringstream ss(target.getListOptions()[0]);
+        int overlaps_max_size;
+        ss >> overlaps_max_size;
+        if (overlaps_max_size >= 0) {
+          query_hint.registerHint(QueryHint::kOverlapsMaxSize);
+          query_hint.overlaps_max_size = (size_t)overlaps_max_size;
+        } else {
+          VLOG(1) << "Skip the query hint \"overlaps_max_size\" (" << overlaps_max_size
+                  << ") : the hint value should be larger than or equal to zero";
+        }
+        break;
+      }
+      case QueryHint::kOverlapsAllowGpuBuild: {
+        query_hint.registerHint(QueryHint::kOverlapsAllowGpuBuild);
+        query_hint.overlaps_allow_gpu_build = true;
+        break;
+      }
+      case QueryHint::kOverlapsNoCache: {
+        query_hint.registerHint(QueryHint::kOverlapsNoCache);
+        query_hint.overlaps_no_cache = true;
+        VLOG(1) << "Skip auto tuner and hashtable caching for overlaps join.";
+        break;
+      }
+      case QueryHint::kOverlapsKeysPerBin: {
+        CHECK(target.getListOptions().size() == 1);
+        double overlaps_keys_per_bin = std::stod(target.getListOptions()[0]);
+        if (overlaps_keys_per_bin > 0.0 &&
+            overlaps_keys_per_bin < std::numeric_limits<double>::max()) {
+          query_hint.registerHint(QueryHint::kOverlapsKeysPerBin);
+          query_hint.overlaps_keys_per_bin = overlaps_keys_per_bin;
+        } else {
+          VLOG(1) << "Skip the given query hint \"overlaps_keys_per_bin\" ("
+                  << overlaps_keys_per_bin
+                  << ") : the hint value should be larger than zero";
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  // we have four cases depending on 1) g_enable_columnar_output flag
+  // and 2) query hint status: columnar_output and rowwise_output
+  // case 1. g_enable_columnar_output = true
+  // case 1.a) columnar_output = true (so rowwise_output = false);
+  // case 1.b) rowwise_output = true (so columnar_output = false);
+  // case 2. g_enable_columnar_output = false
+  // case 2.a) columnar_output = true (so rowwise_output = false);
+  // case 2.b) rowwise_output = true (so columnar_output = false);
+  // case 1.a --> use columnar output
+  // case 1.b --> use rowwise output
+  // case 2.a --> use columnar output
+  // case 2.b --> use rowwise output
+  if (detect_columnar_output_hint && detect_rowwise_output_hint) {
+    VLOG(1) << "Two hints 1) columnar output and 2) rowwise output are enabled together, "
+            << "so skip them and use the runtime configuration "
+               "\"g_enable_columnar_output\"";
+  } else if (detect_columnar_output_hint && !detect_rowwise_output_hint) {
+    if (g_enable_columnar_output) {
+      VLOG(1) << "We already enable columnar output by default "
+                 "(g_enable_columnar_output = true), so skip this columnar output hint";
+    } else {
+      query_hint.registerHint(QueryHint::kColumnarOutput);
+      query_hint.columnar_output = true;
+    }
+  } else if (!detect_columnar_output_hint && detect_rowwise_output_hint) {
+    if (!g_enable_columnar_output) {
+      VLOG(1) << "We already use the default rowwise output (g_enable_columnar_output "
+                 "= false), so skip this rowwise output hint";
+    } else {
+      query_hint.registerHint(QueryHint::kRowwiseOutput);
+      query_hint.rowwise_output = true;
+    }
+  }
+  query_hint_.emplace(node->toHash(), query_hint);
+}
+
+void RelAlgDag::resetQueryExecutionState() {
+  for (auto& node : nodes_) {
+    if (node) {
+      node->resetQueryExecutionState();
+    }
+  }
+}
+
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    const Catalog_Namespace::Catalog* cat,
                                    SchemaProviderPtr schema_provider,
@@ -2833,7 +2964,6 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
     // the tree.
     alterRAForRender(nodes_, *render_info_);
   }
-
   handleQueryHint(nodes_, this);
   mark_nops(nodes_);
   simplify_sort(nodes_);
@@ -2866,23 +2996,8 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   coalesce_nodes(nodes_, left_deep_joins, query_hint_);
   CHECK(nodes_.back().use_count() == 1);
   create_left_deep_join(nodes_);
-}
-
-void RelAlgDagBuilder::eachNode(
-    std::function<void(RelAlgNode const*)> const& callback) const {
-  for (auto const& node : nodes_) {
-    if (node) {
-      callback(node.get());
-    }
-  }
-}
-
-void RelAlgDagBuilder::resetQueryExecutionState() {
-  for (auto& node : nodes_) {
-    if (node) {
-      node->resetQueryExecutionState();
-    }
-  }
+  CHECK(nodes_.size());
+  root_ = nodes_.back();
 }
 
 // Return tree with depth represented by indentations.

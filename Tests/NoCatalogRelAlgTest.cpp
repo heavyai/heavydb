@@ -16,6 +16,7 @@
 #include "QueryEngine/RelAlgExecutor.h"
 
 #include "TestHelpers.h"
+#include "TestRelAlgDagBuilder.h"
 
 #include <gtest/gtest.h>
 
@@ -153,6 +154,9 @@ class TestSchemaProvider : public SchemaProvider {
     for (auto [col_name, col_info] : table_cols) {
       res.push_back(col_info);
     }
+    std::sort(res.begin(), res.end(), [](ColumnInfoPtr& lhs, ColumnInfoPtr& rhs) -> bool {
+      return lhs->column_id < rhs->column_id;
+    });
     return res;
   }
 
@@ -439,15 +443,18 @@ class NoCatalogRelAlgTest : public ::testing::Test {
   static void TearDownTestSuite() {}
 
   ExecutionResult runRelAlgQuery(const std::string& ra) {
-    auto dag =
-        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, nullptr);
+    return runRelAlgQuery(
+        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, nullptr));
+  }
+
+  ExecutionResult runRelAlgQuery(std::unique_ptr<RelAlgDag> dag) {
     auto ra_executor =
         RelAlgExecutor(executor_.get(), TEST_DB_ID, schema_provider_, std::move(dag));
     return ra_executor.executeRelAlgQuery(
         CompilationOptions(), ExecutionOptions(), false, nullptr);
   }
 
- private:
+ protected:
   static std::shared_ptr<DataMgr> data_mgr_;
   static SchemaProviderPtr schema_provider_;
   static std::shared_ptr<Executor> executor_;
@@ -458,90 +465,18 @@ SchemaProviderPtr NoCatalogRelAlgTest::schema_provider_;
 std::shared_ptr<Executor> NoCatalogRelAlgTest::executor_;
 
 TEST_F(NoCatalogRelAlgTest, SelectSingleColumn) {
-  auto ra = R"""(
-{
-  "rels": [
-    {
-      "id": "0",
-      "relOp": "EnumerableTableScan",
-      "table": [
-        "omnisci",
-        "test1"
-      ],
-      "fieldNames": [
-        "col_bi",
-        "col_i",
-        "col_f",
-        "col_d",
-        "rowid"
-      ],
-      "inputs": []
-    },
-    {
-      "id": "1",
-      "relOp": "LogicalProject",
-      "fields": [
-        "coli"
-      ],
-      "exprs": [
-        {
-          "input": 1
-        }
-      ]
-    }
-  ]
-})""";
-  auto res = runRelAlgQuery(ra);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  dag->addProject(dag->addScan(TEST_DB_ID, "test1"), std::vector<int>({1}));
+  dag->finalize();
+  auto res = runRelAlgQuery(std::move(dag));
   compare_res_data(res, std::vector<int>({10, 20, 30, 40, 50}));
 }
 
 TEST_F(NoCatalogRelAlgTest, SelectAllColumns) {
-  auto ra = R"""(
-{
-  "rels": [
-    {
-      "id": "0",
-      "relOp": "EnumerableTableScan",
-      "table": [
-        "omnisci",
-        "test1"
-      ],
-      "fieldNames": [
-        "col_bi",
-        "col_i",
-        "col_f",
-        "col_d",
-        "rowid"
-      ],
-      "inputs": []
-    },
-    {
-      "id": "1",
-      "relOp": "LogicalProject",
-      "fields": [
-        "col_bi",
-        "col_i",
-        "col_f",
-        "col_d"
-      ],
-      "exprs": [
-        {
-          "input": 0
-        },
-        {
-          "input": 1
-        },
-        {
-          "input": 2
-        },
-        {
-          "input": 3
-        }
-      ]
-    }
-  ]
-})""";
-  auto res = runRelAlgQuery(ra);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  dag->addProject(dag->addScan(TEST_DB_ID, "test1"), std::vector<int>({0, 1, 2, 3}));
+  dag->finalize();
+  auto res = runRelAlgQuery(std::move(dag));
   compare_res_data(res,
                    std::vector<int64_t>({1, 2, 3, 4, 5}),
                    std::vector<int>({10, 20, 30, 40, 50}),
@@ -550,52 +485,10 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumns) {
 }
 
 TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
-  auto ra = R"""(
-{
-  "rels": [
-    {
-      "id": "0",
-      "relOp": "EnumerableTableScan",
-      "table": [
-        "omnisci",
-        "test2"
-      ],
-      "fieldNames": [
-        "col_bi",
-        "col_i",
-        "col_f",
-        "col_d",
-        "rowid"
-      ],
-      "inputs": []
-    },
-    {
-      "id": "1",
-      "relOp": "LogicalProject",
-      "fields": [
-        "col_bi",
-        "col_i",
-        "col_f",
-        "col_d"
-      ],
-      "exprs": [
-        {
-          "input": 0
-        },
-        {
-          "input": 1
-        },
-        {
-          "input": 2
-        },
-        {
-          "input": 3
-        }
-      ]
-    }
-  ]
-})""";
-  auto res = runRelAlgQuery(ra);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  dag->addProject(dag->addScan(TEST_DB_ID, "test2"), std::vector<int>({0, 1, 2, 3}));
+  dag->finalize();
+  auto res = runRelAlgQuery(std::move(dag));
   compare_res_data(
       res,
       std::vector<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}),
@@ -606,103 +499,14 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
 }
 
 TEST_F(NoCatalogRelAlgTest, GroupBySingleColumn) {
-  auto ra = R"""(
-{
-  "rels": [
-    {
-      "id": "0",
-      "relOp": "EnumerableTableScan",
-      "table": [
-        "omnisci",
-        "test_agg"
-      ],
-      "fieldNames": [
-        "id",
-        "val",
-        "rowid"
-      ],
-      "inputs": []
-    },
-    {
-      "id": "1",
-      "relOp": "LogicalProject",
-      "fields": [
-        "id",
-        "val"
-      ],
-      "exprs": [
-        {
-          "input": 0
-        },
-        {
-          "input": 1
-        }
-      ]
-    },
-    {
-      "id": "2",
-      "relOp": "LogicalAggregate",
-      "fields": [
-        "id",
-        "cnt1",
-        "cnt2",
-        "sum",
-        "avg"
-      ],
-      "group": [0],
-      "aggs": [
-        {
-          "agg": "COUNT",
-          "distinct" : false,
-          "operands": [],
-          "type": {
-            "type": "INTEGER",
-            "nullable": true
-          }
-        },
-        {
-          "agg": "COUNT",
-          "distinct" : false,
-          "operands": [1],
-          "type": {
-            "type": "INTEGER",
-            "nullable": true
-          }
-        },
-        {
-          "agg": "SUM",
-          "distinct" : false,
-          "operands": [1],
-          "type": {
-            "type": "BIGINT",
-            "nullable": true
-          }
-        },
-        {
-          "agg": "AVG",
-          "distinct" : false,
-          "operands": [1],
-          "type": {
-            "type": "INTEGER",
-            "nullable": true
-          }
-        }
-      ]
-    },
-    {
-      "id": "3",
-      "relOp": "LogicalSort",
-      "collation": [
-        {
-          "field": 0,
-          "direction": "ASCENDING",
-          "nulls": "LAST"
-        }
-      ]
-    }
-  ]
-})""";
-  auto res = runRelAlgQuery(ra);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto proj =
+      dag->addProject(dag->addScan(TEST_DB_ID, "test_agg"), std::vector<int>({0, 1}));
+  auto agg = dag->addAgg(
+      proj, 1, {{kCOUNT}, {kCOUNT, kINT, 1}, {kSUM, kBIGINT, 1}, {kAVG, kINT, 1}});
+  dag->addSort(agg, {{0, SortDirection::Ascending, NullSortedPosition::Last}});
+  dag->finalize();
+  auto res = runRelAlgQuery(std::move(dag));
   compare_res_data(res,
                    std::vector<int32_t>({1, 2, 3}),
                    std::vector<int32_t>({5, 3, 2}),
@@ -712,101 +516,15 @@ TEST_F(NoCatalogRelAlgTest, GroupBySingleColumn) {
 }
 
 TEST_F(NoCatalogRelAlgTest, InnerJoin) {
-  auto ra = R"""(
-{
-  "rels": [
-    {
-      "id": "0",
-      "relOp": "EnumerableTableScan",
-      "table": [
-        "omnisci",
-        "test1"
-      ],
-      "fieldNames": [
-        "col_bi",
-        "col_i",
-        "col_f",
-        "col_d",
-        "rowid"
-      ],
-      "inputs": []
-    },
-    {
-      "id": "1",
-      "relOp": "EnumerableTableScan",
-      "table": [
-        "omnisci",
-        "test2"
-      ],
-      "fieldNames": [
-        "col_bi",
-        "col_i",
-        "col_f",
-        "col_d",
-        "rowid"
-      ],
-      "inputs": []
-    },
-    {
-      "id": "2",
-      "relOp": "LogicalJoin",
-      "inputs": ["0", "1"],
-      "joinType": "inner",
-      "condition": {
-        "op": "=",
-        "operands": [
-          {
-            "input": 0
-          },
-          {
-            "input": 5
-          }
-        ],
-        "type": {
-          "type": "BOOLEAN",
-          "nullable": true
-        }
-      }
-    },
-    {
-      "id": "3",
-      "relOp": "LogicalProject",
-      "fields": [
-        "col_bi",
-        "col_i1",
-        "col_f1",
-        "col_d1",
-        "col_i2",
-        "col_f2",
-        "col_d2"
-      ],
-      "exprs": [
-        {
-          "input": 0
-        },
-        {
-          "input": 1
-        },
-        {
-          "input": 2
-        },
-        {
-          "input": 3
-        },
-        {
-          "input": 6
-        },
-        {
-          "input": 7
-        },
-        {
-          "input": 8
-        }
-      ]
-    }
-  ]
-})""";
-  auto res = runRelAlgQuery(ra);
+  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
+  auto join = dag->addEquiJoin(dag->addScan(TEST_DB_ID, "test1"),
+                               dag->addScan(TEST_DB_ID, "test2"),
+                               JoinType::INNER,
+                               0,
+                               0);
+  dag->addProject(join, std::vector<int>({0, 1, 2, 3, 6, 7, 8}));
+  dag->finalize();
+  auto res = runRelAlgQuery(std::move(dag));
   compare_res_data(res,
                    std::vector<int64_t>({1, 2, 3, 4, 5}),
                    std::vector<int32_t>({10, 20, 30, 40, 50}),

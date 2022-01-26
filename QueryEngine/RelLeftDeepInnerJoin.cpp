@@ -75,7 +75,7 @@ RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
     }
     if (operands.size() > 1) {
       condition_.reset(
-          new RexOperator(kAND, operands, SQLTypeInfo(kBOOLEAN, is_notnull)));
+          new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, is_notnull)));
     } else {
       condition_ = std::move(operands.front());
     }

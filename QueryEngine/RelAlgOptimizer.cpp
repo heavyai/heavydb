@@ -1016,7 +1016,7 @@ void try_insert_coalesceable_proj(
       exprs.push_back(boost::make_unique<RexInput>(filter, i));
       fields.push_back(get_field_name(filter, i));
     }
-    auto project_owner = std::make_shared<RelProject>(exprs, fields, node);
+    auto project_owner = std::make_shared<RelProject>(std::move(exprs), fields, node);
     auto project = project_owner.get();
 
     only_usr->replaceInput(node, project_owner);
@@ -1496,7 +1496,7 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
         const bool notnull = old_condition->getType().get_notnull() &&
                              other_condition->getType().get_notnull();
         auto new_condition = std::unique_ptr<const RexScalar>(
-            new RexOperator(kAND, operands, SQLTypeInfo(kBOOLEAN, notnull)));
+            new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, notnull)));
         folded_filter->setCondition(new_condition);
         replace_all_usages(filter, folded_filter, deconst_mapping, web);
         deconst_mapping.erase(filter.get());
@@ -1708,7 +1708,7 @@ void hoist_filter_cond_to_cross_join(
             notnull = notnull && old_subcond->getType().get_notnull();
           }
           auto new_join_condition = std::unique_ptr<const RexScalar>(
-              new RexOperator(kAND, operands, SQLTypeInfo(kBOOLEAN, notnull)));
+              new RexOperator(kAND, std::move(operands), SQLTypeInfo(kBOOLEAN, notnull)));
           join->setCondition(new_join_condition);
         }
 

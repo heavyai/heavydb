@@ -78,7 +78,7 @@ add_executable(CommandLineTest CommandLineTest.cpp)
 add_executable(SQLHintTest SQLHintTest.cpp)
 add_executable(LoadTableTest LoadTableTest.cpp)
 add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
-add_executable(NoCatalogRelAlgTest NoCatalogRelAlgTest.cpp)
+add_executable(NoCatalogRelAlgTest NoCatalogRelAlgTest.cpp TestRelAlgDagBuilder.cpp)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)

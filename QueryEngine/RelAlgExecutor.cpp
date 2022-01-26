@@ -3149,7 +3149,7 @@ std::unique_ptr<const RexOperator> get_bitwise_equals(const RexScalar* scalar) {
     eq_operands.emplace_back(lhs_op_copy.release());
     eq_operands.emplace_back(rhs_op_copy.release());
     return boost::make_unique<const RexOperator>(
-        kBW_EQ, eq_operands, equi_join_condition->getType());
+        kBW_EQ, std::move(eq_operands), equi_join_condition->getType());
   }
   return nullptr;
 }
@@ -3167,8 +3167,8 @@ std::unique_ptr<const RexOperator> get_bitwise_equals_conjunction(
       std::vector<std::unique_ptr<const RexScalar>> and_operands;
       and_operands.emplace_back(std::move(acc));
       and_operands.emplace_back(get_bitwise_equals_conjunction(condition->getOperand(i)));
-      acc =
-          boost::make_unique<const RexOperator>(kAND, and_operands, condition->getType());
+      acc = boost::make_unique<const RexOperator>(
+          kAND, std::move(and_operands), condition->getType());
     }
     return acc;
   }
