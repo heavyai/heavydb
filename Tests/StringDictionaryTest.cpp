@@ -525,8 +525,8 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildTranslationMapToOtherProxy(
             dest_string_dict_proxy.get());
-    ASSERT_FALSE(str_proxy_translation_map.empty());
-    const auto& translated_ids = str_proxy_translation_map.getVectorMap();
+    ASSERT_FALSE(str_proxy_translation_map->empty());
+    const auto& translated_ids = str_proxy_translation_map->getVectorMap();
     const size_t num_ids = translated_ids.size() - 1;  // Subtract 1 for INVALID_STR_ID
     ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount());
     for (size_t idx = 0; idx < num_ids; ++idx) {
@@ -573,8 +573,8 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildTranslationMapToOtherProxy(
             dest_string_dict_proxy.get());
-    ASSERT_FALSE(str_proxy_translation_map.empty());
-    const auto& translated_ids = str_proxy_translation_map.getVectorMap();
+    ASSERT_FALSE(str_proxy_translation_map->empty());
+    const auto& translated_ids = str_proxy_translation_map->getVectorMap();
     const size_t num_ids = translated_ids.size() - 1;  // Subtract 1 for INVALID_STR_ID
     ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount());
     const int32_t start_source_id =

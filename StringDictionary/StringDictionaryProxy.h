@@ -94,7 +94,7 @@ class StringDictionaryProxy {
     size_t numNonTransients() const { return vector_map_.size() - offset_; }
     int32_t* data() { return vector_map_.data(); }
     int32_t const* data() const { return vector_map_.data(); }
-    int64_t domainStart() const { return -static_cast<int64_t>(offset_); }
+    int32_t domainStart() const { return -static_cast<int32_t>(offset_); }
     int32_t* storageData() { return vector_map_.data() + offset_; }
     int32_t& operator[](int32_t const id) { return vector_map_[getIndex(id)]; }
     int32_t operator[](int32_t const id) const { return vector_map_[getIndex(id)]; }
@@ -102,6 +102,10 @@ class StringDictionaryProxy {
   };
 
   IdMap initIdMap() const { return IdMap(transient_string_vec_.size(), generation_); }
+  std::shared_ptr<IdMap> initSharedIdMap() const {
+    return std::make_shared<IdMap>(static_cast<uint32_t>(transient_string_vec_.size()),
+                                   static_cast<uint32_t>(generation_));
+  }
 
   /**
    * @brief Builds a vectorized string_id translation map from this proxy to dest_proxy
@@ -122,7 +126,8 @@ class StringDictionaryProxy {
    * maps to INVALID_STR_ID.
    *
    */
-  IdMap buildTranslationMapToOtherProxy(const StringDictionaryProxy* dest_proxy) const;
+  std::shared_ptr<IdMap> buildTranslationMapToOtherProxy(
+      const StringDictionaryProxy* dest_proxy) const;
 
   /**
    * @brief Returns the number of string entries in the underlying string dictionary,

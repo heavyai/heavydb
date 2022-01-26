@@ -1975,8 +1975,8 @@ void fill_one_to_many_baseline_hash_table(
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
     const std::vector<JoinBucketInfo>& join_buckets_per_key,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
+    const std::vector<int32_t>& sd_min_inner_elems,
     const size_t cpu_thread_count,
     const bool is_range_join,
     const bool is_geo_compressed) {
@@ -2032,32 +2032,33 @@ void fill_one_to_many_baseline_hash_table(
                                    cpu_thread_count);
           }));
     } else {
-      counter_threads.push_back(std::async(
-          std::launch::async,
-          [count_buff,
-           composite_key_dict,
-           &key_component_count,
-           &hash_entry_count,
-           &join_column_per_key,
-           &type_info_per_key,
-           &sd_inner_proxy_per_key,
-           &sd_outer_proxy_per_key,
-           cpu_thread_idx,
-           cpu_thread_count] {
-            const auto key_handler = GenericKeyHandler(key_component_count,
-                                                       true,
-                                                       &join_column_per_key[0],
-                                                       &type_info_per_key[0],
-                                                       &sd_inner_proxy_per_key[0],
-                                                       &sd_outer_proxy_per_key[0]);
-            count_matches_baseline(count_buff,
-                                   composite_key_dict,
-                                   hash_entry_count,
-                                   &key_handler,
-                                   join_column_per_key[0].num_elems,
-                                   cpu_thread_idx,
-                                   cpu_thread_count);
-          }));
+      counter_threads.push_back(
+          std::async(std::launch::async,
+                     [count_buff,
+                      composite_key_dict,
+                      &key_component_count,
+                      &hash_entry_count,
+                      &join_column_per_key,
+                      &type_info_per_key,
+                      &sd_inner_to_outer_translation_maps,
+                      &sd_min_inner_elems,
+                      cpu_thread_idx,
+                      cpu_thread_count] {
+                       const auto key_handler =
+                           GenericKeyHandler(key_component_count,
+                                             true,
+                                             &join_column_per_key[0],
+                                             &type_info_per_key[0],
+                                             &sd_inner_to_outer_translation_maps[0],
+                                             &sd_min_inner_elems[0]);
+                       count_matches_baseline(count_buff,
+                                              composite_key_dict,
+                                              hash_entry_count,
+                                              &key_handler,
+                                              join_column_per_key[0].num_elems,
+                                              cpu_thread_idx,
+                                              cpu_thread_count);
+                     }));
     }
   }
 
@@ -2151,8 +2152,8 @@ void fill_one_to_many_baseline_hash_table(
                                           key_component_count,
                                           &join_column_per_key,
                                           &type_info_per_key,
-                                          &sd_inner_proxy_per_key,
-                                          &sd_outer_proxy_per_key,
+                                          &sd_inner_to_outer_translation_maps,
+                                          &sd_min_inner_elems,
                                           cpu_thread_idx,
                                           cpu_thread_count] {
                                            const auto key_handler = GenericKeyHandler(
@@ -2160,8 +2161,8 @@ void fill_one_to_many_baseline_hash_table(
                                                true,
                                                &join_column_per_key[0],
                                                &type_info_per_key[0],
-                                               &sd_inner_proxy_per_key[0],
-                                               &sd_outer_proxy_per_key[0]);
+                                               &sd_inner_to_outer_translation_maps[0],
+                                               &sd_min_inner_elems[0]);
                                            SUFFIX(fill_row_ids_baseline)
                                            (buff,
                                             composite_key_dict,
@@ -2189,8 +2190,8 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
+    const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join,
     const bool is_geo_compressed) {
@@ -2202,8 +2203,8 @@ void fill_one_to_many_baseline_hash_table_32(
                                                 join_column_per_key,
                                                 type_info_per_key,
                                                 join_bucket_info,
-                                                sd_inner_proxy_per_key,
-                                                sd_outer_proxy_per_key,
+                                                sd_inner_to_outer_translation_maps,
+                                                sd_min_inner_elems,
                                                 cpu_thread_count,
                                                 is_range_join,
                                                 is_geo_compressed);
@@ -2218,8 +2219,8 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
+    const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join,
     const bool is_geo_compressed) {
@@ -2231,8 +2232,8 @@ void fill_one_to_many_baseline_hash_table_64(
                                                 join_column_per_key,
                                                 type_info_per_key,
                                                 join_bucket_info,
-                                                sd_inner_proxy_per_key,
-                                                sd_outer_proxy_per_key,
+                                                sd_inner_to_outer_translation_maps,
+                                                sd_min_inner_elems,
                                                 cpu_thread_count,
                                                 is_range_join,
                                                 is_geo_compressed);

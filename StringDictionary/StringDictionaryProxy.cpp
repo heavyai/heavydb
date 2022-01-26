@@ -189,18 +189,19 @@ int32_t StringDictionaryProxy::lookupTransientStringUnlocked(
                                            : it->second;
 }
 
-StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherProxy(
+std::shared_ptr<StringDictionaryProxy::IdMap>
+StringDictionaryProxy::buildTranslationMapToOtherProxy(
     const StringDictionaryProxy* dest_proxy) const {
   auto timer = DEBUG_TIMER(__func__);
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  IdMap id_map = initIdMap();
+  auto id_map = initSharedIdMap();
 
-  if (id_map.empty()) {
+  if (id_map->empty()) {
     return id_map;
   }
 
   // First map transient strings, store at front of vector map
-  const size_t num_transient_entries = id_map.numTransients();
+  const size_t num_transient_entries = id_map->numTransients();
   if (num_transient_entries) {
     std::vector<std::string> transient_lookup_strings(num_transient_entries);
     std::transform(transient_string_vec_.cbegin(),
@@ -222,16 +223,16 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherPr
 
     const auto transient_str_to_id_vec_map =
         dest_proxy->getTransientBulk(transient_lookup_strings);
-    CHECK_GE(id_map.getVectorMap().size(), transient_str_to_id_vec_map.size());
+    CHECK_GE(id_map->getVectorMap().size(), transient_str_to_id_vec_map.size());
     std::copy(transient_str_to_id_vec_map.begin(),
               transient_str_to_id_vec_map.end(),
-              id_map.data());
+              id_map->data());
   }
 
   // Now map strings in dictionary
   // We start non transient strings after the transient strings
   // if they exist, otherwise at 0
-  int32_t* translation_map_stored_entries_ptr = id_map.storageData();
+  int32_t* translation_map_stored_entries_ptr = id_map->storageData();
 
   auto dest_transient_lookup_callback = [dest_proxy, translation_map_stored_entries_ptr](
                                             const std::string_view& source_string,
@@ -244,18 +245,20 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherPr
 
   mapd_lock_guard<mapd_shared_mutex> dest_proxy_read_lock(dest_proxy->rw_mutex_);
   const size_t num_dest_transients = dest_proxy->transientEntryCountUnlocked();
-
   const size_t num_strings_not_translated =
-      string_dict_->buildDictionaryTranslationMap(dest_proxy->string_dict_.get(),
-                                                  translation_map_stored_entries_ptr,
-                                                  generation_,
-                                                  dest_proxy->generation_,
-                                                  num_dest_transients > 0UL,
-                                                  dest_transient_lookup_callback);
+      generation_ > 0 ? string_dict_->buildDictionaryTranslationMap(
+                            dest_proxy->string_dict_.get(),
+                            translation_map_stored_entries_ptr,
+                            generation_,
+                            dest_proxy->generation_,
+                            num_dest_transients > 0UL,
+                            dest_transient_lookup_callback)
+                      : 0UL;
+
   const size_t num_dest_entries = dest_proxy->entryCountUnlocked();
-  const size_t num_total_entries = id_map.getVectorMap().size();
+  const size_t num_total_entries = id_map->getVectorMap().size();
   CHECK_GT(num_total_entries, 0UL);
-  CHECK_LE(num_strings_not_translated, id_map.getVectorMap().size());
+  CHECK_LE(num_strings_not_translated, id_map->getVectorMap().size());
   const size_t num_entries_translated = num_total_entries - num_strings_not_translated;
   const float match_pct =
       100.0 * static_cast<float>(num_entries_translated) / num_total_entries;
