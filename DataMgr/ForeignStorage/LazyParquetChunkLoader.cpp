@@ -1418,7 +1418,9 @@ void validate_column_mapping_and_row_group_metadata(
     for (int r = 0; r < file_metadata->num_row_groups(); ++r) {
       auto group_metadata = file_metadata->RowGroup(r);
       auto num_rows = group_metadata->num_rows();
-      if (num_rows > max_row_group_size) {
+      if (num_rows == 0) {
+        continue;
+      } else if (num_rows > max_row_group_size) {
         max_row_group_size = num_rows;
         max_row_group_index = r;
       }

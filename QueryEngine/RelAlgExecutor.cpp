@@ -115,6 +115,12 @@ void set_parallelism_hints(const RelAlgNode& ra_node,
   }
 }
 
+bool is_empty_table(Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
+  const auto& fragments = fragmenter->getFragmentsForQuery().fragments;
+  // The fragmenter always returns at least one fragment, even when the table is empty.
+  return (fragments.size() == 1 && fragments[0].getChunkMetadataMap().empty());
+}
+
 void prepare_string_dictionaries(const RelAlgNode& ra_node,
                                  const Catalog_Namespace::Catalog& catalog) {
   for (const auto& physical_input : get_physical_inputs(&ra_node)) {
@@ -126,6 +132,9 @@ void prepare_string_dictionaries(const RelAlgNode& ra_node,
       auto foreign_table = catalog.getForeignTable(table_id);
       if (col_desc->columnType.is_dict_encoded_type()) {
         CHECK(foreign_table->fragmenter != nullptr);
+        if (is_empty_table(foreign_table->fragmenter.get())) {
+          continue;
+        }
         for (const auto& fragment :
              foreign_table->fragmenter->getFragmentsForQuery().fragments) {
           ChunkKey chunk_key = {

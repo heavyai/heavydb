@@ -99,6 +99,10 @@ SingleTextFileReader::SingleTextFileReader(const std::string& file_path,
   fseek(file_, 0, SEEK_END);
 
   data_size_ = get_data_size(ftell(file_), header_offset_);
+  // Empty file
+  if (data_size_ == 0) {
+    scan_finished_ = true;
+  }
 
   if (fseek(file_, static_cast<long int>(header_offset_), SEEK_SET) != 0) {
     throw std::runtime_error{"An error occurred when attempting to open file \"" +

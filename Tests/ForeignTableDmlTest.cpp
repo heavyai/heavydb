@@ -1954,6 +1954,13 @@ TEST_P(DataWrapperSelectQueryTest, NullTextArray) {
   // clang-format on
 }
 
+TEST_P(DataWrapperSelectQueryTest, EmptyTable) {
+  sql(createForeignTableQuery({{"t", "TEXT"}},
+                              getDataFilesPath() + "empty" + wrapper_ext(GetParam()),
+                              GetParam()));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {});
+}
+
 class CSVFileTypeTests
     : public SelectQueryTest,
       public ::testing::WithParamInterface<std::pair<FileNameType, FileExtType>> {};

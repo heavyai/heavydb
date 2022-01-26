@@ -246,7 +246,7 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
   if (thread_count == 0) {
     thread_count = std::thread::hardware_concurrency();
   }
-  if (size_known) {
+  if (size_known && file_size > 0) {
     size_t num_buffers_in_file = (file_size + buffer_size - 1) / buffer_size;
     if (num_buffers_in_file < thread_count) {
       thread_count = num_buffers_in_file;

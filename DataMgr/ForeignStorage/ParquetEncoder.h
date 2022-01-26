@@ -39,15 +39,17 @@ class ParquetEncoder {
       const parquet::RowGroupMetaData* group_metadata,
       const int parquet_column_index,
       const SQLTypeInfo& column_type) {
-    // update statistics
-    auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
-    auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
+    int64_t null_count{0};
     auto metadata = createMetadata(column_type);
-
-    auto null_count = stats->null_count();
-    validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
-                      null_count,
-                      column_type);
+    if (group_metadata->num_rows() > 0) {
+      // update statistics
+      auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
+      auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
+      null_count = stats->null_count();
+      validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
+                        null_count,
+                        column_type);
+    }
     metadata->chunkStats.has_nulls = null_count > 0;
 
     // update sizing
