@@ -53,6 +53,29 @@ enum TRole {
   STRING_DICTIONARY
 }
 
+enum TTableType {
+  DEFAULT,
+  TEMPORARY,
+  FOREIGN,
+  VIEW
+}
+
+enum TTableRefreshUpdateType {
+  ALL,
+  APPEND
+}
+
+enum TTableRefreshTimingType {
+  MANUAL,
+  SCHEDULED
+}
+
+enum TTableRefreshIntervalType {
+  NONE,
+  HOUR,
+  DAY
+}
+
 /* union */ struct TDatumVal {
   1: i64 int_val;
   2: double real_val;
@@ -348,6 +371,16 @@ struct TTableMeta {
   11: list<string> col_names;
 }
 
+struct TTableRefreshInfo {
+  1: TTableRefreshUpdateType update_type;
+  2: TTableRefreshTimingType timing_type;
+  3: i64 start_date_time;
+  4: TTableRefreshIntervalType interval_type;
+  5: i64 interval_count;
+  6: i64 last_refresh_time;
+  7: i64 next_refresh_time;
+}
+
 struct TTableDetails {
   1: TRowDescriptor row_desc;
   2: i64 fragment_size;
@@ -358,6 +391,8 @@ struct TTableDetails {
   7: string key_metainfo;
   8: bool is_temporary;
   9: TPartitionDetail partition_detail;
+  10: TTableType table_type;
+  11: TTableRefreshInfo refresh_info;
 }
 
 enum TExpressionRangeType {

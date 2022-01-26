@@ -22,10 +22,12 @@
 #include <gtest/gtest.h>
 #include "boost/filesystem.hpp"
 
+#include "Catalog/RefreshTimeCalculator.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "DataMgr/BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "Shared/File.h"
+#include "Shared/misc.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -3217,6 +3219,132 @@ INSTANTIATE_TEST_SUITE_P(
     [](const auto& param_info) {
       return "Page_Size_" + std::to_string(param_info.param);
     });
+
+class GetTableDetailsTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    dropTestTables();
+    createTestTables();
+    // Set current time to a fixed value for the tests
+    foreign_storage::RefreshTimeCalculator::setMockCurrentTime(getFixedCurrentTime());
+  }
+
+  void TearDown() override {
+    foreign_storage::RefreshTimeCalculator::resetMockCurrentTime();
+    dropTestTables();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void createTestTables() {
+    sql("CREATE TABLE test_table_1 (i INTEGER);");
+    sql("CREATE TEMPORARY TABLE test_table_2 (i INTEGER);");
+    sql("CREATE FOREIGN TABLE test_table_3 (i INTEGER) SERVER omnisci_local_csv WITH "
+        "(file_path = '../../Tests/FsiDataFiles/1.csv');");
+    sql("CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;");
+  }
+
+  void dropTestTables() {
+    sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_table_3;");
+    sql("DROP FOREIGN TABLE IF EXISTS test_table_4;");
+    sql("DROP VIEW IF EXISTS test_view_1;");
+  }
+
+  void assertExpectedTableDetails(const std::string& table_name,
+                                  TTableType::type table_type,
+                                  const TTableRefreshInfo* refresh_info = nullptr) {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    TTableDetails table_details;
+    db_handler->get_table_details(table_details, session_id, table_name);
+    ASSERT_EQ(static_cast<int64_t>(DEFAULT_FRAGMENT_ROWS), table_details.fragment_size);
+    ASSERT_EQ(static_cast<int64_t>(DEFAULT_MAX_ROWS), table_details.max_rows);
+    ASSERT_EQ(static_cast<int64_t>(DEFAULT_PAGE_SIZE), table_details.page_size);
+    ASSERT_EQ(static_cast<size_t>(1), table_details.row_desc.size());
+    ASSERT_EQ("i", table_details.row_desc[0].col_name);
+    ASSERT_EQ(TDatumType::INT, table_details.row_desc[0].col_type.type);
+    ASSERT_EQ(table_type, table_details.table_type);
+    if (table_details.table_type == TTableType::TEMPORARY) {
+      ASSERT_TRUE(table_details.is_temporary);
+    } else if (table_details.table_type == TTableType::VIEW) {
+      ASSERT_EQ("SELECT * FROM test_table_1;", table_details.view_sql);
+    }
+    if (refresh_info) {
+      ASSERT_EQ(*refresh_info, table_details.refresh_info);
+    }
+  }
+
+  std::pair<int64_t, std::string> getHourFromNow() {
+    auto epoch = getFixedCurrentTime() + (60 * 60);
+    std::string date_time;
+    // Make string large enough to contain formatted date time.
+    date_time.resize(20);
+    auto length = shared::formatDateTime(date_time.data(), date_time.length(), epoch, 0);
+    CHECK_LT(length, date_time.length());
+    date_time.resize(length);
+    return {epoch, date_time};
+  }
+
+  int64_t getFixedCurrentTime() {
+    return foreign_storage::RefreshTimeCalculator::getCurrentTime();
+  }
+};
+
+TEST_F(GetTableDetailsTest, DifferentTableTypes) {
+  assertExpectedTableDetails("test_table_1", TTableType::DEFAULT);
+  assertExpectedTableDetails("test_table_2", TTableType::TEMPORARY);
+  assertExpectedTableDetails("test_table_3", TTableType::FOREIGN);
+  assertExpectedTableDetails("test_view_1", TTableType::VIEW);
+}
+
+TEST_F(GetTableDetailsTest, DefaultRefreshOptions) {
+  TTableRefreshInfo refresh_info;
+  refresh_info.update_type = TTableRefreshUpdateType::ALL;
+  refresh_info.timing_type = TTableRefreshTimingType::MANUAL;
+  refresh_info.start_date_time = -1;
+  refresh_info.interval_type = TTableRefreshIntervalType::NONE;
+  refresh_info.interval_count = -1;
+  refresh_info.last_refresh_time = foreign_storage::ForeignTable::NULL_REFRESH_TIME;
+  refresh_info.next_refresh_time = foreign_storage::ForeignTable::NULL_REFRESH_TIME;
+  assertExpectedTableDetails("test_table_3", TTableType::FOREIGN, &refresh_info);
+}
+
+TEST_F(GetTableDetailsTest, ScheduledAppendRefresh) {
+  auto [start_date_time, start_date_time_str] = getHourFromNow();
+  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER omnisci_local_csv WITH "
+      "(file_path = '../../Tests/FsiDataFiles/1.csv', refresh_update_type = 'append', "
+      "refresh_timing_type = 'scheduled', refresh_start_date_time = '" +
+      start_date_time_str + "', refresh_interval = '5H');");
+
+  TTableRefreshInfo refresh_info;
+  refresh_info.update_type = TTableRefreshUpdateType::APPEND;
+  refresh_info.timing_type = TTableRefreshTimingType::SCHEDULED;
+  refresh_info.start_date_time = start_date_time;
+  refresh_info.interval_type = TTableRefreshIntervalType::HOUR;
+  refresh_info.interval_count = 5;
+  refresh_info.last_refresh_time = foreign_storage::ForeignTable::NULL_REFRESH_TIME;
+  refresh_info.next_refresh_time = start_date_time;
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+
+  sql("REFRESH FOREIGN TABLES test_table_4;");
+  refresh_info.last_refresh_time = getFixedCurrentTime();
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+}
+
+TEST_F(GetTableDetailsTest, ManualRefresh) {
+  sql("REFRESH FOREIGN TABLES test_table_3;");
+
+  TTableRefreshInfo refresh_info;
+  refresh_info.update_type = TTableRefreshUpdateType::ALL;
+  refresh_info.timing_type = TTableRefreshTimingType::MANUAL;
+  refresh_info.start_date_time = -1;
+  refresh_info.interval_type = TTableRefreshIntervalType::NONE;
+  refresh_info.interval_count = -1;
+  refresh_info.last_refresh_time = getFixedCurrentTime();
+  refresh_info.next_refresh_time = foreign_storage::ForeignTable::NULL_REFRESH_TIME;
+  assertExpectedTableDetails("test_table_3", TTableType::FOREIGN, &refresh_info);
+}
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;

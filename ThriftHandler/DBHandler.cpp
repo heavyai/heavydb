@@ -2361,6 +2361,63 @@ void DBHandler::get_table_details_for_database(TTableDetails& _return,
   get_table_details_impl(_return, stdlog, table_name, false, false, database_name);
 }
 
+namespace {
+TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
+  CHECK(td->isForeignTable());
+  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
+  CHECK(foreign_table);
+  TTableRefreshInfo refresh_info;
+  const auto& update_type =
+      foreign_table->getOption(foreign_storage::ForeignTable::REFRESH_UPDATE_TYPE_KEY);
+  CHECK(update_type.has_value());
+  if (update_type.value() == foreign_storage::ForeignTable::ALL_REFRESH_UPDATE_TYPE) {
+    refresh_info.update_type = TTableRefreshUpdateType::ALL;
+  } else if (update_type.value() ==
+             foreign_storage::ForeignTable::APPEND_REFRESH_UPDATE_TYPE) {
+    refresh_info.update_type = TTableRefreshUpdateType::APPEND;
+  } else {
+    UNREACHABLE() << "Unexpected refresh update type: " << update_type.value();
+  }
+
+  const auto& timing_type =
+      foreign_table->getOption(foreign_storage::ForeignTable::REFRESH_TIMING_TYPE_KEY);
+  CHECK(timing_type.has_value());
+  if (timing_type.value() == foreign_storage::ForeignTable::MANUAL_REFRESH_TIMING_TYPE) {
+    refresh_info.timing_type = TTableRefreshTimingType::MANUAL;
+    refresh_info.start_date_time = -1;
+    refresh_info.interval_count = -1;
+  } else if (timing_type.value() ==
+             foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE) {
+    refresh_info.timing_type = TTableRefreshTimingType::SCHEDULED;
+    const auto& start_date_time = foreign_table->getOption(
+        foreign_storage::ForeignTable::REFRESH_START_DATE_TIME_KEY);
+    CHECK(start_date_time.has_value());
+    refresh_info.start_date_time = dateTimeParse<kTIMESTAMP>(start_date_time.value(), 0);
+    const auto& interval =
+        foreign_table->getOption(foreign_storage::ForeignTable::REFRESH_INTERVAL_KEY);
+    CHECK(interval.has_value());
+    const auto& interval_str = interval.value();
+    refresh_info.interval_count =
+        std::stoi(interval_str.substr(0, interval_str.length() - 1));
+    auto interval_type = std::toupper(interval_str[interval_str.length() - 1]);
+    if (interval_type == 'H') {
+      refresh_info.interval_type = TTableRefreshIntervalType::HOUR;
+    } else if (interval_type == 'D') {
+      refresh_info.interval_type = TTableRefreshIntervalType::DAY;
+    } else if (interval_type == 'S') {
+      // This use case is for development only.
+      refresh_info.interval_type = TTableRefreshIntervalType::NONE;
+    } else {
+      UNREACHABLE() << "Unexpected interval type: " << interval_str;
+    }
+  } else {
+    UNREACHABLE() << "Unexpected refresh timing type: " << timing_type.value();
+  }
+  refresh_info.last_refresh_time = foreign_table->last_refresh_time;
+  refresh_info.next_refresh_time = foreign_table->next_refresh_time;
+  return refresh_info;
+}
+}  // namespace
 void DBHandler::get_table_details_impl(TTableDetails& _return,
                                        query_state::StdLog& stdlog,
                                        const std::string& table_name,
@@ -2449,6 +2506,17 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                    ? TPartitionDetail::REPLICATED
                    : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
                                                   : TPartitionDetail::OTHER));
+    if (td->isView) {
+      _return.table_type = TTableType::VIEW;
+    } else if (td->isTemporaryTable()) {
+      _return.table_type = TTableType::TEMPORARY;
+    } else if (td->isForeignTable()) {
+      _return.table_type = TTableType::FOREIGN;
+      _return.refresh_info = get_refresh_info(td);
+    } else {
+      _return.table_type = TTableType::DEFAULT;
+    }
+
   } catch (const std::runtime_error& e) {
     THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
