@@ -348,6 +348,37 @@ DEVICE void SUFFIX(init_baseline_hash_join_buff)(int8_t* hash_buff,
   }
 }
 
+#ifndef __CUDACC__
+
+template <typename T>
+DEVICE void SUFFIX(init_baseline_hash_join_buff_tbb)(int8_t* hash_buff,
+                                                     const int64_t entry_count,
+                                                     const size_t key_component_count,
+                                                     const bool with_val_slot,
+                                                     const int32_t invalid_slot_val) {
+  const auto hash_entry_size =
+      (key_component_count + (with_val_slot ? 1 : 0)) * sizeof(T);
+  const T empty_key = SUFFIX(get_invalid_key)<T>();
+  tbb::parallel_for(tbb::blocked_range<int64_t>(0, entry_count),
+                    [=](const tbb::blocked_range<int64_t>& r) {
+                      const auto start_idx = r.begin();
+                      const auto end_idx = r.end();
+                      for (int64_t entry_idx = start_idx; entry_idx < end_idx;
+                           ++entry_idx) {
+                        const int64_t offset = entry_idx * hash_entry_size;
+                        auto row_ptr = reinterpret_cast<T*>(hash_buff + offset);
+                        for (size_t k = 0; k < key_component_count; ++k) {
+                          row_ptr[k] = empty_key;
+                        }
+                        if (with_val_slot) {
+                          row_ptr[key_component_count] = invalid_slot_val;
+                        }
+                      }
+                    });
+}
+
+#endif  // #ifndef __CUDACC__
+
 #ifdef __CUDACC__
 template <typename T>
 __device__ T* get_matching_baseline_hash_slot_at(int8_t* hash_buff,
@@ -1371,6 +1402,24 @@ void init_baseline_hash_join_buff_64(int8_t* hash_join_buff,
                                         invalid_slot_val,
                                         cpu_thread_idx,
                                         cpu_thread_count);
+}
+
+void init_baseline_hash_join_buff_tbb_32(int8_t* hash_join_buff,
+                                         const int64_t entry_count,
+                                         const size_t key_component_count,
+                                         const bool with_val_slot,
+                                         const int32_t invalid_slot_val) {
+  init_baseline_hash_join_buff_tbb<int32_t>(
+      hash_join_buff, entry_count, key_component_count, with_val_slot, invalid_slot_val);
+}
+
+void init_baseline_hash_join_buff_tbb_64(int8_t* hash_join_buff,
+                                         const int64_t entry_count,
+                                         const size_t key_component_count,
+                                         const bool with_val_slot,
+                                         const int32_t invalid_slot_val) {
+  init_baseline_hash_join_buff_tbb<int64_t>(
+      hash_join_buff, entry_count, key_component_count, with_val_slot, invalid_slot_val);
 }
 
 int fill_baseline_hash_join_buff_32(int8_t* hash_buff,

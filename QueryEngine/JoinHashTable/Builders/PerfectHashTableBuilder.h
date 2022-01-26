@@ -268,8 +268,6 @@ class PerfectJoinHashTableBuilder {
 
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
 
-    // str_proxy_translation_map.is_valid() is used to control
-    // validilty and whether pointer exists or is nullptr
     CHECK(str_proxy_translation_map);
 
     int thread_count = cpu_threads();
