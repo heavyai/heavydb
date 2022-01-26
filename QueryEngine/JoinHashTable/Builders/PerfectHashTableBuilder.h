@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <tbb/parallel_for.h>
-
 #include "QueryEngine/JoinHashTable/PerfectHashTable.h"
 
 #include "Shared/scope.h"
@@ -177,6 +175,8 @@ class PerfectJoinHashTableBuilder {
                                            0);
 
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
+    const int thread_count = cpu_threads();
+    std::vector<std::thread> init_cpu_buff_threads;
 
     // We always expect a non-null translation map (as we use this to in
     // PerfectJoinHashTable to know if we need to fetch the map or not), but if it's
@@ -185,18 +185,33 @@ class PerfectJoinHashTableBuilder {
     CHECK(str_proxy_translation_map);
 
     {
-      auto timer_init =
-          DEBUG_TIMER("CPU One-To-One Perfect-Hash: init_hash_join_buff_tbb");
+      auto timer_init = DEBUG_TIMER("CPU One-To-One Perfect-Hash: init_hash_join_buff");
+#ifdef HAVE_TBB
       init_hash_join_buff_tbb(cpu_hash_table_buff,
                               hash_entry_info.getNormalizedHashEntryCount(),
                               hash_join_invalid_val);
+#else   // #ifdef HAVE_TBB
+      for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        init_cpu_buff_threads.emplace_back([hash_entry_info,
+                                            hash_join_invalid_val,
+                                            thread_idx,
+                                            thread_count,
+                                            cpu_hash_table_buff] {
+          init_hash_join_buff(cpu_hash_table_buff,
+                              hash_entry_info.getNormalizedHashEntryCount(),
+                              hash_join_invalid_val,
+                              thread_idx,
+                              thread_count);
+        });
+      }
+      for (auto& t : init_cpu_buff_threads) {
+        t.join();
+      }
+      init_cpu_buff_threads.clear();
+#endif  // !HAVE_TBB
     }
-
     const bool for_semi_join = for_semi_anti_join(join_type);
     std::atomic<int> err{0};
-
-    int thread_count = cpu_threads();
-    std::vector<std::thread> init_cpu_buff_threads;
     {
       auto timer_fill =
           DEBUG_TIMER("CPU One-To-One Perfect-Hash: fill_hash_join_buff_bucketized");
@@ -272,11 +287,31 @@ class PerfectJoinHashTableBuilder {
 
     int thread_count = cpu_threads();
     {
-      auto timer_init = DEBUG_TIMER(
-          "CPU One-To-Many Perfect Hash Table Builder: init_hash_join_buff_tbb");
+      auto timer_init =
+          DEBUG_TIMER("CPU One-To-Many Perfect Hash Table Builder: init_hash_join_buff");
+#ifdef HAVE_TBB
       init_hash_join_buff_tbb(cpu_hash_table_buff,
                               hash_entry_info.getNormalizedHashEntryCount(),
                               hash_join_invalid_val);
+#else   // #ifdef HAVE_TBB
+      std::vector<std::future<void> > init_threads;
+      for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        init_threads.emplace_back(
+            std::async(std::launch::async,
+                       init_hash_join_buff,
+                       cpu_hash_table_buff,
+                       hash_entry_info.getNormalizedHashEntryCount(),
+                       hash_join_invalid_val,
+                       thread_idx,
+                       thread_count));
+      }
+      for (auto& child : init_threads) {
+        child.wait();
+      }
+      for (auto& child : init_threads) {
+        child.get();
+      }
+#endif  // !HAVE_TBB
     }
     {
       auto timer_fill = DEBUG_TIMER(
