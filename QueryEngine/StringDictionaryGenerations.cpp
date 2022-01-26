@@ -34,6 +34,9 @@ int64_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {
   if (it != id_to_generation_.end()) {
     return it->second;
   }
+  if (id == TRANSIENT_DICT_ID) {
+    return 0;
+  }
   // This happens when the query didn't need to do any translation from string
   // to id. Return an invalid generation and StringDictionaryProxy will assert
   // the methods which require a generation (the ones which go from string to id)

@@ -268,13 +268,14 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
 class BaselineJoinHashTableBuilder {
  public:
   BaselineJoinHashTableBuilder() = default;
-
   template <class KEY_HANDLER>
   int initHashTableOnCpu(KEY_HANDLER* key_handler,
                          const CompositeKeyInfo& composite_key_info,
                          const std::vector<JoinColumn>& join_columns,
                          const std::vector<JoinColumnTypeInfo>& join_column_types,
                          const std::vector<JoinBucketInfo>& join_bucket_info,
+                         const StrProxyTranslationMapsPtrsAndOffsets&
+                             str_proxy_translation_maps_ptrs_and_offsets,
                          const size_t keyspace_entry_count,
                          const size_t keys_for_all_rows,
                          const HashType layout,
@@ -434,7 +435,11 @@ class BaselineJoinHashTableBuilder {
     if (HashJoin::layoutRequiresAdditionalBuffers(layout)) {
       auto one_to_many_buff = reinterpret_cast<int32_t*>(
           cpu_hash_table_ptr + keyspace_entry_count * entry_size);
-      init_hash_join_buff(one_to_many_buff, keyspace_entry_count, -1, 0, 1);
+      {
+        auto timer_init_additional_buffers =
+            DEBUG_TIMER("CPU Baseline-Hash: Additional Buffers init_hash_join_buff");
+        init_hash_join_buff(one_to_many_buff, keyspace_entry_count, -1, 0, 1);
+      }
       setHashLayout(layout);
       switch (key_component_width) {
         case 4: {
@@ -448,8 +453,8 @@ class BaselineJoinHashTableBuilder {
               join_columns,
               join_column_types,
               join_bucket_info,
-              composite_key_info.sd_inner_proxy_per_key,
-              composite_key_info.sd_outer_proxy_per_key,
+              str_proxy_translation_maps_ptrs_and_offsets.first,
+              str_proxy_translation_maps_ptrs_and_offsets.second,
               thread_count,
               std::is_same_v<KEY_HANDLER, RangeKeyHandler>);
           break;
@@ -465,8 +470,8 @@ class BaselineJoinHashTableBuilder {
               join_columns,
               join_column_types,
               join_bucket_info,
-              composite_key_info.sd_inner_proxy_per_key,
-              composite_key_info.sd_outer_proxy_per_key,
+              str_proxy_translation_maps_ptrs_and_offsets.first,
+              str_proxy_translation_maps_ptrs_and_offsets.second,
               thread_count,
               std::is_same_v<KEY_HANDLER, RangeKeyHandler>);
           break;

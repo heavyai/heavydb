@@ -507,11 +507,10 @@ int PerfectJoinHashTable::initHashTableForDevice(
       // Hoist cache lookup to PerfectJoinHashTable::reify and then move this proxy
       // translation to that level as well, conditioned on the hash table not being
       // cached.
-      if (!str_proxy_translation_map_) {
+      if (needs_dict_translation_ && !str_proxy_translation_map_) {
         CHECK_GE(inner_outer_pairs_.size(), 1UL);
         str_proxy_translation_map_ = HashJoin::translateInnerToOuterStrDictProxies(
             inner_outer_pairs_.front(), executor_);
-        CHECK(str_proxy_translation_map_);
       }
     }
     decltype(std::chrono::steady_clock::now()) ts1, ts2;
@@ -533,7 +532,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                                col_range_,
                                                isBitwiseEq(),
                                                cols,
-                                               str_proxy_translation_map_.get(),
+                                               str_proxy_translation_map_,
                                                join_type_,
                                                hashtable_layout,
                                                hash_entry_info,
@@ -545,7 +544,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
                                                 col_range_,
                                                 isBitwiseEq(),
                                                 cols,
-                                                str_proxy_translation_map_.get(),
+                                                str_proxy_translation_map_,
                                                 hash_entry_info,
                                                 hash_join_invalid_val,
                                                 executor_);

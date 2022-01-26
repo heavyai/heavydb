@@ -178,12 +178,6 @@ class PerfectJoinHashTableBuilder {
     const int thread_count = cpu_threads();
     std::vector<std::thread> init_cpu_buff_threads;
 
-    // We always expect a non-null translation map (as we use this to in
-    // PerfectJoinHashTable to know if we need to fetch the map or not), but if it's
-    // invalid (i.e. we don't have string columns, or we do but the dictionaries are the
-    // same, isEmpty() will return true)
-    CHECK(str_proxy_translation_map);
-
     {
       auto timer_init = DEBUG_TIMER("CPU One-To-One Perfect-Hash: init_hash_join_buff");
 #ifdef HAVE_TBB
@@ -240,9 +234,9 @@ class PerfectJoinHashTableBuilder {
                is_bitwise_eq,
                col_range.getIntMax() + 1,
                get_join_column_type_kind(ti)},
-              str_proxy_translation_map->empty() ? nullptr
-                                                 : str_proxy_translation_map->data(),
-              str_proxy_translation_map->domainStart(),
+              str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
+              str_proxy_translation_map ? str_proxy_translation_map->domainStart()
+                                        : 0,  // 0 is dummy value
               thread_idx,
               thread_count,
               hash_entry_info.bucket_normalization);
@@ -284,8 +278,6 @@ class PerfectJoinHashTableBuilder {
 
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
 
-    CHECK(str_proxy_translation_map);
-
     int thread_count = cpu_threads();
     {
       auto timer_init =
@@ -318,39 +310,39 @@ class PerfectJoinHashTableBuilder {
       auto timer_fill = DEBUG_TIMER(
           "CPU One-To-Many Perfect Hash Table Builder: fill_hash_join_buff_bucketized");
       if (ti.get_type() == kDATE) {
-        fill_one_to_many_hash_table_bucketized(cpu_hash_table_buff,
-                                               hash_entry_info,
-                                               hash_join_invalid_val,
-                                               join_column,
-                                               {static_cast<size_t>(ti.get_size()),
-                                                col_range.getIntMin(),
-                                                col_range.getIntMax(),
-                                                inline_fixed_encoding_null_val(ti),
-                                                is_bitwise_eq,
-                                                col_range.getIntMax() + 1,
-                                                get_join_column_type_kind(ti)},
-                                               str_proxy_translation_map->empty()
-                                                   ? nullptr
-                                                   : str_proxy_translation_map->data(),
-                                               str_proxy_translation_map->domainStart(),
-                                               thread_count);
+        fill_one_to_many_hash_table_bucketized(
+            cpu_hash_table_buff,
+            hash_entry_info,
+            hash_join_invalid_val,
+            join_column,
+            {static_cast<size_t>(ti.get_size()),
+             col_range.getIntMin(),
+             col_range.getIntMax(),
+             inline_fixed_encoding_null_val(ti),
+             is_bitwise_eq,
+             col_range.getIntMax() + 1,
+             get_join_column_type_kind(ti)},
+            str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
+            str_proxy_translation_map ? str_proxy_translation_map->domainStart()
+                                      : 0 /*dummy*/,
+            thread_count);
       } else {
-        fill_one_to_many_hash_table(cpu_hash_table_buff,
-                                    hash_entry_info,
-                                    hash_join_invalid_val,
-                                    join_column,
-                                    {static_cast<size_t>(ti.get_size()),
-                                     col_range.getIntMin(),
-                                     col_range.getIntMax(),
-                                     inline_fixed_encoding_null_val(ti),
-                                     is_bitwise_eq,
-                                     col_range.getIntMax() + 1,
-                                     get_join_column_type_kind(ti)},
-                                    str_proxy_translation_map->empty()
-                                        ? nullptr
-                                        : str_proxy_translation_map->data(),
-                                    str_proxy_translation_map->domainStart(),
-                                    thread_count);
+        fill_one_to_many_hash_table(
+            cpu_hash_table_buff,
+            hash_entry_info,
+            hash_join_invalid_val,
+            join_column,
+            {static_cast<size_t>(ti.get_size()),
+             col_range.getIntMin(),
+             col_range.getIntMax(),
+             inline_fixed_encoding_null_val(ti),
+             is_bitwise_eq,
+             col_range.getIntMax() + 1,
+             get_join_column_type_kind(ti)},
+            str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
+            str_proxy_translation_map ? str_proxy_translation_map->domainStart()
+                                      : 0 /*dummy*/,
+            thread_count);
       }
     }
   }

@@ -41,8 +41,8 @@ struct GenericKeyHandler {
                     const JoinColumnTypeInfo* type_info_per_key
 #ifndef __CUDACC__
                     ,
-                    const void* const* sd_inner_proxy_per_key,
-                    const void* const* sd_outer_proxy_per_key
+                    const int32_t* const* sd_inner_to_outer_translation_maps,
+                    const int32_t* sd_min_inner_elems
 #endif
                     )
       : key_component_count_(key_component_count)
@@ -50,15 +50,15 @@ struct GenericKeyHandler {
       , join_column_per_key_(join_column_per_key)
       , type_info_per_key_(type_info_per_key) {
 #ifndef __CUDACC__
-    if (sd_inner_proxy_per_key) {
-      CHECK(sd_outer_proxy_per_key);
-      sd_inner_proxy_per_key_ = sd_inner_proxy_per_key;
-      sd_outer_proxy_per_key_ = sd_outer_proxy_per_key;
+    if (sd_inner_to_outer_translation_maps) {
+      CHECK(sd_min_inner_elems);
+      sd_inner_to_outer_translation_maps_ = sd_inner_to_outer_translation_maps;
+      sd_min_inner_elems_ = sd_min_inner_elems;
     } else
 #endif
     {
-      sd_inner_proxy_per_key_ = nullptr;
-      sd_outer_proxy_per_key_ = nullptr;
+      sd_inner_to_outer_translation_maps_ = nullptr;
+      sd_min_inner_elems_ = nullptr;
     }
   }
 
@@ -77,25 +77,21 @@ struct GenericKeyHandler {
         break;
       }
 #ifndef __CUDACC__
-      const auto sd_inner_proxy = sd_inner_proxy_per_key_
-                                      ? sd_inner_proxy_per_key_[key_component_index]
-                                      : nullptr;
-      const auto sd_outer_proxy = sd_outer_proxy_per_key_
-                                      ? sd_outer_proxy_per_key_[key_component_index]
-                                      : nullptr;
-      if (sd_inner_proxy && elem != join_column_iterator.type_info->null_val) {
-        CHECK(sd_outer_proxy);
-        const auto sd_inner_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-        const auto sd_outer_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-        const auto elem_str = sd_inner_dict_proxy->getString(elem);
-        const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
-        if (outer_id == StringDictionary::INVALID_STR_ID) {
-          skip_entry = true;
-          break;
+      // Translation map pts will already be set to nullptr if invalid
+      if (sd_inner_to_outer_translation_maps_) {
+        const auto sd_inner_to_outer_translation_map =
+            sd_inner_to_outer_translation_maps_[key_component_index];
+        const auto sd_min_inner_elem = sd_min_inner_elems_[key_component_index];
+        if (sd_inner_to_outer_translation_map &&
+            elem != join_column_iterator.type_info->null_val) {
+          const auto outer_id =
+              sd_inner_to_outer_translation_map[elem - sd_min_inner_elem];
+          if (outer_id == StringDictionary::INVALID_STR_ID) {
+            skip_entry = true;
+            break;
+          }
+          elem = outer_id;
         }
-        elem = outer_id;
       }
 #endif
       key_scratch_buff[key_component_index] = elem;
@@ -122,8 +118,8 @@ struct GenericKeyHandler {
   const bool should_skip_entries_;
   const JoinColumn* join_column_per_key_;
   const JoinColumnTypeInfo* type_info_per_key_;
-  const void* const* sd_inner_proxy_per_key_;
-  const void* const* sd_outer_proxy_per_key_;
+  const int32_t* const* sd_inner_to_outer_translation_maps_;
+  const int32_t* sd_min_inner_elems_;
 };
 
 struct OverlapsKeyHandler {

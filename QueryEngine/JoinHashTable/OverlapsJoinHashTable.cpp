@@ -1253,17 +1253,21 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnCpu(
                          &join_columns[0],
                          join_bucket_info[0].inverse_bucket_sizes_for_dimension.data());
   BaselineJoinHashTableBuilder builder;
-  const auto err = builder.initHashTableOnCpu(&key_handler,
-                                              composite_key_info_,
-                                              join_columns,
-                                              join_column_types,
-                                              join_bucket_info,
-                                              entry_count,
-                                              emitted_keys_count,
-                                              layout,
-                                              join_type_,
-                                              getKeyComponentWidth(),
-                                              getKeyComponentCount());
+  const StrProxyTranslationMapsPtrsAndOffsets
+      dummy_str_proxy_translation_maps_ptrs_and_offsets;
+  const auto err =
+      builder.initHashTableOnCpu(&key_handler,
+                                 composite_key_info_,
+                                 join_columns,
+                                 join_column_types,
+                                 join_bucket_info,
+                                 dummy_str_proxy_translation_maps_ptrs_and_offsets,
+                                 entry_count,
+                                 emitted_keys_count,
+                                 layout,
+                                 join_type_,
+                                 getKeyComponentWidth(),
+                                 getKeyComponentCount());
   ts2 = std::chrono::steady_clock::now();
   if (err) {
     throw HashJoinFail(

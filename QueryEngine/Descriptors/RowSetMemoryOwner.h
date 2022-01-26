@@ -131,7 +131,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return it->second.get();
   }
 
-  StringDictionaryProxy::IdMap* addStringProxyTranslationMap(
+  const StringDictionaryProxy::IdMap* addStringProxyTranslationMap(
       const StringDictionaryProxy* source_proxy,
       const StringDictionaryProxy* dest_proxy) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -144,7 +144,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
               .emplace(map_key, source_proxy->buildTranslationMapToOtherProxy(dest_proxy))
               .first;
     }
-    return &it->second;
+    return it->second.get();
   }
 
   StringDictionaryProxy* getStringDictProxy(const int dict_id) const {
@@ -169,7 +169,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return lit_str_dict_proxy_.get();
   }
 
-  StringDictionaryProxy::IdMap* getOrAddStringProxyTranslationMap(
+  const StringDictionaryProxy::IdMap* getOrAddStringProxyTranslationMap(
       const int db_id,
       const int source_dict_id_in,
       const int dest_dict_id_in,
@@ -231,7 +231,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
-  std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
+  std::map<std::pair<int, int>, std::shared_ptr<StringDictionaryProxy::IdMap>>
       str_proxy_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;

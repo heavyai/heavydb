@@ -521,6 +521,29 @@ Data_Namespace::MemoryLevel BaselineJoinHashTable::getEffectiveMemoryLevel(
   return memory_level_;
 }
 
+StrProxyTranslationMapsPtrsAndOffsets decomposeStrDictTranslationMaps(
+    const std::vector<const StringDictionaryProxy::IdMap*>& str_proxy_translation_maps) {
+  StrProxyTranslationMapsPtrsAndOffsets translation_map_ptrs_and_offsets;
+  // First element of pair is vector of int32_t* pointing to translation map "vector"
+  // Second element of pair is vector of int32_t of min inner dictionary ids (offsets)
+  const size_t num_translation_maps = str_proxy_translation_maps.size();
+  translation_map_ptrs_and_offsets.first.reserve(num_translation_maps);
+  translation_map_ptrs_and_offsets.second.reserve(num_translation_maps);
+  for (const auto& str_proxy_translation_map : str_proxy_translation_maps) {
+    if (str_proxy_translation_map) {
+      translation_map_ptrs_and_offsets.first.emplace_back(
+          str_proxy_translation_map->data());
+      translation_map_ptrs_and_offsets.second.emplace_back(
+          str_proxy_translation_map->domainStart());
+    } else {
+      // dummy values
+      translation_map_ptrs_and_offsets.first.emplace_back(nullptr);
+      translation_map_ptrs_and_offsets.second.emplace_back(0);
+    }
+  }
+  return translation_map_ptrs_and_offsets;
+}
+
 int BaselineJoinHashTable::initHashTableForDevice(
     const std::vector<JoinColumn>& join_columns,
     const std::vector<JoinColumnTypeInfo>& join_column_types,
@@ -568,49 +591,79 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
     }
 
+    if (!hash_table) {
+      std::unique_lock<std::mutex> str_proxy_translation_lock(
+          str_proxy_translation_mutex_);
+      // It's not ideal to populate the str dict proxy translation map at the per device
+      // init func, but currently with the hash table cache lookup (above) at this level,
+      // if we do the translation in BaselineJoinHashTable::reify, we don't know if the
+      // hash table is cached and so needlessly compute a potentially expensive proxy
+      // translation even if we have the hash table already cached. Todo(todd/yoonmin):
+      // Hoist cache lookup to BaselineJoinHashTable::reify and then move this proxy
+      // translation to that level as well, conditioned on the hash table not being
+      // cached.
+      if (str_proxy_translation_maps_.empty()) {
+        str_proxy_translation_maps_ =
+            HashJoin::translateCompositeStrDictProxies(composite_key_info, executor_);
+        CHECK_EQ(str_proxy_translation_maps_.size(), inner_outer_pairs_.size());
+      }
+    }
+    const auto str_proxy_translation_map_ptrs_and_offsets =
+        decomposeStrDictTranslationMaps(str_proxy_translation_maps_);
     if (hash_table) {
       hash_tables_for_device_[device_id] = hash_table;
     } else {
-      BaselineJoinHashTableBuilder builder;
+      // Try to get hash table from cache again, since if we are building
+      // for multiple devices, all devices except the first to take
+      // cpu_hash_table_buff_lock should find their hash table cached now
+      // from the first device to run
+      hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
+                                               CacheItemType::BASELINE_HT,
+                                               DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      if (!hash_table) {
+        // Hash table was not in cache
+        BaselineJoinHashTableBuilder builder;
 
-      const auto key_handler =
-          GenericKeyHandler(key_component_count,
-                            true,
-                            &join_columns[0],
-                            &join_column_types[0],
-                            &composite_key_info.sd_inner_proxy_per_key[0],
-                            &composite_key_info.sd_outer_proxy_per_key[0]);
-      err = builder.initHashTableOnCpu(&key_handler,
-                                       composite_key_info,
-                                       join_columns,
-                                       join_column_types,
-                                       join_bucket_info,
-                                       entry_count,
-                                       join_columns.front().num_elems,
-                                       hashtable_layout,
-                                       join_type_,
-                                       getKeyComponentWidth(),
-                                       getKeyComponentCount());
-      hash_tables_for_device_[device_id] = builder.getHashTable();
-      ts2 = std::chrono::steady_clock::now();
-      auto hashtable_build_time =
-          std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-      if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
-        // add ht-related items to cache iff we have a valid hashtable
-        putHashTableOnCpuToCache(hashtable_cache_key_,
-                                 CacheItemType::BASELINE_HT,
-                                 hash_tables_for_device_[device_id],
-                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-                                 hashtable_build_time);
+        const auto key_handler =
+            GenericKeyHandler(key_component_count,
+                              true,
+                              &join_columns[0],
+                              &join_column_types[0],
+                              &str_proxy_translation_map_ptrs_and_offsets.first[0],
+                              &str_proxy_translation_map_ptrs_and_offsets.second[0]);
+        err = builder.initHashTableOnCpu(&key_handler,
+                                         composite_key_info,
+                                         join_columns,
+                                         join_column_types,
+                                         join_bucket_info,
+                                         str_proxy_translation_map_ptrs_and_offsets,
+                                         entry_count,
+                                         join_columns.front().num_elems,
+                                         hashtable_layout,
+                                         join_type_,
+                                         getKeyComponentWidth(),
+                                         getKeyComponentCount());
+        hash_tables_for_device_[device_id] = builder.getHashTable();
+        ts2 = std::chrono::steady_clock::now();
+        auto hashtable_build_time =
+            std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
+        if (!err && allow_hashtable_recycling && hash_tables_for_device_[device_id]) {
+          // add ht-related items to cache iff we have a valid hashtable
+          putHashTableOnCpuToCache(hashtable_cache_key_,
+                                   CacheItemType::BASELINE_HT,
+                                   hash_tables_for_device_[device_id],
+                                   DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+                                   hashtable_build_time);
 
-        hash_table_layout_cache_->putItemToCache(
-            hashtable_cache_key_,
-            hash_tables_for_device_[device_id]->getLayout(),
-            CacheItemType::HT_HASHING_SCHEME,
-            DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
-            0,
-            0,
-            {});
+          hash_table_layout_cache_->putItemToCache(
+              hashtable_cache_key_,
+              hash_tables_for_device_[device_id]->getLayout(),
+              CacheItemType::HT_HASHING_SCHEME,
+              DataRecyclerUtil::CPU_DEVICE_IDENTIFIER,
+              0,
+              0,
+              {});
+        }
       }
     }
     // Transfer the hash table on the GPU if we've only built it on CPU

@@ -490,7 +490,7 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   return lit_str_dict_proxy_.get();
 }
 
-StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
+const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
     const int source_dict_id,
     const int dest_dict_id,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -502,7 +502,17 @@ StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
       db_id_, source_dict_id, dest_dict_id, with_generation);
 }
 
-StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
+const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
+    const StringDictionaryProxy* source_proxy,
+    const StringDictionaryProxy* dest_proxy,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
+  CHECK(row_set_mem_owner);
+  std::lock_guard<std::mutex> lock(
+      str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  return row_set_mem_owner->addStringProxyTranslationMap(source_proxy, dest_proxy);
+}
+
+const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
     const int db_id,
     const int source_dict_id_in,
     const int dest_dict_id_in,

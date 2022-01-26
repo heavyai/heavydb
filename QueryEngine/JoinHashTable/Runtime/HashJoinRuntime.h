@@ -344,8 +344,8 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
+    const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join = false);
 
@@ -358,8 +358,8 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
     const std::vector<JoinBucketInfo>& join_bucket_info,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
+    const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
+    const std::vector<int32_t>& sd_min_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join = false);
 

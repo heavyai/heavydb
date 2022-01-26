@@ -455,11 +455,16 @@ class Executor {
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
 
-  StringDictionaryProxy::IdMap* getStringProxyTranslationMap(
+  const StringDictionaryProxy::IdMap* getStringProxyTranslationMap(
       const int source_dict_id,
       const int dest_dict_id,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
+
+  const StringDictionaryProxy::IdMap* getStringProxyTranslationMap(
+      const StringDictionaryProxy* source_proxy,
+      const StringDictionaryProxy* dest_proxy,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
   bool isCPUOnly() const;
 

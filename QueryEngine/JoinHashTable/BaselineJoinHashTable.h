@@ -39,6 +39,9 @@
 
 class Executor;
 
+using StrProxyTranslationMapsPtrsAndOffsets =
+    std::pair<std::vector<const int32_t*>, std::vector<int32_t>>;
+
 // Representation for a hash table using the baseline layout: an open-addressing
 // hash with a fill rate of 50%. It is used for equi-joins on multiple columns and
 // on single sparse columns (with very wide range), typically big integer. As of
@@ -228,6 +231,8 @@ class BaselineJoinHashTable : public HashJoin {
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   std::mutex cpu_hash_table_buff_mutex_;
+  std::mutex str_proxy_translation_mutex_;
+  std::vector<const StringDictionaryProxy::IdMap*> str_proxy_translation_maps_;
 
   std::vector<InnerOuter> inner_outer_pairs_;
   const int device_count_;

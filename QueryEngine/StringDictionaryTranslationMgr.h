@@ -72,7 +72,7 @@ class StringDictionaryTranslationMgr {
   const int device_count_;
   Executor* executor_;
   Data_Namespace::DataMgr* data_mgr_;
-  StringDictionaryProxy::IdMap* host_translation_map_{nullptr};
-  std::vector<int32_t*> kernel_translation_maps_;
+  const StringDictionaryProxy::IdMap* host_translation_map_{nullptr};
+  std::vector<const int32_t*> kernel_translation_maps_;
   std::vector<Data_Namespace::AbstractBuffer*> device_buffers_;
 };
