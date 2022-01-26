@@ -24,6 +24,11 @@
 
 #include <regex>
 
+#if defined(_MSC_VER)
+#include <codecvt>
+#include <locale>
+#endif
+
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 
@@ -36,6 +41,24 @@ namespace import_export {
 
 namespace {
 
+std::string ms_to_ss(const mup::string_type& s) {
+#if defined(_MSC_VER)
+  std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+  return converter.to_bytes(s);
+#else
+  return s;
+#endif
+}
+
+mup::string_type ss_to_ms(const std::string& s) {
+#if defined(_MSC_VER)
+  std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> converter;
+  return converter.from_bytes(s);
+#else
+  return s;
+#endif
+}
+
 #define VALIDATE_ARG_TYPE(arg, t2)    \
   if (args[arg]->GetType() != t2) {   \
     mup::ErrorContext err;            \
@@ -46,11 +69,11 @@ namespace {
     throw mup::ParserError(err);      \
   }
 
-#define THROW_INVALID_PARAMETER(arg, what)                 \
-  mup::ErrorContext err;                                   \
-  err.Errc = mup::ecINVALID_PARAMETER;                     \
-  err.Arg = arg;                                           \
-  err.Ident = GetIdent() + " (" + std::string(what) + ")"; \
+#define THROW_INVALID_PARAMETER(arg, what)                                  \
+  mup::ErrorContext err;                                                    \
+  err.Errc = mup::ecINVALID_PARAMETER;                                      \
+  err.Arg = arg;                                                            \
+  err.Ident = GetIdent() + ss_to_ms(" (") + ss_to_ms(what) + ss_to_ms(")"); \
   throw mup::ParserError(err);
 
 #define THROW_INVALID_PARAMETER_COUNT()           \
@@ -108,8 +131,8 @@ class Function_regex_match : public mup::ICallback {
     CHECK_EQ(argc, 2);
     VALIDATE_ARG_TYPE(0, 's');
     VALIDATE_ARG_TYPE(1, 's');
-    auto const text = args[0]->GetString();
-    auto const pattern = args[1]->GetString();
+    auto const text = ms_to_ss(args[0]->GetString());
+    auto const pattern = ms_to_ss(args[1]->GetString());
     try {
       std::regex regex(pattern, std::regex_constants::extended);
       std::smatch match;
@@ -117,7 +140,7 @@ class Function_regex_match : public mup::ICallback {
       if (match.size() != 2u) {
         throw std::runtime_error("must have exactly one match");
       }
-      *ret = match[1];
+      *ret = ss_to_ms(match[1]);
     } catch (std::runtime_error& e) {
       THROW_INVALID_PARAMETER(2, e.what());
     }
@@ -136,8 +159,8 @@ class Function_split_part : public mup::ICallback {
     VALIDATE_ARG_TYPE(0, 's');
     VALIDATE_ARG_TYPE(1, 's');
     VALIDATE_ARG_TYPE(2, 'i');
-    auto const text = args[0]->GetString();
-    auto const delimiter = args[1]->GetString();
+    auto const text = ms_to_ss(args[0]->GetString());
+    auto const delimiter = ms_to_ss(args[1]->GetString());
     auto n = args[2]->GetInteger();
     try {
       std::vector<std::string> tokens;
@@ -162,7 +185,7 @@ class Function_split_part : public mup::ICallback {
       if (index < 0 || index >= static_cast<int>(tokens.size())) {
         throw std::runtime_error("bad token index");
       }
-      *ret = tokens[index];
+      *ret = ss_to_ms(tokens[index]);
     } catch (std::runtime_error& e) {
       THROW_INVALID_PARAMETER(1, e.what());
     }
@@ -184,7 +207,7 @@ class Function_int : public mup::ICallback {
         *ret = static_cast<mup::int_type>(args[0]->GetFloat());
         break;
       case 's':
-        *ret = static_cast<mup::int_type>(std::stoll(args[0]->GetString()));
+        *ret = static_cast<mup::int_type>(std::stoll(ms_to_ss(args[0]->GetString())));
         break;
       case 'b':
         *ret = args[0]->GetBool() ? static_cast<mup::int_type>(1)
@@ -212,7 +235,7 @@ class Function_float : public mup::ICallback {
         *ret = args[0]->GetFloat();
         break;
       case 's':
-        *ret = static_cast<mup::float_type>(std::stod(args[0]->GetString()));
+        *ret = static_cast<mup::float_type>(std::stod(ms_to_ss(args[0]->GetString())));
         break;
       default: {
         THROW_INVALID_PARAMETER(0, "unsupported type");
@@ -236,7 +259,7 @@ class Function_double : public mup::ICallback {
         *ret = args[0]->GetFloat();
         break;
       case 's':
-        *ret = static_cast<mup::float_type>(std::stod(args[0]->GetString()));
+        *ret = static_cast<mup::float_type>(std::stod(ms_to_ss(args[0]->GetString())));
         break;
       default: {
         THROW_INVALID_PARAMETER(0, "unsupported type");
@@ -254,16 +277,14 @@ class Function_str : public mup::ICallback {
     CHECK_EQ(argc, 1);
     switch (args[0]->GetType()) {
       case 'i':
-        *ret = std::to_string(args[0]->GetInteger());
-        break;
       case 'f':
-        *ret = std::to_string(args[0]->GetFloat());
+        *ret = args[0]->ToString();
         break;
       case 's':
         *ret = args[0]->GetString();
         break;
       case 'b':
-        *ret = args[0]->GetBool() ? std::string("true") : std::string("false");
+        *ret = args[0]->GetBool() ? ss_to_ms("true") : ss_to_ms("false");
         break;
       default: {
         THROW_INVALID_PARAMETER(0, "unsupported type");
@@ -284,7 +305,7 @@ class Function_bool : public mup::ICallback {
         *ret = args[0]->GetInteger() != 0;
         break;
       case 's': {
-        auto const s = strip(to_lower(args[0]->GetString()));
+        auto const s = strip(to_lower(ms_to_ss(args[0]->GetString())));
         if (s == "true" || s == "t" || s == "1") {
           *ret = true;
         } else if (s == "false" || s == "f" || s == "0") {
@@ -320,7 +341,7 @@ mup::Value evaluate(mup::ParserX* parser) {
   try {
     result = parser->Eval();
   } catch (mup::ParserError& err) {
-    throw std::runtime_error("Parser Error: " + err.GetMsg());
+    throw std::runtime_error("Parser Error: " + ms_to_ss(err.GetMsg()));
   } catch (std::exception& err) {
     throw std::runtime_error("Unexpected muparserx Error: " + std::string(err.what()));
   }
@@ -350,15 +371,15 @@ ExpressionParser::ExpressionParser()
 
 void ExpressionParser::setStringConstant(const std::string& name,
                                          const std::string& value) {
-  parser_->DefineConst(name, value);
+  parser_->DefineConst(ss_to_ms(name), ss_to_ms(value));
 }
 
 void ExpressionParser::setIntConstant(const std::string& name, const int value) {
-  parser_->DefineConst(name, static_cast<mup::int_type>(value));
+  parser_->DefineConst(ss_to_ms(name), static_cast<mup::int_type>(value));
 }
 
 void ExpressionParser::setExpression(const std::string& expression) {
-  parser_->SetExpr(expression);
+  parser_->SetExpr(ss_to_ms(expression));
 }
 
 std::string ExpressionParser::evalAsString() {
@@ -366,7 +387,7 @@ std::string ExpressionParser::evalAsString() {
   if (result.GetType() != 's') {
     throw std::runtime_error("Expression is not a string");
   }
-  return result.GetString();
+  return ms_to_ss(result.GetString());
 }
 
 int ExpressionParser::evalAsInt() {

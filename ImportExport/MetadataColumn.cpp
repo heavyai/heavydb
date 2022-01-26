@@ -165,16 +165,9 @@ MetadataColumnInfos parse_add_metadata_columns(const std::string& add_metadata_c
     try {
       if (IS_INTEGER(sql_type) || sql_type == kFLOAT || sql_type == kDOUBLE) {
         size_t num_chars{0u};
-        if (IS_INTEGER(sql_type)) {
-          auto const v = static_cast<double>(std::stoll(value, &num_chars));
-          if (v < range_min || v > range_max) {
-            throw std::out_of_range(to_string(sql_type));
-          }
-        } else {
-          auto const v = static_cast<double>(std::stod(value, &num_chars));
-          if (v < range_min || v > range_max) {
-            throw std::out_of_range(to_string(sql_type));
-          }
+        auto const v = static_cast<double>(std::stod(value, &num_chars));
+        if (v < range_min || v > range_max) {
+          throw std::out_of_range(to_string(sql_type));
         }
         if (num_chars == 0u) {
           throw std::invalid_argument("empty value");

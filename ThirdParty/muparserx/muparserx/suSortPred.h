@@ -32,8 +32,6 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include <functional>
-
 
 /** \brief Namespace containing utility functions and classes for string processing. */
 namespace su
@@ -44,7 +42,6 @@ namespace su
     */
     template<class TString>
 	  struct SortByLength
-      :public std::binary_function<TString, TString, bool>
 	  {	
 	    bool operator()(const TString& a_sLeft, const TString& a_sRight) const
       {	

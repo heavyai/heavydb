@@ -4456,6 +4456,18 @@ TEST_F(MetadataColumnsTest, MathSqrtTest) {
   testPass("a,float,sqrt(49.0)", "a", {{7.0}});
 }
 
+TEST_F(MetadataColumnsTest, StringConcatTest) {
+  testPass("a,text,\"a\"||\"b\"", "a", {{"ab"}});
+}
+
+TEST_F(MetadataColumnsTest, StringIntConcatTest) {
+  testPass("a,text,\"a\"||3", "a", {{"a3"}});
+}
+
+TEST_F(MetadataColumnsTest, IntStringConcatTest) {
+  testPass("a,text,3||\"b\"", "a", {{"3b"}});
+}
+
 TEST_F(MetadataColumnsTest, LogicGTIntTest) {
   testPass("a,int,int(3 > 2)", "a", {{1L}});
 }

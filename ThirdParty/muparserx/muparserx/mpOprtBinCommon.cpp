@@ -56,19 +56,15 @@ void OprtStrAdd::Eval(ptr_val_type& ret, const ptr_val_type *arg, int argc)
     string_type a, b;
     if (arg[0]->GetType() == 's') {
       a = arg[0]->GetString();
-    } else if (arg[0]->GetType() == 'f') {
-      a = std::to_string(arg[0]->GetFloat());
-    } else if (arg[0]->GetType() == 'i') {
-      a = std::to_string(arg[0]->GetInteger());
+    } else if (arg[0]->GetType() == 'f' || arg[0]->GetType() == 'i') {
+      a = arg[0]->ToString();
     } else {
       throw ParserError(ErrorContext(ecTYPE_CONFLICT_FUN, -1, arg[0]->GetIdent(), arg[0]->GetType(), 's', 1));
     }
     if (arg[1]->GetType() == 's') {
       b = arg[1]->GetString();
-    } else if (arg[1]->GetType() == 'f') {
-      b = std::to_string(arg[1]->GetFloat());
-    } else if (arg[1]->GetType() == 'i') {
-      b = std::to_string(arg[1]->GetInteger());
+    } else if (arg[1]->GetType() == 'f' || arg[1]->GetType() == 'i') {
+      b = arg[1]->ToString();
     } else {
       throw ParserError(ErrorContext(ecTYPE_CONFLICT_FUN, -1, arg[1]->GetIdent(), arg[1]->GetType(), 's', 2));
     }
