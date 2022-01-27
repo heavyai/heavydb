@@ -17,6 +17,7 @@
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/JoinHashTable/PerfectHashTable.h"
 #include "QueryEngine/MurmurHash1Inl.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
@@ -687,94 +688,6 @@ TEST(Truncate, OverlapsJoinCacheInvalidationTest) {
 
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_point;");
   run_ddl_statement("DROP TABLE IF EXISTS cache_invalid_poly;");
-}
-
-TEST(Update, JoinCacheInvalidationTest) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("drop table if exists string_join1");
-    run_ddl_statement("drop table if exists string_join2");
-    run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
-
-    run_query("insert into string_join1 values ('muffin')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('pizza')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('ice cream')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('poutine')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('samosa')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('tomato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('potato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('apple')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('orange')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('chutney')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('poutine')", ExecutorDeviceType::CPU);
-
-    run_simple_query(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
-        dt);
-
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
-
-    run_query("update string_join1 set t='not poutine' where t='poutine';", dt);
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
-
-    ASSERT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_query(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
-
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
-  }
-}
-
-TEST(Delete, JoinCacheInvalidationTest) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    run_ddl_statement("drop table if exists string_join1;");
-    run_ddl_statement("drop table if exists string_join2;");
-    run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
-
-    run_query("insert into string_join1 values ('muffin')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('pizza')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('ice cream')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('poutine')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join1 values ('samosa')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('tomato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('potato')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('apple')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('orange')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('chutney')", ExecutorDeviceType::CPU);
-    run_query("insert into string_join2 values ('poutine')", ExecutorDeviceType::CPU);
-
-    run_simple_query(
-        "select count(string_join1.t) from string_join1 inner join string_join2 on "
-        "string_join1.t = string_join2.t;",
-        dt);
-
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
-
-    run_query("delete from string_join1 where t='poutine';", dt);
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)0);
-
-    ASSERT_EQ(
-        int64_t(0),
-        v<int64_t>(run_simple_query(
-            "select count(string_join1.t) from string_join1 inner join string_join2 on "
-            "string_join1.t = string_join2.t;",
-            dt)));
-    CHECK_EQ(QR::get()->getNumberOfCachedPerfectHashTables(), (unsigned long)1);
-
-    run_ddl_statement("drop table string_join1;");
-    run_ddl_statement("drop table string_join2;");
-  }
 }
 
 TEST(Delete, JoinCacheInvalidationTest_DropTable) {

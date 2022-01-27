@@ -210,31 +210,6 @@ TEST_F(LowerFunctionTest, SelectLowercaseLiteral) {
   compare_result_set(expected_result_set, result_set);
 }
 
-TEST_F(LowerFunctionTest, UpdateLowercase_EncodedColumnOnly) {
-  auto result_set = multi_sql(R"(
-       update lower_function_test_people set country_code = lower(country_code);
-       select country_code from lower_function_test_people;
-     )");
-  std::vector<std::vector<ScalarTargetValue>> expected_result_set{
-      {"us"}, {"us"}, {"ca"}, {"ca"}};
-  compare_result_set(expected_result_set, result_set);
-}
-
-/**
- * UPDATE statements with at least one non-encoded column follow a different code path
- * from those with only encoded columns (see StorageIOFacility::yieldUpdateCallback for
- * more details).InsertIntoSelectLowercase
- */
-TEST_F(LowerFunctionTest, UpdateLowercase_EncodedAndNonEncodedColumns) {
-  auto result_set = multi_sql(R"(
-       update lower_function_test_people set last_name = last_name, country_code = lower(country_code);
-       select last_name, country_code from lower_function_test_people;
-     )");
-  std::vector<std::vector<ScalarTargetValue>> expected_result_set{
-      {"SMITH", "us"}, {"Banks", "us"}, {"Wilson", "ca"}, {"Smith", "ca"}};
-  compare_result_set(expected_result_set, result_set);
-}
-
 // TODO: Re-enable after clear definition around handling non-ASCII characters
 TEST_F(LowerFunctionTest, DISABLED_LowercaseNonAscii) {
   auto result_set = multi_sql(R"(

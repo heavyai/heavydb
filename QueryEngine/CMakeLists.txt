@@ -37,7 +37,6 @@ set(query_engine_source_files
     Descriptors/RelAlgExecutionDescriptor.cpp
     EquiJoinCondition.cpp
     Execute.cpp
-    ExecuteUpdate.cpp
     ExecutionKernel.cpp
     ExpressionRange.cpp
     ExpressionRewrite.cpp

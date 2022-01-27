@@ -34,8 +34,6 @@
 #include <ctime>
 #include <sstream>
 
-#include "StorageIOFacility.h"
-
 extern bool g_skip_intermediate_count;
 
 enum class MergeType { Union, Reduce };
@@ -47,7 +45,7 @@ struct QueryStepExecutionResult {
   bool is_outermost_query;
 };
 
-class RelAlgExecutor : private StorageIOFacility {
+class RelAlgExecutor {
  public:
   using TargetInfoList = std::vector<TargetInfo>;
 
@@ -55,8 +53,7 @@ class RelAlgExecutor : private StorageIOFacility {
                  const Catalog_Namespace::Catalog* cat,
                  SchemaProviderPtr schema_provider,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : StorageIOFacility(executor, cat)
-      , executor_(executor)
+      : executor_(executor)
       , cat_(cat)
       , db_id_(cat->getDatabaseId())
       , schema_provider_(schema_provider)
@@ -68,8 +65,7 @@ class RelAlgExecutor : private StorageIOFacility {
                  const Catalog_Namespace::Catalog* cat,
                  const std::string& query_ra,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : StorageIOFacility(executor, cat)
-      , executor_(executor)
+      : executor_(executor)
       , cat_(cat)
       , db_id_(cat->getDatabaseId())
       , query_dag_(std::make_unique<RelAlgDagBuilder>(
@@ -87,8 +83,7 @@ class RelAlgExecutor : private StorageIOFacility {
                  const Catalog_Namespace::Catalog* cat,
                  std::unique_ptr<RelAlgDagBuilder> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : StorageIOFacility(executor, cat)
-      , executor_(executor)
+      : executor_(executor)
       , cat_(cat)
       , db_id_(cat->getDatabaseId())
       , query_dag_(std::move(query_dag))
@@ -103,8 +98,7 @@ class RelAlgExecutor : private StorageIOFacility {
                  SchemaProviderPtr schema_provider,
                  std::unique_ptr<RelAlgDagBuilder> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : StorageIOFacility(executor, nullptr)
-      , executor_(executor)
+      : executor_(executor)
       , cat_(nullptr)
       , db_id_(db_id)
       , query_dag_(std::move(query_dag))
@@ -211,16 +205,6 @@ class RelAlgExecutor : private StorageIOFacility {
                          const ExecutionOptions&,
                          RenderInfo*,
                          const int64_t queue_time_ms);
-
-  void executeUpdate(const RelAlgNode* node,
-                     const CompilationOptions& co,
-                     const ExecutionOptions& eo,
-                     const int64_t queue_time_ms);
-
-  void executeDelete(const RelAlgNode* node,
-                     const CompilationOptions& co,
-                     const ExecutionOptions& eo_in,
-                     const int64_t queue_time_ms);
 
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
@@ -427,7 +411,6 @@ class RelAlgExecutor : private StorageIOFacility {
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
 
-  std::unique_ptr<TransactionParameters> dml_transaction_parameters_;
   std::optional<std::function<void()>> post_execution_callback_;
 
   friend class PendingExecutionClosure;

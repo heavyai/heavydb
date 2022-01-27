@@ -114,11 +114,6 @@ std::unique_ptr<RexLiteral> genLiteralStr(std::string val) {
       new RexLiteral(val, SQLTypes::kTEXT, SQLTypes::kTEXT, 0, 0, 0, 0));
 }
 
-std::unique_ptr<RexLiteral> genLiteralTimestamp(time_t val) {
-  return std::unique_ptr<RexLiteral>(new RexLiteral(
-      (int64_t)val, SQLTypes::kTIMESTAMP, SQLTypes::kTIMESTAMP, 0, 8, 0, 8));
-}
-
 std::unique_ptr<RexLiteral> genLiteralBigInt(int64_t val) {
   return std::unique_ptr<RexLiteral>(
       new RexLiteral(val, SQLTypes::kBIGINT, SQLTypes::kBIGINT, 0, 8, 0, 8));
@@ -152,8 +147,8 @@ void add_table_details(std::vector<RelLogicalValues::RowValues>& logical_values,
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->tableId));
   logical_values.back().emplace_back(genLiteralStr(logical_table->tableName));
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->nColumns));
-  logical_values.back().emplace_back(genLiteralBoolean(false)); // sharded
-  logical_values.back().emplace_back(genLiteralBigInt(0)); // nShards
+  logical_values.back().emplace_back(genLiteralBoolean(false));  // sharded
+  logical_values.back().emplace_back(genLiteralBigInt(0));       // nShards
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxRows));
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxFragRows));
   logical_values.back().emplace_back(genLiteralBigInt(logical_table->maxRollbackEpochs));
@@ -279,14 +274,6 @@ std::string DdlCommandDataImpl::commandStr() {
 const rapidjson::Value& extractPayload(const DdlCommandData& ddl_data) {
   const DdlCommandDataImpl* data = static_cast<const DdlCommandDataImpl*>(&ddl_data);
   return data->payload();
-}
-
-const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
-  const rapidjson::Value* filters = nullptr;
-  if (payload.HasMember("filters") && payload["filters"].IsArray()) {
-    filters = &payload["filters"];
-  }
-  return filters;
 }
 
 }  // namespace

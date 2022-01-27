@@ -187,24 +187,12 @@ TEST_F(DumpRestoreTest, DumpRestore) {
   dump_restore(false, false, false);
 }
 
-TEST_F(DumpRestoreTest, DumpRestore_Rollback) {
-  dump_restore(false, false, true);
-}
-
 TEST_F(DumpRestoreTest, DumpRestore_Altered) {
   dump_restore(false, true, false);
 }
 
-TEST_F(DumpRestoreTest, DumpRestore_Altered_Rollback) {
-  dump_restore(false, true, true);
-}
-
 TEST_F(DumpRestoreTest, DumpMigrate) {
   dump_restore(true, false, false);
-}
-
-TEST_F(DumpRestoreTest, DumpMigrate_Rollback) {
-  dump_restore(true, false, true);
 }
 
 TEST_F(DumpRestoreTest, DumpMigrate_Altered) {

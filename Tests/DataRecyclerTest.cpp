@@ -19,6 +19,7 @@
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryRunner/QueryRunner.h"

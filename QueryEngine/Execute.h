@@ -486,16 +486,6 @@ class Executor {
                                  const bool has_cardinality_estimation,
                                  ColumnCacheMap& column_cache);
 
-  TableUpdateMetadata executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
-                                    const std::vector<InputTableInfo>& table_infos,
-                                    const TableDescriptor* updated_table_desc,
-                                    const CompilationOptions& co,
-                                    const ExecutionOptions& eo,
-                                    const Catalog_Namespace::Catalog& cat,
-                                    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                    const UpdateLogForFragment::Callback& cb,
-                                    const bool is_agg);
-
   void addTransientStringLiterals(
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner);

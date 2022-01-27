@@ -1859,13 +1859,15 @@ TEST_F(Itas, OmitDictionaryEncodedArrayColumn) {
 }
 
 TEST_F(Itas, ItasOrderLimitOffset) {
-  // clean up
-  sql("DROP TABLE IF EXISTS ITAS_TARGET;");
-  sql("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  auto init_target = [] {
+    sql("DROP TABLE IF EXISTS ITAS_TARGET;");
+    sql("CREATE TABLE ITAS_TARGET (t int);");
+  };
 
   // create table src, target
-  sql("CREATE TABLE ITAS_TARGET (t int);");
+  sql("DROP TABLE IF EXISTS ITAS_SOURCE;");
   sql("CREATE TABLE ITAS_SOURCE (s1 int, s2 int, s3 int) with (fragment_size = 4);");
+  init_target();
 
   // populate src
   int max = 100;
@@ -1890,7 +1892,7 @@ TEST_F(Itas, ItasOrderLimitOffset) {
   assertResultSetEqual(
       {{i(0)}, {i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}, {i(9)}},
       result1);
-  sql("DELETE FROM ITAS_TARGET;");
+  init_target();
 
   EXPECT_NO_THROW(sql(
       "INSERT INTO ITAS_TARGET (SELECT s2 FROM ITAS_SOURCE ORDER BY s2 DESC LIMIT 4);"));
@@ -1898,7 +1900,7 @@ TEST_F(Itas, ItasOrderLimitOffset) {
   TQueryResult result2;
   sql(result2, "SELECT * FROM ITAS_TARGET ORDER BY t;");
   assertResultSetEqual({{i(max - 3)}, {i(max - 2)}, {i(max - 1)}, {i(max - 0)}}, result2);
-  sql("DELETE FROM ITAS_TARGET;");
+  init_target();
 
 #if 0  
   // disabled until an issue resolved with ORDER/LIMIT/OFFSET
@@ -1910,7 +1912,7 @@ TEST_F(Itas, ItasOrderLimitOffset) {
   sql(result3, "SELECT * FROM ITAS_TARGET ORDER BY t LIMIT 6;");
   int c = 3*max-1;
   assertResultSetEqual({{i(c-5)}, {i(c-4)}, {i(c-3)}, {i(c-2)}, {i(c-1)}, {i(c)}}, result3);
-  sql("DELETE FROM ITAS_TARGET;");
+  init_target();
 #endif
 
   std::string insert_sql =
@@ -1921,7 +1923,7 @@ TEST_F(Itas, ItasOrderLimitOffset) {
   TQueryResult result4;
   sql(result4, "SELECT * FROM ITAS_TARGET ORDER BY t;");
   assertResultSetEqual({{i(62)}, {i(63)}, {i(64)}, {i(65)}, {i(66)}, {i(67)}}, result4);
-  sql("DELETE FROM ITAS_TARGET;");
+  init_target();
 }
 
 class Export : public DBHandlerTestFixture {
@@ -1996,145 +1998,6 @@ TEST_F(Export, ExportFromSelect) {
 
 TEST_F(Export, ExportFromSelectFragments) {
   exportTestBody(") WITH (FRAGMENT_SIZE=3)");
-}
-
-TEST_P(Update, InvalidTextArrayAssignment) {
-  sql("DROP TABLE IF EXISTS arr;");
-  sql("CREATE TABLE arr (id int, ia text[3]);");
-  sql("INSERT INTO arr VALUES(1 , ARRAY[null,null,null]); ");
-  ASSERT_ANY_THROW(sql("INSERT INTO arr VALUES(0 , null); "));
-  ASSERT_ANY_THROW(sql("UPDATE arr set ia = NULL;"));
-  ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY[];"));
-  ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY[null];"));
-  ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY['one'];"));
-  ASSERT_ANY_THROW(sql("UPDATE arr set ia = ARRAY['one', 'two', 'three', 'four'];"));
-}
-
-TEST_P(Update, UpdateColumnByColumn) {
-  if (isDistributedMode()) {
-    GTEST_SKIP();
-  }
-  sql("DROP TABLE IF EXISTS update_test;");
-
-  std::string create_sql = "CREATE TABLE update_test(id int";
-  for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
-    auto tcd = columnDescriptors[col];
-
-    if (tcd->skip_test("UpdateColumnByColumn")) {
-      LOG(ERROR) << "not supported... skipping";
-      return;
-    }
-
-    create_sql += ", col_src_" + std::to_string(col) + " " + tcd->get_column_definition();
-    create_sql += ", col_dst_" + std::to_string(col) + " " + tcd->get_column_definition();
-  }
-  create_sql += ") WITH (fragment_size=3);";
-
-  LOG(INFO) << create_sql;
-
-  sql(create_sql);
-
-  size_t num_rows = 10;
-
-  // fill source table
-  for (unsigned int row = 0; row < num_rows; row++) {
-    std::string insert_sql = "INSERT INTO update_test VALUES (" + std::to_string(row);
-    for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
-      auto tcd = columnDescriptors[col];
-      insert_sql += ", " + tcd->get_column_value(row);
-      insert_sql += ", " + tcd->get_column_value(row + 1);
-    }
-    insert_sql += ");";
-
-    sql(insert_sql);
-  }
-
-  // execute Updates
-  std::string update_sql = "UPDATE update_test set ";
-  for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
-    update_sql +=
-        " col_dst_" + std::to_string(col) + "=" + "col_src_" + std::to_string(col);
-    if (col + 1 < columnDescriptors.size()) {
-      update_sql += ",";
-    }
-  }
-  update_sql += ";";
-
-  LOG(INFO) << update_sql;
-
-  sql(update_sql);
-
-  // compare source against CTAS
-  std::string select_sql = "SELECT id";
-  for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
-    select_sql += ", col_dst_" + std::to_string(col);
-    select_sql += ", col_src_" + std::to_string(col);
-  }
-  select_sql += " FROM update_test ORDER BY id;";
-
-  LOG(INFO) << select_sql;
-  TQueryResult select_result;
-  sql(select_result, select_sql);
-
-  auto columns = select_result.row_set.columns;
-
-  // check expected result count
-  ASSERT_EQ(num_rows, columns[0].nulls.size());
-
-  // we compare each column with the column 'next' to it to check the update replace the
-  // value
-  for (unsigned int c = 0; c < columnDescriptors.size(); c++) {
-    std::string col_details =
-        "col_" + std::to_string(c) + " " + columnDescriptors[c]->get_column_definition();
-    for (size_t r = 0; r < num_rows; r++) {
-      ASSERT_EQ(columns[2 * c + 1].nulls[r], columns[2 * c + 2].nulls[r])
-          << col_details << " Column " << std::to_string(c) << " row "
-          << std::to_string(r);
-      if (columns[2 * c + 1].data.int_col.size() > 0) {
-        ASSERT_EQ(columns[2 * c + 1].data.int_col[r], columns[2 * c + 2].data.int_col[r])
-            << col_details << " Column " << std::to_string(c) << " row "
-            << std::to_string(r);
-      }
-      if (columns[2 * c + 1].data.real_col.size() > 0) {
-        ASSERT_EQ(columns[2 * c + 1].data.real_col[r],
-                  columns[2 * c + 2].data.real_col[r])
-            << col_details << " Column " << std::to_string(c) << " row "
-            << std::to_string(r);
-      }
-      if (columns[2 * c + 1].data.str_col.size() > 0) {
-        ASSERT_EQ(columns[2 * c + 1].data.str_col[r], columns[2 * c + 2].data.str_col[r])
-            << col_details << " Column " << std::to_string(c) << " row "
-            << std::to_string(r);
-      }
-      if (columns[2 * c + 1].data.arr_col.size() > 0) {
-        ASSERT_EQ(columns[2 * c + 1].data.arr_col[r], columns[2 * c + 2].data.arr_col[r])
-            << col_details << " Column " << std::to_string(c) << " row "
-            << std::to_string(r);
-      }
-    }
-  }
-}
-
-TEST_P(Update, UpdateColumnByLiteral) {
-  updateColumnByLiteralTest(columnDescriptors, columnDescriptors.size());
-}
-
-TEST_P(Update, UpdateFirstColumnByLiteral) {
-  if (columnDescriptors.size() > 1) {
-    updateColumnByLiteralTest(columnDescriptors, 1);
-  }
-}
-
-TEST_P(Update, UnsupportedWindowFunctions) {
-  sql("DROP TABLE IF EXISTS update_window_func;");
-  sql("CREATE TABLE update_window_func (a INT, b INT);");
-  sql("INSERT INTO update_window_func VALUES(1, 10);");
-  sql("INSERT INTO update_window_func VALUES(2, 1);");
-  sql("INSERT INTO update_window_func VALUES(1, 20);");
-  sql("INSERT INTO update_window_func VALUES(2, 4);");
-  sql("ALTER TABLE update_window_func ADD COLUMN c INT;");
-  ASSERT_ANY_THROW(
-      sql("UPDATE update_window_func SET c = MAX(b) OVER (PARTITION BY a);"));
 }
 
 const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
@@ -2380,36 +2243,6 @@ const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE
 
 INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Ctas, testing::Values(ALL));
 INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Itas_P, testing::Values(ALL));
-INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Update, testing::Values(ALL));
-
-INSTANTIATE_TEST_SUITE_P(
-    MIXED_VARLEN_WITHOUT_GEO,
-    Update,
-    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{
-        STRING_NONE_BASE,
-        BOOLEAN_ARRAY,
-        BOOLEAN_FIXED_LEN_ARRAY,
-        TINYINT_ARRAY,
-        TINYINT_FIXED_LEN_ARRAY,
-        SMALLINT_ARRAY,
-        SMALLINT_FIXED_LEN_ARRAY,
-        INTEGER_ARRAY,
-        INTEGER_FIXED_LEN_ARRAY,
-        BIGINT_ARRAY,
-        BIGINT_FIXED_LEN_ARRAY,
-        NUMERIC_ARRAY,
-        NUMERIC_FIXED_LEN_ARRAY,
-        TEXT_NONE,
-        TEXT_ARRAY,
-        TEXT_FIXED_LEN_ARRAY,
-        TIME_ARRAY,
-        TIME_FIXED_LEN_ARRAY,
-        DATE_ARRAY,
-        DATE_FIXED_LEN_ARRAY,
-        TIMESTAMP_ARRAY,
-        TIMESTAMP_FIXED_LEN_ARRAY
-
-    }));
 
 // TODO 4 May TEMP tables not being found
 // calcite not being updated as it should

@@ -129,30 +129,6 @@ TEST_F(TableTest, InsertWithCache) {
   sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}, {i(2)}});
 }
 
-TEST_F(TableTest, DeleteWithCache) {
-  sqlCreateTable("(i INTEGER) WITH (fragment_size = 1)");
-  sql("INSERT INTO " + default_table_name + " VALUES(1);");
-  sql("INSERT INTO " + default_table_name + " VALUES(2);");
-  sql("INSERT INTO " + default_table_name + " VALUES(3);");
-  sql("INSERT INTO " + default_table_name + " VALUES(4);");
-  sql("DELETE FROM " + default_table_name + " WHERE i = 3;");
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
-                      {{i(1)}, {i(2)}, {i(4)}});
-  sql("DELETE FROM " + default_table_name + " WHERE i = 4;");
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{i(1)}, {i(2)}});
-}
-
-TEST_F(TableTest, UpdateWithCache) {
-  sqlCreateTable("(i INTEGER) WITH (fragment_size = 1)");
-  sql("INSERT INTO " + default_table_name + " VALUES(1);");
-  sql("INSERT INTO " + default_table_name + " VALUES(2);");
-  sql("INSERT INTO " + default_table_name + " VALUES(3);");
-  sql("INSERT INTO " + default_table_name + " VALUES(4);");
-  sql("UPDATE " + default_table_name + " SET i = 0 WHERE i >= 2;");
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
-                      {{i(1)}, {i(0)}, {i(0)}, {i(0)}});
-}
-
 TEST_F(TableTest, RecoverCache_All) {
   sqlCreateTable("(i INTEGER)");
   sql("INSERT INTO " + default_table_name + " VALUES(1);");

@@ -59,6 +59,7 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -751,7 +752,6 @@ std::shared_ptr<Analyzer::Expr> ColumnRefExpr::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  int table_id{0};
   int rte_idx{0};
   const ColumnDescriptor* cd{nullptr};
   if (column_ == nullptr) {
@@ -768,7 +768,6 @@ std::shared_ptr<Analyzer::Expr> ColumnRefExpr::analyze(
     if (cd == nullptr) {
       throw std::runtime_error("Column name " + *column_ + " does not exist.");
     }
-    table_id = rte->get_table_id();
   } else {
     bool found = false;
     int i = 0;
@@ -777,7 +776,6 @@ std::shared_ptr<Analyzer::Expr> ColumnRefExpr::analyze(
       if (cd != nullptr && !found) {
         found = true;
         rte_idx = i;
-        table_id = rte->get_table_id();
       } else if (cd != nullptr && found) {
         throw std::runtime_error("Column name " + *column_ + " is ambiguous.");
       }
@@ -3627,7 +3625,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.dropTable(td);
 
   // invalidate cached hashtable
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
+  JoinHashTableCacheInvalidator::invalidateCaches();
 }
 
 void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {}
@@ -3778,7 +3776,7 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.truncateTable(td);
 
   // invalidate cached hashtable
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
+  JoinHashTableCacheInvalidator::invalidateCaches();
 }
 
 OptimizeTableStmt::OptimizeTableStmt(const rapidjson::Value& payload) {
@@ -4362,7 +4360,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   // invalidate cached hashtable
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
+  JoinHashTableCacheInvalidator::invalidateCaches();
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4886,13 +4884,12 @@ void CopyTableStmt::execute(
                                      QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
       }
 
-      ScopeGuard clearInterruptStatus =
-          [executor, &query_str, &query_session, &start_time, &importer] {
-            // reset the runtime query interrupt status
-            if (g_enable_non_kernel_time_query_interrupt) {
-              executor->clearQuerySessionStatus(query_session, start_time);
-            }
-          };
+      ScopeGuard clearInterruptStatus = [executor, &query_session, &start_time] {
+        // reset the runtime query interrupt status
+        if (g_enable_non_kernel_time_query_interrupt) {
+          executor->clearQuerySessionStatus(query_session, start_time);
+        }
+      };
       import_export::ImportStatus import_result;
       auto ms =
           measure<>::execution([&]() { import_result = importer->import(&session); });

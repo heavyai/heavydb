@@ -1470,19 +1470,6 @@ INSTANTIATE_TEST_SUITE_P(
       return "Page_Size_" + (page_size == -1 ? "Default" : std::to_string(page_size));
     });
 
-TEST_F(ShowTableDetailsTest, MaxRollbackEpochsUpdates) {
-  sql("create table test_table_1 (c1 int, c2 int) with (max_rollback_epochs = 15);");
-  sql("insert into test_table_1 values (1, 2);");
-  sql("insert into test_table_1 values (10, 20);");
-  for (int i = 0; i < 2; i++) {
-    sql("update test_table_1 set c1 = c1 + 1 where c1 >= 10;");
-  }
-  assertMaxRollbackUpdateResult(15, 8, 5, 6, 0);
-
-  sql("alter table test_table_1 set max_rollback_epochs = 1;");
-  assertMaxRollbackUpdateResult(1, 3, 3, 7, 5);
-}
-
 TEST_F(ShowTableDetailsTest, CommandWithTableNames) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create table test_table_3 (c1 int);");

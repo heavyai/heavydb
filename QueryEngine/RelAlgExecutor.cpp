@@ -720,71 +720,59 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   auto hint_applied = handle_hint();
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
-    if (compound->isDeleteViaSelect()) {
-      executeDelete(compound, hint_applied.first, hint_applied.second, queue_time_ms);
-    } else if (compound->isUpdateViaSelect()) {
-      executeUpdate(compound, hint_applied.first, hint_applied.second, queue_time_ms);
-    } else {
-      exec_desc.setResult(executeCompound(
-          compound, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
-      VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
-              << static_cast<int>(-compound->getId()) << ", ...)"
-              << " exec_desc.getResult().getDataPtr()->rowCount()="
-              << exec_desc.getResult().getDataPtr()->rowCount();
-      if (exec_desc.getResult().isFilterPushDownEnabled()) {
-        return;
-      }
-      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
+    exec_desc.setResult(executeCompound(
+        compound, hint_applied.first, hint_applied.second, render_info, queue_time_ms));
+    VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
+            << static_cast<int>(-compound->getId()) << ", ...)"
+            << " exec_desc.getResult().getDataPtr()->rowCount()="
+            << exec_desc.getResult().getDataPtr()->rowCount();
+    if (exec_desc.getResult().isFilterPushDownEnabled()) {
+      return;
     }
+    addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
   const auto project = dynamic_cast<const RelProject*>(body);
   if (project) {
-    if (project->isDeleteViaSelect()) {
-      executeDelete(project, hint_applied.first, hint_applied.second, queue_time_ms);
-    } else if (project->isUpdateViaSelect()) {
-      executeUpdate(project, hint_applied.first, hint_applied.second, queue_time_ms);
-    } else {
-      std::optional<size_t> prev_count;
-      // Disabling the intermediate count optimization in distributed, as the previous
-      // execution descriptor will likely not hold the aggregated result.
-      if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
-        auto prev_exec_desc = seq.getDescriptor(step_idx - 1);
-        CHECK(prev_exec_desc);
-        RelAlgNode const* prev_body = prev_exec_desc->getBody();
-        // This optimization needs to be restricted in its application for UNION, which
-        // can have 2 input nodes in which neither should restrict the count of the other.
-        // However some non-UNION queries are measurably slower with this restriction, so
-        // it is only applied when g_enable_union is true.
-        bool const parent_check =
-            !g_enable_union || project->getInput(0)->getId() == prev_body->getId();
-        // If the previous node produced a reliable count, skip the pre-flight count
-        if (parent_check && (dynamic_cast<const RelCompound*>(prev_body) ||
-                             dynamic_cast<const RelLogicalValues*>(prev_body))) {
-          const auto& prev_exe_result = prev_exec_desc->getResult();
-          const auto prev_result = prev_exe_result.getRows();
-          if (prev_result) {
-            prev_count = prev_result->rowCount();
-            VLOG(3) << "Setting output row count for projection node to previous node ("
-                    << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
-          }
+    std::optional<size_t> prev_count;
+    // Disabling the intermediate count optimization in distributed, as the previous
+    // execution descriptor will likely not hold the aggregated result.
+    if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
+      auto prev_exec_desc = seq.getDescriptor(step_idx - 1);
+      CHECK(prev_exec_desc);
+      RelAlgNode const* prev_body = prev_exec_desc->getBody();
+      // This optimization needs to be restricted in its application for UNION, which
+      // can have 2 input nodes in which neither should restrict the count of the other.
+      // However some non-UNION queries are measurably slower with this restriction, so
+      // it is only applied when g_enable_union is true.
+      bool const parent_check =
+          !g_enable_union || project->getInput(0)->getId() == prev_body->getId();
+      // If the previous node produced a reliable count, skip the pre-flight count
+      if (parent_check && (dynamic_cast<const RelCompound*>(prev_body) ||
+                           dynamic_cast<const RelLogicalValues*>(prev_body))) {
+        const auto& prev_exe_result = prev_exec_desc->getResult();
+        const auto prev_result = prev_exe_result.getRows();
+        if (prev_result) {
+          prev_count = prev_result->rowCount();
+          VLOG(3) << "Setting output row count for projection node to previous node ("
+                  << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
         }
       }
-      // For intermediate results we want to keep the result fragmented
-      // to have higher parallelism on next steps.
-      bool multifrag_result = g_enable_multifrag_rs && (step_idx != seq.size() - 1);
-      exec_desc.setResult(
-          executeProject(project,
-                         co,
-                         eo_work_unit.with_multifrag_result(multifrag_result),
-                         render_info,
-                         queue_time_ms,
-                         prev_count));
-      if (exec_desc.getResult().isFilterPushDownEnabled()) {
-        return;
-      }
-      addTemporaryTable(-project->getId(), exec_desc.getResult().getTable());
     }
+    // For intermediate results we want to keep the result fragmented
+    // to have higher parallelism on next steps.
+    bool multifrag_result = g_enable_multifrag_rs && (step_idx != seq.size() - 1);
+    exec_desc.setResult(
+        executeProject(project,
+                       co,
+                       eo_work_unit.with_multifrag_result(multifrag_result),
+                       render_info,
+                       queue_time_ms,
+                       prev_count));
+    if (exec_desc.getResult().isFilterPushDownEnabled()) {
+      return;
+    }
+    addTemporaryTable(-project->getId(), exec_desc.getResult().getTable());
     return;
   }
   const auto aggregate = dynamic_cast<const RelAggregate*>(body);
@@ -1499,247 +1487,6 @@ std::vector<TargetMetaInfo> get_targets_meta(
 }
 
 }  // namespace
-
-void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
-                                   const CompilationOptions& co_in,
-                                   const ExecutionOptions& eo_in,
-                                   const int64_t queue_time_ms) {
-  CHECK(node);
-  auto timer = DEBUG_TIMER(__func__);
-
-  UpdateTriggeredCacheInvalidator::invalidateCaches();
-
-  auto co = co_in;
-  co.hoist_literals = false;  // disable literal hoisting as it interferes with dict
-                              // encoded string updates
-
-  auto execute_update_for_node = [this, &co, &eo_in](const auto node,
-                                                     auto& work_unit,
-                                                     const bool is_aggregate) {
-    auto table_descriptor = node->getModifiedTableDescriptor();
-    CHECK(table_descriptor);
-    if (node->isVarlenUpdateRequired() && !table_descriptor->hasDeletedCol) {
-      throw std::runtime_error(
-          "UPDATE queries involving variable length columns are only supported on tables "
-          "with the vacuum attribute set to 'delayed'");
-    }
-    auto updated_table_desc = node->getModifiedTableDescriptor();
-    dml_transaction_parameters_ =
-        std::make_unique<UpdateTransactionParameters>(updated_table_desc,
-                                                      node->getTargetColumns(),
-                                                      node->getOutputMetainfo(),
-                                                      node->isVarlenUpdateRequired());
-
-    const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-
-    auto execute_update_ra_exe_unit =
-        [this, &co, &eo_in, &table_infos, &updated_table_desc](
-            const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
-          CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
-
-          auto eo = eo_in;
-          if (dml_transaction_parameters_->tableIsTemporary()) {
-            eo.output_columnar_hint = true;
-            co_project.allow_lazy_fetch = false;
-            co_project.filter_on_deleted_column =
-                false;  // project the entire delete column for columnar update
-          }
-
-          auto update_transaction_parameters = dynamic_cast<UpdateTransactionParameters*>(
-              dml_transaction_parameters_.get());
-          CHECK(update_transaction_parameters);
-          auto update_callback = yieldUpdateCallback(*update_transaction_parameters);
-          try {
-            auto table_update_metadata =
-                executor_->executeUpdate(ra_exe_unit,
-                                         table_infos,
-                                         updated_table_desc,
-                                         co_project,
-                                         eo,
-                                         *cat_,
-                                         executor_->row_set_mem_owner_,
-                                         update_callback,
-                                         is_aggregate);
-            post_execution_callback_ = [table_update_metadata, this]() {
-              dml_transaction_parameters_->finalizeTransaction(*cat_);
-              // 'deleted' column might be created during execution (due to update
-              // executed as delete + insert for varlen data) and it might be missing in
-              // the current schema provider. Use Catalog based schema provider for
-              // correct metadata update.
-              executor_->setSchemaProvider(
-                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat_));
-              TableOptimizer table_optimizer{
-                  dml_transaction_parameters_->getTableDescriptor(), executor_, *cat_};
-              table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
-            };
-          } catch (const QueryExecutionError& e) {
-            throw std::runtime_error(getErrorMessageFromCode(e.getErrorCode()));
-          }
-        };
-
-    if (dml_transaction_parameters_->tableIsTemporary()) {
-      // hold owned target exprs during execution if rewriting
-      auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
-      // rewrite temp table updates to generate the full column by moving the where
-      // clause into a case if such a rewrite is not possible, bail on the update
-      // operation build an expr for the update target
-      auto update_transaction_params =
-          dynamic_cast<UpdateTransactionParameters*>(dml_transaction_parameters_.get());
-      CHECK(update_transaction_params);
-      const auto td = update_transaction_params->getTableDescriptor();
-      CHECK(td);
-      const auto update_columns = update_transaction_params->getUpdateColumns();
-      if (update_columns.size() > 1) {
-        throw std::runtime_error(
-            "Multi-column update is not yet supported for temporary tables.");
-      }
-
-      auto cd = cat_->getMetadataForColumn(td->tableId, update_columns.front()->name);
-      CHECK(cd);
-      CHECK(!cd->isVirtualCol);
-      auto projected_column_to_update =
-          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_->getDatabaseId()), 0);
-      const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
-          work_unit.exe_unit, projected_column_to_update);
-      if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
-        throw std::runtime_error(
-            "Variable length updates not yet supported on temporary tables.");
-      }
-      execute_update_ra_exe_unit(rewritten_exe_unit, is_aggregate);
-    } else {
-      execute_update_ra_exe_unit(work_unit.exe_unit, is_aggregate);
-    }
-  };
-
-  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
-    auto work_unit =
-        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
-
-    execute_update_for_node(compound, work_unit, compound->isAggregate());
-  } else if (auto project = dynamic_cast<const RelProject*>(node)) {
-    auto work_unit =
-        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
-
-    if (project->isSimple()) {
-      CHECK_EQ(size_t(1), project->inputCount());
-      const auto input_ra = project->getInput(0);
-      if (dynamic_cast<const RelSort*>(input_ra)) {
-        const auto& input_table =
-            get_temporary_table(&temporary_tables_, -input_ra->getId());
-        work_unit.exe_unit.scan_limit = input_table.rowCount();
-      }
-    }
-
-    execute_update_for_node(project, work_unit, false);
-  } else {
-    throw std::runtime_error("Unsupported parent node for update: " + node->toString());
-  }
-}
-
-void RelAlgExecutor::executeDelete(const RelAlgNode* node,
-                                   const CompilationOptions& co,
-                                   const ExecutionOptions& eo_in,
-                                   const int64_t queue_time_ms) {
-  CHECK(node);
-  auto timer = DEBUG_TIMER(__func__);
-
-  DeleteTriggeredCacheInvalidator::invalidateCaches();
-
-  auto execute_delete_for_node = [this, &co, &eo_in](const auto node,
-                                                     auto& work_unit,
-                                                     const bool is_aggregate) {
-    auto* table_descriptor = node->getModifiedTableDescriptor();
-    CHECK(table_descriptor);
-    if (!table_descriptor->hasDeletedCol) {
-      throw std::runtime_error(
-          "DELETE queries are only supported on tables with the vacuum attribute set to "
-          "'delayed'");
-    }
-
-    const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-
-    auto execute_delete_ra_exe_unit =
-        [this, &table_infos, &table_descriptor, &eo_in, &co](const auto& exe_unit,
-                                                             const bool is_aggregate) {
-          dml_transaction_parameters_ =
-              std::make_unique<DeleteTransactionParameters>(table_descriptor);
-          auto delete_params = dynamic_cast<DeleteTransactionParameters*>(
-              dml_transaction_parameters_.get());
-          CHECK(delete_params);
-          auto delete_callback = yieldDeleteCallback(*delete_params);
-          CompilationOptions co_delete = CompilationOptions::makeCpuOnly(co);
-
-          auto eo = eo_in;
-          if (dml_transaction_parameters_->tableIsTemporary()) {
-            eo.output_columnar_hint = true;
-            co_delete.filter_on_deleted_column =
-                false;  // project the entire delete column for columnar update
-          } else {
-            CHECK_EQ(exe_unit.target_exprs.size(), size_t(1));
-          }
-
-          try {
-            auto table_update_metadata =
-                executor_->executeUpdate(exe_unit,
-                                         table_infos,
-                                         table_descriptor,
-                                         co_delete,
-                                         eo,
-                                         *cat_,
-                                         executor_->row_set_mem_owner_,
-                                         delete_callback,
-                                         is_aggregate);
-            post_execution_callback_ = [table_update_metadata, this]() {
-              dml_transaction_parameters_->finalizeTransaction(*cat_);
-              // 'deleted' column might be created during execution and it might be
-              // missing in the current schema provider. Use Catalog based schema provider
-              // for correct metadata update.
-              executor_->setSchemaProvider(
-                  std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat_));
-              TableOptimizer table_optimizer{
-                  dml_transaction_parameters_->getTableDescriptor(), executor_, *cat_};
-              table_optimizer.vacuumFragmentsAboveMinSelectivity(table_update_metadata);
-            };
-          } catch (const QueryExecutionError& e) {
-            throw std::runtime_error(getErrorMessageFromCode(e.getErrorCode()));
-          }
-        };
-
-    if (table_is_temporary(table_descriptor)) {
-      auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
-      auto cd = cat_->getDeletedColumn(table_descriptor);
-      CHECK(cd);
-      auto delete_column_expr =
-          makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat_->getDatabaseId()), 0);
-      const auto rewritten_exe_unit =
-          query_rewrite->rewriteColumnarDelete(work_unit.exe_unit, delete_column_expr);
-      execute_delete_ra_exe_unit(rewritten_exe_unit, is_aggregate);
-    } else {
-      execute_delete_ra_exe_unit(work_unit.exe_unit, is_aggregate);
-    }
-  };
-
-  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
-    const auto work_unit =
-        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
-    execute_delete_for_node(compound, work_unit, compound->isAggregate());
-  } else if (auto project = dynamic_cast<const RelProject*>(node)) {
-    auto work_unit =
-        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
-    if (project->isSimple()) {
-      CHECK_EQ(size_t(1), project->inputCount());
-      const auto input_ra = project->getInput(0);
-      if (dynamic_cast<const RelSort*>(input_ra)) {
-        const auto& input_table =
-            get_temporary_table(&temporary_tables_, -input_ra->getId());
-        work_unit.exe_unit.scan_limit = input_table.rowCount();
-      }
-    }
-    execute_delete_for_node(project, work_unit, false);
-  } else {
-    throw std::runtime_error("Unsupported parent node for delete: " + node->toString());
-  }
-}
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const CompilationOptions& co,

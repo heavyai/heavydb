@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef UPDATECACHEINVALIDATORS_H
-#define UPDATECACHEINVALIDATORS_H
+#pragma once
 
 #include "CacheInvalidator.h"
 
@@ -29,15 +28,9 @@
 #include "JoinHashTable/OverlapsJoinHashTable.h"
 #include "JoinHashTable/PerfectJoinHashTable.h"
 
-using UpdateTriggeredCacheInvalidator =
-    CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
-using DeleteTriggeredCacheInvalidator = UpdateTriggeredCacheInvalidator;
-
 // Note that this is functionally the same as the above two invalidators. The
 // JoinHashTableCacheInvalidator is a generic invalidator used during `clear_cpu` calls.
 // The above cache invalidators are specific invalidators called during update/delete and
 // will likely be extended in the future.
 using JoinHashTableCacheInvalidator =
     CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
-
-#endif
