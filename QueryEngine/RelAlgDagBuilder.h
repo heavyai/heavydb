@@ -932,9 +932,6 @@ class RelScan : public RelAlgNode {
     return column_infos_[spi - 1];
   }
 
-  ColumnInfoPtr getDeleteColumnInfo() const { return delete_col_info_; }
-  void setDeleteColumnInfo(ColumnInfoPtr info) { delete_col_info_ = info; }
-
   std::string toString() const override {
     std::vector<std::string_view> field_names;
     field_names.reserve(column_infos_.size());
@@ -990,7 +987,6 @@ class RelScan : public RelAlgNode {
  private:
   TableInfoPtr table_info_;
   const std::vector<ColumnInfoPtr> column_infos_;
-  ColumnInfoPtr delete_col_info_;
   bool hint_applied_;
   std::unique_ptr<Hints> hints_;
 };
