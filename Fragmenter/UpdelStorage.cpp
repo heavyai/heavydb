@@ -303,12 +303,6 @@ void InsertOrderFragmenter::updateColumns(
     auto chunk = chunks[indexOfChunk];
     const auto chunk_info = chunk->getColumnInfo();
 
-    if (chunk_info->is_delete) {
-      indexOfDeletedColumn = chunk_info->column_id;
-      deletedChunk = chunk;
-      continue;
-    }
-
     auto targetColumnIt = std::find_if(columnDescriptors.begin(),
                                        columnDescriptors.end(),
                                        [=](const ColumnDescriptor* cd) -> bool {
@@ -882,16 +876,6 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
   }
   wait_cleanup_threads(threads);
 
-  // for unit test
-  if (Fragmenter_Namespace::FragmentInfo::unconditionalVacuum_) {
-    if (cd->isDeletedCol) {
-      const auto deleted_offsets = getVacuumOffsets(chunk);
-      if (deleted_offsets.size() > 0) {
-        compactRows(catalog, td, fragment_id, deleted_offsets, memory_level, updel_roll);
-        return {};
-      }
-    }
-  }
   ChunkUpdateStats update_stats;
   for (size_t c = 0; c < ncore; ++c) {
     update_metadata(update_stats.new_values_stats,

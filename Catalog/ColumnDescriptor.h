@@ -40,11 +40,10 @@ struct ColumnDescriptor {
   bool isSystemCol;
   bool isVirtualCol;
   std::string virtualExpr;
-  bool isDeletedCol;
   bool isGeoPhyCol{false};
   std::optional<std::string> default_value;
 
-  ColumnDescriptor() : isSystemCol(false), isVirtualCol(false), isDeletedCol(false) {}
+  ColumnDescriptor() : isSystemCol(false), isVirtualCol(false) {}
   ColumnDescriptor(const int tableId,
                    const int columnId,
                    const std::string& columnName,
@@ -55,8 +54,7 @@ struct ColumnDescriptor {
       , sourceName(columnName)
       , columnType(columnType)
       , isSystemCol(false)
-      , isVirtualCol(false)
-      , isDeletedCol(false) {}
+      , isVirtualCol(false) {}
   ColumnDescriptor(const bool isGeoPhyCol) : ColumnDescriptor() {
     this->isGeoPhyCol = isGeoPhyCol;
   }
@@ -99,7 +97,7 @@ struct ColumnDescriptor {
 
   ColumnInfoPtr makeInfo(int db_id = -1) const {
     return std::make_shared<ColumnInfo>(
-        db_id, tableId, columnId, columnName, columnType, isVirtualCol, isDeletedCol);
+        db_id, tableId, columnId, columnName, columnType, isVirtualCol);
   }
 };
 

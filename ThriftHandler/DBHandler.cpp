@@ -3074,8 +3074,7 @@ DBHandler::prepare_loader_generic(
     //               Subtracting 1 (rowid) until TableDescriptor is updated.
     auto geo_physical_cols = std::count_if(
         col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
-    const auto num_table_cols = static_cast<size_t>(td->nColumns) - geo_physical_cols -
-                                (td->hasDeletedCol ? 2 : 1);
+    const auto num_table_cols = static_cast<size_t>(td->nColumns) - geo_physical_cols - 1;
     if (num_cols != num_table_cols) {
       throw std::runtime_error("Number of columns to load (" + std::to_string(num_cols) +
                                ") does not match number of columns in table " +

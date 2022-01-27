@@ -62,8 +62,6 @@ struct TableDescriptor {
                    // first use.
   int sortedColumnId;  // Id of the column to be sorted on
   Data_Namespace::MemoryLevel persistenceLevel;
-  bool hasDeletedCol;  // Does table has a delete col, Yes (VACUUM = DELAYED)
-                       //                              No  (VACUUM = IMMEDIATE)
   // Spi means Sequential Positional Index which is equivalent to the input index in a
   // RexInput node
   std::vector<int> columnIdBySpi_;  // spi = 1,2,3,...
@@ -78,7 +76,6 @@ struct TableDescriptor {
       : tableId(-1)
       , sortedColumnId(0)
       , persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL)
-      , hasDeletedCol(true)
       , maxRollbackEpochs(DEFAULT_MAX_ROLLBACK_EPOCHS)
       , mutex_(std::make_shared<std::mutex>()) {}
 

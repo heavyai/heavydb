@@ -305,24 +305,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
       // know the table fits in memory as it is a temporary table, so signal to the lower
       // layers that we can disregard the early out select * optimization
       is_temporary_table = true;
-    } else {
-      if (table_info->delete_column_id >= 0) {
-        auto frag_info =
-            executor->getDataMgr()->getTableInfo(table_info->db_id, table_info->table_id);
-        for (auto frag : frag_info.fragments) {
-          auto chunk_meta_it =
-              frag.getChunkMetadataMapPhysical().find(table_info->delete_column_id);
-          if (chunk_meta_it != frag.getChunkMetadataMapPhysical().end()) {
-            const auto& chunk_meta = chunk_meta_it->second;
-            ChunkKey chunk_key_prefix = {table_info->db_id,
-                                         outer_table_id,
-                                         table_info->delete_column_id,
-                                         frag.fragmentId};
-            deleted_chunk_metadata_vec.emplace_back(
-                std::pair{chunk_key_prefix, chunk_meta});
-          }
-        }
-      }
     }
   }
 

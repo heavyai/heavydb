@@ -228,13 +228,6 @@ class RelAlgPhysicalColumnInfosVisitor
       }
     }
 
-    // Add 'delete' column if exists.
-    if (scan->getTableInfo()->delete_column_id >= 0) {
-      auto del_col_info = scan->getDeleteColumnInfo();
-      CHECK(del_col_info);
-      res.insert({*del_col_info, del_col_info});
-    }
-
     return res;
   }
 };

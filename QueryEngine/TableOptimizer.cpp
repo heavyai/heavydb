@@ -187,113 +187,13 @@ void TableOptimizer::recomputeMetadataUnlocked(
 DeletedColumnStats TableOptimizer::recomputeDeletedColumnMetadata(
     const TableDescriptor* td,
     const std::set<size_t>& fragment_indexes) const {
-  if (!td->hasDeletedCol) {
     return {};
-  }
-
-  auto stats = getDeletedColumnStats(td, fragment_indexes);
-  auto* fragmenter = td->fragmenter.get();
-  CHECK(fragmenter);
-  auto cd = cat_.getDeletedColumn(td);
-  fragmenter->updateChunkStats(cd, stats.chunk_stats_per_fragment, {});
-  fragmenter->setNumRows(stats.total_row_count);
-  return stats;
 }
 
 DeletedColumnStats TableOptimizer::getDeletedColumnStats(
     const TableDescriptor* td,
     const std::set<size_t>& fragment_indexes) const {
-  if (!td->hasDeletedCol) {
     return {};
-  }
-
-  auto cd = cat_.getDeletedColumn(td);
-  const auto column_id = cd->columnId;
-  CHECK(!cd->isVirtualCol);
-
-  const auto input_col_desc =
-      std::make_shared<const InputColDescriptor>(cd->makeInfo(cat_.getDatabaseId()), 0);
-  const auto col_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, column_id, 0);
-  const auto count_expr =
-      makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
-
-  const auto ra_exe_unit = build_ra_exe_unit(input_col_desc, {count_expr.get()});
-  const auto table_infos = get_table_infos(ra_exe_unit, executor_);
-  CHECK_EQ(table_infos.size(), size_t(1));
-
-  const auto co = get_compilation_options(ExecutorDeviceType::CPU);
-  const auto eo = get_execution_options();
-
-  DeletedColumnStats deleted_column_stats;
-  Executor::PerFragmentCallBack compute_deleted_callback =
-      [&deleted_column_stats, cd](
-          ResultSetPtr results, const Fragmenter_Namespace::FragmentInfo& fragment_info) {
-        // count number of tuples in $deleted as total number of tuples in table.
-        if (cd->isDeletedCol) {
-          deleted_column_stats.total_row_count += fragment_info.getPhysicalNumTuples();
-        }
-        if (fragment_info.getPhysicalNumTuples() == 0) {
-          // TODO(adb): Should not happen, but just to be safe...
-          LOG(WARNING) << "Skipping completely empty fragment for column "
-                       << cd->columnName;
-          return;
-        }
-
-        const auto row = results->getNextRow(false, false);
-        CHECK_EQ(row.size(), size_t(1));
-
-        const auto& ti = cd->columnType;
-
-        auto chunk_metadata = std::make_shared<ChunkMetadata>();
-        chunk_metadata->sqlType = get_logical_type_info(ti);
-
-        const auto count_val = read_scalar_target_value<int64_t>(row[0]);
-
-        // min element 0 max element 1
-        std::vector<TargetValue> fakerow;
-
-        auto num_tuples = static_cast<size_t>(count_val);
-
-        // calculate min
-        if (num_tuples == fragment_info.getPhysicalNumTuples()) {
-          // nothing deleted
-          // min = false;
-          // max = false;
-          fakerow.emplace_back(TargetValue{int64_t(0)});
-          fakerow.emplace_back(TargetValue{int64_t(0)});
-        } else {
-          if (num_tuples == 0) {
-            // everything marked as delete
-            // min = true
-            // max = true
-            fakerow.emplace_back(TargetValue{int64_t(1)});
-            fakerow.emplace_back(TargetValue{int64_t(1)});
-          } else {
-            // some deleted
-            // min = false
-            // max = true;
-            fakerow.emplace_back(TargetValue{int64_t(0)});
-            fakerow.emplace_back(TargetValue{int64_t(1)});
-          }
-        }
-
-        // place manufacture min and max in fake row to use common infra
-        if (!set_metadata_from_results(*chunk_metadata, fakerow, ti, false)) {
-          LOG(WARNING) << "Unable to process new metadata values for column "
-                       << cd->columnName;
-          return;
-        }
-
-        deleted_column_stats.chunk_stats_per_fragment.emplace(
-            std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
-        deleted_column_stats.visible_row_count_per_fragment.emplace(
-            std::make_pair(fragment_info.fragmentId, num_tuples));
-      };
-
-  executor_->executeWorkUnitPerFragment(
-      ra_exe_unit, table_infos[0], co, eo, compute_deleted_callback, fragment_indexes);
-  return deleted_column_stats;
 }
 
 void TableOptimizer::recomputeColumnMetadata(

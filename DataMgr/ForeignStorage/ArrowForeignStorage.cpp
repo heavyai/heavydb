@@ -847,7 +847,6 @@ void ArrowForeignStorage::prepareTable(const int db_id,
                                        const std::string& name,
                                        TableDescriptor& td,
                                        std::list<ColumnDescriptor>& cols) {
-  td.hasDeletedCol = false;
   this->name = name;
   auto table = tables[name];
   for (auto& field : table->schema()->fields()) {
@@ -906,9 +905,7 @@ class ArrowCsvForeignStorage : public ArrowForeignStorageBase {
 void ArrowCsvForeignStorage::prepareTable(const int db_id,
                                           const std::string& type,
                                           TableDescriptor& td,
-                                          std::list<ColumnDescriptor>& cols) {
-  td.hasDeletedCol = false;
-}
+                                          std::list<ColumnDescriptor>& cols) {}
 
 // TODO: this overlaps with getArrowType() from ArrowResultSetConverter.cpp but with few
 // differences in kTEXT and kDATE

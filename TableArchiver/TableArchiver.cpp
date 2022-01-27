@@ -376,12 +376,6 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   std::list<ColumnDescriptor> src_columns;
   std::vector<Parser::SharedDictionaryDef> shared_dict_defs;
   create_table_stmt->executeDryRun(session, src_td, src_columns, shared_dict_defs);
-  // - sanity check table-level compatibility
-  if (src_td.hasDeletedCol != td->hasDeletedCol) {
-    // TODO: allow the case, in which src data enables vacuum while
-    // dst doesn't, by simply discarding src $deleted column data.
-    throw std::runtime_error("Incompatible table VACCUM option");
-  }
   // - sanity check column-level compatibility (based on column names)
   const auto dst_columns =
       cat_->getAllColumnMetadataForTable(td->tableId, false, false, false);

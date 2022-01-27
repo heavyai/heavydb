@@ -194,22 +194,16 @@ class ColumnVar : public Expr {
   ColumnVar(const SQLTypeInfo& ti)
       : Expr(ti)
       , rte_idx(-1)
-      , col_info_(std::make_shared<ColumnInfo>(-1, 0, 0, "", ti, false, false)) {}
+      , col_info_(std::make_shared<ColumnInfo>(-1, 0, 0, "", ti, false)) {}
   ColumnVar(const SQLTypeInfo& ti,
             int table_id,
             int col_id,
             int nest_level,
-            bool is_virtual = false,
-            bool is_delete = false)
+            bool is_virtual = false)
       : Expr(ti)
       , rte_idx(nest_level)
-      , col_info_(std::make_shared<ColumnInfo>(-1,
-                                               table_id,
-                                               col_id,
-                                               "",
-                                               ti,
-                                               is_virtual,
-                                               is_delete)) {}
+      , col_info_(
+            std::make_shared<ColumnInfo>(-1, table_id, col_id, "", ti, is_virtual)) {}
   int get_db_id() const { return col_info_->db_id; }
   int get_table_id() const { return col_info_->table_id; }
   int get_column_id() const { return col_info_->column_id; }
@@ -225,8 +219,7 @@ class ColumnVar : public Expr {
                                                col_info_->column_id,
                                                col_info_->name,
                                                ti,
-                                               col_info_->is_rowid,
-                                               col_info_->is_delete);
+                                               col_info_->is_rowid);
       type_info = ti;
     }
   }
@@ -299,15 +292,8 @@ class ExpressionTuple : public Expr {
 class Var : public ColumnVar {
  public:
   enum WhichRow { kINPUT_OUTER, kINPUT_INNER, kOUTPUT, kGROUPBY };
-  Var(const SQLTypeInfo& ti,
-      int r,
-      int c,
-      int i,
-      bool is_virtual,
-      bool is_delete,
-      WhichRow o,
-      int v)
-      : ColumnVar(ti, r, c, i, is_virtual, is_delete), which_row(o), varno(v) {}
+  Var(const SQLTypeInfo& ti, int r, int c, int i, bool is_virtual, WhichRow o, int v)
+      : ColumnVar(ti, r, c, i, is_virtual), which_row(o), varno(v) {}
   Var(ColumnInfoPtr col_info, int i, WhichRow o, int v)
       : ColumnVar(col_info, i), which_row(o), varno(v) {}
   Var(const SQLTypeInfo& ti, WhichRow o, int v) : ColumnVar(ti), which_row(o), varno(v) {}
@@ -1895,7 +1881,7 @@ class GeoColumnVar : public ColumnVar {
                const int range_table_index,
                const bool with_bounds,
                const bool with_render_group)
-      : ColumnVar(ti, table_id, column_id, range_table_index, false, false)
+      : ColumnVar(ti, table_id, column_id, range_table_index, false)
       , with_bounds_(with_bounds)
       , with_render_group_(with_render_group) {}
   GeoColumnVar(const ColumnInfoPtr col_info,

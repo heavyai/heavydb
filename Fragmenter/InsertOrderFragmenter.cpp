@@ -560,18 +560,6 @@ bool InsertOrderFragmenter::hasDeletedRows(const int delete_column_id) {
 }
 
 void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
-  // populate deleted system column if it should exist, as it will not come from client
-  std::unique_ptr<int8_t[]> data_for_deleted_column;
-  for (const auto& cit : columnMap_) {
-    if (cit.second.getColumnInfo()->is_delete) {
-      data_for_deleted_column.reset(new int8_t[insert_data.numRows]);
-      memset(data_for_deleted_column.get(), 0, insert_data.numRows);
-      insert_data.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
-      insert_data.columnIds.push_back(cit.second.getColumnId());
-      insert_data.is_default.push_back(false);
-      break;
-    }
-  }
   CHECK(insert_data.is_default.size() == insert_data.columnIds.size());
   std::unordered_map<int, int> inverseInsertDataColIdMap;
   for (size_t insertId = 0; insertId < insert_data.columnIds.size(); ++insertId) {

@@ -52,7 +52,6 @@ struct DataframeTableDescriptor : TableDescriptor {
     keyMetainfo = td.keyMetainfo;
     fragmenter = td.fragmenter;
     persistenceLevel = td.persistenceLevel;
-    hasDeletedCol = td.hasDeletedCol;
     columnIdBySpi_ = td.columnIdBySpi_;
     storageType = td.storageType;
     mutex_ = td.mutex_;

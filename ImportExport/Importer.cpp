@@ -194,7 +194,7 @@ Importer::Importer(Loader* providedLoader, const std::string& f, const CopyParam
     }
     // neither are rowid or $deleted$
     // note: columns can be added after rowid/$deleted$
-    if (p->isVirtualCol || p->isDeletedCol) {
+    if (p->isVirtualCol) {
       continue;
     }
     skip_physical_cols = p->columnType.get_physical_cols();

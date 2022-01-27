@@ -2318,10 +2318,6 @@ class RelAlgDispatcher {
       CHECK(infos.back());
     }
     auto scan_node = std::make_shared<RelScan>(tinfo, std::move(infos));
-    if (tinfo->delete_column_id >= 0) {
-      scan_node->setDeleteColumnInfo(
-          schema_provider_->getColumnInfo(*tinfo, tinfo->delete_column_id));
-    }
     if (scan_ra.HasMember("hints")) {
       getRelAlgHints(scan_ra, scan_node);
     }
@@ -2463,14 +2459,12 @@ class RelAlgDispatcher {
                                                           -1,
                                                           name,
                                                           SQLTypeInfo(kBIGINT, false),
-                                                          false,
                                                           false);
         auto cd = cat_->getMetadataForColumn(table_descriptor->tableId, name);
         if (cd) {
           info->column_id = cd->columnId;
           info->type = cd->columnType;
           info->is_rowid = cd->isVirtualCol;
-          info->is_delete = cd->isDeletedCol;
         } else {
           CHECK_EQ(std::string(name), "EXPR$DELETE_OFFSET_IN_FRAGMENT");
         }

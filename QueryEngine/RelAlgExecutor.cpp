@@ -1118,7 +1118,6 @@ void collect_used_input_desc(
                      col_id,
                      "",
                      input_ra->getOutputMetainfo()[col_id].get_type_info(),
-                     false,
                      false);
       input_col_descs_unique.insert(
           std::make_shared<const InputColDescriptor>(col_info, nest_level));
@@ -3545,8 +3544,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
         table_id,
         scan_ra ? input_idx + 1 : input_idx,
         rte_idx,
-        scan_ra ? scan_ra->isVirtualColBySpi(input_idx + 1) : false,
-        scan_ra ? scan_ra->isDeleteColBySpi(input_idx + 1) : false));
+        scan_ra ? scan_ra->isVirtualColBySpi(input_idx + 1) : false));
     ++input_idx;
   }
   return inputs;

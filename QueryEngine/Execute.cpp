@@ -3498,43 +3498,7 @@ void add_deleted_col_to_map(PlanState::DeletedColumnsMap& deleted_cols_map,
 std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDeletedColumn(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co) {
-  if (!co.filter_on_deleted_column) {
-    return std::make_tuple(ra_exe_unit, PlanState::DeletedColumnsMap{});
-  }
-  auto ra_exe_unit_with_deleted = ra_exe_unit;
-  PlanState::DeletedColumnsMap deleted_cols_map;
-  for (const auto& input_table : ra_exe_unit_with_deleted.input_descs) {
-    if (input_table.getSourceType() != InputSourceType::TABLE) {
-      continue;
-    }
-    auto table_info = schema_provider_->getTableInfo(db_id_, input_table.getTableId());
-    CHECK(table_info);
-    if (table_info->delete_column_id < 0) {
-      continue;
-    }
-    auto col_info =
-        schema_provider_->getColumnInfo(*table_info, table_info->delete_column_id);
-    CHECK(col_info);
-    CHECK(col_info->type.is_boolean());
-    // check deleted column is not already present
-    bool found = false;
-    for (const auto& input_col : ra_exe_unit_with_deleted.input_col_descs) {
-      if (input_col.get()->getColId() == col_info->column_id &&
-          input_col.get()->getTableId() == col_info->table_id &&
-          input_col.get()->getNestLevel() == input_table.getNestLevel()) {
-        found = true;
-        add_deleted_col_to_map(deleted_cols_map, col_info);
-        break;
-      }
-    }
-    if (!found) {
-      // add deleted column
-      ra_exe_unit_with_deleted.input_col_descs.emplace_back(
-          new InputColDescriptor(col_info, input_table.getNestLevel()));
-      add_deleted_col_to_map(deleted_cols_map, col_info);
-    }
-  }
-  return std::make_tuple(ra_exe_unit_with_deleted, deleted_cols_map);
+  return std::make_tuple(ra_exe_unit, PlanState::DeletedColumnsMap{});
 }
 
 namespace {
@@ -3579,32 +3543,6 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
 bool Executor::isFragmentFullyDeleted(
     const int table_id,
     const Fragmenter_Namespace::FragmentInfo& fragment) {
-  // Skip temporary tables
-  if (table_id < 0) {
-    return false;
-  }
-
-  auto table_info = schema_provider_->getTableInfo(db_id_, fragment.physicalTableId);
-  CHECK(table_info);
-  if (table_info->delete_column_id < 0) {
-    return false;
-  }
-  auto col_info =
-      schema_provider_->getColumnInfo(*table_info, table_info->delete_column_id);
-  CHECK(col_info);
-  CHECK(col_info->type.is_boolean());
-
-  auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_info->column_id);
-  if (chunk_meta_it != fragment.getChunkMetadataMap().end()) {
-    const int64_t chunk_min =
-        extract_min_stat(chunk_meta_it->second->chunkStats, col_info->type);
-    const int64_t chunk_max =
-        extract_max_stat(chunk_meta_it->second->chunkStats, col_info->type);
-    if (chunk_min == 1 && chunk_max == 1) {  // Delete chunk if metadata says full bytemap
-      // is true (signifying all rows deleted)
-      return true;
-    }
-  }
   return false;
 }
 

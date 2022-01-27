@@ -44,20 +44,16 @@ struct ColumnInfo : public ColumnRef {
              int column_id,
              const std::string name_,
              SQLTypeInfo type_,
-             bool is_rowid_,
-             bool is_delete_)
+             bool is_rowid_)
       : ColumnRef(db_id, table_id, column_id)
       , name(name_)
       , type(type_)
-      , is_rowid(is_rowid_)
-      , is_delete(is_delete_) {}
+      , is_rowid(is_rowid_) {}
 
   std::string name;
   SQLTypeInfo type;
   // Virtual rowid column.
   bool is_rowid;
-  // Special column holding a bitmap for deleted rows.
-  bool is_delete;
 
   std::string toString() const;
 };

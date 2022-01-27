@@ -375,44 +375,6 @@ void import_table_file(const std::string& table, const std::string& file) {
   QR::get()->runImport(copy_stmt);
 }
 
-bool prepare_table_for_delete(const std::string& table = "trips",
-                              const std::string& column = UpdelTestConfig::sequence,
-                              const int64_t cnt = UpdelTestConfig::fixNumRows) {
-  UpdelRoll updelRoll;
-  std::vector<uint64_t> fragOffsets;
-  std::vector<ScalarTargetValue> rhsValues;
-  for (int64_t i = 0; i < cnt; ++i) {
-    fragOffsets.push_back(i);
-    rhsValues.emplace_back(ScalarTargetValue(i));
-  }
-  auto ms = measure<>::execution([&]() {
-    auto catalog = QR::get()->getCatalog();
-    const auto td = catalog->getMetadataForTable(table);
-    CHECK(td);
-    CHECK(td->fragmenter);
-    const auto cd = catalog->getMetadataForColumn(td->tableId, column);
-    CHECK(cd);
-
-    td->fragmenter->updateColumn(catalog.get(),
-                                 td,
-                                 cd,
-                                 0,  // 1st frag since we have only 100 rows
-                                 fragOffsets,
-                                 rhsValues,
-                                 SQLTypeInfo(kBIGINT, false),
-                                 Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                 updelRoll);
-  });
-  if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(1) << "time on update " << cnt << " rows:" << ms << " ms";
-  }
-  ms = measure<>::execution([&]() { updelRoll.commitUpdate(); });
-  if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(1) << "time on commit:" << ms << " ms";
-  }
-  return compare_agg(table, column, cnt, (0 + cnt - 1) * cnt / 2. / cnt);
-}
-
 bool check_row_count_with_string(const std::string& table,
                                  const std::string& column,
                                  const int64_t cnt,
@@ -428,64 +390,6 @@ bool check_row_count_with_string(const std::string& table,
   }
   VLOG(1) << "r_cnt: " << std::to_string(r_cnt) << ", cnt: " << std::to_string(cnt);
   return false;
-}
-
-bool delete_and_immediately_vacuum_rows(const std::string& table,
-                                        const std::string& column,
-                                        const std::string& deleted_column,
-                                        const int64_t nall,
-                                        const int dcnt,
-                                        const int start,
-                                        const int step) {
-  // set a column to "traceable" values
-  if (false == prepare_table_for_delete(table, column, nall)) {
-    return false;
-  }
-
-  // pre calc expected count and sum of the traceable values
-  UpdelRoll updelRoll;
-  std::vector<uint64_t> fragOffsets;
-  std::vector<ScalarTargetValue> rhsValues;
-  rhsValues.emplace_back(int64_t{1});
-  int64_t sum = 0, cnt = 0;
-  for (int d = 0, i = start; d < dcnt; ++d, i += step) {
-    fragOffsets.push_back(i);
-    sum += i;
-    cnt += 1;
-  }
-
-  // delete and vacuum rows supposedly immediately
-  auto cat = QR::get()->getCatalog().get();
-  auto td = cat->getMetadataForTable(table);
-  auto cd = cat->getMetadataForColumn(td->tableId, deleted_column);
-  const_cast<ColumnDescriptor*>(cd)->isDeletedCol = true;
-  auto ms = measure<>::execution([&]() {
-    td->fragmenter->updateColumn(cat,
-                                 td,
-                                 cd,
-                                 0,  // 1st frag since we have only 100 rows
-                                 fragOffsets,
-                                 rhsValues,
-                                 SQLTypeInfo(kBOOLEAN, false),
-                                 Data_Namespace::MemoryLevel::CPU_LEVEL,
-                                 updelRoll);
-  });
-  if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(1) << "time on delete & vacuum " << dcnt << " of " << nall << " rows:" << ms
-            << " ms";
-  }
-  ms = measure<>::execution([&]() { updelRoll.commitUpdate(); });
-  if (UpdelTestConfig::showMeasuredTime) {
-    VLOG(1) << "time on commit:" << ms << " ms";
-  }
-  cnt = nall - cnt;
-  // check varlen column vacuumed
-  if (false == check_row_count_with_string(
-                   table, "hack_license", cnt, "BA96DE419E711691B9445D6A6307C170")) {
-    return false;
-  }
-  return compare_agg(
-      table, column, cnt, ((0 + nall - 1) * nall / 2. - sum) / (cnt ? cnt : 1));
 }
 
 // don't use R"()" format; somehow it causes many blank lines
@@ -578,56 +482,6 @@ class RowVacuumTestWithVarlenAndArraysN : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl_statement("drop table varlen;"););
   }
 };
-
-class RowVacuumTest : public ::testing::Test {
- protected:
-  void SetUp() override {
-    ASSERT_NO_THROW(init_table_data(););
-    Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(true);
-  }
-
-  void TearDown() override {
-    Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(false);
-    ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
-  }
-};
-
-TEST_F(RowVacuumTest, Vacuum_Half_First) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_rows("trips",
-                                                 UpdelTestConfig::sequence,
-                                                 "deleted",
-                                                 UpdelTestConfig::fixNumRows,
-                                                 UpdelTestConfig::fixNumRows / 2,
-                                                 0,
-                                                 1));
-}
-TEST_F(RowVacuumTest, Vacuum_Half_Second) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_rows("trips",
-                                                 UpdelTestConfig::sequence,
-                                                 "deleted",
-                                                 UpdelTestConfig::fixNumRows,
-                                                 UpdelTestConfig::fixNumRows / 2,
-                                                 UpdelTestConfig::fixNumRows / 2,
-                                                 1));
-}
-TEST_F(RowVacuumTest, Vacuum_Interleaved_2) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_rows("trips",
-                                                 UpdelTestConfig::sequence,
-                                                 "deleted",
-                                                 UpdelTestConfig::fixNumRows,
-                                                 UpdelTestConfig::fixNumRows / 2,
-                                                 0,
-                                                 2));
-}
-TEST_F(RowVacuumTest, Vacuum_Interleaved_4) {
-  EXPECT_TRUE(delete_and_immediately_vacuum_rows("trips",
-                                                 UpdelTestConfig::sequence,
-                                                 "deleted",
-                                                 UpdelTestConfig::fixNumRows,
-                                                 UpdelTestConfig::fixNumRows / 4,
-                                                 0,
-                                                 4));
-}
 
 class UpdateStorageTest : public ::testing::Test {
  protected:

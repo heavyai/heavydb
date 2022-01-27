@@ -182,8 +182,7 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
     EXPECT_EQ("[]", td->keyMetainfo);
     EXPECT_EQ("", td->fragments);
 
-    EXPECT_EQ(column_count + 2, td->nColumns);  // +2 for rowid and $deleted$ columns
-    EXPECT_TRUE(td->hasDeletedCol);
+    EXPECT_EQ(column_count + 1, td->nColumns);  // +1 for rowid
     EXPECT_TRUE(td->storageType.empty());
   }
 
@@ -195,7 +194,6 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
     EXPECT_FALSE(column->isSystemCol);
     EXPECT_FALSE(column->isVirtualCol);
     EXPECT_TRUE(column->virtualExpr.empty());
-    EXPECT_FALSE(column->isDeletedCol);
 
     auto& type_info = column->columnType;
     EXPECT_EQ(expected.not_null, type_info.get_notnull());

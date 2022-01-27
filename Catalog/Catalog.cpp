@@ -929,7 +929,6 @@ void Catalog::buildMaps() {
       td->fragmenter = nullptr;
     }
     td->maxRollbackEpochs = sqliteConnector_.getData<int>(r, 18);
-    td->hasDeletedCol = false;
 
     tableDescriptorMap_[to_upper(td->tableName)] = td;
     tableDescriptorMapById_[td->tableId] = td;
@@ -962,7 +961,6 @@ void Catalog::buildMaps() {
     cd->isSystemCol = sqliteConnector_.getData<bool>(r, 12);
     cd->isVirtualCol = sqliteConnector_.getData<bool>(r, 13);
     cd->virtualExpr = sqliteConnector_.getData<string>(r, 14);
-    cd->isDeletedCol = sqliteConnector_.getData<bool>(r, 15);
     if (sqliteConnector_.isNull(r, 16)) {
       cd->default_value = std::nullopt;
     } else {
@@ -981,10 +979,7 @@ void Catalog::buildMaps() {
     auto td_itr = tableDescriptorMapById_.find(cd->tableId);
     CHECK(td_itr != tableDescriptorMapById_.end());
 
-    if (cd->isDeletedCol) {
-      td_itr->second->hasDeletedCol = true;
-      setDeletedColumnUnlocked(td_itr->second, cd);
-    } else if (cd->columnType.is_geometry() || skip_physical_cols-- <= 0) {
+    if (cd->columnType.is_geometry() || skip_physical_cols-- <= 0) {
       tableDescriptorMapById_[cd->tableId]->columnIdBySpi_.push_back(cd->columnId);
     }
   }
@@ -1093,12 +1088,6 @@ void Catalog::addTableToMap(const TableDescriptor* td,
     columnDescriptorMap_[columnKey] = new_cd;
     ColumnIdKey columnIdKey(new_cd->tableId, new_cd->columnId);
     columnDescriptorMapById_[columnIdKey] = new_cd;
-
-    // Add deleted column to the map
-    if (cd.isDeletedCol) {
-      CHECK(new_td->hasDeletedCol);
-      setDeletedColumnUnlocked(new_td, new_cd);
-    }
   }
 
   std::sort(new_td->columnIdBySpi_.begin(),
@@ -1137,11 +1126,6 @@ void Catalog::removeTableFromMap(const string& tableName,
   }
 
   TableDescriptor* td = tableDescIt->second;
-
-  if (td->hasDeletedCol) {
-    const auto ret = deletedColumnPerTable_.erase(td);
-    CHECK_EQ(ret, size_t(1));
-  }
 
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
@@ -1842,7 +1826,7 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
                                std::to_string(cd.isSystemCol),
                                std::to_string(cd.isVirtualCol),
                                cd.virtualExpr,
-                               std::to_string(cd.isDeletedCol),
+                               "0",
                                cd.default_value.value_or("NULL")},
       types);
 
@@ -2092,17 +2076,6 @@ void Catalog::createTable(
   columns.push_back(cd);
   toplevel_column_names.insert(cd.columnName);
 
-  if (td.hasDeletedCol) {
-    ColumnDescriptor cd_del;
-    cd_del.columnName = "$deleted$";
-    cd_del.isSystemCol = true;
-    cd_del.isVirtualCol = false;
-    cd_del.columnType = SQLTypeInfo(kBOOLEAN, true);
-    cd_del.isDeletedCol = true;
-
-    columns.push_back(cd_del);
-  }
-
   td.nColumns = columns.size();
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -2181,7 +2154,7 @@ void Catalog::createTable(
                                      std::to_string(cd.isSystemCol),
                                      std::to_string(cd.isVirtualCol),
                                      cd.virtualExpr,
-                                     std::to_string(cd.isDeletedCol),
+                                     "0",
                                      cd.default_value.value_or("NULL")},
             types);
         cd.tableId = td.tableId;
@@ -2317,7 +2290,7 @@ void Catalog::serializeTableJsonUnlocked(const TableDescriptor* td,
         "is_notnull", Value().SetBool(cd.columnType.get_notnull()), d.GetAllocator());
     column.AddMember("is_systemcol", Value().SetBool(cd.isSystemCol), d.GetAllocator());
     column.AddMember("is_virtualcol", Value().SetBool(cd.isVirtualCol), d.GetAllocator());
-    column.AddMember("is_deletedcol", Value().SetBool(cd.isDeletedCol), d.GetAllocator());
+    column.AddMember("is_deletedcol", Value().SetBool(false), d.GetAllocator());
     table["columns"].PushBack(column, d.GetAllocator());
   }
   d.AddMember(StringRef(td->tableName.c_str()), table, d.GetAllocator());
@@ -3706,8 +3679,6 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
   with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
   with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
   with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
-  with_options.emplace_back(td->hasDeletedCol ? "VACUUM='DELAYED'"
-                                              : "VACUUM='IMMEDIATE'");
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
     CHECK(sort_cd);
@@ -3857,9 +3828,6 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
       td->maxRollbackEpochs != -1) {
     with_options.push_back("MAX_ROLLBACK_EPOCHS=" +
                            std::to_string(td->maxRollbackEpochs));
-  }
-  if (dump_defaults || !td->hasDeletedCol) {
-    with_options.push_back(td->hasDeletedCol ? "VACUUM='DELAYED'" : "VACUUM='IMMEDIATE'");
   }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
@@ -4365,18 +4333,10 @@ void Catalog::restoreOldOwnersInMemory(
 }
 
 TableInfoPtr Catalog::makeInfo(const TableDescriptor* td) const {
-  int del_col_id = -1;
-  if (td->hasDeletedCol) {
-    auto cd = getDeletedColumnIfRowsDeleted(td);
-    if (cd) {
-      del_col_id = cd->columnId;
-    }
-  }
   return std::make_shared<TableInfo>(getDatabaseId(),
                                      td->tableId,
                                      td->tableName,
                                      td->isView,
-                                     del_col_id,
                                      td->persistenceLevel,
                                      td->fragmenter->getNumFragments());
 }

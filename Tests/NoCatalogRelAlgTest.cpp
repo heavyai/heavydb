@@ -81,22 +81,15 @@ class TestSchemaProvider : public SchemaProvider {
                  TEST1_TABLE_ID,
                  "test1",
                  false,
-                 -1,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
-    addColumnInfo(db_id_,
-                  TEST1_TABLE_ID,
-                  1,
-                  "col_bi",
-                  SQLTypeInfo(SQLTypes::kBIGINT),
-                  false,
-                  false);
     addColumnInfo(
-        db_id_, TEST1_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false, false);
+        db_id_, TEST1_TABLE_ID, 1, "col_bi", SQLTypeInfo(SQLTypes::kBIGINT), false);
+    addColumnInfo(db_id_, TEST1_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false);
     addColumnInfo(
-        db_id_, TEST1_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false, false);
+        db_id_, TEST1_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false);
     addColumnInfo(
-        db_id_, TEST1_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false, false);
+        db_id_, TEST1_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false);
     addRowidColumn(db_id_, TEST1_TABLE_ID);
 
     // Table test2
@@ -104,22 +97,15 @@ class TestSchemaProvider : public SchemaProvider {
                  TEST2_TABLE_ID,
                  "test2",
                  false,
-                 -1,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
-    addColumnInfo(db_id_,
-                  TEST2_TABLE_ID,
-                  1,
-                  "col_bi",
-                  SQLTypeInfo(SQLTypes::kBIGINT),
-                  false,
-                  false);
     addColumnInfo(
-        db_id_, TEST2_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false, false);
+        db_id_, TEST2_TABLE_ID, 1, "col_bi", SQLTypeInfo(SQLTypes::kBIGINT), false);
+    addColumnInfo(db_id_, TEST2_TABLE_ID, 2, "col_i", SQLTypeInfo(SQLTypes::kINT), false);
     addColumnInfo(
-        db_id_, TEST2_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false, false);
+        db_id_, TEST2_TABLE_ID, 3, "col_f", SQLTypeInfo(SQLTypes::kFLOAT), false);
     addColumnInfo(
-        db_id_, TEST2_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false, false);
+        db_id_, TEST2_TABLE_ID, 4, "col_d", SQLTypeInfo(SQLTypes::kDOUBLE), false);
     addRowidColumn(db_id_, TEST2_TABLE_ID);
 
     // Table test_agg
@@ -127,13 +113,11 @@ class TestSchemaProvider : public SchemaProvider {
                  TEST_AGG_TABLE_ID,
                  "test_agg",
                  false,
-                 -1,
                  Data_Namespace::MemoryLevel::CPU_LEVEL,
                  1);
+    addColumnInfo(db_id_, TEST_AGG_TABLE_ID, 1, "id", SQLTypeInfo(SQLTypes::kINT), false);
     addColumnInfo(
-        db_id_, TEST_AGG_TABLE_ID, 1, "id", SQLTypeInfo(SQLTypes::kINT), false, false);
-    addColumnInfo(
-        db_id_, TEST_AGG_TABLE_ID, 2, "val", SQLTypeInfo(SQLTypes::kINT), false, false);
+        db_id_, TEST_AGG_TABLE_ID, 2, "val", SQLTypeInfo(SQLTypes::kINT), false);
     addRowidColumn(db_id_, TEST_AGG_TABLE_ID);
   }
 
@@ -225,8 +209,7 @@ class TestSchemaProvider : public SchemaProvider {
   void addRowidColumn(int db_id, int table_id) {
     CHECK_EQ(column_index_by_name_.count({db_id, table_id}), 1);
     int col_id = static_cast<int>(column_index_by_name_[{db_id, table_id}].size() + 1);
-    addColumnInfo(
-        db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), false, false);
+    addColumnInfo(db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), true);
   }
 
   using TableByNameMap = std::unordered_map<std::string, TableInfoPtr>;

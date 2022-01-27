@@ -2142,7 +2142,6 @@ decltype(auto) get_vacuum_def(TableDescriptor& td,
     if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
       throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
     }
-    td.hasDeletedCol = boost::iequals(vacuum_uc, "IMMEDIATE") ? false : true;
   });
 }
 
@@ -4323,7 +4322,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
   }
 
-  if (td->nColumns <= (td->hasDeletedCol ? 3 : 2)) {
+  if (td->nColumns <= 2) {
     throw std::runtime_error("Table " + *table_ + " has only one column.");
   }
 
