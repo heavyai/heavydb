@@ -864,8 +864,6 @@ class RelScan : public RelAlgNode {
     return column_infos_[spi - 1]->is_rowid;
   }
 
-  bool isDeleteColBySpi(int spi) const { return false; }
-
   int getColumnIdBySpi(int spi) const {
     int col_idx;
     int geo_idx = 0;

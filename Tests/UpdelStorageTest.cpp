@@ -473,14 +473,9 @@ class RowVacuumTestWithVarlenAndArraysN : public ::testing::Test {
         "WITH (FRAGMENT_SIZE = " + std::to_string(N ? N : 32'000'000) + ")";
     ASSERT_NO_THROW(
         init_table_data("varlen", create_varlen_table, UpdelTestConfig::varFile););
-    // immediate vacuum?
-    Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(N == 0);
   }
 
-  void TearDown() override {
-    Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(false);
-    ASSERT_NO_THROW(run_ddl_statement("drop table varlen;"););
-  }
+  void TearDown() override { ASSERT_NO_THROW(run_ddl_statement("drop table varlen;");); }
 };
 
 class UpdateStorageTest : public ::testing::Test {

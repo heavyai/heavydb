@@ -110,11 +110,6 @@ class FragmentInfo {
   void invalidateChunkMetadataMap() const { synthesizedMetadataIsValid = false; };
   void invalidateNumTuples() const { synthesizedNumTuplesIsValid = false; }
 
-  // for unit tests
-  static void setUnconditionalVacuum(const double unconditionalVacuum) {
-    unconditionalVacuum_ = unconditionalVacuum;
-  }
-
   int fragmentId;
   size_t shadowNumTuples;
   std::vector<int> deviceIds;
@@ -130,7 +125,6 @@ class FragmentInfo {
   mutable bool synthesizedMetadataIsValid;
 
   friend class InsertOrderFragmenter;
-  static bool unconditionalVacuum_;
 };
 
 /**

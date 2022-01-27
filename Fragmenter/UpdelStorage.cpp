@@ -49,8 +49,6 @@ inline bool is_integral(const SQLTypeInfo& t) {
   return t.is_integer() || t.is_boolean() || t.is_time() || t.is_timeinterval();
 }
 
-bool FragmentInfo::unconditionalVacuum_{false};
-
 void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catalog,
                                          const TableDescriptor* td,
                                          const ColumnDescriptor* cd,
