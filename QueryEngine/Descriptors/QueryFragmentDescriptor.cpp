@@ -113,12 +113,11 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     const std::vector<uint64_t>& frag_offsets,
     const int device_count,
     const size_t num_bytes_for_row,
-    const ChunkMetadataVector& deleted_chunk_metadata_vec,
     const std::optional<size_t> table_desc_offset,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
-  auto get_fragment_tuple_count = [&deleted_chunk_metadata_vec, &is_temporary_table](
-                                      const auto& fragment) -> std::optional<size_t> {
+  auto get_fragment_tuple_count =
+      [&is_temporary_table](const auto& fragment) -> std::optional<size_t> {
     // returning std::nullopt disables execution dispatch optimizations based on tuple
     // counts as it signals to the dispatch mechanism that a reliable tuple count cannot
     // be obtained. This is the case for fragments which have deleted rows, temporary
@@ -127,17 +126,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
       // 31 Mar 2021 MAT TODO I think that the fragment Tuple count should be ok
       // need to double check that at some later date
       return std::nullopt;
-    }
-    if (deleted_chunk_metadata_vec.empty()) {
-      return fragment.getNumTuples();
-    }
-    const auto fragment_id = fragment.fragmentId;
-    CHECK_GE(fragment_id, 0);
-    if (static_cast<size_t>(fragment_id) < deleted_chunk_metadata_vec.size()) {
-      const auto& chunk_metadata = deleted_chunk_metadata_vec[fragment_id];
-      if (chunk_metadata.second->chunkStats.max.tinyintval == 1) {
-        return std::nullopt;
-      }
     }
     return fragment.getNumTuples();
   };
@@ -228,7 +216,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     TableFragments const* fragments = selected_tables_fragments_.at(table_id);
 
     auto data_mgr = executor->getDataMgr();
-    ChunkMetadataVector deleted_chunk_metadata_vec;
 
     bool is_temporary_table = false;
     if (table_id > 0) {
@@ -250,7 +237,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
                                    frag_offsets,
                                    device_count,
                                    num_bytes_for_row,
-                                   {},
                                    j,
                                    device_type,
                                    executor);
@@ -284,7 +270,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   const auto outer_fragments = it->second;
   outer_fragments_size_ = outer_fragments->size();
 
-  ChunkMetadataVector deleted_chunk_metadata_vec;
   bool is_temporary_table = false;
   if (outer_table_id > 0) {
     auto schema_provider = executor->getSchemaProvider();
@@ -307,7 +292,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
                                  frag_offsets,
                                  device_count,
                                  num_bytes_for_row,
-                                 deleted_chunk_metadata_vec,
                                  std::nullopt,
                                  device_type,
                                  executor);

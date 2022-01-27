@@ -177,18 +177,16 @@ class QueryFragmentDescriptor {
                                const bool enable_inner_join_fragment_skipping,
                                Executor* executor);
 
-  void buildFragmentPerKernelForTable(
-      const TableFragments* fragments,
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const InputDescriptor& table_desc,
-      const bool is_temporary_table,
-      const std::vector<uint64_t>& frag_offsets,
-      const int device_count,
-      const size_t num_bytes_for_row,
-      const ChunkMetadataVector& deleted_chunk_metadata_vec,
-      const std::optional<size_t> table_desc_offset,
-      const ExecutorDeviceType& device_type,
-      Executor* executor);
+  void buildFragmentPerKernelForTable(const TableFragments* fragments,
+                                      const RelAlgExecutionUnit& ra_exe_unit,
+                                      const InputDescriptor& table_desc,
+                                      const bool is_temporary_table,
+                                      const std::vector<uint64_t>& frag_offsets,
+                                      const int device_count,
+                                      const size_t num_bytes_for_row,
+                                      const std::optional<size_t> table_desc_offset,
+                                      const ExecutorDeviceType& device_type,
+                                      Executor* executor);
 
   bool terminateDispatchMaybe(size_t& tuple_count,
                               const RelAlgExecutionUnit& ra_exe_unit,
