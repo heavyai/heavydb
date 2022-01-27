@@ -1242,15 +1242,6 @@ class OptimizeTableStmt : public DDLStmt {
 
   const std::string getTableName() const { return *(table_.get()); }
 
-  bool shouldVacuumDeletedRows() const {
-    for (const auto& e : options_) {
-      if (boost::iequals(*(e->get_name()), "VACUUM")) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:

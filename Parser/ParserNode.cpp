@@ -3820,9 +3820,6 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog));
   const TableOptimizer optimizer(td, executor, catalog);
-  if (shouldVacuumDeletedRows()) {
-    optimizer.vacuumDeletedRows();
-  }
   optimizer.recomputeMetadata();
 }
 

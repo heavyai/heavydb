@@ -6305,9 +6305,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         auto executor = Executor::getExecutor(
             Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
         const TableOptimizer optimizer(td, executor.get(), cat);
-        if (optimize_stmt->shouldVacuumDeletedRows()) {
-          optimizer.vacuumDeletedRows();
-        }
         optimizer.recomputeMetadata();
       }));
       return;

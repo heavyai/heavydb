@@ -138,14 +138,6 @@ void recompute_metadata(const TableDescriptor* td,
   EXPECT_NO_THROW(optimizer.recomputeMetadata());
 }
 
-void vacuum_and_recompute_metadata(const TableDescriptor* td,
-                                   const Catalog_Namespace::Catalog& cat) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
-  TableOptimizer optimizer(td, executor.get(), cat);
-  EXPECT_NO_THROW(optimizer.vacuumDeletedRows());
-  EXPECT_NO_THROW(optimizer.recomputeMetadata());
-}
-
 static const std::string g_table_name{"metadata_test"};
 
 }  // namespace
@@ -355,11 +347,11 @@ TEST_P(MetadataUpdate, EncodedStringNull) {
 
   TestHelpers::ValuesGenerator gen(g_table_name);
   sql(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'abc'", 0));
-  vacuum_and_recompute_metadata(td, cat);
+  recompute_metadata(td, cat);
   run_op_per_fragment(cat, td, check_fragment_metadata(8, 0, 1, false));
 
   sql(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "null", 0));
-  vacuum_and_recompute_metadata(td, cat);
+  recompute_metadata(td, cat);
   run_op_per_fragment(cat, td, check_fragment_metadata(8, 0, 1, true));
 }
 
