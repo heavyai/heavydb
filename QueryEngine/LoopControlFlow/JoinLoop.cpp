@@ -30,8 +30,6 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
                        outer_condition_match,
                    const std::function<void(llvm::Value*)>& found_outer_matches,
                    const HoistedFiltersCallback& hoisted_filters,
-                   const std::function<llvm::Value*(const std::vector<llvm::Value*>&,
-                                                    llvm::Value*)>& is_deleted,
                    const std::string& name)
     : kind_(kind)
     , type_(type)
@@ -39,7 +37,6 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
     , outer_condition_match_(outer_condition_match)
     , found_outer_matches_(found_outer_matches)
     , hoisted_filters_(hoisted_filters)
-    , is_deleted_(is_deleted)
     , name_(name) {
   CHECK(outer_condition_match == nullptr || type == JoinType::LEFT);
   CHECK_EQ(static_cast<bool>(found_outer_matches), (type == JoinType::LEFT));
@@ -141,14 +138,6 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto iter_advance_bb = llvm::BasicBlock::Create(
             context, "ub_iter_advance_" + join_loop.name_, parent_func);
         llvm::BasicBlock* row_not_deleted_bb{nullptr};
-        if (join_loop.is_deleted_) {
-          row_not_deleted_bb = llvm::BasicBlock::Create(
-              context, "row_not_deleted_" + join_loop.name_, parent_func);
-          const auto row_is_deleted =
-              join_loop.is_deleted_(iterators, have_more_inner_rows);
-          builder.CreateCondBr(row_is_deleted, iter_advance_bb, row_not_deleted_bb);
-          builder.SetInsertPoint(row_not_deleted_bb);
-        }
         if (join_loop.type_ == JoinType::LEFT) {
           std::tie(last_head_bb, prev_comparison_result) =
               evaluateOuterJoinCondition(join_loop,
@@ -234,10 +223,6 @@ llvm::BasicBlock* JoinLoop::codegen(
         auto match_found =
             builder.CreateAnd(join_cond_match, builder.CreateLoad(remaining_cond_match));
         CHECK(match_found);
-        if (join_loop.is_deleted_) {
-          match_found = builder.CreateAnd(
-              match_found, builder.CreateNot(join_loop.is_deleted_(iterators, nullptr)));
-        }
         auto match_found_bb = builder.GetInsertBlock();
         switch (join_loop.type_) {
           case JoinType::INNER:

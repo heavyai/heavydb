@@ -240,14 +240,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
         // we know the table fits in memory as it is a temporary table, so signal to the
         // lower layers that we can disregard the early out select * optimization
         is_temporary_table = true;
-      } else {
-        const auto deleted_cd = executor->plan_state_->getDeletedColForTable(table_id);
-        if (deleted_cd) {
-          ChunkKey chunk_key_prefix = {
-              catalog->getCurrentDB().dbId, table_id, deleted_cd->column_id};
-          data_mgr->getChunkMetadataVecForKeyPrefix(deleted_chunk_metadata_vec,
-                                                    chunk_key_prefix);
-        }
       }
     }
 

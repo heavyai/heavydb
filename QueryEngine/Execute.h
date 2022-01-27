@@ -781,7 +781,6 @@ class Executor {
 
   std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>> compileWorkUnit(
       const std::vector<InputTableInfo>& query_infos,
-      const PlanState::DeletedColumnsMap& deleted_cols_map,
       const RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co,
       const ExecutionOptions& eo,
@@ -793,10 +792,6 @@ class Executor {
       const bool has_cardinality_estimation,
       ColumnCacheMap& column_cache,
       RenderInfo* render_info = nullptr);
-  // Generate code to skip the deleted rows in the outermost table.
-  llvm::BasicBlock* codegenSkipDeletedOuterTableRow(
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const CompilationOptions& co);
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
@@ -810,12 +805,6 @@ class Executor {
       const size_t level_idx,
       const int inner_table_id,
       const CompilationOptions& co);
-  // Create a callback which generates code which returns true iff the row on the given
-  // level is deleted.
-  std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>
-  buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
-                   const size_t level_idx,
-                   const CompilationOptions& co);
   // Builds a join hash table for the provided conditions on the current level.
   // Returns null iff on failure and provides the reasons in `fail_reasons`.
   std::shared_ptr<HashJoin> buildCurrentLevelHashTable(
@@ -873,7 +862,6 @@ class Executor {
       const TableIdToNodeMap& table_id_to_node_map);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
-                    const PlanState::DeletedColumnsMap& deleted_cols_map,
                     const RelAlgExecutionUnit* ra_exe_unit);
 
   std::shared_ptr<CompilationContext> optimizeAndCodegenCPU(
@@ -911,13 +899,6 @@ class Executor {
                         SQLTypeInfo const& from_ti,
                         SQLTypeInfo const& to_ti);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
-
-  std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> addDeletedColumn(
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const CompilationOptions& co);
-
-  bool isFragmentFullyDeleted(const int table_id,
-                              const Fragmenter_Namespace::FragmentInfo& fragment);
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,

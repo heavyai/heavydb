@@ -41,7 +41,6 @@ struct JoinInfo {
 struct PlanState {
   using TableId = int;
   using ColumnId = int;
-  using DeletedColumnsMap = std::unordered_map<TableId, ColumnInfoPtr>;
   using HoistedFiltersSet = std::unordered_set<std::shared_ptr<Analyzer::Expr>>;
 
   struct CompareInputColDescId {
@@ -55,11 +54,9 @@ struct PlanState {
 
   PlanState(const bool allow_lazy_fetch,
             const std::vector<InputTableInfo>& query_infos,
-            const DeletedColumnsMap& deleted_columns,
             const Executor* executor)
       : allow_lazy_fetch_(allow_lazy_fetch)
       , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
-      , deleted_columns_(deleted_columns)
       , query_infos_(query_infos)
       , executor_(executor) {}
 
@@ -73,7 +70,6 @@ struct PlanState {
       left_join_non_hashtable_quals_;
   bool allow_lazy_fetch_;
   JoinInfo join_info_;
-  const DeletedColumnsMap deleted_columns_;
   const std::vector<InputTableInfo>& query_infos_;
   std::list<std::shared_ptr<Analyzer::Expr>> simple_quals_;
   const Executor* executor_;
@@ -88,14 +84,6 @@ struct PlanState {
   bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
     Analyzer::ColumnVar column(col_desc.getColInfo(), col_desc.getNestLevel());
     return isLazyFetchColumn(&column);
-  }
-
-  ColumnInfoPtr getDeletedColForTable(const TableId table_id) {
-    auto deleted_cols_it = deleted_columns_.find(table_id);
-    if (deleted_cols_it != deleted_columns_.end()) {
-      return deleted_cols_it->second;
-    }
-    return nullptr;
   }
 
   void addSimpleQual(std::shared_ptr<Analyzer::Expr> simple_qual) {

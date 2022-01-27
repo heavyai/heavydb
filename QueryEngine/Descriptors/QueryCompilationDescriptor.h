@@ -50,7 +50,6 @@ class QueryCompilationDescriptor {
       const bool has_cardinality_estimation,
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& table_infos,
-      const PlanState::DeletedColumnsMap& deleted_cols_map,
       const ColumnFetcher& column_fetcher,
       const CompilationOptions& co,
       const ExecutionOptions& eo,

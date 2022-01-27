@@ -1481,7 +1481,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
     const bool is_agg,
     const bool allow_single_frag_table_opt,
     const std::vector<InputTableInfo>& query_infos,
-    const RelAlgExecutionUnit& ra_exe_unit_in,
+    const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -1489,7 +1489,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
-  const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
@@ -1524,7 +1523,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                            has_cardinality_estimation,
                                            ra_exe_unit,
                                            query_infos,
-                                           deleted_cols_map,
                                            column_fetcher,
                                            {device_type,
                                             co.hoist_literals,
@@ -1544,7 +1542,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
         continue;
       }
     } else {
-      plan_state_.reset(new PlanState(false, query_infos, deleted_cols_map, this));
+      plan_state_.reset(new PlanState(false, query_infos, this));
       plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
       CHECK(!query_mem_desc_owned);
       query_mem_desc_owned.reset(
@@ -1654,13 +1652,12 @@ TemporaryTable Executor::executeWorkUnitImpl(
 }
 
 void Executor::executeWorkUnitPerFragment(
-    const RelAlgExecutionUnit& ra_exe_unit_in,
+    const RelAlgExecutionUnit& ra_exe_unit,
     const InputTableInfo& table_info,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     PerFragmentCallBack& cb,
     const std::set<size_t>& fragment_indexes_param) {
-  const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
   std::vector<InputTableInfo> table_infos{table_info};
@@ -1679,7 +1676,6 @@ void Executor::executeWorkUnitPerFragment(
                                        /*has_cardinality_estimation=*/false,
                                        ra_exe_unit,
                                        table_infos,
-                                       deleted_cols_map,
                                        column_fetcher,
                                        co,
                                        eo,
@@ -1759,7 +1755,7 @@ ResultSetPtr Executor::executeTableFunction(
         this->gridSize());
   }
 
-  nukeOldState(false, table_infos, PlanState::DeletedColumnsMap{}, nullptr);
+  nukeOldState(false, table_infos, nullptr);
 
   ColumnCacheMap column_cache;  // Note: if we add retries to the table function
                                 // framework, we may want to move this up a level
@@ -3310,7 +3306,6 @@ std::vector<int64_t> Executor::getJoinHashTablePtrs(const ExecutorDeviceType dev
 
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const std::vector<InputTableInfo>& query_infos,
-                            const PlanState::DeletedColumnsMap& deleted_cols_map,
                             const RelAlgExecutionUnit* ra_exe_unit) {
   kernel_queue_time_ms_ = 0;
   compilation_queue_time_ms_ = 0;
@@ -3321,10 +3316,8 @@ void Executor::nukeOldState(const bool allow_lazy_fetch,
                                     return join_condition.type == JoinType::LEFT;
                                   }) != ra_exe_unit->join_quals.end();
   cgen_state_.reset(new CgenState(query_infos.size(), contains_left_deep_outer_join));
-  plan_state_.reset(new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join,
-                                  query_infos,
-                                  deleted_cols_map,
-                                  this));
+  plan_state_.reset(new PlanState(
+      allow_lazy_fetch && !contains_left_deep_outer_join, query_infos, this));
 }
 
 void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_descs,
@@ -3484,24 +3477,6 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #undef EXECUTE_INCLUDE
 
 namespace {
-void add_deleted_col_to_map(PlanState::DeletedColumnsMap& deleted_cols_map,
-                            ColumnInfoPtr col_info) {
-  auto deleted_cols_it = deleted_cols_map.find(col_info->table_id);
-  if (deleted_cols_it == deleted_cols_map.end()) {
-    CHECK(deleted_cols_map.insert(std::make_pair(col_info->table_id, col_info)).second);
-  } else {
-    CHECK_EQ(col_info, deleted_cols_it->second);
-  }
-}
-}  // namespace
-
-std::tuple<RelAlgExecutionUnit, PlanState::DeletedColumnsMap> Executor::addDeletedColumn(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CompilationOptions& co) {
-  return std::make_tuple(ra_exe_unit, PlanState::DeletedColumnsMap{});
-}
-
-namespace {
 // Note(Wamsi): `get_hpt_overflow_underflow_safe_scaled_value` will return `true` for safe
 // scaled epoch value and `false` for overflow/underflow values as the first argument of
 // return type.
@@ -3540,12 +3515,6 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
 
 }  // namespace
 
-bool Executor::isFragmentFullyDeleted(
-    const int table_id,
-    const Fragmenter_Namespace::FragmentInfo& fragment) {
-  return false;
-}
-
 std::pair<bool, int64_t> Executor::skipFragment(
     const InputDescriptor& table_desc,
     const Fragmenter_Namespace::FragmentInfo& fragment,
@@ -3553,13 +3522,6 @@ std::pair<bool, int64_t> Executor::skipFragment(
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
   const int table_id = table_desc.getTableId();
-
-  // First check to see if all of fragment is deleted, in which case we know we can skip
-  if (isFragmentFullyDeleted(table_id, fragment)) {
-    VLOG(2) << "Skipping deleted fragment with table id: " << fragment.physicalTableId
-            << ", fragment id: " << frag_idx;
-    return {true, -1};
-  }
 
   for (const auto& simple_qual : simple_quals) {
     const auto comp_expr =

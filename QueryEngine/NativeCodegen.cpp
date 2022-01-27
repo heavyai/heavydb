@@ -2560,7 +2560,6 @@ std::string serialize_llvm_metadata_footnotes(llvm::Function* query_func,
 
 std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
 Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
-                          const PlanState::DeletedColumnsMap& deleted_cols_map,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const CompilationOptions& co,
                           const ExecutionOptions& eo,
@@ -2590,7 +2589,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   LOG(ASM) << "CODEGEN #" << counter << ":";
 #endif
 
-  nukeOldState(allow_lazy_fetch, query_infos, deleted_cols_map, &ra_exe_unit);
+  nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
 
   addTransientStringLiterals(ra_exe_unit, row_set_mem_owner);
 
@@ -2758,10 +2757,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   for (auto& simple_qual : ra_exe_unit.simple_quals) {
     plan_state_->addSimpleQual(simple_qual);
-  }
-  const auto is_not_deleted_bb = codegenSkipDeletedOuterTableRow(ra_exe_unit, co);
-  if (is_not_deleted_bb) {
-    cgen_state_->row_func_bb_ = is_not_deleted_bb;
   }
   if (!join_loops.empty()) {
     codegenJoinLoops(join_loops,
@@ -3034,41 +3029,6 @@ void Executor::insertErrorCodeChecker(llvm::Function* query_func,
       }
     }
   }
-}
-
-llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CompilationOptions& co) {
-  AUTOMATIC_IR_METADATA(cgen_state_.get());
-  if (!co.filter_on_deleted_column) {
-    return nullptr;
-  }
-  CHECK(!ra_exe_unit.input_descs.empty());
-  const auto& outer_input_desc = ra_exe_unit.input_descs[0];
-  if (outer_input_desc.getSourceType() != InputSourceType::TABLE) {
-    return nullptr;
-  }
-  const auto deleted_cinfo =
-      plan_state_->getDeletedColForTable(outer_input_desc.getTableId());
-  if (!deleted_cinfo) {
-    return nullptr;
-  }
-  CHECK(deleted_cinfo->type.is_boolean());
-  CHECK(!deleted_cinfo->is_rowid);
-  const auto deleted_expr =
-      makeExpr<Analyzer::ColumnVar>(deleted_cinfo, outer_input_desc.getNestLevel());
-  CodeGenerator code_generator(this);
-  const auto is_deleted =
-      code_generator.toBool(code_generator.codegen(deleted_expr.get(), true, co).front());
-  const auto is_deleted_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "is_deleted", cgen_state_->row_func_);
-  llvm::BasicBlock* bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "is_not_deleted", cgen_state_->row_func_);
-  cgen_state_->ir_builder_.CreateCondBr(is_deleted, is_deleted_bb, bb);
-  cgen_state_->ir_builder_.SetInsertPoint(is_deleted_bb);
-  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt<int32_t>(0));
-  cgen_state_->ir_builder_.SetInsertPoint(bb);
-  return bb;
 }
 
 bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,

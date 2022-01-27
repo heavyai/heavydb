@@ -571,7 +571,6 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           cgen_state_->outer_join_match_found_per_level_[level_idx] =
               found_outer_join_matches;
         };
-    const auto is_deleted_cb = buildIsDeletedCb(ra_exe_unit, level_idx, co);
     auto rem_left_join_quals_it =
         plan_state_->left_join_non_hashtable_quals_.find(level_idx);
     bool has_remaining_left_join_quals =
@@ -622,8 +621,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
-            /*hoisted_filters=*/hoisted_filters_cb,
-            /*is_deleted=*/is_deleted_cb);
+            /*hoisted_filters=*/hoisted_filters_cb);
       } else if (auto range_join_table =
                      dynamic_cast<RangeJoinHashTable*>(current_level_hash_table.get())) {
         join_loops.emplace_back(
@@ -654,8 +652,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
-            /* hoisted_filters= */ nullptr,  // <<! TODO
-            /* is_deleted= */ is_deleted_cb);
+            /* hoisted_filters= */ nullptr  // <<! TODO
+        );
       } else {
         join_loops.emplace_back(
             /*kind=*/JoinLoopKind::Set,
@@ -679,8 +677,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             /*found_outer_matches=*/current_level_join_conditions.type == JoinType::LEFT
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
-            /*hoisted_filters=*/hoisted_filters_cb,
-            /*is_deleted=*/is_deleted_cb);
+            /*hoisted_filters=*/hoisted_filters_cb);
       }
       ++current_hash_table_idx;
     } else {
@@ -734,8 +731,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
               : nullptr,
-          /*hoisted_filters=*/nullptr,
-          /*is_deleted=*/is_deleted_cb);
+          /*hoisted_filters=*/nullptr);
     }
   }
   return join_loops;
@@ -884,64 +880,6 @@ JoinLoop::HoistedFiltersCallback Executor::buildHoistLeftHandSideFiltersCb(
     }
   }
   return nullptr;
-}
-
-std::function<llvm::Value*(const std::vector<llvm::Value*>&, llvm::Value*)>
-Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
-                           const size_t level_idx,
-                           const CompilationOptions& co) {
-  AUTOMATIC_IR_METADATA(cgen_state_.get());
-  if (!co.filter_on_deleted_column) {
-    return nullptr;
-  }
-  CHECK_LT(level_idx + 1, ra_exe_unit.input_descs.size());
-  const auto input_desc = ra_exe_unit.input_descs[level_idx + 1];
-  if (input_desc.getSourceType() != InputSourceType::TABLE) {
-    return nullptr;
-  }
-
-  const auto deleted_cinfo = plan_state_->getDeletedColForTable(input_desc.getTableId());
-  if (!deleted_cinfo) {
-    return nullptr;
-  }
-  CHECK(deleted_cinfo->type.is_boolean());
-  const auto deleted_expr =
-      makeExpr<Analyzer::ColumnVar>(deleted_cinfo, input_desc.getNestLevel());
-  return [this, deleted_expr, level_idx, &co](const std::vector<llvm::Value*>& prev_iters,
-                                              llvm::Value* have_more_inner_rows) {
-    const auto matching_row_index = addJoinLoopIterator(prev_iters, level_idx + 1);
-    // Avoid fetching the deleted column from a position which is not valid.
-    // An invalid position can be returned by a one to one hash lookup (negative)
-    // or at the end of iteration over a set of matching values.
-    llvm::Value* is_valid_it{nullptr};
-    if (have_more_inner_rows) {
-      is_valid_it = have_more_inner_rows;
-    } else {
-      is_valid_it = cgen_state_->ir_builder_.CreateICmp(
-          llvm::ICmpInst::ICMP_SGE, matching_row_index, cgen_state_->llInt<int64_t>(0));
-    }
-    const auto it_valid_bb = llvm::BasicBlock::Create(
-        cgen_state_->context_, "it_valid", cgen_state_->current_func_);
-    const auto it_not_valid_bb = llvm::BasicBlock::Create(
-        cgen_state_->context_, "it_not_valid", cgen_state_->current_func_);
-    cgen_state_->ir_builder_.CreateCondBr(is_valid_it, it_valid_bb, it_not_valid_bb);
-    const auto row_is_deleted_bb = llvm::BasicBlock::Create(
-        cgen_state_->context_, "row_is_deleted", cgen_state_->current_func_);
-    cgen_state_->ir_builder_.SetInsertPoint(it_valid_bb);
-    CodeGenerator code_generator(this);
-    const auto row_is_deleted = code_generator.toBool(
-        code_generator.codegen(deleted_expr.get(), true, co).front());
-    cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
-    cgen_state_->ir_builder_.SetInsertPoint(it_not_valid_bb);
-    const auto row_is_deleted_default = cgen_state_->llBool(false);
-    cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
-    cgen_state_->ir_builder_.SetInsertPoint(row_is_deleted_bb);
-    auto row_is_deleted_or_default =
-        cgen_state_->ir_builder_.CreatePHI(row_is_deleted->getType(), 2);
-    row_is_deleted_or_default->addIncoming(row_is_deleted, it_valid_bb);
-    row_is_deleted_or_default->addIncoming(row_is_deleted_default, it_not_valid_bb);
-    return row_is_deleted_or_default;
-  };
 }
 
 std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
@@ -1189,7 +1127,6 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
           domain.values_buffer = values;
           return domain;
         },
-        nullptr,
         nullptr,
         nullptr,
         nullptr,

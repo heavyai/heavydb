@@ -68,8 +68,6 @@ class JoinLoop {
                outer_condition_match,
            const std::function<void(llvm::Value*)>& found_outer_matches,
            const HoistedFiltersCallback& hoisted_filters,
-           const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
-                                            llvm::Value*)>& is_deleted,
            const std::string& name = "");
 
   static llvm::BasicBlock* codegen(
@@ -110,12 +108,5 @@ class JoinLoop {
   // Callback to hoist left hand side filters through the join, evaluating the filters
   // prior to evaluating the join (but within the same kernel)
   const HoistedFiltersCallback hoisted_filters_;
-  // Callback provided from the executor which returns if the current row (given by
-  // position) is deleted. The second argument is true iff the iteration isn't done yet.
-  // Useful for UpperBound and Set, which need to avoid fetching the deleted column from a
-  // past-the-end position. It's null for Singleton.
-  const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
-                                   llvm::Value*)>
-      is_deleted_;
   const std::string name_;
 };

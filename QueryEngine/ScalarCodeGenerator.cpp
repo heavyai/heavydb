@@ -70,8 +70,8 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     const Analyzer::Expr* expr,
     const bool fetch_columns,
     const CompilationOptions& co) {
-  own_plan_state_ = std::make_unique<PlanState>(
-      false, std::vector<InputTableInfo>{}, PlanState::DeletedColumnsMap{}, nullptr);
+  own_plan_state_ =
+      std::make_unique<PlanState>(false, std::vector<InputTableInfo>{}, nullptr);
   plan_state_ = own_plan_state_.get();
   const auto used_columns = prepare(expr);
   std::vector<llvm::Type*> arg_types(plan_state_->global_to_local_col_ids_.size() + 1);
