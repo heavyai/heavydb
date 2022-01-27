@@ -29,8 +29,6 @@
 #define BASE_PATH "./tmp"
 #endif
 
-extern float g_vacuum_min_selectivity;
-
 namespace {
 
 #define ASSERT_METADATA(type, tag)                                   \
@@ -253,10 +251,7 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
 class MetadataUpdate : public DBHandlerTestFixture,
                        public testing::WithParamInterface<bool> {
  protected:
-  static void SetUpTestSuite() {
-    g_enable_auto_metadata_update = false;
-    g_vacuum_min_selectivity = 1.1;
-  }
+  static void SetUpTestSuite() { g_enable_auto_metadata_update = false; }
 
   void SetUp() override {
     DBHandlerTestFixture::SetUp();

@@ -23,9 +23,6 @@
 #include "Shared/misc.h"
 #include "Shared/scope.h"
 
-// By default, when rows are deleted, vacuum fragments with a least 10% deleted rows
-float g_vacuum_min_selectivity{0.1};
-
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
                                const Catalog_Namespace::Catalog& cat)

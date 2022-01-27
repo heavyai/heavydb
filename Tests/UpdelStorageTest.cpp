@@ -753,7 +753,7 @@ TEST_F(UpdateStorageTest, Half_boolean_deleted_rollback) {
 
 class VarLenColumnUpdateTest : public ::testing::Test {
  protected:
-  static void SetUpTestSuite() { g_vacuum_min_selectivity = 1.1; }
+  static void SetUpTestSuite() {}
 
   void SetUp() override {
     run_ddl_statement("drop table if exists test_table;");
