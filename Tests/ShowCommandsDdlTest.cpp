@@ -930,7 +930,7 @@ TEST_F(ShowCreateTableTest, Defaults) {
           std::to_string(DEFAULT_PAGE_SIZE) + ");",
       "CREATE TABLE showcreatetabletest (i INTEGER) WITH (MAX_ROWS=" +
           std::to_string(DEFAULT_MAX_ROWS) + ");",
-      "CREATE TABLE showcreatetabletest (i INTEGER) WITH (VACUUM='DELAYED');"};
+      "CREATE TABLE showcreatetabletest (i INTEGER);"};
 
   for (size_t i = 0; i < creates.size(); ++i) {
     sql(creates[i]);

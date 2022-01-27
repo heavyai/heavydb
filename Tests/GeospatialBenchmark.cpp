@@ -153,7 +153,6 @@ void import_geospatial_test(const bool use_temporary_tables, const size_t num_ro
       {},
       2,
       /*use_temporary_tables=*/use_temporary_tables,
-      /*deleted_support=*/true,
       /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_test");

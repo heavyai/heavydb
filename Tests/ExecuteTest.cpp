@@ -541,8 +541,6 @@ TEST(Create, StorageOptions) {
                {{"max_chunk_size"s, false},
                 {"", {"2097152", "4194304", "10485760", "2147483648"}}},
                {{"partitions"s, true}, {"", {"'No'", "'null'", "'-1'"}}},
-               {{"vacuum"s, true}, {"", {"'-1'", "'0'", "'null'"}}},
-               {{"vacuum"s, false}, {"", {"'IMMEDIATE'", "'delayed'"}}},
                {{"sort_column"s, true}, {"", {"'arsenal'", "'barca'", "'city'"}}},
                {{"sort_column"s, false}, {"", {"'id'", "'val'"}}}};
 
@@ -7652,19 +7650,14 @@ void import_text_group_by_test() {
   run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
 }
 
-void import_join_test(bool with_delete_support) {
+void import_join_test() {
   const std::string drop_old_test{"DROP TABLE IF EXISTS join_test;"};
   run_ddl_statement(drop_old_test);
   g_sqlite_comparator.query(drop_old_test);
   std::string columns_definition{
       "x int not null, y int, str text encoding dict, dup_str text encoding dict"};
-  const auto create_test = build_create_table_statement(columns_definition,
-                                                        "join_test",
-                                                        {},
-                                                        2,
-                                                        g_use_temporary_tables,
-                                                        with_delete_support,
-                                                        g_aggregator);
+  const auto create_test = build_create_table_statement(
+      columns_definition, "join_test", {}, 2, g_use_temporary_tables, g_aggregator);
   run_ddl_statement(create_test);
   g_sqlite_comparator.query(
       "CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
@@ -7759,7 +7752,7 @@ void import_hash_join_decimal_test() {
   }
 }
 
-void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
+void import_coalesce_cols_join_test(const int id) {
   const std::string table_name = "coalesce_cols_test_" + std::to_string(id);
   const std::string drop_old_test{"DROP TABLE IF EXISTS " + table_name + ";"};
   run_ddl_statement(drop_old_test);
@@ -7773,7 +7766,6 @@ void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
                                                         {},
                                                         id == 2 ? 2 : 20,
                                                         g_use_temporary_tables,
-                                                        with_delete_support,
                                                         g_aggregator);
   run_ddl_statement(create_test);
 
@@ -10797,7 +10789,7 @@ class JoinTest : public ::testing::Test {
       const std::string columns_definition{
           "x int not null, y int, str text encoding dict"};
       const auto table_create = build_create_table_statement(
-          columns_definition, table_name, {}, 50, g_use_temporary_tables, true, false);
+          columns_definition, table_name, {}, 50, g_use_temporary_tables, false);
       run_ddl_statement(table_create);
 
       TestHelpers::ValuesGenerator gen(table_name);
@@ -17377,7 +17369,7 @@ TEST(Select, GroupEmptyBlank) {
     };
     std::string columns_definition{"t1 TEXT NOT NULL, i1 INTEGER"};
     const std::string create_test = build_create_table_statement(
-        columns_definition, "blank_test", {}, 10, g_use_temporary_tables, true);
+        columns_definition, "blank_test", {}, 10, g_use_temporary_tables);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query("CREATE TABLE blank_test (t1 TEXT NOT NULL, i1 INTEGER);");
 
@@ -18256,8 +18248,7 @@ int create_and_populate_current_user_table() {
   return 0;
 }
 
-int create_and_populate_tables(const bool use_temporary_tables,
-                               const bool with_delete_support = true) {
+int create_and_populate_tables(const bool use_temporary_tables) {
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
     run_ddl_statement(drop_old_test);
@@ -18266,13 +18257,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "x int not null, y int, xx smallint, str text encoding dict, dt DATE, dt32 "
         "DATE "
         "ENCODING FIXED(32), dt16 DATE ENCODING FIXED(16), ts TIMESTAMP"};
-    const auto create_test_inner = build_create_table_statement(columns_definition,
-                                                                "test_inner",
-                                                                {},
-                                                                2,
-                                                                use_temporary_tables,
-                                                                with_delete_support,
-                                                                g_aggregator);
+    const auto create_test_inner = build_create_table_statement(
+        columns_definition, "test_inner", {}, 2, use_temporary_tables, g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
         "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text, dt "
@@ -18303,13 +18289,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     g_sqlite_comparator.query(drop_old_bweq_test);
 
     auto column_definition = "x int"s;
-    auto create_bweq_test = build_create_table_statement(column_definition,
-                                                         "bweq_test",
-                                                         {},
-                                                         2,
-                                                         use_temporary_tables,
-                                                         with_delete_support,
-                                                         g_aggregator);
+    auto create_bweq_test = build_create_table_statement(
+        column_definition, "bweq_test", {}, 2, use_temporary_tables, g_aggregator);
     run_ddl_statement(create_bweq_test);
     g_sqlite_comparator.query("create table bweq_test (x int);");
   } catch (...) {
@@ -18413,13 +18394,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int"};
-    const auto create_vacuum_test_alt = build_create_table_statement(columns_definition,
-                                                                     "vacuum_test_alt",
-                                                                     {},
-                                                                     2,
-                                                                     use_temporary_tables,
-                                                                     with_delete_support,
-                                                                     g_aggregator);
+    const auto create_vacuum_test_alt = build_create_table_statement(
+        columns_definition, "vacuum_test_alt", {}, 2, use_temporary_tables, g_aggregator);
     run_ddl_statement(create_vacuum_test_alt);
     g_sqlite_comparator.query("CREATE TABLE vacuum_test_alt(x int not null, y int );");
 
@@ -18453,13 +18429,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner = build_create_table_statement(columns_definition,
-                                                                "test_inner_x",
-                                                                {},
-                                                                2,
-                                                                use_temporary_tables,
-                                                                with_delete_support,
-                                                                g_aggregator);
+    const auto create_test_inner = build_create_table_statement(
+        columns_definition, "test_inner_x", {}, 2, use_temporary_tables, g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
         "CREATE TABLE test_inner_x(x int not null, y int, str text);");
@@ -18477,13 +18448,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"x int not null, y int, str text encoding dict"};
-    const auto create_test_inner = build_create_table_statement(columns_definition,
-                                                                "test_inner_y",
-                                                                {},
-                                                                2,
-                                                                use_temporary_tables,
-                                                                with_delete_support,
-                                                                g_aggregator);
+    const auto create_test_inner = build_create_table_statement(
+        columns_definition, "test_inner_y", {}, 2, use_temporary_tables, g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
         "CREATE TABLE test_inner_y(x int not null, y int, str text);");
@@ -18506,13 +18472,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_bar);
     g_sqlite_comparator.query(drop_old_bar);
     std::string columns_definition{"str text encoding dict"};
-    const auto create_bar = build_create_table_statement(columns_definition,
-                                                         "bar",
-                                                         {},
-                                                         2,
-                                                         use_temporary_tables,
-                                                         with_delete_support,
-                                                         g_aggregator);
+    const auto create_bar = build_create_table_statement(
+        columns_definition, "bar", {}, 2, use_temporary_tables, g_aggregator);
     run_ddl_statement(create_bar);
     g_sqlite_comparator.query("CREATE TABLE bar(str text);");
   } catch (...) {
@@ -18575,8 +18536,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "test",
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
-        use_temporary_tables,
-        with_delete_support);
+        use_temporary_tables);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, w tinyint, y int, z smallint, t bigint, b "
@@ -18665,7 +18625,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
         use_temporary_tables,
-        with_delete_support,
         g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
@@ -18710,7 +18669,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
         use_temporary_tables,
-        with_delete_support,
         g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
@@ -18749,12 +18707,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_date_time;"};
     run_ddl_statement(drop_old_test);
     std::string columns_definition{"dt DATE"};
-    const std::string create_test = build_create_table_statement(columns_definition,
-                                                                 "test_date_time",
-                                                                 {},
-                                                                 2,
-                                                                 use_temporary_tables,
-                                                                 with_delete_support);
+    const std::string create_test = build_create_table_statement(
+        columns_definition, "test_date_time", {}, 2, use_temporary_tables);
     run_ddl_statement(create_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_date_time'";
@@ -18776,12 +18730,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"i INT, b BIGINT"};
-    const std::string create_test = build_create_table_statement(columns_definition,
-                                                                 "test_ranges",
-                                                                 {},
-                                                                 2,
-                                                                 use_temporary_tables,
-                                                                 with_delete_support);
+    const std::string create_test = build_create_table_statement(
+        columns_definition, "test_ranges", {}, 2, use_temporary_tables);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query("CREATE TABLE test_ranges(i INT, b BIGINT);");
   } catch (...) {
@@ -18816,7 +18766,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "int not null, ofq bigint, ufq "
         "bigint not null"};
     const std::string create_test = build_create_table_statement(
-        columns_definition, "test_x", {}, 2, use_temporary_tables, with_delete_support);
+        columns_definition, "test_x", {}, 2, use_temporary_tables);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test_x(x int not null, y int, z smallint, t bigint, b boolean, f "
@@ -18891,7 +18841,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
                                      {},
                                      32000000,
                                      use_temporary_tables,
-                                     with_delete_support,
                                      g_aggregator);
     run_ddl_statement(create_array_test);
   } catch (...) {
@@ -19001,7 +18950,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
-    import_join_test(with_delete_support);
+    import_join_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'join_test'";
     return -EEXIST;
@@ -19019,9 +18968,9 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
-    import_coalesce_cols_join_test(0, with_delete_support);
-    import_coalesce_cols_join_test(1, with_delete_support);
-    import_coalesce_cols_join_test(2, with_delete_support);
+    import_coalesce_cols_join_test(0);
+    import_coalesce_cols_join_test(1);
+    import_coalesce_cols_join_test(2);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table for coalesce col join test "
                   "('coalesce_cols_join_0', "

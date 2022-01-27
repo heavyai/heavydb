@@ -129,7 +129,6 @@ void import_geospatial_test(const bool use_temporary_tables) {
       {},
       2,
       /*use_temporary_tables=*/use_temporary_tables,
-      /*deleted_support=*/true,
       /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_test");
@@ -177,7 +176,6 @@ void import_geospatial_join_test(const bool use_temporary_tables) {
                                    {},
                                    20,
                                    /*use_temporary_tables=*/use_temporary_tables,
-                                   /*deleted_support=*/true,
                                    g_aggregator);
   run_ddl_statement(create_statement);
   TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
@@ -212,7 +210,6 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
       {},
       2,
       /*use_temporary_tables=*/use_temporary_tables,
-      /*deleted_support=*/true,
       /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_null_test");
@@ -255,7 +252,6 @@ void import_geospatial_multi_frag_test(const bool use_temporary_tables) {
       {},
       2,
       /*use_temporary_tables=*/use_temporary_tables,
-      /*deleted_support=*/true,
       /*is_replicated=*/false);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_multi_frag_test");

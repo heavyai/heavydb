@@ -2138,11 +2138,7 @@ decltype(auto) get_shard_count_def(TableDescriptor& td,
 decltype(auto) get_vacuum_def(TableDescriptor& td,
                               const NameValueAssign* p,
                               const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<StringLiteral>(p, [&td](const auto vacuum_uc) {
-    if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
-      throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
-    }
-  });
+  throw std::runtime_error("VACUUM support was removed.");
 }
 
 decltype(auto) get_sort_column_def(TableDescriptor& td,
@@ -2189,8 +2185,7 @@ void get_table_definitions(TableDescriptor& td,
     throw std::runtime_error(
         "Invalid CREATE TABLE option " + *p->get_name() +
         ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROLLBACK_EPOCHS, "
-        "MAX_ROWS, "
-        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE.");
+        "MAX_ROWS, SORT_COLUMN, STORAGE_TYPE.");
   }
   return it->second(td, p.get(), columns);
 }
@@ -2203,9 +2198,7 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
     throw std::runtime_error(
         "Invalid CREATE TABLE AS option " + *p->get_name() +
         ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROLLBACK_EPOCHS, "
-        "MAX_ROWS, "
-        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, STORAGE_TYPE or "
-        "USE_SHARED_DICTIONARIES.");
+        "MAX_ROWS, SORT_COLUMN, STORAGE_TYPE or USE_SHARED_DICTIONARIES.");
   }
   return it->second(td, p.get(), columns);
 }

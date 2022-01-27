@@ -273,7 +273,6 @@ std::string build_create_table_statement(
     const std::vector<SharedDictionaryInfo>& shared_dict_info,
     const size_t fragment_size,
     const bool use_temporary_tables,
-    const bool delete_support = true,
     const bool replicated = false) {
   std::vector<std::string> shared_dict_def;
   if (shared_dict_info.size() > 0) {
@@ -286,12 +285,6 @@ std::string build_create_table_statement(
 
   std::ostringstream with_statement_assembly;
   with_statement_assembly << "fragment_size=" << fragment_size;
-
-  if (delete_support) {
-    with_statement_assembly << ", vacuum='delayed'";
-  } else {
-    with_statement_assembly << ", vacuum='immediate'";
-  }
 
   const std::string replicated_def{(!replicated) ? "" : ", PARTITIONS='REPLICATED' "};
 
