@@ -280,12 +280,6 @@ class Catalog final {
   void getDictionary(const ColumnDescriptor& cd,
                      std::map<int, StringDictionary*>& stringDicts);
 
-  const bool checkMetadataForDeletedRecs(const TableDescriptor* td, int column_id) const;
-  const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
-  const ColumnDescriptor* getDeletedColumnIfRowsDeleted(const TableDescriptor* td) const;
-
-  void setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd);
-  void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   void checkpoint(const int logicalTableId) const;
   void checkpointWithAutoRollback(const int logical_table_id) const;
   std::string name() const { return getCurrentDB().dbName; }
@@ -502,7 +496,6 @@ class Catalog final {
                             std::set<std::string>& shared_dict_column_names,
                             const TableDescriptor* td) const;
   std::string quoteIfRequired(const std::string& column_name) const;
-  DeletedColumnPerTableMap deletedColumnPerTable_;
   void adjustAlteredTableFiles(
       const std::string& temp_data_dir,
       const std::unordered_map<int, int>& all_column_ids_map) const;

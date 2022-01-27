@@ -2564,57 +2564,6 @@ void Catalog::setTableEpochsLogExceptions(
   }
 }
 
-const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) const {
-  cat_read_lock read_lock(this);
-  const auto it = deletedColumnPerTable_.find(td);
-  return it != deletedColumnPerTable_.end() ? it->second : nullptr;
-}
-
-const bool Catalog::checkMetadataForDeletedRecs(const TableDescriptor* td,
-                                                int delete_column_id) const {
-  // check if there are rows deleted by examining the deletedColumn metadata
-  CHECK(td);
-  auto fragmenter = td->fragmenter;
-  if (fragmenter) {
-    return fragmenter->hasDeletedRows(delete_column_id);
-  } else {
-    return false;
-  }
-}
-
-const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
-    const TableDescriptor* td) const {
-  const ColumnDescriptor* cd;
-  {
-    cat_read_lock read_lock(this);
-
-    const auto it = deletedColumnPerTable_.find(td);
-    // if not a table that supports delete return nullptr,  nothing more to do
-    if (it == deletedColumnPerTable_.end()) {
-      return nullptr;
-    }
-    cd = it->second;
-  }
-  // individual tables are still protected by higher level locks
-  if (checkMetadataForDeletedRecs(td, cd->columnId)) {
-    return cd;
-  }
-  // no deletes so far recorded in metadata
-  return nullptr;
-}
-
-void Catalog::setDeletedColumn(const TableDescriptor* td, const ColumnDescriptor* cd) {
-  cat_write_lock write_lock(this);
-  setDeletedColumnUnlocked(td, cd);
-}
-
-void Catalog::setDeletedColumnUnlocked(const TableDescriptor* td,
-                                       const ColumnDescriptor* cd) {
-  cat_write_lock write_lock(this);
-  const auto it_ok = deletedColumnPerTable_.emplace(td, cd);
-  CHECK(it_ok.second);
-}
-
 namespace {
 
 const ColumnDescriptor* get_foreign_col(

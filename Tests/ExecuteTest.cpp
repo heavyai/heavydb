@@ -18442,29 +18442,6 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_multiple_agg(insert_query4, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query4);
   }
-  try {
-#if 0
-    const std::string drop_old_test_inner_deleted{"DROP TABLE IF EXISTS test_inner_deleted;"};
-    run_ddl_statement(drop_old_test_inner_deleted);
-    g_sqlite_comparator.query(drop_old_test_inner_deleted);
-    std::string columns_definition{"x int not null, y int, str text encoding dict, deleted boolean"};
-
-    const auto create_test_inner_deleted =
-        build_create_table_statement(columns_definition, "test_inner_deleted", {}, 2, use_temporary_tables, with_delete_support);
-    run_ddl_statement(create_test_inner_deleted);
-    auto& cat = QR::get()->getSession()->getCatalog();
-    const auto td = cat.getMetadataForTable("test_inner_deleted");
-    CHECK(td);
-    const auto cd = cat.getMetadataForColumn(td->tableId, "deleted");
-    CHECK(cd);
-    cat.setDeletedColumn(td, cd);
-
-    g_sqlite_comparator.query("CREATE TABLE test_inner_deleted(x int not null, y int, str text);");
-#endif
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'test_inner_deleted'";
-    return -EEXIST;
-  }
   {
 #if 0
     const std::string insert_query{"INSERT INTO test_inner_deleted VALUES(7, 43, 'foo', 't');"};

@@ -289,11 +289,7 @@ class DBEngineImpl : public DBEngine {
     if (metadata) {
       const auto col_descriptors =
           catalog.getAllColumnMetadataForTable(metadata->tableId, false, true, false);
-      const auto deleted_cd = catalog.getDeletedColumn(metadata);
       for (const auto cd : col_descriptors) {
-        if (cd == deleted_cd) {
-          continue;
-        }
         ColumnDetails col_details;
         col_details.col_name = cd->columnName;
         auto ct = cd->columnType;

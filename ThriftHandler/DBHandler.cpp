@@ -2362,11 +2362,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
       if (hasTableAccessPrivileges(td, *session_info)) {
         const auto col_descriptors =
             cat.getAllColumnMetadataForTable(td->tableId, get_system, true, get_physical);
-        const auto deleted_cd = cat.getDeletedColumn(td);
         for (const auto cd : col_descriptors) {
-          if (cd == deleted_cd) {
-            continue;
-          }
           _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
         }
       } else {
@@ -2537,11 +2533,7 @@ void DBHandler::get_tables_meta_impl(std::vector<TTableMeta>& _return,
         if (hasTableAccessPrivileges(td, session_info)) {
           const auto col_descriptors =
               cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
-          const auto deleted_cd = cat.getDeletedColumn(td);
           for (const auto cd : col_descriptors) {
-            if (cd == deleted_cd) {
-              continue;
-            }
             col_types.push_back(ThriftSerializers::type_info_to_thrift(cd->columnType));
             col_names.push_back(cd->columnName);
           }

@@ -326,44 +326,7 @@ void TableOptimizer::vacuumDeletedRows() const {
 
 void TableOptimizer::vacuumFragments(const TableDescriptor* td,
                                      const std::set<int>& fragment_ids) const {
-  // "if not a table that supports delete return,  nothing more to do"
-  const ColumnDescriptor* cd = cat_.getDeletedColumn(td);
-  if (nullptr == cd) {
     return;
-  }
-  // vacuum chunks which show sign of deleted rows in metadata
-  ChunkKey chunk_key_prefix = {cat_.getDatabaseId(), td->tableId, cd->columnId};
-  ChunkMetadataVector chunk_metadata_vec;
-  cat_.getDataMgr().getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
-  for (auto& [chunk_key, chunk_metadata] : chunk_metadata_vec) {
-    auto fragment_id = chunk_key[CHUNK_KEY_FRAGMENT_IDX];
-    // If delete has occurred, only vacuum fragments that are in the fragment_ids set.
-    // Empty fragment_ids set implies all fragments.
-    if (chunk_metadata->chunkStats.max.tinyintval == 1 &&
-        (fragment_ids.empty() || shared::contains(fragment_ids, fragment_id))) {
-      UpdelRoll updel_roll;
-      updel_roll.catalog = &cat_;
-      updel_roll.logicalTableId = td->tableId;
-      updel_roll.memoryLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
-      updel_roll.table_descriptor = td;
-      CHECK_EQ(cd->columnId, chunk_key[CHUNK_KEY_COLUMN_IDX]);
-      const auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(cat_.getDatabaseId()),
-                                                   &cat_.getDataMgr(),
-                                                   chunk_key,
-                                                   updel_roll.memoryLevel,
-                                                   0,
-                                                   chunk_metadata->numBytes,
-                                                   chunk_metadata->numElements);
-      td->fragmenter->compactRows(&cat_,
-                                  td,
-                                  fragment_id,
-                                  td->fragmenter->getVacuumOffsets(chunk),
-                                  updel_roll.memoryLevel,
-                                  updel_roll);
-      updel_roll.stageUpdate();
-    }
-  }
-  td->fragmenter->resetSizesFromFragments();
 }
 
 void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
