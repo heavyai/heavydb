@@ -31,6 +31,8 @@
 #include <unordered_set>
 #include <vector>
 
+class SQLTypeInfo;
+
 namespace {
 
 template <typename T>
@@ -155,10 +157,15 @@ size_t formatDate(char* buf, size_t const max, int64_t const unixtime);
 size_t formatDateTime(char* buf,
                       size_t const max,
                       int64_t const timestamp,
-                      int const dimension);
+                      int const dimension,
+                      bool use_iso_format = false);
 
 // Write unixtime in seconds since epoch as "HH:MM:SS" format.
 size_t formatHMS(char* buf, size_t const max, int64_t const unixtime);
+
+// Write unix time in seconds since epoch as ISO 8601 format for the given temporal type.
+std::string convert_temporal_to_iso_format(const SQLTypeInfo& type_info,
+                                           int64_t unix_time);
 
 // Result of division where quot is floored and rem is unsigned.
 struct DivUMod {

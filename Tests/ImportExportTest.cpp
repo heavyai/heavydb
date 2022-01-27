@@ -17,6 +17,7 @@
 #include <Tests/TestHelpers.h>
 
 #include <algorithm>
+#include <fstream>
 #include <limits>
 #include <string>
 
@@ -2945,31 +2946,33 @@ TEST_P(SortedImportTest, SortedOnRegexWithoutSortRegex) {
                           "\"FILE_SORT_ORDER_BY='REGEX'\".");
 }
 
+namespace {
+void remove_all_files_from_export() {
+  boost::filesystem::path path_to_remove(BASE_PATH "/mapd_export/");
+  if (boost::filesystem::exists(path_to_remove)) {
+    for (boost::filesystem::directory_iterator end_dir_it, it(path_to_remove);
+         it != end_dir_it;
+         ++it) {
+      boost::filesystem::remove_all(it->path());
+    }
+  }
+}
+}  // namespace
+
 class ExportTest : public ImportTestGDAL {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     sql("drop table if exists query_export_test;");
     sql("drop table if exists query_export_test_reimport;");
-    ASSERT_NO_THROW(removeAllFilesFromExport());
+    ASSERT_NO_THROW(remove_all_files_from_export());
   }
 
   void TearDown() override {
     sql("drop table if exists query_export_test;");
     sql("drop table if exists query_export_test_reimport;");
-    ASSERT_NO_THROW(removeAllFilesFromExport());
+    ASSERT_NO_THROW(remove_all_files_from_export());
     DBHandlerTestFixture::TearDown();
-  }
-
-  void removeAllFilesFromExport() {
-    boost::filesystem::path path_to_remove(BASE_PATH "/mapd_export/");
-    if (boost::filesystem::exists(path_to_remove)) {
-      for (boost::filesystem::directory_iterator end_dir_it, it(path_to_remove);
-           it != end_dir_it;
-           ++it) {
-        boost::filesystem::remove_all(it->path());
-      }
-    }
   }
 
   // clang-format off
@@ -3823,6 +3826,107 @@ TEST_F(ExportTest, Array_Null_Handling_NullField) {
   ASSERT_NO_THROW(
       doTestArrayNullHandling("query_export_test_array_null_handling_nullfield.geojson",
                               ", array_null_handling='nullfield'"));
+}
+
+class TemporalColumnExportTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    remove_all_files_from_export();
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("CREATE TABLE test_table (index INTEGER, time_col TIME, date_col DATE, "
+        "timestamp_0_col TIMESTAMP(0), timestamp_3_col TIMESTAMP(3), timestamp_6_col "
+        "TIMESTAMP(6), timestamp_9_col TIMESTAMP(9), time_arr_col TIME[], "
+        "date_arr_col DATE[], timestamp_9_arr_col TIMESTAMP(9)[]);");
+    sql("INSERT INTO test_table VALUES (0, '00:00:00', '1000-01-01', "
+        "'1000-01-01T00:00:00Z', '1000-01-01T00:00:00.000Z', "
+        "'1000-01-01T00:00:00.000000Z', '1677-09-21T00:12:43.145224193Z',"
+        "{'00:00:00'}, {'1000-01-01'}, {'1677-09-21T00:12:43.145224193Z'});");
+    sql("INSERT INTO test_table VALUES (1, '00:50:00', '1900-06-06', "
+        "'1900-06-06T01:50:50Z', '1900-06-06T01:50:50.123Z', "
+        "'1900-06-06T01:50:50.123456Z', '1900-06-06T01:50:50.123456789Z',"
+        "{'00:50:00'}, {'1900-06-06'}, {'1900-06-06T01:50:50.123456789Z'});");
+    sql("INSERT INTO test_table VALUES (2, '12:00:00', '1970-01-01', "
+        "'1970-01-01T00:00:00Z', '1970-01-01T00:00:00.000Z', "
+        "'1970-01-01T00:00:00.000000Z', '1970-01-01T00:00:00.000000000Z',"
+        "{'12:00:00', '12:30:00'}, {'1000-01-01', '2000-01-01'}, "
+        "{'1677-09-21T00:12:43.145224193Z', '1800-01-01T00:12:43.145224193Z'});");
+    sql("INSERT INTO test_table VALUES (3, '00:00:50', '2022-06-06', "
+        "'2022-06-06T00:00:50Z', '2022-06-06T00:00:50.123Z', "
+        "'2022-06-06T00:00:50.123456Z', '2022-06-06T00:00:50.123456789Z',"
+        "{'00:00:50'}, {'2022-06-06'}, {'2022-06-06T00:00:50.123456789Z'});");
+    sql("INSERT INTO test_table VALUES (4, '23:59:59', '9999-12-31', "
+        "'2900-12-31T23:59:59Z', '2900-12-31T23:59:59.999Z', "
+        "'2900-12-31T23:59:59.999999Z', '2262-04-11T23:47:16.854775807Z',"
+        "{'23:59:59'}, {'9999-12-31'}, {'2262-04-11T23:47:16.854775807Z'});");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS test_table;");
+    remove_all_files_from_export();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void assertExpectedFileContent(const std::string& file_name,
+                                 const std::vector<std::string>& rows) {
+    auto file_path =
+        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file_name;
+    ASSERT_TRUE(boost::filesystem::exists(file_path));
+    std::ifstream file{file_path};
+    ASSERT_TRUE(file.is_open());
+    std::string line;
+    size_t line_index{};
+    while (std::getline(file, line)) {
+      ASSERT_LT(line_index, rows.size());
+      EXPECT_EQ(rows[line_index], line) << "At line: " << line_index;
+      line_index++;
+    }
+  }
+};
+
+TEST_F(TemporalColumnExportTest, Quoted) {
+  sql("COPY (SELECT * FROM test_table ORDER BY index) TO 'temporal_columns_quoted.csv';");
+  assertExpectedFileContent(
+      "temporal_columns_quoted.csv",
+      {"\"0\",\"00:00:00\",\"1000-01-01\",\"1000-01-01T00:00:00Z\",\"1000-01-01T00:00:00."
+       "000Z\",\"1000-01-01T00:00:00.000000Z\",\"1677-09-21T00:12:43.145224193Z\","
+       "\"{00:00:00}\",\"{1000-01-01}\",\"{1677-09-21T00:12:43.145224193Z}\"",
+       "\"1\",\"00:50:00\",\"1900-06-06\",\"1900-06-06T01:50:50Z\",\"1900-06-06T01:50:50."
+       "123Z\",\"1900-06-06T01:50:50.123456Z\",\"1900-06-06T01:50:50.123456789Z\","
+       "\"{00:50:00}\",\"{1900-06-06}\",\"{1900-06-06T01:50:50.123456789Z}\"",
+       "\"2\",\"12:00:00\",\"1970-01-01\",\"1970-01-01T00:00:00Z\",\"1970-01-01T00:00:00."
+       "000Z\",\"1970-01-01T00:00:00.000000Z\",\"1970-01-01T00:00:00.000000000Z\","
+       "\"{12:00:00 | 12:30:00}\",\"{1000-01-01 | 2000-01-01}\","
+       "\"{1677-09-21T00:12:43.145224193Z | 1800-01-01T00:12:43.145224193Z}\"",
+       "\"3\",\"00:00:50\",\"2022-06-06\",\"2022-06-06T00:00:50Z\",\"2022-06-06T00:00:50."
+       "123Z\",\"2022-06-06T00:00:50.123456Z\",\"2022-06-06T00:00:50.123456789Z\","
+       "\"{00:00:50}\",\"{2022-06-06}\",\"{2022-06-06T00:00:50.123456789Z}\"",
+       "\"4\",\"23:59:59\",\"9999-12-31\",\"2900-12-31T23:59:59Z\",\"2900-12-31T23:59:59."
+       "999Z\",\"2900-12-31T23:59:59.999999Z\",\"2262-04-11T23:47:16.854775807Z\","
+       "\"{23:59:59}\",\"{9999-12-31}\",\"{2262-04-11T23:47:16.854775807Z}\""});
+}
+
+TEST_F(TemporalColumnExportTest, Unquoted) {
+  sql("COPY (SELECT * FROM test_table ORDER BY index) TO 'temporal_columns_unquoted.csv' "
+      "WITH (quoted = 'false');");
+  assertExpectedFileContent(
+      "temporal_columns_unquoted.csv",
+      {"0,00:00:00,1000-01-01,1000-01-01T00:00:00Z,1000-01-01T00:00:00."
+       "000Z,1000-01-01T00:00:00.000000Z,1677-09-21T00:12:43.145224193Z,"
+       "{00:00:00},{1000-01-01},{1677-09-21T00:12:43.145224193Z}",
+       "1,00:50:00,1900-06-06,1900-06-06T01:50:50Z,1900-06-06T01:50:50."
+       "123Z,1900-06-06T01:50:50.123456Z,1900-06-06T01:50:50.123456789Z,"
+       "{00:50:00},{1900-06-06},{1900-06-06T01:50:50.123456789Z}",
+       "2,12:00:00,1970-01-01,1970-01-01T00:00:00Z,1970-01-01T00:00:00."
+       "000Z,1970-01-01T00:00:00.000000Z,1970-01-01T00:00:00.000000000Z,"
+       "{12:00:00 | 12:30:00},{1000-01-01 | 2000-01-01},"
+       "{1677-09-21T00:12:43.145224193Z | 1800-01-01T00:12:43.145224193Z}",
+       "3,00:00:50,2022-06-06,2022-06-06T00:00:50Z,2022-06-06T00:00:50."
+       "123Z,2022-06-06T00:00:50.123456Z,2022-06-06T00:00:50.123456789Z,"
+       "{00:00:50},{2022-06-06},{2022-06-06T00:00:50.123456789Z}",
+       "4,23:59:59,9999-12-31,2900-12-31T23:59:59Z,2900-12-31T23:59:59."
+       "999Z,2900-12-31T23:59:59.999999Z,2262-04-11T23:47:16.854775807Z,"
+       "{23:59:59},{9999-12-31},{2262-04-11T23:47:16.854775807Z}"});
 }
 
 //
