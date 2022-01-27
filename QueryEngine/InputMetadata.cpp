@@ -21,7 +21,6 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
-#include <tbb/task_group.h>
 #include <future>
 
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
@@ -171,47 +170,43 @@ void compute_table_function_col_chunk_stats(
     std::vector<T> threads_local_maxes(num_threads, std::numeric_limits<T>::lowest());
     std::vector<bool> threads_local_has_nulls(num_threads, false);
     tbb::task_arena limited_arena(num_threads);
-    tbb::task_group tg;
 
     limited_arena.execute([&] {
-      tg.run([&] {
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, row_count, min_grain_size),
-            [&](const tbb::blocked_range<size_t>& r) {
-              const size_t start_idx = r.begin();
-              const size_t end_idx = r.end();
-              T local_min_val = std::numeric_limits<T>::max();
-              T local_max_val = std::numeric_limits<T>::lowest();
-              bool local_has_nulls = false;
-              for (size_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
-                const T cell_val = col_buffer[row_idx];
-                if (cell_val == null_val) {
-                  local_has_nulls = true;
-                  continue;
-                }
-                if (cell_val < local_min_val) {
-                  local_min_val = cell_val;
-                }
-                if (cell_val > local_max_val) {
-                  local_max_val = cell_val;
-                }
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, row_count, min_grain_size),
+          [&](const tbb::blocked_range<size_t>& r) {
+            const size_t start_idx = r.begin();
+            const size_t end_idx = r.end();
+            T local_min_val = std::numeric_limits<T>::max();
+            T local_max_val = std::numeric_limits<T>::lowest();
+            bool local_has_nulls = false;
+            for (size_t row_idx = start_idx; row_idx < end_idx; ++row_idx) {
+              const T cell_val = col_buffer[row_idx];
+              if (cell_val == null_val) {
+                local_has_nulls = true;
+                continue;
               }
-              size_t thread_idx = tbb::this_task_arena::current_thread_index();
-              if (local_min_val < threads_local_mins[thread_idx]) {
-                threads_local_mins[thread_idx] = local_min_val;
+              if (cell_val < local_min_val) {
+                local_min_val = cell_val;
               }
-              if (local_max_val > threads_local_maxes[thread_idx]) {
-                threads_local_maxes[thread_idx] = local_max_val;
+              if (cell_val > local_max_val) {
+                local_max_val = cell_val;
               }
-              if (local_has_nulls) {
-                threads_local_has_nulls[thread_idx] = true;
-              }
-            },
-            tbb::simple_partitioner());
-      });
+            }
+            size_t thread_idx = tbb::this_task_arena::current_thread_index();
+            if (local_min_val < threads_local_mins[thread_idx]) {
+              threads_local_mins[thread_idx] = local_min_val;
+            }
+            if (local_max_val > threads_local_maxes[thread_idx]) {
+              threads_local_maxes[thread_idx] = local_max_val;
+            }
+            if (local_has_nulls) {
+              threads_local_has_nulls[thread_idx] = true;
+            }
+          },
+          tbb::simple_partitioner());
     });
 
-    limited_arena.execute([&] { tg.wait(); });
     for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
       if (threads_local_mins[thread_idx] < min_val) {
         min_val = threads_local_mins[thread_idx];

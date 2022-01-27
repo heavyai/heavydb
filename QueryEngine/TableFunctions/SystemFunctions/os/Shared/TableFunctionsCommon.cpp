@@ -27,7 +27,6 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
-#include <tbb/task_group.h>
 
 #include "TableFunctionsCommon.h"
 
@@ -46,40 +45,34 @@ TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col) {
   std::vector<T> local_col_mins(num_threads, std::numeric_limits<T>::max());
   std::vector<T> local_col_maxes(num_threads, std::numeric_limits<T>::lowest());
   tbb::task_arena limited_arena(num_threads);
-  tbb::task_group tg;
 
   limited_arena.execute([&] {
-    tg.run([&] {
-      tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
-                        [&](const tbb::blocked_range<int64_t>& r) {
-                          const int64_t start_idx = r.begin();
-                          const int64_t end_idx = r.end();
-                          T local_col_min = std::numeric_limits<T>::max();
-                          T local_col_max = std::numeric_limits<T>::lowest();
-                          for (int64_t r = start_idx; r < end_idx; ++r) {
-                            if (col.isNull(r)) {
-                              continue;
-                            }
-                            if (col[r] < local_col_min) {
-                              local_col_min = col[r];
-                            }
-                            if (col[r] > local_col_max) {
-                              local_col_max = col[r];
-                            }
+    tbb::parallel_for(tbb::blocked_range<int64_t>(0, num_rows),
+                      [&](const tbb::blocked_range<int64_t>& r) {
+                        const int64_t start_idx = r.begin();
+                        const int64_t end_idx = r.end();
+                        T local_col_min = std::numeric_limits<T>::max();
+                        T local_col_max = std::numeric_limits<T>::lowest();
+                        for (int64_t r = start_idx; r < end_idx; ++r) {
+                          if (col.isNull(r)) {
+                            continue;
                           }
-                          size_t thread_idx =
-                              tbb::this_task_arena::current_thread_index();
-                          if (local_col_min < local_col_mins[thread_idx]) {
-                            local_col_mins[thread_idx] = local_col_min;
+                          if (col[r] < local_col_min) {
+                            local_col_min = col[r];
                           }
-                          if (local_col_max > local_col_maxes[thread_idx]) {
-                            local_col_maxes[thread_idx] = local_col_max;
+                          if (col[r] > local_col_max) {
+                            local_col_max = col[r];
                           }
-                        });
-    });
+                        }
+                        size_t thread_idx = tbb::this_task_arena::current_thread_index();
+                        if (local_col_min < local_col_mins[thread_idx]) {
+                          local_col_mins[thread_idx] = local_col_min;
+                        }
+                        if (local_col_max > local_col_maxes[thread_idx]) {
+                          local_col_maxes[thread_idx] = local_col_max;
+                        }
+                      });
   });
-
-  limited_arena.execute([&] { tg.wait(); });
 
   for (size_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
     if (local_col_mins[thread_idx] < col_min) {

@@ -18,7 +18,6 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
-#include <tbb/task_group.h>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -530,27 +529,22 @@ void StringDictionaryProxy::transientLookupBulkParallelUnlocked(
                ((num_strings + max_inputs_per_thread - 1) / max_inputs_per_thread));
 
   tbb::task_arena limited_arena(num_threads);
-  tbb::task_group tg;
   limited_arena.execute([&] {
-    tg.run([&] {
-      tbb::parallel_for(
-          tbb::blocked_range<size_t>(0, num_strings, min_grain_size),
-          [&](const tbb::blocked_range<size_t>& r) {
-            const size_t start_idx = r.begin();
-            const size_t end_idx = r.end();
-            for (size_t string_idx = start_idx; string_idx < end_idx; ++string_idx) {
-              if (string_ids[string_idx] != StringDictionary::INVALID_STR_ID) {
-                continue;
-              }
-              string_ids[string_idx] =
-                  lookupTransientStringUnlocked(lookup_strings[string_idx]);
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, num_strings, min_grain_size),
+        [&](const tbb::blocked_range<size_t>& r) {
+          const size_t start_idx = r.begin();
+          const size_t end_idx = r.end();
+          for (size_t string_idx = start_idx; string_idx < end_idx; ++string_idx) {
+            if (string_ids[string_idx] != StringDictionary::INVALID_STR_ID) {
+              continue;
             }
-          },
-          tbb::simple_partitioner());
-    });
+            string_ids[string_idx] =
+                lookupTransientStringUnlocked(lookup_strings[string_idx]);
+          }
+        },
+        tbb::simple_partitioner());
   });
-
-  limited_arena.execute([&] { tg.wait(); });
 }
 
 template void StringDictionaryProxy::transientLookupBulkParallelUnlocked(
