@@ -545,20 +545,6 @@ void InsertOrderFragmenter::dropColumns(const std::vector<int>& columnIds) {
   }
 }
 
-bool InsertOrderFragmenter::hasDeletedRows(const int delete_column_id) {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(fragmentInfoMutex_);
-
-  for (auto const& fragment : fragmentInfoVec_) {
-    auto chunk_meta_it = fragment->getChunkMetadataMapPhysical().find(delete_column_id);
-    CHECK(chunk_meta_it != fragment->getChunkMetadataMapPhysical().end());
-    const auto& chunk_stats = chunk_meta_it->second->chunkStats;
-    if (chunk_stats.max.tinyintval == 1) {
-      return true;
-    }
-  }
-  return false;
-}
-
 void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
   CHECK(insert_data.is_default.size() == insert_data.columnIds.size());
   std::unordered_map<int, int> inverseInsertDataColIdMap;

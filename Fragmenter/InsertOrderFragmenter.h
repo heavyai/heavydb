@@ -162,23 +162,11 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                       const MetaDataKey& key,
                       UpdelRoll& updel_roll) override;
 
-  void compactRows(const Catalog_Namespace::Catalog* catalog,
-                   const TableDescriptor* td,
-                   const int fragment_id,
-                   const std::vector<uint64_t>& frag_offsets,
-                   const Data_Namespace::MemoryLevel memory_level,
-                   UpdelRoll& updel_roll) override;
-
-  const std::vector<uint64_t> getVacuumOffsets(
-      const std::shared_ptr<Chunk_NS::Chunk>& chunk) override;
-
   auto getChunksForAllColumns(const TableDescriptor* td,
                               const FragmentInfo& fragment,
                               const Data_Namespace::MemoryLevel memory_level);
 
   void dropColumns(const std::vector<int>& columnIds) override;
-
-  bool hasDeletedRows(const int delete_column_id) override;
 
   void resetSizesFromFragments() override;
 
@@ -237,13 +225,6 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   mutable std::mutex temp_mutex_;
 
   FragmentInfo& getFragmentInfoFromId(const int fragment_id);
-
-  auto vacuum_fixlen_rows(const FragmentInfo& fragment,
-                          const std::shared_ptr<Chunk_NS::Chunk>& chunk,
-                          const std::vector<uint64_t>& frag_offsets);
-  auto vacuum_varlen_rows(const FragmentInfo& fragment,
-                          const std::shared_ptr<Chunk_NS::Chunk>& chunk,
-                          const std::vector<uint64_t>& frag_offsets);
 
  private:
   bool isAddingNewColumns(const InsertData& insert_data) const;

@@ -221,20 +221,7 @@ class AbstractFragmenter {
                               const MetaDataKey& key,
                               UpdelRoll& updel_roll) = 0;
 
-  virtual void compactRows(const Catalog_Namespace::Catalog* catalog,
-                           const TableDescriptor* td,
-                           const int fragmentId,
-                           const std::vector<uint64_t>& fragOffsets,
-                           const Data_Namespace::MemoryLevel memoryLevel,
-                           UpdelRoll& updelRoll) = 0;
-
-  virtual const std::vector<uint64_t> getVacuumOffsets(
-      const std::shared_ptr<Chunk_NS::Chunk>& chunk) = 0;
-
   virtual void dropColumns(const std::vector<int>& columnIds) = 0;
-
-  //! Iterates through chunk metadata to return whether any rows have been deleted.
-  virtual bool hasDeletedRows(const int delete_column_id) = 0;
 
   /**
    * @brief Updates the metadata for a column chunk
