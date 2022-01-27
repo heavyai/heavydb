@@ -113,10 +113,10 @@ OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
     case kVARCHAR:
     case kTEXT:
     case kTIME:
-      return OFTString;
-    case kBIGINT:
     case kTIMESTAMP:
     case kDATE:
+      return OFTString;
+    case kBIGINT:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
       return OFTInteger64;
@@ -138,10 +138,10 @@ OGRFieldType sql_type_info_to_ogr_field_type(const std::string& name,
           case kVARCHAR:
           case kTEXT:
           case kTIME:
-            return OFTStringList;
-          case kBIGINT:
           case kTIMESTAMP:
           case kDATE:
+            return OFTStringList;
+          case kBIGINT:
           case kINTERVAL_DAY_TIME:
           case kINTERVAL_YEAR_MONTH:
             return OFTInteger64List;
@@ -408,13 +408,10 @@ void insert_scalar_column(const ScalarTargetValue* scalar_tv,
     }
     if (is_null) {
       ogr_feature->SetFieldNull(field_index);
-    } else if (ti.get_type() == kTIME) {
+    } else if (ti.is_time()) {
       CHECK_EQ(field_type, OFTString);
-      constexpr size_t buf_size = 9;
-      char buf[buf_size];
-      size_t const len = shared::formatHMS(buf, buf_size, int_val);
-      CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
-      ogr_feature->SetField(field_index, buf);
+      auto str = shared::convert_temporal_to_iso_format(ti, int_val);
+      ogr_feature->SetField(field_index, str.c_str());
     } else if (is_int64) {
       CHECK_EQ(field_type, OFTInteger64);
       ogr_feature->SetField(field_index, static_cast<GIntBig>(int_val));
@@ -539,15 +536,12 @@ void insert_array_column(const ArrayTargetValue* array_tv,
         default:
           is_null = false;
       }
-      if (ti.get_subtype() == kTIME) {
+      if (ti.get_elem_type().is_time()) {
         if (is_null) {
           string_values.emplace_back("");
         } else {
-          constexpr size_t buf_size = 9;
-          char buf[buf_size];
-          size_t const len = shared::formatHMS(buf, buf_size, int_val);
-          CHECK_EQ(8u, len);  // 8 == strlen("HH:MM:SS")
-          string_values.emplace_back(buf);
+          string_values.emplace_back(
+              shared::convert_temporal_to_iso_format(ti.get_elem_type(), int_val));
         }
       } else if (is_int64) {
         if (is_null && force_null_to_zero) {
