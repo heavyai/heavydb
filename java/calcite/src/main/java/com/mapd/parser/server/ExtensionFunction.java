@@ -119,6 +119,19 @@ public class ExtensionFunction {
     return null;
   }
 
+  public List<String> getPrettyArgNames() {
+    if (this.names != null) {
+      List<String> pretty_names = new ArrayList<String>();
+      for (int arg_idx = 0; arg_idx < this.args.size(); ++arg_idx) {
+        // Split on first array opening bracket and take everything preceding
+        // For names without array brackets this will just be the name
+        pretty_names.add(this.names.get(arg_idx).split("\\[", 2)[0]);
+      }
+      return pretty_names;
+    }
+    return null;
+  }
+
   public List<String> getOutNames() {
     if (this.names != null) {
       return this.names.subList(this.args.size(), this.names.size());

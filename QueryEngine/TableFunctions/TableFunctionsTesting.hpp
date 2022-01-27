@@ -1862,4 +1862,40 @@ ct_test_preflight_multicursor_qe227__cpu_(TableFunctionManager& mgr,
   return out.size();
 }
 
+// clang-format off
+/*
+  UDTF: ct_scalar_named_args__cpu_(TableFunctionManager, int32_t arg1, int32_t arg2) ->
+  Column<int32_t> out1, Column<int32_t> out2
+*/
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_scalar_named_args__cpu_(TableFunctionManager& mgr, const int32_t arg1,
+ const int32_t arg2, Column<int32_t>& out1, Column<int32_t>& out2) {
+  mgr.set_output_row_size(1);
+  out1[0] = arg1;
+  out2[0] = arg2;
+  return 1;
+ }
+
+// clang-format off
+/*
+  UDTF: ct_cursor_named_args__cpu_(TableFunctionManager, Cursor<Column<int32_t> input_table_arg1, 
+  Column<int32_t> input_table_arg2> input_table, int32_t arg1, int32_t arg2) ->
+  Column<int32_t> out1, Column<int32_t> out2
+*/
+
+EXTENSION_NOINLINE_HOST int32_t
+ct_cursor_named_args__cpu_(TableFunctionManager& mgr, const Column<int32_t>& input_arg1,
+const Column<int32_t>& input_arg2, const int32_t arg1, const int32_t arg2,
+ Column<int32_t>& out1, Column<int32_t>& out2) {
+  const int32_t num_rows = input_arg1.size();
+  mgr.set_output_row_size(num_rows);
+  for (int32_t r = 0; r < num_rows; ++r) {
+    out1[r] = input_arg1[r] + arg1;
+    out2[r] = input_arg2[r] + arg2;
+  }
+  return num_rows;
+}
+
+
 #endif

@@ -24,6 +24,7 @@ import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
+import org.apache.calcite.schema.FunctionParameter;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlCallBinding;
@@ -1916,6 +1917,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               OperandTypes.family(sig.toSqlSignature()),
               SqlFunctionCategory.SYSTEM);
       ret = sig.getSqlRet();
+      arg_names = sig.getArgNames();
+    }
+
+    @Override
+    public List<String> getParamNames() {
+      return arg_names;
     }
 
     @Override
@@ -1925,6 +1932,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     private final SqlTypeName ret;
+    private final List<String> arg_names;
   }
 
   public static class ExtTableFunction extends SqlFunction implements SqlTableFunction {
@@ -1935,10 +1943,65 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               OperandTypes.family(sig.toSqlSignature()),
               SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+      arg_types = sig.toSqlSignature();
       outs = sig.getSqlOuts();
       out_names = sig.getOutNames();
       arg_names = sig.getArgNames();
+      // pretty_arg_names will be same as arg_names, except with
+      // arg names for cursors stripped of array elements, i.e
+      // my_cursor_input[x, y, z] => my_cursor_input
+      pretty_arg_names = sig.getPrettyArgNames();
       options = sig.getOptions();
+    }
+
+    // The following method allows for parameter annotation
+    // i.e. my_param => 3.
+    // Note this method is deprecated, and it appears that
+    // getParameters() is the correct method to use, but
+    // need to troubleshoot why it's not being called
+    @Override
+    public List<String> getParamNames() {
+      return pretty_arg_names;
+    }
+
+    // Per the above, this appears to be the non-deprecated way
+    // to allow for parameter annotation, and it also allows
+    // for specifying optionality.
+    // However it currently is not being picked up/called,
+    // so need to troubleshot. Leaving in for now as scaffolding
+    // for the correct approach forward.
+
+    // Note that OperandTypeInference seems another route
+    // to implementing optionality.
+
+    public List<FunctionParameter> getParameters() {
+      final Boolean has_names = this.pretty_arg_names != null
+              && this.pretty_arg_names.size() == this.arg_types.size();
+      final List<FunctionParameter> parameters = new java.util.ArrayList<>();
+      for (int i = 0; i < this.arg_types.size(); i++) {
+        final int arg_idx = i;
+        parameters.add(new FunctionParameter() {
+          public int getOrdinal() {
+            return arg_idx;
+          }
+
+          public String getName() {
+            if (has_names) {
+              return pretty_arg_names.get(arg_idx);
+            }
+            return "arg" + arg_idx;
+          }
+
+          public RelDataType getType(RelDataTypeFactory typeFactory) {
+            return arg_types.get(arg_idx).getDefaultConcreteType(typeFactory);
+          }
+
+          public boolean isOptional() {
+            return false;
+          }
+        });
+      }
+      return parameters;
     }
 
     @Override
@@ -1997,8 +2060,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return s;
     }
 
+    private final List<SqlTypeFamily> arg_types;
     private final List<SqlTypeName> outs;
     private final List<String> arg_names;
+    private final List<String> pretty_arg_names;
     private final List<String> out_names;
     private final Map<String, String> options;
   }

@@ -98,7 +98,25 @@ public class SqlIdentifierCapturer {
 
     if (root instanceof SqlBasicCall) {
       SqlBasicCall call = (SqlBasicCall) root;
-      if (call.getOperator().getKind() == SqlKind.AS) {
+      if (call.getOperator().getKind() == SqlKind.ARGUMENT_ASSIGNMENT) {
+        // We have a => named parameter operator
+        // We need to ignore it as otherwise we will pick up literal args
+        // as tables, EXCEPT if it points to a CURSOR operator, as there
+        // will be at least one table inside of the CURSOR.
+        if (call.operandCount() == 0) {
+          return;
+        }
+        if (call.getOperands()[0].getKind() == SqlKind.CURSOR) {
+          SqlBasicCall cursor_call = (SqlBasicCall) call.getOperands()[0];
+          if (cursor_call.operandCount() == 0) {
+            return;
+          }
+          scan(cursor_call.getOperands()[0]);
+          return;
+        } else {
+          return;
+        }
+      } else if (call.getOperator().getKind() == SqlKind.AS) {
         // only really interested in the first operand
         scan(call.getOperands()[0]);
         return;

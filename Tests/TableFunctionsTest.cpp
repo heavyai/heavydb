@@ -607,6 +607,137 @@ TEST_F(TableFunctions, GroupByIn) {
   }
 }
 
+TEST_F(TableFunctions, NamedArgsMissingArgs) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Should throw when using named argument syntax if argument is missing
+      // Scalar args test
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_scalar_named_args"
+                                    "(arg1 => 1));",
+                                    dt),
+                   std::exception);
+
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_scalar_named_args"
+                                    "(arg2 => 2));",
+                                    dt),
+                   std::exception);
+    }
+
+    {
+      // Should throw when using named argument syntax if argument is missing
+      // Cursor test
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_cursor_named_args"
+                                    "(arg1 => 3, arg2 => 1));",
+                                    dt),
+                   std::exception);
+
+      EXPECT_THROW(run_multiple_agg(
+                       "SELECT * FROM TABLE(ct_cursor_named_args"
+                       "(CURSOR(SELECT * from (VALUES (1, 2)) AS t(x, y), arg2 => 1));",
+                       dt),
+                   std::exception);
+
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_cursor_named_args"
+                                    "(input_table => CURSOR(SELECT * from (VALUES (1, "
+                                    "2)) AS t(x, y), arg1 => 1));",
+                                    dt),
+                   std::exception);
+    }
+
+    {
+      // Should throw when using named argument syntax if arguments
+      // are present but one is not named
+      // Scalar args test
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_scalar_named_args"
+                                    "(arg1 => 1, 2));",
+                                    dt),
+                   std::exception);
+
+      EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_scalar_named_args"
+                                    "(1, arg2 = >2));",
+                                    dt),
+                   std::exception);
+    }
+
+    {
+      // Should throw when using named argument syntax if arguments
+      // are present but one is not named
+      // Cursor test
+      EXPECT_THROW(run_multiple_agg(
+                       "SELECT * FROM TABLE(ct_cursor_named_args("
+                       "CURSOR(SELECT * from (VALUES (1, 2))), arg1 => 1, arg2 => 2));",
+                       dt),
+                   std::exception);
+
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(ct_cursor_named_args("
+                           "input_table => CURSOR(SELECT * from (VALUES (1, 2))), "
+                           "arg1 => 1,  2));",
+                           dt),
+          std::exception);
+    }
+  }
+}
+
+TEST_F(TableFunctions, NamedArgsValidCalls) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Scalar args
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_scalar_named_args"
+          "(arg1 => 1, arg2 => 2));",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(2));
+      auto crt_row = rows->getNextRow(false, false);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), 1);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 2);
+    }
+
+    // Scalar args - reverse order
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_scalar_named_args"
+          "(arg2 => 4, arg1 => 3));",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(2));
+      auto crt_row = rows->getNextRow(false, false);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), 3);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 4);
+    }
+
+    // Cursor arg
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_cursor_named_args("
+          "input_table => CURSOR(SELECT * from (VALUES (1, 2))), "
+          "arg1 => 1,  arg2=>2));",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(2));
+      auto crt_row = rows->getNextRow(false, false);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), 2);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 4);
+    }
+    // Cursor arg - permutation 2
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(ct_cursor_named_args("
+          "arg2 => 3, input_table => CURSOR(SELECT * from (VALUES (1, 2))), "
+          "arg1=>10));",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      EXPECT_EQ(rows->colCount(), size_t(2));
+      auto crt_row = rows->getNextRow(false, false);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[0]), 11);
+      EXPECT_EQ(TestHelpers::v<int64_t>(crt_row[1]), 5);
+    }
+  }
+}
+
 TEST_F(TableFunctions, GroupByOut) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
