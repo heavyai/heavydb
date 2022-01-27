@@ -18,7 +18,6 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
-#include <tbb/task_group.h>
 #include <algorithm>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
@@ -472,49 +471,43 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
   // that we need to look up against
 
   tbb::task_arena limited_arena(thread_info.num_threads);
-  tbb::task_group tg;
   limited_arena.execute([&] {
     CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
-    tg.run([&] {
-      tbb::parallel_for(
-          tbb::blocked_range<int64_t>(
-              0,
-              num_lookup_strings,
-              thread_info.num_elems_per_thread /* tbb grain_size */),
-          [&](const tbb::blocked_range<int64_t>& r) {
-            const int64_t start_idx = r.begin();
-            const int64_t end_idx = r.end();
-            size_t num_strings_not_found = 0;
-            for (int64_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
-              const auto& input_string = string_vec[string_idx];
-              if (input_string.empty()) {
-                encoded_vec[string_idx] = inline_int_null_value<T>();
-                continue;
-              }
-              if (input_string.size() > StringDictionary::MAX_STRLEN) {
-                throw_string_too_long_error(input_string, dict_ref_);
-              }
-              const string_dict_hash_t input_string_hash = hash_string(input_string);
-              uint32_t hash_bucket = computeBucket(
-                  input_string_hash, input_string, string_id_string_dict_hash_table_);
-              // Will either be legit id or INVALID_STR_ID
-              const auto string_id = string_id_string_dict_hash_table_[hash_bucket];
-              if (string_id == StringDictionary::INVALID_STR_ID ||
-                  string_id >= num_dict_strings) {
-                encoded_vec[string_idx] = StringDictionary::INVALID_STR_ID;
-                num_strings_not_found++;
-                continue;
-              }
-              encoded_vec[string_idx] = string_id;
+    tbb::parallel_for(
+        tbb::blocked_range<int64_t>(
+            0, num_lookup_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
+        [&](const tbb::blocked_range<int64_t>& r) {
+          const int64_t start_idx = r.begin();
+          const int64_t end_idx = r.end();
+          size_t num_strings_not_found = 0;
+          for (int64_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
+            const auto& input_string = string_vec[string_idx];
+            if (input_string.empty()) {
+              encoded_vec[string_idx] = inline_int_null_value<T>();
+              continue;
             }
-            const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
-            num_strings_not_found_per_thread[tbb_thread_idx] = num_strings_not_found;
-          },
-          tbb::simple_partitioner());
-    });
+            if (input_string.size() > StringDictionary::MAX_STRLEN) {
+              throw_string_too_long_error(input_string, dict_ref_);
+            }
+            const string_dict_hash_t input_string_hash = hash_string(input_string);
+            uint32_t hash_bucket = computeBucket(
+                input_string_hash, input_string, string_id_string_dict_hash_table_);
+            // Will either be legit id or INVALID_STR_ID
+            const auto string_id = string_id_string_dict_hash_table_[hash_bucket];
+            if (string_id == StringDictionary::INVALID_STR_ID ||
+                string_id >= num_dict_strings) {
+              encoded_vec[string_idx] = StringDictionary::INVALID_STR_ID;
+              num_strings_not_found++;
+              continue;
+            }
+            encoded_vec[string_idx] = string_id;
+          }
+          const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
+          num_strings_not_found_per_thread[tbb_thread_idx] = num_strings_not_found;
+        },
+        tbb::simple_partitioner());
   });
 
-  limited_arena.execute([&] { tg.wait(); });
   size_t num_strings_not_found = 0;
   for (int64_t thread_idx = 0; thread_idx < thread_info.num_threads; ++thread_idx) {
     num_strings_not_found += num_strings_not_found_per_thread[thread_idx];
@@ -1695,25 +1688,20 @@ std::vector<std::string_view> StringDictionary::getStringViews(
 
     tbb::task_arena limited_arena(thread_info.num_threads);
     CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
-    tbb::task_group tg;
     limited_arena.execute([&] {
-      tg.run([&] {
-        tbb::parallel_for(
-            tbb::blocked_range<int64_t>(
-                0, num_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
-            [&](const tbb::blocked_range<int64_t>& r) {
-              // r should be in range of int32_t per CHECK above
-              const int32_t start_idx = r.begin();
-              const int32_t end_idx = r.end();
-              for (int32_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
-                string_views[string_idx] = getStringFromStorageFast(string_idx);
-              }
-            },
-            tbb::simple_partitioner());
-      });
+      tbb::parallel_for(
+          tbb::blocked_range<int64_t>(
+              0, num_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
+          [&](const tbb::blocked_range<int64_t>& r) {
+            // r should be in range of int32_t per CHECK above
+            const int32_t start_idx = r.begin();
+            const int32_t end_idx = r.end();
+            for (int32_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
+              string_views[string_idx] = getStringFromStorageFast(string_idx);
+            }
+          },
+          tbb::simple_partitioner());
     });
-
-    limited_arena.execute([&] { tg.wait(); });
   }
   return string_views;
 }
@@ -1805,26 +1793,23 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   // but should benchmark in this specific context
 
   tbb::task_arena limited_arena(thread_info.num_threads);
-  tbb::task_group tg;
   std::vector<size_t> num_strings_not_translated_per_thread(thread_info.num_threads, 0UL);
   limited_arena.execute([&] {
     CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
     if (dest_dictionary_is_empty) {
-      tg.run([&] {
-        tbb::parallel_for(
-            tbb::blocked_range<int32_t>(
-                0,
-                num_source_strings,
-                thread_info.num_elems_per_thread /* tbb grain_size */),
-            [&](const tbb::blocked_range<int32_t>& r) {
-              const int32_t start_idx = r.begin();
-              const int32_t end_idx = r.end();
-              for (int32_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
-                translated_ids[string_idx] = INVALID_STR_ID;
-              }
-            },
-            tbb::simple_partitioner());
-      });
+      tbb::parallel_for(
+          tbb::blocked_range<int32_t>(
+              0,
+              num_source_strings,
+              thread_info.num_elems_per_thread /* tbb grain_size */),
+          [&](const tbb::blocked_range<int32_t>& r) {
+            const int32_t start_idx = r.begin();
+            const int32_t end_idx = r.end();
+            for (int32_t string_idx = start_idx; string_idx != end_idx; ++string_idx) {
+              translated_ids[string_idx] = INVALID_STR_ID;
+            }
+          },
+          tbb::simple_partitioner());
       num_strings_not_translated_per_thread[0] += num_source_strings;
     } else {
       // The below logic, by executing low-level private variable accesses on both
@@ -1833,55 +1818,52 @@ size_t StringDictionary::buildDictionaryTranslationMap(
       // destination dictionary, but this version gets significantly better performance
       // (~2X), likely due to eliminating the overhead of writing out the string views and
       // then reading them back in (along with the associated cache misses)
-      tg.run([&] {
-        tbb::parallel_for(
-            tbb::blocked_range<int32_t>(
-                0,
-                num_source_strings,
-                thread_info.num_elems_per_thread /* tbb grain_size */),
-            [&](const tbb::blocked_range<int32_t>& r) {
-              const int32_t start_idx = r.begin();
-              const int32_t end_idx = r.end();
-              size_t num_strings_not_translated = 0;
-              for (int32_t source_string_id = start_idx; source_string_id != end_idx;
-                   ++source_string_id) {
-                const std::string_view source_str =
-                    getStringFromStorageFast(source_string_id);
-                // Get the hash from this/the source dictionary's cache, as the function
-                // will be the same for the dest_dict, sparing us having to recompute it
+      tbb::parallel_for(
+          tbb::blocked_range<int32_t>(
+              0,
+              num_source_strings,
+              thread_info.num_elems_per_thread /* tbb grain_size */),
+          [&](const tbb::blocked_range<int32_t>& r) {
+            const int32_t start_idx = r.begin();
+            const int32_t end_idx = r.end();
+            size_t num_strings_not_translated = 0;
+            for (int32_t source_string_id = start_idx; source_string_id != end_idx;
+                 ++source_string_id) {
+              const std::string_view source_str =
+                  getStringFromStorageFast(source_string_id);
+              // Get the hash from this/the source dictionary's cache, as the function
+              // will be the same for the dest_dict, sparing us having to recompute it
 
-                // Todo(todd): Remove option to turn string hash cache off or at least
-                // make a constexpr to avoid these branches when we expect it to be always
-                // on going forward
-                const string_dict_hash_t hash = materialize_hashes_
-                                                    ? hash_cache_[source_string_id]
-                                                    : hash_string(source_str);
-                uint32_t hash_bucket = dest_dict->computeBucket(
-                    hash, source_str, dest_dict->string_id_string_dict_hash_table_);
-                const auto translated_string_id =
-                    dest_dict->string_id_string_dict_hash_table_[hash_bucket];
-                translated_ids[source_string_id] = translated_string_id;
+              // Todo(todd): Remove option to turn string hash cache off or at least
+              // make a constexpr to avoid these branches when we expect it to be always
+              // on going forward
+              const string_dict_hash_t hash = materialize_hashes_
+                                                  ? hash_cache_[source_string_id]
+                                                  : hash_string(source_str);
+              uint32_t hash_bucket = dest_dict->computeBucket(
+                  hash, source_str, dest_dict->string_id_string_dict_hash_table_);
+              const auto translated_string_id =
+                  dest_dict->string_id_string_dict_hash_table_[hash_bucket];
+              translated_ids[source_string_id] = translated_string_id;
 
-                if (translated_string_id == StringDictionary::INVALID_STR_ID ||
-                    translated_string_id >= num_dest_strings) {
-                  if (dest_has_transients) {
-                    num_strings_not_translated +=
-                        dest_transient_lookup_callback(source_str, source_string_id);
-                  } else {
-                    num_strings_not_translated++;
-                  }
-                  continue;
+              if (translated_string_id == StringDictionary::INVALID_STR_ID ||
+                  translated_string_id >= num_dest_strings) {
+                if (dest_has_transients) {
+                  num_strings_not_translated +=
+                      dest_transient_lookup_callback(source_str, source_string_id);
+                } else {
+                  num_strings_not_translated++;
                 }
+                continue;
               }
-              const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
-              num_strings_not_translated_per_thread[tbb_thread_idx] +=
-                  num_strings_not_translated;
-            },
-            tbb::simple_partitioner());
-      });
+            }
+            const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
+            num_strings_not_translated_per_thread[tbb_thread_idx] +=
+                num_strings_not_translated;
+          },
+          tbb::simple_partitioner());
     }
   });
-  limited_arena.execute([&] { tg.wait(); });
   size_t total_num_strings_not_translated = 0;
   for (int64_t thread_idx = 0; thread_idx < thread_info.num_threads; ++thread_idx) {
     total_num_strings_not_translated += num_strings_not_translated_per_thread[thread_idx];
