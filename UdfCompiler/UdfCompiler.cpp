@@ -296,6 +296,8 @@ UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
     , target_arch_(target_arch)
 #endif
 {
+  // To ifguard unsupported code included in OmniSciTypes.h (i.e. <shared_mutex>)
+  clang_options_.emplace_back(std::string("-D UDF_COMPILED"));
 }
 
 UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
@@ -307,6 +309,8 @@ UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
     , target_arch_(target_arch)
 #endif
 {
+  // To ifguard unsupported code included in OmniSciTypes.h (i.e. <shared_mutex>)
+  clang_options_.emplace_back(std::string("-D UDF_COMPILED"));
 }
 
 std::pair<std::string, std::string> UdfCompiler::compileUdf(
@@ -547,8 +551,7 @@ std::string UdfCompiler::compileToNVVMIR(const std::string& udf_file_name) const
                                         "-emit-llvm",
                                         "-o",
                                         gpu_out_filename,
-                                        "-std=c++14",
-                                        "-Wno-c++17-extensions",
+                                        "-std=c++17",
                                         "-DNO_BOOST"};
 
   command_line.emplace_back("--cuda-gpu-arch=" +
@@ -586,8 +589,7 @@ std::string UdfCompiler::compileToLLVMIR(const std::string& udf_file_name) const
                                         "-emit-llvm",
                                         "-o",
                                         cpu_out_filename,
-                                        "-std=c++14",
-                                        "-Wno-c++17-extensions",
+                                        "-std=c++17",
                                         "-DNO_BOOST",
                                         udf_file_name};
   auto res = compileFromCommandLine(command_line);
@@ -614,6 +616,7 @@ void UdfCompiler::generateAST(const std::string& file_name) const {
   arg_vector.emplace_back("--");
   arg_vector.emplace_back("-DNO_BOOST");
   arg_vector.emplace_back(include_option);
+  arg_vector.emplace_back("-std=c++17");
 
   if (clang_options_.size() > 0) {
     std::copy(

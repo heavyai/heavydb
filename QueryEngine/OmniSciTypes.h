@@ -26,7 +26,9 @@
 #include "../Shared/funcannotations.h"
 
 #ifndef __CUDACC__
+#ifndef UDF_COMPILED
 #include "../StringDictionary/StringDictionaryProxy.h"
+#endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef __CUDACC__
 
 // declaring CPU functions as __host__ can help catch erroneous compilation of
@@ -223,6 +225,15 @@ struct GeoMultiPolygon {
   DEVICE int32_t getOutputSrid() const { return output_srid; }
 };
 
+// There are redundant #ifndef UDF_COMPILED inside
+// ifguard for StringDictionaryProxy to flag that
+// if we decide to adapt C++ UDF Compiler for table
+// functions, the linking issue we encountered with
+// the shared_mutex include in StringDicitonaryProxy
+// will need to be resolved separately.
+
+#ifndef UDF_COMPILED
+
 #ifdef __CUDACC__
 template <typename T>
 static DEVICE __constant__ T Column_null_value;
@@ -281,7 +292,9 @@ struct Column<TextEncodingDict> {
   TextEncodingDict* ptr_;  // row data
   int64_t size_;           // row count
 #ifndef __CUDACC__
+#ifndef UDF_COMPILED
   StringDictionaryProxy* string_dict_proxy_;
+#endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef __CUDACC__
 
   DEVICE TextEncodingDict& operator[](const unsigned int index) const {
@@ -303,14 +316,15 @@ struct Column<TextEncodingDict> {
   DEVICE inline void setNull(int64_t index) { set_null(ptr_[index].value); }
 
 #ifndef __CUDACC__
+#ifndef UDF_COMPILED
   DEVICE inline const std::string getString(int64_t index) const {
     return isNull(index) ? "" : string_dict_proxy_->getString(ptr_[index].value);
   }
   DEVICE inline const TextEncodingDict getStringId(const std::string& str) {
     return string_dict_proxy_->getOrAddTransient(str);
   }
-
-#endif
+#endif  // #ifndef UDF_COMPILED
+#endif  // #ifndef __CUDACC__
 
   DEVICE Column<TextEncodingDict>& operator=(const Column<TextEncodingDict>& other) {
 #ifndef __CUDACC__
@@ -379,7 +393,9 @@ struct ColumnList<TextEncodingDict> {
   int64_t num_cols_;  // the length of columns list
   int64_t size_;      // the size of columns
 #ifndef __CUDACC__
+#ifndef UDF_COMPILED
   StringDictionaryProxy** string_dict_proxies_;  // the size of columns
+#endif                                           // #ifndef UDF_COMPILED
 #endif                                           // #ifndef __CUDACC__
 
   DEVICE int64_t size() const { return size_; }
@@ -389,15 +405,19 @@ struct ColumnList<TextEncodingDict> {
       return {reinterpret_cast<TextEncodingDict*>(ptrs_[index]),
               size_,
 #ifndef __CUDACC__
+#ifndef UDF_COMPILED
               string_dict_proxies_[index]
+#endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef __CUDACC__
       };
     } else {
       return {nullptr,
               -1
 #ifndef __CUDACC__
+#ifndef UDF_COMPILED
               ,
               nullptr
+#endif  // #ifndef UDF_COMPILED
 #endif  // #ifndef__CUDACC__
       };
     }
@@ -449,3 +469,5 @@ struct TableFunctionManager {
   }
 #endif  // HAVE_TOSTRING
 };
+
+#endif  // #ifndef UDF_COMPILED
