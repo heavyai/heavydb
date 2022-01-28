@@ -482,7 +482,7 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   return lit_str_dict_proxy_.get();
 }
 
-StringDictionaryProxyTranslationMap* Executor::getStringProxyTranslationMap(
+StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
     const int source_dict_id,
     const int dest_dict_id,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -494,7 +494,7 @@ StringDictionaryProxyTranslationMap* Executor::getStringProxyTranslationMap(
       source_dict_id, dest_dict_id, with_generation, catalog_);
 }
 
-StringDictionaryProxyTranslationMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
+StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
     const int source_dict_id_in,
     const int dest_dict_id_in,
     const bool with_generation,
@@ -1134,13 +1134,13 @@ ResultSetPtr get_merged_result(
   CHECK(first);
   auto const first_target_idx = result_set::first_dict_encoded_idx(targets);
   if (first_target_idx) {
-    first->translateDictEncodedString(targets, *first_target_idx);
+    first->translateDictEncodedColumns(targets, *first_target_idx);
   }
   for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
     const auto& next = results_per_device[dev_idx].first;
     CHECK(next);
     if (first_target_idx) {
-      next->translateDictEncodedString(targets, *first_target_idx);
+      next->translateDictEncodedColumns(targets, *first_target_idx);
     }
     first->append(*next);
   }

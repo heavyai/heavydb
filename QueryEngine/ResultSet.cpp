@@ -332,34 +332,36 @@ StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) co
 // This may modify both the storage_ values and storage_ targets.
 // Does not iterate through appended_storage_.
 // Iterate over targets starting at index target_idx.
-void ResultSet::translateDictEncodedString(std::vector<TargetInfo> const& targets,
-                                           size_t const start_idx) {
+void ResultSet::translateDictEncodedColumns(std::vector<TargetInfo> const& targets,
+                                            size_t const start_idx) {
   using StringId = int32_t;
-  if (!storage_) {
-    return;
-  }
-  CHECK_EQ(targets.size(), storage_->targets_.size());
-  RowIterationState state;
-  for (size_t target_idx = start_idx; target_idx < targets.size(); ++target_idx) {
-    auto const& type0 = targets[target_idx].sql_type;
-    if (type0.is_dict_encoded_string()) {
-      auto& type1 = const_cast<SQLTypeInfo&>(storage_->targets_[target_idx].sql_type);
-      CHECK(type1.is_dict_encoded_string());
-      if (type0.get_comp_param() != type1.get_comp_param()) {
-        auto* const sdp0 = getStringDictionaryProxy(type0.get_comp_param());
-        CHECK(sdp0);
-        auto const* const sdp1 = getStringDictionaryProxy(type1.get_comp_param());
-        CHECK(sdp1);
-        state.cur_target_idx_ = target_idx;
-        eachCellInColumn(state, [sdp0, sdp1](int8_t const* const cell_ptr) {
-          StringId* const string_id_ptr =
-              const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
-          if (*string_id_ptr != NULL_INT) {
-            std::string const str = sdp1->getString(*string_id_ptr);
-            *string_id_ptr = sdp0->getOrAddTransient(str);
-          }
-        });
-        type1.set_comp_param(type0.get_comp_param());
+  if (storage_) {
+    CHECK_EQ(targets.size(), storage_->targets_.size());
+    RowIterationState state;
+    for (size_t target_idx = start_idx; target_idx < targets.size(); ++target_idx) {
+      auto const& type_lhs = targets[target_idx].sql_type;
+      if (type_lhs.is_dict_encoded_string()) {
+        auto& type_rhs =
+            const_cast<SQLTypeInfo&>(storage_->targets_[target_idx].sql_type);
+        CHECK(type_rhs.is_dict_encoded_string());
+        if (type_lhs.get_comp_param() != type_rhs.get_comp_param()) {
+          auto* const sdp_lhs = getStringDictionaryProxy(type_lhs.get_comp_param());
+          CHECK(sdp_lhs);
+          auto const* const sdp_rhs = getStringDictionaryProxy(type_rhs.get_comp_param());
+          CHECK(sdp_rhs);
+          auto const translate_string_ids =
+              [id_map = sdp_lhs->transientUnion(*sdp_rhs),
+               null_int = inline_int_null_val(type_rhs)](int8_t const* const cell_ptr) {
+                StringId* const string_id_ptr =
+                    const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
+                if (*string_id_ptr != null_int) {
+                  *string_id_ptr = id_map[*string_id_ptr];
+                }
+              };
+          state.cur_target_idx_ = target_idx;
+          eachCellInColumn(state, translate_string_ids);
+          type_rhs.set_comp_param(type_lhs.get_comp_param());
+        }
       }
     }
   }

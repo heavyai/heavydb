@@ -1,5 +1,5 @@
 /*
- * Copyright 2018, OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -206,9 +206,12 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
       CHECK(source_dict_desc_);
     } else {
       if (literals_dict) {
-        for (auto& entry : literals_dict->getTransientMapping()) {
-          auto newId = target_dict_desc_->stringDict->getOrAdd(entry.second);
-          literals_lookup_[entry.first] = newId;
+        auto const& transient_vecmap = literals_dict->getTransientVector();
+        for (unsigned index = 0; index < transient_vecmap.size(); ++index) {
+          auto const old_id = StringDictionaryProxy::transientIndexToId(index);
+          std::string const& str = *transient_vecmap[index];
+          auto const new_id = target_dict_desc_->stringDict->getOrAdd(str);
+          literals_lookup_[old_id] = new_id;
         }
       }
 
@@ -302,12 +305,11 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
         dest_ids.resize(bufferPtr->size());
 
         if (source_dict_proxy_) {
-          StringDictionary::populate_string_ids(
-              dest_ids,
-              target_dict_desc_->stringDict.get(),
-              *bufferPtr,
-              source_dict_desc_->stringDict.get(),
-              source_dict_proxy_->getTransientMapping());
+          StringDictionary::populate_string_ids(dest_ids,
+                                                target_dict_desc_->stringDict.get(),
+                                                *bufferPtr,
+                                                source_dict_desc_->stringDict.get(),
+                                                source_dict_proxy_->getTransientVector());
         } else {
           StringDictionary::populate_string_ids(dest_ids,
                                                 target_dict_desc_->stringDict.get(),

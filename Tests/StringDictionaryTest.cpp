@@ -16,8 +16,7 @@
 
 #include "TestHelpers.h"
 
-#include "../StringDictionary/StringDictionary.h"
-#include "../StringDictionary/StringDictionaryProxy.h"
+#include "StringDictionary/StringDictionaryProxy.h"
 
 #include <cstdlib>
 #include <filesystem>
@@ -46,9 +45,12 @@ TEST(StringDictionary, AddAndGet) {
   ASSERT_EQ(0, id1);
   auto id3 = string_dict.getOrAdd("baz");
   ASSERT_EQ(1, id3);
-  auto id4 = string_dict.getIdOfString("foo bar");
+  auto id4 = string_dict.getIdOfString(std::string_view("foo bar"));
   ASSERT_EQ(id1, id4);
   ASSERT_EQ("foo bar", string_dict.getString(id4));
+  auto id5 = string_dict.getIdOfString(std::string("foo bar"));
+  ASSERT_EQ(id1, id5);
+  ASSERT_EQ("foo bar", string_dict.getString(id5));
 }
 
 TEST(StringDictionary, Recover) {
@@ -523,12 +525,10 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildTranslationMapToOtherProxy(
             dest_string_dict_proxy.get());
-    CHECK(str_proxy_translation_map);
-    ASSERT_FALSE(str_proxy_translation_map->isEmpty());
-    const auto& translated_ids = str_proxy_translation_map->translation_map_;
-    const size_t num_ids = translated_ids.size();
+    ASSERT_FALSE(str_proxy_translation_map.empty());
+    const auto& translated_ids = str_proxy_translation_map.getVectorMap();
+    const size_t num_ids = translated_ids.size() - 1;  // Subtract 1 for INVALID_STR_ID
     ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount());
-    ASSERT_EQ(num_ids, str_proxy_translation_map->size());
     for (size_t idx = 0; idx < num_ids; ++idx) {
       ASSERT_EQ(translated_ids[idx], StringDictionary::INVALID_STR_ID);
     }
@@ -573,13 +573,10 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildTranslationMapToOtherProxy(
             dest_string_dict_proxy.get());
-    CHECK(str_proxy_translation_map);
-    ASSERT_FALSE(str_proxy_translation_map->isEmpty());
-    const auto& translated_ids = str_proxy_translation_map->translation_map_;
-    const size_t num_ids = translated_ids.size();
-    // Todo (todd): Expose transient start offset instead of having to use magic number
-    ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount() + 1);
-    ASSERT_EQ(num_ids, str_proxy_translation_map->size());
+    ASSERT_FALSE(str_proxy_translation_map.empty());
+    const auto& translated_ids = str_proxy_translation_map.getVectorMap();
+    const size_t num_ids = translated_ids.size() - 1;  // Subtract 1 for INVALID_STR_ID
+    ASSERT_EQ(num_ids, source_string_dict_proxy->entryCount());
     const int32_t start_source_id =
         source_string_dict_proxy->transientEntryCount() > 0
             ? (source_string_dict_proxy->transientEntryCount() + 1) * -1
@@ -613,6 +610,112 @@ void create_directory_if_not_exists(const std::string& path) {
   std::filesystem::path fs_path(path);
   if (!(std::filesystem::exists(path))) {
     std::filesystem::create_directory(path);
+  }
+}
+
+TEST(StringDictionary, TransientUnion) {
+  std::string const sd_lhs_path = std::string(BASE_PATH) + "/sd_lhs";
+  std::string const sd_rhs_path = std::string(BASE_PATH) + "/sd_rhs";
+#ifdef _WIN32
+  mkdir(sd_lhs_path.c_str());
+  mkdir(sd_rhs_path.c_str());
+#else
+  mkdir(sd_lhs_path.c_str(), 0755);
+  mkdir(sd_rhs_path.c_str(), 0755);
+#endif
+
+  dict_ref_t const dict_ref_lhs(100, 10);
+  auto sd_lhs = std::make_shared<StringDictionary>(
+      dict_ref_lhs, sd_lhs_path, false, true, g_cache_string_hash);
+  sd_lhs->getOrAdd("a");  // id = 0
+  sd_lhs->getOrAdd("b");  // id = 1
+  sd_lhs->getOrAdd("c");  // id = 2
+  sd_lhs->getOrAdd("d");  // id = 3
+  sd_lhs->getOrAdd("e");  // id = 4
+
+  dict_ref_t const dict_ref_rhs(100, 20);
+  auto sd_rhs = std::make_shared<StringDictionary>(
+      dict_ref_rhs, sd_rhs_path, false, true, g_cache_string_hash);
+  sd_rhs->getOrAdd("c");  // id = 0
+  sd_rhs->getOrAdd("d");  // id = 1
+  sd_rhs->getOrAdd("e");  // id = 2
+  sd_rhs->getOrAdd("f");  // id = 3
+  sd_rhs->getOrAdd("g");  // id = 4
+  sd_rhs->getOrAdd("h");  // id = 5
+  sd_rhs->getOrAdd("i");  // id = 6
+
+  {
+    // TODO cleanup redundancy of setting SD id here.
+    StringDictionaryProxy sdp_lhs(
+        sd_lhs, dict_ref_lhs.dictId, sd_lhs->storageEntryCount());
+    sdp_lhs.getOrAddTransient("t0");  // id = -2
+    StringDictionaryProxy sdp_rhs(
+        sd_rhs, dict_ref_rhs.dictId, sd_rhs->storageEntryCount());
+    sdp_rhs.getOrAddTransient("t0");  // id = -2
+    sdp_rhs.getOrAddTransient("t1");  // id = -3
+    auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
+    // Expected output:
+    // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
+    // t1 -3 (1st transient added to lhs when calling transientUnion())
+    // t0 -2 (exising transient id in sd_lhs)
+    //    -1 (There is always at least one -1 so that id=-1 maps to -1)
+    // c   2 (existing id in sd_lhs)
+    // d   3 (existing id in sd_lhs)
+    // e   4 (existing id in sd_lhs)
+    // f  -4 (2nd transient added to lhs when calling transientUnion())
+    // g  -5 (3rd transient added to lhs when calling transientUnion())
+    // h  -6 (4th transient added to lhs when calling transientUnion())
+    // i  -7 (5th transient added to lhs when calling transientUnion())
+    //           rhs id(-3 -2 -1 0 1 2  3  4  5  6)
+    // translation_map_(-3 -2 -1 2 3 4 -4 -5 -6 -7)
+    ASSERT_EQ("IdMap(offset_(3) vector_map_(-3 -2 -1 2 3 4 -4 -5 -6 -7))",
+              boost::lexical_cast<std::string>(id_map));
+    ASSERT_EQ(0, sdp_lhs.getIdOfString("a"));
+    ASSERT_EQ(1, sdp_lhs.getIdOfString("b"));
+    ASSERT_EQ(2, sdp_lhs.getIdOfString("c"));
+    ASSERT_EQ(3, sdp_lhs.getIdOfString("d"));
+    ASSERT_EQ(4, sdp_lhs.getIdOfString("e"));
+    ASSERT_EQ(-2, sdp_lhs.getIdOfString("t0"));
+    ASSERT_EQ(-3, sdp_lhs.getIdOfString("t1"));
+    ASSERT_EQ(-4, sdp_lhs.getIdOfString("f"));
+    ASSERT_EQ(-5, sdp_lhs.getIdOfString("g"));
+    ASSERT_EQ(-6, sdp_lhs.getIdOfString("h"));
+    ASSERT_EQ(-7, sdp_lhs.getIdOfString("i"));
+  }
+
+  {  // Swap sd_lhs <-> sd_rhs
+    StringDictionaryProxy sdp_lhs(
+        sd_rhs, dict_ref_lhs.dictId, sd_rhs->storageEntryCount());
+    sdp_lhs.getOrAddTransient("t0");
+    StringDictionaryProxy sdp_rhs(
+        sd_lhs, dict_ref_rhs.dictId, sd_lhs->storageEntryCount());
+    sdp_rhs.getOrAddTransient("t0");
+    sdp_rhs.getOrAddTransient("t1");
+    auto const id_map = sdp_lhs.transientUnion(sdp_rhs);
+    // Expected output:
+    // source_domain_min_ = -3 = -1 - number of transients in sdp_rhs
+    // t1 -3 (1st transient added to lhs when calling transientUnion())
+    // t0 -2 (existing transient id in sd_lhs)
+    //    -1 (There is always at least one -1 so that id=-1 maps to -1)
+    // a  -4 (2nd transient added to lhs when calling transientUnion())
+    // b  -5 (3rd transient added to lhs when calling transientUnion())
+    // c   0 (existing id in sd_rhs)
+    // d   1 (existing id in sd_rhs)
+    // e   2 (existing id in sd_rhs)
+    // translation_map_(-3 -2 -1 -4 -5 0 1 2)
+    ASSERT_EQ("IdMap(offset_(3) vector_map_(-3 -2 -1 -4 -5 0 1 2))",
+              boost::lexical_cast<std::string>(id_map));
+    ASSERT_EQ(-2, sdp_lhs.getIdOfString("t0"));
+    ASSERT_EQ(-3, sdp_lhs.getIdOfString("t1"));
+    ASSERT_EQ(-4, sdp_lhs.getIdOfString("a"));
+    ASSERT_EQ(-5, sdp_lhs.getIdOfString("b"));
+    ASSERT_EQ(0, sdp_lhs.getIdOfString("c"));
+    ASSERT_EQ(1, sdp_lhs.getIdOfString("d"));
+    ASSERT_EQ(2, sdp_lhs.getIdOfString("e"));
+    ASSERT_EQ(3, sdp_lhs.getIdOfString("f"));
+    ASSERT_EQ(4, sdp_lhs.getIdOfString("g"));
+    ASSERT_EQ(5, sdp_lhs.getIdOfString("h"));
+    ASSERT_EQ(6, sdp_lhs.getIdOfString("i"));
   }
 }
 

@@ -517,7 +517,8 @@ class ResultSet {
 
   static double calculateQuantile(quantile::TDigest* const t_digest);
 
-  void translateDictEncodedString(std::vector<TargetInfo> const&, size_t const start_idx);
+  void translateDictEncodedColumns(std::vector<TargetInfo> const&,
+                                   size_t const start_idx);
 
   struct RowIterationState {
     size_t prev_target_idx_{0};

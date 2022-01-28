@@ -77,7 +77,7 @@ void StringDictionaryTranslationMgr::buildTranslationMap() {
 void StringDictionaryTranslationMgr::createKernelBuffers() {
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    const size_t translation_map_size_bytes{host_translation_map_->size() *
+    const size_t translation_map_size_bytes{host_translation_map_->getVectorMap().size() *
                                             sizeof(int32_t)};
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       device_buffers_.emplace_back(CudaAllocator::allocGpuAbstractBuffer(
@@ -86,7 +86,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
           reinterpret_cast<int32_t*>(device_buffers_.back()->getMemoryPtr());
       copy_to_nvidia_gpu(data_mgr_,
                          reinterpret_cast<CUdeviceptr>(device_buffer),
-                         host_translation_map_->dataPtr(),
+                         host_translation_map_->data(),
                          translation_map_size_bytes,
                          device_id);
       kernel_translation_maps_.push_back(device_buffer);
@@ -96,7 +96,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
   CHECK_EQ(1, device_count_);
 #endif  // HAVE_CUDA
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
-    kernel_translation_maps_.push_back(host_translation_map_->dataPtr());
+    kernel_translation_maps_.push_back(host_translation_map_->data());
   }
 }
 
@@ -150,11 +150,11 @@ llvm::Value* StringDictionaryTranslationMgr::codegenCast(llvm::Value* input_str_
 }
 
 bool StringDictionaryTranslationMgr::isMapValid() const {
-  return host_translation_map_ && !host_translation_map_->isEmpty();
+  return host_translation_map_ && !host_translation_map_->empty();
 }
 
 const int32_t* StringDictionaryTranslationMgr::data() const {
-  return isMapValid() ? host_translation_map_->dataPtr() : nullptr;
+  return isMapValid() ? host_translation_map_->data() : nullptr;
 }
 
 int32_t StringDictionaryTranslationMgr::minSourceStringId() const {
