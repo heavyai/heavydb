@@ -346,7 +346,7 @@ HashJoin::getStrDictProxies(const InnerOuter& cols, const Executor* executor) {
   return inner_outer_str_dict_proxies;
 }
 
-std::shared_ptr<StringDictionaryProxyTranslationMap>
+std::shared_ptr<StringDictionaryProxy::IdMap>
 HashJoin::translateInnerToOuterStrDictProxies(const InnerOuter& cols,
                                               const Executor* executor) {
   const auto inner_outer_proxies = HashJoin::getStrDictProxies(cols, executor);
@@ -355,10 +355,11 @@ HashJoin::translateInnerToOuterStrDictProxies(const InnerOuter& cols,
   if (translate_dictionary) {
     CHECK_NE(inner_outer_proxies.first->getDictId(),
              inner_outer_proxies.second->getDictId());
-    return inner_outer_proxies.first->buildTranslationMapToOtherProxy(
-        inner_outer_proxies.second);
+    return std::make_shared<StringDictionaryProxy::IdMap>(
+        inner_outer_proxies.first->buildTranslationMapToOtherProxy(
+            inner_outer_proxies.second));
   }
-  return std::make_shared<StringDictionaryProxyTranslationMap>();
+  return std::make_shared<StringDictionaryProxy::IdMap>(0, 0);  // empty()
 }
 
 CompositeKeyInfo HashJoin::getCompositeKeyInfo(

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "StringDictionary/StringDictionary.h"
+#include "StringDictionary/StringDictionaryProxy.h"
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
@@ -27,6 +27,7 @@
 #include <iostream>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 
 // TODO(adb): fixup
 #ifdef _WIN32
@@ -231,6 +232,59 @@ StringDictionary::StringDictionary(const DictRef& dict_ref,
   }
 }
 
+namespace {
+class MapMaker : public StringDictionary::StringCallback {
+  std::unordered_map<std::string, int32_t> map_;
+
+ public:
+  void operator()(std::string const& str, int32_t const string_id) override {
+    auto const emplaced = map_.emplace(str, string_id);
+    CHECK(emplaced.second) << "str(" << str << ") string_id(" << string_id << ')';
+  }
+  void operator()(std::string_view const, int32_t const string_id) override {
+    UNREACHABLE() << "MapMaker must be called with a std::string.";
+  }
+  std::unordered_map<std::string, int32_t> moveMap() { return std::move(map_); }
+};
+}  // namespace
+
+std::function<int32_t(std::string const&)> StringDictionary::makeLambdaStringToId()
+    const {
+  CHECK(isClient());
+  constexpr size_t big_gen = static_cast<size_t>(std::numeric_limits<size_t>::max());
+  MapMaker map_maker;
+  eachStringSerially(big_gen, map_maker);
+  return [map{map_maker.moveMap()}](std::string const& str) {
+    auto const itr = map.find(str);
+    return itr == map.cend() ? INVALID_STR_ID : itr->second;
+  };
+}
+
+// Call serial_callback for each (string/_view, string_id). Must be called serially.
+void StringDictionary::eachStringSerially(int64_t const generation,
+                                          StringCallback& serial_callback) const {
+  if (isClient()) {
+    // copyStrings() is not supported when isClient().
+    std::string str;  // Import buffer. Placing outside of loop should reduce allocations.
+    size_t const n = std::min(static_cast<size_t>(generation), storageEntryCount());
+    CHECK_LE(n, static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
+    for (unsigned id = 0; id < n; ++id) {
+      {
+        mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+        client_->get_string(str, id);
+      }
+      serial_callback(str, id);
+    }
+  } else {
+    size_t const n = std::min(static_cast<size_t>(generation), str_count_);
+    CHECK_LE(n, static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    for (unsigned id = 0; id < n; ++id) {
+      serial_callback(getStringFromStorageFast(static_cast<int>(id)), id);
+    }
+  }
+}
+
 void StringDictionary::processDictionaryFutures(
     std::vector<std::future<std::vector<std::pair<string_dict_hash_t, unsigned int>>>>&
         dictionary_futures) {
@@ -299,7 +353,7 @@ StringDictionary::StringDictionary(const LeafHostInfo& host, const DictRef dict_
 
 StringDictionary::~StringDictionary() noexcept {
   free(CANARY_BUFFER);
-  if (client_) {
+  if (isClient()) {
     return;
   }
   if (payload_map_) {
@@ -320,7 +374,7 @@ StringDictionary::~StringDictionary() noexcept {
 }
 
 int32_t StringDictionary::getOrAdd(const std::string_view& str) noexcept {
-  if (client_) {
+  if (isClient()) {
     std::vector<int32_t> string_ids;
     client_->get_or_add_bulk(string_ids, std::vector<std::string>{std::string(str)});
     CHECK_EQ(size_t(1), string_ids.size());
@@ -380,6 +434,11 @@ template <class String>
 void StringDictionary::getOrAddBulkArray(
     const std::vector<std::vector<String>>& string_array_vec,
     std::vector<std::vector<int32_t>>& ids_array_vec) {
+  if (client_no_timeout_) {
+    client_no_timeout_->get_or_add_bulk_array(ids_array_vec, string_array_vec);
+    return;
+  }
+
   ids_array_vec.resize(string_array_vec.size());
   for (size_t i = 0; i < string_array_vec.size(); i++) {
     auto& strings = string_array_vec[i];
@@ -426,13 +485,6 @@ template size_t StringDictionary::getBulk(const std::vector<std::string>& string
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
                                           uint16_t* encoded_vec) const;
 template size_t StringDictionary::getBulk(const std::vector<std::string>& string_vec,
-                                          int32_t* encoded_vec) const;
-
-template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          uint8_t* encoded_vec) const;
-template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          uint16_t* encoded_vec) const;
-template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
                                           int32_t* encoded_vec) const;
 
 template <class T, class String>
@@ -525,16 +577,6 @@ template size_t StringDictionary::getBulk(const std::vector<std::string>& string
                                           int32_t* encoded_vec,
                                           const int64_t generation) const;
 
-template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          uint8_t* encoded_vec,
-                                          const int64_t generation) const;
-template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          uint16_t* encoded_vec,
-                                          const int64_t generation) const;
-template size_t StringDictionary::getBulk(const std::vector<std::string_view>& string_vec,
-                                          int32_t* encoded_vec,
-                                          const int64_t generation) const;
-
 template <class T, class String>
 void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
                                     T* output_string_ids) {
@@ -542,6 +584,7 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     getOrAddBulkParallel(input_strings, output_string_ids);
     return;
   }
+  // Single-thread path.
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
 
   const size_t initial_str_count = str_count_;
@@ -688,24 +731,32 @@ template void StringDictionary::getOrAddBulk(
     const std::vector<std::string_view>& string_vec,
     int32_t* encoded_vec);
 
-int32_t StringDictionary::getIdOfString(const std::string& str) const {
+template <class String>
+int32_t StringDictionary::getIdOfString(const String& str) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  if (client_) {
-    return client_->get(str);
+  if (isClient()) {
+    if constexpr (std::is_same_v<std::string, std::decay_t<String>>) {
+      return client_->get(str);
+    } else {
+      return client_->get(std::string(str));
+    }
   }
   return getUnlocked(str);
 }
 
-int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
-  const string_dict_hash_t hash = hash_string(str);
+template int32_t StringDictionary::getIdOfString(const std::string&) const;
+template int32_t StringDictionary::getIdOfString(const std::string_view&) const;
+
+int32_t StringDictionary::getUnlocked(const std::string_view sv) const noexcept {
+  const string_dict_hash_t hash = hash_string(sv);
   auto str_id = string_id_string_dict_hash_table_[computeBucket(
-      hash, str, string_id_string_dict_hash_table_)];
+      hash, sv, string_id_string_dict_hash_table_)];
   return str_id;
 }
 
 std::string StringDictionary::getString(int32_t string_id) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  if (client_) {
+  if (isClient()) {
     std::string ret;
     client_->get_string(ret, string_id);
     return ret;
@@ -721,7 +772,7 @@ std::string StringDictionary::getStringUnlocked(int32_t string_id) const noexcep
 std::pair<char*, size_t> StringDictionary::getStringBytes(
     int32_t string_id) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  CHECK(!client_);
+  CHECK(!isClient());
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringBytesChecked(string_id);
@@ -729,7 +780,7 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(
 
 size_t StringDictionary::storageEntryCount() const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  if (client_) {
+  if (isClient()) {
     return client_->storage_entry_count();
   }
   return str_count_;
@@ -767,7 +818,7 @@ std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
                                                const char escape,
                                                const size_t generation) const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  if (client_) {
+  if (isClient()) {
     return client_->get_like(pattern, icase, is_simple, escape, generation);
   }
   const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
@@ -878,7 +929,7 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
                                                   const std::string& comp_operator,
                                                   const size_t generation) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  if (client_) {
+  if (isClient()) {
     return client_->get_compare(pattern, comp_operator, generation);
   }
   std::vector<int32_t> ret;
@@ -1039,7 +1090,7 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
                                                      const char escape,
                                                      const size_t generation) const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  if (client_) {
+  if (isClient()) {
     return client_->get_regexp_like(pattern, escape, generation);
   }
   const auto cache_key = std::make_pair(pattern, escape);
@@ -1084,7 +1135,7 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
 
 std::vector<std::string> StringDictionary::copyStrings() const {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  if (client_) {
+  if (isClient()) {
     // TODO(miyu): support remote string dictionary
     throw std::runtime_error(
         "copying dictionaries from remote server is not supported yet.");
@@ -1518,7 +1569,7 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
 // uncheckpointed data be written to disk. Only option is a table truncate, and thats
 // assuming not replicated dictionary
 bool StringDictionary::checkpoint() noexcept {
-  if (client_) {
+  if (isClient()) {
     try {
       return client_->checkpoint();
     } catch (...) {
@@ -1534,6 +1585,10 @@ bool StringDictionary::checkpoint() noexcept {
   ret = ret && (omnisci::fsync(offset_fd_) == 0);
   ret = ret && (omnisci::fsync(payload_fd_) == 0);
   return ret;
+}
+
+bool StringDictionary::isClient() const noexcept {
+  return static_cast<bool>(client_);
 }
 
 void StringDictionary::buildSortedCache() {
@@ -1589,19 +1644,16 @@ void StringDictionary::populate_string_ids(
     StringDictionary* dest_dict,
     const std::vector<int32_t>& source_ids,
     const StringDictionary* source_dict,
-    const std::map<int32_t, std::string> transient_mapping) {
+    const std::vector<std::string const*>& transient_string_vec) {
   std::vector<std::string> strings;
 
   for (const int32_t source_id : source_ids) {
     if (source_id == std::numeric_limits<int32_t>::min()) {
       strings.emplace_back("");
     } else if (source_id < 0) {
-      if (auto string_itr = transient_mapping.find(source_id);
-          string_itr != transient_mapping.end()) {
-        strings.emplace_back(string_itr->second);
-      } else {
-        throw std::runtime_error("Unexpected negative source ID");
-      }
+      unsigned const string_index = StringDictionaryProxy::transientIdToIndex(source_id);
+      CHECK_LT(string_index, transient_string_vec.size()) << "source_id=" << source_id;
+      strings.emplace_back(*transient_string_vec[string_index]);
     } else {
       strings.push_back(source_dict->getString(source_id));
     }
@@ -1737,7 +1789,6 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   auto timer = DEBUG_TIMER(__func__);
   CHECK_GE(source_generation, 0L);
   CHECK_GE(dest_generation, 0L);
-
   const int64_t num_source_strings = source_generation;
   const int64_t num_dest_strings = dest_generation;
 
@@ -1750,7 +1801,6 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   // Note case of transient source dictionaries that aren't
   // seen as remote (they have no client_no_timeout_) is covered
   // by early bail above on num_source_strings == 0
-
   if (dest_dict->client_no_timeout_) {
     throw std::runtime_error(
         "Cannot translate between a local source and remote destination dictionary.");

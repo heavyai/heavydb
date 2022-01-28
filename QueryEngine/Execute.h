@@ -455,7 +455,7 @@ class Executor {
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
 
-  StringDictionaryProxyTranslationMap* getStringProxyTranslationMap(
+  StringDictionaryProxy::IdMap* getStringProxyTranslationMap(
       const int source_dict_id,
       const int dest_dict_id,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,

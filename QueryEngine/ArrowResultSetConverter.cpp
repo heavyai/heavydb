@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1461,12 +1461,13 @@ void ArrowResultSetConverter::initializeColumnBuilder(
       // dictionary (they are placed at the end after the materialized
       // string entries from StringDictionary)
 
-      const auto& transient_map = sdp->getTransientMapping();
       int32_t crt_transient_id = static_cast<int32_t>(str_list.size());
-      for (auto transient_pair : transient_map) {
-        ARROW_THROW_NOT_OK(str_array_builder.Append(transient_pair.second));
+      auto const& transient_vecmap = sdp->getTransientVector();
+      for (unsigned index = 0; index < transient_vecmap.size(); ++index) {
+        ARROW_THROW_NOT_OK(str_array_builder.Append(*transient_vecmap[index]));
+        auto const old_id = StringDictionaryProxy::transientIndexToId(index);
         CHECK(column_builder.string_remapping
-                  .insert(std::make_pair(transient_pair.first, crt_transient_id++))
+                  .insert(std::make_pair(old_id, crt_transient_id++))
                   .second);
       }
     } else {

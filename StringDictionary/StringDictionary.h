@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2021 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
 
+#include <functional>
 #include <future>
 #include <map>
 #include <string>
@@ -58,6 +59,20 @@ class StringDictionary {
   int32_t getDbId() const noexcept;
   int32_t getDictId() const noexcept;
 
+  class StringCallback {
+   public:
+    virtual ~StringCallback() = default;
+    virtual void operator()(std::string const&, int32_t const string_id) = 0;
+    virtual void operator()(std::string_view const, int32_t const string_id) = 0;
+  };
+
+  // Functors passed to eachStringSerially() must derive from StringCallback.
+  // Each std::string const& (if isClient()) or std::string_view (if !isClient())
+  // plus string_id is passed to the callback functor.
+  void eachStringSerially(int64_t const generation, StringCallback&) const;
+  std::function<int32_t(std::string const&)> makeLambdaStringToId() const;
+  friend class StringLocalCallback;
+
   int32_t getOrAdd(const std::string_view& str) noexcept;
   template <class T, class String>
   size_t getBulk(const std::vector<String>& string_vec, T* encoded_vec) const;
@@ -72,7 +87,8 @@ class StringDictionary {
   template <class String>
   void getOrAddBulkArray(const std::vector<std::vector<String>>& string_array_vec,
                          std::vector<std::vector<int32_t>>& ids_array_vec);
-  int32_t getIdOfString(const std::string& str) const;
+  template <class String>
+  int32_t getIdOfString(const String&) const;
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
@@ -110,6 +126,8 @@ class StringDictionary {
 
   bool checkpoint() noexcept;
 
+  bool isClient() const noexcept;
+
   /**
    * @brief Populates provided \p dest_ids vector with string ids corresponding to given
    * source strings
@@ -125,14 +143,14 @@ class StringDictionary {
    * @param dest_dict - destination dictionary
    * @param source_ids - vector of source string ids for which destination ids are needed
    * @param source_dict - source dictionary
-   * @param transient_mapping - map of transient source string ids to string values
+   * @param transient_string_vec - ordered vector of string value pointers
    */
   static void populate_string_ids(
       std::vector<int32_t>& dest_ids,
       StringDictionary* dest_dict,
       const std::vector<int32_t>& source_ids,
       const StringDictionary* source_dict,
-      const std::map<int32_t, std::string> transient_mapping = {});
+      const std::vector<std::string const*>& transient_string_vec = {});
 
   static void populate_string_array_ids(
       std::vector<std::vector<int32_t>>& dest_array_ids,
@@ -182,18 +200,8 @@ class StringDictionary {
   template <class String>
   void hashStrings(const std::vector<String>& string_vec,
                    std::vector<string_dict_hash_t>& hashes) const noexcept;
-  template <class T, class String>
-  void getOrAddBulkRemote(const std::vector<String>& string_vec, T* encoded_vec);
 
-  template <class T, class String>
-  size_t getBulkRemote(const std::vector<String>& string_vec, T* encoded_vec) const;
-
-  template <class T, class String>
-  size_t getBulkRemote(const std::vector<String>& string_vec,
-                       T* encoded_vec,
-                       const int64_t generation) const;
-
-  int32_t getUnlocked(const std::string& str) const noexcept;
+  int32_t getUnlocked(const std::string_view sv) const noexcept;
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;

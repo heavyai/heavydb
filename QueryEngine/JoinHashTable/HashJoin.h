@@ -295,7 +295,7 @@ class HashJoin {
   static std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
   getStrDictProxies(const InnerOuter& cols, const Executor* executor);
 
-  static std::shared_ptr<StringDictionaryProxyTranslationMap>
+  static std::shared_ptr<StringDictionaryProxy::IdMap>
   translateInnerToOuterStrDictProxies(const InnerOuter& cols, const Executor* executor);
 
  protected:

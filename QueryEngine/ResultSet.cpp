@@ -339,6 +339,105 @@ StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) co
       db_id_for_dict_, dict_id, with_generation);
 }
 
+class ResultSet::CellCallback {
+  StringDictionaryProxy::IdMap const id_map_;
+  int64_t const null_int_;
+
+ public:
+  CellCallback(StringDictionaryProxy::IdMap&& id_map, int64_t const null_int)
+      : id_map_(std::move(id_map)), null_int_(null_int) {}
+  void operator()(int8_t const* const cell_ptr) const {
+    using StringId = int32_t;
+    StringId* const string_id_ptr =
+        const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
+    if (*string_id_ptr != null_int_) {
+      *string_id_ptr = id_map_[*string_id_ptr];
+    }
+  }
+};
+
+void ResultSet::translateDictEncodedColumns(std::vector<TargetInfo> const& targets,
+                                            size_t const start_idx) {
+  if (storage_) {
+    CHECK_EQ(targets.size(), storage_->targets_.size());
+    RowIterationState state;
+    for (size_t target_idx = start_idx; target_idx < targets.size(); ++target_idx) {
+      auto const& type_lhs = targets[target_idx].sql_type;
+      if (type_lhs.is_dict_encoded_string()) {
+        auto& type_rhs =
+            const_cast<SQLTypeInfo&>(storage_->targets_[target_idx].sql_type);
+        CHECK(type_rhs.is_dict_encoded_string());
+        if (type_lhs.get_comp_param() != type_rhs.get_comp_param()) {
+          auto* const sdp_lhs = getStringDictionaryProxy(type_lhs.get_comp_param());
+          CHECK(sdp_lhs);
+          auto const* const sdp_rhs = getStringDictionaryProxy(type_rhs.get_comp_param());
+          CHECK(sdp_rhs);
+          state.cur_target_idx_ = target_idx;
+          CellCallback const translate_string_ids(sdp_lhs->transientUnion(*sdp_rhs),
+                                                  inline_int_null_val(type_rhs));
+          eachCellInColumn(state, translate_string_ids);
+          type_rhs.set_comp_param(type_lhs.get_comp_param());
+        }
+      }
+    }
+  }
+}
+
+// For each cell in column target_idx, callback func with pointer to datum.
+// This currently assumes the column type is a dictionary-encoded string, but this logic
+// can be generalized to other types.
+void ResultSet::eachCellInColumn(RowIterationState& state, CellCallback const& func) {
+  size_t const target_idx = state.cur_target_idx_;
+  QueryMemoryDescriptor& storage_qmd = storage_->query_mem_desc_;
+  CHECK_LT(target_idx, lazy_fetch_info_.size());
+  auto& col_lazy_fetch = lazy_fetch_info_[target_idx];
+  CHECK(col_lazy_fetch.is_lazily_fetched);
+  int const target_size = storage_->targets_[target_idx].sql_type.get_size();
+  CHECK_LT(0, target_size) << storage_->targets_[target_idx].toString();
+  size_t const nrows = storage_->binSearchRowCount();
+  if (storage_qmd.didOutputColumnar()) {
+    // Logic based on ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage()
+    if (state.buf_ptr_ == nullptr) {
+      state.buf_ptr_ = get_cols_ptr(storage_->buff_, storage_qmd);
+      state.compact_sz1_ = storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               ? storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               : query_mem_desc_.getEffectiveKeyWidth();
+    }
+    for (size_t j = state.prev_target_idx_; j < state.cur_target_idx_; ++j) {
+      size_t const next_target_idx = j + 1;  // Set state to reflect next target_idx j+1
+      state.buf_ptr_ = advance_to_next_columnar_target_buff(
+          state.buf_ptr_, storage_qmd, state.agg_idx_);
+      auto const& next_agg_info = storage_->targets_[next_target_idx];
+      state.agg_idx_ =
+          advance_slot(state.agg_idx_, next_agg_info, separate_varlen_storage_valid_);
+      state.compact_sz1_ = storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               ? storage_qmd.getPaddedSlotWidthBytes(state.agg_idx_)
+                               : query_mem_desc_.getEffectiveKeyWidth();
+    }
+    for (size_t i = 0; i < nrows; ++i) {
+      int8_t const* const pos_ptr = state.buf_ptr_ + i * state.compact_sz1_;
+      int64_t pos = read_int_from_buff(pos_ptr, target_size);
+      CHECK_GE(pos, 0);
+      auto& frag_col_buffers = getColumnFrag(0, target_idx, pos);
+      CHECK_LT(size_t(col_lazy_fetch.local_col_id), frag_col_buffers.size());
+      int8_t const* const col_frag = frag_col_buffers[col_lazy_fetch.local_col_id];
+      func(col_frag + pos * target_size);
+    }
+  } else {
+    size_t const key_bytes_with_padding =
+        align_to_int64(get_key_bytes_rowwise(storage_qmd));
+    for (size_t i = 0; i < nrows; ++i) {
+      int8_t const* const keys_ptr = row_ptr_rowwise(storage_->buff_, storage_qmd, i);
+      int8_t const* const rowwise_target_ptr = keys_ptr + key_bytes_with_padding;
+      int64_t pos = *reinterpret_cast<int64_t const*>(rowwise_target_ptr);
+      auto& frag_col_buffers = getColumnFrag(0, target_idx, pos);
+      CHECK_LT(size_t(col_lazy_fetch.local_col_id), frag_col_buffers.size());
+      int8_t const* const col_frag = frag_col_buffers[col_lazy_fetch.local_col_id];
+      func(col_frag + pos * target_size);
+    }
+  }
+}
+
 namespace {
 
 size_t get_truncated_row_count(size_t total_row_count, size_t limit, size_t offset) {

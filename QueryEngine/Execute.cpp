@@ -490,7 +490,7 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   return lit_str_dict_proxy_.get();
 }
 
-StringDictionaryProxyTranslationMap* Executor::getStringProxyTranslationMap(
+StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
     const int source_dict_id,
     const int dest_dict_id,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -502,7 +502,7 @@ StringDictionaryProxyTranslationMap* Executor::getStringProxyTranslationMap(
       db_id_, source_dict_id, dest_dict_id, with_generation);
 }
 
-StringDictionaryProxyTranslationMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
+StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
     const int db_id,
     const int source_dict_id_in,
     const int dest_dict_id_in,

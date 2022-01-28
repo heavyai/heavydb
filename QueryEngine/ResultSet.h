@@ -511,6 +511,22 @@ class ResultSet {
 
   static double calculateQuantile(quantile::TDigest* const t_digest);
 
+  void translateDictEncodedColumns(std::vector<TargetInfo> const&,
+                                   size_t const start_idx);
+
+  struct RowIterationState {
+    size_t prev_target_idx_{0};
+    size_t cur_target_idx_;
+    size_t agg_idx_{0};
+    int8_t const* buf_ptr_{nullptr};
+    int8_t compact_sz1_;
+  };
+
+  using StringId = int32_t;
+
+  class CellCallback;
+  void eachCellInColumn(RowIterationState&, CellCallback const&);
+
   const Executor* getExecutor() const { return query_mem_desc_.getExecutor(); }
 
  private:
