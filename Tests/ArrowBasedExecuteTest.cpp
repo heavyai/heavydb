@@ -12918,6 +12918,52 @@ TEST_F(Select, TimestampPrecision_HighPrecisionCastsWithIntervals) {
   }
 }
 
+TEST_F(Select, TimestampPrecision_CastFromInt) {
+  char const* const queries[] = {
+      // CAST(TINYINT column AS TIMESTAMP(*))
+      "SELECT CAST('1970-01-01 00:01:32' AS TIMESTAMP)"
+      " = CAST(w+100 AS TIMESTAMP) FROM test WHERE w+100=92 GROUP BY w;",
+      "SELECT CAST('1970-01-01 00:00:00.092' AS TIMESTAMP(3))"
+      " = CAST(w+100 AS TIMESTAMP(3)) FROM test WHERE w+100=92 GROUP BY w;",
+      "SELECT CAST('1970-01-01 00:00:00.000092' AS TIMESTAMP(6))"
+      " = CAST(w+100 AS TIMESTAMP(6)) FROM test WHERE w+100=92 GROUP BY w;",
+      "SELECT CAST('1970-01-01 00:00:00.000000092' AS TIMESTAMP(9))"
+      " = CAST(w+100 AS TIMESTAMP(9)) FROM test WHERE w+100=92 GROUP BY w;",
+      // CAST(SMALLINT column AS TIMESTAMP(*))
+      "SELECT CAST('1970-01-01 00:01:41' AS TIMESTAMP)"
+      " = CAST(z AS TIMESTAMP) FROM test WHERE z=101 GROUP BY z;",
+      "SELECT CAST('1970-01-01 00:00:00.101' AS TIMESTAMP(3))"
+      " = CAST(z AS TIMESTAMP(3)) FROM test WHERE z=101 GROUP BY z;",
+      "SELECT CAST('1970-01-01 00:00:00.000101' AS TIMESTAMP(6))"
+      " = CAST(z AS TIMESTAMP(6)) FROM test WHERE z=101 GROUP BY z;",
+      "SELECT CAST('1970-01-01 00:00:00.000000101' AS TIMESTAMP(9))"
+      " = CAST(z AS TIMESTAMP(9)) FROM test WHERE z=101 GROUP BY z;",
+      // CAST(INTEGER column AS TIMESTAMP(*))
+      "SELECT CAST('1970-01-01 00:00:07' AS TIMESTAMP)"
+      " = CAST(x AS TIMESTAMP) FROM test WHERE x=7 GROUP BY x;",
+      "SELECT CAST('1970-01-01 00:00:00.007' AS TIMESTAMP(3))"
+      " = CAST(x AS TIMESTAMP(3)) FROM test WHERE x=7 GROUP BY x;",
+      "SELECT CAST('1970-01-01 00:00:00.000007' AS TIMESTAMP(6))"
+      " = CAST(x AS TIMESTAMP(6)) FROM test WHERE x=7 GROUP BY x;",
+      "SELECT CAST('1970-01-01 00:00:00.000000007' AS TIMESTAMP(9))"
+      " = CAST(x AS TIMESTAMP(9)) FROM test WHERE x=7 GROUP BY x;",
+      // CAST(BIGINT column AS TIMESTAMP(*))
+      "SELECT CAST('1970-01-01 00:16:41' AS TIMESTAMP)"
+      " = CAST(t AS TIMESTAMP) FROM test WHERE t=1001 GROUP BY t;",
+      "SELECT CAST('1970-01-01 00:00:01.001' AS TIMESTAMP(3))"
+      " = CAST(t AS TIMESTAMP(3)) FROM test WHERE t=1001 GROUP BY t;",
+      "SELECT CAST('1970-01-01 00:00:00.001001' AS TIMESTAMP(6))"
+      " = CAST(t AS TIMESTAMP(6)) FROM test WHERE t=1001 GROUP BY t;",
+      "SELECT CAST('1970-01-01 00:00:00.000001001' AS TIMESTAMP(9))"
+      " = CAST(t AS TIMESTAMP(9)) FROM test WHERE t=1001 GROUP BY t;"};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (char const* const query : queries) {
+      ASSERT_TRUE(v<int64_t>(run_simple_agg(query, dt))) << query;
+    }
+  }
+}
+
 TEST_F(Select, TimestampPrecision_CastsImplicitAndExplicit) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

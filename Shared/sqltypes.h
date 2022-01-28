@@ -513,6 +513,9 @@ class SQLTypeInfo {
       // can cast from timestamp or date to number (epoch)
     } else if ((type == kTIMESTAMP || type == kDATE) && new_type_info.is_number()) {
       return true;
+      // can cast from number (epoch) to timestamp, date, or time
+    } else if (is_number() && new_type_info.is_time()) {
+      return true;
       // can cast from date to timestamp
     } else if (type == kDATE && new_type_info.get_type() == kTIMESTAMP) {
       return true;
