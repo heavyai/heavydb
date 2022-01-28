@@ -107,6 +107,7 @@
 #include <arrow/ipc/api.h>
 
 #include "Shared/ArrowUtil.h"
+#include "Shared/enable_assign_render_groups.h"
 
 #define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
 
@@ -3010,7 +3011,8 @@ void DBHandler::fillGeoColumns(
   }
 
   // start or continue assigning render groups for poly columns?
-  if (IS_GEO_POLY(cd->columnType.get_type()) && assign_render_groups) {
+  if (IS_GEO_POLY(cd->columnType.get_type()) && assign_render_groups &&
+      g_enable_assign_render_groups) {
     // get RGA to use
     import_export::RenderGroupAnalyzer* render_group_analyzer{};
     {
@@ -3803,7 +3805,8 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
-  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
+  copy_params.geo_assign_render_groups =
+      cp.geo_assign_render_groups && g_enable_assign_render_groups;
   copy_params.geo_explode_collections = cp.geo_explode_collections;
   copy_params.source_srid = cp.source_srid;
   switch (cp.raster_point_type) {

@@ -21,6 +21,7 @@
 #include "Geospatial/Compression.h"
 #include "ImportExport/RenderGroupAnalyzer.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "StringDictionary/StringDictionary.h"
 
 #include <atomic>
@@ -800,7 +801,7 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  import_export::RenderGroupAnalyzer render_group_analyzer_;
+  std::unique_ptr<import_export::RenderGroupAnalyzer> render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
@@ -822,6 +823,10 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
 
     if (num_rows) {
       allocateColumnarData(num_rows);
+    }
+
+    if (g_enable_assign_render_groups) {
+      render_group_analyzer_ = std::make_unique<import_export::RenderGroupAnalyzer>();
     }
   }
 
@@ -850,8 +855,12 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
       (*ring_sizes_data_)[row] = to_array_datum(geoPoly->ring_sizes);
       auto bounds = compute_bounds_of_coords(geoPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      render_group_data_[row] =
-          render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+      if (render_group_analyzer_) {
+        render_group_data_[row] =
+            render_group_analyzer_->insertBoundsAndReturnRenderGroup(bounds);
+      } else {
+        render_group_data_[row] = 0;
+      }
     } else {
       // NULL Polygon
       (*column_data_)[row] = "";
@@ -891,7 +900,7 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
   const ColumnDescriptor* ring_sizes_solumn_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  import_export::RenderGroupAnalyzer render_group_analyzer_;
+  std::unique_ptr<import_export::RenderGroupAnalyzer> render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> poly_rings_data_;
@@ -917,6 +926,10 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
 
     if (num_rows) {
       allocateColumnarData(num_rows);
+    }
+
+    if (g_enable_assign_render_groups) {
+      render_group_analyzer_ = std::make_unique<import_export::RenderGroupAnalyzer>();
     }
   }
 
@@ -947,8 +960,12 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
       (*poly_rings_data_)[row] = to_array_datum(geoMultiPoly->poly_rings);
       auto bounds = compute_bounds_of_coords(geoMultiPoly->coords);
       (*bounds_data_)[row] = to_array_datum(bounds);
-      render_group_data_[row] =
-          render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+      if (render_group_analyzer_) {
+        render_group_data_[row] =
+            render_group_analyzer_->insertBoundsAndReturnRenderGroup(bounds);
+      } else {
+        render_group_data_[row] = 0;
+      }
     } else {
       // NULL MultiPolygon
       (*column_data_)[row] = "";

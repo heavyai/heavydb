@@ -67,6 +67,7 @@
 #include "RenderGroupAnalyzer.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/likely.h"
@@ -2534,15 +2535,18 @@ static ImportStatus import_thread_shapefile(
               }
             }
 
-            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-              if (ring_sizes.size()) {
-                // get a suitable render group for these poly coords
-                auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-                CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-                render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
-              } else {
-                // empty poly
-                render_group = -1;
+            if (columnIdToRenderGroupAnalyzerMap.size()) {
+              if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+                if (ring_sizes.size()) {
+                  // get a suitable render group for these poly coords
+                  auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+                  CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+                  render_group =
+                      (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+                } else {
+                  // empty poly
+                  render_group = -1;
+                }
               }
             }
 
@@ -4413,7 +4417,7 @@ ImportStatus Importer::importDelimited(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (copy_params.geo_assign_render_groups) {
+  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
     auto& cat = loader->getCatalog();
     auto* td = loader->getTableDesc();
     CHECK(td);
@@ -5335,7 +5339,7 @@ ImportStatus Importer::importGDALGeo(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  if (copy_params.geo_assign_render_groups) {
+  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
     auto& cat = loader->getCatalog();
     auto* td = loader->getTableDesc();
     CHECK(td);

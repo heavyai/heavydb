@@ -10,7 +10,8 @@ set(shared_source_files
     threading.cpp
     MathUtils.cpp
     file_path_util.cpp
-    file_type.cpp)
+    file_type.cpp
+    enable_assign_render_groups.cpp)
 
 include_directories(${CMAKE_SOURCE_DIR})
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
