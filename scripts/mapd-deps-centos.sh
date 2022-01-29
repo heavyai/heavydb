@@ -330,7 +330,7 @@ popd # spirv-cross
 
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
-VERS=1.2.198.1 # stable 12/3/21
+VERS=1.2.162.0 # stable 12/11/20
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan
