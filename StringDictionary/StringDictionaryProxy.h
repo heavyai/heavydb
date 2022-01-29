@@ -17,11 +17,13 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARYPROXY_H
 #define STRINGDICTIONARY_STRINGDICTIONARYPROXY_H
 
+#include "Logger/Logger.h"  // For CHECK macros
 #include "StringDictionary.h"
 
 #include <map>
 #include <optional>
 #include <ostream>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -81,6 +83,7 @@ class StringDictionaryProxy {
   class IdMap {
     size_t const offset_;
     std::vector<int32_t> vector_map_;
+    int64_t num_untranslated_strings_{-1};
 
    public:
     // +1 is added to skip string_id=-1 reserved for INVALID_STR_ID. id_map[-1]==-1.
@@ -92,11 +95,26 @@ class StringDictionaryProxy {
     bool empty() const { return vector_map_.size() == 1; }
     inline size_t getIndex(int32_t const id) const { return offset_ + id; }
     std::vector<int32_t> const& getVectorMap() const { return vector_map_; }
+    size_t size() const { return vector_map_.size(); }
     size_t numTransients() const { return offset_ - 1; }
     size_t numNonTransients() const { return vector_map_.size() - offset_; }
     int32_t* data() { return vector_map_.data(); }
     int32_t const* data() const { return vector_map_.data(); }
     int32_t domainStart() const { return -static_cast<int32_t>(offset_); }
+    int32_t domainEnd() const { return static_cast<int32_t>(numNonTransients()); }
+    // Next two methods are currently used by buildUnionTranslationMapToOtherProxy to
+    // short circuit iteration over ids after intersection translation if all
+    // ids translated. Currently the private num_untranslated_strings_ is initialized
+    // to a -1 sentinel to signify that the value has not been calculated, which we
+    // CHECK against in the getter numUntranslatedStrings() method
+    // to represent that the num_untranslated_strings_ field has been uninitialized
+    size_t numUntranslatedStrings() const {
+      CHECK_GE(num_untranslated_strings_, 0L);
+      return static_cast<size_t>(num_untranslated_strings_);
+    }
+    void setNumUntranslatedStrings(const size_t num_untranslated_strings) {
+      num_untranslated_strings_ = static_cast<int64_t>(num_untranslated_strings);
+    }
     int32_t* storageData() { return vector_map_.data() + offset_; }
     int32_t& operator[](int32_t const id) { return vector_map_[getIndex(id)]; }
     int32_t operator[](int32_t const id) const { return vector_map_[getIndex(id)]; }
@@ -124,7 +142,10 @@ class StringDictionaryProxy {
    * maps to INVALID_STR_ID.
    *
    */
-  IdMap buildTranslationMapToOtherProxy(const StringDictionaryProxy* dest_proxy) const;
+  IdMap buildIntersectionTranslationMapToOtherProxy(
+      const StringDictionaryProxy* dest_proxy) const;
+
+  IdMap buildUnionTranslationMapToOtherProxy(StringDictionaryProxy* dest_proxy) const;
 
   /**
    * @brief Returns the number of string entries in the underlying string dictionary,
@@ -196,26 +217,34 @@ class StringDictionaryProxy {
   IdMap transientUnion(StringDictionaryProxy const&);
 
  private:
+  std::string getStringUnlocked(const int32_t string_id) const;
   size_t transientEntryCountUnlocked() const;
   size_t entryCountUnlocked() const;
   template <typename String>
   int32_t lookupTransientStringUnlocked(const String& lookup_string) const;
+  size_t getTransientBulkImpl(const std::vector<std::string>& strings,
+                              int32_t* string_ids,
+                              const bool take_read_lock) const;
   template <typename String>
-  void transientLookupBulk(const std::vector<String>& lookup_strings,
-                           int32_t* string_ids) const;
+  size_t transientLookupBulk(const std::vector<String>& lookup_strings,
+                             int32_t* string_ids,
+                             const bool take_read_lock) const;
   template <typename String>
-  void transientLookupBulkUnlocked(const std::vector<String>& lookup_strings,
-                                   int32_t* string_ids) const;
+  size_t transientLookupBulkUnlocked(const std::vector<String>& lookup_strings,
+                                     int32_t* string_ids) const;
   template <typename String>
-  void transientLookupBulkParallelUnlocked(const std::vector<String>& lookup_strings,
-                                           int32_t* string_ids) const;
+  size_t transientLookupBulkParallelUnlocked(const std::vector<String>& lookup_strings,
+                                             int32_t* string_ids) const;
+
+  IdMap buildIntersectionTranslationMapToOtherProxyUnlocked(
+      const StringDictionaryProxy* dest_proxy) const;
   std::shared_ptr<StringDictionary> string_dict_;
   const int32_t string_dict_id_;
   TransientMap transient_str_to_int_;
   // Holds pointers into transient_str_to_int_
   std::vector<std::string const*> transient_string_vec_;
   int64_t generation_;
-  mutable mapd_shared_mutex rw_mutex_;
+  mutable std::shared_mutex rw_mutex_;
 
   // Return INVALID_STR_ID if not found on string_dict_. Don't lock or check transients.
   template <typename String>

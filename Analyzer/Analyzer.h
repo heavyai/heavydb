@@ -1826,7 +1826,8 @@ std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
 std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
     const std::list<
         std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>&,
-    const std::shared_ptr<Analyzer::Expr>);
+    const std::shared_ptr<Analyzer::Expr>,
+    const Executor* executor = nullptr);
 
 std::shared_ptr<Analyzer::Expr> getLikeExpr(std::shared_ptr<Analyzer::Expr> arg_expr,
                                             std::shared_ptr<Analyzer::Expr> like_expr,

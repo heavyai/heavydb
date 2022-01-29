@@ -41,12 +41,14 @@
 StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     const int32_t source_string_dict_id,
     const int32_t dest_string_dict_id,
+    const bool translate_intersection_only,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     Executor* executor,
     Data_Namespace::DataMgr* data_mgr)
     : source_string_dict_id_(source_string_dict_id)
     , dest_string_dict_id_(dest_string_dict_id)
+    , translate_intersection_only_(translate_intersection_only)
     , memory_level_(memory_level)
     , device_count_(device_count)
     , executor_(executor)
@@ -67,11 +69,14 @@ StringDictionaryTranslationMgr::~StringDictionaryTranslationMgr() {
 }
 
 void StringDictionaryTranslationMgr::buildTranslationMap() {
-  host_translation_map_ =
-      executor_->getStringProxyTranslationMap(source_string_dict_id_,
-                                              dest_string_dict_id_,
-                                              executor_->getRowSetMemoryOwner(),
-                                              true);
+  host_translation_map_ = executor_->getStringProxyTranslationMap(
+      source_string_dict_id_,
+      dest_string_dict_id_,
+      translate_intersection_only_
+          ? RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION
+          : RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
+      executor_->getRowSetMemoryOwner(),
+      true);
 }
 
 void StringDictionaryTranslationMgr::createKernelBuffers() {

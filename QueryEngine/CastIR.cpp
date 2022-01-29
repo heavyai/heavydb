@@ -211,6 +211,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
         std::make_unique<StringDictionaryTranslationMgr>(
             operand_ti.get_comp_param(),
             ti.get_comp_param(),
+            ti.is_dict_intersection(),
             co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                       : Data_Namespace::CPU_LEVEL,
             executor()->deviceCount(co.device_type),

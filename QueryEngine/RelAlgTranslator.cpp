@@ -805,7 +805,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
   if (rex_case->getElse()) {
     else_expr = translateScalarRex(rex_case->getElse());
   }
-  return normalizeCaseExpr(expr_list, else_expr);
+  return normalizeCaseExpr(expr_list, else_expr, executor_);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(

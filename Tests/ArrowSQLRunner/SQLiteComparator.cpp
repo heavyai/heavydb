@@ -205,10 +205,10 @@ void compare_impl(SqliteConnector& connector,
             CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
           } else {
             const auto ref_val = connector.getData<std::string>(row_idx, col_idx);
-            if (ref_val == "t") {
+            if (ref_val == "t" || ref_val == "1") {
               ASSERT_EQ(1, *omnisci_as_int_p) << errmsg;
             } else {
-              CHECK_EQ("f", ref_val) << errmsg;
+              CHECK(ref_val == "f" || ref_val == "0") << errmsg;
               ASSERT_EQ(0, *omnisci_as_int_p) << errmsg;
             }
           }

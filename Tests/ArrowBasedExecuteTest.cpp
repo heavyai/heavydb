@@ -4419,18 +4419,87 @@ TEST_F(Select, Case) {
       dt);
     c(R"(SELECT COUNT(*) FROM test WHERE (CASE WHEN fixed_str = 'foo' THEN 'a' WHEN fixed_str is NULL THEN 'b' ELSE str END) = 'z';)",
       dt);
+
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test ORDER BY x, str, fixed_str ASC;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN str <> fixed_str then str ELSE fixed_str END FROM test ORDER BY x, str, fixed_str ASC;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN 'a' WHEN str <> fixed_str then str ELSE fixed_str END AS case_group, COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN 'a' WHEN str <> fixed_str then 'b' ELSE fixed_str END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN 'a' WHEN str <> fixed_str THEN 'b' ELSE NULL END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN 'a' WHEN str <> fixed_str THEN NULL ELSE NULL END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    EXPECT_ANY_THROW(c(
+        R"(SELECT CASE WHEN x = 8 THEN NULL WHEN str <> fixed_str THEN NULL ELSE NULL END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+        dt));  // Untyped NULL values are not supported. Please CAST any NULL constants to
+               // a type.
+    c(R"(SELECT CASE WHEN x = 8 THEN NULL WHEN str <> fixed_str THEN str ELSE fixed_str END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN str WHEN x = 7 THEN 'b' END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN str WHEN x = 7 THEN NULL END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN 'b' WHEN x = 7 THEN str END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN NULL WHEN x = 7 THEN str END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN str ELSE 'b' END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN str ELSE NULL END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN 'b' ELSE str END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN NULL ELSE str END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN 'b' ELSE str END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    // Note that Sqlite does not support TRUE/FALSE boolean literals, use 1/0 instead
+    c(R"(SELECT CASE WHEN x = 8 THEN FALSE ELSE (str = fixed_str) END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      R"(SELECT CASE WHEN x = 8 THEN 0 ELSE (str = fixed_str) END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE CASE WHEN x = 7 THEN str WHEN x = 8 THEN fixed_str ELSE 'bar' END = 'foo';)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE CASE WHEN x = 7 THEN str WHEN x = 8 THEN fixed_str ELSE 'bar' END = str;)",
+      dt);
+    c(R"(SELECT COUNT(*) FROM test WHERE CASE WHEN x = 7 THEN str WHEN x = 8 THEN fixed_str ELSE 'bar' END = fixed_str;)",
+      dt);
+
+    c(R"(SELECT CASE WHEN x = 8 THEN 'b' WHEN x = 7 THEN str END AS case_group, COUNT(*) AS n FROM test WHERE CASE WHEN x = 7 THEN str WHEN x = 8 THEN fixed_str ELSE 'bar' END = str GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+      dt);
+
+    EXPECT_ANY_THROW(
+        c(R"(SELECT CASE WHEN x = 8 THEN str ELSE (str = fixed_str) END AS case_group,
+     COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
+          dt));  // Cast from BOOLEAN to TEXT not supported
+
     {
       const auto watchdog_state = g_enable_watchdog;
       g_enable_watchdog = true;
       ScopeGuard reset_Watchdog_state = [&watchdog_state] {
         g_enable_watchdog = watchdog_state;
       };
-      EXPECT_ANY_THROW(run_multiple_agg(
-          R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test;)",
-          dt));  // Cast from dictionary-encoded string to none-encoded would
-                 // be slow
-      g_enable_watchdog = false;
+
       // casts not yet supported in distributed mode
+      g_enable_watchdog = false;
       c(R"(SELECT CASE WHEN x = 7 THEN 'a' WHEN x = 8 then str ELSE fixed_str END FROM test ORDER BY 1;)",
         dt);
       c(R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str END FROM test ORDER BY 1)",

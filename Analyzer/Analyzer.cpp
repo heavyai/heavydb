@@ -3447,9 +3447,9 @@ bool exprs_share_one_and_same_rte_idx(const std::shared_ptr<Analyzer::Expr>& lhs
   return lhs_rte_idx.size() == 1UL && lhs_rte_idx == rhs_rte_idx;
 }
 
-SQLTypeInfo& get_str_dict_cast_dest_type(SQLTypeInfo& lhs_type_info,
-                                         SQLTypeInfo& rhs_type_info,
-                                         const Executor* executor) {
+SQLTypeInfo const& get_str_dict_cast_type(const SQLTypeInfo& lhs_type_info,
+                                          const SQLTypeInfo& rhs_type_info,
+                                          const Executor* executor) {
   CHECK(lhs_type_info.is_string());
   CHECK(lhs_type_info.get_compression() == kENCODING_DICT);
   CHECK(rhs_type_info.is_string());
@@ -3468,6 +3468,27 @@ SQLTypeInfo& get_str_dict_cast_dest_type(SQLTypeInfo& lhs_type_info,
   const auto lhs_sdp = executor->getStringDictionaryProxy(lhs_comp_param, true);
   const auto rhs_sdp = executor->getStringDictionaryProxy(rhs_comp_param, true);
   return lhs_sdp->entryCount() >= rhs_sdp->entryCount() ? lhs_type_info : rhs_type_info;
+}
+
+SQLTypeInfo const& common_string_type(const SQLTypeInfo& lhs_type_info,
+                                      const SQLTypeInfo& rhs_type_info,
+                                      const Executor* executor) {
+  CHECK(lhs_type_info.is_string());
+  CHECK(rhs_type_info.is_string());
+  const auto lhs_comp_param = lhs_type_info.get_comp_param();
+  const auto rhs_comp_param = rhs_type_info.get_comp_param();
+  if (lhs_type_info.is_dict_encoded_string() && rhs_type_info.is_dict_encoded_string()) {
+    if (lhs_comp_param == rhs_comp_param ||
+        lhs_comp_param == TRANSIENT_DICT(rhs_comp_param)) {
+      return lhs_comp_param <= rhs_comp_param ? lhs_type_info : rhs_type_info;
+    }
+    return get_str_dict_cast_type(lhs_type_info, rhs_type_info, executor);
+  }
+  CHECK(lhs_type_info.is_none_encoded_string() || rhs_type_info.is_none_encoded_string());
+  if (lhs_type_info.is_none_encoded_string()) {
+    return lhs_type_info;
+  }
+  return rhs_type_info;
 }
 
 std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
@@ -3529,14 +3550,10 @@ std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
           CHECK(executor);
           // Make the type we're casting to the transient dictionary, if it exists,
           // otherwise the largest dictionary in terms of number of entries
-          auto& dest_type =
-              get_str_dict_cast_dest_type(new_left_type, new_right_type, executor);
-
-          auto& expr_to_cast = dest_type == new_left_type ? right_expr : left_expr;
-          SQLTypeInfo ti(dest_type);
-          ti.set_compression(dest_type.get_compression());
-          ti.set_comp_param(dest_type.get_comp_param());
+          SQLTypeInfo ti(get_str_dict_cast_type(new_left_type, new_right_type, executor));
+          auto& expr_to_cast = ti == new_left_type ? right_expr : left_expr;
           ti.set_fixed_size();
+          ti.set_dict_intersection();
           expr_to_cast = expr_to_cast->add_cast(ti);
         } else {  // Ordered comparison operator
           // We do not currently support ordered (i.e. >, <=) comparisons between
@@ -3587,80 +3604,99 @@ std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
 std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
     const std::list<std::pair<std::shared_ptr<Analyzer::Expr>,
                               std::shared_ptr<Analyzer::Expr>>>& expr_pair_list,
-    const std::shared_ptr<Analyzer::Expr> else_e_in) {
+    const std::shared_ptr<Analyzer::Expr> else_e_in,
+    const Executor* executor) {
   SQLTypeInfo ti;
   bool has_agg = false;
-  std::set<int> dictionary_ids;
-  bool has_none_encoded_str_projection = false;
+  // We need to keep track of whether there was at
+  // least one none-encoded string literal expression
+  // type among any of the case sub-expressions separately
+  // from rest of type determination logic, as it will
+  // be casted to the output dictionary type if all output
+  // types are either dictionary encoded or none-encoded
+  // literals, or kept as none-encoded if all sub-expression
+  // types are none-encoded (column or literal)
+  Analyzer::Expr* none_encoded_literal_expr = nullptr;
 
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
     CHECK(e1->get_type_info().is_boolean());
     auto e2 = p.second;
-    if (e2->get_type_info().is_string()) {
-      if (e2->get_type_info().is_dict_encoded_string()) {
-        dictionary_ids.insert(e2->get_type_info().get_comp_param());
-        // allow literals to potentially fall down the transient path
-      } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
-        has_none_encoded_str_projection = true;
-      }
+    if (e2->get_contains_agg()) {
+      has_agg = true;
+    }
+    const auto& e2_ti = e2->get_type_info();
+    if (e2_ti.is_string() && !e2_ti.is_dict_encoded_string() &&
+        !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
+      CHECK(e2_ti.is_none_encoded_string());
+      none_encoded_literal_expr = e2.get();
+      continue;
     }
 
     if (ti.get_type() == kNULLT) {
-      ti = e2->get_type_info();
-    } else if (e2->get_type_info().get_type() == kNULLT) {
+      ti = e2_ti;
+    } else if (e2_ti.get_type() == kNULLT) {
       ti.set_notnull(false);
       e2->set_type_info(ti);
-    } else if (ti != e2->get_type_info()) {
-      if (ti.is_string() && e2->get_type_info().is_string()) {
-        ti = Analyzer::BinOper::common_string_type(ti, e2->get_type_info());
-      } else if (ti.is_number() && e2->get_type_info().is_number()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
-      } else if (ti.is_boolean() && e2->get_type_info().is_boolean()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
+    } else if (ti != e2_ti) {
+      if (ti.is_string() && e2_ti.is_string()) {
+        // Executor is needed to determine which dictionary is the largest
+        // in case of two dictionary types with different encodings
+        ti = common_string_type(ti, e2_ti, executor);
+      } else if (ti.is_number() && e2_ti.is_number()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, e2_ti);
+      } else if (ti.is_boolean() && e2_ti.is_boolean()) {
+        ti = Analyzer::BinOper::common_numeric_type(ti, e2_ti);
       } else {
         throw std::runtime_error(
             "expressions in THEN clause must be of the same or compatible types.");
       }
     }
-    if (e2->get_contains_agg()) {
-      has_agg = true;
-    }
   }
   auto else_e = else_e_in;
+  const auto& else_ti = else_e->get_type_info();
   if (else_e) {
     if (else_e->get_contains_agg()) {
       has_agg = true;
     }
-    if (expr_is_null(else_e.get())) {
-      ti.set_notnull(false);
-      else_e->set_type_info(ti);
-    } else if (ti != else_e->get_type_info()) {
-      if (else_e->get_type_info().is_string()) {
-        if (else_e->get_type_info().is_dict_encoded_string()) {
-          dictionary_ids.insert(else_e->get_type_info().get_comp_param());
-          // allow literals to potentially fall down the transient path
-        } else if (std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
-          has_none_encoded_str_projection = true;
+    if (else_ti.is_string() && !else_ti.is_dict_encoded_string() &&
+        !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
+      CHECK(else_ti.is_none_encoded_string());
+      none_encoded_literal_expr = else_e.get();
+    } else {
+      if (ti.get_type() == kNULLT) {
+        ti = else_ti;
+      } else if (expr_is_null(else_e.get())) {
+        ti.set_notnull(false);
+        else_e->set_type_info(ti);
+      } else if (ti != else_ti) {
+        ti.set_notnull(false);
+        if (ti.is_string() && else_ti.is_string()) {
+          // Executor is needed to determine which dictionary is the largest
+          // in case of two dictionary types with different encodings
+          ti = common_string_type(ti, else_ti, executor);
+        } else if (ti.is_number() && else_ti.is_number()) {
+          ti = Analyzer::BinOper::common_numeric_type(ti, else_ti);
+        } else if (ti.is_boolean() && else_ti.is_boolean()) {
+          ti = Analyzer::BinOper::common_numeric_type(ti, else_ti);
+        } else if (get_logical_type_info(ti) != get_logical_type_info(else_ti)) {
+          throw std::runtime_error(
+              // types differing by encoding will be resolved at decode
+              "Expressions in ELSE clause must be of the same or compatible types as "
+              "those "
+              "in the THEN clauses.");
         }
-      }
-      ti.set_notnull(false);
-      if (ti.is_string() && else_e->get_type_info().is_string()) {
-        ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
-      } else if (ti.is_number() && else_e->get_type_info().is_number()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
-      } else if (ti.is_boolean() && else_e->get_type_info().is_boolean()) {
-        ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
-      } else if (get_logical_type_info(ti) !=
-                 get_logical_type_info(else_e->get_type_info())) {
-        throw std::runtime_error(
-            // types differing by encoding will be resolved at decode
-
-            "expressions in ELSE clause must be of the same or compatible types as those "
-            "in the THEN clauses.");
       }
     }
   }
+
+  if (ti.get_type() == kNULLT && none_encoded_literal_expr) {
+    // If we haven't set a type so far it's because
+    // every case sub-expression has a none-encoded
+    // literal output. Make this our output type
+    ti = none_encoded_literal_expr->get_type_info();
+  }
+
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       cast_expr_pair_list;
   for (auto p : expr_pair_list) {
@@ -3677,21 +3713,10 @@ std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
   }
   if (ti.get_type() == kNULLT) {
     throw std::runtime_error(
-        "Can't deduce the type for case expressions, all branches null");
+        "Cannot deduce the type for case expressions, all branches null");
   }
 
   auto case_expr = makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
-  if (ti.get_compression() != kENCODING_DICT && dictionary_ids.size() == 1 &&
-      *(dictionary_ids.begin()) > 0 && !has_none_encoded_str_projection) {
-    // the above logic makes two assumptions when strings are present. 1) that all types
-    // in the case statement are either null or strings, and 2) that none-encoded strings
-    // will always win out over dict encoding. If we only have one dictionary, and that
-    // dictionary is not a transient dictionary, we can cast the entire case to be dict
-    // encoded and use transient dictionaries for any literals
-    ti.set_compression(kENCODING_DICT);
-    ti.set_comp_param(*dictionary_ids.begin());
-    case_expr->add_cast(ti);
-  }
   return case_expr;
 }
 

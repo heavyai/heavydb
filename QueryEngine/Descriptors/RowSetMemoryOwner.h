@@ -52,6 +52,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     CHECK(!allocators_.empty());
   }
 
+  enum class StringTranslationType { SOURCE_INTERSECTION, SOURCE_UNION };
+
   int8_t* allocate(const size_t num_bytes, const size_t thread_idx = 0) override {
     CHECK_LT(thread_idx, allocators_.size());
     auto allocator = allocators_[thread_idx].get();
@@ -131,18 +133,35 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return it->second.get();
   }
 
-  const StringDictionaryProxy::IdMap* addStringProxyTranslationMap(
+  const StringDictionaryProxy::IdMap* addStringProxyIntersectionTranslationMap(
       const StringDictionaryProxy* source_proxy,
       const StringDictionaryProxy* dest_proxy) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     const auto map_key = std::make_pair(source_proxy->getDictionary()->getDictId(),
                                         dest_proxy->getDictionary()->getDictId());
-    auto it = str_proxy_translation_maps_owned_.find(map_key);
-    if (it == str_proxy_translation_maps_owned_.end()) {
-      it =
-          str_proxy_translation_maps_owned_
-              .emplace(map_key, source_proxy->buildTranslationMapToOtherProxy(dest_proxy))
-              .first;
+    auto it = str_proxy_intersection_translation_maps_owned_.find(map_key);
+    if (it == str_proxy_intersection_translation_maps_owned_.end()) {
+      it = str_proxy_intersection_translation_maps_owned_
+               .emplace(
+                   map_key,
+                   source_proxy->buildIntersectionTranslationMapToOtherProxy(dest_proxy))
+               .first;
+    }
+    return &it->second;
+  }
+
+  const StringDictionaryProxy::IdMap* addStringProxyUnionTranslationMap(
+      const StringDictionaryProxy* source_proxy,
+      StringDictionaryProxy* dest_proxy) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    const auto map_key = std::make_pair(source_proxy->getDictionary()->getDictId(),
+                                        dest_proxy->getDictionary()->getDictId());
+    auto it = str_proxy_union_translation_maps_owned_.find(map_key);
+    if (it == str_proxy_union_translation_maps_owned_.end()) {
+      it = str_proxy_union_translation_maps_owned_
+               .emplace(map_key,
+                        source_proxy->buildUnionTranslationMapToOtherProxy(dest_proxy))
+               .first;
     }
     return &it->second;
   }
@@ -173,7 +192,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       const int db_id,
       const int source_dict_id_in,
       const int dest_dict_id_in,
-      const bool with_generation);
+      const bool with_generation,
+      const StringTranslationType translation_map_type);
 
   void addColBuffer(const void* col_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -232,7 +252,9 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
   std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
-      str_proxy_translation_maps_owned_;
+      str_proxy_intersection_translation_maps_owned_;
+  std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
+      str_proxy_union_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;
   std::vector<void*> col_buffers_;

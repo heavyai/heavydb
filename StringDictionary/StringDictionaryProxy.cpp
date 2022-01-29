@@ -17,6 +17,7 @@
 #include "StringDictionary/StringDictionaryProxy.h"
 
 #include "Logger/Logger.h"
+#include "Shared/ThreadInfo.h"
 #include "Shared/misc.h"
 #include "Shared/sqltypes.h"
 #include "Shared/thread_count.h"
@@ -52,20 +53,8 @@ int32_t truncate_to_generation(const int32_t id, const size_t generation) {
 std::vector<int32_t> StringDictionaryProxy::getTransientBulk(
     const std::vector<std::string>& strings) const {
   CHECK_GE(generation_, 0);
-  const size_t num_strings = strings.size();
-  std::vector<int32_t> string_ids(num_strings);
-  if (num_strings == 0) {
-    return string_ids;
-  }
-  // Use fast parallel String::Dictionary getBulk method
-  // Todo: Evaluate getBulk method that takes callback to do transient lookup
-  // to avoid a second rescan of the data
-  const size_t num_strings_not_found = string_dict_->getBulk(strings, string_ids.data());
-  if (num_strings_not_found > 0) {
-    // Dictionary could not find at least 1 target string, now look these up
-    // in the transient dictionary
-    transientLookupBulk(strings, string_ids.data());
-  }
+  std::vector<int32_t> string_ids(strings.size());
+  getTransientBulkImpl(strings, string_ids.data(), true);
   return string_ids;
 }
 
@@ -84,13 +73,12 @@ std::vector<int32_t> StringDictionaryProxy::getOrAddTransientBulk(
 
   // Don't need to be under lock here as the string ids for strings in the underlying
   // materialized dictionary are immutable
-  const size_t num_strings_not_found = string_dict_->getBulk(strings, string_ids.data());
+  const size_t num_strings_not_found =
+      string_dict_->getBulk(strings, string_ids.data(), generation_);
   if (num_strings_not_found > 0) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+    std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
     for (size_t string_idx = 0; string_idx < num_strings; ++string_idx) {
-      const auto transient_id =
-          truncate_to_generation(string_ids[string_idx], generation_);
-      if (transient_id == StringDictionary::INVALID_STR_ID) {
+      if (string_ids[string_idx] == StringDictionary::INVALID_STR_ID) {
         string_ids[string_idx] = getOrAddTransientUnlocked(strings[string_idx]);
       }
     }
@@ -116,12 +104,12 @@ int32_t StringDictionaryProxy::getOrAddTransient(const std::string& str) {
   if (string_id != StringDictionary::INVALID_STR_ID) {
     return string_id;
   }
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   return getOrAddTransientUnlocked(str);
 }
 
 int32_t StringDictionaryProxy::getIdOfString(const std::string& str) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   auto const str_id = getIdOfStringFromClient(str);
   if (str_id != StringDictionary::INVALID_STR_ID || transient_str_to_int_.empty()) {
     return str_id;
@@ -138,7 +126,7 @@ int32_t StringDictionaryProxy::getIdOfStringFromClient(const String& str) const 
 }
 
 int32_t StringDictionaryProxy::getIdOfStringNoGeneration(const std::string& str) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   auto str_id = string_dict_->getIdOfString(str);
   if (str_id != StringDictionary::INVALID_STR_ID || transient_str_to_int_.empty()) {
     return str_id;
@@ -152,7 +140,11 @@ std::string StringDictionaryProxy::getString(int32_t string_id) const {
   if (inline_int_null_value<int32_t>() == string_id) {
     return "";
   }
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  return getStringUnlocked(string_id);
+}
+
+std::string StringDictionaryProxy::getStringUnlocked(const int32_t string_id) const {
   if (string_id >= 0 && storageEntryCount() > 0) {
     return string_dict_->getString(string_id);
   }
@@ -166,7 +158,7 @@ std::vector<std::string> StringDictionaryProxy::getStrings(
   std::vector<std::string> strings;
   if (!string_ids.empty()) {
     strings.reserve(string_ids.size());
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
     for (const auto string_id : string_ids) {
       if (string_id >= 0) {
         strings.emplace_back(string_dict_->getString(string_id));
@@ -189,10 +181,10 @@ int32_t StringDictionaryProxy::lookupTransientStringUnlocked(
                                            : it->second;
 }
 
-StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherProxy(
+StringDictionaryProxy::IdMap
+StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxyUnlocked(
     const StringDictionaryProxy* dest_proxy) const {
   auto timer = DEBUG_TIMER(__func__);
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   IdMap id_map = initIdMap();
 
   if (id_map.empty()) {
@@ -201,6 +193,7 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherPr
 
   // First map transient strings, store at front of vector map
   const size_t num_transient_entries = id_map.numTransients();
+  size_t num_transient_strings_not_translated = 0UL;
   if (num_transient_entries) {
     std::vector<std::string> transient_lookup_strings(num_transient_entries);
     std::transform(transient_string_vec_.cbegin(),
@@ -209,28 +202,22 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherPr
                    [](std::string const* ptr) { return *ptr; });
 
     // This lookup may have a different snapshot of
-    // dest_proxy transients and dictionary than what happends under
+    // dest_proxy transients and dictionary than what happens under
     // the below dest_proxy_read_lock. We may need an unlocked version of
     // getTransientBulk to ensure consistency (I don't believe
     // current behavior would cause crashes/races, verify this though)
 
-    // Todo(todd): Consider implementing a getTransientBulk call that takes
-    // an allocated pointer to avoid extra copy of return vector into
-    // the already allocated translation map
-    // And can take a vector of pointer-to-strings so we don't have to materialize
+    // Todo(mattp): Consider variant of getTransientBulkImp that can take
+    // a vector of pointer-to-strings so we don't have to materialize
     // transient_string_vec_ into transient_lookup_strings.
 
-    const auto transient_str_to_id_vec_map =
-        dest_proxy->getTransientBulk(transient_lookup_strings);
-    CHECK_GE(id_map.getVectorMap().size(), transient_str_to_id_vec_map.size());
-    std::copy(transient_str_to_id_vec_map.begin(),
-              transient_str_to_id_vec_map.end(),
-              id_map.data());
+    num_transient_strings_not_translated =
+        dest_proxy->getTransientBulkImpl(transient_lookup_strings, id_map.data(), false);
   }
 
   // Now map strings in dictionary
-  // We start non transient strings after the transient strings
-  // if they exist, otherwise at 0
+  // We place non-transient strings after the transient strings
+  // if they exist, otherwise at index 0
   int32_t* translation_map_stored_entries_ptr = id_map.storageData();
 
   auto dest_transient_lookup_callback = [dest_proxy, translation_map_stored_entries_ptr](
@@ -242,9 +229,8 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherPr
            StringDictionary::INVALID_STR_ID;
   };
 
-  mapd_lock_guard<mapd_shared_mutex> dest_proxy_read_lock(dest_proxy->rw_mutex_);
   const size_t num_dest_transients = dest_proxy->transientEntryCountUnlocked();
-  const size_t num_strings_not_translated =
+  const size_t num_persisted_strings_not_translated =
       generation_ > 0 ? string_dict_->buildDictionaryTranslationMap(
                             dest_proxy->string_dict_.get(),
                             translation_map_stored_entries_ptr,
@@ -255,9 +241,13 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherPr
                       : 0UL;
 
   const size_t num_dest_entries = dest_proxy->entryCountUnlocked();
-  const size_t num_total_entries = id_map.getVectorMap().size();
+  const size_t num_total_entries =
+      id_map.getVectorMap().size() - 1UL /* account for skipped entry -1 */;
   CHECK_GT(num_total_entries, 0UL);
-  CHECK_LE(num_strings_not_translated, id_map.getVectorMap().size());
+  const size_t num_strings_not_translated =
+      num_transient_strings_not_translated + num_persisted_strings_not_translated;
+  CHECK_LE(num_strings_not_translated, num_total_entries);
+  id_map.setNumUntranslatedStrings(num_strings_not_translated);
   const size_t num_entries_translated = num_total_entries - num_strings_not_translated;
   const float match_pct =
       100.0 * static_cast<float>(num_entries_translated) / num_total_entries;
@@ -271,6 +261,92 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherPr
           << " total entries (" << dest_proxy->transientEntryCountUnlocked()
           << " literals).";
 
+  return id_map;
+}
+
+void order_translation_locks(const int32_t source_dict_id,
+                             const int32_t dest_dict_id,
+                             std::shared_lock<std::shared_mutex>& source_proxy_read_lock,
+                             std::unique_lock<std::shared_mutex>& dest_proxy_write_lock) {
+  if (source_dict_id == dest_dict_id) {
+    // proxies are same, only take one write lock
+    dest_proxy_write_lock.lock();
+  } else if (source_dict_id < dest_dict_id) {
+    source_proxy_read_lock.lock();
+    dest_proxy_write_lock.lock();
+  } else {
+    dest_proxy_write_lock.lock();
+    source_proxy_read_lock.lock();
+  }
+}
+
+StringDictionaryProxy::IdMap
+StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy(
+    const StringDictionaryProxy* dest_proxy) const {
+  const auto source_dict_id = getDictId();
+  const auto dest_dict_id = dest_proxy->getDictId();
+
+  std::shared_lock<std::shared_mutex> source_proxy_read_lock(rw_mutex_, std::defer_lock);
+  std::unique_lock<std::shared_mutex> dest_proxy_write_lock(dest_proxy->rw_mutex_,
+                                                            std::defer_lock);
+  order_translation_locks(
+      source_dict_id, dest_dict_id, source_proxy_read_lock, dest_proxy_write_lock);
+  return buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy);
+}
+
+StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOtherProxy(
+    StringDictionaryProxy* dest_proxy) const {
+  auto timer = DEBUG_TIMER(__func__);
+
+  const auto source_dict_id = getDictId();
+  const auto dest_dict_id = dest_proxy->getDictId();
+  std::shared_lock<std::shared_mutex> source_proxy_read_lock(rw_mutex_, std::defer_lock);
+  std::unique_lock<std::shared_mutex> dest_proxy_write_lock(dest_proxy->rw_mutex_,
+                                                            std::defer_lock);
+  order_translation_locks(
+      source_dict_id, dest_dict_id, source_proxy_read_lock, dest_proxy_write_lock);
+
+  auto id_map = buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy);
+  if (id_map.empty()) {
+    return id_map;
+  }
+  const auto num_untranslated_strings = id_map.numUntranslatedStrings();
+  if (num_untranslated_strings > 0) {
+    const size_t total_post_translation_dest_transients =
+        num_untranslated_strings + dest_proxy->transientEntryCountUnlocked();
+    constexpr size_t max_allowed_transients =
+        static_cast<size_t>(std::numeric_limits<int32_t>::max() -
+                            2); /* -2 accounts for INVALID_STR_ID and NULL value */
+    if (total_post_translation_dest_transients > max_allowed_transients) {
+      throw std::runtime_error("Union translation to dictionary" +
+                               std::to_string(getDictId()) + " would result in " +
+                               std::to_string(total_post_translation_dest_transients) +
+                               " transient entries, which is more than limit of " +
+                               std::to_string(max_allowed_transients) + " transients.");
+    }
+    const int32_t map_domain_start = id_map.domainStart();
+    const int32_t map_domain_end = id_map.domainEnd();
+    // First iterate over transient strings and add to dest map
+    // Todo (todd): Add call to fetch string_views (local) or strings (distributed)
+    // for all non-translated ids to avoid string-by-string fetch
+    for (int32_t source_string_id = map_domain_start; source_string_id < -1;
+         ++source_string_id) {
+      if (id_map[source_string_id] == StringDictionary::INVALID_STR_ID) {
+        const auto source_string = getStringUnlocked(source_string_id);
+        const auto dest_string_id = dest_proxy->getOrAddTransientUnlocked(source_string);
+        id_map[source_string_id] = dest_string_id;
+      }
+    }
+    // Now iterate over stored strings
+    for (int32_t source_string_id = 0; source_string_id < map_domain_end;
+         ++source_string_id) {
+      if (id_map[source_string_id] == StringDictionary::INVALID_STR_ID) {
+        const auto source_string = string_dict_->getString(source_string_id);
+        const auto dest_string_id = dest_proxy->getOrAddTransientUnlocked(source_string);
+        id_map[source_string_id] = dest_string_id;
+      }
+    }
+  }
   return id_map;
 }
 
@@ -405,7 +481,7 @@ size_t StringDictionaryProxy::transientEntryCountUnlocked() const {
 }
 
 size_t StringDictionaryProxy::transientEntryCount() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   return transientEntryCountUnlocked();
 }
 
@@ -414,7 +490,7 @@ size_t StringDictionaryProxy::entryCountUnlocked() const {
 }
 
 size_t StringDictionaryProxy::entryCount() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   return entryCountUnlocked();
 }
 
@@ -514,28 +590,51 @@ void StringDictionaryProxy::updateGeneration(const int64_t generation) noexcept 
   generation_ = generation;
 }
 
+size_t StringDictionaryProxy::getTransientBulkImpl(
+    const std::vector<std::string>& strings,
+    int32_t* string_ids,
+    const bool take_read_lock) const {
+  const size_t num_strings = strings.size();
+  if (num_strings == 0) {
+    return 0UL;
+  }
+  // StringDictionary::getBulk returns the number of strings not found
+  if (string_dict_->getBulk(strings, string_ids, generation_) == 0UL) {
+    return 0UL;
+  }
+
+  // If here, dictionary could not find at least 1 target string,
+  // now look these up in the transient dictionary
+  // transientLookupBulk returns the number of strings not found
+  return transientLookupBulk(strings, string_ids, take_read_lock);
+}
+
 template <typename String>
-void StringDictionaryProxy::transientLookupBulk(const std::vector<String>& lookup_strings,
-                                                int32_t* string_ids) const {
+size_t StringDictionaryProxy::transientLookupBulk(
+    const std::vector<String>& lookup_strings,
+    int32_t* string_ids,
+    const bool take_read_lock) const {
   const size_t num_strings = lookup_strings.size();
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  auto read_lock = take_read_lock ? std::shared_lock<std::shared_mutex>(rw_mutex_)
+                                  : std::shared_lock<std::shared_mutex>();
 
   if (num_strings == static_cast<size_t>(0) || transient_str_to_int_.empty()) {
-    return;
+    return 0UL;
   }
   constexpr size_t tbb_parallel_threshold{20000};
   if (num_strings < tbb_parallel_threshold) {
-    transientLookupBulkUnlocked(lookup_strings, string_ids);
+    return transientLookupBulkUnlocked(lookup_strings, string_ids);
   } else {
-    transientLookupBulkParallelUnlocked(lookup_strings, string_ids);
+    return transientLookupBulkParallelUnlocked(lookup_strings, string_ids);
   }
 }
 
 template <typename String>
-void StringDictionaryProxy::transientLookupBulkUnlocked(
+size_t StringDictionaryProxy::transientLookupBulkUnlocked(
     const std::vector<String>& lookup_strings,
     int32_t* string_ids) const {
   const size_t num_strings = lookup_strings.size();
+  size_t num_strings_not_found = 0;
   for (size_t string_idx = 0; string_idx < num_strings; ++string_idx) {
     if (string_ids[string_idx] != StringDictionary::INVALID_STR_ID) {
       continue;
@@ -543,38 +642,55 @@ void StringDictionaryProxy::transientLookupBulkUnlocked(
     // If we're here it means we need to look up this string as we don't
     // have a valid id for it
     string_ids[string_idx] = lookupTransientStringUnlocked(lookup_strings[string_idx]);
+    if (string_ids[string_idx] == StringDictionary::INVALID_STR_ID) {
+      num_strings_not_found++;
+    }
   }
+  return num_strings_not_found;
 }
 
 template <typename String>
-void StringDictionaryProxy::transientLookupBulkParallelUnlocked(
+size_t StringDictionaryProxy::transientLookupBulkParallelUnlocked(
     const std::vector<String>& lookup_strings,
     int32_t* string_ids) const {
-  const size_t num_strings = lookup_strings.size();
-  const size_t max_thread_count = std::thread::hardware_concurrency();
-  const size_t max_inputs_per_thread = 20000;
-  const size_t min_grain_size = max_inputs_per_thread / 2;
-  const size_t num_threads =
-      std::min(max_thread_count,
-               ((num_strings + max_inputs_per_thread - 1) / max_inputs_per_thread));
+  const size_t num_lookup_strings = lookup_strings.size();
+  const size_t target_inputs_per_thread = 20000L;
+  ThreadInfo thread_info(
+      std::thread::hardware_concurrency(), num_lookup_strings, target_inputs_per_thread);
+  CHECK_GE(thread_info.num_threads, 1L);
+  CHECK_GE(thread_info.num_elems_per_thread, 1L);
 
-  tbb::task_arena limited_arena(num_threads);
+  std::vector<size_t> num_strings_not_found_per_thread(thread_info.num_threads, 0UL);
+
+  tbb::task_arena limited_arena(thread_info.num_threads);
   limited_arena.execute([&] {
     tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, num_strings, min_grain_size),
+        tbb::blocked_range<size_t>(
+            0, num_lookup_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
         [&](const tbb::blocked_range<size_t>& r) {
           const size_t start_idx = r.begin();
           const size_t end_idx = r.end();
+          size_t num_local_strings_not_found = 0;
           for (size_t string_idx = start_idx; string_idx < end_idx; ++string_idx) {
             if (string_ids[string_idx] != StringDictionary::INVALID_STR_ID) {
               continue;
             }
             string_ids[string_idx] =
                 lookupTransientStringUnlocked(lookup_strings[string_idx]);
+            if (string_ids[string_idx] == StringDictionary::INVALID_STR_ID) {
+              num_local_strings_not_found++;
+            }
           }
+          const size_t tbb_thread_idx = tbb::this_task_arena::current_thread_index();
+          num_strings_not_found_per_thread[tbb_thread_idx] = num_local_strings_not_found;
         },
         tbb::simple_partitioner());
   });
+  size_t num_strings_not_found = 0;
+  for (int64_t thread_idx = 0; thread_idx < thread_info.num_threads; ++thread_idx) {
+    num_strings_not_found += num_strings_not_found_per_thread[thread_idx];
+  }
+  return num_strings_not_found;
 }
 
 StringDictionary* StringDictionaryProxy::getDictionary() const noexcept {

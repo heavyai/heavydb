@@ -344,6 +344,7 @@ class SQLTypeInfo {
   inline void set_notnull(bool n) { notnull = n; }
   inline void set_size(int s) { size = s; }
   inline void set_fixed_size() { size = get_storage_size(); }
+  inline void set_dict_intersection() { dict_intersection = true; }
   inline void set_compression(EncodingType c) { compression = c; }
   inline void set_comp_param(int p) { comp_param = p; }
 #ifndef __CUDACC__
@@ -452,6 +453,10 @@ class SQLTypeInfo {
     return is_string() && compression == kENCODING_DICT;
   }
 
+  inline bool is_none_encoded_string() const {
+    return is_string() && compression == kENCODING_NONE;
+  }
+
   inline bool is_subtype_dict_encoded_string() const {
     return IS_STRING(subtype) && compression == kENCODING_DICT;
   }
@@ -460,6 +465,8 @@ class SQLTypeInfo {
     return is_dict_encoded_string() ||
            (is_array() && get_elem_type().is_dict_encoded_string());
   }
+
+  inline bool is_dict_intersection() const { return dict_intersection; }
 
   HOST DEVICE inline bool operator!=(const SQLTypeInfo& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
@@ -797,6 +804,7 @@ class SQLTypeInfo {
   EncodingType compression;  // compression scheme
   int comp_param;            // compression parameter when applicable for certain schemes
   int size;                  // size of the type in bytes.  -1 for variable size
+  bool dict_intersection{false};
 #ifndef __CUDACC__
   static std::string type_name[kSQLTYPE_LAST];
   static std::string comp_name[kENCODING_LAST];
