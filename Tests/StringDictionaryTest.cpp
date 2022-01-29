@@ -25,6 +25,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
 #ifndef BASE_PATH1
 #define BASE_PATH1 "./tmp/dict1"
@@ -492,7 +493,7 @@ TEST(StringDictionaryProxy, GetTransientBulk) {
   }
 }
 
-TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
+TEST(StringDictionaryProxy, BuildIntersectionTranslationMapToOtherProxy) {
   // Use existing dictionary from GetBulk
   const DictRef dict_ref1(-1, 1);
   const DictRef dict_ref2(-1, 2);
@@ -523,7 +524,7 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
                                                 2 /* string_dict_id */,
                                                 dest_string_dict->storageEntryCount());
     const auto str_proxy_translation_map =
-        source_string_dict_proxy->buildTranslationMapToOtherProxy(
+        source_string_dict_proxy->buildIntersectionTranslationMapToOtherProxy(
             dest_string_dict_proxy.get());
     ASSERT_FALSE(str_proxy_translation_map.empty());
     const auto& translated_ids = str_proxy_translation_map.getVectorMap();
@@ -571,7 +572,7 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
     }
 
     const auto str_proxy_translation_map =
-        source_string_dict_proxy->buildTranslationMapToOtherProxy(
+        source_string_dict_proxy->buildIntersectionTranslationMapToOtherProxy(
             dest_string_dict_proxy.get());
     ASSERT_FALSE(str_proxy_translation_map.empty());
     const auto& translated_ids = str_proxy_translation_map.getVectorMap();
@@ -605,12 +606,206 @@ TEST(StringDictionaryProxy, BuildTranslationMapToOtherProxy) {
   }
 }
 
-void create_directory_if_not_exists(const std::string& path) {
-  // Up to caller to catch any exceptions
-  std::filesystem::path fs_path(path);
-  if (!(std::filesystem::exists(path))) {
-    std::filesystem::create_directory(path);
+TEST(StringDictionaryProxy, BuildUnionTranslationMapToEmptyProxy) {
+  // Todo(todd): Migrate this and intersection translation tests to use
+  // approach and methods in BuildUnionTranslationMapToPartialOverlapProxy
+  const DictRef dict_ref1(-1, 1);
+  const DictRef dict_ref2(-1, 2);
+  std::shared_ptr<StringDictionary> source_string_dict =
+      std::make_shared<StringDictionary>(
+          dict_ref1, BASE_PATH1, false, false, g_cache_string_hash);
+  std::shared_ptr<StringDictionary> dest_string_dict = std::make_shared<StringDictionary>(
+      dict_ref2, BASE_PATH2, false, false, g_cache_string_hash);
+
+  // Prep: insert g_op_count strings into source_string_dict
+  std::vector<int32_t> string_ids(g_op_count);
+  std::vector<std::string> strings;
+  strings.reserve(g_op_count);
+  for (int i = 0; i < g_op_count; ++i) {
+    strings.emplace_back(std::to_string(i));
   }
+  source_string_dict->getOrAddBulk(strings, string_ids.data());
+
+  {
+    // First try to union translate to empty dictionary.
+    // All strings should end up as transient entries in
+    // destination proxy
+    std::shared_ptr<StringDictionaryProxy> source_string_dict_proxy =
+        std::make_shared<StringDictionaryProxy>(source_string_dict,
+                                                1 /* string_dict_id */,
+                                                source_string_dict->storageEntryCount());
+    std::shared_ptr<StringDictionaryProxy> dest_string_dict_proxy =
+        std::make_shared<StringDictionaryProxy>(dest_string_dict,
+                                                2 /* string_dict_id */,
+                                                dest_string_dict->storageEntryCount());
+    const auto str_proxy_translation_map =
+        source_string_dict_proxy->buildUnionTranslationMapToOtherProxy(
+            dest_string_dict_proxy.get());
+    ASSERT_FALSE(str_proxy_translation_map.empty());
+    ASSERT_EQ(str_proxy_translation_map.numUntranslatedStrings(), strings.size());
+    const auto& translated_ids = str_proxy_translation_map.getVectorMap();
+    const size_t num_ids = translated_ids.size();
+    ASSERT_EQ(num_ids - 1UL /* for INVALID_STR_ID */,
+              source_string_dict_proxy->entryCount());
+    const auto domain_start = str_proxy_translation_map.domainStart();
+    for (size_t idx = 0; idx < num_ids; ++idx) {
+      const auto string_id = static_cast<int32_t>(idx) + domain_start;
+      if (string_id == -1) {
+        ASSERT_EQ(translated_ids[idx], StringDictionary::INVALID_STR_ID);
+      } else {
+        ASSERT_LT(translated_ids[idx], StringDictionary::INVALID_STR_ID);
+        ASSERT_EQ(dest_string_dict_proxy->getString(translated_ids[idx]),
+                  strings[string_id]);
+      }
+    }
+  }
+}
+
+std::vector<std::string> add_strings_numeric_range(std::shared_ptr<StringDictionary> sd,
+                                                   const size_t num_vals,
+                                                   const int32_t start_val) {
+  CHECK_GE(start_val, 0);
+  const auto end_val = start_val + static_cast<int32_t>(num_vals);
+  std::vector<std::string> strings(num_vals);
+  for (int32_t int_val = start_val; int_val < end_val; ++int_val) {
+    strings[int_val - start_val] = std::to_string(int_val);
+  }
+  std::vector<int32_t> string_ids(num_vals);
+  sd->getOrAddBulk(strings, string_ids.data());
+  sd->checkpoint();
+  return strings;
+}
+
+std::vector<std::string> add_strings_numeric_range(StringDictionaryProxy& sdp,
+                                                   const size_t num_vals,
+                                                   const int32_t start_val) {
+  CHECK_LE(start_val, -2);
+  std::vector<std::string> strings(num_vals);
+  const auto end_val = start_val - static_cast<int32_t>(num_vals);
+  for (int32_t int_val = start_val; int_val > end_val; --int_val) {
+    strings[start_val - int_val] = std::to_string(int_val);
+  }
+  sdp.getOrAddTransientBulk(strings);
+  return strings;
+}
+
+size_t calc_expected_untranslated_strings(const size_t num_source_entries,
+                                          const size_t num_dest_entries,
+                                          const int32_t source_start_val,
+                                          const int32_t dest_start_val) {
+  const int32_t source_abs_min = std::abs(source_start_val);  // 0
+  const int32_t source_abs_max =
+      std::abs(source_start_val) + static_cast<int32_t>(num_source_entries);  // 10
+  const int32_t dest_abs_min = std::abs(dest_start_val);                      // 7
+  const int32_t dest_abs_max =
+      std::abs(dest_start_val) + static_cast<int32_t>(num_dest_entries);  // 12
+  return static_cast<size_t>(std::max(dest_abs_min - source_abs_min, 0) +
+                             std::max(source_abs_max - dest_abs_max, 0));
+}
+
+void verify_translation(const StringDictionaryProxy& source_proxy,
+                        const StringDictionaryProxy& dest_proxy,
+                        const StringDictionaryProxy::IdMap& id_map,
+                        const std::vector<std::string>& persisted_source_strings,
+                        const std::vector<std::string>& transient_source_strings,
+                        const std::vector<std::string>& persisted_dest_strings,
+                        const std::vector<std::string>& transient_dest_strings,
+                        const bool is_union) {
+  std::unordered_set<std::string> dest_string_set;
+  for (const auto& str : persisted_dest_strings) {
+    ASSERT_TRUE(dest_string_set.insert(str).second);
+  }
+  for (const auto& str : transient_dest_strings) {
+    ASSERT_TRUE(dest_string_set.insert(str).second);
+  }
+  for (const auto& persisted_source_str : persisted_source_strings) {
+    const int32_t source_str_id = source_proxy.getIdOfString(persisted_source_str);
+    ASSERT_GE(source_str_id, 0);
+    const bool str_was_in_dest_proxy =
+        dest_string_set.find(persisted_source_str) != dest_string_set.end();
+    const auto translated_id = id_map[source_str_id];
+    if (str_was_in_dest_proxy) {
+      ASSERT_GE(translated_id, 0);
+      const auto dest_str = dest_proxy.getString(translated_id);
+      ASSERT_EQ(persisted_source_str, dest_str);
+    } else {
+      if (is_union) {
+        ASSERT_LE(translated_id, -2);
+        const auto dest_str = dest_proxy.getString(translated_id);
+        ASSERT_EQ(persisted_source_str, dest_str);
+      } else {
+        ASSERT_EQ(translated_id, StringDictionary::INVALID_STR_ID);
+      }
+    }
+  }
+}
+
+TEST(StringDictionaryProxy, BuildUnionTranslationMapToPartialOverlapProxy) {
+  const DictRef dict_ref1(-1, 1);
+  const DictRef dict_ref2(-1, 2);
+  std::shared_ptr<StringDictionary> source_sd = std::make_shared<StringDictionary>(
+      dict_ref1, BASE_PATH1, false, false, g_cache_string_hash);
+  std::shared_ptr<StringDictionary> dest_sd = std::make_shared<StringDictionary>(
+      dict_ref2, BASE_PATH2, false, false, g_cache_string_hash);
+
+  constexpr size_t num_source_persisted_entries{10};
+  constexpr size_t num_dest_persisted_entries{5};
+  constexpr int32_t source_persisted_start_val{0};
+  constexpr int32_t dest_persisted_start_val{7};
+
+  constexpr size_t num_source_transient_entries{10};
+  constexpr size_t num_dest_transient_entries{5};
+  constexpr int32_t source_transient_start_val{-2};
+  constexpr int32_t dest_transient_start_val{-9};
+  const auto persisted_source_strings = add_strings_numeric_range(
+      source_sd, num_source_persisted_entries, source_persisted_start_val);
+  ASSERT_EQ(source_sd->storageEntryCount(), num_source_persisted_entries);
+
+  const auto persisted_dest_strings = add_strings_numeric_range(
+      dest_sd, num_dest_persisted_entries, dest_persisted_start_val);
+  ASSERT_EQ(dest_sd->storageEntryCount(), num_dest_persisted_entries);
+
+  StringDictionaryProxy source_sdp(
+      source_sd, 1 /* string_dict_id */, source_sd->storageEntryCount());
+  StringDictionaryProxy dest_sdp(
+      dest_sd, 2 /* string_dict_id */, dest_sd->storageEntryCount());
+  const auto transient_source_strings = add_strings_numeric_range(
+      source_sdp, num_source_transient_entries, source_transient_start_val);
+  ASSERT_EQ(source_sdp.getDictId(), 1);
+  ASSERT_EQ(source_sdp.storageEntryCount(), num_source_persisted_entries);
+  ASSERT_EQ(source_sdp.transientEntryCount(), num_source_transient_entries);
+
+  const auto transient_dest_strings = add_strings_numeric_range(
+      dest_sdp, num_dest_transient_entries, dest_transient_start_val);
+  ASSERT_EQ(dest_sdp.getDictId(), 2);
+  ASSERT_EQ(dest_sdp.storageEntryCount(), num_dest_persisted_entries);
+  ASSERT_EQ(dest_sdp.transientEntryCount(), num_dest_transient_entries);
+
+  const auto id_map = source_sdp.buildUnionTranslationMapToOtherProxy(&dest_sdp);
+  const size_t expected_num_untranslated_strings =
+      calc_expected_untranslated_strings(num_source_persisted_entries,
+                                         num_dest_persisted_entries,
+                                         source_persisted_start_val,
+                                         dest_persisted_start_val) +
+      calc_expected_untranslated_strings(num_source_transient_entries,
+                                         num_dest_transient_entries,
+                                         source_transient_start_val,
+                                         dest_transient_start_val);
+  ASSERT_EQ(id_map.size(),
+            num_source_persisted_entries + num_source_transient_entries +
+                1UL /* slot for INVALID_STR_ID */);
+  ASSERT_EQ(id_map.numNonTransients(), num_source_persisted_entries);
+  ASSERT_EQ(id_map.numTransients(), num_source_transient_entries);
+  ASSERT_EQ(id_map.numUntranslatedStrings(), expected_num_untranslated_strings);
+
+  verify_translation(source_sdp,
+                     dest_sdp,
+                     id_map,
+                     persisted_source_strings,
+                     transient_source_strings,
+                     persisted_dest_strings,
+                     transient_dest_strings,
+                     true);
 }
 
 TEST(StringDictionary, TransientUnion) {
@@ -716,6 +911,14 @@ TEST(StringDictionary, TransientUnion) {
     ASSERT_EQ(4, sdp_lhs.getIdOfString("g"));
     ASSERT_EQ(5, sdp_lhs.getIdOfString("h"));
     ASSERT_EQ(6, sdp_lhs.getIdOfString("i"));
+  }
+}
+
+void create_directory_if_not_exists(const std::string& path) {
+  // Up to caller to catch any exceptions
+  std::filesystem::path fs_path(path);
+  if (!(std::filesystem::exists(path))) {
+    std::filesystem::create_directory(path);
   }
 }
 

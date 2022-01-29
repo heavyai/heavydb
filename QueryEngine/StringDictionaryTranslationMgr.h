@@ -48,6 +48,7 @@ class StringDictionaryTranslationMgr {
  public:
   StringDictionaryTranslationMgr(const int32_t source_string_dict_id,
                                  const int32_t dest_string_dict_id,
+                                 const bool translate_intersection_only,
                                  const Data_Namespace::MemoryLevel memory_level,
                                  const int device_count,
                                  Executor* executor,
@@ -67,6 +68,7 @@ class StringDictionaryTranslationMgr {
  private:
   const int32_t source_string_dict_id_;
   const int32_t dest_string_dict_id_;
+  const bool translate_intersection_only_;
   const Data_Namespace::MemoryLevel memory_level_;
   const int device_count_;
   Executor* executor_;

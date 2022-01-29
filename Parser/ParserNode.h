@@ -708,7 +708,8 @@ class CaseExpr : public Expr {
   static std::shared_ptr<Analyzer::Expr> normalize(
       const std::list<
           std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>&,
-      const std::shared_ptr<Analyzer::Expr>);
+      const std::shared_ptr<Analyzer::Expr>,
+      const Executor* executor = nullptr);
   std::string to_string() const override;
 
  private:

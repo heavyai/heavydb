@@ -485,35 +485,41 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
 const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
     const int source_dict_id,
     const int dest_dict_id,
+    const RowSetMemoryOwner::StringTranslationType translation_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool with_generation) const {
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
   return row_set_mem_owner->getOrAddStringProxyTranslationMap(
-      source_dict_id, dest_dict_id, with_generation, catalog_);
+      source_dict_id, dest_dict_id, with_generation, translation_type, catalog_);
 }
 
-const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
+const StringDictionaryProxy::IdMap* Executor::getIntersectionStringProxyTranslationMap(
     const StringDictionaryProxy* source_proxy,
     const StringDictionaryProxy* dest_proxy,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
-  return row_set_mem_owner->addStringProxyTranslationMap(source_proxy, dest_proxy);
+  return row_set_mem_owner->addStringProxyIntersectionTranslationMap(source_proxy,
+                                                                     dest_proxy);
 }
 
 const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
     const int source_dict_id_in,
     const int dest_dict_id_in,
     const bool with_generation,
+    const RowSetMemoryOwner::StringTranslationType translation_type,
     const Catalog_Namespace::Catalog* catalog) {
   const auto source_proxy =
       getOrAddStringDictProxy(source_dict_id_in, with_generation, catalog);
-  const auto dest_proxy =
-      getOrAddStringDictProxy(dest_dict_id_in, with_generation, catalog);
-  return addStringProxyTranslationMap(source_proxy, dest_proxy);
+  auto dest_proxy = getOrAddStringDictProxy(dest_dict_id_in, with_generation, catalog);
+  if (translation_type == RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION) {
+    return addStringProxyIntersectionTranslationMap(source_proxy, dest_proxy);
+  } else {
+    return addStringProxyUnionTranslationMap(source_proxy, dest_proxy);
+  }
 }
 
 quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {
