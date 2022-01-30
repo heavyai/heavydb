@@ -109,7 +109,7 @@ class TableFunctions : public ::testing::Test {
           {"'world'", "'foo'", "'New York'", "'New York'", "'New York'"},
           {"'baz'", "'hello'", "'New York'", "'Ohio'", "'California'"}};
 
-      for (const auto r : v) {
+      for (const auto& r : v) {
         const auto insert_query = gen(r[0], r[1], r[2], r[3], r[4]);
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
