@@ -327,6 +327,23 @@ StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) co
                   : row_set_mem_owner_->getStringDictProxy(dict_id);
 }
 
+class ResultSet::CellCallback {
+  StringDictionaryProxy::IdMap const id_map_;
+  int64_t const null_int_;
+
+ public:
+  CellCallback(StringDictionaryProxy::IdMap&& id_map, int64_t const null_int)
+      : id_map_(std::move(id_map)), null_int_(null_int) {}
+  void operator()(int8_t const* const cell_ptr) const {
+    using StringId = int32_t;
+    StringId* const string_id_ptr =
+        const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
+    if (*string_id_ptr != null_int_) {
+      *string_id_ptr = id_map_[*string_id_ptr];
+    }
+  }
+};
+
 // Update any dictionary-encoded targets within storage_ with the corresponding
 // dictionary in the given targets parameter, if their comp_param (dictionary) differs.
 // This may modify both the storage_ values and storage_ targets.
@@ -334,7 +351,6 @@ StringDictionaryProxy* ResultSet::getStringDictionaryProxy(int const dict_id) co
 // Iterate over targets starting at index target_idx.
 void ResultSet::translateDictEncodedColumns(std::vector<TargetInfo> const& targets,
                                             size_t const start_idx) {
-  using StringId = int32_t;
   if (storage_) {
     CHECK_EQ(targets.size(), storage_->targets_.size());
     RowIterationState state;
@@ -349,16 +365,9 @@ void ResultSet::translateDictEncodedColumns(std::vector<TargetInfo> const& targe
           CHECK(sdp_lhs);
           auto const* const sdp_rhs = getStringDictionaryProxy(type_rhs.get_comp_param());
           CHECK(sdp_rhs);
-          auto const translate_string_ids =
-              [id_map = sdp_lhs->transientUnion(*sdp_rhs),
-               null_int = inline_int_null_val(type_rhs)](int8_t const* const cell_ptr) {
-                StringId* const string_id_ptr =
-                    const_cast<StringId*>(reinterpret_cast<StringId const*>(cell_ptr));
-                if (*string_id_ptr != null_int) {
-                  *string_id_ptr = id_map[*string_id_ptr];
-                }
-              };
           state.cur_target_idx_ = target_idx;
+          CellCallback const translate_string_ids(sdp_lhs->transientUnion(*sdp_rhs),
+                                                  inline_int_null_val(type_rhs));
           eachCellInColumn(state, translate_string_ids);
           type_rhs.set_comp_param(type_lhs.get_comp_param());
         }
@@ -370,8 +379,7 @@ void ResultSet::translateDictEncodedColumns(std::vector<TargetInfo> const& targe
 // For each cell in column target_idx, callback func with pointer to datum.
 // This currently assumes the column type is a dictionary-encoded string, but this logic
 // can be generalized to other types.
-void ResultSet::eachCellInColumn(RowIterationState& state,
-                                 std::function<void(int8_t const*)> func) {
+void ResultSet::eachCellInColumn(RowIterationState& state, CellCallback const& func) {
   size_t const target_idx = state.cur_target_idx_;
   QueryMemoryDescriptor& storage_qmd = storage_->query_mem_desc_;
   CHECK_LT(target_idx, lazy_fetch_info_.size());

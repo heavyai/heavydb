@@ -528,7 +528,8 @@ class ResultSet {
     int8_t compact_sz1_;
   };
 
-  void eachCellInColumn(RowIterationState&, std::function<void(int8_t const*)>);
+  class CellCallback;
+  void eachCellInColumn(RowIterationState&, CellCallback const&);
 
   const Executor* getExecutor() const { return query_mem_desc_.getExecutor(); }
 

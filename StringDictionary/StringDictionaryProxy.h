@@ -87,6 +87,8 @@ class StringDictionaryProxy {
     IdMap(uint32_t const tran_size, uint32_t const dict_size)
         : offset_(tran_size + 1)
         , vector_map_(offset_ + dict_size, StringDictionary::INVALID_STR_ID) {}
+    IdMap(IdMap const&) = delete;
+    IdMap(IdMap&&) = default;
     bool empty() const { return vector_map_.size() == 1; }
     inline size_t getIndex(int32_t const id) const { return offset_ + id; }
     std::vector<int32_t> const& getVectorMap() const { return vector_map_; }
@@ -102,10 +104,6 @@ class StringDictionaryProxy {
   };
 
   IdMap initIdMap() const { return IdMap(transient_string_vec_.size(), generation_); }
-  std::shared_ptr<IdMap> initSharedIdMap() const {
-    return std::make_shared<IdMap>(static_cast<uint32_t>(transient_string_vec_.size()),
-                                   static_cast<uint32_t>(generation_));
-  }
 
   /**
    * @brief Builds a vectorized string_id translation map from this proxy to dest_proxy
@@ -126,8 +124,7 @@ class StringDictionaryProxy {
    * maps to INVALID_STR_ID.
    *
    */
-  std::shared_ptr<IdMap> buildTranslationMapToOtherProxy(
-      const StringDictionaryProxy* dest_proxy) const;
+  IdMap buildTranslationMapToOtherProxy(const StringDictionaryProxy* dest_proxy) const;
 
   /**
    * @brief Returns the number of string entries in the underlying string dictionary,
