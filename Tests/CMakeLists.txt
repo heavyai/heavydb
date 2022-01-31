@@ -122,6 +122,7 @@ endif()
 # Tests + Microbenchmarks
 add_executable(TableUpdateDeleteBenchmark TableUpdateDeleteBenchmark.cpp)
 add_executable(GeospatialBenchmark GeospatialBenchmark.cpp)
+add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
 
 set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
@@ -247,6 +248,11 @@ endif()
 
 target_link_libraries(TableUpdateDeleteBenchmark benchmark ${EXECUTE_TEST_LIBS})
 target_link_libraries(GeospatialBenchmark benchmark ${EXECUTE_TEST_LIBS})
+if(ENABLE_FOLLY)
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${CMAKE_DL_LIBS} ${Folly_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+else()
+  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary Logger Utils $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs> ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+endif()
 
 if(ENABLE_CUDA)
   target_link_libraries(GpuSharedMemoryTest ${EXECUTE_TEST_LIBS})
