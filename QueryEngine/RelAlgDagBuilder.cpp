@@ -586,8 +586,8 @@ RelLogicalUnion::RelLogicalUnion(RelAlgInputs inputs, bool is_all)
     : RelAlgNode(std::move(inputs)), is_all_(is_all) {
   if (!g_enable_union) {
     throw QueryNotSupported(
-        "UNION is not supported yet. There is an experimental enable-union option "
-        "available to enable UNION ALL queries.");
+        "The DEPRECATED enable-union option is set to off. Please remove this option as "
+        "it may be disabled in the future.");
   }
   CHECK_EQ(2u, inputs_.size());
   if (!is_all_) {
