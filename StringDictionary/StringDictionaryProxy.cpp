@@ -189,19 +189,18 @@ int32_t StringDictionaryProxy::lookupTransientStringUnlocked(
                                            : it->second;
 }
 
-std::shared_ptr<StringDictionaryProxy::IdMap>
-StringDictionaryProxy::buildTranslationMapToOtherProxy(
+StringDictionaryProxy::IdMap StringDictionaryProxy::buildTranslationMapToOtherProxy(
     const StringDictionaryProxy* dest_proxy) const {
   auto timer = DEBUG_TIMER(__func__);
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  auto id_map = initSharedIdMap();
+  IdMap id_map = initIdMap();
 
-  if (id_map->empty()) {
+  if (id_map.empty()) {
     return id_map;
   }
 
   // First map transient strings, store at front of vector map
-  const size_t num_transient_entries = id_map->numTransients();
+  const size_t num_transient_entries = id_map.numTransients();
   if (num_transient_entries) {
     std::vector<std::string> transient_lookup_strings(num_transient_entries);
     std::transform(transient_string_vec_.cbegin(),
@@ -223,16 +222,16 @@ StringDictionaryProxy::buildTranslationMapToOtherProxy(
 
     const auto transient_str_to_id_vec_map =
         dest_proxy->getTransientBulk(transient_lookup_strings);
-    CHECK_GE(id_map->getVectorMap().size(), transient_str_to_id_vec_map.size());
+    CHECK_GE(id_map.getVectorMap().size(), transient_str_to_id_vec_map.size());
     std::copy(transient_str_to_id_vec_map.begin(),
               transient_str_to_id_vec_map.end(),
-              id_map->data());
+              id_map.data());
   }
 
   // Now map strings in dictionary
   // We start non transient strings after the transient strings
   // if they exist, otherwise at 0
-  int32_t* translation_map_stored_entries_ptr = id_map->storageData();
+  int32_t* translation_map_stored_entries_ptr = id_map.storageData();
 
   auto dest_transient_lookup_callback = [dest_proxy, translation_map_stored_entries_ptr](
                                             const std::string_view& source_string,
@@ -256,9 +255,9 @@ StringDictionaryProxy::buildTranslationMapToOtherProxy(
                       : 0UL;
 
   const size_t num_dest_entries = dest_proxy->entryCountUnlocked();
-  const size_t num_total_entries = id_map->getVectorMap().size();
+  const size_t num_total_entries = id_map.getVectorMap().size();
   CHECK_GT(num_total_entries, 0UL);
-  CHECK_LE(num_strings_not_translated, id_map->getVectorMap().size());
+  CHECK_LE(num_strings_not_translated, id_map.getVectorMap().size());
   const size_t num_entries_translated = num_total_entries - num_strings_not_translated;
   const float match_pct =
       100.0 * static_cast<float>(num_entries_translated) / num_total_entries;

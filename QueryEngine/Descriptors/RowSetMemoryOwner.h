@@ -144,7 +144,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
               .emplace(map_key, source_proxy->buildTranslationMapToOtherProxy(dest_proxy))
               .first;
     }
-    return it->second.get();
+    return &it->second;
   }
 
   StringDictionaryProxy* getStringDictProxy(const int dict_id) const {
@@ -231,7 +231,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
-  std::map<std::pair<int, int>, std::shared_ptr<StringDictionaryProxy::IdMap>>
+  std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
       str_proxy_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;
