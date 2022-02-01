@@ -193,34 +193,6 @@ bool nullize_a_fixed_encoded_column(const std::string& table,
   return r_cnt == cnt;
 }
 
-using ResultRow = std::vector<TargetValue>;
-using ResultRows = std::vector<ResultRow>;
-
-const ResultRows get_some_rows(const std::string& table, const int limit = 10) {
-  ResultRows result_rows;
-  if (!UpdelTestConfig::enableVarUpdelPerfTest) {
-    std::string query_str =
-        "SELECT * FROM " + table + (limit ? " LIMIT " + std::to_string(limit) : "") + ";";
-    const auto rows = run_query(query_str);
-    // subtle here is we can't simply return ResultSet because it won't survive
-    // any rollback which wipes out all chunk data/metadata of the table, crashing
-    // UpdelRoll destructor that needs to free dirty chunks. So we need to copy
-    // the result rows out before the rollback ...
-    const auto nrow = rows->rowCount();
-    const auto ncol = rows->colCount();
-    for (std::remove_const<decltype(nrow)>::type r = 0; r < nrow; ++r) {
-      // translate string, or encoded strings won't be equal w/ boost ==
-      const auto row = rows->getNextRow(true, false);
-      std::vector<TargetValue> result_row;
-      for (std::remove_const<decltype(ncol)>::type c = 0; c < ncol; ++c) {
-        result_row.emplace_back(row[c]);
-      }
-      result_rows.emplace_back(result_row);
-    }
-  }
-  return result_rows;
-}
-
 template <typename T>
 TargetValue targetValue(std::true_type, const std::vector<T>& vals) {
   return std::vector<ScalarTargetValue>(vals.begin(), vals.end());
@@ -229,68 +201,6 @@ TargetValue targetValue(std::true_type, const std::vector<T>& vals) {
 template <typename T>
 TargetValue targetValue(std::false_type, const T& val) {
   return ScalarTargetValue(val);
-}
-
-const std::string dumpv(const TargetValue& tv) {
-  std::ostringstream os;
-  if (const auto svp = boost::get<ScalarTargetValue>(&tv)) {
-    os << *svp;
-  } else if (const auto avp = boost::get<ArrayTargetValue>(&tv)) {
-    const auto& svp = avp->get();
-    os << boost::algorithm::join(
-        svp | boost::adaptors::transformed(ScalarTargetValueExtractor()), ",");
-  }
-  return os.str();
-}
-
-inline bool is_equal(const TargetValue& lhs, const TargetValue& rhs) {
-  CHECK(!(boost::get<GeoTargetValue>(&lhs) || boost::get<GeoTargetValue>(&rhs)));
-  if (lhs.which() == rhs.which()) {
-    const auto l = boost::get<ScalarTargetValue>(&lhs);
-    const auto r = boost::get<ScalarTargetValue>(&rhs);
-    if (l && r) {
-      return *l == *r;
-    }
-    const auto la = boost::get<ArrayTargetValue>(&lhs);
-    const auto ra = boost::get<ArrayTargetValue>(&rhs);
-    if (la && ra) {
-      if (la->is_initialized() && ra->is_initialized()) {
-        const auto& lvec = la->get();
-        const auto& rvec = ra->get();
-        return lvec == rvec;
-      }
-      if (!la->is_initialized() && !ra->is_initialized()) {
-        // NULL arrays: consider them equal
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-bool compare_row(const std::string& table,
-                 const std::string& column,
-                 const ResultRow& oldr,
-                 const ResultRow& newr,
-                 const TargetValue& val,
-                 const bool commit) {
-  const auto cat = QR::get()->getCatalog();
-  const auto td = cat->getMetadataForTable(table);
-  const auto cdl = cat->getAllColumnMetadataForTable(td->tableId, false, false, false);
-  const auto cds = std::vector<const ColumnDescriptor*>(cdl.begin(), cdl.end());
-  const auto noldc = oldr.size();
-  const auto nnewc = newr.size();
-  const auto is_geophy_included = cds.size() < noldc;
-  CHECK_EQ(noldc, nnewc);
-  for (std::remove_const<decltype(noldc)>::type i = 0, c = 0; c < noldc;
-       c += is_geophy_included ? cds[i]->columnType.get_physical_cols() + 1 : 1, ++i) {
-    if (!is_equal(newr[c], (commit && cds[i]->columnName == column ? val : oldr[c]))) {
-      VLOG(1) << cds[i]->columnName << ": " << dumpv(newr[c]) << " - "
-              << dumpv((commit && cds[i]->columnName == column ? val : oldr[c]));
-      return false;
-    }
-  }
-  return true;
 }
 
 bool update_a_encoded_string_column(const std::string& table,
@@ -373,23 +283,6 @@ void import_table_file(const std::string& table, const std::string& file) {
     throw std::runtime_error("Expected a CopyTableStatment: " + query_str);
   }
   QR::get()->runImport(copy_stmt);
-}
-
-bool check_row_count_with_string(const std::string& table,
-                                 const std::string& column,
-                                 const int64_t cnt,
-                                 const std::string& val) {
-  std::string query_str =
-      "SELECT count(*) FROM " + table + " WHERE " + column + " = '" + val + "';";
-  auto rows = run_query(query_str);
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size());
-  auto r_cnt = v<int64_t>(crt_row[0]);
-  if (r_cnt == cnt) {
-    return true;
-  }
-  VLOG(1) << "r_cnt: " << std::to_string(r_cnt) << ", cnt: " << std::to_string(cnt);
-  return false;
 }
 
 // don't use R"()" format; somehow it causes many blank lines

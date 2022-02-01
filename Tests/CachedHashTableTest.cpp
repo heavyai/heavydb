@@ -73,19 +73,6 @@ std::shared_ptr<ResultSet> run_query(const std::string& query_str,
   return QR::get()->runSQL(query_str, device_type, true, true);
 }
 
-TargetValue run_simple_query(const std::string& query_str,
-                             const ExecutorDeviceType device_type,
-                             const bool geo_return_geo_tv = true,
-                             const bool allow_loop_joins = true) {
-  auto rows = QR::get()->runSQL(query_str, device_type, allow_loop_joins);
-  if (geo_return_geo_tv) {
-    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  }
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size()) << query_str;
-  return crt_row[0];
-}
-
 struct HashtableInfo {
  public:
   HashtableInfo(int32_t min_, int32_t max_, int32_t hash_entry_count_)

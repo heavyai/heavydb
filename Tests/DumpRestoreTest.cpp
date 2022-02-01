@@ -61,7 +61,6 @@ void clear() {
   CHECK_EQ(0, boost::process::system(("rm -rf " + tar_ball_path).c_str()));
 }
 
-static int nshard;
 static int nrow;
 
 void reset() {
