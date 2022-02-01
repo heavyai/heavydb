@@ -472,16 +472,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     return {rs, {}};
   }
 
-  if (render_info) {
-    // set render to be non-insitu in certain situations.
-    if (!render_info->disallow_in_situ_only_if_final_ED_is_aggregate &&
-        ed_seq.size() > 1) {
-      // old logic
-      // disallow if more than one ED
-      render_info->setInSituDataIfUnset(false);
-    }
-  }
-
   if (eo.find_push_down_candidates) {
     // this extra logic is mainly due to current limitations on multi-step queries
     // and/or subqueries.

@@ -34,7 +34,7 @@
 class RelRexDagVisitor {
  public:
   virtual ~RelRexDagVisitor() = default;
-  void visit(RelAlgNode const*);
+  virtual void visit(RelAlgNode const*);
   virtual void visit(RexScalar const*);
 
  protected:
@@ -61,6 +61,8 @@ class RelRexDagVisitor {
   virtual void visit(RexRef const*) {}
   virtual void visit(RexSubQuery const*);
   virtual void visit(RexWindowFunctionOperator const*);
+
+  void castAndVisit(RelAlgNode const*);
 
  private:
   template <typename T, typename U>

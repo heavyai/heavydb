@@ -37,7 +37,6 @@ class RenderInfo {
 
   // All the "selected from" tables in a query. Includes resolved and un-resolved views.
   std::unordered_set<std::string> table_names;
-  bool disallow_in_situ_only_if_final_ED_is_aggregate;
 
   RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
              const RenderQueryOptions& in_render_query_opts,
@@ -46,6 +45,7 @@ class RenderInfo {
   const Catalog_Namespace::SessionInfo& getSessionInfo() const;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> getSessionInfoPtr() const;
   void setForceNonInSituData();
+  bool isForcedNonInSitu() const;
   bool queryRanWithInSituData() const;
   bool hasInSituData() const;
   bool isInSituDataFlagUnset() const;
@@ -66,8 +66,7 @@ class RenderInfo {
   bool setInSituDataIfUnset(const bool is_in_situ_data);
 
   void reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
-             const bool in_force_non_in_situ_data,
-             const bool in_disallow_in_situ_only_if_final_ED_is_aggregate);
+             const bool in_force_non_in_situ_data);
 
  private:
   enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };

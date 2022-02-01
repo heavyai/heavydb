@@ -37,8 +37,7 @@ RelRexDagVisitor::Handlers<T, sizeof...(Ts)> RelRexDagVisitor::make_handlers() {
 }
 
 // RelAlgNode types
-
-void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
+void RelRexDagVisitor::castAndVisit(RelAlgNode const* rel_alg_node) {
   // Array that pairs std::type_index(typeid(*rel_alg_node)) -> method pointer.
   static auto const handlers = make_handlers<RelAlgNode,
                                              RelAggregate,
@@ -63,6 +62,10 @@ void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
   } else {
     LOG(FATAL) << "Unhandled RelAlgNode type: " << rel_alg_node->toString();
   }
+}
+
+void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
+  castAndVisit(rel_alg_node);
   for (size_t i = 0; i < rel_alg_node->inputCount(); ++i) {
     visit(rel_alg_node->getInput(i));
   }
@@ -123,7 +126,6 @@ void RelRexDagVisitor::visit(RelTranslatedJoin const* rel_translated_join) {
 }
 
 // RexScalar types
-
 void RelRexDagVisitor::visit(RexScalar const* rex_scalar) {
   // Array that pairs std::type_index(typeid(*rex_scalar)) -> method pointer.
   static auto const handlers = make_handlers<RexScalar,

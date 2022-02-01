@@ -45,6 +45,11 @@ void RenderInfo::setForceNonInSituData() {
   CHECK(false);
 }
 
+bool RenderInfo::isForcedNonInSitu() const {
+  CHECK(false);
+  return false;
+}
+
 bool RenderInfo::queryRanWithInSituData() const {
   CHECK(false);
   return false;
@@ -105,7 +110,6 @@ const RenderQueryOptions& RenderInfo::getRenderQueryOptions() const {
 }
 
 void RenderInfo::reset(std::unique_ptr<RenderQueryOptions> in_query_opts,
-                       const bool in_force_non_in_situ_data,
-                       const bool in_disallow_in_situ_only_if_final_ED_is_aggregate) {
+                       const bool in_force_non_in_situ_data) {
   CHECK(false);
 }
