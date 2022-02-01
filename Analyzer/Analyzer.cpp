@@ -22,12 +22,10 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include "Analyzer.h"
-#include "Catalog/Catalog.h"
+#include "Analyzer/Analyzer.h"
 #include "Geospatial/Conversion.h"
 #include "Geospatial/Types.h"
 #include "QueryEngine/DateTimeUtils.h"
-#include "RangeTableEntry.h"
 #include "Shared/DateConverters.h"
 #include "Shared/misc.h"
 #include "Shared/sqltypes.h"
@@ -50,9 +48,6 @@ Subquery::~Subquery() {
 }
 
 Query::~Query() {
-  for (auto p : rangetable) {
-    delete p;
-  }
   delete order_by;
   delete next_query;
 }
@@ -1389,21 +1384,6 @@ std::shared_ptr<Analyzer::Expr> Subquery::add_cast(const SQLTypeInfo& new_type_i
   // not supported yet.
   CHECK(false);
   return nullptr;
-}
-
-int Query::get_rte_idx(const std::string& name) const {
-  int rte_idx = 0;
-  for (auto rte : rangetable) {
-    if (rte->get_rangevar() == name) {
-      return rte_idx;
-    }
-    rte_idx++;
-  }
-  return -1;
-}
-
-void Query::add_rte(RangeTableEntry* rte) {
-  rangetable.push_back(rte);
 }
 
 void ColumnVar::check_group_by(

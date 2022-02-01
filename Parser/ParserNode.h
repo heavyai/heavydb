@@ -1757,16 +1757,6 @@ class QuerySpec : public QueryExpr {
   std::unique_ptr<Expr> where_clause_;
   std::list<std::unique_ptr<Expr>> groupby_clause_;
   std::unique_ptr<Expr> having_clause_;
-  void analyze_from_clause(const Catalog_Namespace::Catalog& catalog,
-                           Analyzer::Query& query) const;
-  void analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
-                             Analyzer::Query& query) const;
-  void analyze_where_clause(const Catalog_Namespace::Catalog& catalog,
-                            Analyzer::Query& query) const;
-  void analyze_group_by(const Catalog_Namespace::Catalog& catalog,
-                        Analyzer::Query& query) const;
-  void analyze_having_clause(const Catalog_Namespace::Catalog& catalog,
-                             Analyzer::Query& query) const;
 };
 
 /*

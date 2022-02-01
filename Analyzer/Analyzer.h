@@ -42,10 +42,6 @@ namespace Analyzer {
 class Expr;
 }
 
-namespace Catalog_Namespace {
-class Catalog;
-}
-
 template <typename Tp, typename... Args>
 inline typename std::enable_if<std::is_base_of<Analyzer::Expr, Tp>::value,
                                std::shared_ptr<Tp>>::type
@@ -1778,8 +1774,6 @@ class TargetEntry {
   bool unnest;                           // unnest a collection type
 };
 
-class RangeTableEntry;
-
 /*
  * @type Query
  * @brief parse tree for a query
@@ -1807,7 +1801,6 @@ class Query {
   std::vector<std::shared_ptr<TargetEntry>>& get_targetlist_nonconst() {
     return targetlist;
   }
-  const std::vector<RangeTableEntry*>& get_rangetable() const { return rangetable; }
   const Expr* get_where_predicate() const { return where_predicate.get(); }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_group_by() const {
     return group_by;
@@ -1831,8 +1824,6 @@ class Query {
   void set_stmt_type(SQLStmtType t) { stmt_type = t; }
   void set_num_aggs(int a) { num_aggs = a; }
   int get_rte_idx(const std::string& range_var_name) const;
-  RangeTableEntry* get_rte(int rte_idx) const { return rangetable[rte_idx]; }
-  void add_rte(RangeTableEntry* rte);
   void add_tle(std::shared_ptr<TargetEntry> tle) { targetlist.push_back(tle); }
   int64_t get_limit() const { return limit; }
   void set_limit(int64_t l) { limit = l; }
@@ -1842,15 +1833,12 @@ class Query {
  private:
   bool is_distinct;                                      // true only if SELECT DISTINCT
   std::vector<std::shared_ptr<TargetEntry>> targetlist;  // represents the SELECT clause
-  std::vector<RangeTableEntry*> rangetable;  // represents the FROM clause for SELECT. For
-                                             // INSERT, DELETE, UPDATE the result table is
-                                             // always the first entry in rangetable.
-  std::shared_ptr<Analyzer::Expr> where_predicate;      // represents the WHERE clause
-  std::list<std::shared_ptr<Analyzer::Expr>> group_by;  // represents the GROUP BY clause
-  std::shared_ptr<Analyzer::Expr> having_predicate;     // represents the HAVING clause
-  std::list<OrderEntry>* order_by;                      // represents the ORDER BY clause
-  Query* next_query;                                    // the next query to UNION
-  bool is_unionall;                                     // true only if it is UNION ALL
+  std::shared_ptr<Analyzer::Expr> where_predicate;       // represents the WHERE clause
+  std::list<std::shared_ptr<Analyzer::Expr>> group_by;   // represents the GROUP BY clause
+  std::shared_ptr<Analyzer::Expr> having_predicate;      // represents the HAVING clause
+  std::list<OrderEntry>* order_by;                       // represents the ORDER BY clause
+  Query* next_query;                                     // the next query to UNION
+  bool is_unionall;                                      // true only if it is UNION ALL
   SQLStmtType stmt_type;
   int num_aggs;                    // number of aggregate functions in query
   int result_table_id;             // for INSERT statements only
