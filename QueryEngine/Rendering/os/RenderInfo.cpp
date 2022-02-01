@@ -45,6 +45,11 @@ void RenderInfo::setForceNonInSituData() {
   CHECK(false);
 }
 
+bool RenderInfo::isForcedNonInSitu() const {
+  CHECK(false);
+  return false;
+}
+
 bool RenderInfo::queryRanWithInSituData() const {
   CHECK(false);
   return false;
