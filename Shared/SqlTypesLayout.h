@@ -168,8 +168,9 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
   const auto int_type = ti.is_decimal() ? kBIGINT : ti.get_type();
   switch (int_type) {
     case kNULLT:
-      LOG(FATAL) << "Untyped NULL values are not supported. Please CAST any NULL "
-                    "constants to a type.";
+      throw std::runtime_error(
+          "Untyped NULL values are not supported. Please CAST any NULL "
+          "constants to a type.");
     case kBOOLEAN:
       return 8;
     case kTINYINT:
