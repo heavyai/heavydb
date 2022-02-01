@@ -22446,6 +22446,48 @@ TEST(Select, Explain_Query_Session) {
   EXPECT_EQ(executor->getNumCurentSessionsEnrolled(), static_cast<size_t>(0));
 }
 
+TEST(Select, ProjectMoreThan1MVarlenTypeColumn) {
+  // this test checks that we can safely fallback to row-wise output mode
+  // when target expression (in a projection target list) generates geo point
+  // i.e., st_point(x, y), see `is_varlen_projection` function in TargetExprBuilder.cpp
+  // todo(yoonmin): add proper tests when we support more varlen-column projection
+  const auto drop_test_table = "DROP TABLE IF EXISTS largeTestTable";
+  run_ddl_statement(drop_test_table);
+  run_ddl_statement("CREATE TABLE largeTestTable (f1 float, f2 float);");
+
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/largeTestTable.csv");
+  if (boost::filesystem::exists(file_path)) {
+    boost::filesystem::remove(file_path);
+  }
+  std::ofstream out(file_path.string());
+  for (int i = 0; i < 1000001; i++) {
+    if (out.is_open()) {
+      std::string insert_query = "1.1, 2.2\n";
+      out << insert_query;
+    }
+  }
+  out.close();
+
+  std::string import_data{
+      "COPY largeTestTable FROM "
+      "'../../Tests/Import/datafiles/largeTestTable.csv' WITH "
+      "(header='false')"};
+  run_ddl_statement(import_data);
+
+  ScopeGuard reset = [orig = g_enable_columnar_output, drop_test_table, file_path] {
+    g_enable_columnar_output = orig;
+    run_ddl_statement(drop_test_table);
+    boost::filesystem::remove(file_path);
+  };
+
+  for (const bool flag : {true, false}) {
+    g_enable_columnar_output = flag;  // let's force columnar output for testing
+    run_multiple_agg("SELECT st_point(f1, f2) FROM largeTestTable;",
+                     ExecutorDeviceType::CPU);
+  }
+}
+
 namespace {
 int create_sharded_join_table(const std::string& table_name,
                               size_t fragment_size,

@@ -2937,8 +2937,8 @@ bool is_projection(const RelAlgExecutionUnit& ra_exe_unit) {
   return ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front();
 }
 
-bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
-                            const RenderInfo* render_info) {
+bool can_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
+                         const RenderInfo* render_info) {
   if (!is_projection(ra_exe_unit)) {
     return false;
   }
@@ -2956,8 +2956,12 @@ bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
       return false;
     }
   }
+  return true;
+}
 
-  return ra_exe_unit.scan_limit >= g_columnar_large_projections_threshold;
+bool should_output_columnar(const RelAlgExecutionUnit& ra_exe_unit) {
+  return g_columnar_large_projections &&
+         ra_exe_unit.scan_limit >= g_columnar_large_projections_threshold;
 }
 
 /**
@@ -3151,14 +3155,18 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
   }
 
-  if (g_columnar_large_projections) {
-    const auto prefer_columnar = should_output_columnar(ra_exe_unit, render_info);
-    if (prefer_columnar) {
+  // when output_columnar_hint is true here, it means either 1) columnar output
+  // configuration is on or 2) a user hint is given but we have to disable it if some
+  // requirements are not satisfied
+  if (can_output_columnar(ra_exe_unit, render_info)) {
+    if (!eo.output_columnar_hint && should_output_columnar(ra_exe_unit)) {
       VLOG(1) << "Using columnar layout for projection as output size of "
               << ra_exe_unit.scan_limit << " rows exceeds threshold of "
               << g_columnar_large_projections_threshold << ".";
       eo.output_columnar_hint = true;
     }
+  } else {
+    eo.output_columnar_hint = false;
   }
 
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
