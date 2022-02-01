@@ -664,7 +664,6 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
 
   // linearize buffers if we don't have corresponding buf in cache
   size_t sum_data_buf_size = 0;
-  size_t sum_idx_buf_size = 0;
   size_t cur_sum_num_tuples = 0;
   size_t total_idx_size_modifier = 0;
   auto chunk_holder_it = local_chunk_holder.begin();
@@ -826,7 +825,6 @@ MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
         }
       }
     }
-    sum_idx_buf_size += idx_buf_size;
     cur_sum_num_tuples += cur_chunk_num_tuples;
     sum_data_buf_size += target_chunk_data_buffer->size();
     if (target_idx_buf_ptr[*chunk_num_tuple_it] < 0) {
