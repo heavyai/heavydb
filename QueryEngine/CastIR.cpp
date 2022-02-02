@@ -200,11 +200,6 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
-    if (g_cluster) {
-      throw std::runtime_error(
-          "Cast from none-encoded string to dictionary-encoded not supported for "
-          "distributed queries");
-    }
     if (g_enable_watchdog) {
       throw WatchdogException(
           "Cast from none-encoded string to dictionary-encoded would be slow");
@@ -224,11 +219,6 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
-    if (g_cluster) {
-      throw std::runtime_error(
-          "Cast from dictionary-encoded string to none-encoded not supported for "
-          "distributed queries");
-    }
     if (g_enable_watchdog) {
       throw WatchdogException(
           "Cast from dictionary-encoded string to none-encoded would be slow");

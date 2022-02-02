@@ -68,9 +68,6 @@ extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 
-extern size_t g_leaf_count;
-extern bool g_cluster;
-
 extern bool g_is_test_env;
 
 using QR = QueryRunner::QueryRunner;
@@ -9057,12 +9054,6 @@ TEST(Select, Export_Via_Query_Having_Scalar_Subquery) {
   // since RexSubquery Analyzer does not know about the validation query
   // so we have to let subquery analyzer know about that we do process validation query
   // and keep doing processing instead of throwing the exception
-  if (g_cluster) {
-    // Those queries are executed successfully in both single and dist mode
-    // but in dist test environment, DistributedQueryRunner fails to parse those COPY stmt
-    // with scalar subquery so we skip this in dist test, but see if we can relax this
-    return;
-  }
   std::string base_path = BASE_PATH;
   std::string tmp_output_path_str = base_path + "/export_via_subquery.csv";
   const auto tmp_output_path = boost::filesystem::path(tmp_output_path_str);

@@ -35,9 +35,6 @@ constexpr int64_t Null_i = NULL_INT;
 
 using NullableTargetValue = boost::variant<TargetValue, void*>;
 
-extern size_t g_leaf_count;
-extern bool g_cluster;
-
 /**
  * Helper class for asserting equality between a result set represented as a boost variant
  * and a thrift result set (TRowSet).

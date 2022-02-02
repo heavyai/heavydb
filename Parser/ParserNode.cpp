@@ -72,7 +72,6 @@
 
 bool g_enable_calcite_ddl_parser{true};
 
-size_t g_leaf_count{0};
 bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_fsi;
@@ -2554,9 +2553,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     populate_table = true;
   } else {
     leafs_connector_ = &local_connector;
-    if (!g_cluster) {
-      populate_table = true;
-    }
+    populate_table = true;
   }
 
   auto get_target_column_descriptors = [this, &catalog](const TableDescriptor* td) {
@@ -3316,11 +3313,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   try {
     populateData(query_state->createQueryStateProxy(), td, false, true);
   } catch (...) {
-    if (!g_cluster) {
-      const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
-      if (created_td) {
-        catalog.dropTable(created_td);
-      }
+    const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
+    if (created_td) {
+      catalog.dropTable(created_td);
     }
     throw;
   }

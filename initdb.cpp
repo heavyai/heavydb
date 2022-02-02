@@ -79,8 +79,6 @@ static void loadGeo(std::string base_path) {
   system_parameters.calcite_port = 3280;
 
   system_parameters.aggregator = false;
-  g_leaf_count = 0;
-  g_cluster = false;
 
   File_Namespace::DiskCacheLevel cache_level{File_Namespace::DiskCacheLevel::fsi};
   File_Namespace::DiskCacheConfig disk_cache_config{

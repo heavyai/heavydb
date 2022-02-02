@@ -42,7 +42,6 @@
 #include "Shared/measure.h"
 #include "Shared/thread_count.h"
 
-extern bool g_cluster;
 bool g_test_rollback_dump_restore{false};
 
 constexpr static char const* table_schema_filename = "_table.sql";
@@ -261,9 +260,6 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
                               const std::string& compression) {
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::EXPORT);
-  if (g_cluster) {
-    throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
-  }
   if (boost::filesystem::exists(archive_path)) {
     throw std::runtime_error("Archive " + archive_path + " already exists.");
   }
@@ -334,9 +330,6 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const std::string& compression) {
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::IMPORT);
-  if (g_cluster) {
-    throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
-  }
   if (!boost::filesystem::exists(archive_path)) {
     throw std::runtime_error("Archive " + archive_path + " does not exist.");
   }

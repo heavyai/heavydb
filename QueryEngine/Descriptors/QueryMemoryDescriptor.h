@@ -44,8 +44,6 @@
 #include <Shared/SqlTypesLayout.h>
 #include <Shared/TargetInfo.h>
 
-extern bool g_cluster;
-
 class Executor;
 class QueryExecutionContext;
 class RenderInfo;

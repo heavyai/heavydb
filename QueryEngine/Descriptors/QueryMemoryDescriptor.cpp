@@ -144,10 +144,6 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
 
 bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
                          const bool output_columnar) {
-  if (g_cluster) {
-    return false;  // TODO(miyu)
-  }
-
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return false;
@@ -1043,8 +1039,7 @@ void QueryMemoryDescriptor::setOutputColumnar(const bool val) {
 bool QueryMemoryDescriptor::isLogicalSizedColumnsAllowed() const {
   // In distributed mode, result sets are serialized using rowwise iterators, so we use
   // consistent slot widths for now
-  return output_columnar_ && !g_cluster &&
-         (query_desc_type_ == QueryDescriptionType::Projection);
+  return output_columnar_ && (query_desc_type_ == QueryDescriptionType::Projection);
 }
 
 size_t QueryMemoryDescriptor::getBufferColSlotCount() const {
@@ -1068,7 +1063,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (g_cluster || is_table_function_) {
+  if (is_table_function_) {
     return true;
   }
   if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {

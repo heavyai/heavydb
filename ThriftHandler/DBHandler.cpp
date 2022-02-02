@@ -473,12 +473,6 @@ void DBHandler::initialize(const bool is_new_db) {
     } catch (const std::exception& e) {
       LOG(ERROR) << "Distributed aggregator support disabled: " << e.what();
     }
-  } else if (g_cluster) {
-    try {
-      leaf_handler_.reset(new MapDLeafHandler(this));
-    } catch (const std::exception& e) {
-      LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
-    }
   }
 
 #ifdef ENABLE_GEOS
@@ -832,12 +826,6 @@ void DBHandler::interrupt(const TSessionId& query_session,
 }
 
 TRole::type DBHandler::getServerRole() const {
-  if (g_cluster) {
-    if (leaf_aggregator_.leafCount() > 0) {
-      return TRole::type::AGGREGATOR;
-    }
-    return TRole::type::LEAF;
-  }
   return TRole::type::SERVER;
 }
 
@@ -870,8 +858,7 @@ void DBHandler::get_status(std::vector<TServerStatus>& _return,
   // Hence, we allow this session-less mode only in distributed mode, and
   // then on a leaf (always), or on the aggregator (only in super-user mode)
   //
-  auto const allow_invalid_session = g_cluster && (!isAggregator() || super_user_rights_);
-  if (!allow_invalid_session || session != getInvalidSessionId()) {
+  if (session != getInvalidSessionId()) {
     auto stdlog = STDLOG(get_session_ptr(session));
     stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   } else {
@@ -6068,29 +6055,11 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
               legacylockmgr::ExecutorOuterLock, true));
 
       std::string output{"Result for validate"};
-      if (g_cluster) {
-        if (leaf_aggregator_.leafCount()) {
-          _return.addExecutionTime(measure<>::execution([&]() {
-            const system_validator::DistributedValidate validator(
-                validate_stmt.getType(),
-                validate_stmt.isRepairTypeRemove(),
-                cat,  // tables may be dropped here
-                leaf_aggregator_,
-                *session_ptr,
-                *this);
-            output = validator.validate(query_state_proxy);
-          }));
-        } else {
-          THROW_MAPD_EXCEPTION("Validate command should be executed on the aggregator.");
-        }
-
-      } else {
-        _return.addExecutionTime(measure<>::execution([&]() {
-          const system_validator::SingleNodeValidator validator(validate_stmt.getType(),
-                                                                cat);
-          output = validator.validate();
-        }));
-      }
+      _return.addExecutionTime(measure<>::execution([&]() {
+        const system_validator::SingleNodeValidator validator(validate_stmt.getType(),
+                                                              cat);
+        output = validator.validate();
+      }));
       _return.updateResultSet(output, ExecutionResult::SimpleResult);
     }));
 
@@ -6107,11 +6076,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     std::unique_ptr<Parser::DDLStmt> stmt = create_ddl_from_calcite(query_ra);
     const auto import_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
     if (import_stmt) {
-      if (g_cluster && !leaf_aggregator_.leafCount()) {
-        // Don't allow copy from imports directly on a leaf node
-        throw std::runtime_error(
-            "Cannot import on an individual leaf. Please import from the Aggregator.");
-      } else if (leaf_aggregator_.leafCount() > 0) {
+      if (leaf_aggregator_.leafCount() > 0) {
         _return.addExecutionTime(measure<>::execution(
             [&]() { execute_distributed_copy_statement(import_stmt, *session_ptr); }));
       } else {
@@ -6164,7 +6129,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
       }));
     }
     std::string query_ra_calcite_explain;
-    if (pw.isCalciteExplain() && (!g_enable_filter_push_down || g_cluster)) {
+    if (pw.isCalciteExplain() && !g_enable_filter_push_down) {
       // return the ra as the result
       _return.updateResultSet(query_ra, ExecutionResult::Explaination);
       return;
@@ -6208,7 +6173,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
               first_n,
               at_most_n,
               /*just_validate=*/false,
-              g_enable_filter_push_down && !g_cluster,
+              g_enable_filter_push_down,
               explain_info,
               executor_index);
           if (explain_info.justCalciteExplain()) {
@@ -6915,10 +6880,8 @@ void DBHandler::set_table_epochs(const TSessionId& session,
 
   // Only super users are allowed to call this API on a single node instance
   // or aggregator (for distributed mode)
-  if (!g_cluster || leaf_aggregator_.leafCount() > 0) {
-    if (!session_ptr->get_currentUser().isSuper) {
-      THROW_MAPD_EXCEPTION("Only super users can set table epochs");
-    }
+  if (!session_ptr->get_currentUser().isSuper) {
+    THROW_MAPD_EXCEPTION("Only super users can set table epochs");
   }
   std::vector<Catalog_Namespace::TableEpochInfo> table_epochs_vector;
   for (const auto& table_epoch : table_epochs) {

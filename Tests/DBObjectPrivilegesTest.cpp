@@ -30,7 +30,6 @@ using Catalog_Namespace::DBMetadata;
 using Catalog_Namespace::SysCatalog;
 using Catalog_Namespace::UserMetadata;
 
-extern size_t g_leaf_count;
 extern bool g_enable_fsi;
 std::string g_test_binary_file_path;
 

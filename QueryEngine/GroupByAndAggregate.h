@@ -260,7 +260,7 @@ inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
   // the bitmap into multiple sub-bitmaps which are unified to get the full result.
   // The threshold value for bitmap_sz_bits works well on Kepler.
   return bitmap_sz_bits < 50000 && ra_exe_unit.groupby_exprs.empty() &&
-                 (device_type == ExecutorDeviceType::GPU || g_cluster)
+                 device_type == ExecutorDeviceType::GPU
              ? 64  // NB: must be a power of 2 to keep runtime offset computations cheap
              : 1;
 }

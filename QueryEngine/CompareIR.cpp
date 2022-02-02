@@ -564,11 +564,6 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
   const bool is_real_string{target_ti.is_string() &&
                             target_ti.get_compression() != kENCODING_DICT};
   if (is_real_string) {
-    if (g_cluster) {
-      throw std::runtime_error(
-          "Comparison between a dictionary-encoded and a none-encoded string not "
-          "supported for distributed queries");
-    }
     if (g_enable_watchdog) {
       throw WatchdogException(
           "Comparison between a dictionary-encoded and a none-encoded string would be "

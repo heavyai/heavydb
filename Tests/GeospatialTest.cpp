@@ -32,8 +32,6 @@ bool g_all_utm_zones{false};
 bool g_aggregator{false};
 bool g_hoist_literals{true};
 
-extern size_t g_leaf_count;
-extern bool g_cluster;
 extern bool g_is_test_env;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;

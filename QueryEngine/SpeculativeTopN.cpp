@@ -189,9 +189,6 @@ bool SpeculativeTopNBlacklist::contains(const std::shared_ptr<Analyzer::Expr> ex
  */
 bool use_speculative_top_n(const RelAlgExecutionUnit& ra_exe_unit,
                            const QueryMemoryDescriptor& query_mem_desc) {
-  if (g_cluster) {
-    return false;
-  }
   if (ra_exe_unit.target_exprs.size() != 2) {
     return false;
   }

@@ -33,7 +33,6 @@
 #include <string>
 #include <unordered_set>
 
-extern bool g_cluster;
 extern bool g_enable_union;
 
 namespace {
@@ -2985,7 +2984,7 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   separate_window_function_expressions(nodes_, query_hint_);
   add_window_function_pre_project(
       nodes_,
-      g_cluster /* always_add_project_if_first_project_is_window_expr */,
+      false /* always_add_project_if_first_project_is_window_expr */,
       query_hint_);
   coalesce_nodes(nodes_, left_deep_joins, query_hint_);
   CHECK(nodes_.back().use_count() == 1);

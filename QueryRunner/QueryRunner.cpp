@@ -47,7 +47,6 @@
 
 #define CALCITEPORT 3279
 
-extern size_t g_leaf_count;
 extern bool g_enable_filter_push_down;
 
 double g_gpu_mem_limit_percent{0.9};

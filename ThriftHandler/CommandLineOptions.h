@@ -190,7 +190,6 @@ extern bool g_enable_lazy_fetch;
 extern bool g_enable_multifrag_rs;
 
 extern int64_t g_omni_kafka_seek;
-extern size_t g_leaf_count;
 extern size_t g_compression_limit_bytes;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;

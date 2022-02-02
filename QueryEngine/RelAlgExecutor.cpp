@@ -562,7 +562,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       // TODO(todd): Determine if and when we can relax this restriction
       // for distributed
       CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry || g_cluster) {
+      if (!g_allow_query_step_cpu_retry) {
         throw;
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
@@ -626,7 +626,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
       // TODO(todd): Determine if and when we can relax this restriction
       // for distributed
       CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry || g_cluster) {
+      if (!g_allow_query_step_cpu_retry) {
         throw;
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
@@ -709,7 +709,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     auto columnar_output_enabled = eo_work_unit.output_columnar_hint
                                        ? !rowwise_output_hint_enabled
                                        : columnar_output_hint_enabled;
-    if (g_cluster && (columnar_output_hint_enabled || rowwise_output_hint_enabled)) {
+    if (columnar_output_hint_enabled || rowwise_output_hint_enabled) {
       LOG(INFO) << "Currently, we do not support applying query hint to change query "
                    "output layout in distributed mode.";
     }
@@ -737,7 +737,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     std::optional<size_t> prev_count;
     // Disabling the intermediate count optimization in distributed, as the previous
     // execution descriptor will likely not hold the aggregated result.
-    if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
+    if (g_skip_intermediate_count && step_idx > 0) {
       auto prev_exec_desc = seq.getDescriptor(step_idx - 1);
       CHECK(prev_exec_desc);
       RelAlgNode const* prev_body = prev_exec_desc->getBody();
@@ -1575,9 +1575,6 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
 
   auto co = co_in;
 
-  if (g_cluster) {
-    throw std::runtime_error("Table functions not supported in distributed mode yet");
-  }
   if (!g_enable_table_functions) {
     throw std::runtime_error("Table function support is disabled");
   }
@@ -2205,8 +2202,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
 
   // Ensure checkpoint happens across all shards, if not in distributed
   // mode (aggregator handles checkpointing in distributed mode)
-  if (!g_cluster &&
-      table_descriptor->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+  if (table_descriptor->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     const_cast<Catalog_Namespace::Catalog*>(cat_)->checkpointWithAutoRollback(table_id);
   }
 
@@ -2349,17 +2345,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
           source_work_unit.exe_unit.sort_info.order_entries, top_n, executor_);
     }
     if (limit || offset) {
-      if (g_cluster && sort->collationCount() == 0) {
-        if (offset >= rows_to_sort->rowCount()) {
-          rows_to_sort->dropFirstN(offset);
-        } else {
-          rows_to_sort->keepFirstN(limit + offset);
-        }
-      } else {
-        rows_to_sort->dropFirstN(offset);
-        if (limit) {
-          rows_to_sort->keepFirstN(limit);
-        }
+      rows_to_sort->dropFirstN(offset);
+      if (limit) {
+        rows_to_sort->keepFirstN(limit);
       }
     }
     return {rows_to_sort, source_result.getTargetsMeta()};
@@ -2518,7 +2506,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     // When running distributed, the threshold for using the precise implementation
     // must be consistent across all leaves, otherwise we could have a mix of precise
     // and approximate bitmaps and we cannot aggregate them.
-    const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
+    const auto device_type = device_type_in;
     const auto bitmap_sz_bits = arg_range.getIntMax() - arg_range.getIntMin() + 1;
     const auto sub_bitmap_count =
         get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
@@ -3199,11 +3187,6 @@ std::vector<size_t> do_table_reordering(
     const RA* node,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor) {
-  if (g_cluster) {
-    // Disable table reordering in distributed mode. The aggregator does not have enough
-    // information to break ties
-    return {};
-  }
   for (const auto& table_info : query_infos) {
     if (table_info.table_id < 0) {
       continue;

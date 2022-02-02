@@ -49,11 +49,9 @@
 #include <string_view>
 #include <thread>
 
-bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 size_t g_watchdog_baseline_max_groups{120000000};
-extern size_t g_leaf_count;
 
 namespace {
 
@@ -370,10 +368,9 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
       minimum distance is always at least shard_count * no of leaf nodes.
     */
     if (device_count < shard_count) {
-      bucket = g_leaf_count ? std::max(device_count, static_cast<size_t>(1))
-                            : std::min(device_count, shard_count - device_count);
+      bucket = std::min(device_count, shard_count - device_count);
     } else {
-      bucket = shard_count * std::max(g_leaf_count, static_cast<size_t>(1));
+      bucket = shard_count;
     }
   }
 
@@ -1476,7 +1473,7 @@ bool GroupByAndAggregate::codegenAggCalls(
   // different sizes (only used when actual column width sizes are used)
   llvm::Value* output_buffer_byte_stream{nullptr};
   llvm::Value* out_row_idx{nullptr};
-  if (query_mem_desc.didOutputColumnar() && !g_cluster &&
+  if (query_mem_desc.didOutputColumnar() &&
       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
     output_buffer_byte_stream = LL_BUILDER.CreateBitCast(
         std::get<0>(agg_out_ptr_w_idx),
@@ -1533,8 +1530,7 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
   if (query_mem_desc.didOutputColumnar()) {
     // TODO(Saman): remove the second columnar branch, and support all query description
     // types through the first branch. Then, input arguments should also be cleaned up
-    if (!g_cluster &&
-        query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
       CHECK(chosen_bytes == 1 || chosen_bytes == 2 || chosen_bytes == 4 ||
             chosen_bytes == 8);
       CHECK(output_buffer_byte_stream);

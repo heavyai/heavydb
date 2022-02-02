@@ -1872,29 +1872,6 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(agg_info.is_agg);
     target_infos.push_back(agg_info);
-    if (g_cluster) {
-      const auto executor = query_mem_desc.getExecutor();
-      CHECK(executor);
-      auto row_set_mem_owner = executor->getRowSetMemoryOwner();
-      CHECK(row_set_mem_owner);
-      const auto& count_distinct_desc =
-          query_mem_desc.getCountDistinctDescriptor(target_idx);
-      if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-        CHECK(row_set_mem_owner);
-        auto count_distinct_buffer = row_set_mem_owner->allocateCountDistinctBuffer(
-            count_distinct_desc.bitmapPaddedSizeBytes(),
-            /*thread_idx=*/0);  // TODO: can we detect thread idx here?
-        entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
-        continue;
-      }
-      if (count_distinct_desc.impl_type_ == CountDistinctImplType::HashSet) {
-        auto count_distinct_set = new robin_hood::unordered_set<int64_t>();
-        CHECK(row_set_mem_owner);
-        row_set_mem_owner->addCountDistinctSet(count_distinct_set);
-        entry.push_back(reinterpret_cast<int64_t>(count_distinct_set));
-        continue;
-      }
-    }
     const bool float_argument_input = takes_float_argument(agg_info);
     if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
       entry.push_back(0);

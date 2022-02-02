@@ -36,7 +36,6 @@
 
 using namespace TestHelpers;
 
-extern size_t g_leaf_count;
 extern bool g_test_rollback_dump_restore;
 
 const static std::string tar_ball_path = "/tmp/_Orz__";

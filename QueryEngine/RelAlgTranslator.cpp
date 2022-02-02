@@ -245,11 +245,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
             "1 and 100");
       }
     } else if (agg_kind == kAPPROX_QUANTILE) {
-      if (g_cluster) {
-        throw std::runtime_error(
-            "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this "
-            "time.");
-      }
       // If second parameter is not given then APPROX_MEDIAN is assumed.
       if (rex->size() == 2) {
         arg1 = std::dynamic_pointer_cast<Analyzer::Constant>(
@@ -785,11 +780,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
   const auto entry_count = val_set.entryCount();
   CHECK_EQ(size_t(1), val_set.colCount());
   const auto& col_type = val_set.getColType(0);
-  if (g_cluster && arg_type.is_string() &&
-      (col_type.get_comp_param() <= 0 || arg_type.get_comp_param() <= 0)) {
-    // Skip this case for now, see comment for fill_dictionary_encoded_in_vals.
-    return nullptr;
-  }
   std::atomic<size_t> total_in_vals_count{0};
   for (size_t i = 0,
               start_entry = 0,
@@ -812,7 +802,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
           std::launch::async,
           [this, &val_set, &total_in_vals_count, sd, dd, needle_null_val](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-            CHECK(!g_cluster);
             fill_dictionary_encoded_in_vals(in_vals,
                                             total_in_vals_count,
                                             &val_set,
