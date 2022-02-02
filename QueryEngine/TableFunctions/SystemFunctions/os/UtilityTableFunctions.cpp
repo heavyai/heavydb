@@ -138,11 +138,11 @@ int32_t generate_random_strings__cpu_(TableFunctionManager& mgr,
   // with require over multiple variables
   constexpr int64_t max_strings{10000000L};
   constexpr int64_t max_str_len{10000L};
-  if (num_strings < 0 || num_strings > max_strings) {
+  if (num_strings > max_strings) {
     return mgr.ERROR_MESSAGE(
         "generate_random_strings: num_strings must be between 0 and 10,000,000.");
   }
-  if (string_length <= 0 || string_length > max_str_len) {
+  if (string_length > max_str_len) {
     return mgr.ERROR_MESSAGE(
         "generate_random_strings: string_length must be between 1 and 10,000.");
   }

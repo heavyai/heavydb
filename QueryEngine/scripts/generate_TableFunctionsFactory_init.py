@@ -1601,7 +1601,7 @@ def find_signatures(input_file):
     for line in open(input_file).readlines():
         line = line.strip()
         if last_line is not None:
-            line = last_line + line
+            line = last_line + ' ' + line
             last_line = None
         if not line.startswith('UDTF:'):
             continue
@@ -1658,7 +1658,7 @@ def find_signatures(input_file):
     return signatures
 
 
-def format_function_args(input_types, output_types, uses_manager, use_generic_arg_name):
+def format_function_args(input_types, output_types, uses_manager, use_generic_arg_name, emit_output_args):
     cpp_args = []
     name_args = []
 
@@ -1673,12 +1673,13 @@ def format_function_args(input_types, output_types, uses_manager, use_generic_ar
         cpp_args.append(cpp_arg)
         name_args.append(name)
 
-    for idx, typ in enumerate(output_types):
-        cpp_arg, name = typ.format_cpp_type(idx,
-                                            use_generic_arg_name=use_generic_arg_name,
-                                            is_input=False)
-        cpp_args.append(cpp_arg)
-        name_args.append(name)
+    if emit_output_args:
+        for idx, typ in enumerate(output_types):
+            cpp_arg, name = typ.format_cpp_type(idx,
+                                                use_generic_arg_name=use_generic_arg_name,
+                                                is_input=False)
+            cpp_args.append(cpp_arg)
+            name_args.append(name)
 
     cpp_args = ', '.join(cpp_args)
     name_args = ', '.join(name_args)
@@ -1686,7 +1687,11 @@ def format_function_args(input_types, output_types, uses_manager, use_generic_ar
 
 
 def build_template_function_call(caller, called, input_types, output_types, uses_manager):
-    cpp_args, name_args = format_function_args(input_types, output_types, uses_manager, use_generic_arg_name=True)
+    cpp_args, name_args = format_function_args(input_types,
+                                               output_types,
+                                               uses_manager,
+                                               use_generic_arg_name=True,
+                                               emit_output_args=True)
 
     template = ("EXTENSION_NOINLINE int32_t\n"
                 "%s(%s) {\n"
@@ -1703,7 +1708,11 @@ def build_preflight_function(fn_name, sizer, input_types, output_types, uses_man
         else:
             return "    return table_function_error(%s);\n" % (err_msg,)
 
-    cpp_args, _ = format_function_args(input_types, output_types, uses_manager, use_generic_arg_name=False)
+    cpp_args, _ = format_function_args(input_types,
+                                       output_types,
+                                       uses_manager,
+                                       use_generic_arg_name=False,
+                                       emit_output_args=False)
 
     if uses_manager:
         fn = "EXTENSION_NOINLINE int32_t\n"

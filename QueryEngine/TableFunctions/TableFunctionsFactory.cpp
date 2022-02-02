@@ -217,6 +217,11 @@ std::pair<int32_t, int32_t> TableFunction::getInputID(const size_t idx) const {
 
   const std::string& input_id = annot->second;
 
+  if (input_id == "args<-1>") {
+    // empty input id! -1 seems to be the magic number used in RelAlgExecutor.cpp
+    return {-1, -1};
+  }
+
   size_t comma = input_id.find(",");
   int32_t gt = input_id.size() - 1;
   int32_t lo = std::stoi(input_id.substr(PREFIX_LENGTH, comma - 1));

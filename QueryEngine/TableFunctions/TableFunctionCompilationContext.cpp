@@ -550,11 +550,13 @@ void TableFunctionCompilationContext::generateEntryPoint(
              output_row_count_ptr)});
   }
 
-  for (auto& col : output_col_args) {
-    func_args.push_back((pass_column_by_value
-                             ? cgen_state->ir_builder_.CreateLoad(
-                                   col->getType()->getPointerElementType(), col)
-                             : col));
+  if (!emit_only_preflight_fn) {
+    for (auto& col : output_col_args) {
+      func_args.push_back((pass_column_by_value
+                               ? cgen_state->ir_builder_.CreateLoad(
+                                     col->getType()->getPointerElementType(), col)
+                               : col));
+    }
   }
 
   generateTableFunctionCall(

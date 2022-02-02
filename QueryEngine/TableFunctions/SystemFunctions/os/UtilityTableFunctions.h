@@ -47,7 +47,10 @@ int32_t generate_series__cpu_2(TableFunctionManager& mgr,
 
 // clang-format off
 /*
-  UDTF: generate_random_strings__cpu_(TableFunctionManager, int64_t num_strings, int64_t string_length) -> Column<int64_t> id, Column<TextEncodingDict> rand_str | input_id=args<>
+  UDTF: generate_random_strings__cpu_(TableFunctionManager,
+                                      int64_t num_strings | require="num_strings >= 0",
+                                      int64_t string_length | require="string_length > 0") ->
+                                    Column<int64_t> id, Column<TextEncodingDict> rand_str | input_id=args<>
 */
 // clang-format on
 
