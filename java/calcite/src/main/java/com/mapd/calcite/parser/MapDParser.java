@@ -154,6 +154,7 @@ public final class MapDParser {
   private int callCount = 0;
   private final int mapdPort;
   private MapDUser mapdUser;
+  private String schemaJson;
   SqlNode sqlNode_;
   private SockTransportProperties sock_transport_properties = null;
 
@@ -167,6 +168,7 @@ public final class MapDParser {
     this.mapDSqlOperatorTable = mapDSqlOperatorTable;
     this.mapdPort = mapdPort;
     this.sock_transport_properties = skT;
+    this.schemaJson = "";
   }
 
   public void clearMemo() {
@@ -312,8 +314,13 @@ public final class MapDParser {
 
     // create the default schema
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
-    final MapDSchema defaultSchema =
-            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+    final MapDSchema defaultSchema = new MapDSchema(dataDir,
+            this,
+            mapdPort,
+            mapdUser,
+            sock_transport_properties,
+            null,
+            schemaJson);
     final SchemaPlus defaultSchemaPlus = rootSchema.add(mapdUser.getDB(), defaultSchema);
 
     // add the other potential schemas
@@ -371,6 +378,10 @@ public final class MapDParser {
     this.mapdUser = mapdUser;
   }
 
+  public void setSchema(String schemaJson) {
+    this.schemaJson = schemaJson;
+  }
+
   public Pair<String, SqlIdentifierCapturer> process(
           String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
@@ -383,8 +394,13 @@ public final class MapDParser {
 
   public String optimizeRAQuery(String query, final MapDParserOptions parserOptions)
           throws IOException {
-    MapDSchema schema =
-            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+    MapDSchema schema = new MapDSchema(dataDir,
+            this,
+            mapdPort,
+            mapdUser,
+            sock_transport_properties,
+            null,
+            schemaJson);
     MapDPlanner planner = getPlanner(true);
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
@@ -437,8 +453,13 @@ public final class MapDParser {
 
   public HashSet<ImmutableList<String>> resolveSelectIdentifiers(
           SqlIdentifierCapturer capturer) {
-    MapDSchema schema =
-            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+    MapDSchema schema = new MapDSchema(dataDir,
+            this,
+            mapdPort,
+            mapdUser,
+            sock_transport_properties,
+            null,
+            schemaJson);
     HashSet<ImmutableList<String>> resolved = new HashSet<ImmutableList<String>>();
 
     for (ImmutableList<String> names : capturer.selects) {
@@ -828,8 +849,13 @@ public final class MapDParser {
     } else {
       // check to see if a view is involved in the query
       boolean foundView = false;
-      MapDSchema schema = new MapDSchema(
-              dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+      MapDSchema schema = new MapDSchema(dataDir,
+              this,
+              mapdPort,
+              mapdUser,
+              sock_transport_properties,
+              null,
+              schemaJson);
       SqlIdentifierCapturer capturer = captureIdentifiers(sqlNode);
       for (ImmutableList<String> names : capturer.selects) {
         MapDTable table = (MapDTable) schema.getTable(names.get(0));

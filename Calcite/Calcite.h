@@ -78,6 +78,15 @@ class Calcite final {
                       const bool is_view_optimize,
                       const bool check_privileges,
                       const std::string& calcite_session_id = "");
+  TPlanResult process(const std::string& user,
+                      const std::string& db_name,
+                      const std::string& sql_string,
+                      const std::string& schema_json = "",
+                      const std::string& session_id = "",
+                      const std::vector<TFilterPushDownInfo>& filter_push_down_info = {},
+                      const bool legacy_syntax = false,
+                      const bool is_explain = false,
+                      const bool is_view_optimize = false);
   void checkAccessedObjectsPrivileges(query_state::QueryStateProxy query_state_prox,
                                       TPlanResult plan) const;
   std::vector<TCompletionHint> getCompletionHints(
@@ -96,6 +105,8 @@ class Calcite final {
                                     bool isruntime = true);
   std::string const getInternalSessionProxyUserName() { return kCalciteUserName; }
   std::string const getInternalSessionProxyPassword() { return kCalciteUserPassword; }
+
+  void setSchema(const std::string schema_json);
 
  private:
   void init(const int db_port,

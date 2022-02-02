@@ -17,8 +17,10 @@
 #ifndef TEST_HELPERS_H_
 #define TEST_HELPERS_H_
 
-#include "../QueryEngine/TargetValue.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/ArrowResultSet.h"
+#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/TargetValue.h"
 
 #include "LeafHostInfo.h"
 
@@ -355,6 +357,19 @@ void compare_arrow_table(std::shared_ptr<arrow::Table> at,
                          const std::vector<Ts>&... expected) {
   ASSERT_EQ(at->columns().size(), sizeof...(Ts));
   compare_arrow_table_impl(at, 0, expected...);
+}
+
+template <typename... Ts>
+void compare_res_data(const ExecutionResult& res, const std::vector<Ts>&... expected) {
+  std::vector<std::string> col_names;
+  for (auto& target : res.getTargetsMeta()) {
+    col_names.push_back(target.get_resname());
+  }
+  auto converter =
+      std::make_unique<ArrowResultSetConverter>(res.getDataPtr(), col_names, -1);
+  auto at = converter->convertToArrowTable();
+
+  compare_arrow_table(at, expected...);
 }
 
 }  // namespace TestHelpers

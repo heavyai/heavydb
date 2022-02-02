@@ -12,8 +12,13 @@
  * limitations under the License.
  */
 
+#include "QueryEngine/ArrowResultSet.h"
+#include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
+#include "gen-cpp/CalciteServer.h"
+
+#include "SchemaJson.h"
 #include "TestDataProvider.h"
 #include "TestHelpers.h"
 #include "TestRelAlgDagBuilder.h"
@@ -26,6 +31,8 @@ constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 constexpr int TEST1_TABLE_ID = 1;
 constexpr int TEST2_TABLE_ID = 2;
 constexpr int TEST_AGG_TABLE_ID = 3;
+
+constexpr int CALCITE_PORT = 3278;
 
 using TestHelpers::compare_res_data;
 using TestHelpers::inline_null_value;
@@ -123,7 +130,7 @@ class TestDataProvider : public TestHelpers::TestDataProvider {
   ~TestDataProvider() override = default;
 };
 
-class NoCatalogRelAlgTest : public ::testing::Test {
+class NoCatalogSqlTest : public ::testing::Test {
  protected:
   static void SetUpTestSuite() {
     schema_provider_ = std::make_shared<TestSchemaProvider>();
@@ -141,16 +148,28 @@ class NoCatalogRelAlgTest : public ::testing::Test {
                                            system_parameters.max_gpu_slab_size,
                                            "",
                                            "");
+
+    init_calcite("");
   }
 
-  static void TearDownTestSuite() {}
-
-  ExecutionResult runRelAlgQuery(const std::string& ra) {
-    return runRelAlgQuery(
-        std::make_unique<RelAlgDagBuilder>(ra, TEST_DB_ID, schema_provider_, nullptr));
+  static void init_calcite(const std::string& udf_filename) {
+    calcite_ =
+        std::make_shared<Calcite>(-1, CALCITE_PORT, "", 1024, 5000, true, udf_filename);
   }
 
-  ExecutionResult runRelAlgQuery(std::unique_ptr<RelAlgDag> dag) {
+  static void TearDownTestSuite() {
+    data_mgr_.reset();
+    schema_provider_.reset();
+    executor_.reset();
+    calcite_.reset();
+  }
+
+  ExecutionResult runSqlQuery(const std::string& sql) {
+    auto schema_json = schema_to_json(schema_provider_);
+    const auto query_ra =
+        calcite_->process("admin", "test_db", pg_shim(sql), schema_json).plan_result;
+    auto dag = std::make_unique<RelAlgDagBuilder>(
+        query_ra, TEST_DB_ID, schema_provider_, nullptr);
     auto ra_executor =
         RelAlgExecutor(executor_.get(), TEST_DB_ID, schema_provider_, std::move(dag));
     return ra_executor.executeRelAlgQuery(
@@ -161,25 +180,21 @@ class NoCatalogRelAlgTest : public ::testing::Test {
   static std::shared_ptr<DataMgr> data_mgr_;
   static SchemaProviderPtr schema_provider_;
   static std::shared_ptr<Executor> executor_;
+  static std::shared_ptr<Calcite> calcite_;
 };
 
-std::shared_ptr<DataMgr> NoCatalogRelAlgTest::data_mgr_;
-SchemaProviderPtr NoCatalogRelAlgTest::schema_provider_;
-std::shared_ptr<Executor> NoCatalogRelAlgTest::executor_;
+std::shared_ptr<DataMgr> NoCatalogSqlTest::data_mgr_;
+SchemaProviderPtr NoCatalogSqlTest::schema_provider_;
+std::shared_ptr<Executor> NoCatalogSqlTest::executor_;
+std::shared_ptr<Calcite> NoCatalogSqlTest::calcite_;
 
-TEST_F(NoCatalogRelAlgTest, SelectSingleColumn) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
-  dag->addProject(dag->addScan(TEST_DB_ID, "test1"), std::vector<int>({1}));
-  dag->finalize();
-  auto res = runRelAlgQuery(std::move(dag));
+TEST_F(NoCatalogSqlTest, SelectSingleColumn) {
+  auto res = runSqlQuery("SELECT col_i FROM test1;");
   compare_res_data(res, std::vector<int>({10, 20, 30, 40, 50}));
 }
 
-TEST_F(NoCatalogRelAlgTest, SelectAllColumns) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
-  dag->addProject(dag->addScan(TEST_DB_ID, "test1"), std::vector<int>({0, 1, 2, 3}));
-  dag->finalize();
-  auto res = runRelAlgQuery(std::move(dag));
+TEST_F(NoCatalogSqlTest, SelectAllColumns) {
+  auto res = runSqlQuery("SELECT * FROM test1;");
   compare_res_data(res,
                    std::vector<int64_t>({1, 2, 3, 4, 5}),
                    std::vector<int>({10, 20, 30, 40, 50}),
@@ -187,11 +202,8 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumns) {
                    std::vector<double>({10.1, 20.2, 30.3, 40.4, 50.5}));
 }
 
-TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
-  dag->addProject(dag->addScan(TEST_DB_ID, "test2"), std::vector<int>({0, 1, 2, 3}));
-  dag->finalize();
-  auto res = runRelAlgQuery(std::move(dag));
+TEST_F(NoCatalogSqlTest, SelectAllColumnsMultiFrag) {
+  auto res = runSqlQuery("SELECT * FROM test2;");
   compare_res_data(
       res,
       std::vector<int64_t>({1, 2, 3, 4, 5, 6, 7, 8, 9}),
@@ -201,41 +213,16 @@ TEST_F(NoCatalogRelAlgTest, SelectAllColumnsMultiFrag) {
           {110.1, 120.2, 130.3, 140.4, 150.5, 160.6, 170.7, 180.8, 190.9}));
 }
 
-TEST_F(NoCatalogRelAlgTest, GroupBySingleColumn) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
-  auto proj =
-      dag->addProject(dag->addScan(TEST_DB_ID, "test_agg"), std::vector<int>({0, 1}));
-  auto agg = dag->addAgg(
-      proj, 1, {{kCOUNT}, {kCOUNT, kINT, 1}, {kSUM, kBIGINT, 1}, {kAVG, kINT, 1}});
-  dag->addSort(agg, {{0, SortDirection::Ascending, NullSortedPosition::Last}});
-  dag->finalize();
-  auto res = runRelAlgQuery(std::move(dag));
+TEST_F(NoCatalogSqlTest, GroupBySingleColumn) {
+  auto res = runSqlQuery(
+      "SELECT id, COUNT(*), COUNT(val), SUM(val), AVG(val) FROM test_agg GROUP BY id "
+      "ORDER BY id;");
   compare_res_data(res,
                    std::vector<int32_t>({1, 2, 3}),
                    std::vector<int32_t>({5, 3, 2}),
                    std::vector<int32_t>({5, 2, 1}),
                    std::vector<int64_t>({250, 60, 100}),
                    std::vector<double>({50, 30, 100}));
-}
-
-TEST_F(NoCatalogRelAlgTest, InnerJoin) {
-  auto dag = std::make_unique<TestRelAlgDagBuilder>(schema_provider_);
-  auto join = dag->addEquiJoin(dag->addScan(TEST_DB_ID, "test1"),
-                               dag->addScan(TEST_DB_ID, "test2"),
-                               JoinType::INNER,
-                               0,
-                               0);
-  dag->addProject(join, std::vector<int>({0, 1, 2, 3, 6, 7, 8}));
-  dag->finalize();
-  auto res = runRelAlgQuery(std::move(dag));
-  compare_res_data(res,
-                   std::vector<int64_t>({1, 2, 3, 4, 5}),
-                   std::vector<int32_t>({10, 20, 30, 40, 50}),
-                   std::vector<float>({1.1, 2.2, 3.3, 4.4, 5.5}),
-                   std::vector<double>({10.1, 20.2, 30.3, 40.4, 50.5}),
-                   std::vector<int32_t>({110, 120, 130, 140, 150}),
-                   std::vector<float>({101.1, 102.2, 103.3, 104.4, 105.5}),
-                   std::vector<double>({110.1, 120.2, 130.3, 140.4, 150.5}));
 }
 
 int main(int argc, char** argv) {

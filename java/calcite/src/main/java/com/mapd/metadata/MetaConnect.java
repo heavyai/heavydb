@@ -73,6 +73,7 @@ public class MetaConnect {
   private final int mapdPort;
   private Connection catConn;
   private final MapDParser parser;
+  private final String schemaJson;
 
   private static final int KBOOLEAN = 1;
   private static final int KCHAR = 2;
@@ -108,7 +109,8 @@ public class MetaConnect {
           MapDUser currentMapDUser,
           MapDParser parser,
           SockTransportProperties skT,
-          String db) {
+          String db,
+          String schemaJson) {
     this.dataDir = dataDir;
     if (db != null) {
       this.default_db = db;
@@ -123,6 +125,7 @@ public class MetaConnect {
     this.mapdPort = mapdPort;
     this.parser = parser;
     this.sock_transport_properties = skT;
+    this.schemaJson = schemaJson;
 
     // check to see if we have a populated DATABASE_TO_TABLES structure
     // first time in we need to make sure this gets populated
@@ -139,7 +142,7 @@ public class MetaConnect {
           MapDUser currentMapDUser,
           MapDParser parser,
           SockTransportProperties skT) {
-    this(mapdPort, dataDir, currentMapDUser, parser, skT, null);
+    this(mapdPort, dataDir, currentMapDUser, parser, skT, null, null);
   }
 
   public List<String> getDatabases() {
@@ -224,10 +227,16 @@ public class MetaConnect {
     }
 
     if (mapdPort == -1) {
-      // use sql
-      connectToDBCatalog();
-      Set<String> ts = getTables_SQL();
-      disconnectFromCatalog();
+      // Ignore database if schema is provided via JSON string.
+      Set<String> ts;
+      if (schemaJson != null && !schemaJson.isEmpty()) {
+        ts = getTables_JSON();
+      } else {
+        // use sql
+        connectToDBCatalog();
+        ts = getTables_SQL();
+        disconnectFromCatalog();
+      }
       DATABASE_TO_TABLES.put(default_db.toUpperCase(), ts);
       MAPDLOGGER.debug(
               "Metaconnect DB getTables " + default_db + " tables " + ts + " from catDB");
@@ -312,15 +321,7 @@ public class MetaConnect {
         return tableSet;
       }
 
-      Gson gson = new Gson();
-      JsonObject fileParentObject = gson.fromJson(tempTablesJsonStr, JsonObject.class);
-      for (Entry<String, JsonElement> member : fileParentObject.entrySet()) {
-        String tableName = member.getKey();
-        tableSet.add(tableName);
-        /*--*/
-        MAPDLOGGER.debug("Temp table object name = " + tableName);
-      }
-
+      addTables_JSON(tempTablesJsonStr, tableSet);
     } catch (Exception e) {
       String err = "error trying to load temporary tables from json file, error was "
               + e.getMessage();
@@ -331,12 +332,42 @@ public class MetaConnect {
     return tableSet;
   }
 
+  private Set<String> getTables_JSON() {
+    Set<String> tableSet = new HashSet<String>();
+    addTables_JSON(schemaJson, tableSet);
+    return tableSet;
+  }
+
+  private void addTables_JSON(String json, Set<String> tableSet) {
+    Gson gson = new Gson();
+    JsonObject fileParentObject = gson.fromJson(json, JsonObject.class);
+    for (Entry<String, JsonElement> member : fileParentObject.entrySet()) {
+      String tableName = member.getKey();
+      tableSet.add(tableName);
+      /*--*/
+      MAPDLOGGER.debug("Temp table object name = " + tableName);
+    }
+  }
+
   public TTableDetails get_table_details(String tableName) {
     if (mapdPort == -1) {
+      TTableDetails td;
       // use sql
-      connectToDBCatalog();
-      TTableDetails td = get_table_detail_SQL(tableName);
-      disconnectFromCatalog();
+      if (schemaJson != null && !schemaJson.isEmpty()) {
+        try {
+          td = get_table_detail_JSON(tableName);
+        } catch (Exception e) {
+          String err =
+                  "Table '" + tableName + "' does not exist for DB '" + default_db + "'";
+          MAPDLOGGER.error(err);
+          throw new RuntimeException(err);
+        }
+
+      } else {
+        connectToDBCatalog();
+        td = get_table_detail_SQL(tableName);
+        disconnectFromCatalog();
+      }
       return td;
     }
     // use thrift direct to local server
@@ -495,22 +526,27 @@ public class MetaConnect {
     TTableDetails td = new TTableDetails();
     td.getRow_descIterator();
 
-    // open table json file
-    final String filePath =
-            dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
-    MAPDLOGGER.debug("Opening temp table file at " + filePath);
-
     String tempTablesJsonStr;
-    try {
-      File tempTablesFile = new File(filePath);
-      FileInputStream tempTablesStream = new FileInputStream(tempTablesFile);
-      byte[] data = new byte[(int) tempTablesFile.length()];
-      tempTablesStream.read(data);
-      tempTablesStream.close();
 
-      tempTablesJsonStr = new String(data, "UTF-8");
-    } catch (java.io.FileNotFoundException e) {
-      throw new RuntimeException("Failed to read temporary tables file.");
+    if (schemaJson != null && !schemaJson.isEmpty()) {
+      tempTablesJsonStr = schemaJson;
+    } else {
+      // open table json file
+      final String filePath =
+              dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
+      MAPDLOGGER.debug("Opening temp table file at " + filePath);
+
+      try {
+        File tempTablesFile = new File(filePath);
+        FileInputStream tempTablesStream = new FileInputStream(tempTablesFile);
+        byte[] data = new byte[(int) tempTablesFile.length()];
+        tempTablesStream.read(data);
+        tempTablesStream.close();
+
+        tempTablesJsonStr = new String(data, "UTF-8");
+      } catch (java.io.FileNotFoundException e) {
+        throw new RuntimeException("Failed to read temporary tables file.");
+      }
     }
 
     Gson gson = new Gson();
@@ -596,6 +632,12 @@ public class MetaConnect {
     Statement stmt = null;
     ResultSet rs = null;
     int tableId = -1;
+
+    // Ignore database if schema is provided via JSON string.
+    if (schemaJson != null && !schemaJson.isEmpty()) {
+      return tableId;
+    }
+
     try {
       stmt = catConn.createStatement();
       rs = stmt.executeQuery(String.format(
@@ -792,13 +834,18 @@ public class MetaConnect {
       return;
     }
     if (mapdPort == -1) {
-      // use sql
-      connectToCatalog("omnisci_system_catalog"); // hardcoded sys catalog
-      Set<String> dbNames = getDatabases_SQL();
-      disconnectFromCatalog();
-      for (String dbName : dbNames) {
+      if (schemaJson != null && !schemaJson.isEmpty()) {
         Set<String> ts = new HashSet<String>();
-        DATABASE_TO_TABLES.putIfAbsent(dbName, ts);
+        DATABASE_TO_TABLES.putIfAbsent(default_db, ts);
+      } else {
+        // use sql
+        connectToCatalog("omnisci_system_catalog"); // hardcoded sys catalog
+        Set<String> dbNames = getDatabases_SQL();
+        disconnectFromCatalog();
+        for (String dbName : dbNames) {
+          Set<String> ts = new HashSet<String>();
+          DATABASE_TO_TABLES.putIfAbsent(dbName, ts);
+        }
       }
       return;
     }

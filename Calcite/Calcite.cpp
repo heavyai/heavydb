@@ -478,6 +478,57 @@ TPlanResult Calcite::process(
   return result;
 }
 
+TPlanResult Calcite::process(
+    const std::string& user,
+    const std::string& db_name,
+    const std::string& sql_string,
+    const std::string& schema_json,
+    const std::string& session_id,
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    const bool legacy_syntax,
+    const bool is_explain,
+    const bool is_view_optimize) {
+  TPlanResult ret;
+  if (server_available_) {
+    try {
+      // calcite_session_id would be an empty string when accessed by internal resources
+      // that would not access `process` through handler instance, like for eg: Unit
+      // Tests. In these cases we would use the session_id from query state.
+      auto ms = measure<>::execution([&]() {
+        auto clientP = getClient(remote_calcite_port_);
+        clientP.first->process(ret,
+                               user,
+                               session_id,
+                               db_name,
+                               sql_string,
+                               filter_push_down_info,
+                               legacy_syntax,
+                               is_explain,
+                               is_view_optimize,
+                               {},
+                               schema_json);
+        clientP.second->close();
+      });
+
+      // LOG(INFO) << ret.plan_result;
+      LOG(INFO) << "Time in Thrift "
+                << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
+                << " (ms), Time in Java Calcite server " << ret.execution_time_ms
+                << " (ms)";
+    } catch (InvalidParseRequest& e) {
+      throw std::invalid_argument(e.whyUp);
+    } catch (const std::exception& ex) {
+      LOG(FATAL)
+          << "Error occurred trying to communicate with Calcite server, the error was: '"
+          << ex.what() << "', omnisci_server restart will be required";
+      return ret;  // satisfy return-type warning
+    }
+  } else {
+    LOG(FATAL) << "Not routing to Calcite, server is not up";
+  }
+  return ret;
+}
+
 void Calcite::checkAccessedObjectsPrivileges(
     query_state::QueryStateProxy query_state_proxy,
     TPlanResult plan) const {
@@ -580,7 +631,8 @@ TPlanResult Calcite::processImpl(
                                legacy_syntax,
                                is_explain,
                                is_view_optimize,
-                               restriction);
+                               restriction,
+                               "");
         clientP.second->close();
       });
 

@@ -252,7 +252,8 @@ public class TestServer {
               false,
               false,
               false,
-              null);
+              null,
+              "");
       transport.close();
       try {
         assertEquals(algebra.plan_result, result);

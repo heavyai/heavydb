@@ -141,7 +141,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
           boolean legacySyntax,
           boolean isExplain,
           boolean isViewOptimize,
-          TRestriction restriction) throws InvalidParseRequest, TException {
+          TRestriction restriction,
+          String schemaJson) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
 
@@ -162,6 +163,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
     parser.setUser(mapDUser);
+    parser.setSchema(schemaJson);
     CURRENT_PARSER.set(parser);
 
     // need to trim the sql string as it seems it is not trimed prior to here
