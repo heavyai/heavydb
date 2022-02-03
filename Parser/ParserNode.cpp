@@ -54,6 +54,7 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/Importer.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
@@ -65,6 +66,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
@@ -3925,6 +3927,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           thread_end_idx[0] = result_rows->entryCount();
         }
 
+        RenderGroupAnalyzerMap render_group_analyzer_map;
+
         for (size_t block_start = 0; block_start < num_rows;
              block_start += rows_per_block) {
           const auto num_rows_this_itr = block_start + rows_per_block < num_rows
@@ -3949,6 +3953,10 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                           sourceDataMetaInfo.get_type_info().get_comp_param(),
                           result_rows->getRowSetMemOwner(),
                           true)
+                    : nullptr,
+                IS_GEO_POLY(targetDescriptor->columnType.get_type()) &&
+                        g_enable_assign_render_groups
+                    ? &render_group_analyzer_map
                     : nullptr};
             auto converter = factory.create(param);
             value_converters.push_back(std::move(converter));

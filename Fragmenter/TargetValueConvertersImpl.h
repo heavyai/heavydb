@@ -799,11 +799,26 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
   }
 };
 
-struct GeoPolygonValueConverter : public GeoPointValueConverter {
+struct GeoPolygonRenderGroupManager {
+ protected:
+  GeoPolygonRenderGroupManager(RenderGroupAnalyzerMap* render_group_analyzer_map,
+                               const int column_id)
+      : render_group_analyzer_{nullptr} {
+    if (render_group_analyzer_map) {
+      // NOTE: this is not thread safe
+      auto itr = render_group_analyzer_map->try_emplace(column_id).first;
+      render_group_analyzer_ = &itr->second;
+    }
+  }
+
+  import_export::RenderGroupAnalyzer* render_group_analyzer_;
+};
+
+struct GeoPolygonValueConverter : public GeoPointValueConverter,
+                                  public GeoPolygonRenderGroupManager {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  std::unique_ptr<import_export::RenderGroupAnalyzer> render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> bounds_data_;
@@ -811,8 +826,11 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
 
   GeoPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                            size_t num_rows,
-                           const ColumnDescriptor* logicalColumnDescriptor)
-      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
+                           const ColumnDescriptor* logicalColumnDescriptor,
+                           RenderGroupAnalyzerMap* render_group_analyzer_map)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor)
+      , GeoPolygonRenderGroupManager(render_group_analyzer_map,
+                                     logicalColumnDescriptor->columnId) {
     ring_sizes_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 2);
     CHECK(ring_sizes_column_descriptor_);
@@ -825,10 +843,6 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
 
     if (num_rows) {
       allocateColumnarData(num_rows);
-    }
-
-    if (g_enable_assign_render_groups) {
-      render_group_analyzer_ = std::make_unique<import_export::RenderGroupAnalyzer>();
     }
   }
 
@@ -897,12 +911,12 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
   }
 };
 
-struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
+struct GeoMultiPolygonValueConverter : public GeoPointValueConverter,
+                                       public GeoPolygonRenderGroupManager {
   const ColumnDescriptor* ring_sizes_column_descriptor_;
   const ColumnDescriptor* ring_sizes_solumn_descriptor_;
   const ColumnDescriptor* bounds_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
-  std::unique_ptr<import_export::RenderGroupAnalyzer> render_group_analyzer_;
 
   std::unique_ptr<std::vector<ArrayDatum>> ring_sizes_data_;
   std::unique_ptr<std::vector<ArrayDatum>> poly_rings_data_;
@@ -911,8 +925,11 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
 
   GeoMultiPolygonValueConverter(const Catalog_Namespace::Catalog& cat,
                                 size_t num_rows,
-                                const ColumnDescriptor* logicalColumnDescriptor)
-      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor) {
+                                const ColumnDescriptor* logicalColumnDescriptor,
+                                RenderGroupAnalyzerMap* render_group_analyzer_map)
+      : GeoPointValueConverter(cat, num_rows, logicalColumnDescriptor)
+      , GeoPolygonRenderGroupManager(render_group_analyzer_map,
+                                     logicalColumnDescriptor->columnId) {
     ring_sizes_column_descriptor_ = cat.getMetadataForColumn(
         column_descriptor_->tableId, column_descriptor_->columnId + 2);
     CHECK(ring_sizes_column_descriptor_);
@@ -928,10 +945,6 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
 
     if (num_rows) {
       allocateColumnarData(num_rows);
-    }
-
-    if (g_enable_assign_render_groups) {
-      render_group_analyzer_ = std::make_unique<import_export::RenderGroupAnalyzer>();
     }
   }
 

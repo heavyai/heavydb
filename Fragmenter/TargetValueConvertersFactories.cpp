@@ -239,10 +239,21 @@ struct ArraysConverterFactory {
   }
 };
 
-template <typename CONVERTER>
+template <typename CONVERTER, class Enable = void>
 struct GeoConverterFactory {
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
     return std::make_unique<CONVERTER>(param.cat, param.num_rows, param.target);
+  }
+};
+
+template <typename CONVERTER>
+struct GeoConverterFactory<
+    CONVERTER,
+    typename std::enable_if_t<std::is_same_v<GeoPolygonValueConverter, CONVERTER> ||
+                              std::is_same_v<GeoMultiPolygonValueConverter, CONVERTER>>> {
+  std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
+    return std::make_unique<CONVERTER>(
+        param.cat, param.num_rows, param.target, param.render_group_analyzer_map);
   }
 };
 
