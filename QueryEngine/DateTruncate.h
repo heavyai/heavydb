@@ -71,7 +71,7 @@ static_assert(dtMICROSECOND + 1 == dtNANOSECOND, "Please keep these consecutive.
 
 int64_t DateTruncate(DatetruncField field, const int64_t timeval);
 
-extern "C" RUNTIME_EXPORT DEVICE int64_t
-DateTruncateHighPrecisionToDate(const int64_t timeval, const int64_t scale);
+// for usage in compiled and linked modules in the binary
+int64_t truncate_high_precision_timestamp_to_date(const int64_t timeval, const int64_t scale);
 
 #endif  // QUERYENGINE_DATETRUNCATE_H

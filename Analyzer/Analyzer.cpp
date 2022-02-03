@@ -1211,7 +1211,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
     constval.bigintval =
         type_info.is_high_precision_timestamp()
-            ? DateTruncateHighPrecisionToDate(
+            ? truncate_high_precision_timestamp_to_date(
                   constval.bigintval,
                   DateTimeUtils::get_timestamp_precision_scale(type_info.get_dimension()))
             : DateTruncate(dtDAY, constval.bigintval);
