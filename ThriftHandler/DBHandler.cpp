@@ -2427,12 +2427,15 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
                                        const std::string& database_name) {
   try {
     auto session_info = stdlog.getSessionInfo();
-    auto& cat = (database_name.empty())
-                    ? session_info->getCatalog()
-                    : *SysCatalog::instance().getCatalog(database_name);
+    auto cat = (database_name.empty())
+                   ? &session_info->getCatalog()
+                   : SysCatalog::instance().getCatalog(database_name).get();
+    if (!cat) {
+      THROW_MAPD_EXCEPTION("Database " + database_name + " does not exist.");
+    }
     const auto td_with_lock =
         lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-            cat, table_name, false);
+            *cat, table_name, false);
     const auto td = td_with_lock();
     CHECK(td);
 
@@ -2458,7 +2461,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
           const auto result = validate_rel_alg(query_ra.plan_result,
                                                query_state->createQueryStateProxy());
 
-          _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
+          _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, *cat);
         } else {
           throw std::runtime_error(
               "Unable to access view " + table_name +
@@ -2475,14 +2478,14 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
       }
     } else {
       if (hasTableAccessPrivileges(td, *session_info)) {
-        const auto col_descriptors =
-            cat.getAllColumnMetadataForTable(td->tableId, get_system, true, get_physical);
-        const auto deleted_cd = cat.getDeletedColumn(td);
+        const auto col_descriptors = cat->getAllColumnMetadataForTable(
+            td->tableId, get_system, true, get_physical);
+        const auto deleted_cd = cat->getDeletedColumn(td);
         for (const auto cd : col_descriptors) {
           if (cd == deleted_cd) {
             continue;
           }
-          _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
+          _return.row_desc.push_back(populateThriftColumnType(cat, cd));
         }
       } else {
         throw std::runtime_error(
@@ -2566,6 +2569,9 @@ void DBHandler::get_tables_impl(std::vector<std::string>& table_names,
         session_info.get_currentUser(), get_tables_type);
   } else {
     auto request_cat = SysCatalog::instance().getCatalog(database_name);
+    if (!request_cat) {
+      THROW_MAPD_EXCEPTION("Database " + database_name + " does not exist.");
+    }
     table_names = request_cat->getTableNamesForUser(session_info.get_currentUser(),
                                                     get_tables_type);
   }
