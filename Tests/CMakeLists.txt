@@ -55,7 +55,6 @@ add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
 add_executable(GroupByTest GroupByTest.cpp)
 add_executable(ParallelExecutorsTest ParallelExecutorsTest.cpp)
-add_executable(MigrationMgrTest MigrationMgrTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
@@ -129,7 +128,6 @@ target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ParallelExecutorsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(MigrationMgrTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(SpecialCharsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
@@ -237,7 +235,6 @@ add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
 add_test(ParallelExecutorsTest ParallelExecutorsTest ${TEST_ARGS})
 add_test(GroupByTest GroupByTest ${TEST_ARGS})
-add_test(MigrationMgrTest MigrationMgrTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
@@ -331,7 +328,6 @@ set(TEST_PROGRAMS
   ArrayTest
   GroupByTest
   ParallelExecutorsTest
-  MigrationMgrTest
   TopKTest
   TokenCompletionHintsTest
   OmniSQLCommandTest
