@@ -327,7 +327,8 @@ std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImport
     }
   }
 
-  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
+  // this code path is deprecated and does not need a RenderGroupAnalyzerMap
+  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get(), nullptr);
 
   std::optional<RowGroupInterval> next_row_group;
   {

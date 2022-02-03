@@ -41,7 +41,8 @@ class LazyParquetChunkLoader {
   const static int batch_reader_num_elements = 4096;
 
   LazyParquetChunkLoader(std::shared_ptr<arrow::fs::FileSystem> file_system,
-                         FileReaderMap* file_reader_cache);
+                         FileReaderMap* file_reader_cache,
+                         const RenderGroupAnalyzerMap* render_group_analyzer_map);
 
   /**
    * Load a number of row groups of a column in a parquet file into a chunk
@@ -130,5 +131,7 @@ class LazyParquetChunkLoader {
       const ColumnDescriptor* column_descriptor,
       std::list<Chunk_NS::Chunk>& chunks,
       StringDictionary* string_dictionary);
+
+  const RenderGroupAnalyzerMap* render_group_analyzer_map_;
 };
 }  // namespace foreign_storage

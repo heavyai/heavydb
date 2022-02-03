@@ -25,6 +25,7 @@
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/StringNoneEncoder.h"
 #include "ImportExport/Importer.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
 
 namespace foreign_storage {
 
@@ -40,9 +41,11 @@ class GeospatialEncoder {
  public:
   virtual ~GeospatialEncoder() = default;
 
-  GeospatialEncoder() {}
+  GeospatialEncoder(const RenderGroupAnalyzerMap* render_group_analyzer_map)
+      : render_group_analyzer_map_{render_group_analyzer_map} {}
 
-  GeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks)
+  GeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks,
+                    const RenderGroupAnalyzerMap* render_group_analyzer_map)
       : geo_column_descriptor_(chunks.begin()->getColumnDesc())
       , base_column_encoder_(nullptr)
       , coords_column_encoder_(nullptr)
@@ -55,7 +58,8 @@ class GeospatialEncoder {
       , bounds_column_metadata_(nullptr)
       , ring_sizes_column_metadata_(nullptr)
       , poly_rings_column_metadata_(nullptr)
-      , render_group_column_metadata_(nullptr) {
+      , render_group_column_metadata_(nullptr)
+      , render_group_analyzer_map_{render_group_analyzer_map} {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
     validateChunksSizing(chunks);
     const auto geo_column_type = geo_column_descriptor_->columnType.get_type();
@@ -86,7 +90,8 @@ class GeospatialEncoder {
   }
 
   GeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks,
-                    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata)
+                    std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
+                    const RenderGroupAnalyzerMap* render_group_analyzer_map)
       : geo_column_descriptor_(chunks.begin()->getColumnDesc())
       , base_column_encoder_(nullptr)
       , coords_column_encoder_(nullptr)
@@ -99,7 +104,8 @@ class GeospatialEncoder {
       , bounds_column_metadata_(nullptr)
       , ring_sizes_column_metadata_(nullptr)
       , poly_rings_column_metadata_(nullptr)
-      , render_group_column_metadata_(nullptr) {
+      , render_group_column_metadata_(nullptr)
+      , render_group_analyzer_map_{render_group_analyzer_map} {
     CHECK(geo_column_descriptor_->columnType.is_geometry());
 
     validateChunksSizing(chunks);
@@ -156,13 +162,13 @@ class GeospatialEncoder {
 
  protected:
   void appendBaseAndRenderGroupDataAndUpdateMetadata(const int64_t row_count) {
-    // add nulls to base column & zeros to render group (if applicable)
-    render_group_values_.resize(row_count, 0);
     base_values_.resize(row_count);
     *base_column_metadata_ =
         *base_column_encoder_->appendData(&base_values_, 0, row_count);
     if (hasRenderGroupColumn()) {
-      auto data_ptr = reinterpret_cast<int8_t*>(render_group_values_.data());
+      CHECK_EQ(render_group_value_buffer_.size(), static_cast<size_t>(row_count))
+          << "Render Group Values not generated correctly!";
+      auto data_ptr = reinterpret_cast<int8_t*>(render_group_value_buffer_.data());
       *render_group_column_metadata_ = *render_group_column_encoder_->appendData(
           data_ptr, row_count, render_group_column_descriptor_->columnType);
     }
@@ -272,6 +278,24 @@ class GeospatialEncoder {
       poly_rings_datum_buffer_.emplace_back(
           encode_as_array_datum(poly_rings_parse_buffer_));
     }
+
+    if (hasRenderGroupColumn()) {
+      if (IS_GEO_POLY(import_ti.get_type()) && render_group_analyzer_map_ &&
+          render_group_analyzer_map_->size()) {
+        CHECK_EQ(bounds_parse_buffer_.size(), 4u);
+        auto const itr =
+            render_group_analyzer_map_->find(geo_column_descriptor_->columnId);
+        int render_group{0};
+        if (itr != render_group_analyzer_map_->end()) {
+          auto& render_group_analyzer = *itr->second;
+          render_group = render_group_analyzer.insertBoundsAndReturnRenderGroup(
+              bounds_parse_buffer_);
+        }
+        render_group_value_buffer_.emplace_back(render_group);
+      } else {
+        render_group_value_buffer_.emplace_back(0);
+      }
+    }
   }
 
   void processNullGeoElement() {
@@ -306,6 +330,10 @@ class GeospatialEncoder {
           import_export::ImporterUtils::composeNullArray(
               poly_rings_column_descriptor_->columnType));
     }
+    if (hasRenderGroupColumn()) {
+      static constexpr int32_t kNullRenderGroupValue = -1;
+      render_group_value_buffer_.emplace_back(kNullRenderGroupValue);
+    }
   }
 
   void clearParseBuffers() {
@@ -320,6 +348,7 @@ class GeospatialEncoder {
     bounds_datum_buffer_.clear();
     ring_sizes_datum_buffer_.clear();
     poly_rings_datum_buffer_.clear();
+    render_group_value_buffer_.clear();
   }
 
   enum GeoColumnType { COORDS, BOUNDS, RING_SIZES, POLY_RINGS, RENDER_GROUP };
@@ -475,7 +504,6 @@ class GeospatialEncoder {
   const ColumnDescriptor* poly_rings_column_descriptor_;
   const ColumnDescriptor* render_group_column_descriptor_;
 
-  std::vector<int32_t> render_group_values_;
   std::vector<std::string> base_values_;
 
   // Used repeatedly in parsing geo types, declared as members to prevent
@@ -490,6 +518,9 @@ class GeospatialEncoder {
   std::vector<ArrayDatum> bounds_datum_buffer_;
   std::vector<ArrayDatum> ring_sizes_datum_buffer_;
   std::vector<ArrayDatum> poly_rings_datum_buffer_;
+  std::vector<int32_t> render_group_value_buffer_;
+
+  const RenderGroupAnalyzerMap* render_group_analyzer_map_;
 };
 
 }  // namespace foreign_storage

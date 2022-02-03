@@ -30,6 +30,8 @@
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
+#include "Shared/enable_assign_render_groups.h"
+#include "Shared/scope.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -4059,6 +4061,13 @@ TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
 }
 
 TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
+  // enable for these tests
+  bool enable_assign_render_groups = g_enable_assign_render_groups;
+  ScopeGuard restore = [&]() {
+    g_enable_assign_render_groups = enable_assign_render_groups;
+  };
+  g_enable_assign_render_groups = true;
+
   const auto& query = getCreateForeignTableQuery(
       "( index INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON )",
       "geo_types",
@@ -4081,7 +4090,8 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int32_t>(9, 12, 5, 3, 4, true);
   test_chunk_metadata_map[{0, 10}] =
       createChunkMetadata<double>(10, 160, 5, 0.000000, 7.000000, true);
-  test_chunk_metadata_map[{0, 11}] = createChunkMetadata<int32_t>(11, 20, 5, 0, 0, true);
+  test_chunk_metadata_map[{0, 11}] =
+      createChunkMetadata<int32_t>(11, 20, 5, -1, 0, true);  // adjust for RGs
   test_chunk_metadata_map[{0, 12}] = createChunkMetadata(12, 0, 5, true);
   test_chunk_metadata_map[{0, 13}] =
       createChunkMetadata<int8_t>(13, 288, 5, -16, 64, true);
@@ -4089,7 +4099,8 @@ TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
   test_chunk_metadata_map[{0, 15}] = createChunkMetadata<int32_t>(15, 24, 5, 1, 1, true);
   test_chunk_metadata_map[{0, 16}] =
       createChunkMetadata<double>(16, 160, 5, 0.000000, 3.000000, true);
-  test_chunk_metadata_map[{0, 17}] = createChunkMetadata<int32_t>(17, 20, 5, 0, 0, true);
+  test_chunk_metadata_map[{0, 17}] =
+      createChunkMetadata<int32_t>(17, 20, 5, -1, 0, true);  // adjust for RGs
   assertExpectedChunkMetadata(test_chunk_metadata_map);
 }
 

@@ -25,6 +25,7 @@
 #include "ForeignStorageException.h"
 #include "FsiChunkUtils.h"
 #include "FsiJsonUtils.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
 #include "Shared/file_path_util.h"
@@ -175,8 +176,10 @@ void ParquetDataWrapper::initializeChunkBuffers(
       auto encoder = buffer->getEncoder();
       encoder->resetChunkStats(metadata->chunkStats);
       encoder->setNumElems(metadata->numElements);
-      if ((column->columnType.is_string() || column->columnType.is_geometry()) &&
-          column->columnType.get_compression() == kENCODING_NONE) {
+      if ((column->columnType.is_string() &&
+           column->columnType.get_compression() == kENCODING_NONE) ||
+          column->columnType.is_geometry()) {
+        // non-dictionary string or geometry WKT string
         auto index_buffer = chunk.getIndexBuf();
         index_buffer->reserve(sizeof(StringOffsetT) * (metadata->numElements + 1));
       } else if (!column->columnType.is_fixlen_array() && column->columnType.is_array()) {
@@ -317,7 +320,7 @@ std::vector<std::string> ParquetDataWrapper::getAllFilePaths() {
 }
 
 void ParquetDataWrapper::metadataScanFiles(const std::vector<std::string>& file_paths) {
-  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
+  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get(), nullptr);
   auto row_group_metadata = chunk_loader.metadataScan(file_paths, *schema_);
   auto column_interval =
       Interval<ColumnType>{schema_->getLogicalAndPhysicalColumns().front()->columnId,
@@ -430,7 +433,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     chunks.emplace_back(chunk);
   }
 
-  LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get());
+  LazyParquetChunkLoader chunk_loader(
+      file_system_, file_reader_cache_.get(), &render_group_analyzer_map_);
   auto metadata = chunk_loader.loadChunk(
       row_group_intervals, parquet_column_index, chunks, string_dictionary);
 
@@ -571,6 +575,29 @@ void ParquetDataWrapper::restoreDataWrapperInternals(
 
 bool ParquetDataWrapper::isRestored() const {
   return is_restored_;
+}
+
+// declared in three derived classes to avoid
+// polluting ForeignDataWrapper virtual base
+// @TODO refactor to lower class if needed
+void ParquetDataWrapper::createRenderGroupAnalyzers() {
+  // must have these
+  CHECK_GE(db_id_, 0);
+  CHECK(foreign_table_);
+
+  // populate map for all poly columns in this table
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
+  CHECK(catalog);
+  auto columns =
+      catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
+  for (auto const& column : columns) {
+    if (IS_GEO_POLY(column->columnType.get_type())) {
+      CHECK(render_group_analyzer_map_
+                .try_emplace(column->columnId,
+                             std::make_unique<import_export::RenderGroupAnalyzer>())
+                .second);
+    }
+  }
 }
 
 }  // namespace foreign_storage

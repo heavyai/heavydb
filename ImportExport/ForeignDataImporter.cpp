@@ -20,6 +20,7 @@
 #include "DataMgr/ForeignStorage/ParquetImporter.h"
 #include "Importer.h"
 #include "Parser/ParserNode.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "UserMapping.h"
@@ -126,6 +127,14 @@ import_export::ImportStatus import_foreign_data(
     max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);
   }
   CHECK_GE(max_fragment_id, 0);
+
+  if (g_enable_assign_render_groups) {
+    // if render group assignment is globally enabled,
+    // tell the wrapper to create any RenderGroupAnalyzers it
+    // may need for any poly columns in the table, if that
+    // wrapper type supports it
+    data_wrapper->createRenderGroupAnalyzers();
+  }
 
   Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector);
   import_export::ImportStatus import_status;  // manually update

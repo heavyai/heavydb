@@ -222,7 +222,8 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
                                is_null,
                                request.first_row_index,
                                row_count,
-                               request.getCatalog());
+                               request.getCatalog(),
+                               request.render_group_analyzer_map);
               // Skip remaining physical columns
               for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
                 ++cd_it;

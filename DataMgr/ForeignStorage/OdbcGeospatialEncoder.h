@@ -23,8 +23,9 @@ namespace foreign_storage {
 class OdbcGeospatialEncoder : public GeospatialEncoder {
  public:
   OdbcGeospatialEncoder(std::list<Chunk_NS::Chunk>& chunks,
-                        std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata)
-      : GeospatialEncoder(chunks, chunk_metadata) {}
+                        std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
+                        const RenderGroupAnalyzerMap* render_group_analyzer_map)
+      : GeospatialEncoder(chunks, chunk_metadata, render_group_analyzer_map) {}
 
   void appendData(const std::vector<std::string>& geo_strings) {
     clearDatumBuffers();

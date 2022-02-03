@@ -57,6 +57,8 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
     return INTRA_FRAGMENT;
   }
 
+  void createRenderGroupAnalyzers() override;
+
  protected:
   virtual const TextFileBufferParser& getFileBufferParser() const = 0;
 
@@ -102,5 +104,10 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
 
   // Force cache to be disabled
   const bool disable_cache_;
+
+  // declared in three derived classes to avoid
+  // polluting ForeignDataWrapper virtual base
+  // @TODO refactor to lower class if needed
+  RenderGroupAnalyzerMap render_group_analyzer_map_;
 };
 }  // namespace foreign_storage

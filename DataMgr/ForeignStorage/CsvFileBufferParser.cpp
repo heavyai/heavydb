@@ -198,7 +198,8 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
                              is_null,
                              request.first_row_index,
                              row_index_plus_one,
-                             request.getCatalog());
+                             request.getCatalog(),
+                             request.render_group_analyzer_map);
           } else {
             // update import/col idx according to types
             if (!is_null && cd->columnType == kPOINT &&

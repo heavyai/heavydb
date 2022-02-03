@@ -20,8 +20,10 @@
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 
 #include "ImportExport/Importer.h"
+#include "ImportExport/RenderGroupAnalyzer.h"
 
 namespace foreign_storage {
+
 struct ParseBufferRequest {
   ParseBufferRequest(const ParseBufferRequest& request) = delete;
   ParseBufferRequest(ParseBufferRequest&& request) = default;
@@ -30,7 +32,8 @@ struct ParseBufferRequest {
                      int db_id,
                      const ForeignTable* foreign_table,
                      const std::set<int> column_filter_set,
-                     const std::string& full_path);
+                     const std::string& full_path,
+                     const RenderGroupAnalyzerMap* render_group_analyzer_map);
 
   inline std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const {
     auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
@@ -64,6 +67,7 @@ struct ParseBufferRequest {
   const int db_id;
   std::unique_ptr<ForeignTableSchema> foreign_table_schema;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  const RenderGroupAnalyzerMap* render_group_analyzer_map;
 
   // These are set during parsing.
   size_t buffer_row_count;
@@ -137,7 +141,8 @@ class TextFileBufferParser {
       bool is_null,
       size_t first_row_index,
       size_t row_index_plus_one,
-      std::shared_ptr<Catalog_Namespace::Catalog> catalog);
+      std::shared_ptr<Catalog_Namespace::Catalog> catalog,
+      const RenderGroupAnalyzerMap* render_group_analyzer_map);
 
   static bool isNullDatum(const std::string_view datum,
                           const ColumnDescriptor* column,

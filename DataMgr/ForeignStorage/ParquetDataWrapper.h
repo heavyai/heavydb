@@ -59,6 +59,8 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
     return INTRA_FRAGMENT;
   }
 
+  void createRenderGroupAnalyzers() override;
+
  private:
   std::list<const ColumnDescriptor*> getColumnsToInitialize(
       const Interval<ColumnType>& column_interval);
@@ -99,5 +101,10 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   std::unique_ptr<FileReaderMap> file_reader_cache_;
+
+  // declared in three derived classes to avoid
+  // polluting ForeignDataWrapper virtual base
+  // @TODO refactor to lower class if needed
+  RenderGroupAnalyzerMap render_group_analyzer_map_;
 };
 }  // namespace foreign_storage
