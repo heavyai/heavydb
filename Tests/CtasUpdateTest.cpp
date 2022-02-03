@@ -2494,31 +2494,6 @@ TEST_F(Select, CtasItasNullGeoPoint) {
   }
 }
 
-TEST_F(Select, CtasFixedLenBooleanArrayCrash) {
-  auto drop_table = []() { sql("DROP TABLE IF EXISTS CtasFBoolArrayCrash;"); };
-  auto prepare_table = []() {
-    sql("CREATE TABLE CtasFBoolArrayCrash (src boolean[3], dst boolean[3]);");
-    sql("INSERT INTO CtasFBoolArrayCrash VALUES (null, {\'true\', \'false\', "
-        "\'true\'});");
-    sql("INSERT INTO CtasFBoolArrayCrash VALUES ({\'true\', \'false\', \'true\'}, "
-        "{\'false\', \'true\', \'false\'});");
-    sql("UPDATE CtasFBoolArrayCrash set dst = src;");
-  };
-  drop_table();
-
-  prepare_table();
-  sql("SELECT src FROM CtasFBoolArrayCrash;");
-  drop_table();
-
-  prepare_table();
-  sql("SELECT dst FROM CtasFBoolArrayCrash;");
-  drop_table();
-
-  prepare_table();
-  sql("UPDATE CtasFBoolArrayCrash set dst = src;");
-  drop_table();
-}
-
 class Errors : public DBHandlerTestFixture {
  public:
   void SetUp() override {

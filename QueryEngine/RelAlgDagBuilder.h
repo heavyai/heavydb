@@ -30,7 +30,6 @@
 #include <boost/core/noncopyable.hpp>
 #include <boost/functional/hash.hpp>
 
-#include "Catalog/Catalog.h"
 #include "Descriptors/InputDescriptors.h"
 #include "QueryEngine/QueryHint.h"
 #include "QueryEngine/Rendering/RenderInfo.h"
@@ -2248,11 +2247,11 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
   /**
    * Constructs a RelAlg DAG from a JSON representation.
    * @param query_ra A JSON string representation of an RA tree from Calcite.
-   * @param cat DB catalog for the current user.
+   * @param db_id ID of the current database.
    * @param render_opts Additional build options for render queries.
    */
   RelAlgDagBuilder(const std::string& query_ra,
-                   const Catalog_Namespace::Catalog* cat,
+                   int db_id,
                    SchemaProviderPtr schema_provider,
                    const RenderInfo* render_info);
 
@@ -2262,24 +2261,18 @@ class RelAlgDagBuilder : public RelAlgDag, public boost::noncopyable {
    * @param root_dag_builder The root DAG builder. The root stores pointers to all
    * subqueries.
    * @param query_ast The current JSON node to build a DAG for.
-   * @param cat DB catalog for the current user.
+   * @param db_id ID of the current database.
    * @param render_opts Additional build options for render queries.
    */
   RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                    const rapidjson::Value& query_ast,
-                   const Catalog_Namespace::Catalog* cat,
-                   SchemaProviderPtr schema_provider,
-                   const RenderInfo* render_opts);
-
-  RelAlgDagBuilder(const std::string& query_ra,
                    int db_id,
                    SchemaProviderPtr schema_provider,
-                   const RenderInfo* render_info);
+                   const RenderInfo* render_opts);
 
  private:
   void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
 
-  const Catalog_Namespace::Catalog* cat_;
   int db_id_;
   SchemaProviderPtr schema_provider_;
   const RenderInfo* render_info_;

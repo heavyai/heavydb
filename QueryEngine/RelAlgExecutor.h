@@ -70,7 +70,7 @@ class RelAlgExecutor {
       , db_id_(cat->getDatabaseId())
       , query_dag_(std::make_unique<RelAlgDagBuilder>(
             query_ra,
-            cat_,
+            cat_->getDatabaseId(),
             std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat),
             nullptr))
       , schema_provider_(

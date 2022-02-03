@@ -128,7 +128,6 @@ void check_table(const std::string& table, const bool alter, const int delta) {
 
 void dump_restore(const bool migrate,
                   const bool alter,
-                  const bool rollback,
                   const std::vector<std::string>& with_options) {
   reset();
   // if set, alter pivot table t to make it have "been altered"
@@ -143,62 +142,47 @@ void dump_restore(const bool migrate,
                                     with_options_clause + ";"));
   // restore is to table t while migrate is to table x
   const std::string table = migrate ? "x" : "t";
-  // increment column table.j by a delta if testing rollback restore
   int delta = 0;
-  if (rollback) {
-    delta = NROWS;
-    EXPECT_NO_THROW(
-        run_multiple_agg("UPDATE t SET j = j + " + std::to_string(delta) + ";"));
-  }
   // rollback table restore/migrate?
   const auto run_restore = "RESTORE TABLE " + table + " FROM '" + tar_ball_path + "'" +
                            with_options_clause + ";";
   // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
   // Will add a REPLACE TABLE to explicitly replace target table.
   // After that, remove the first following if-block to pass test!!!
+  g_test_rollback_dump_restore = false;
   if (!migrate) {
-    EXPECT_THROW(run_ddl_statement(run_restore), std::runtime_error);
-  } else if (true == (g_test_rollback_dump_restore = rollback)) {
     EXPECT_THROW(run_ddl_statement(run_restore), std::runtime_error);
   } else {
     EXPECT_NO_THROW(run_ddl_statement(run_restore));
   }
-  if (migrate && rollback) {
-    EXPECT_THROW(run_ddl_statement("DROP TABLE x;"), std::runtime_error);
-  } else {
-    EXPECT_NO_THROW(check_table(table, alter, delta));
-  }
+  EXPECT_NO_THROW(check_table(table, alter, delta));
 }
 
-void dump_restore(const bool migrate, const bool alter, const bool rollback) {
+void dump_restore(const bool migrate, const bool alter) {
   // test two compression modes only so as not to hold cit back too much
   if (boost::process::search_path("lz4").string().empty()) {
-    dump_restore(migrate, alter, rollback, {});  // gzip
-    dump_restore(migrate, alter, rollback, {"compression='none'"});
+    dump_restore(migrate, alter, {});  // gzip
+    dump_restore(migrate, alter, {"compression='none'"});
   } else {
-    dump_restore(migrate, alter, rollback, {});  // lz4
-    dump_restore(migrate, alter, rollback, {"compression='gzip'"});
+    dump_restore(migrate, alter, {});  // lz4
+    dump_restore(migrate, alter, {"compression='gzip'"});
   }
 }
 
 TEST_F(DumpRestoreTest, DumpRestore) {
-  dump_restore(false, false, false);
+  dump_restore(false, false);
 }
 
 TEST_F(DumpRestoreTest, DumpRestore_Altered) {
-  dump_restore(false, true, false);
+  dump_restore(false, true);
 }
 
 TEST_F(DumpRestoreTest, DumpMigrate) {
-  dump_restore(true, false, false);
+  dump_restore(true, false);
 }
 
 TEST_F(DumpRestoreTest, DumpMigrate_Altered) {
-  dump_restore(true, true, false);
-}
-
-TEST_F(DumpRestoreTest, DumpMigrate_Altered_Rollback) {
-  dump_restore(true, true, true);
+  dump_restore(true, true);
 }
 
 class DumpAndRestoreTest : public ::testing::Test {

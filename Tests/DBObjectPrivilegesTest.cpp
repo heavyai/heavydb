@@ -2964,20 +2964,6 @@ TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
   queryAsTestUserWithPrivilege(query, privilege);
 }
 
-TEST_F(TablePermissionsTest, TableGrantRevokeDeletePrivilege) {
-  std::string privilege{"DELETE"};
-  std::string query{"DELETE FROM test_table WHERE i = 1;"};
-  std::string no_privilege_exception{
-      "Violation of access privileges: user test_user has no proper "
-      "privileges for "
-      "object test_table"};
-  createTestTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilege(query, privilege);
-}
-
 TEST_F(TablePermissionsTest, TableGrantRevokeInsertPrivilege) {
   std::string privilege{"INSERT"};
   std::string query{"INSERT INTO test_table VALUES (2);"};
@@ -2995,20 +2981,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeTruncatePrivilege) {
   std::string no_privilege_exception{
       "Table test_table will not be truncated. User test_user has no proper "
       "privileges."};
-  createTestTable();
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  grantThenRevokePrivilegeToTestUser(privilege);
-  queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
-  queryAsTestUserWithPrivilege(query, privilege);
-}
-
-TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
-  std::string privilege{"UPDATE"};
-  std::string query{"UPDATE test_table SET i = 2 WHERE i = 1;"};
-  std::string no_privilege_exception{
-      "Violation of access privileges: user test_user has no proper "
-      "privileges for "
-      "object test_table"};
   createTestTable();
   queryAsTestUserWithNoPrivilegeAndAssertException(query, no_privilege_exception);
   grantThenRevokePrivilegeToTestUser(privilege);
@@ -3053,10 +3025,8 @@ TEST_F(TablePermissionsTest, TableAllPrivileges) {
   sql("GRANT ALL ON TABLE test_table TO test_user;");
   login("test_user", "test_pass");
   runQuery("SHOW CREATE TABLE test_table;");
-  runQuery("UPDATE test_table SET i = 2 WHERE i = 1;");
   runQuery("TRUNCATE TABLE test_table;");
   runQuery("INSERT INTO test_table VALUES (2);");
-  runQuery("DELETE FROM test_table WHERE i = 2;");
   if (!g_aggregator) {
     // TODO: select queries as a user currently do not work in distributed
     // mode for regular tables (DistributedQueryRunner::init can not be run
