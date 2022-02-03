@@ -44,9 +44,5 @@ using LinkDescriptorMap = std::map<std::string, LinkDescriptor*>;
 using LinkDescriptorMapById = std::map<int, LinkDescriptor*>;
 using DeletedColumnPerTableMap =
     std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>;
-using ForeignServerMap =
-    std::map<std::string, std::shared_ptr<foreign_storage::ForeignServer>>;
-using ForeignServerMapById =
-    std::map<int, std::shared_ptr<foreign_storage::ForeignServer>>;
 using CustomExpressionMapById = std::map<int, std::unique_ptr<CustomExpression>>;
 }  // namespace Catalog_Namespace

@@ -16,6 +16,7 @@
 
 #include "CachingGlobalFileMgr.h"
 
+#include "DataMgr/ForeignStorage/ForeignStorageBuffer.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 
 namespace File_Namespace {

@@ -28,7 +28,6 @@
 #include "../Shared/mapd_shared_mutex.h"
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/CachingFileMgr.h"
-#include "ForeignDataWrapper.h"
 
 class CacheTooSmallException : public std::runtime_error {
  public:
@@ -36,6 +35,8 @@ class CacheTooSmallException : public std::runtime_error {
 };
 
 using namespace Data_Namespace;
+
+using ChunkToBufferMap = std::map<ChunkKey, AbstractBuffer*>;
 
 namespace foreign_storage {
 

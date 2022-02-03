@@ -17,6 +17,7 @@
 #include "FsiChunkUtils.h"
 
 #include "Catalog/Catalog.h"
+#include "DataMgr/ForeignStorage/ForeignStorageBuffer.h"
 
 namespace foreign_storage {
 void init_chunk_for_column(

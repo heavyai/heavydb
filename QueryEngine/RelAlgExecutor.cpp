@@ -1284,41 +1284,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
   return scalar_sources;
 }
 
-template <class RA>
-std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources_for_update(
-    const RA* ra_node,
-    const RelAlgTranslator& translator,
-    int32_t tableId,
-    const Catalog_Namespace::Catalog& cat,
-    const ColumnInfoList& colInfos,
-    size_t starting_projection_column_idx) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
-  for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
-    const auto scalar_rex = scalar_at(i, ra_node);
-    if (dynamic_cast<const RexRef*>(scalar_rex)) {
-      // RexRef are synthetic scalars we append at the end of the real ones
-      // for the sake of taking memory ownership, no real work needed here.
-      continue;
-    }
-
-    std::shared_ptr<Analyzer::Expr> translated_expr;
-    if (i >= starting_projection_column_idx && i < get_scalar_sources_size(ra_node) - 1) {
-      translated_expr =
-          cast_to_column_type(translator.translateScalarRex(scalar_rex),
-                              tableId,
-                              cat,
-                              colInfos[i - starting_projection_column_idx]->name);
-    } else {
-      translated_expr = translator.translateScalarRex(scalar_rex);
-    }
-    const auto scalar_expr = rewrite_array_elements(translated_expr.get());
-    const auto rewritten_expr = rewrite_expr(scalar_expr.get());
-    set_transient_dict_maybe(scalar_sources, rewritten_expr);
-  }
-
-  return scalar_sources;
-}
-
 std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
     const RelCompound* compound,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {

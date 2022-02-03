@@ -40,7 +40,6 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
-#include "DataMgr/ForeignStorage/DummyForeignStorage.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Compression.h"
