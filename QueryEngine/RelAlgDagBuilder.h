@@ -40,6 +40,7 @@
 #include "Utils/FsiUtils.h"
 
 using ColumnNameList = std::vector<std::string>;
+static auto const HASH_N = boost::hash_value("n");
 
 class Rex {
  public:
@@ -413,8 +414,7 @@ class RexCase : public RexScalar {
         boost::hash_combine(*hash_, getWhen(i)->toHash());
         boost::hash_combine(*hash_, getThen(i)->toHash());
       }
-      boost::hash_combine(*hash_,
-                          getElse() ? getElse()->toHash() : boost::hash_value("n"));
+      boost::hash_combine(*hash_, getElse() ? getElse()->toHash() : HASH_N);
     }
     return *hash_;
   }
@@ -612,8 +612,7 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
       }
       auto get_window_bound_hash =
           [](const RexWindowFunctionOperator::RexWindowBound& bound) {
-            auto h = boost::hash_value(bound.offset ? bound.offset->toHash()
-                                                    : boost::hash_value("n"));
+            auto h = boost::hash_value(bound.offset ? bound.offset->toHash() : HASH_N);
             boost::hash_combine(h, bound.unbounded);
             boost::hash_combine(h, bound.preceding);
             boost::hash_combine(h, bound.following);
@@ -1268,8 +1267,7 @@ class RelJoin : public RelAlgNode {
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RelJoin).hash_code();
-      boost::hash_combine(*hash_,
-                          condition_ ? condition_->toHash() : boost::hash_value("n"));
+      boost::hash_combine(*hash_, condition_ ? condition_->toHash() : HASH_N);
       for (auto& node : inputs_) {
         boost::hash_combine(*hash_, node->toHash());
       }
@@ -1370,8 +1368,7 @@ class RelTranslatedJoin : public RelAlgNode {
       hash_ = typeid(RelTranslatedJoin).hash_code();
       boost::hash_combine(*hash_, lhs_->toHash());
       boost::hash_combine(*hash_, rhs_->toHash());
-      boost::hash_combine(
-          *hash_, outer_join_cond_ ? outer_join_cond_->toHash() : boost::hash_value("n"));
+      boost::hash_combine(*hash_, outer_join_cond_ ? outer_join_cond_->toHash() : HASH_N);
       boost::hash_combine(*hash_, nested_loop_);
       boost::hash_combine(*hash_, ::toString(join_type_));
       boost::hash_combine(*hash_, op_type_);
@@ -1476,7 +1473,7 @@ class RelFilter : public RelAlgNode {
   size_t toHash() const override {
     if (!hash_) {
       hash_ = typeid(RelFilter).hash_code();
-      boost::hash_combine(*hash_, filter_ ? filter_->toHash() : boost::hash_value("n"));
+      boost::hash_combine(*hash_, filter_ ? filter_->toHash() : HASH_N);
       for (auto& node : inputs_) {
         boost::hash_combine(*hash_, node->toHash());
       }

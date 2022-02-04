@@ -2905,8 +2905,7 @@ std::string RelCompound::toString() const {
 size_t RelCompound::toHash() const {
   if (!hash_) {
     hash_ = typeid(RelCompound).hash_code();
-    boost::hash_combine(*hash_,
-                        filter_expr_ ? filter_expr_->toHash() : boost::hash_value("n"));
+    boost::hash_combine(*hash_, filter_expr_ ? filter_expr_->toHash() : HASH_N);
     boost::hash_combine(*hash_, is_agg_);
     for (auto& target_expr : target_exprs_) {
       if (auto rex_scalar = dynamic_cast<const RexScalar*>(target_expr)) {

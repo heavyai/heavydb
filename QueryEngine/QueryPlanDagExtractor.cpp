@@ -467,11 +467,9 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
         current_level_join_conditions.type != JoinType::INVALID &&
         boost::algorithm::any_of(current_level_join_conditions.quals, IsEquivBinOp{});
     const bool nested_loop = !found_eq_join_qual;
-
+    const bool is_left_join = current_level_join_conditions.type == JoinType::LEFT;
     RexScalar const* const outer_join_cond =
-        current_level_join_conditions.type == JoinType::LEFT
-            ? rel_left_deep_join->getOuterCondition(level_idx + 1)
-            : nullptr;
+        is_left_join ? rel_left_deep_join->getOuterCondition(level_idx + 1) : nullptr;
 
     // collect join col, filter ops, and detailed info of join operation, i.e., op_type,
     // qualifier, ...
@@ -490,10 +488,16 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
                            qual_bin_oper->get_type_info().to_string()};
         }
         for (auto& col_pair_info : normalizeColumnsPair(qual_bin_oper.get())) {
-          if (col_pair_info.loop_join_qual && !found_eq_join_qual) {
+          // even though we fall back to loop join when left outer join has
+          // non-eq comparator so we additionally check it here to classify the qual
+          // properly todo(yoonmin): relax left join case once we have an improved logic
+          // for this
+          if (!found_eq_join_qual && (is_left_join || col_pair_info.loop_join_qual)) {
             // we only consider that cur level's join is loop join if we have no
             // equi-join qual and both lhs and rhs are not col_var,
             // i.e., lhs: col_var / rhs: constant / bin_op: kGE
+            // also, currently we fallback to loop-join when left outer join
+            // has non-eq join qual
             if (visited_filter_ops.insert(join_qual_str).second) {
               filter_ops.push_back(join_qual);
             }

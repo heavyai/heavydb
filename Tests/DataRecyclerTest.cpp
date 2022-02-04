@@ -373,6 +373,25 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q5_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(), executor);
   EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q5_plan_dag.extracted_dag) != 0);
+
+  std::unordered_set<std::string> query_plan_dag_hash;
+  std::vector<std::string> queries;
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 LEFT JOIN T2 ON T1.y <= T2.y WHERE T1.x = T2.x");
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 LEFT JOIN T2 ON T1.y = T2.y WHERE T1.x = T2.x");
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 INNER JOIN T2 ON T1.y = T2.y WHERE T1.x = T2.x");
+  queries.push_back(
+      "SELECT COUNT(1) FROM T1 INNER JOIN T2 ON T1.y <= T2.y WHERE T1.x = T2.x");
+  for (const auto& sql : queries) {
+    auto query_info = QR::get()->getQueryInfoForDataRecyclerTest(sql);
+    auto dag =
+        QueryPlanDagExtractor::extractQueryPlanDag(query_info.root_node.get(), executor);
+    query_plan_dag_hash.insert(dag.extracted_dag);
+  }
+  // check whether we correctly extract query plan DAG for outer join having loop-join
+  EXPECT_EQ(query_plan_dag_hash.size(), queries.size());
 }
 
 TEST(DataRecycler, QueryPlanDagExtractor_TableFunction) {

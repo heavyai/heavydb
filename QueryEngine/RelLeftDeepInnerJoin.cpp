@@ -120,8 +120,11 @@ std::string RelLeftDeepInnerJoin::toString() const {
 size_t RelLeftDeepInnerJoin::toHash() const {
   if (!hash_) {
     hash_ = typeid(RelLeftDeepInnerJoin).hash_code();
-    boost::hash_combine(*hash_,
-                        condition_ ? condition_->toHash() : boost::hash_value("n"));
+    boost::hash_combine(*hash_, condition_ ? condition_->toHash() : HASH_N);
+    for (auto& expr : outer_conditions_per_level_) {
+      boost::hash_combine(*hash_, expr ? expr->toHash() : HASH_N);
+    }
+    boost::hash_combine(*hash_, original_filter_ ? original_filter_->toHash() : HASH_N);
     for (auto& node : inputs_) {
       boost::hash_combine(*hash_, node->toHash());
     }
