@@ -443,7 +443,7 @@ std::vector<InputTableInfo> getSyntheticInputTableInfo(
   for (auto id : phys_table_ids) {
     query_infos[i].table_id = id;
     query_infos[i].info =
-        executor->getDataMgr()->getTableInfo(executor->getDatabaseId(), id);
+        executor->getDataMgr()->getTableMetadata(executor->getDatabaseId(), id);
     ++i;
   }
 

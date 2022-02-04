@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-#include "DataMgr/AbstractBufferMgr.h"
+#include "DataMgr/AbstractDataProvider.h"
 
 namespace TestHelpers {
 
@@ -106,31 +106,10 @@ class TestTableData {
   std::unordered_map<int, SQLTypeInfo> col_types_;
 };
 
-class TestDataProvider : public AbstractBufferMgr {
+class TestDataProvider : public AbstractDataProvider {
  public:
   TestDataProvider(int db_id, SchemaProviderPtr schema_provider)
-      : AbstractBufferMgr(0), db_id_(db_id), schema_provider_(schema_provider) {}
-
-  AbstractBuffer* createBuffer(const ChunkKey& key,
-                               const size_t pageSize = 0,
-                               const size_t initialSize = 0) override {
-    UNREACHABLE();
-    return nullptr;
-  }
-
-  void deleteBuffer(const ChunkKey& key, const bool purge = true) override {
-    UNREACHABLE();
-  }
-
-  void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
-                               const bool purge = true) override {
-    UNREACHABLE();
-  }
-
-  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override {
-    UNREACHABLE();
-    return nullptr;
-  }
+      : db_id_(db_id), schema_provider_(schema_provider) {}
 
   void fetchBuffer(const ChunkKey& key,
                    AbstractBuffer* destBuffer,
@@ -144,86 +123,11 @@ class TestDataProvider : public AbstractBufferMgr {
                    numBytes);
   }
 
-  AbstractBuffer* putBuffer(const ChunkKey& key,
-                            AbstractBuffer* srcBuffer,
-                            const size_t numBytes = 0) override {
-    UNREACHABLE();
-    return nullptr;
-  }
-
-  void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
-                                       const ChunkKey& keyPrefix) override {
-    UNREACHABLE();
-  }
-
-  bool isBufferOnDevice(const ChunkKey& key) override {
-    UNREACHABLE();
-    return false;
-  }
-
-  std::string printSlabs() override {
-    UNREACHABLE();
-    return "";
-  }
-
-  size_t getMaxSize() override {
-    UNREACHABLE();
-    return 0;
-  }
-
-  size_t getInUseSize() override {
-    UNREACHABLE();
-    return 0;
-  }
-
-  size_t getAllocated() override {
-    UNREACHABLE();
-    return 0;
-  }
-
-  bool isAllocationCapped() override { UNREACHABLE(); }
-
-  void checkpoint() override { UNREACHABLE(); }
-
-  void checkpoint(const int db_id, const int tb_id) override { UNREACHABLE(); }
-
-  void removeTableRelatedDS(const int db_id, const int table_id) override {
-    UNREACHABLE();
-  }
-
-  const DictDescriptor* getDictMetadata(int db_id,
-                                        int dict_id,
-                                        bool load_dict = true) override {
-    UNREACHABLE();
-  }
-
-  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
+  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
+                                                   int table_id) const override {
     CHECK_EQ(db_id, db_id_);
     CHECK_EQ(tables_.count(table_id), 1);
     return tables_.at(table_id).getTableInfo();
-  }
-
-  // Buffer API
-  AbstractBuffer* alloc(const size_t numBytes = 0) override {
-    UNREACHABLE();
-    return nullptr;
-  }
-
-  void free(AbstractBuffer* buffer) override { UNREACHABLE(); }
-
-  MgrType getMgrType() override {
-    UNREACHABLE();
-    return static_cast<MgrType>(0);
-  }
-
-  std::string getStringMgrType() override {
-    UNREACHABLE();
-    return "";
-  }
-
-  size_t getNumChunks() override {
-    UNREACHABLE();
-    return 0;
   }
 
  protected:

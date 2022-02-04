@@ -366,7 +366,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
     return nullptr;
   }
 
-  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override {
+  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
+                                                   int table_id) const override {
     UNREACHABLE();
     return Fragmenter_Namespace::TableInfo();
   }

@@ -62,7 +62,8 @@ class PersistentStorageMgr : public AbstractBufferMgr {
                                         int dict_id,
                                         bool load_dict = true) override;
 
-  Fragmenter_Namespace::TableInfo getTableInfo(int db_id, int table_id) const override;
+  Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
+                                                   int table_id) const override;
 
   File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
   foreign_storage::ForeignStorageCache* getDiskCache() const;

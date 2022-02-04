@@ -88,7 +88,7 @@ Fragmenter_Namespace::TableInfo InputTableInfoCache::getTableInfo(const int tabl
   }
   const auto data_mgr = executor_->getDataMgr();
   CHECK(data_mgr);
-  auto table_info = data_mgr->getTableInfo(executor_->getDatabaseId(), table_id);
+  auto table_info = data_mgr->getTableMetadata(executor_->getDatabaseId(), table_id);
   auto it_ok = cache_.emplace(table_id, copy_table_info(table_info));
   CHECK(it_ok.second);
   return copy_table_info(table_info);

@@ -344,8 +344,8 @@ const DictDescriptor* GlobalFileMgr::getDictMetadata(int db_id,
   return catalog->getMetadataForDict(dict_id, load_dict);
 }
 
-Fragmenter_Namespace::TableInfo GlobalFileMgr::getTableInfo(int db_id,
-                                                            int table_id) const {
+Fragmenter_Namespace::TableInfo GlobalFileMgr::getTableMetadata(int db_id,
+                                                                int table_id) const {
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
   CHECK(catalog);
   const auto td = catalog->getMetadataForTable(table_id);

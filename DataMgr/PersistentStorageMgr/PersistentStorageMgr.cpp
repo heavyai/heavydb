@@ -159,9 +159,10 @@ const DictDescriptor* PersistentStorageMgr::getDictMetadata(int db_id,
   return getGlobalFileMgr()->getDictMetadata(db_id, dict_id, load_dict);
 }
 
-Fragmenter_Namespace::TableInfo PersistentStorageMgr::getTableInfo(int db_id,
-                                                                   int table_id) const {
-  return getStorageMgrForTableKey({db_id, table_id})->getTableInfo(db_id, table_id);
+Fragmenter_Namespace::TableInfo PersistentStorageMgr::getTableMetadata(
+    int db_id,
+    int table_id) const {
+  return getStorageMgrForTableKey({db_id, table_id})->getTableMetadata(db_id, table_id);
 }
 
 AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(

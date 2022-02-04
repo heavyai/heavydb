@@ -617,8 +617,8 @@ const DictDescriptor* DataMgr::getDictMetadata(int db_id,
   return getPersistentStorageMgr()->getDictMetadata(db_id, dict_id, load_dict);
 }
 
-Fragmenter_Namespace::TableInfo DataMgr::getTableInfo(int db_id, int table_id) const {
-  return getPersistentStorageMgr()->getTableInfo(db_id, table_id);
+Fragmenter_Namespace::TableInfo DataMgr::getTableMetadata(int db_id, int table_id) const {
+  return getPersistentStorageMgr()->getTableMetadata(db_id, table_id);
 }
 
 }  // namespace Data_Namespace
