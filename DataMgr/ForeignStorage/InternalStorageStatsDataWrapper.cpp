@@ -45,8 +45,15 @@ void populate_import_buffers_for_storage_details(
     if (import_buffers.find("database_id") != import_buffers.end()) {
       import_buffers["database_id"]->addInt(storage_detail.database_id);
     }
+    if (import_buffers.find("database_name") != import_buffers.end()) {
+      import_buffers["database_name"]->addString(get_db_name(storage_detail.database_id));
+    }
     if (import_buffers.find("table_id") != import_buffers.end()) {
       import_buffers["table_id"]->addInt(storage_detail.table_id);
+    }
+    if (import_buffers.find("table_name") != import_buffers.end()) {
+      import_buffers["table_name"]->addString(
+          get_table_name(storage_detail.database_id, storage_detail.table_id));
     }
     if (import_buffers.find("epoch") != import_buffers.end()) {
       import_buffers["epoch"]->addInt(storage_detail.storage_stats.epoch);
@@ -125,12 +132,19 @@ void InternalStorageStatsDataWrapper::initializeObjectsForTable(
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
     if (catalog->name() != INFORMATION_SCHEMA_DB) {
+      std::set<std::string> found_dict_paths;
       for (const auto& [table_id, shard_id] :
            catalog->getAllPersistedTableAndShardIds()) {
         uint64_t total_dictionary_file_size{0};
         auto logical_table_id = catalog->getLogicalTableId(table_id);
         for (const auto& dict_path :
              catalog->getTableDictDirectoryPaths(logical_table_id)) {
+          if (found_dict_paths.find(dict_path) == found_dict_paths.end()) {
+            found_dict_paths.emplace(dict_path);
+          } else {
+            // Skip shared dictionaries.
+            continue;
+          }
           CHECK(std::filesystem::is_directory(dict_path));
           for (const auto& file_entry : std::filesystem::directory_iterator(dict_path)) {
             CHECK(file_entry.is_regular_file());

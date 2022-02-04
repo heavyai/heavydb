@@ -55,7 +55,6 @@ using namespace TestHelpers;
 
 bool g_aggregator{false};
 
-extern int g_test_against_columnId_gap;
 extern bool g_enable_smem_group_by;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
@@ -24688,11 +24687,6 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Running ExecuteTest using temporary tables.";
     g_use_temporary_tables = true;
   }
-
-  // insert artificial gap of columnId so as to test against the gap w/o
-  // need of ALTER ADD/DROP COLUMN before doing query test.
-  // Note: Temporarily disabling for distributed tests.
-  g_test_against_columnId_gap = g_aggregator ? 0 : 99;
 
   const bool use_existing_data = vm.count("use-existing-data");
   int err{0};

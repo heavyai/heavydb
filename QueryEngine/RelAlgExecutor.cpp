@@ -196,7 +196,8 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
       CHECK(td);
       CHECK(td->fragmenter);
       auto fragment_count = td->fragmenter->getFragmentsForQuery().fragments.size();
-      CHECK_LE(fragment_count, static_cast<size_t>(1));
+      CHECK_LE(fragment_count, static_cast<size_t>(1))
+          << "In-memory system tables are expected to have a single fragment.";
       if (fragment_count > 0) {
         for (auto column_id : column_ids) {
           // Prefetch system table chunks in order to force chunk statistics metadata

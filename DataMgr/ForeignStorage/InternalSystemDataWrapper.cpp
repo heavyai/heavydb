@@ -18,6 +18,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
+#include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
 #include "FsiChunkUtils.h"
 #include "ImportExport/Importer.h"
@@ -25,6 +26,26 @@
 #include "UserMapping.h"
 
 namespace foreign_storage {
+std::string get_db_name(int32_t db_id) {
+  Catalog_Namespace::DBMetadata db_metadata;
+  auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+  CHECK(sys_catalog.getMetadataForDBById(db_id, db_metadata));
+  return db_metadata.dbName;
+}
+
+std::string get_table_name(int32_t db_id, int32_t table_id) {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto table_name = catalog->getTableName(table_id);
+  if (table_name.has_value()) {
+    return table_name.value();
+  } else {
+    // It is possible for the table to be concurrently deleted while querying the system
+    // table.
+    return kDeletedValueIndicator;
+  }
+}
+
 InternalSystemDataWrapper::InternalSystemDataWrapper()
     : db_id_(-1), foreign_table_(nullptr) {}
 
@@ -129,6 +150,10 @@ void InternalSystemDataWrapper::populateChunkMetadata(
   CHECK_EQ(catalog->name(), INFORMATION_SCHEMA_DB);
 
   initializeObjectsForTable(foreign_table_->tableName);
+  if (row_count_ > static_cast<size_t>(foreign_table_->maxFragRows)) {
+    throw ForeignStorageException{
+        "System table size exceeds the maximum supported size."};
+  }
   foreign_storage::ForeignTableSchema schema(db_id_, foreign_table_);
   for (auto column : schema.getLogicalColumns()) {
     ChunkKey chunk_key = {db_id_, foreign_table_->tableId, column->columnId, 0};
@@ -169,7 +194,8 @@ void InternalSystemDataWrapper::populateChunkBuffers(
   CHECK_EQ(catalog->name(), INFORMATION_SCHEMA_DB);
 
   auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
-  CHECK_EQ(fragment_id, 0);
+  CHECK_EQ(fragment_id, 0)
+      << "In-memory system tables are expected to have a single fragment.";
 
   std::map<ChunkKey, Chunk_NS::Chunk> chunks;
   std::set<const ColumnDescriptor*> columns_to_parse;

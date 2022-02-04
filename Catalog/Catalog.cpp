@@ -90,7 +90,6 @@ using std::runtime_error;
 using std::string;
 using std::vector;
 
-int g_test_against_columnId_gap{0};
 bool g_enable_fsi{false};
 bool g_enable_s3_fsi{false};
 extern bool g_cache_string_hash;
@@ -1084,10 +1083,7 @@ void Catalog::buildMaps() {
       cd->default_value = std::make_optional(sqliteConnector_.getData<string>(r, 16));
     }
     cd->isGeoPhyCol = skip_physical_cols > 0;
-    ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
-    columnDescriptorMap_[columnKey] = cd;
-    ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
-    columnDescriptorMapById_[columnIdKey] = cd;
+    addToColumnMap(cd);
 
     if (skip_physical_cols <= 0) {
       skip_physical_cols = cd->columnType.get_physical_cols();
@@ -1236,10 +1232,7 @@ void Catalog::addTableToMap(const TableDescriptor* td,
   for (auto cd : columns) {
     ColumnDescriptor* new_cd = new ColumnDescriptor();
     *new_cd = cd;
-    ColumnKey columnKey(new_cd->tableId, to_upper(new_cd->columnName));
-    columnDescriptorMap_[columnKey] = new_cd;
-    ColumnIdKey columnIdKey(new_cd->tableId, new_cd->columnId);
-    columnDescriptorMapById_[columnIdKey] = new_cd;
+    addToColumnMap(new_cd);
 
     // Add deleted column to the map
     if (cd.isDeletedCol) {
@@ -1293,6 +1286,7 @@ void Catalog::removeTableFromMap(const string& tableName,
   tableDescriptorMapById_.erase(tableDescIt);
   tableDescriptorMap_.erase(to_upper(tableName));
   td->fragmenter = nullptr;
+  dict_columns_by_table_id_.erase(tableId);
 
   bool isTemp = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   delete td;
@@ -1640,6 +1634,16 @@ const ColumnDescriptor* Catalog::getMetadataForColumn(int table_id, int column_i
   return colDescIt->second;
 }
 
+const std::optional<std::string> Catalog::getColumnName(int table_id,
+                                                        int column_id) const {
+  cat_read_lock read_lock(this);
+  auto it = columnDescriptorMapById_.find(ColumnIdKey{table_id, column_id});
+  if (it == columnDescriptorMapById_.end()) {
+    return {};
+  }
+  return it->second->columnName;
+}
+
 const int Catalog::getColumnIdBySpiUnlocked(const int table_id, const size_t spi) const {
   const auto tabDescIt = tableDescriptorMapById_.find(table_id);
   CHECK(tableDescriptorMapById_.end() != tabDescIt);
@@ -1864,6 +1868,7 @@ std::vector<TableDescriptor> Catalog::getAllTableMetadataCopy() const {
   tables.reserve(tableDescriptorMapById_.size());
   for (auto table_entry : tableDescriptorMapById_) {
     tables.emplace_back(*table_entry.second);
+    tables.back().fragmenter = nullptr;
   }
   return tables;
 }
@@ -2041,8 +2046,7 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
 
   ++tableDescriptorMapById_[td.tableId]->nColumns;
   auto ncd = new ColumnDescriptor(cd);
-  columnDescriptorMap_[ColumnKey(cd.tableId, to_upper(cd.columnName))] = ncd;
-  columnDescriptorMapById_[ColumnIdKey(cd.tableId, cd.columnId)] = ncd;
+  addToColumnMap(ncd);
   columnDescriptorsForRoll.emplace_back(nullptr, ncd);
 }
 
@@ -2065,9 +2069,7 @@ void Catalog::dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd) 
     CHECK(columnDescIt != columnDescriptorMap_.end());
 
     columnDescriptorsForRoll.emplace_back(columnDescIt->second, nullptr);
-
-    columnDescriptorMap_.erase(columnDescIt);
-    columnDescriptorMapById_.erase(ColumnIdKey(cd.tableId, cd.columnId));
+    removeFromColumnMap(columnDescIt->second);
     --tableDescriptorMapById_[td.tableId]->nColumns;
   }
 
@@ -2115,13 +2117,11 @@ void Catalog::roll(const bool forward) {
       tds.insert(td);
     } else {
       if (ocd) {
-        columnDescriptorMap_[ColumnKey(ocd->tableId, to_upper(ocd->columnName))] = ocd;
-        columnDescriptorMapById_[ColumnIdKey(ocd->tableId, ocd->columnId)] = ocd;
+        addToColumnMap(ocd);
       }
       // roll back the dict of new column
       if (ncd) {
-        columnDescriptorMap_.erase(ColumnKey(ncd->tableId, to_upper(ncd->columnName)));
-        columnDescriptorMapById_.erase(ColumnIdKey(ncd->tableId, ncd->columnId));
+        removeFromColumnMap(ncd);
         if (nullptr == ocd ||
             ocd->columnType.get_comp_param() != ncd->columnType.get_comp_param()) {
           delDictionary(*ncd);
@@ -2377,15 +2377,15 @@ void Catalog::createTable(
           const bool is_foreign_col =
               setColumnSharedDictionary(cd, cds, dds, td, shared_dict_defs);
           if (!is_foreign_col) {
-            setColumnDictionary(cd, dds, td, isLogicalTable);
+            // Do not persist string dictionaries for system tables, since system table
+            // content can be highly dynamic and string dictionaries are not currently
+            // vacuumed.
+            auto use_temp_dictionary = td.is_system_table;
+            setColumnDictionary(cd, dds, td, isLogicalTable, use_temp_dictionary);
           }
         }
 
         if (toplevel_column_names.count(cd.columnName)) {
-          // make up colId gap for sanity test (begin with 1 bc much code depends on it!)
-          if (colId > 1) {
-            colId += g_test_against_columnId_gap;
-          }
           if (!cd.isGeoPhyCol) {
             td.columnIdBySpi_.push_back(colId);
           }
@@ -2476,10 +2476,6 @@ void Catalog::createTable(
         }
       }
       if (toplevel_column_names.count(cd.columnName)) {
-        // make up colId gap for sanity test (begin with 1 bc much code depends on it!)
-        if (colId > 1) {
-          colId += g_test_against_columnId_gap;
-        }
         if (!cd.isGeoPhyCol) {
           td.columnIdBySpi_.push_back(colId);
         }
@@ -3372,13 +3368,14 @@ bool Catalog::setColumnSharedDictionary(
 void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                                   std::list<DictDescriptor>& dds,
                                   const TableDescriptor& td,
-                                  const bool isLogicalTable) {
+                                  bool is_logical_table,
+                                  bool use_temp_dictionary) {
   cat_write_lock write_lock(this);
 
   std::string dictName{"Initial_key"};
   int dictId{0};
   std::string folderPath;
-  if (isLogicalTable) {
+  if (is_logical_table) {
     cat_sqlite_lock sqlite_lock(getObjForLock());
 
     sqliteConnector_.query_with_text_params(
@@ -3402,7 +3399,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                     false,
                     1,
                     folderPath,
-                    false);
+                    use_temp_dictionary);
   dds.push_back(dd);
   if (!cd.columnType.is_array()) {
     cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
@@ -3566,26 +3563,29 @@ void Catalog::dropTable(const TableDescriptor* td) {
   for (auto table : tables_to_drop) {
     eraseTablePhysicalData(table);
   }
+  deleteTableCatalogMetadata(td, tables_to_drop);
+}
 
-  {
-    cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(getObjForLock());
-    sqliteConnector_.query("BEGIN TRANSACTION");
-    try {
-      // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
-      sqliteConnector_.query_with_text_param(
-          "DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
-          std::to_string(td->tableId));
-      logicalToPhysicalTableMapById_.erase(td->tableId);
-      for (auto table : tables_to_drop) {
-        eraseTableMetadata(table);
-      }
-    } catch (std::exception& e) {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw;
+void Catalog::deleteTableCatalogMetadata(
+    const TableDescriptor* logical_table,
+    const std::vector<const TableDescriptor*>& physical_tables) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
+    sqliteConnector_.query_with_text_param(
+        "DELETE FROM mapd_logical_to_physical WHERE logical_table_id = ?",
+        std::to_string(logical_table->tableId));
+    logicalToPhysicalTableMapById_.erase(logical_table->tableId);
+    for (auto table : physical_tables) {
+      eraseTableMetadata(table);
     }
-    sqliteConnector_.query("END TRANSACTION");
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
   }
+  sqliteConnector_.query("END TRANSACTION");
 }
 
 void Catalog::eraseTableMetadata(const TableDescriptor* td) {
@@ -4529,10 +4529,13 @@ std::vector<std::string> Catalog::getTableDictDirectories(
 std::set<std::string> Catalog::getTableDictDirectoryPaths(int32_t table_id) const {
   cat_read_lock read_lock(this);
   std::set<std::string> directory_paths;
-  for (auto cd : getAllColumnMetadataForTable(table_id, false, false, true)) {
-    auto directory_path = getColumnDictDirectory(cd, false);
-    if (!directory_path.empty()) {
-      directory_paths.emplace(directory_path);
+  auto it = dict_columns_by_table_id_.find(table_id);
+  if (it != dict_columns_by_table_id_.end()) {
+    for (auto cd : it->second) {
+      auto directory_path = getColumnDictDirectory(cd, false);
+      if (!directory_path.empty()) {
+        directory_paths.emplace(directory_path);
+      }
     }
   }
   return directory_paths;
@@ -4672,7 +4675,23 @@ std::string Catalog::dumpCreateTable(const TableDescriptor* td,
                                      bool multiline_formatting,
                                      bool dump_defaults) const {
   cat_read_lock read_lock(this);
+  return dumpCreateTableUnlocked(td, multiline_formatting, dump_defaults);
+}
 
+std::optional<std::string> Catalog::dumpCreateTable(int32_t table_id,
+                                                    bool multiline_formatting,
+                                                    bool dump_defaults) const {
+  cat_read_lock read_lock(this);
+  const auto td = getMutableMetadataForTableUnlocked(table_id);
+  if (!td) {
+    return {};
+  }
+  return dumpCreateTableUnlocked(td, multiline_formatting, dump_defaults);
+}
+
+std::string Catalog::dumpCreateTableUnlocked(const TableDescriptor* td,
+                                             bool multiline_formatting,
+                                             bool dump_defaults) const {
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
   std::ostringstream os;
 
@@ -5457,128 +5476,166 @@ void Catalog::initializeSystemServers() {
                           foreign_storage::DataWrapperType::INTERNAL_STORAGE_STATS);
 }
 
+namespace {
+inline SQLTypeInfo get_encoded_text_type() {
+  return {kTEXT, 0, 0, false, kENCODING_DICT, 32, kNULLT};
+}
+
+inline SQLTypeInfo get_var_array_type(SQLTypes type) {
+  SQLTypeInfo sql_type_info{kARRAY, 0, 0, false, kENCODING_NONE, 0, type};
+  sql_type_info.set_size(-1);
+  return sql_type_info;
+}
+
+inline SQLTypeInfo get_var_encoded_text_array_type() {
+  auto sql_type_info = get_var_array_type(kTEXT);
+  sql_type_info.set_compression(kENCODING_DICT);
+  sql_type_info.set_comp_param(32);
+  return sql_type_info;
+}
+}  // namespace
+
 void Catalog::initializeSystemTables() {
-  if (!getMetadataForTable(USERS_SYS_TABLE_NAME, false)) {
-    createSystemTable(USERS_SYS_TABLE_NAME,
-                      CATALOG_SERVER_NAME,
-                      {{"user_id", {kINT}},
-                       {"user_name", {kTEXT}},
-                       {"is_super_user", {kBOOLEAN}},
-                       {"default_db_id", {kINT}},
-                       {"can_login", {kBOOLEAN}}});
-  }
+  foreign_storage::ForeignTable foreign_table;
+  list<ColumnDescriptor> columns;
 
-  if (!getMetadataForTable(DATABASES_SYS_TABLE_NAME, false)) {
-    createSystemTable(
-        DATABASES_SYS_TABLE_NAME,
-        CATALOG_SERVER_NAME,
-        {{"database_id", {kINT}}, {"database_name", {kTEXT}}, {"owner_id", {kINT}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(USERS_SYS_TABLE_NAME,
+                           CATALOG_SERVER_NAME,
+                           {{"user_id", {kINT}},
+                            {"user_name", get_encoded_text_type()},
+                            {"is_super_user", {kBOOLEAN}},
+                            {"default_db_id", {kINT}},
+                            {"default_db_name", get_encoded_text_type()},
+                            {"can_login", {kBOOLEAN}}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(PERMISSIONS_SYS_TABLE_NAME, false)) {
-    createSystemTable(
-        PERMISSIONS_SYS_TABLE_NAME,
-        CATALOG_SERVER_NAME,
-        {{"role_name", {kTEXT}},
-         {"is_user_role", {kBOOLEAN}},
-         {"database_id", {kINT}},
-         {"object_name", {kTEXT}},
-         {"object_id", {kINT}},
-         {"object_owner_id", {kINT}},
-         {"object_permission_type", {kTEXT}},
-         {"object_permissions", {kARRAY, 0, 0, false, kENCODING_DICT, 0, kTEXT}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(DATABASES_SYS_TABLE_NAME,
+                           CATALOG_SERVER_NAME,
+                           {{"database_id", {kINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"owner_id", {kINT}},
+                            {"owner_user_name", get_encoded_text_type()}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(ROLES_SYS_TABLE_NAME, false)) {
-    createSystemTable(
-        ROLES_SYS_TABLE_NAME, CATALOG_SERVER_NAME, {{"role_name", {kTEXT}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(PERMISSIONS_SYS_TABLE_NAME,
+                           CATALOG_SERVER_NAME,
+                           {{"role_name", get_encoded_text_type()},
+                            {"is_user_role", {kBOOLEAN}},
+                            {"database_id", {kINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"object_name", get_encoded_text_type()},
+                            {"object_id", {kINT}},
+                            {"object_owner_id", {kINT}},
+                            {"object_owner_user_name", get_encoded_text_type()},
+                            {"object_permission_type", get_encoded_text_type()},
+                            {"object_permissions", get_var_encoded_text_array_type()}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(TABLES_SYS_TABLE_NAME, false)) {
-    createSystemTable(TABLES_SYS_TABLE_NAME,
-                      CATALOG_SERVER_NAME,
-                      {{"database_id", {kINT}},
-                       {"table_id", {kINT}},
-                       {"table_name", {kTEXT}},
-                       {"owner_id", {kINT}},
-                       {"column_count", {kINT}},
-                       {"is_view", {kBOOLEAN}},
-                       {"view_sql", {kTEXT}},
-                       {"max_fragment_size", {kINT}},
-                       {"max_chunk_size", {kBIGINT}},
-                       {"fragment_page_size", {kINT}},
-                       {"max_rows", {kBIGINT}},
-                       {"max_rollback_epochs", {kINT}},
-                       {"shard_count", {kINT}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(ROLES_SYS_TABLE_NAME,
+                           CATALOG_SERVER_NAME,
+                           {{"role_name", get_encoded_text_type()}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(DASHBOARDS_SYS_TABLE_NAME, false)) {
-    createSystemTable(DASHBOARDS_SYS_TABLE_NAME,
-                      CATALOG_SERVER_NAME,
-                      {{"database_id", {kINT}},
-                       {"dashboard_id", {kINT}},
-                       {"dashboard_name", {kTEXT}},
-                       {"owner_id", {kINT}},
-                       {"last_updated_at", {kTIMESTAMP}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(TABLES_SYS_TABLE_NAME,
+                           CATALOG_SERVER_NAME,
+                           {{"database_id", {kINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"table_id", {kINT}},
+                            {"table_name", get_encoded_text_type()},
+                            {"owner_id", {kINT}},
+                            {"owner_user_name", get_encoded_text_type()},
+                            {"column_count", {kINT}},
+                            {"table_type", get_encoded_text_type()},
+                            {"view_sql", get_encoded_text_type()},
+                            {"max_fragment_size", {kINT}},
+                            {"max_chunk_size", {kBIGINT}},
+                            {"fragment_page_size", {kINT}},
+                            {"max_rows", {kBIGINT}},
+                            {"max_rollback_epochs", {kINT}},
+                            {"shard_count", {kINT}},
+                            {"ddl_statement", get_encoded_text_type()}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME, false)) {
-    createSystemTable(ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
-                      CATALOG_SERVER_NAME,
-                      {{"role_name", {kTEXT}}, {"user_name", {kTEXT}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(DASHBOARDS_SYS_TABLE_NAME,
+                           CATALOG_SERVER_NAME,
+                           {{"database_id", {kINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"dashboard_id", {kINT}},
+                            {"dashboard_name", get_encoded_text_type()},
+                            {"owner_id", {kINT}},
+                            {"owner_user_name", get_encoded_text_type()},
+                            {"last_updated_at", {kTIMESTAMP}},
+                            {"data_sources", get_var_encoded_text_array_type()}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(MEMORY_SUMMARY_SYS_TABLE_NAME, false)) {
-    createSystemTable(MEMORY_SUMMARY_SYS_TABLE_NAME,
-                      MEMORY_STATS_SERVER_NAME,
-                      {{"node", {kTEXT}},
-                       {"device_id", {kINT}},
-                       {"device_type", {kTEXT}},
-                       {"max_page_count", {kBIGINT}},
-                       {"page_size", {kBIGINT}},
-                       {"allocated_page_count", {kBIGINT}},
-                       {"used_page_count", {kBIGINT}},
-                       {"free_page_count", {kBIGINT}}});
-  }
+  std::tie(foreign_table, columns) = getSystemTableSchema(
+      ROLE_ASSIGNMENTS_SYS_TABLE_NAME,
+      CATALOG_SERVER_NAME,
+      {{"role_name", get_encoded_text_type()}, {"user_name", get_encoded_text_type()}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(MEMORY_DETAILS_SYS_TABLE_NAME, false)) {
-    createSystemTable(MEMORY_DETAILS_SYS_TABLE_NAME,
-                      MEMORY_STATS_SERVER_NAME,
-                      {{"node", {kTEXT}},
-                       {"database_id", {kINT}},
-                       {"table_id", {kINT}},
-                       {"column_id", {kINT}},
-                       {"chunk_key", {kARRAY, 0, 0, false, kENCODING_NONE, 0, kINT}},
-                       {"device_id", {kINT}},
-                       {"device_type", {kTEXT}},
-                       {"memory_status", {kTEXT}},
-                       {"page_count", {kBIGINT}},
-                       {"page_size", {kBIGINT}},
-                       {"slab_id", {kINT}},
-                       {"start_page", {kBIGINT}},
-                       {"last_touch_epoch", {kBIGINT}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(MEMORY_SUMMARY_SYS_TABLE_NAME,
+                           MEMORY_STATS_SERVER_NAME,
+                           {{"node", get_encoded_text_type()},
+                            {"device_id", {kINT}},
+                            {"device_type", get_encoded_text_type()},
+                            {"max_page_count", {kBIGINT}},
+                            {"page_size", {kBIGINT}},
+                            {"allocated_page_count", {kBIGINT}},
+                            {"used_page_count", {kBIGINT}},
+                            {"free_page_count", {kBIGINT}}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 
-  if (!getMetadataForTable(STORAGE_DETAILS_SYS_TABLE_NAME, false)) {
-    createSystemTable(STORAGE_DETAILS_SYS_TABLE_NAME,
-                      STORAGE_STATS_SERVER_NAME,
-                      {{"node", {kTEXT}},
-                       {"database_id", {kINT}},
-                       {"table_id", {kINT}},
-                       {"epoch", {kINT}},
-                       {"epoch_floor", {kINT}},
-                       {"fragment_count", {kINT}},
-                       {"shard_id", {kINT}},
-                       {"data_file_count", {kINT}},
-                       {"metadata_file_count", {kINT}},
-                       {"total_data_file_size", {kBIGINT}},
-                       {"total_data_page_count", {kBIGINT}},
-                       {"total_free_data_page_count", {kBIGINT}},
-                       {"total_metadata_file_size", {kBIGINT}},
-                       {"total_metadata_page_count", {kBIGINT}},
-                       {"total_free_metadata_page_count", {kBIGINT}},
-                       {"total_dictionary_data_file_size", {kBIGINT}}});
-  }
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(MEMORY_DETAILS_SYS_TABLE_NAME,
+                           MEMORY_STATS_SERVER_NAME,
+                           {{"node", get_encoded_text_type()},
+                            {"database_id", {kINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"table_id", {kINT}},
+                            {"table_name", get_encoded_text_type()},
+                            {"column_id", {kINT}},
+                            {"column_name", get_encoded_text_type()},
+                            {"chunk_key", get_var_array_type(kINT)},
+                            {"device_id", {kINT}},
+                            {"device_type", get_encoded_text_type()},
+                            {"memory_status", get_encoded_text_type()},
+                            {"page_count", {kBIGINT}},
+                            {"page_size", {kBIGINT}},
+                            {"slab_id", {kINT}},
+                            {"start_page", {kBIGINT}},
+                            {"last_touch_epoch", {kBIGINT}}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
+
+  std::tie(foreign_table, columns) =
+      getSystemTableSchema(STORAGE_DETAILS_SYS_TABLE_NAME,
+                           STORAGE_STATS_SERVER_NAME,
+                           {{"node", get_encoded_text_type()},
+                            {"database_id", {kINT}},
+                            {"database_name", get_encoded_text_type()},
+                            {"table_id", {kINT}},
+                            {"table_name", get_encoded_text_type()},
+                            {"epoch", {kINT}},
+                            {"epoch_floor", {kINT}},
+                            {"fragment_count", {kINT}},
+                            {"shard_id", {kINT}},
+                            {"data_file_count", {kINT}},
+                            {"metadata_file_count", {kINT}},
+                            {"total_data_file_size", {kBIGINT}},
+                            {"total_data_page_count", {kBIGINT}},
+                            {"total_free_data_page_count", {kBIGINT}},
+                            {"total_metadata_file_size", {kBIGINT}},
+                            {"total_metadata_page_count", {kBIGINT}},
+                            {"total_free_metadata_page_count", {kBIGINT}},
+                            {"total_dictionary_data_file_size", {kBIGINT}}});
+  recreateSystemTableIfUpdated(foreign_table, columns);
 }
 
 void Catalog::createSystemTableServer(const std::string& server_name,
@@ -5592,7 +5649,8 @@ void Catalog::createSystemTableServer(const std::string& server_name,
   createForeignServer(std::move(server), true);
 }
 
-void Catalog::createSystemTable(
+std::pair<foreign_storage::ForeignTable, std::list<ColumnDescriptor>>
+Catalog::getSystemTableSchema(
     const std::string& table_name,
     const std::string& server_name,
     const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name) {
@@ -5621,21 +5679,65 @@ void Catalog::createSystemTable(
     columns.emplace_back();
     auto& cd = columns.back();
     cd.columnName = column_name;
-    cd.columnType.set_type(column_type.get_type());
-    cd.columnType.set_subtype(column_type.get_subtype());
-    cd.columnType.set_notnull(false);
-    if (cd.columnType.is_string() || cd.columnType.is_string_array()) {
-      cd.columnType.set_compression(kENCODING_DICT);
-      cd.columnType.set_comp_param(32);
-    }
-    if (cd.columnType.is_array()) {
-      cd.columnType.set_size(-1);
-    } else {
-      cd.columnType.set_fixed_size();
-    }
+    cd.columnType = column_type;
     cd.isSystemCol = false;
     cd.isVirtualCol = false;
   }
-  createTable(foreign_table, columns, {}, true);
+  return {foreign_table, columns};
+}
+
+void Catalog::recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreign_table,
+                                           const std::list<ColumnDescriptor>& columns) {
+  auto stored_td = getMetadataForTable(foreign_table.tableName, false);
+  bool should_recreate{false};
+  if (stored_td) {
+    auto stored_foreign_table =
+        dynamic_cast<const foreign_storage::ForeignTable*>(stored_td);
+    CHECK(stored_foreign_table);
+    if (stored_foreign_table->foreign_server->name !=
+        foreign_table.foreign_server->name) {
+      should_recreate = true;
+    } else {
+      auto stored_columns =
+          getAllColumnMetadataForTable(stored_td->tableId, false, false, false);
+      if (stored_columns.size() != columns.size()) {
+        should_recreate = true;
+      } else {
+        auto it_1 = stored_columns.begin();
+        auto it_2 = columns.begin();
+        for (; it_1 != stored_columns.end() && it_2 != columns.end(); it_1++, it_2++) {
+          if ((*it_1)->columnName != it_2->columnName ||
+              (*it_1)->columnType != it_2->columnType) {
+            should_recreate = true;
+            break;
+          }
+        }
+      }
+    }
+  } else {
+    should_recreate = true;
+  }
+  if (should_recreate) {
+    if (stored_td) {
+      deleteTableCatalogMetadata(stored_td, {stored_td});
+    }
+    createTable(foreign_table, columns, {}, true);
+  }
+}
+
+void Catalog::addToColumnMap(ColumnDescriptor* cd) {
+  columnDescriptorMap_[ColumnKey{cd->tableId, to_upper(cd->columnName)}] = cd;
+  columnDescriptorMapById_[ColumnIdKey{cd->tableId, cd->columnId}] = cd;
+  if (cd->columnType.is_dict_encoded_type()) {
+    dict_columns_by_table_id_[cd->tableId].emplace(cd);
+  }
+}
+
+void Catalog::removeFromColumnMap(ColumnDescriptor* cd) {
+  if (cd->columnType.is_dict_encoded_type()) {
+    dict_columns_by_table_id_[cd->tableId].erase(cd);
+  }
+  columnDescriptorMap_.erase(ColumnKey{cd->tableId, to_upper(cd->columnName)});
+  columnDescriptorMapById_.erase(ColumnIdKey{cd->tableId, cd->columnId});
 }
 }  // namespace Catalog_Namespace

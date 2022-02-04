@@ -172,7 +172,8 @@ void GlobalFileMgr::setFileMgrParams(const int32_t db_id,
       defaultPageSize_);
   CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
   CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
-  max_rollback_epochs_per_table_[{db_id, tb_id}] = max_rollback_epochs;
+  max_rollback_epochs_per_table_[file_mgr_key] = max_rollback_epochs;
+  lazy_initialized_stats_.erase(file_mgr_key);
   return;
 }
 
@@ -212,6 +213,7 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t 
                                          defaultPageSize_);
       CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
       CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
+      lazy_initialized_stats_.erase(file_mgr_key);
       return s.get();
     }
   }
@@ -231,8 +233,10 @@ std::shared_ptr<FileMgr> GlobalFileMgr::getSharedFileMgr(const int db_id,
 void GlobalFileMgr::setFileMgr(const int db_id,
                                const int table_id,
                                std::shared_ptr<FileMgr> file_mgr) {
-  allFileMgrs_[{db_id, table_id}] = file_mgr.get();
-  ownedFileMgrs_[{db_id, table_id}] = file_mgr;
+  TablePair file_mgr_key{db_id, table_id};
+  allFileMgrs_[file_mgr_key] = file_mgr.get();
+  ownedFileMgrs_[file_mgr_key] = file_mgr;
+  lazy_initialized_stats_.erase(file_mgr_key);
 }
 
 void GlobalFileMgr::writeFileMgrData(
@@ -321,12 +325,17 @@ StorageStats GlobalFileMgr::getStorageStats(const int32_t db_id, const int32_t t
   if (opened_fm) {
     return dynamic_cast<FileMgr*>(opened_fm)->getStorageStats();
   }
-  // Do not do full init of table just to get storage stats, just check file instead
-  const auto file_mgr_key = std::make_pair(db_id, tb_id);
-  auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
-  const auto basic_storage_stats = u->getStorageStats();
-  u.reset();
-  return basic_storage_stats;
+  TablePair file_mgr_key{db_id, tb_id};
+  auto it = lazy_initialized_stats_.find(file_mgr_key);
+  if (it != lazy_initialized_stats_.end()) {
+    return it->second;
+  } else {
+    // Do not do full init of table just to get storage stats, just check file instead
+    auto u = std::make_unique<FileMgr>(0, this, file_mgr_key, defaultPageSize_, true);
+    lazy_initialized_stats_[file_mgr_key] = u->getStorageStats();
+    u.reset();
+    return lazy_initialized_stats_[file_mgr_key];
+  }
 }
 
 void GlobalFileMgr::compactDataFiles(const int32_t db_id, const int32_t tb_id) {

@@ -16,10 +16,14 @@
 
 #include "InternalCatalogDataWrapper.h"
 
+#include <regex>
+
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "FsiChunkUtils.h"
+#include "FsiJsonUtils.h"
 #include "ImportExport/Importer.h"
+#include "Shared/StringTransform.h"
 
 namespace foreign_storage {
 InternalCatalogDataWrapper::InternalCatalogDataWrapper() : InternalSystemDataWrapper() {}
@@ -29,6 +33,10 @@ InternalCatalogDataWrapper::InternalCatalogDataWrapper(const int db_id,
     : InternalSystemDataWrapper(db_id, foreign_table) {}
 
 namespace {
+void set_null(import_export::TypedImportBuffer* import_buffer) {
+  import_buffer->add_value(import_buffer->getColumnDesc(), "", true, {});
+}
+
 void populate_import_buffers_for_catalog_users(
     const std::list<Catalog_Namespace::UserMetadata>& all_users,
     std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
@@ -45,10 +53,48 @@ void populate_import_buffers_for_catalog_users(
     if (import_buffers.find("default_db_id") != import_buffers.end()) {
       import_buffers["default_db_id"]->addInt(user.defaultDbId);
     }
+    if (import_buffers.find("default_db_name") != import_buffers.end()) {
+      if (user.defaultDbId > 0) {
+        import_buffers["default_db_name"]->addString(get_db_name(user.defaultDbId));
+      } else {
+        set_null(import_buffers["default_db_name"]);
+      }
+    }
     if (import_buffers.find("can_login") != import_buffers.end()) {
       import_buffers["can_login"]->addBoolean(user.can_login);
     }
   }
+}
+
+std::string get_user_name(int32_t user_id) {
+  Catalog_Namespace::UserMetadata user_metadata;
+  auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
+  CHECK(sys_catalog.getMetadataForUserById(user_id, user_metadata));
+  return user_metadata.userName;
+}
+
+std::string get_table_type(const TableDescriptor& td) {
+  std::string table_type{"DEFAULT"};
+  if (td.isView) {
+    table_type = "VIEW";
+  } else if (td.isTemporaryTable()) {
+    table_type = "TEMPORARY";
+  } else if (td.isForeignTable()) {
+    table_type = "FOREIGN";
+  }
+  return table_type;
+}
+
+std::string get_table_ddl(int32_t db_id, const TableDescriptor& td) {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto ddl = catalog->dumpCreateTable(td.tableId);
+  if (!ddl.has_value()) {
+    // It is possible for the table to be concurrently deleted while querying the system
+    // table.
+    return kDeletedValueIndicator;
+  }
+  return ddl.value();
 }
 
 void populate_import_buffers_for_catalog_tables(
@@ -59,6 +105,9 @@ void populate_import_buffers_for_catalog_tables(
       if (import_buffers.find("database_id") != import_buffers.end()) {
         import_buffers["database_id"]->addInt(db_id);
       }
+      if (import_buffers.find("database_name") != import_buffers.end()) {
+        import_buffers["database_name"]->addString(get_db_name(db_id));
+      }
       if (import_buffers.find("table_id") != import_buffers.end()) {
         import_buffers["table_id"]->addInt(table.tableId);
       }
@@ -68,11 +117,14 @@ void populate_import_buffers_for_catalog_tables(
       if (import_buffers.find("owner_id") != import_buffers.end()) {
         import_buffers["owner_id"]->addInt(table.userId);
       }
+      if (import_buffers.find("owner_user_name") != import_buffers.end()) {
+        import_buffers["owner_user_name"]->addString(get_user_name(table.userId));
+      }
       if (import_buffers.find("column_count") != import_buffers.end()) {
         import_buffers["column_count"]->addInt(table.nColumns);
       }
-      if (import_buffers.find("is_view") != import_buffers.end()) {
-        import_buffers["is_view"]->addBoolean(table.isView);
+      if (import_buffers.find("table_type") != import_buffers.end()) {
+        import_buffers["table_type"]->addString(get_table_type(table));
       }
       if (import_buffers.find("view_sql") != import_buffers.end()) {
         import_buffers["view_sql"]->addString(table.viewSQL);
@@ -95,8 +147,33 @@ void populate_import_buffers_for_catalog_tables(
       if (import_buffers.find("shard_count") != import_buffers.end()) {
         import_buffers["shard_count"]->addInt(table.nShards);
       }
+      if (import_buffers.find("ddl_statement") != import_buffers.end()) {
+        import_buffers["ddl_statement"]->addString(get_table_ddl(db_id, table));
+      }
     }
   }
+}
+
+std::vector<std::string> get_data_sources(const std::string& dashboard_metadata) {
+  rapidjson::Document document;
+  document.Parse(dashboard_metadata);
+  if (!document.IsObject()) {
+    return {};
+  }
+  std::string data_sources_str;
+  json_utils::get_value_from_object(document, data_sources_str, "table");
+  auto data_sources = split(data_sources_str, ",");
+  for (auto it = data_sources.begin(); it != data_sources.end();) {
+    *it = strip(*it);
+    static std::regex parameter_regex{"\\$\\{.+\\}"};
+    if (std::regex_match(*it, parameter_regex)) {
+      // Remove custom SQL sources.
+      it = data_sources.erase(it);
+    } else {
+      it++;
+    }
+  }
+  return data_sources;
 }
 
 void populate_import_buffers_for_catalog_dashboards(
@@ -107,6 +184,9 @@ void populate_import_buffers_for_catalog_dashboards(
       if (import_buffers.find("database_id") != import_buffers.end()) {
         import_buffers["database_id"]->addInt(db_id);
       }
+      if (import_buffers.find("database_name") != import_buffers.end()) {
+        import_buffers["database_name"]->addString(get_db_name(db_id));
+      }
       if (import_buffers.find("dashboard_id") != import_buffers.end()) {
         import_buffers["dashboard_id"]->addInt(dashboard.dashboardId);
       }
@@ -116,10 +196,17 @@ void populate_import_buffers_for_catalog_dashboards(
       if (import_buffers.find("owner_id") != import_buffers.end()) {
         import_buffers["owner_id"]->addInt(dashboard.userId);
       }
+      if (import_buffers.find("owner_user_name") != import_buffers.end()) {
+        import_buffers["owner_user_name"]->addString(get_user_name(dashboard.userId));
+      }
       if (import_buffers.find("last_updated_at") != import_buffers.end()) {
         auto& buffer = import_buffers["last_updated_at"];
         import_buffers["last_updated_at"]->add_value(
             buffer->getColumnDesc(), dashboard.updateTime, false, {});
+      }
+      if (import_buffers.find("data_sources") != import_buffers.end()) {
+        import_buffers["data_sources"]->addStringArray(
+            get_data_sources(dashboard.dashboardMetadata));
       }
     }
   }
@@ -272,6 +359,9 @@ void populate_import_buffers_for_catalog_permissions(
     if (import_buffers.find("database_id") != import_buffers.end()) {
       import_buffers["database_id"]->addInt(permission.dbId);
     }
+    if (import_buffers.find("database_name") != import_buffers.end()) {
+      import_buffers["database_name"]->addString(get_db_name(permission.dbId));
+    }
     if (import_buffers.find("object_name") != import_buffers.end()) {
       import_buffers["object_name"]->addString(permission.objectName);
     }
@@ -280,6 +370,10 @@ void populate_import_buffers_for_catalog_permissions(
     }
     if (import_buffers.find("object_owner_id") != import_buffers.end()) {
       import_buffers["object_owner_id"]->addInt(permission.objectOwnerId);
+    }
+    if (import_buffers.find("object_owner_user_name") != import_buffers.end()) {
+      import_buffers["object_owner_user_name"]->addString(
+          get_user_name(permission.objectOwnerId));
     }
     if (import_buffers.find("object_permission_type") != import_buffers.end()) {
       import_buffers["object_permission_type"]->addString(
@@ -305,6 +399,9 @@ void populate_import_buffers_for_catalog_databases(
     }
     if (import_buffers.find("owner_id") != import_buffers.end()) {
       import_buffers["owner_id"]->addInt(db.dbOwner);
+    }
+    if (import_buffers.find("owner_user_name") != import_buffers.end()) {
+      import_buffers["owner_user_name"]->addString(get_user_name(db.dbOwner));
     }
   }
 }

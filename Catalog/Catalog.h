@@ -187,6 +187,7 @@ class Catalog final {
   const ColumnDescriptor* getMetadataForColumn(int tableId,
                                                const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
+  const std::optional<std::string> getColumnName(int table_id, int column_id) const;
 
   const int getColumnIdBySpi(const int tableId, const size_t spi) const;
   const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId,
@@ -313,6 +314,9 @@ class Catalog final {
   std::string dumpCreateTable(const TableDescriptor* td,
                               bool multiline_formatting = true,
                               bool dump_defaults = false) const;
+  std::optional<std::string> dumpCreateTable(int32_t table_id,
+                                             bool multiline_formatting = true,
+                                             bool dump_defaults = false) const;
 
   /**
    * Gets the DDL statement used to create a foreign table schema.
@@ -602,7 +606,8 @@ class Catalog final {
   void setColumnDictionary(ColumnDescriptor& cd,
                            std::list<DictDescriptor>& dds,
                            const TableDescriptor& td,
-                           const bool isLogicalTable);
+                           bool is_logical_table,
+                           bool use_temp_dictionary = false);
   void addFrontendViewToMap(DashboardDescriptor& vd);
   void addFrontendViewToMapNoLock(DashboardDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
@@ -648,6 +653,7 @@ class Catalog final {
   ForeignServerMap foreignServerMap_;
   ForeignServerMapById foreignServerMapById_;
   CustomExpressionMapById custom_expr_map_by_id_;
+  TableDictColumnsMap dict_columns_by_table_id_;
 
   SqliteConnector sqliteConnector_;
   const DBMetadata currentDB_;
@@ -738,12 +744,27 @@ class Catalog final {
   void initializeSystemTables();
   void createSystemTableServer(const std::string& server_name,
                                const std::string& data_wrapper_type);
-  void createSystemTable(
+  std::pair<foreign_storage::ForeignTable, std::list<ColumnDescriptor>>
+  getSystemTableSchema(
       const std::string& table_name,
       const std::string& server_name,
       const std::vector<std::pair<std::string, SQLTypeInfo>>& column_type_by_name);
 
+  void recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreign_table,
+                                    const std::list<ColumnDescriptor>& columns);
+
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
+
+  void addToColumnMap(ColumnDescriptor* cd);
+  void removeFromColumnMap(ColumnDescriptor* cd);
+
+  void deleteTableCatalogMetadata(
+      const TableDescriptor* logical_table,
+      const std::vector<const TableDescriptor*>& physical_tables);
+
+  std::string dumpCreateTableUnlocked(const TableDescriptor* td,
+                                      bool multiline_formatting,
+                                      bool dump_defaults) const;
 
   static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"omnisci_memory_stats_server"};

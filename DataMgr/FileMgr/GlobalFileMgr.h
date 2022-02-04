@@ -219,6 +219,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   std::map<TablePair, std::shared_ptr<FileMgr>> ownedFileMgrs_;
   std::map<TablePair, AbstractBufferMgr*> allFileMgrs_;
   std::map<TablePair, int32_t> max_rollback_epochs_per_table_;
+  std::map<TablePair, StorageStats> lazy_initialized_stats_;
 
   mapd_shared_mutex fileMgrs_mutex_;
 };

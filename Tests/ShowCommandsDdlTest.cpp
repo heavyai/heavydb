@@ -1638,42 +1638,47 @@ TEST_F(SystemTablesShowCreateTableTest, Users) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE users;",
       {{"CREATE TABLE users (\n  user_id INTEGER,\n  user_name TEXT ENCODING DICT(32),\n "
-        " "
-        "is_super_user BOOLEAN,\n  default_db_id INTEGER,\n  can_login BOOLEAN);"}});
+        " is_super_user BOOLEAN,\n  default_db_id INTEGER,\n  default_db_name TEXT "
+        "ENCODING DICT(32),\n  can_login BOOLEAN);"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Tables) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE tables;",
-      {{"CREATE TABLE tables (\n  database_id INTEGER,\n  table_id INTEGER,\n  "
-        "table_name TEXT ENCODING DICT(32),\n  owner_id INTEGER,\n  column_count "
-        "INTEGER,\n  is_view BOOLEAN,\n  view_sql TEXT ENCODING DICT(32),\n  "
-        "max_fragment_size INTEGER,\n  max_chunk_size BIGINT,\n  fragment_page_size "
-        "INTEGER,\n  max_rows BIGINT,\n  max_rollback_epochs INTEGER,\n  shard_count "
-        "INTEGER);"}});
+      {{"CREATE TABLE tables (\n  database_id INTEGER,\n  database_name TEXT ENCODING "
+        "DICT(32),\n  table_id INTEGER,\n  table_name TEXT ENCODING DICT(32),\n  "
+        "owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32),\n  column_count "
+        "INTEGER,\n  table_type TEXT ENCODING DICT(32),\n  view_sql TEXT ENCODING "
+        "DICT(32),\n  max_fragment_size INTEGER,\n  max_chunk_size BIGINT,\n  "
+        "fragment_page_size INTEGER,\n  max_rows BIGINT,\n  max_rollback_epochs "
+        "INTEGER,\n  shard_count INTEGER,\n  ddl_statement TEXT ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Dashboards) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE dashboards;",
-      {{"CREATE TABLE dashboards (\n  database_id INTEGER,\n  dashboard_id INTEGER,\n  "
-        "dashboard_name TEXT ENCODING DICT(32),\n  owner_id INTEGER,\n  last_updated_at "
-        "TIMESTAMP(0));"}});
+      {{"CREATE TABLE dashboards (\n  database_id INTEGER,\n  database_name TEXT "
+        "ENCODING DICT(32),\n  dashboard_id INTEGER,\n  dashboard_name TEXT ENCODING "
+        "DICT(32),\n  owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32),\n  "
+        "last_updated_at TIMESTAMP(0),\n  data_sources TEXT[] ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Databases) {
-  sqlAndCompareResult("SHOW CREATE TABLE databases;",
-                      {{"CREATE TABLE databases (\n  database_id INTEGER,\n  "
-                        "database_name TEXT ENCODING DICT(32),\n  owner_id INTEGER);"}});
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE databases;",
+      {{"CREATE TABLE databases (\n  database_id INTEGER,\n  database_name TEXT ENCODING "
+        "DICT(32),\n  owner_id INTEGER,\n  owner_user_name TEXT ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, Permissions) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE permissions;",
       {{"CREATE TABLE permissions (\n  role_name TEXT ENCODING DICT(32),\n  is_user_role "
-        "BOOLEAN,\n  database_id INTEGER,\n  object_name TEXT ENCODING DICT(32),\n  "
-        "object_id INTEGER,\n  object_owner_id INTEGER,\n  object_permission_type TEXT "
-        "ENCODING DICT(32),\n  object_permissions TEXT[] ENCODING DICT(32));"}});
+        "BOOLEAN,\n  database_id INTEGER,\n  database_name TEXT ENCODING DICT(32),\n  "
+        "object_name TEXT ENCODING DICT(32),\n  object_id INTEGER,\n  object_owner_id "
+        "INTEGER,\n  object_owner_user_name TEXT ENCODING DICT(32),\n  "
+        "object_permission_type TEXT ENCODING DICT(32),\n  object_permissions TEXT[] "
+        "ENCODING DICT(32));"}});
 }
 
 TEST_F(SystemTablesShowCreateTableTest, RoleAssignments) {
@@ -1700,10 +1705,26 @@ TEST_F(SystemTablesShowCreateTableTest, MemoryDetails) {
   sqlAndCompareResult(
       "SHOW CREATE TABLE memory_details;",
       {{"CREATE TABLE memory_details (\n  node TEXT ENCODING DICT(32),\n  database_id "
-        "INTEGER,\n  table_id INTEGER,\n  column_id INTEGER,\n  chunk_key INTEGER[],\n  "
-        "device_id INTEGER,\n  device_type TEXT ENCODING DICT(32),\n  memory_status TEXT "
-        "ENCODING DICT(32),\n  page_count BIGINT,\n  page_size BIGINT,\n  slab_id "
-        "INTEGER,\n  start_page BIGINT,\n  last_touch_epoch BIGINT);"}});
+        "INTEGER,\n  database_name TEXT ENCODING DICT(32),\n  table_id INTEGER,\n  "
+        "table_name TEXT ENCODING DICT(32),\n  column_id INTEGER,\n  column_name TEXT "
+        "ENCODING DICT(32),\n  chunk_key INTEGER[],\n  device_id INTEGER,\n  device_type "
+        "TEXT ENCODING DICT(32),\n  memory_status TEXT ENCODING DICT(32),\n  page_count "
+        "BIGINT,\n  page_size BIGINT,\n  slab_id INTEGER,\n  start_page BIGINT,\n  "
+        "last_touch_epoch BIGINT);"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, StorageDetails) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE storage_details;",
+      {{"CREATE TABLE storage_details (\n  node TEXT ENCODING DICT(32),\n  database_id "
+        "INTEGER,\n  database_name TEXT ENCODING DICT(32),\n  table_id INTEGER,\n  "
+        "table_name TEXT ENCODING DICT(32),\n  epoch INTEGER,\n  epoch_floor INTEGER,\n  "
+        "fragment_count INTEGER,\n  shard_id INTEGER,\n  data_file_count INTEGER,\n  "
+        "metadata_file_count INTEGER,\n  total_data_file_size BIGINT,\n  "
+        "total_data_page_count BIGINT,\n  total_free_data_page_count BIGINT,\n  "
+        "total_metadata_file_size BIGINT,\n  total_metadata_page_count BIGINT,\n  "
+        "total_free_metadata_page_count BIGINT,\n  total_dictionary_data_file_size "
+        "BIGINT);"}});
 }
 
 namespace {
@@ -2638,6 +2659,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     }
     switchToAdmin();
     sql("DROP TABLE IF EXISTS test_table_1;");
+    sql("DROP TABLE IF EXISTS test_table_2;");
     dropUser("test_user_3");
     resetDbObjectsAndPermissions();
   }
@@ -2675,8 +2697,12 @@ class SystemTablesTest : public DBHandlerTestFixture {
 
   void createDashboard(const std::string& dashboard_name) {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-    auto id = db_handler->create_dashboard(
-        session_id, dashboard_name, "state", "image", "\"table\":\"test_table\"");
+    auto id =
+        db_handler->create_dashboard(session_id,
+                                     dashboard_name,
+                                     "state",
+                                     "image",
+                                     "{\"table\":\"test_table, ${test_custom_source}\"}");
     dashboard_id_by_name_[dashboard_name] = id;
   }
 
@@ -2882,39 +2908,43 @@ TEST_F(SystemTablesTest, SystemTableDisabled) {
 }
 
 TEST_F(SystemTablesTest, UsersSystemTable) {
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True}});
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId("admin"), "admin", True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True}});
 
   switchToAdmin();
   createUser("test_user_3");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True},
-                       {getUserId("test_user_3"), "test_user_3", False, i(1), True}});
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId("admin"), "admin", True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True},
+       {getUserId("test_user_3"), "test_user_3", False, i(1), "omnisci", True}});
 
   switchToAdmin();
   sql("ALTER USER test_user_3 (is_super = 'true');");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True},
-                       {getUserId("test_user_3"), "test_user_3", True, i(1), True}});
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId("admin"), "admin", True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True},
+       {getUserId("test_user_3"), "test_user_3", True, i(1), "omnisci", True}});
 
   switchToAdmin();
   dropUser("test_user_3");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM users ORDER BY user_name;",
-                      {{getUserId("admin"), "admin", True, i(-1), True},
-                       {getUserId("test_user_1"), "test_user_1", False, i(1), True},
-                       {getUserId("test_user_2"), "test_user_2", False, i(1), True}});
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId("admin"), "admin", True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True}});
 }
 
 TEST_F(SystemTablesTest, TablesSystemTable) {
@@ -2922,8 +2952,12 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
   sql("CREATE DATABASE test_db_1;");
 
   login("admin", "HyperInteractive", "test_db_1");
-  sql("CREATE TABLE test_table_1 (i INTEGER);");
-  sql("CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;");
+  std::string create_table_sql{"CREATE TABLE test_table_1 (\n  i INTEGER);"};
+  sql(create_table_sql);
+  std::string create_view_sql{"CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;"};
+  sql(create_view_sql);
+  auto table_1_id = getTableId("test_table_1");
+  auto view_1_id = getTableId("test_view_1");
 
   loginInformationSchema();
   // Skip the "omnisci" database, since it can contain default created tables
@@ -2931,34 +2965,67 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
                       std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
-                      {{i(3), i(1), "test_table_1", getUserId("admin"), i(3), False, Null,
-                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
-                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
-                       {i(3), i(2), "test_view_1", getUserId("admin"), i(2), True,
-                        "SELECT * FROM test_table_1;", i(DEFAULT_FRAGMENT_ROWS),
-                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)}});
+                      {{i(3), "test_db_1", table_1_id, "test_table_1", getUserId("admin"),
+                        "admin", i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
+                        create_table_sql},
+                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId("admin"),
+                        "admin", i(2), "VIEW", "SELECT * FROM test_table_1;",
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql}});
   // clang-format on
 
   login("admin", "HyperInteractive", "test_db_1");
   sql("ALTER TABLE test_table_1 RENAME TO test_table_2;");
-  sql("CREATE VIEW test_view_2 AS SELECT * FROM test_table_2;");
+  create_table_sql = "CREATE TABLE test_table_2 (\n  i INTEGER);";
+  std::string create_view_sql_2{"CREATE VIEW test_view_2 AS SELECT * FROM test_table_2;"};
+  sql(create_view_sql_2);
+  std::string create_temp_table_sql{
+      "CREATE TEMPORARY TABLE test_temp_table (\n  t TEXT ENCODING DICT(32));"};
+  sql(create_temp_table_sql);
+  std::string create_foreign_table_sql{
+      "CREATE FOREIGN TABLE test_foreign_table (\n  "
+      "i INTEGER)\nSERVER omnisci_local_csv\nWITH (FILE_PATH='" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() +
+      "', "
+      "REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"};
+  sql(create_foreign_table_sql);
+
+  auto view_2_id = getTableId("test_view_2");
+  auto foreign_table_id = getTableId("test_foreign_table");
+  auto temp_table_id = getTableId("test_temp_table");
 
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
                       std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
-                      {{i(3), i(1), "test_table_2", getUserId("admin"), i(3), False, Null,
-                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
-                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
-                       {i(3), i(2), "test_view_1", getUserId("admin"), i(2), True,
-                        "SELECT * FROM test_table_1;", i(DEFAULT_FRAGMENT_ROWS),
-                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)},
-                       {i(3), i(3), "test_view_2", getUserId("admin"), i(2), True,
-                        "SELECT * FROM test_table_2;", i(DEFAULT_FRAGMENT_ROWS),
-                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
-                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0)}});
+                      {{i(3), "test_db_1", foreign_table_id, "test_foreign_table",
+                        getUserId("admin"), "admin", i(2), "FOREIGN", Null,
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_foreign_table_sql},
+                       {i(3), "test_db_1", table_1_id, "test_table_2", getUserId("admin"),
+                        "admin", i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
+                        create_table_sql},
+                       {i(3), "test_db_1", temp_table_id, "test_temp_table",
+                        getUserId("admin"), "admin", i(3), "TEMPORARY", Null,
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_temp_table_sql},
+                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId("admin"),
+                        "admin", i(2), "VIEW", "SELECT * FROM test_table_1;",
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql},
+                       {i(3), "test_db_1", view_2_id, "test_view_2", getUserId("admin"),
+                        "admin", i(2), "VIEW", "SELECT * FROM test_table_2;",
+                        i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
+                        i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
+                        i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql_2}});
   // clang-format on
 }
 
@@ -2976,7 +3043,8 @@ TEST_F(SystemTablesTest, DashboardsSystemTable) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
                       std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
-                      {{i(3), i(1), "test_dashboard_1", getUserId("admin"), last_updated_1}});
+                      {{i(3), "test_db_1", i(1), "test_dashboard_1", getUserId("admin"),
+                        "admin", last_updated_1, array({"test_table"})}});
   // clang-format on
 
   login("admin", "HyperInteractive", "test_db_1");
@@ -2989,8 +3057,10 @@ TEST_F(SystemTablesTest, DashboardsSystemTable) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
                       std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
-                      {{i(3), i(2), "test_dashboard_2", getUserId("admin"), last_updated_2},
-                       {i(3), i(1), "test_dashboard_3", getUserId("admin"), last_updated_3}});
+                      {{i(3), "test_db_1", i(2), "test_dashboard_2", getUserId("admin"),
+                        "admin", last_updated_2, array({"test_table"})},
+                       {i(3), "test_db_1", i(1), "test_dashboard_3", getUserId("admin"),
+                        "admin", last_updated_3, array({"test_table"})}});
   // clang-format on
 }
 
@@ -3001,9 +3071,9 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
   loginInformationSchema();
   sqlAndCompareResult(
       "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
-       {getDbId("omnisci"), "omnisci", getUserId("admin")},
-       {getDbId("test_db_1"), "test_db_1", getUserId("admin")}});
+      {{getDbId("information_schema"), "information_schema", getUserId("admin"), "admin"},
+       {getDbId("omnisci"), "omnisci", getUserId("admin"), "admin"},
+       {getDbId("test_db_1"), "test_db_1", getUserId("admin"), "admin"}});
 
   switchToAdmin();
   sql("CREATE DATABASE test_db_2;");
@@ -3011,10 +3081,10 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
   loginInformationSchema();
   sqlAndCompareResult(
       "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
-       {getDbId("omnisci"), "omnisci", getUserId("admin")},
-       {getDbId("test_db_1"), "test_db_1", getUserId("admin")},
-       {getDbId("test_db_2"), "test_db_2", getUserId("admin")}});
+      {{getDbId("information_schema"), "information_schema", getUserId("admin"), "admin"},
+       {getDbId("omnisci"), "omnisci", getUserId("admin"), "admin"},
+       {getDbId("test_db_1"), "test_db_1", getUserId("admin"), "admin"},
+       {getDbId("test_db_2"), "test_db_2", getUserId("admin"), "admin"}});
 
   switchToAdmin();
   sql("DROP DATABASE test_db_1;");
@@ -3022,18 +3092,20 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
   loginInformationSchema();
   sqlAndCompareResult(
       "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin")},
-       {getDbId("omnisci"), "omnisci", getUserId("admin")},
-       {getDbId("test_db_2"), "test_db_2", getUserId("admin")}});
+      {{getDbId("information_schema"), "information_schema", getUserId("admin"), "admin"},
+       {getDbId("omnisci"), "omnisci", getUserId("admin"), "admin"},
+       {getDbId("test_db_2"), "test_db_2", getUserId("admin"), "admin"}});
 }
 
 TEST_F(SystemTablesTest, PermissionsSystemTable) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
-                      {{"test_user_1", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})},
-                       {"test_user_2", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})}});
+                      {{"test_user_1", True, i(2), "information_schema",
+                        "information_schema", i(-1), getUserId("admin"), "admin",
+                        "database", array({"access"})},
+                       {"test_user_2", True, i(2), "information_schema",
+                        "information_schema", i(-1), getUserId("admin"), "admin",
+                        "database", array({"access"})}});
   // clang-format on
 
   switchToAdmin();
@@ -3042,12 +3114,15 @@ TEST_F(SystemTablesTest, PermissionsSystemTable) {
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name, object_name;",
-                      {{"test_user_1", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})},
-                       {"test_user_1", True, i(1), "omnisci", i(-1), getUserId("admin"),
-                        "table", array({"select table", "create table"})},
-                       {"test_user_2", True, i(2), "information_schema", i(-1),
-                        getUserId("admin"), "database", array({"access"})}});
+                      {{"test_user_1", True, i(2), "information_schema",
+                        "information_schema", i(-1), getUserId("admin"), "admin",
+                        "database", array({"access"})},
+                       {"test_user_1", True, i(1), "omnisci", "omnisci", i(-1),
+                        getUserId("admin"), "admin", "table",
+                        array({"select table", "create table"})},
+                       {"test_user_2", True, i(2), "information_schema",
+                        "information_schema", i(-1), getUserId("admin"), "admin",
+                        "database", array({"access"})}});
   // clang-format on
 }
 
@@ -3109,7 +3184,8 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
                       {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
-                        getAllocatedCpuPageCount(), i(1), getAllocatedCpuPageCount() - 1}});
+                        getAllocatedCpuPageCount(), i(1),
+                        getAllocatedCpuPageCount() - 1}});
   // clang-format on
 }
 
@@ -3150,10 +3226,12 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU';",
-                      {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
-                        i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0), i(1)},
-                       {"Server", Null, Null, Null, Null,
-                        i(0), "CPU", "FREE", getAllocatedCpuPageCount() - 1, getCpuPageSize(), i(0), i(1), i(0)}});
+                      {{"Server", db_id, "omnisci", table_id, "test_table_1", i(1), "i",
+                        array({db_id, table_id, i(1), i(0)}), i(0), "CPU", "USED", i(1),
+                        getCpuPageSize(), i(0), i(0), i(1)},
+                       {"Server", Null, Null, Null, Null, Null, Null, Null, i(0), "CPU",
+                        "FREE", getAllocatedCpuPageCount() - 1, getCpuPageSize(), i(0),
+                        i(1), i(0)}});
   // clang-format on
 }
 
@@ -3174,10 +3252,11 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'GPU' AND "
                       "device_id = " + std::to_string(device_id) + ";",
-                      {{"Server", db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
-                        i(device_id), "GPU", "USED", i(1), getGpuPageSize(device_id), i(0), i(0), i(0)},
-                       {"Server", Null, Null, Null, Null,
-                        i(device_id), "GPU", "FREE", getAllocatedGpuPageCount(device_id) - 1,
+                      {{"Server", db_id, "omnisci", table_id, "test_table_1", i(1), "i",
+                        array({db_id, table_id, i(1), i(0)}), i(device_id), "GPU", "USED",
+                        i(1), getGpuPageSize(device_id), i(0), i(0), i(0)},
+                       {"Server", Null, Null, Null, Null, Null, Null, Null, i(device_id),
+                        "GPU", "FREE", getAllocatedGpuPageCount(device_id) - 1,
                         getGpuPageSize(device_id), i(0), i(1), i(14)}});
   // clang-format on
 }
@@ -3189,18 +3268,20 @@ TEST_F(SystemTablesTest, SystemTablesJoin) {
                       "WHERE permissions.database_id = databases.database_id "
                       "ORDER BY role_name;",
                       {{"information_schema", "test_user_1", True, i(2),
-                        "information_schema", i(-1), getUserId("admin"),
-                        "database", array({"access"})},
+                        "information_schema", "information_schema", i(-1),
+                        getUserId("admin"), "admin", "database", array({"access"})},
                        {"information_schema", "test_user_2", True, i(2),
-                        "information_schema", i(-1), getUserId("admin"),
-                        "database", array({"access"})}});
+                        "information_schema", "information_schema", i(-1),
+                        getUserId("admin"), "admin", "database", array({"access"})}});
   // clang-format on
 }
 
 struct StorageDetailsResult {
   std::string node{"Server"};
   int64_t database_id{0};
+  std::string database_name;
   int64_t table_id{0};
+  std::string table_name;
   int64_t epoch{1};
   int64_t epoch_floor{0};
   int64_t fragment_count{1};
@@ -3238,7 +3319,9 @@ class StorageDetailsSystemTableTest : public SystemTablesTest,
       target_values.emplace_back(
           std::vector<NullableTargetValue>{result.node,
                                            result.database_id,
+                                           result.database_name,
                                            result.table_id,
+                                           result.table_name,
                                            result.epoch,
                                            result.epoch_floor,
                                            result.fragment_count,
@@ -3288,20 +3371,26 @@ TEST_F(StorageDetailsSystemTableTest, ShardedTable) {
       "(shard_count = 2);");
   sql("INSERT INTO test_table VALUES (20, 'efgh', 1.23);");
 
-  auto db_id = getDbId("test_db");
-  auto table_id = getTableId("test_table");
+  std::string db_name{"test_db"};
+  auto db_id = getDbId(db_name);
+  std::string table_name{"test_table"};
+  auto table_id = getTableId(table_name);
   StorageDetailsResult shard_1_result;
   shard_1_result.database_id = db_id;
+  shard_1_result.database_name = db_name;
   shard_1_result.table_id = table_id;
+  shard_1_result.table_name = table_name;
   shard_1_result.shard_id = 0;
   // One page for each of the 3 defined columns + the $deleted$ column
   shard_1_result.total_free_metadata_page_count -= 4;
   shard_1_result.total_free_data_page_count -= 4;
-  shard_1_result.total_dictionary_data_file_size = getDictionarySize("test_table", "c2");
+  shard_1_result.total_dictionary_data_file_size = getDictionarySize(table_name, "c2");
 
   StorageDetailsResult shard_2_result;
   shard_2_result.database_id = db_id;
+  shard_2_result.database_name = db_name;
   shard_2_result.table_id = table_id;
+  shard_2_result.table_name = table_name;
   // Only the first shard should contain table data/metadata
   shard_2_result.fragment_count = 0;
   shard_2_result.data_file_count = 0;
@@ -3313,7 +3402,7 @@ TEST_F(StorageDetailsSystemTableTest, ShardedTable) {
   shard_2_result.total_free_metadata_page_count = 0;
   shard_2_result.total_data_page_count = 0;
   shard_2_result.total_free_data_page_count = 0;
-  shard_2_result.total_dictionary_data_file_size = getDictionarySize("test_table", "c2");
+  shard_2_result.total_dictionary_data_file_size = 0;
   sqlAndCompareResult({shard_1_result, shard_2_result});
 }
 
@@ -3324,11 +3413,15 @@ TEST_F(StorageDetailsSystemTableTest, MultipleFragments) {
     sql("INSERT INTO test_table VALUES (" + std::to_string(i) + ");");
   }
 
-  auto db_id = getDbId("test_db");
-  auto table_id = getTableId("test_table");
+  std::string db_name{"test_db"};
+  auto db_id = getDbId(db_name);
+  std::string table_name{"test_table"};
+  auto table_id = getTableId(table_name);
   StorageDetailsResult result;
   result.database_id = db_id;
+  result.database_name = db_name;
   result.table_id = table_id;
+  result.table_name = table_name;
   // One page for each defined integer column chunk + the $deleted$ column chunks
   result.total_free_metadata_page_count -= row_count * 2;
   result.total_free_data_page_count -= row_count * 2;
@@ -3349,17 +3442,60 @@ TEST_F(StorageDetailsSystemTableTest, NonLocalTables) {
   sqlAndCompareResult({});
 }
 
+TEST_F(StorageDetailsSystemTableTest, SharedDictionary) {
+  std::string table_1{"test_table_1"}, table_2{"test_table_2"};
+  sql("CREATE TABLE " + table_1 + " (i INTEGER, t TEXT);");
+  sql("INSERT INTO " + table_1 + " VALUES (1, 'abc');");
+  sql("CREATE TABLE " + table_2 +
+      " (t TEXT, SHARED DICTIONARY (t) REFERENCES test_table_1(t));");
+  sql("INSERT INTO " + table_2 + " VALUES ('efg');");
+
+  std::string db_name{"test_db"};
+  auto db_id = getDbId(db_name);
+  std::vector<StorageDetailsResult> expected_result;
+  for (const auto& table_name : {table_1, table_2}) {
+    auto table_id = getTableId(table_name);
+    StorageDetailsResult result;
+    result.database_id = db_id;
+    result.database_name = db_name;
+    result.table_id = table_id;
+    result.table_name = table_name;
+    if (table_name == table_1) {
+      // One page for integer column chunk, text column chunk, and the $deleted$ column
+      // chunk.
+      result.total_free_metadata_page_count -= 3;
+      result.total_free_data_page_count -= 3;
+      result.total_dictionary_data_file_size = getDictionarySize(table_1, "t");
+    } else if (table_name == table_2) {
+      // One page for text column chunk and the $deleted$ column chunk.
+      result.total_free_metadata_page_count -= 2;
+      result.total_free_data_page_count -= 2;
+      // Table referencing the shared dictionary should not record additional storage for
+      // the dictionary.
+      result.total_dictionary_data_file_size = 0;
+    } else {
+      FAIL() << "Unexpected table name: " << table_name;
+    }
+    expected_result.emplace_back(result);
+  }
+  sqlAndCompareResult(expected_result);
+}
+
 TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
   const auto page_size = GetParam();
   sql("CREATE TABLE test_table (c1 INTEGER) WITH (page_size = " +
       std::to_string(page_size) + ");");
   sql("INSERT INTO test_table VALUES (10);");
 
-  auto db_id = getDbId("test_db");
-  auto table_id = getTableId("test_table");
+  std::string db_name{"test_db"};
+  auto db_id = getDbId(db_name);
+  std::string table_name{"test_table"};
+  auto table_id = getTableId(table_name);
   StorageDetailsResult result;
   result.database_id = db_id;
+  result.database_name = db_name;
   result.table_id = table_id;
+  result.table_name = table_name;
   result.total_data_file_size = page_size * PAGES_PER_DATA_FILE;
   if (page_size == METADATA_PAGE_SIZE) {
     // In the case where the data page size is the same as the metadata page size, the

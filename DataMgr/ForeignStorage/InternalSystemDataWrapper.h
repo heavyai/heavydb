@@ -23,6 +23,10 @@ class TypedImportBuffer;
 }
 
 namespace foreign_storage {
+constexpr const char* kDeletedValueIndicator{"<DELETED>"};
+
+std::string get_db_name(int32_t db_id);
+std::string get_table_name(int32_t db_id, int32_t table_id);
 
 class InternalSystemDataWrapper : public ForeignDataWrapper {
  public:

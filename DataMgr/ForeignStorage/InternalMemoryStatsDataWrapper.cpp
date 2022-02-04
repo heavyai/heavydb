@@ -76,6 +76,24 @@ void set_null(import_export::TypedImportBuffer* import_buffer) {
   import_buffer->add_value(import_buffer->getColumnDesc(), "", true, {});
 }
 
+bool is_table_chunk(const ChunkKey& chunk_key) {
+  // Non-table chunks (temporary buffers) use a negative id for the database id.
+  return (!chunk_key.empty() && chunk_key[CHUNK_KEY_DB_IDX] > 0);
+}
+
+std::string get_column_name(int32_t db_id, int32_t table_id, int32_t column_id) {
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto column_name = catalog->getColumnName(table_id, column_id);
+  if (column_name.has_value()) {
+    return column_name.value();
+  } else {
+    // It is possible for the column to be concurrently deleted while querying the system
+    // table.
+    return kDeletedValueIndicator;
+  }
+}
+
 void populate_import_buffers_for_memory_details(
     const std::map<std::string, std::vector<MemoryInfo>>& memory_info_by_device_type,
     std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
@@ -89,26 +107,53 @@ void populate_import_buffers_for_memory_details(
         const auto& chunk_key = memory_data.chunk_key;
         if (import_buffers.find("database_id") != import_buffers.end()) {
           auto import_buffer = import_buffers["database_id"];
-          if (chunk_key.empty()) {
-            set_null(import_buffer);
-          } else {
+          if (is_table_chunk(chunk_key)) {
             import_buffer->addInt(chunk_key[CHUNK_KEY_DB_IDX]);
+          } else {
+            set_null(import_buffer);
+          }
+        }
+        if (import_buffers.find("database_name") != import_buffers.end()) {
+          auto import_buffer = import_buffers["database_name"];
+          if (is_table_chunk(chunk_key)) {
+            import_buffer->addString(get_db_name(chunk_key[CHUNK_KEY_DB_IDX]));
+          } else {
+            set_null(import_buffer);
           }
         }
         if (import_buffers.find("table_id") != import_buffers.end()) {
           auto import_buffer = import_buffers["table_id"];
-          if (chunk_key.empty()) {
-            set_null(import_buffer);
-          } else {
+          if (is_table_chunk(chunk_key)) {
             import_buffer->addInt(chunk_key[CHUNK_KEY_TABLE_IDX]);
+          } else {
+            set_null(import_buffer);
+          }
+        }
+        if (import_buffers.find("table_name") != import_buffers.end()) {
+          auto import_buffer = import_buffers["table_name"];
+          if (is_table_chunk(chunk_key)) {
+            import_buffer->addString(get_table_name(chunk_key[CHUNK_KEY_DB_IDX],
+                                                    chunk_key[CHUNK_KEY_TABLE_IDX]));
+          } else {
+            set_null(import_buffer);
           }
         }
         if (import_buffers.find("column_id") != import_buffers.end()) {
           auto import_buffer = import_buffers["column_id"];
-          if (chunk_key.empty()) {
-            set_null(import_buffer);
-          } else {
+          if (is_table_chunk(chunk_key)) {
             import_buffer->addInt(chunk_key[CHUNK_KEY_COLUMN_IDX]);
+          } else {
+            set_null(import_buffer);
+          }
+        }
+        if (import_buffers.find("column_name") != import_buffers.end()) {
+          auto import_buffer = import_buffers["column_name"];
+          if (is_table_chunk(chunk_key)) {
+            import_buffer->addString(get_column_name(chunk_key[CHUNK_KEY_DB_IDX],
+                                                     chunk_key[CHUNK_KEY_TABLE_IDX],
+                                                     chunk_key[CHUNK_KEY_COLUMN_IDX]));
+          } else {
+            set_null(import_buffer);
           }
         }
         if (import_buffers.find("chunk_key") != import_buffers.end()) {
