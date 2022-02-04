@@ -5604,18 +5604,19 @@ ImportStatus Importer::importGDALRaster(
   }
 
   // validate the band column types
-  // other columns must be of a limited set of types that
-  // are compatible with the supported GDAL band data types
-  // detection should only generate these types
-  // any Immerse overriding to other types must be rejected
+  // any Immerse overriding to other types will currently be rejected
+  auto const band_names_and_types = raster_importer.getBandNamesAndSQLTypes();
+  if (band_names_and_types.size() != num_bands) {
+    throw std::runtime_error("Column/Band count mismatch when validating types");
+  }
   for (uint32_t i = 0; i < num_bands; i++) {
     auto const* cd = *cd_itr++;
     auto const cd_type = cd->columnType.get_type();
-    if (cd_type != kSMALLINT && cd_type != kINT && cd_type != kBIGINT &&
-        cd_type != kFLOAT && cd_type != kDOUBLE) {
+    auto const sql_type = band_names_and_types[i].second;
+    if (cd_type != sql_type) {
       throw std::runtime_error("Band Column '" + cd->columnName +
-                               "' overridden type invalid (must be SMALLINT, INT, "
-                               "BIGINT, FLOAT, or DOUBLE)");
+                               "' overridden type invalid (must be " +
+                               to_string(sql_type) + ")");
     }
   }
 
