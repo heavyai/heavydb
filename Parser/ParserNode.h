@@ -1411,6 +1411,8 @@ class DumpRestoreTableStmtBase : public DDLStmt {
       delete options;
     };
 
+    compression_ = defaultCompression(is_restore);
+
     std::unique_ptr<std::list<NameValueAssign*>, decltype(options_deleter)> options_ptr(
         options, options_deleter);
     // specialize decompressor or break on osx bsdtar...
@@ -1419,8 +1421,7 @@ class DumpRestoreTableStmtBase : public DDLStmt {
         if (boost::iequals(*option->get_name(), "compression")) {
           if (const auto str_literal =
                   dynamic_cast<const StringLiteral*>(option->get_value())) {
-            compression_ = *str_literal->get_stringval();
-            validateCompression(compression_, is_restore);
+            compression_ = validateCompression(*str_literal->get_stringval(), is_restore);
           } else {
             throw std::runtime_error("Compression option must be a string.");
           }
@@ -1433,16 +1434,26 @@ class DumpRestoreTableStmtBase : public DDLStmt {
 
   DumpRestoreTableStmtBase(const rapidjson::Value& payload, const bool is_restore);
 
-  void validateCompression(std::string& compression, const bool is_restore);
+  enum class CompressionType { kGZIP, kLZ4, kNONE };
+
+  // default compression type, based upon available executables
+  CompressionType defaultCompression(bool is_restore);
+
+  // validate inputted compression string, check for executable
+  CompressionType validateCompression(const std::string& compression,
+                                      const bool is_restore);
+
+  // construct tar option string for compression setting
+  std::string tarCompressionStr(CompressionType compression, const bool is_restore);
 
   const std::string* getTable() const { return table_.get(); }
   const std::string* getPath() const { return path_.get(); }
-  const std::string getCompression() const { return compression_; }
+  const CompressionType getCompression() const { return compression_; }
 
  protected:
   std::unique_ptr<std::string> table_;
   std::unique_ptr<std::string> path_;  // dump TO file path
-  std::string compression_;
+  CompressionType compression_;
 };
 
 class DumpTableStmt : public DumpRestoreTableStmtBase {

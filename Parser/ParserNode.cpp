@@ -6621,6 +6621,14 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().dropUser(*user_name_);
 }
 
+namespace Compress {
+const std::string sGZIP = "gzip";
+const std::string sUNGZIP = "gunzip";
+const std::string sLZ4 = "lz4";
+const std::string sUNLZ4 = "unlz4";
+const std::string sNONE = "none";
+}  // namespace Compress
+
 DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& payload,
                                                    const bool is_restore) {
   CHECK(payload.HasMember("tableName"));
@@ -6629,6 +6637,8 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
   CHECK(payload.HasMember("filePath"));
   path_ = std::make_unique<std::string>(json_str(payload["filePath"]));
 
+  compression_ = defaultCompression(is_restore);
+
   std::list<std::unique_ptr<NameValueAssign>> options;
   parse_options(payload, options);
 
@@ -6636,9 +6646,8 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
     for (auto& p : options) {
       if (boost::iequals(*p->get_name(), "compression")) {
         checkStringLiteral("compression", p);
-        compression_ =
-            *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        validateCompression(compression_, is_restore);
+        const auto str_literal = static_cast<const StringLiteral*>(p->get_value());
+        compression_ = validateCompression(*str_literal->get_stringval(), is_restore);
       }
     }
   }
@@ -6651,42 +6660,61 @@ DumpRestoreTableStmtBase::DumpRestoreTableStmtBase(const rapidjson::Value& paylo
   }
 }
 
-void DumpRestoreTableStmtBase::validateCompression(std::string& compression_type,
-                                                   const bool is_restore) {
-  // default lz4 compression, next gzip, or none.
-  if (compression_type.empty()) {
-    if (boost::process::search_path(compression_type = "gzip").string().empty()) {
-      if (boost::process::search_path(compression_type = "lz4").string().empty()) {
-        compression_type = "none";
-      }
-    }
-  } else {
-    std::vector<std::string> allowed_compression_programs{"lz4", "gzip", "none"};
-
-    const std::string lowercase_compression =
-        boost::algorithm::to_lower_copy(compression_type);
-    if (allowed_compression_programs.end() ==
-        std::find(allowed_compression_programs.begin(),
-                  allowed_compression_programs.end(),
-                  lowercase_compression)) {
-      throw std::runtime_error("Compression program " + compression_type +
-                               " is not supported.");
-    }
+// select default compression type based upon available executables
+DumpRestoreTableStmtBase::CompressionType DumpRestoreTableStmtBase::defaultCompression(
+    const bool is_restore) {
+  if (boost::process::search_path(is_restore ? Compress::sUNGZIP : Compress::sGZIP)
+          .string()
+          .size()) {
+    return CompressionType::kGZIP;
+  } else if (boost::process::search_path(is_restore ? Compress::sUNLZ4 : Compress::sLZ4)
+                 .string()
+                 .size()) {
+    return CompressionType::kLZ4;
   }
+  return CompressionType::kNONE;
+}
 
-  if (boost::iequals(compression_type, "none")) {
-    compression_type.clear();
-  } else {
-    std::map<std::string, std::string> decompression{{"lz4", "unlz4"},
-                                                     {"gzip", "gunzip"}};
-    const auto use_program =
-        is_restore ? decompression[compression_type] : compression_type;
-    const auto prog_path = boost::process::search_path(use_program);
+DumpRestoreTableStmtBase::CompressionType DumpRestoreTableStmtBase::validateCompression(
+    const std::string& compression_type,
+    const bool is_restore) {
+  // only allow ('gzip', 'lz4', 'none') compression types
+  const std::string compression = boost::algorithm::to_lower_copy(compression_type);
+
+  // verify correct compression executable is available
+  if (boost::iequals(compression, Compress::sGZIP)) {
+    const auto prog_name = is_restore ? Compress::sUNGZIP : Compress::sGZIP;
+    const auto prog_path = boost::process::search_path(prog_name);
     if (prog_path.string().empty()) {
-      throw std::runtime_error("Compression program " + use_program + " is not found.");
+      throw std::runtime_error("Compression program " + prog_name + " is not found.");
     }
-    compression_type = "--use-compress-program=" + use_program;
+    return CompressionType::kGZIP;
+
+  } else if (boost::iequals(compression, Compress::sLZ4)) {
+    const auto prog_name = is_restore ? Compress::sUNLZ4 : Compress::sLZ4;
+    const auto prog_path = boost::process::search_path(prog_name);
+    if (prog_path.string().empty()) {
+      throw std::runtime_error("Compression program " + prog_name + " is not found.");
+    }
+    return CompressionType::kLZ4;
+
+  } else if (!boost::iequals(compression, Compress::sNONE)) {
+    throw std::runtime_error("Compression program " + compression + " is not supported.");
   }
+
+  return CompressionType::kNONE;
+}
+
+// construct a valid tar option string for compression setting
+std::string DumpRestoreTableStmtBase::tarCompressionStr(CompressionType compression_type,
+                                                        const bool is_restore) {
+  if (compression_type == CompressionType::kGZIP) {
+    return "--use-compress-program=" + (is_restore ? Compress::sUNGZIP : Compress::sGZIP);
+  } else if (compression_type == CompressionType::kLZ4) {
+    return "--use-compress-program=" + (is_restore ? Compress::sUNLZ4 : Compress::sLZ4);
+  }
+  // kNONE uses "none' as a user input, but an empty string "" for tar
+  return "";
 }
 
 DumpTableStmt::DumpTableStmt(const rapidjson::Value& payload)
@@ -6717,7 +6745,7 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   const TableDescriptor* td = catalog.getMetadataForTable(*table_);
   TableArchiver table_archiver(&catalog);
-  table_archiver.dumpTable(td, *path_, compression_);
+  table_archiver.dumpTable(td, *path_, tarCompressionStr(compression_, false));
 }
 
 RestoreTableStmt::RestoreTableStmt(const rapidjson::Value& payload)
@@ -6739,7 +6767,8 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                " will not be restored. User has no create privileges.");
     }
     TableArchiver table_archiver(&catalog);
-    table_archiver.restoreTable(session, *table_, *path_, compression_);
+    table_archiver.restoreTable(
+        session, *table_, *path_, tarCompressionStr(compression_, true));
   }
 }
 
