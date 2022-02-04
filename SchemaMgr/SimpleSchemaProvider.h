@@ -12,14 +12,14 @@
  * limitations under the License.
  */
 
-#include "SchemaMgr/SchemaProvider.h"
+#pragma once
 
-namespace TestHelpers {
+#include "SchemaProvider.h"
 
-class TestSchemaProvider : public SchemaProvider {
+class SimpleSchemaProvider : public SchemaProvider {
  public:
-  TestSchemaProvider(int id, const std::string& name) : id_(id), name_(name) {}
-  ~TestSchemaProvider() override = default;
+  SimpleSchemaProvider(int id, const std::string& name) : id_(id), name_(name) {}
+  ~SimpleSchemaProvider() override = default;
 
   int getId() const override { return id_; }
   std::string_view getName() const override { return name_; }
@@ -101,31 +101,34 @@ class TestSchemaProvider : public SchemaProvider {
   }
 
  protected:
-  void addTableInfo(TableInfoPtr table_info) {
+  TableInfoPtr addTableInfo(TableInfoPtr table_info) {
     table_infos_[*table_info] = table_info;
     table_index_by_name_[table_info->db_id][table_info->name] = table_info;
+    return table_info;
   }
 
   template <typename... Ts>
-  void addTableInfo(Ts... args) {
-    addTableInfo(std::make_shared<TableInfo>(args...));
+  TableInfoPtr addTableInfo(Ts... args) {
+    return addTableInfo(std::make_shared<TableInfo>(args...));
   }
 
-  void addColumnInfo(ColumnInfoPtr col_info) {
+  ColumnInfoPtr addColumnInfo(ColumnInfoPtr col_info) {
     column_infos_[*col_info] = col_info;
     column_index_by_name_[{col_info->db_id, col_info->table_id}][col_info->name] =
         col_info;
+    return col_info;
   }
 
   template <typename... Ts>
-  void addColumnInfo(Ts... args) {
-    addColumnInfo(std::make_shared<ColumnInfo>(args...));
+  ColumnInfoPtr addColumnInfo(Ts... args) {
+    return addColumnInfo(std::make_shared<ColumnInfo>(args...));
   }
 
-  void addRowidColumn(int db_id, int table_id) {
+  ColumnInfoPtr addRowidColumn(int db_id, int table_id) {
     CHECK_EQ(column_index_by_name_.count({db_id, table_id}), 1);
     int col_id = static_cast<int>(column_index_by_name_[{db_id, table_id}].size() + 1);
-    addColumnInfo(db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), true);
+    return addColumnInfo(
+        db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), true);
   }
 
   using TableByNameMap = std::unordered_map<std::string, TableInfoPtr>;
@@ -138,5 +141,3 @@ class TestSchemaProvider : public SchemaProvider {
   ColumnInfoMap column_infos_;
   std::unordered_map<TableRef, ColumnByNameMap> column_index_by_name_;
 };
-
-}  // namespace TestHelpers

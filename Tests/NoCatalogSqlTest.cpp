@@ -15,6 +15,7 @@
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "SchemaMgr/SimpleSchemaProvider.h"
 
 #include "gen-cpp/CalciteServer.h"
 
@@ -22,7 +23,6 @@
 #include "TestDataProvider.h"
 #include "TestHelpers.h"
 #include "TestRelAlgDagBuilder.h"
-#include "TestSchemaProvider.h"
 
 #include <gtest/gtest.h>
 
@@ -37,9 +37,9 @@ constexpr int CALCITE_PORT = 3278;
 using TestHelpers::compare_res_data;
 using TestHelpers::inline_null_value;
 
-class TestSchemaProvider : public TestHelpers::TestSchemaProvider {
+class TestSchemaProvider : public SimpleSchemaProvider {
  public:
-  TestSchemaProvider() : TestHelpers::TestSchemaProvider(TEST_SCHEMA_ID, "test") {
+  TestSchemaProvider() : SimpleSchemaProvider(TEST_SCHEMA_ID, "test") {
     // Table test1
     addTableInfo(TEST_DB_ID,
                  TEST1_TABLE_ID,
