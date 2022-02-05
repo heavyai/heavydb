@@ -11,6 +11,7 @@ struct dict_ref_t {
 
   static constexpr int32_t invalidDbId{-1};
   static constexpr int32_t invalidDictId{-1};
+  static constexpr int32_t literalsDictId{0};
 
   dict_ref_t() : dbId(invalidDbId), dictId(invalidDictId) {}
   dict_ref_t(int32_t db_id, int32_t dict_id) : dbId(db_id), dictId(dict_id) {}
