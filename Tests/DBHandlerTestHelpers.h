@@ -21,8 +21,10 @@
 #endif
 
 #include <gtest/gtest.h>
+#include <boost/algorithm/string/regex.hpp>
 #include <boost/format.hpp>
 #include <boost/optional.hpp>
+#include <boost/regex.hpp>
 
 #include "Catalog/Catalog.h"
 #include "QueryRunner/TestProcessSignalHandler.h"
@@ -38,6 +40,68 @@ using NullableTargetValue = boost::variant<TargetValue, void*>;
 extern size_t g_leaf_count;
 extern bool g_cluster;
 extern bool g_enable_system_tables;
+
+namespace {
+using ColumnPair = std::pair<std::string, std::string>;
+
+std::vector<std::string> split_on_regex(const std::string& in, const std::string& regex) {
+  std::vector<std::string> tokens;
+  boost::split_regex(tokens, in, boost::regex{regex});
+  return tokens;
+}
+
+std::vector<ColumnPair> schema_string_to_pairs(const std::string& schema) {
+  auto schema_list = split_on_regex(schema, ",\\s+");
+  std::vector<ColumnPair> result;
+  for (const auto& token : schema_list) {
+    auto tokens = split_on_regex(token, "\\s+");
+    if (tokens[0] == "shard" &&
+        tokens[1].substr(0, 3) == "key") {  // skip `shard key` specifier
+      continue;
+    }
+    result.push_back({tokens[0], tokens[1]});
+  }
+  return result;
+}
+
+boost::regex make_regex(const std::string& pattern) {
+  std::string whitespace_wrapper = "\\s*" + pattern + "\\s*";
+  return boost::regex(whitespace_wrapper, boost::regex::icase);
+}
+
+void substitute_rdms_column_types(const std::string& dbms_type, std::string& type) {
+  static const std::map<std::string, std::map<boost::regex, std::string>>
+      substitutions_by_dbms = {
+          {"sqlite",
+           {{make_regex("DECIMAL\\s*\\(\\d+,\\s*\\d+\\)\\s*\\[\\d*\\]"), "double"}}},
+          {"postgres",
+           {{make_regex("FLOAT"), "real"},
+            {make_regex("DOUBLE"), "double precision"},
+            {make_regex("TINYINT"), "smallint"},
+            {make_regex("TIME"), "time(0)"},
+            {make_regex("TIMESTAMP"), "timestamp(0)"},
+            {make_regex("TIMESTAMP\\s*\\(6\\)"), "timestamp"},
+            {make_regex("POINT"), "geometry"},
+            {make_regex("LINESTRING"), "geometry"},
+            {make_regex("POLYGON"), "geometry"},
+            {make_regex("MULTIPOLYGON"), "geometry"}}},
+          {"redshift",
+           {{make_regex("FLOAT"), "real"},
+            {make_regex("DOUBLE"), "double precision"},
+            {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"}}}};
+
+  if (const auto& dbms_it = substitutions_by_dbms.find(dbms_type);
+      dbms_it != substitutions_by_dbms.end()) {
+    for (const auto& substitute : dbms_it->second) {
+      if (boost::regex_match(type, substitute.first)) {
+        type = substitute.second;
+        return;
+      }
+    }
+  }
+}
+
+}  // namespace
 
 /**
  * Helper class for asserting equality between a result set represented as a boost variant
@@ -361,6 +425,31 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
+  static std::string createSchemaString(const std::string& schema,
+                                        const std::string& dbms_type = "") {
+    return createSchemaString(schema_string_to_pairs(schema), dbms_type);
+  }
+
+  static std::string createSchemaString(const std::vector<ColumnPair>& column_pairs,
+                                        const std::string& dbms_type = "") {
+    std::stringstream schema_stream;
+    schema_stream << "(";
+    size_t i = 0;
+    for (auto [name, type] : column_pairs) {
+      if (!dbms_type.empty()) {
+        if (std::string::npos != type.find("TEXT")) {
+          // remove encoding information
+          type = "TEXT";
+        } else {
+          substitute_rdms_column_types(dbms_type, type);
+        }
+      }
+      schema_stream << name << " " << type;
+      schema_stream << ((++i < column_pairs.size()) ? ", " : ") ");
+    }
+    return schema_stream.str();
+  }
+
   static const std::vector<LeafHostInfo>& getDbLeaves() { return db_leaves_; }
 
   template <typename Lambda>
@@ -419,6 +508,16 @@ class DBHandlerTestFixture : public testing::Test {
   void queryAndAssertException(const std::string& sql_statement,
                                const std::string& error_message) {
     executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message);
+  }
+
+  void queryAndAssertExceptionWithParam(
+      const std::string& sql_statement,
+      const std::string& key,
+      const std::map<std::string, std::string>& error_message_map) {
+    auto error_message_pair_it = error_message_map.find(key);
+    ASSERT_TRUE(error_message_pair_it != error_message_map.end());
+    auto& error_message = error_message_pair_it->second;
+    queryAndAssertException(sql_statement, error_message);
   }
 
   void queryAndAssertPartialException(const std::string& sql_statement,

@@ -78,7 +78,10 @@ static const std::vector<WrapperType> s3_wrappers{"csv",
                                                   "csv_s3_select",
                                                   "regex_parser"};
 static const std::vector<WrapperType> csv_s3_wrappers{"csv", "csv_s3_select"};
-static const std::vector<WrapperType> odbc_wrappers{"sqlite", "postgres"};
+static const std::vector<WrapperType> odbc_wrappers{"sqlite", "postgres", "redshift"};
+static const std::map<std::string, std::pair<std::string, std::string>>
+    odbc_credentials_environment{
+        {"redshift", {"redshift_username", "redshift_password"}}};
 
 static const std::string default_table_name = "test_foreign_table";
 static const std::string default_table_name_2 = "test_foreign_table_2";
@@ -89,7 +92,8 @@ static const std::string default_select = "SELECT * FROM " + default_table_name 
 namespace {
 
 bool is_odbc(const std::string& wrapper_type) {
-  return (wrapper_type == "sqlite" || wrapper_type == "postgres");
+  return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), wrapper_type) !=
+         odbc_wrappers.end();
 }
 
 std::string wrapper_file_type(const std::string& wrapper_type) {
@@ -225,7 +229,6 @@ class ForeignTableTest : public DBHandlerTestFixture {
   void TearDown() override {
     g_enable_fsi = true;
     DBHandlerTestFixture::TearDown();
-    dropLocalODBCServerIfExists();
   }
 
   void skipIfOdbcDisabled() {
@@ -236,17 +239,6 @@ class ForeignTableTest : public DBHandlerTestFixture {
     if (is_odbc(wrapper_type_)) {
       skipIfOdbcDisabled();
     }
-  }
-
-  void createLocalODBCServer(const std::string& dsn_name) {
-    dropLocalODBCServerIfExists();
-    sql("CREATE SERVER " + DEFAULT_ODBC_SERVER_NAME_ +
-        " FOREIGN DATA WRAPPER omnisci_odbc WITH (DATA_SOURCE_NAME = '" + dsn_name +
-        "');");
-  }
-
-  void dropLocalODBCServerIfExists() {
-    sql("DROP SERVER IF EXISTS " + DEFAULT_ODBC_SERVER_NAME_ + ";");
   }
 
   static std::string getCreateForeignTableQuery(const std::string& columns,
@@ -289,48 +281,80 @@ class ForeignTableTest : public DBHandlerTestFixture {
     return query;
   }
 
-  static std::string createSchemaString(const std::vector<NameTypePair>& column_pairs,
-                                        std::string dbms_type = "") {
-    std::stringstream schema_stream;
-    schema_stream << "(";
-    size_t i = 0;
-    for (auto [name, type] : column_pairs) {
-      if (!dbms_type.empty()) {
-        if (std::string::npos != type.find("TEXT")) {
-          // remove encoding information
-          type = "TEXT";
-        }
-        if (dbms_type == "postgres") {
-          if (type == "FLOAT") {
-            type = "real";
-          } else if (type == "TIME") {
-            // Postgres times can include fractional elements
-            // Unless specified they will default to time(6).
-            type = "time(0)";
-          } else if (type == "TIMESTAMP") {
-            // Postgres times by default  are time(6).
-            type = "timestamp(0)";
-          } else if (type == "TIMESTAMP (6)") {
-            type = "timestamp";
-          }
-        }
-      }
-      schema_stream << name << " " << type;
-      if (dbms_type == "postgres" && type == "DOUBLE") {
-        schema_stream << " precision ";
-      }
-      schema_stream << ((++i < column_pairs.size()) ? ", " : ") ");
+  static void createUserMappingForDsn(const std::string& server_name,
+                                      const std::string& username,
+                                      const std::string& password) {
+    sql("CREATE USER MAPPING FOR PUBLIC SERVER " + server_name + " WITH (username='" +
+        username + "', password='" + password + "');");
+  }
+
+  static void createUserMappingForCs(const std::string& server_name,
+                                     const std::map<std::string, std::string>& pairs,
+                                     const std::string& connection_string_suffix = "") {
+    CHECK(!pairs.empty());
+    auto statement = "CREATE USER MAPPING FOR PUBLIC SERVER " + server_name +
+                     " WITH (credential_string='";
+    for (auto const& [key, value] : pairs) {
+      statement += key + "=" + value + ";";
     }
-    return schema_stream.str();
+    statement.pop_back();
+    statement += connection_string_suffix + "');";
+    sql(statement);
+  }
+
+  static void createUserMappingForOdbc(const std::string& server_name,
+                                       const std::map<std::string, std::string>& pairs,
+                                       const bool use_dsn,
+                                       const std::string& connection_string_suffix = "") {
+    if (use_dsn) {
+      auto username_it = pairs.find("USERNAME");
+      auto password_it = pairs.find("PASSWORD");
+      CHECK(username_it != pairs.end());
+      CHECK(password_it != pairs.end());
+      createUserMappingForDsn(server_name, username_it->second, password_it->second);
+    } else {
+      createUserMappingForCs(server_name, pairs, connection_string_suffix);
+    }
+  }
+
+  static void createUserMappingForS3(const std::string& server_name,
+                                     const std::string& access_key,
+                                     const std::string& secret_key,
+                                     const std::string session_token = "") {
+    sql("CREATE USER MAPPING FOR PUBLIC SERVER " + server_name +
+        " WITH (s3_access_key='" + access_key + "', s3_secret_key='" + secret_key +
+        (session_token.empty() ? "" : "', s3_session_token='" + session_token) + "');");
+  }
+
+  static std::pair<std::optional<std::string>, std::optional<std::string>>
+  getODBCCredentials(const std::string& data_wrapper_type) {
+    if (auto it = odbc_credentials_environment.find(data_wrapper_type);
+        it != odbc_credentials_environment.end()) {
+      auto [username_environment, password_environment] = it->second;
+      auto username_ptr = std::getenv(username_environment.c_str());
+      auto password_ptr = std::getenv(password_environment.c_str());
+      if (!username_ptr || !password_ptr) {
+        return {std::nullopt, std::nullopt};
+      }
+      return {std::string(username_ptr), std::string(password_ptr)};
+    }
+    return {"admin", "HyperInteractive"};
+  }
+
+  std::string getODBCCredentialString(const std::string& data_wrapper_type) {
+    auto [username, password] = getODBCCredentials(data_wrapper_type);
+    CHECK(username.has_value());
+    CHECK(password.has_value());
+    std::string credential_string =
+        "Username=" + username.value() + ";Password=" + password.value();
+    return credential_string;
   }
 
   static void createODBCSourceTable(const std::string table_name,
                                     const std::string& table_schema,
                                     const std::string& src_file,
                                     const std::string& data_wrapper_type,
-                                    const bool is_odbc_geo = false,
-                                    const std::string& username = "admin",
-                                    const std::string& password = "HyperInteractive") {}
+                                    const bool is_odbc_geo = false) {}
 
   /**
    * Returns a query to create a foreign table.  Creates a source odbc table for odbc
@@ -347,12 +371,12 @@ class ForeignTableTest : public DBHandlerTestFixture {
       const int order_by_column_index = -1) {
     std::stringstream ss;
     ss << "CREATE FOREIGN TABLE " << table_name << " ";
-    std::string schema = createSchemaString(column_pairs);
+    std::string schema = DBHandlerTestFixture::createSchemaString(column_pairs);
     ss << schema;
 
     if (is_odbc(data_wrapper_type)) {
-      std::string db_specific_schema =
-          createSchemaString(column_pairs, data_wrapper_type);
+      std::string db_specific_schema = DBHandlerTestFixture::createSchemaString(
+          column_pairs, data_wrapper_type);
       ss << "SERVER temp_odbc WITH (sql_select = 'select ";
       size_t i = 0;
       for (auto [name, type] : column_pairs) {
@@ -717,6 +741,10 @@ class DataTypeFragmentSizeAndDataWrapperTest
   void SetUp() override {
     std::tie(fragment_size_, wrapper_type_, extension_) = GetParam();
     SelectQueryTest::SetUp();
+  }
+
+  void TearDown() override {
+    SelectQueryTest::TearDown();
   }
 
   std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>>
@@ -1585,7 +1613,7 @@ TEST_P(DataWrapperSelectQueryTest, null_values_for_non_encoded_types) {
                               {{"FRAGMENT_SIZE", std::to_string(1)}}));
 
   TQueryResult result;
-  sql(result, "SELECT * FROM test_foreign_table order by idx;");
+  sql(result, "SELECT * FROM " + default_table_name + " order by idx;");
   assertResultSetEqual(expected_results, result);
 }
 
@@ -2657,7 +2685,7 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
       if (is_odbc(wrapper_type_)) {
         // If we are in ODBC we need to recreate the ODBC table as well.
         createODBCSourceTable(table_names_[i],
-                              createSchemaString(column_pairs),
+                              DBHandlerTestFixture::createSchemaString(column_pairs),
                               tmp_file_names_[i],
                               wrapper_type_);
       }
@@ -3394,7 +3422,7 @@ TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
 
   // Overwrite source dir with append_after data and update odbc source table (if
   // necessary).
-  overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
 
   recoverCacheIfSpecified();
 
@@ -3542,7 +3570,7 @@ TEST_P(StringDictAppendTest, AppendStringDictFilter) {
   sqlAndCompareResult("SELECT count(txt) from " + table_name_ + " WHERE txt = 'a';",
                       {{i(1)}});
   recoverCacheIfSpecified();
-  overwriteSourceDir(createSchemaString({{"txt", "TEXT"}}));
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"txt", "TEXT"}}));
   sql("REFRESH FOREIGN TABLES " + table_name_ + evictString() + ";");
   sqlAndCompareResult("SELECT count(txt) from " + table_name_ + " WHERE txt = 'aaaa';",
                       {{i(1)}});
@@ -3560,7 +3588,7 @@ TEST_P(StringDictAppendTest, AppendStringDictJoin) {
 
   sqlAndCompareResult(join, {{"a", "a"}, {"aa", "aa"}, {"aaa", "aaa"}});
   recoverCacheIfSpecified();
-  auto table_schema = createSchemaString({{"txt", "TEXT"}});
+  auto table_schema = DBHandlerTestFixture::createSchemaString({{"txt", "TEXT"}});
   overwriteSourceDir(table_schema);
   // Need an extra createODBCSourceTable() call as only the first table is handled by
   // overwriteSourceDir()
@@ -3631,7 +3659,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
 
-  overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
 
   // Refresh command
   if (is_odbc(wrapper_type_)) {
@@ -3652,7 +3680,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRowsEvict) {
   file_name_ = "single_file_delete_rows"s + wrapper_ext(wrapper_type_);
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
-  overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
   sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict=true); ");
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}});
 }
@@ -3664,7 +3692,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingFile) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_missing_file";
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
-  overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
   queryAndAssertException(
       "REFRESH FOREIGN TABLES " + table_name_ + ";",
       "Refresh of foreign table created with \"APPEND\" update type failed as "
@@ -3682,7 +3710,7 @@ TEST_P(DataWrapperAppendRefreshTest, MultifileAppendtoFile) {
   file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_multi_bad_append";
   sqlCreateTestTable();
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
-  overwriteSourceDir(createSchemaString({{"i", "BIGINT"}}));
+  overwriteSourceDir(DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
   sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
   sqlAndCompareResult("SELECT * FROM "s + table_name_ + " ORDER BY i;", {{i(1)}, {i(2)}});
 }
@@ -4917,11 +4945,12 @@ TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
   recursive_copy(getDataFilesPath() + "append_after", getDataFilesPath() + "append_tmp");
   // Recreate table for ODBC data wrappers
   if (is_odbc(wrapper_type_)) {
-    createODBCSourceTable(default_table_name,
-                          createSchemaString({{"i", "BIGINT"}}, wrapper_type_),
-                          file_path,
-                          wrapper_type_,
-                          false);
+    createODBCSourceTable(
+        default_table_name,
+        DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}, wrapper_type_),
+        file_path,
+        wrapper_type_,
+        false);
   }
 
   // Refresh command
@@ -5121,7 +5150,7 @@ TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Refresh) {
   if (wrapper_type_ == "regex_parser") {
     options["LINE_REGEX"] = get_line_regex(2);
   }
-  setTestFile("0", ext_, createSchemaString({{"i", "BIGINT"}}));
+  setTestFile("0", ext_, DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
   sql(createForeignTableQuery(
       {{"i", "BIGINT"}}, TEMP_DIR + TEMP_FILE + ext_, wrapper_type_, options));
   sql("SELECT COUNT(*) FROM " + default_table_name + ";");
@@ -5129,7 +5158,8 @@ TEST_P(SchemaMismatchTest, FileHasTooManyColumns_Refresh) {
     // Mismatch between file content and regex should result in rows with all null values
     sqlAndCompareResult("SELECT * FROM " + default_table_name + ";", {{NULL_BIGINT}});
   }
-  setTestFile("two_col_1_2", ext_, createSchemaString({{"i", "BIGINT"}}));
+  setTestFile(
+      "two_col_1_2", ext_, DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}}));
   queryAndAssertException("REFRESH FOREIGN TABLES " + default_table_name + ";",
                           "Mismatched number of logical columns: (expected 1 "
                           "columns, has 2): in file '" +
@@ -5143,7 +5173,9 @@ TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Refresh) {
     options["LINE_REGEX"] = get_line_regex(1);
   }
   setTestFile(
-      "two_col_1_2", ext_, createSchemaString({{"i", "BIGINT"}, {"i2", "BIGINT"}}));
+      "two_col_1_2",
+      ext_,
+      DBHandlerTestFixture::createSchemaString({{"i", "BIGINT"}, {"i2", "BIGINT"}}));
   sql(createForeignTableQuery({{"i", "BIGINT"}, {"i2", "BIGINT"}},
                               TEMP_DIR + TEMP_FILE + ext_,
                               wrapper_type_,

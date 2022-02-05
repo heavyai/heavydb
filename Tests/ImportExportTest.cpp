@@ -24,7 +24,6 @@
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/regex.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/gzip.hpp>
@@ -750,85 +749,6 @@ class ImportAndSelectTest
     return (import_type == "sqlite" || import_type == "postgres");
   }
 
-  using SchemaPairs = std::vector<std::pair<std::string, std::string>>;
-
-  static std::string createSchemaString(const SchemaPairs& column_pairs,
-                                        std::string dbms_type = "") {
-    std::stringstream schema_stream;
-    schema_stream << "(";
-    size_t i = 0;
-    for (auto [name, type] : column_pairs) {
-      if (!dbms_type.empty()) {
-        if (std::string::npos != type.find("TEXT")) {
-          // remove encoding information
-          type = "TEXT";
-        }
-        if (dbms_type == "sqlite") {
-          if (type.substr(0, 7) == "DECIMAL") {
-            type = "double";
-          }
-        }
-        if (dbms_type == "postgres") {
-          if (type == "FLOAT") {
-            type = "real";
-          } else if (type == "TINYINT") {
-            type = "smallint";
-          } else if (type == "TIME") {
-            // Postgres times can include fractional elements
-            // Unless specified they will default to time(6).
-            type = "time(0)";
-          } else if (type == "TIMESTAMP") {
-            // Postgres times by default  are time(6).
-            type = "timestamp(0)";
-          } else if (type == "TIMESTAMP (6)") {
-            type = "timestamp";
-          } else if (type == "POINT") {
-            type = "geometry";
-          } else if (type == "LINESTRING") {
-            type = "geometry";
-          } else if (type == "POLYGON") {
-            type = "geometry";
-          } else if (type == "MULTIPOLYGON") {
-            type = "geometry";
-          }
-        }
-      }
-      schema_stream << name << " " << type;
-      if (dbms_type == "postgres" && type == "DOUBLE") {
-        schema_stream << " precision ";
-      }
-      schema_stream << ((++i < column_pairs.size()) ? ", " : ") ");
-    }
-    return schema_stream.str();
-  }
-
-  static std::vector<std::string> splitOnRegex(const std::string& in,
-                                               const std::string& regex) {
-    std::vector<std::string> tokens;
-    boost::split_regex(tokens, in, boost::regex{regex});
-    return tokens;
-  }
-
-  static SchemaPairs schemaStringToPairs(const std::string& schema,
-                                         const std::string dbms_type) {
-    auto schema_list = splitOnRegex(schema, ",\\s+");
-    SchemaPairs result;
-    for (const auto& token : schema_list) {
-      auto tokens = splitOnRegex(token, "\\s+");
-      if (tokens[0] == "shard" &&
-          tokens[1].substr(0, 3) == "key") {  // skip `shard key` specifier
-        continue;
-      }
-      result.push_back({tokens[0], tokens[1]});
-    }
-    return result;
-  }
-
-  static std::string createSchemaString(const std::string& schema,
-                                        const std::string dbms_type) {
-    return createSchemaString(schemaStringToPairs(schema, dbms_type), dbms_type);
-  }
-
   static void createODBCSourceTable(const std::string& table_name,
                                     const std::string& table_schema,
                                     const std::string& src_file,
@@ -996,12 +916,7 @@ class ImportAndSelectTest
     auto copy_from_source = "'" + file_path + "'";
 
     if (isOdbc(import_type)) {
-      createODBCSourceTable("import_test",
-                            createSchemaString(schema, import_type),
-                            file_path,
-                            import_type,
-                            is_odbc_geo);
-      copy_from_source = odbc_select;
+      UNREACHABLE();
     }
     EXPECT_NO_THROW(sql(query));
     EXPECT_NO_THROW(sql("COPY import_test_new FROM " + copy_from_source +
