@@ -2131,7 +2131,7 @@ void Executor::addTransientStringLiterals(
         if (dict_id >= 0) {
           auto sdp = getStringDictionaryProxy(dict_id, row_set_mem_owner, true);
           CHECK(sdp);
-          TransientStringLiteralsVisitor visitor(sdp);
+          TransientStringLiteralsVisitor visitor(sdp, this);
           visitor.visit(expr);
         }
       };

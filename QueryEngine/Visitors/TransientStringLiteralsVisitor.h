@@ -21,14 +21,60 @@
 
 class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
  public:
-  TransientStringLiteralsVisitor(StringDictionaryProxy* sdp) : sdp_(sdp) { CHECK(sdp); }
+  TransientStringLiteralsVisitor(StringDictionaryProxy* sdp, Executor* executor)
+      : sdp_(sdp), executor_(executor) {
+    CHECK(sdp);
+  }
 
   void* visitConstant(const Analyzer::Constant* constant) const override {
     if (constant->get_type_info().is_string() && !constant->get_is_null()) {
       CHECK(constant->get_constval().stringval);
       sdp_->getOrAddTransient(*constant->get_constval().stringval);
     }
-    return nullptr;
+    return defaultResult();
+  }
+
+  // visitUOper is for handling casts between dictionary encoded text
+  // columns that do not share string dictionaries. For these
+  // we need to run the translation again on the aggregator
+  // so that we know how to interpret the transient literals added
+  // by the leaves via string-to-string casts
+
+  // Todo(todd): It is inefficient to do the same translation on
+  // the aggregator and each of the leaves, explore storing these
+  // translations/literals on the remote dictionary server instead
+  // so the translation happens once and only once
+
+  void* visitUOper(const Analyzer::UOper* uoper) const override {
+    visit(uoper->get_operand());
+    const auto& uoper_ti = uoper->get_type_info();
+    const auto& operand_ti = uoper->get_operand()->get_type_info();
+    if (!(uoper->get_optype() == kCAST && uoper_ti.is_dict_encoded_string() &&
+          operand_ti.is_dict_encoded_string())) {
+      // If we are not casting from a dictionary-encoded string
+      // to a dictionary-encoded string
+      return defaultResult();
+    }
+    if (uoper_ti.get_comp_param() != sdp_->getDictId()) {
+      // If we are not casting to our dictionary (sdp_
+      return defaultResult();
+    }
+    if (uoper_ti.get_comp_param() == operand_ti.get_comp_param()) {
+      // If cast is inert, i.e. source and destination dict ids are same
+      return defaultResult();
+    }
+    if (uoper_ti.is_dict_intersection()) {
+      // Intersection translations don't add transients to the dest proxy,
+      // and hence can be ignored for the purposes of populating transients
+      return defaultResult();
+    }
+    executor_->getStringProxyTranslationMap(
+        operand_ti.get_comp_param(),
+        uoper_ti.get_comp_param(),
+        RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
+        executor_->getRowSetMemoryOwner(),
+        true);  // with_generation
+    return defaultResult();
   }
 
  protected:
@@ -36,6 +82,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
 
  private:
   mutable StringDictionaryProxy* sdp_;
+  mutable Executor* executor_;
 };
 
 class TransientDictIdVisitor : public ScalarExprVisitor<int> {
