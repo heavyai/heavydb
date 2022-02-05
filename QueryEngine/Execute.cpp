@@ -552,9 +552,9 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
         with_generation ? string_dictionary_generations_.getGeneration(dict_id) : -1;
     return addStringDict(dd->stringDict, dict_id, generation);
   }
-  CHECK_EQ(0, dict_id);
+  CHECK_EQ(dict_id, DictRef::literalsDictId);
   if (!lit_str_dict_proxy_) {
-    DictRef literal_dict_ref{DictRef::InvalidDictRef()};
+    DictRef literal_dict_ref(catalog->getDatabaseId(), DictRef::literalsDictId);
     std::shared_ptr<StringDictionary> tsd = std::make_shared<StringDictionary>(
         literal_dict_ref, "", false, true, g_cache_string_hash);
     lit_str_dict_proxy_ =
