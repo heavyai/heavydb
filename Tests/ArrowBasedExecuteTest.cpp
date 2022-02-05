@@ -4489,6 +4489,22 @@ TEST_F(Select, Case) {
     c(R"(SELECT CASE WHEN x = 8 THEN 'b' WHEN x = 7 THEN str END AS case_group, COUNT(*) AS n FROM test WHERE CASE WHEN x = 7 THEN str WHEN x = 8 THEN fixed_str ELSE 'bar' END = str GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
       dt);
 
+    // Ensure that transients added during case-statement string dictionary column casts
+    // are propogated to aggregator in distributed mode
+
+    c(R"(SELECT CASE WHEN x = 8 THEN str WHEN x = 7 THEN ss END AS case_expr FROM test ORDER BY case_expr ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN str WHEN x = 7 THEN ss END AS case_group, COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN str WHEN x = 7 AND fixed_str IS NOT NULL THEN fixed_str ELSE ss END AS case_group, COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN str WHEN x = 7 AND fixed_str IS NOT NULL THEN 'a' ELSE ss END AS case_group, COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN ss WHEN x = 7 AND fixed_str IS NOT NULL THEN ss ELSE fixed_str END AS case_group, COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST;)",
+      dt);
+    c(R"(SELECT CASE WHEN x = 8 THEN ss WHEN x = 7 AND fixed_str IS NOT NULL THEN ss ELSE fixed_str END AS case_group, COUNT(*) AS n FROM test WHERE CASE WHEN x = 7 THEN ss ELSE str END = 'fish' GROUP BY case_group ORDER BY case_group ASC NULLS FIRST;)",
+      dt);
+
     EXPECT_ANY_THROW(
         c(R"(SELECT CASE WHEN x = 8 THEN str ELSE (str = fixed_str) END AS case_group,
      COUNT(*) AS n FROM test GROUP BY case_group ORDER BY case_group ASC NULLS FIRST, n ASC NULLS FIRST;)",
