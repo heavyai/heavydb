@@ -146,14 +146,14 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
   }
 }
 
-size_t Chunk::getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                             const size_t num_elems,
-                                             const size_t start_idx,
-                                             const size_t byte_limit) {
+size_t Chunk::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t* index_data,
+    const std::vector<size_t>& selected_idx,
+    const size_t byte_limit) {
   CHECK(column_desc_->columnType.is_varlen());
   CHECK(buffer_->getEncoder());
-  return buffer_->getEncoder()->getNumElemsForBytesEncodedData(
-      index_data, start_idx, num_elems, byte_limit);
+  return buffer_->getEncoder()->getNumElemsForBytesEncodedDataAtIndices(
+      index_data, selected_idx, byte_limit);
 }
 
 size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,

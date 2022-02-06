@@ -36,12 +36,12 @@ class FixedLengthEncoder : public Encoder {
     resetChunkStats();
   }
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const int start_idx,
-                                        const size_t num_elements,
-                                        const size_t byte_limit) override {
-    UNREACHABLE() << "getNumElemsForBytesEncodedData unexpectedly called for non varlen"
-                     " encoder";
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit) override {
+    UNREACHABLE()
+        << "getNumElemsForBytesEncodedDataAtIndices unexpectedly called for non varlen"
+           " encoder";
     return {};
   }
 

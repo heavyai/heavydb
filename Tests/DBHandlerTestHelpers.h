@@ -364,6 +364,12 @@ class DBHandlerTestFixture : public testing::Test {
     sql(result, query);
   }
 
+  static TImportStatus getImportStatus(const std::string& import_id) {
+    TImportStatus import_status;
+    db_handler_->import_table_status(import_status, session_id_, import_id);
+    return import_status;
+  }
+
   static void sql(TQueryResult& result, const std::string& query) {
     db_handler_->sql_execute(
         result, session_id_, boost::trim_copy(query), true, "", -1, -1);

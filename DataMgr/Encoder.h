@@ -155,9 +155,8 @@ class Encoder {
    * byte limit
    *
    * @param index_data - (optional) index data for the encoded type
-   * @param start_idx - (optional) starting index of the encoded data
-   * @param num_elements - maximal number of elements
-   * @param byte_limit - byte limit that mus be respected
+   * @param selected_idx - which indices in the encoded data to consider
+   * @param byte_limit - byte limit that must be respected
    *
    * @return the number of elements
    *
@@ -165,10 +164,10 @@ class Encoder {
    * may or may not be required depending on the encoder type backing the
    * implementation.
    */
-  virtual size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                                const int start_idx,
-                                                const size_t num_elements,
-                                                const size_t byte_limit) = 0;
+  virtual size_t getNumElemsForBytesEncodedDataAtIndices(
+      const int8_t* index_data,
+      const std::vector<size_t>& selected_idx,
+      const size_t byte_limit) = 0;
 
   /**
    * Append selected encoded data to the chunk buffer backing this encoder.

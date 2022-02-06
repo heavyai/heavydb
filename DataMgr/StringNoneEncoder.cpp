@@ -48,26 +48,21 @@ size_t StringNoneEncoder::getNumElemsForBytesInsertData(
   return n - start_idx;
 }
 
-size_t StringNoneEncoder::getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                                         const int start_idx,
-                                                         const size_t num_elements,
-                                                         const size_t byte_limit) {
+size_t StringNoneEncoder::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t* index_data,
+    const std::vector<size_t>& selected_idx,
+    const size_t byte_limit) {
+  size_t num_elements = 0;
   size_t data_size = 0;
-  auto string_offsets = reinterpret_cast<const StringOffsetT*>(index_data);
-  size_t count;
-  for (count = 1; count <= num_elements; ++count) {
-    auto current_index = start_idx + count;
-    auto offset = string_offsets[current_index];
-    CHECK(offset >= 0);
-    int64_t last_offset = string_offsets[current_index - 1];
-    CHECK(last_offset >= 0 && last_offset <= offset);
-    size_t string_byte_size = offset - last_offset;
-    if (data_size + string_byte_size > byte_limit) {
+  for (const auto& offset_index : selected_idx) {
+    auto element_size = getStringSizeAtIndex(index_data, offset_index);
+    if (data_size + element_size > byte_limit) {
       break;
     }
-    data_size += string_byte_size;
+    data_size += element_size;
+    num_elements++;
   }
-  return count - 1;
+  return num_elements;
 }
 
 std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendEncodedDataAtIndices(
@@ -76,8 +71,8 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendEncodedDataAtIndices(
     const std::vector<size_t>& selected_idx) {
   std::vector<std::string_view> data_subset;
   data_subset.reserve(selected_idx.size());
-  for (const auto& index : selected_idx) {
-    data_subset.emplace_back(getStringAtIndex(index_data, data, index));
+  for (const auto& offset_index : selected_idx) {
+    data_subset.emplace_back(getStringAtIndex(index_data, data, offset_index));
   }
   return appendData(&data_subset, 0, selected_idx.size(), false);
 }
@@ -204,15 +199,28 @@ void StringNoneEncoder::update_elem_stats(const StringType& elem) {
   }
 }
 
-std::string_view StringNoneEncoder::getStringAtIndex(const int8_t* index_data,
-                                                     const int8_t* data,
-                                                     size_t index) {
+std::pair<StringOffsetT, StringOffsetT> StringNoneEncoder::getStringOffsets(
+    const int8_t* index_data,
+    size_t index) {
   auto string_offsets = reinterpret_cast<const StringOffsetT*>(index_data);
   auto current_index = index + 1;
   auto offset = string_offsets[current_index];
   CHECK(offset >= 0);
   int64_t last_offset = string_offsets[current_index - 1];
   CHECK(last_offset >= 0 && last_offset <= offset);
+  return {offset, last_offset};
+}
+
+size_t StringNoneEncoder::getStringSizeAtIndex(const int8_t* index_data, size_t index) {
+  auto [offset, last_offset] = getStringOffsets(index_data, index);
+  size_t string_byte_size = offset - last_offset;
+  return string_byte_size;
+}
+
+std::string_view StringNoneEncoder::getStringAtIndex(const int8_t* index_data,
+                                                     const int8_t* data,
+                                                     size_t index) {
+  auto [offset, last_offset] = getStringOffsets(index_data, index);
   size_t string_byte_size = offset - last_offset;
   auto current_data = reinterpret_cast<const char*>(data + last_offset);
   return std::string_view{current_data, string_byte_size};

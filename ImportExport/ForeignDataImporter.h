@@ -44,6 +44,10 @@ class ForeignDataImporter : public AbstractImporter {
                 const std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>>&
                     string_dictionaries);
 
+  void finalize(const Catalog_Namespace::SessionInfo& parent_session_info,
+                ImportStatus& import_status,
+                const int32_t table_id);
+
 #ifdef ENABLE_IMPORT_PARQUET
   ImportStatus importParquet(const Catalog_Namespace::SessionInfo* session_info);
 #endif

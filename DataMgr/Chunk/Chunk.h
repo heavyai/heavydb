@@ -74,10 +74,9 @@ class Chunk {
                            int start_idx = 0,
                            int skip = 1) const;
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const size_t num_elems,
-                                        const size_t start_idx,
-                                        const size_t byte_limit);
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit);
 
   size_t getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
                                        const size_t num_elems,

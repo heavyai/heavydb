@@ -43,11 +43,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   FixedLengthArrayNoneEncoder(AbstractBuffer* buffer, size_t as)
       : Encoder(buffer), has_nulls(false), initialized(false), array_size(as) {}
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const int start_idx,
-                                        const size_t num_elements,
-                                        const size_t byte_limit) override {
-    size_t data_size = num_elements * array_size;
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit) override {
+    size_t data_size = selected_idx.size() * array_size;
     if (data_size > byte_limit) {
       data_size = byte_limit;
     }

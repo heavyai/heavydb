@@ -57,10 +57,14 @@ class ForeignDataWrapper {
    * @param optional_buffers - chunk buffers that can be optionally populated,
    * if the data wrapper has to scan through chunk data anyways (typically for
    * row wise data formats)
+   * @param delete_buffer - chunk buffer for fragment's delete column, if
+   * non-null data wrapper is expected to mark deleted rows in buffer and
+   * continue processing
    */
 
   virtual void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                                    const ChunkToBufferMap& optional_buffers) = 0;
+                                    const ChunkToBufferMap& optional_buffers,
+                                    AbstractBuffer* delete_buffer = nullptr) = 0;
 
   /**
    * Serialize internal state of wrapper into file at given path if implemented

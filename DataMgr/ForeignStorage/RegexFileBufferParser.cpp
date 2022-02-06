@@ -171,12 +171,15 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
   std::vector<size_t> row_offsets;
   row_offsets.emplace_back(request.file_offset + request.begin_pos);
 
+  size_t current_row_id = 0;
   size_t row_count = 0;
   auto logical_column_count = request.foreign_table_schema->getLogicalColumns().size();
   std::vector<std::string> parsed_columns_str;
   parsed_columns_str.reserve(logical_column_count);
   std::vector<std::string_view> parsed_columns_sv;
   parsed_columns_sv.reserve(logical_column_count);
+
+  ParseBufferResult result{};
 
   std::string row_str;
   size_t remaining_row_count = request.process_row_count;
@@ -186,7 +189,7 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
       row_str = get_next_row(
           curr, buffer_end - 1, request.copy_params.line_delim, line_start_regex_);
       curr += row_str.length() + 1;
-      row_count++;
+      current_row_id = row_count++;
       remaining_row_count--;
 
       bool skip_all_columns =
@@ -194,17 +197,31 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
                       request.import_buffers.end(),
                       [](const auto& import_buffer) { return !import_buffer; });
       if (!skip_all_columns) {
-        bool set_all_nulls = regex_match_columns(row_str,
-                                                 line_regex_,
-                                                 logical_column_count,
-                                                 parsed_columns_str,
-                                                 parsed_columns_sv,
-                                                 request.getFilePath());
+        auto columns = request.getColumns();
+
+        bool set_all_nulls = false;
+        try {
+          set_all_nulls = regex_match_columns(row_str,
+                                              line_regex_,
+                                              logical_column_count,
+                                              parsed_columns_str,
+                                              parsed_columns_sv,
+                                              request.getFilePath());
+        } catch (const ForeignStorageException& e) {
+          if (request.track_rejected_rows) {
+            result.rejected_rows.insert(current_row_id);
+            auto cd_it = columns.begin();
+            fillRejectedRowWithInvalidData(columns, cd_it, 0, request);
+            continue;
+          } else {
+            throw;
+          }
+        }
 
         size_t parsed_column_index = 0;
         size_t import_buffer_index = 0;
-        auto columns = request.getColumns();
-        for (auto cd_it = columns.begin(); cd_it != columns.end(); cd_it++) {
+
+        for (auto cd_it = columns.begin(); cd_it != columns.end(); ++cd_it) {
           auto cd = *cd_it;
           const auto& column_type = cd->columnType;
           if (request.import_buffers[import_buffer_index]) {
@@ -213,27 +230,50 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
                                               cd,
                                               request.copy_params.null_str));
             if (column_type.is_geometry()) {
-              processGeoColumn(request.import_buffers,
-                               import_buffer_index,
-                               request.copy_params,
-                               cd_it,
-                               parsed_columns_sv,
-                               parsed_column_index,
-                               is_null,
-                               request.first_row_index,
-                               row_count,
-                               request.getCatalog(),
-                               request.render_group_analyzer_map);
+              auto starting_import_buffer_index = import_buffer_index;
+              try {
+                processGeoColumn(request.import_buffers,
+                                 import_buffer_index,
+                                 request.copy_params,
+                                 cd_it,
+                                 parsed_columns_sv,
+                                 parsed_column_index,
+                                 is_null,
+                                 request.first_row_index,
+                                 row_count,
+                                 request.getCatalog(),
+                                 request.render_group_analyzer_map);
+              } catch (const std::exception& e) {
+                if (request.track_rejected_rows) {
+                  result.rejected_rows.insert(current_row_id);
+                  fillRejectedRowWithInvalidData(
+                      columns, cd_it, starting_import_buffer_index, request);
+                  break;  // skip rest of row
+                } else {
+                  throw;
+                }
+              }
               // Skip remaining physical columns
               for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
                 ++cd_it;
               }
             } else {
-              request.import_buffers[import_buffer_index]->add_value(
-                  cd,
-                  parsed_columns_sv[parsed_column_index],
-                  is_null,
-                  request.copy_params);
+              try {
+                request.import_buffers[import_buffer_index]->add_value(
+                    cd,
+                    parsed_columns_sv[parsed_column_index],
+                    is_null,
+                    request.copy_params);
+              } catch (const std::exception& e) {
+                if (request.track_rejected_rows) {
+                  result.rejected_rows.insert(current_row_id);
+                  fillRejectedRowWithInvalidData(
+                      columns, cd_it, import_buffer_index, request);
+                  break;  // skip rest of row
+                } else {
+                  throw;
+                }
+              }
               parsed_column_index++;
               import_buffer_index++;
             }
@@ -258,7 +298,6 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
   }
   row_offsets.emplace_back(request.file_offset + (curr - request.buffer.get()));
 
-  ParseBufferResult result{};
   result.row_offsets = row_offsets;
   result.row_count = row_count;
   if (convert_data_blocks) {

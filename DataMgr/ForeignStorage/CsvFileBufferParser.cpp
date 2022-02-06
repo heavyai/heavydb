@@ -147,14 +147,18 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
     }
   }
 
+  size_t current_row_id = 0;
   size_t row_count = 0;
   size_t remaining_row_count = request.process_row_count;
   std::vector<size_t> row_offsets{};
   row_offsets.emplace_back(request.file_offset + (p - request.buffer.get()));
 
+  ParseBufferResult result{};
+
   std::string file_path = request.getFilePath();
   for (; p < thread_buf_end && remaining_row_count > 0; p++, remaining_row_count--) {
     row.clear();
+    current_row_id = row_count;
     row_count++;
     std::vector<std::unique_ptr<char[]>>
         tmp_buffers;  // holds string w/ removed escape chars, etc
@@ -170,13 +174,30 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
                                                  !columns_are_pre_filtered);
 
     row_index_plus_one++;
-    validate_expected_column_count(row, num_cols, point_cols, file_path);
+
+    bool incorrect_column_count = false;
+    try {
+      validate_expected_column_count(row, num_cols, point_cols, file_path);
+    } catch (const ForeignStorageException& e) {
+      if (request.track_rejected_rows) {
+        result.rejected_rows.insert(current_row_id);
+        incorrect_column_count = true;
+      } else {
+        throw;
+      }
+    }
 
     size_t import_idx = 0;
     size_t col_idx = 0;
+
     try {
       auto columns = request.getColumns();
-      for (auto cd_it = columns.begin(); cd_it != columns.end(); cd_it++) {
+      if (incorrect_column_count) {
+        auto cd_it = columns.begin();
+        fillRejectedRowWithInvalidData(columns, cd_it, 0, request);
+        continue;
+      }
+      for (auto cd_it = columns.begin(); cd_it != columns.end(); ++cd_it) {
         auto cd = *cd_it;
         const auto& col_ti = cd->columnType;
         bool column_is_present =
@@ -189,17 +210,28 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
 
         if (col_ti.is_geometry()) {
           if (!skip_column_import(request, col_idx)) {
-            processGeoColumn(request.import_buffers,
-                             col_idx,
-                             request.copy_params,
-                             cd_it,
-                             row,
-                             import_idx,
-                             is_null,
-                             request.first_row_index,
-                             row_index_plus_one,
-                             request.getCatalog(),
-                             request.render_group_analyzer_map);
+            auto starting_col_idx = col_idx;
+            try {
+              processGeoColumn(request.import_buffers,
+                               col_idx,
+                               request.copy_params,
+                               cd_it,
+                               row,
+                               import_idx,
+                               is_null,
+                               request.first_row_index,
+                               row_index_plus_one,
+                               request.getCatalog(),
+                               request.render_group_analyzer_map);
+            } catch (const std::exception& e) {
+              if (request.track_rejected_rows) {
+                result.rejected_rows.insert(current_row_id);
+                fillRejectedRowWithInvalidData(columns, cd_it, starting_col_idx, request);
+                break;  // skip rest of row
+              } else {
+                throw;
+              }
+            }
           } else {
             // update import/col idx according to types
             if (!is_null && cd->columnType == kPOINT &&
@@ -220,8 +252,18 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
           }
         } else {
           if (!skip_column_import(request, col_idx)) {
-            request.import_buffers[col_idx]->add_value(
-                cd, row[import_idx], is_null, request.copy_params);
+            try {
+              request.import_buffers[col_idx]->add_value(
+                  cd, row[import_idx], is_null, request.copy_params);
+            } catch (const std::exception& e) {
+              if (request.track_rejected_rows) {
+                result.rejected_rows.insert(current_row_id);
+                fillRejectedRowWithInvalidData(columns, cd_it, col_idx, request);
+                break;  // skip rest of row
+              } else {
+                throw;
+              }
+            }
           }
           if (column_is_present) {
             ++import_idx;
@@ -237,7 +279,6 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
   }
   row_offsets.emplace_back(request.file_offset + (p - request.buffer.get()));
 
-  ParseBufferResult result{};
   result.row_offsets = row_offsets;
   result.row_count = row_count;
   if (convert_data_blocks) {

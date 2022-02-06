@@ -50,6 +50,8 @@ struct InsertChunks {
   const int table_id;
   const int db_id;
   std::map</*column_id=*/int, std::shared_ptr<Chunk_NS::Chunk> > chunks;
+  std::vector<size_t> valid_row_indices; /* specifies which row indices in chunk are valid
+                                            for insertion */
 };
 
 /**

@@ -43,7 +43,8 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override;
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override;
 
   std::string getSerializedDataWrapper() const override;
 
@@ -71,9 +72,11 @@ class AbstractTextFileDataWrapper : public AbstractFileStorageDataWrapper {
    *
    * @param column_id_to_chunk_map - map of column id to chunks to be populated
    * @param fragment_id - fragment id of given chunks
+   * @param delete_buffer - optional buffer to store deleted row indices
    */
   void populateChunks(std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
-                      int fragment_id);
+                      int fragment_id,
+                      AbstractBuffer* delete_buffer);
 
   void populateChunkMapForColumns(const std::set<const ColumnDescriptor*>& columns,
                                   const int fragment_id,

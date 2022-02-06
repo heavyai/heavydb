@@ -121,7 +121,9 @@ import_export::ImportStatus import_foreign_data(
     Catalog_Namespace::Catalog& catalog,
     const TableDescriptor* table,
     foreign_storage::ForeignDataWrapper* data_wrapper,
-    const Catalog_Namespace::SessionInfo* session_info) {
+    const Catalog_Namespace::SessionInfo* session_info,
+    const import_export::CopyParams& copy_params,
+    const std::string& copy_from_source) {
   int32_t max_fragment_id = -1;
   for (const auto& [key, _] : metadata_vector) {
     max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);
@@ -136,8 +138,9 @@ import_export::ImportStatus import_foreign_data(
     data_wrapper->createRenderGroupAnalyzers();
   }
 
+  import_export::ImportStatus import_status;
   Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector);
-  import_export::ImportStatus import_status;  // manually update
+
   for (int32_t fragment_id = 0; fragment_id <= max_fragment_id; ++fragment_id) {
     // gather applicable keys to load for fragment
     std::set<ChunkKey> fragment_keys;
@@ -163,6 +166,7 @@ import_export::ImportStatus import_foreign_data(
     std::map<ChunkKey, std::unique_ptr<foreign_storage::ForeignStorageBuffer>>
         fragment_buffers_owner;
     foreign_storage::ChunkToBufferMap fragment_buffers;
+    auto delete_buffer = std::make_unique<foreign_storage::ForeignStorageBuffer>();
     for (const auto& key : fragment_keys) {
       fragment_buffers_owner[key] =
           std::make_unique<foreign_storage::ForeignStorageBuffer>();
@@ -172,10 +176,10 @@ import_export::ImportStatus import_foreign_data(
 
     // get chunks for import
     Fragmenter_Namespace::InsertChunks insert_chunks{
-        table->tableId, catalog.getDatabaseId(), {}};
+        table->tableId, catalog.getDatabaseId(), {}, {}};
 
     // get the buffers
-    data_wrapper->populateChunkBuffers(fragment_buffers, {});
+    data_wrapper->populateChunkBuffers(fragment_buffers, {}, delete_buffer.get());
 
     // create chunks from buffers
     for (const auto& [key, buffer] : fragment_buffers) {
@@ -197,11 +201,37 @@ import_export::ImportStatus import_foreign_data(
       }
     }
 
+    // mark which row indices are valid for import
+    auto row_count = fragment_buffers.begin()
+                         ->second->getEncoder()
+                         ->getNumElems();  // asssume all chunks have same number of rows,
+                                           // this is validated at a lower level
+    insert_chunks.valid_row_indices.reserve(row_count);
+    for (size_t irow = 0; irow < row_count; ++irow) {
+      if (delete_buffer->size() > 0) {
+        CHECK_LE(irow, delete_buffer->size());
+        if (delete_buffer->getMemoryPtr()[irow]) {
+          continue;
+        }
+      }
+      insert_chunks.valid_row_indices.emplace_back(irow);
+    }
+
     // import chunks
     insert_data_loader.insertChunks(*session_info, insert_chunks);
+
+    CHECK_LE(insert_chunks.valid_row_indices.size(), row_count);
+    import_status.rows_rejected += row_count - insert_chunks.valid_row_indices.size();
+    import_status.rows_completed += insert_chunks.valid_row_indices.size();
+    if (import_status.rows_rejected > copy_params.max_reject) {
+      import_status.load_failed = true;
+      import_status.load_msg = "Load was cancelled due to max reject rows being reached";
+      import_export::Importer::set_import_status(copy_from_source, import_status);
+      break;
+    }
+    import_export::Importer::set_import_status(copy_from_source, import_status);
   }
-  return {};  // TODO: update import status appropriately once error handling is
-              // implemented
+  return import_status;
 }
 
 }  // namespace
@@ -243,6 +273,28 @@ void ForeignDataImporter::finalize(
   }
 }
 
+void ForeignDataImporter::finalize(
+    const Catalog_Namespace::SessionInfo& parent_session_info,
+    ImportStatus& import_status,
+    const int32_t table_id) {
+  auto& catalog = parent_session_info.getCatalog();
+
+  auto logical_columns =
+      catalog.getAllColumnMetadataForTable(table_id, false, false, false);
+
+  std::vector<std::pair<const ColumnDescriptor*, StringDictionary*>> string_dictionaries;
+  for (const auto& column_descriptor : logical_columns) {
+    if (!column_descriptor->columnType.is_dict_encoded_string()) {
+      continue;
+    }
+    auto dict_descriptor =
+        catalog.getMetadataForDict(column_descriptor->columnType.get_comp_param(), true);
+    string_dictionaries.push_back({column_descriptor, dict_descriptor->stringDict.get()});
+  }
+
+  finalize(parent_session_info, import_status, string_dictionaries);
+}
+
 // TODO: the `proxy_foreign_table_fragment_size_` parameter controls the amount
 // of data buffered in memory while importing using the `ForeignDataImporter`
 // may need to be tuned or exposed as configurable parameter
@@ -257,30 +309,41 @@ ImportStatus ForeignDataImporter::importGeneral(
   // validate copy params before import in order to print user friendly messages
   validate_copy_params(copy_params_);
 
-  auto [server, user_mapping, foreign_table] = create_proxy_fsi_objects(
-      copy_from_source_, copy_params_, catalog, table_, session_info);
+  ImportStatus import_status;
+  {
+    auto [server, user_mapping, foreign_table] = create_proxy_fsi_objects(
+        copy_from_source_, copy_params_, catalog, table_, session_info);
 
-  // set fragment size for prox foreign table during import
-  foreign_table->maxFragRows = proxy_foreign_table_fragment_size_;
+    // set fragment size for proxy foreign table during import
+    foreign_table->maxFragRows = proxy_foreign_table_fragment_size_;
 
-  auto data_wrapper = foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
-      get_data_wrapper_type(copy_params_),
-      catalog.getDatabaseId(),
-      foreign_table.get(),
-      user_mapping.get());
+    auto data_wrapper =
+        foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
+            get_data_wrapper_type(copy_params_),
+            catalog.getDatabaseId(),
+            foreign_table.get(),
+            user_mapping.get());
 
-  ChunkMetadataVector metadata_vector =
-      metadata_scan(data_wrapper.get(), foreign_table.get());
-  if (metadata_vector.empty()) {  // an empty data source
-    return {};
-  }
+    ChunkMetadataVector metadata_vector =
+        metadata_scan(data_wrapper.get(), foreign_table.get());
+    if (metadata_vector.empty()) {  // an empty data source
+      return {};
+    }
 
-  return import_foreign_data(metadata_vector,
-                             connector_.get(),
-                             catalog,
-                             table_,
-                             data_wrapper.get(),
-                             session_info);
+    import_status = import_foreign_data(metadata_vector,
+                                        connector_.get(),
+                                        catalog,
+                                        table_,
+                                        data_wrapper.get(),
+                                        session_info,
+                                        copy_params_,
+                                        copy_from_source_);
+
+  }  // this scope ensures that fsi proxy objects are destroyed proir to checkpointing
+
+  finalize(*session_info, import_status, table_->tableId);
+
+  return import_status;
 }
 
 #ifdef ENABLE_IMPORT_PARQUET

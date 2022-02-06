@@ -262,6 +262,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                                 const size_t num_rows_to_insert,
                                 size_t& num_rows_inserted,
                                 size_t& num_rows_left,
+                                std::vector<size_t>& valid_row_indices,
                                 const size_t start_fragment);
 };
 

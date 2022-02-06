@@ -33,7 +33,8 @@ struct ParseBufferRequest {
                      const ForeignTable* foreign_table,
                      const std::set<int> column_filter_set,
                      const std::string& full_path,
-                     const RenderGroupAnalyzerMap* render_group_analyzer_map);
+                     const RenderGroupAnalyzerMap* render_group_analyzer_map,
+                     const bool track_rejected_rows = false);
 
   inline std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const {
     auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
@@ -77,12 +78,16 @@ struct ParseBufferRequest {
   size_t file_offset;
   size_t process_row_count;
   std::string full_path;
+
+  // This parameter controls the behaviour of error handling in the data wrapper
+  const bool track_rejected_rows;
 };
 
 struct ParseBufferResult {
   std::map<int, DataBlockPtr> column_id_to_data_blocks_map;
   size_t row_count;
   std::vector<size_t> row_offsets;
+  std::set<size_t> rejected_rows;
 };
 
 class TextFileBufferParser {
@@ -144,8 +149,26 @@ class TextFileBufferParser {
       std::shared_ptr<Catalog_Namespace::Catalog> catalog,
       const RenderGroupAnalyzerMap* render_group_analyzer_map);
 
+  /**
+   * Fill the current row of the `request` with invalid (null) data as row will
+   * be marked as rejected
+   */
+  static void fillRejectedRowWithInvalidData(
+      const std::list<const ColumnDescriptor*>& columns,
+      std::list<const ColumnDescriptor*>::iterator& cd_it,
+      const size_t col_idx,
+      ParseBufferRequest& request);
+
   static bool isNullDatum(const std::string_view datum,
                           const ColumnDescriptor* column,
                           const std::string& null_indicator);
+
+ private:
+  static void processInvalidGeoColumn(
+      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+      size_t& col_idx,
+      const import_export::CopyParams& copy_params,
+      const ColumnDescriptor* cd,
+      std::shared_ptr<Catalog_Namespace::Catalog> catalog);
 };
 }  // namespace foreign_storage

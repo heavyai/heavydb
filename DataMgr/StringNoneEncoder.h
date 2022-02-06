@@ -45,10 +45,9 @@ class StringNoneEncoder : public Encoder {
                                        const size_t byteLimit,
                                        const bool replicating = false);
 
-  size_t getNumElemsForBytesEncodedData(const int8_t* index_data,
-                                        const int start_idx,
-                                        const size_t num_elements,
-                                        const size_t byte_limit) override;
+  size_t getNumElemsForBytesEncodedDataAtIndices(const int8_t* index_data,
+                                                 const std::vector<size_t>& selected_idx,
+                                                 const size_t byte_limit) override;
 
   std::shared_ptr<ChunkMetadata> appendData(int8_t*& src_data,
                                             const size_t num_elems_to_append,
@@ -142,6 +141,10 @@ class StringNoneEncoder : public Encoder {
   void resetChunkStats() override { has_nulls = false; }
 
  private:
+  std::pair<StringOffsetT, StringOffsetT> getStringOffsets(const int8_t* index_data,
+                                                           size_t index);
+
+  size_t getStringSizeAtIndex(const int8_t* index_data, size_t index);
   std::string_view getStringAtIndex(const int8_t* index_data,
                                     const int8_t* data,
                                     size_t index);

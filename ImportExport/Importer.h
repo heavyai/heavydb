@@ -489,7 +489,8 @@ class TypedImportBuffer : boost::noncopyable {
   void add_value(const ColumnDescriptor* cd,
                  const std::string_view val,
                  const bool is_null,
-                 const CopyParams& copy_params);
+                 const CopyParams& copy_params,
+                 const bool check_not_null = true);
 
   void add_value(const ColumnDescriptor* cd, const TDatum& val, const bool is_null);
 
@@ -834,7 +835,8 @@ class Importer : public DataStreamSink, public AbstractImporter {
       std::vector<double>& bounds,
       std::vector<int>& ring_sizes,
       std::vector<int>& poly_rings,
-      int render_group);
+      int render_group,
+      const bool force_null = false);
   static void set_geo_physical_import_buffer_columnar(
       const Catalog_Namespace::Catalog& catalog,
       const ColumnDescriptor* cd,

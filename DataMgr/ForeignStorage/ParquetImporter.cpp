@@ -289,7 +289,8 @@ void ParquetImporter::populateChunkMetadata(ChunkMetadataVector& chunk_metadata_
 }
 
 void ParquetImporter::populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                                           const ChunkToBufferMap& optional_buffers) {
+                                           const ChunkToBufferMap& optional_buffers,
+                                           AbstractBuffer* delete_buffer) {
   UNREACHABLE();
 }
 

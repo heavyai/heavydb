@@ -4985,7 +4985,8 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
   }
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override {
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override {
     if (throw_on_chunk_fetch_) {
       throw std::runtime_error{"populateChunkBuffers mock exception"};
     } else {
@@ -6142,7 +6143,8 @@ class TrackBuffersMockWrapper : public MockDataWrapper {
   TrackBuffersMockWrapper() : is_first_call_(true) {}
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override {
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override {
     parent_data_wrapper_->populateChunkBuffers(required_buffers, optional_buffers);
   }
 
@@ -6158,8 +6160,10 @@ class KeySetMockWrapper : public TrackBuffersMockWrapper {
   KeySetMockWrapper(const std::set<ChunkKey>& data_keys) : data_keys_(data_keys) {}
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override {
-    TrackBuffersMockWrapper::populateChunkBuffers(required_buffers, optional_buffers);
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override {
+    TrackBuffersMockWrapper::populateChunkBuffers(
+        required_buffers, optional_buffers, delete_buffer);
     if (is_first_call_) {
       compareExpected(required_buffers, optional_buffers);
       is_first_call_ = true;
@@ -6191,8 +6195,10 @@ class CountChunksMockWrapper : public TrackBuffersMockWrapper {
   CountChunksMockWrapper(size_t num_chunks) : expected_num_chunks_(num_chunks) {}
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override {
-    TrackBuffersMockWrapper::populateChunkBuffers(required_buffers, optional_buffers);
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override {
+    TrackBuffersMockWrapper::populateChunkBuffers(
+        required_buffers, optional_buffers, delete_buffer);
     if (is_first_call_) {
       // optional_buffers has any cached buffers removed, so only the first call (the
       // one that populates the cache) will contain any optional buffers.
@@ -6223,8 +6229,10 @@ class SizeLimitMockWrapper : public CountChunksMockWrapper {
       : CountChunksMockWrapper(num_chunks), expected_size_(size) {}
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override {
-    TrackBuffersMockWrapper::populateChunkBuffers(required_buffers, optional_buffers);
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override {
+    TrackBuffersMockWrapper::populateChunkBuffers(
+        required_buffers, optional_buffers, delete_buffer);
     if (is_first_call_) {
       // optional_buffers has any cached buffers removed, so only the first call (the
       // one that populates the cache) will contain any optional buffers.
@@ -6254,9 +6262,11 @@ class SameFragmentMockWrapper : public SizeLimitMockWrapper {
   SameFragmentMockWrapper(size_t size, size_t num_chunks)
       : SizeLimitMockWrapper(size, num_chunks) {}
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override {
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override {
     assertSameFragment(required_buffers, optional_buffers);
-    SizeLimitMockWrapper::populateChunkBuffers(required_buffers, optional_buffers);
+    SizeLimitMockWrapper::populateChunkBuffers(
+        required_buffers, optional_buffers, delete_buffer);
   }
 
  private:

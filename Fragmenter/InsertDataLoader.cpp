@@ -300,7 +300,8 @@ copy_data_of_shard(const Catalog_Namespace::Catalog& cat,
   const auto* table = cat.getMetadataForTable(insert_chunks.table_id);
   const auto* physical_table = cat.getPhysicalTablesDescriptors(table)[shardTableIndex];
 
-  InsertChunks insert_chunks_for_shard{physical_table->tableId, insert_chunks.db_id, {}};
+  InsertChunks insert_chunks_for_shard{
+      physical_table->tableId, insert_chunks.db_id, {}, {}};
 
   std::list<std::unique_ptr<foreign_storage::ForeignStorageBuffer>> buffers;
 
@@ -318,6 +319,19 @@ copy_data_of_shard(const Catalog_Namespace::Catalog& cat,
     }
     chunk_for_shard.initEncoder();
     chunk_for_shard.appendEncodedDataAtIndices(*chunk, rowIndices);
+    CHECK_EQ(chunk_for_shard.getBuffer()->getEncoder()->getNumElems(), rowIndices.size());
+  }
+
+  // mark which row indices are valid for import
+  auto row_count = rowIndices.size();
+  insert_chunks_for_shard.valid_row_indices.reserve(row_count);
+  for (size_t irow = 0; irow < row_count; ++irow) {
+    auto row_index = rowIndices[irow];
+    if (std::binary_search(insert_chunks.valid_row_indices.begin(),
+                           insert_chunks.valid_row_indices.end(),
+                           row_index)) {
+      insert_chunks_for_shard.valid_row_indices.emplace_back(irow);
+    }
   }
 
   return {std::move(buffers), insert_chunks_for_shard};

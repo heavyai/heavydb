@@ -48,7 +48,8 @@ class ParquetImporter : public AbstractFileStorageDataWrapper {
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
   void populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                            const ChunkToBufferMap& optional_buffers) override;
+                            const ChunkToBufferMap& optional_buffers,
+                            AbstractBuffer* delete_buffer) override;
 
   std::string getSerializedDataWrapper() const override;
 

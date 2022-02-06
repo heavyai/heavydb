@@ -478,7 +478,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
 }
 
 void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_buffers,
-                                              const ChunkToBufferMap& optional_buffers) {
+                                              const ChunkToBufferMap& optional_buffers,
+                                              AbstractBuffer* delete_buffer) {
   ChunkToBufferMap buffers_to_load;
   buffers_to_load.insert(required_buffers.begin(), required_buffers.end());
   buffers_to_load.insert(optional_buffers.begin(), optional_buffers.end());

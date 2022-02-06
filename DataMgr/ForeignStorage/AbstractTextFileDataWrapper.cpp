@@ -97,7 +97,8 @@ void AbstractTextFileDataWrapper::populateChunkMapForColumns(
 
 void AbstractTextFileDataWrapper::populateChunkBuffers(
     const ChunkToBufferMap& required_buffers,
-    const ChunkToBufferMap& optional_buffers) {
+    const ChunkToBufferMap& optional_buffers,
+    AbstractBuffer* delete_buffer) {
   auto timer = DEBUG_TIMER(__func__);
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
@@ -116,7 +117,7 @@ void AbstractTextFileDataWrapper::populateChunkBuffers(
     populateChunkMapForColumns(
         optional_columns, fragment_id, optional_buffers, column_id_to_chunk_map);
   }
-  populateChunks(column_id_to_chunk_map, fragment_id);
+  populateChunks(column_id_to_chunk_map, fragment_id, delete_buffer);
   updateMetadata(column_id_to_chunk_map, fragment_id);
 }
 
@@ -161,6 +162,7 @@ struct ParseFileRegionResult {
   size_t file_offset;
   size_t row_count;
   std::map<int, DataBlockPtr> column_id_to_data_blocks_map;
+  std::set<size_t> rejected_row_indices;
 
   bool operator<(const ParseFileRegionResult& other) const {
     return file_offset < other.file_offset;
@@ -199,6 +201,10 @@ ParseFileRegionResult parse_file_regions(
 
     result = parser.parseBuffer(parse_file_request, i == end_index);
     CHECK_EQ(file_regions[i].row_count, result.row_count);
+    for (const auto& rejected_row_index : result.rejected_rows) {
+      load_file_region_result.rejected_row_indices.insert(
+          load_file_region_result.row_count + rejected_row_index);
+    }
     load_file_region_result.row_count += result.row_count;
   }
   load_file_region_result.column_id_to_data_blocks_map =
@@ -263,7 +269,8 @@ size_t get_thread_count(const import_export::CopyParams& copy_params,
 
 void AbstractTextFileDataWrapper::populateChunks(
     std::map<int, Chunk_NS::Chunk>& column_id_to_chunk_map,
-    int fragment_id) {
+    int fragment_id,
+    AbstractBuffer* delete_buffer) {
   const auto copy_params = getFileBufferParser().validateAndGetCopyParams(foreign_table_);
 
   CHECK(!column_id_to_chunk_map.empty());
@@ -298,7 +305,8 @@ void AbstractTextFileDataWrapper::populateChunks(
                                      foreign_table_,
                                      column_filter_set,
                                      file_path,
-                                     &render_group_analyzer_map_);
+                                     &render_group_analyzer_map_,
+                                     delete_buffer != nullptr);
     auto start_index = i;
     auto end_index =
         std::min<size_t>(start_index + batch_size - 1, file_regions.size() - 1);
@@ -330,10 +338,30 @@ void AbstractTextFileDataWrapper::populateChunks(
     load_file_region_results.emplace_back(future.get());
   }
 
+  std::set<size_t> chunk_rejected_row_indices;
+  size_t chunk_offset = 0;
   for (auto result : load_file_region_results) {
     for (auto& [column_id, chunk] : column_id_to_chunk_map) {
       chunk.appendData(
           result.column_id_to_data_blocks_map[column_id], result.row_count, 0);
+    }
+    for (const auto& rejected_row_index : result.rejected_row_indices) {
+      chunk_rejected_row_indices.insert(rejected_row_index + chunk_offset);
+    }
+    chunk_offset += result.row_count;
+  }
+
+  if (delete_buffer) {
+    auto chunk_element_count = chunk_offset;
+    delete_buffer->reserve(chunk_element_count);
+    for (size_t i = 0; i < chunk_element_count; ++i) {
+      if (chunk_rejected_row_indices.find(i) != chunk_rejected_row_indices.end()) {
+        int8_t true_byte = true;
+        delete_buffer->append(&true_byte, 1);
+      } else {
+        int8_t false_byte = false;
+        delete_buffer->append(&false_byte, 1);
+      }
     }
   }
 }
@@ -881,7 +909,12 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
                                                   foreign_table_,
                                                   columns_to_scan,
                                                   getFullFilePath(foreign_table_),
-                                                  nullptr);
+                                                  nullptr,
+                                                  disable_cache_);
+      // TODO: when the cache is renabled for the import case, the above
+      // relationship between `disable_cache_` and `track_rejected_rows`
+      // will no longer hold and will need to be addressed using a different
+      // approach
 
       futures.emplace_back(std::async(std::launch::async,
                                       scan_metadata,

@@ -116,7 +116,8 @@ size_t get_num_rows_to_insert(const size_t rows_left_in_current_fragment,
                               const std::unordered_map<int, size_t>& var_len_col_info,
                               const size_t max_chunk_size,
                               const InsertChunks& insert_chunks,
-                              std::map<int, Chunk_NS::Chunk>& column_map) {
+                              std::map<int, Chunk_NS::Chunk>& column_map,
+                              const std::vector<size_t>& valid_row_indices) {
   size_t num_rows_to_insert = min(rows_left_in_current_fragment, num_rows_left);
   if (rows_left_in_current_fragment != 0) {
     for (const auto& var_len_col_info_it : var_len_col_info) {
@@ -133,10 +134,10 @@ size_t get_num_rows_to_insert(const size_t rows_left_in_current_fragment,
       CHECK(column_type.is_varlen());
 
       auto col_map_it = column_map.find(var_len_col_info_it.first);
-      num_rows_to_insert = std::min(
-          num_rows_to_insert,
-          col_map_it->second.getNumElemsForBytesEncodedData(
-              index_buffer_ptr, num_rows_to_insert, num_rows_inserted, bytes_left));
+      num_rows_to_insert =
+          std::min(num_rows_to_insert,
+                   col_map_it->second.getNumElemsForBytesEncodedDataAtIndices(
+                       index_buffer_ptr, valid_row_indices, bytes_left));
     }
   }
   return num_rows_to_insert;
@@ -636,18 +637,24 @@ void InsertOrderFragmenter::insertChunksIntoFragment(
     const size_t num_rows_to_insert,
     size_t& num_rows_inserted,
     size_t& num_rows_left,
+    std::vector<size_t>& valid_row_indices,
     const size_t start_fragment) {
   mapd_unique_lock<mapd_shared_mutex> write_lock(fragmentInfoMutex_);
   // for each column, append the data in the appropriate insert buffer
-  for (auto& [columnId, chunk] : insert_chunks.chunks) {
-    auto colMapIt = columnMap_.find(columnId);
-    CHECK(colMapIt != columnMap_.end());
-    current_fragment->shadowChunkMetadataMap[columnId] =
-        colMapIt->second.appendEncodedData(*chunk, num_rows_to_insert, num_rows_inserted);
-    auto varLenColInfoIt = varLenColInfo_.find(columnId);
-    if (varLenColInfoIt != varLenColInfo_.end()) {
-      varLenColInfoIt->second = colMapIt->second.getBuffer()->size();
-      CHECK_LE(varLenColInfoIt->second, maxChunkSize_);
+  auto insert_row_indices = valid_row_indices;
+  CHECK_GE(insert_row_indices.size(), num_rows_to_insert);
+  insert_row_indices.erase(insert_row_indices.begin() + num_rows_to_insert,
+                           insert_row_indices.end());
+  CHECK_EQ(insert_row_indices.size(), num_rows_to_insert);
+  for (auto& [column_id, chunk] : insert_chunks.chunks) {
+    auto col_map_it = columnMap_.find(column_id);
+    CHECK(col_map_it != columnMap_.end());
+    current_fragment->shadowChunkMetadataMap[column_id] =
+        col_map_it->second.appendEncodedDataAtIndices(*chunk, insert_row_indices);
+    auto var_len_col_info_it = varLenColInfo_.find(column_id);
+    if (var_len_col_info_it != varLenColInfo_.end()) {
+      var_len_col_info_it->second = col_map_it->second.getBuffer()->size();
+      CHECK_LE(var_len_col_info_it->second, maxChunkSize_);
     }
   }
   if (hasMaterializedRowId_) {
@@ -680,13 +687,17 @@ void InsertOrderFragmenter::insertChunksIntoFragment(
       fragmentInfoVec_.back()->getPhysicalNumTuples() + num_rows_to_insert;
   num_rows_left -= num_rows_to_insert;
   num_rows_inserted += num_rows_to_insert;
-  for (auto partIt = fragmentInfoVec_.begin() + start_fragment;
-       partIt != fragmentInfoVec_.end();
-       ++partIt) {
-    auto fragment_ptr = partIt->get();
+  for (auto part_it = fragmentInfoVec_.begin() + start_fragment;
+       part_it != fragmentInfoVec_.end();
+       ++part_it) {
+    auto fragment_ptr = part_it->get();
     fragment_ptr->setPhysicalNumTuples(fragment_ptr->shadowNumTuples);
     fragment_ptr->setChunkMetadataMap(fragment_ptr->shadowChunkMetadataMap);
   }
+
+  // truncate the first `num_rows_to_insert` rows in `valid_row_indices`
+  valid_row_indices.erase(valid_row_indices.begin(),
+                          valid_row_indices.begin() + num_rows_to_insert);
 }
 
 void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) {
@@ -712,7 +723,8 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
     }
   }
 
-  size_t num_rows_left = *num_rows;
+  auto valid_row_indices = insert_chunks.valid_row_indices;
+  size_t num_rows_left = valid_row_indices.size();
   size_t num_rows_inserted = 0;
 
   if (num_rows_left == 0) {
@@ -743,7 +755,8 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
                                                        varLenColInfo_,
                                                        maxChunkSize_,
                                                        insert_chunks,
-                                                       columnMap_);
+                                                       columnMap_,
+                                                       valid_row_indices);
 
     if (rows_left_in_current_fragment == 0 || num_rows_to_insert == 0) {
       current_fragment = createNewFragment(defaultInsertLevel_);
@@ -760,7 +773,8 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
                                                   varLenColInfo_,
                                                   maxChunkSize_,
                                                   insert_chunks,
-                                                  columnMap_);
+                                                  columnMap_,
+                                                  valid_row_indices);
     }
 
     CHECK_GT(num_rows_to_insert, size_t(0));  // would put us into an endless loop as we'd
@@ -772,6 +786,7 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
                              num_rows_to_insert,
                              num_rows_inserted,
                              num_rows_left,
+                             valid_row_indices,
                              start_fragment);
   }
   numTuples_ += *num_rows;

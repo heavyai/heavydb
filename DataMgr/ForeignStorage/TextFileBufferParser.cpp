@@ -26,14 +26,16 @@ ParseBufferRequest::ParseBufferRequest(
     const ForeignTable* foreign_table,
     std::set<int> column_filter_set,
     const std::string& full_path,
-    const RenderGroupAnalyzerMap* render_group_analyzer_map)
+    const RenderGroupAnalyzerMap* render_group_analyzer_map,
+    const bool track_rejected_rows)
     : buffer_size(buffer_size)
     , buffer_alloc_size(buffer_size)
     , copy_params(copy_params)
     , db_id(db_id)
     , foreign_table_schema(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
     , render_group_analyzer_map(render_group_analyzer_map)
-    , full_path(full_path) {
+    , full_path(full_path)
+    , track_rejected_rows(track_rejected_rows) {
   if (buffer_size > 0) {
     buffer = std::make_unique<char[]>(buffer_size);
   }
@@ -151,6 +153,81 @@ bool set_coordinates_from_separate_lon_lat_columns(const std::string_view lon_st
 }
 }  // namespace
 
+void TextFileBufferParser::fillRejectedRowWithInvalidData(
+    const std::list<const ColumnDescriptor*>& columns,
+    std::list<const ColumnDescriptor*>::iterator& cd_it,
+    const size_t starting_col_idx,
+    ParseBufferRequest& request) {
+  size_t col_idx = starting_col_idx;
+
+  for (; cd_it != columns.end(); cd_it++) {
+    auto cd = *cd_it;
+    const auto& col_ti = cd->columnType;
+    if (col_ti.is_geometry()) {
+      if (request.import_buffers[col_idx] != nullptr) {
+        processInvalidGeoColumn(request.import_buffers,
+                                col_idx,
+                                request.copy_params,
+                                cd,
+                                request.getCatalog());
+      } else {
+        ++col_idx;
+        col_idx += col_ti.get_physical_cols();
+      }
+      // skip remaining physical columns
+      for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
+        ++cd_it;
+      }
+    } else {
+      if (request.import_buffers[col_idx] != nullptr) {
+        request.import_buffers[col_idx]->add_value(cd,
+                                                   {},
+                                                   true,
+                                                   request.copy_params,
+                                                   /*check_not_null=*/false);
+      }
+      ++col_idx;
+    }
+  }
+}
+
+void TextFileBufferParser::processInvalidGeoColumn(
+    std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
+    size_t& col_idx,
+    const import_export::CopyParams& copy_params,
+    const ColumnDescriptor* cd,
+    std::shared_ptr<Catalog_Namespace::Catalog> catalog) {
+  auto col_ti = cd->columnType;
+  SQLTypes col_type = col_ti.get_type();
+  CHECK(IS_GEO(col_type));
+
+  // store null string in the base column
+  import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
+  ++col_idx;
+
+  std::vector<double> coords;
+  std::vector<double> bounds;
+  std::vector<int> ring_sizes;
+  std::vector<int> poly_rings;
+  int render_group = 0;
+
+  SQLTypeInfo import_ti{col_ti};
+  Geospatial::GeoTypesFactory::getNullGeoColumns(
+      import_ti, coords, bounds, ring_sizes, poly_rings, PROMOTE_POLYGON_TO_MULTIPOLYGON);
+
+  // import extracted geo
+  import_export::Importer::set_geo_physical_import_buffer(*catalog,
+                                                          cd,
+                                                          import_buffers,
+                                                          col_idx,
+                                                          coords,
+                                                          bounds,
+                                                          ring_sizes,
+                                                          poly_rings,
+                                                          render_group,
+                                                          /*force_null=*/true);
+}
+
 void TextFileBufferParser::processGeoColumn(
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
     size_t& col_idx,
@@ -168,8 +245,7 @@ void TextFileBufferParser::processGeoColumn(
   SQLTypes col_type = col_ti.get_type();
   CHECK(IS_GEO(col_type));
 
-  // store null string in the base column
-  import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
+  auto starting_col_idx = col_idx;
 
   auto const& geo_string = row[import_idx];
   ++import_idx;
@@ -244,6 +320,10 @@ void TextFileBufferParser::processGeoColumn(
                                                           ring_sizes,
                                                           poly_rings,
                                                           render_group);
+
+  // store null string in the base column
+  import_buffers[starting_col_idx]->add_value(
+      cd, copy_params.null_str, true, copy_params);
 }
 
 bool TextFileBufferParser::isNullDatum(const std::string_view datum,

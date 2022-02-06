@@ -367,8 +367,10 @@ ArrayDatum StringToArray(const std::string& s,
   }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
-    int8_t* buf = (int8_t*)checked_malloc(len);
-    int8_t* p = buf;
+    std::function<void(int8_t * ptr)> deleter = [](int8_t* ptr) { free(ptr); };
+    std::unique_ptr<int8_t, std::function<void(int8_t*)>> buf(
+        reinterpret_cast<int8_t*>(checked_malloc(len)), deleter);
+    int8_t* p = buf.get();
     for (auto& es : elem_strs) {
       auto e = trim_space(es.c_str(), es.length());
       bool is_null = (e == copy_params.null_str) || e == "NULL";
@@ -384,7 +386,7 @@ ArrayDatum StringToArray(const std::string& s,
       p = append_datum(p, d, elem_ti);
       CHECK(p);
     }
-    return ArrayDatum(len, buf, false);
+    return ArrayDatum(len, buf.release(), false);
   }
   // must not be called for array of strings
   CHECK(false);
@@ -550,12 +552,13 @@ void TypedImportBuffer::addDictEncodedString(const std::vector<std::string>& str
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
                                   const std::string_view val,
                                   const bool is_null,
-                                  const CopyParams& copy_params) {
+                                  const CopyParams& copy_params,
+                                  const bool check_not_null) {
   const auto type = cd->columnType.get_type();
   switch (type) {
     case kBOOLEAN: {
       if (is_null) {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBoolean(inline_fixed_encoding_null_val(cd->columnType));
@@ -572,7 +575,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addTinyint(d.tinyintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addTinyint(inline_fixed_encoding_null_val(cd->columnType));
@@ -585,7 +588,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addSmallint(d.smallintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addSmallint(inline_fixed_encoding_null_val(cd->columnType));
@@ -598,7 +601,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addInt(d.intval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addInt(inline_fixed_encoding_null_val(cd->columnType));
@@ -611,7 +614,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addBigint(d.bigintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
@@ -627,7 +630,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         validator.validate(d.bigintval);
         addBigint(d.bigintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
@@ -638,7 +641,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addFloat(static_cast<float>(std::atof(std::string(val).c_str())));
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addFloat(NULL_FLOAT);
@@ -648,7 +651,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (!is_null && (val[0] == '.' || isdigit(val[0]) || val[0] == '-')) {
         addDouble(std::atof(std::string(val).c_str()));
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addDouble(NULL_DOUBLE);
@@ -659,7 +662,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     case kCHAR: {
       // @TODO(wei) for now, use empty string for nulls
       if (is_null) {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addString(std::string());
@@ -681,14 +684,14 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         Datum d = StringToDatum(val, ti);
         addBigint(d.bigintval);
       } else {
-        if (cd->columnType.get_notnull()) {
+        if (check_not_null && cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
         }
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
     case kARRAY: {
-      if (is_null && cd->columnType.get_notnull()) {
+      if (check_not_null && is_null && cd->columnType.get_notnull()) {
         throw std::runtime_error("NULL for column " + cd->columnName);
       }
       SQLTypeInfo ti = cd->columnType;
@@ -1642,7 +1645,8 @@ void Importer::set_geo_physical_import_buffer(
     std::vector<double>& bounds,
     std::vector<int>& ring_sizes,
     std::vector<int>& poly_rings,
-    int render_group) {
+    int render_group,
+    const bool force_null) {
   const auto col_ti = cd->columnType;
   const auto col_type = col_ti.get_type();
   auto columnId = cd->columnId;
@@ -1663,6 +1667,9 @@ void Importer::set_geo_physical_import_buffer(
       // [un]compressed+[not]null
       is_null_geo = false;
     }
+  }
+  if (force_null) {
+    is_null_geo = true;
   }
   TDatum tdd_coords;
   // Get the raw data representing [optionally compressed] non-NULL geo's coords.

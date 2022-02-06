@@ -45,6 +45,7 @@
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
+#include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/misc.h"
@@ -53,9 +54,8 @@
 #include "DBHandlerTestHelpers.h"
 #include "ThriftHandler/DBHandler.h"
 
+#include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/RasterImporter.h"
-
-#include "Shared/enable_assign_render_groups.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -744,6 +744,8 @@ class ImportAndSelectTest
     std::string code_path;
   };
   Param param_;
+  std::string import_id_;
+  std::string copy_from_result_;
 
   static bool isOdbc(const std::string& import_type) {
     return (import_type == "sqlite" || import_type == "postgres");
@@ -871,15 +873,63 @@ class ImportAndSelectTest
     return schema;
   }
 
-  TQueryResult createTableCopyFromAndSelect(const std::string& in_schema,
-                                            const std::string& file_name_base,
-                                            const std::string& select_query,
-                                            const std::string& line_regex,
-                                            const std::string& odbc_select,
-                                            const int64_t max_byte_size_per_element,
-                                            const std::string& table_options = {},
-                                            const bool is_dir = false,
-                                            const bool is_odbc_geo = false) {
+  void validateImportStatus(const size_t rows_completed,
+                            const size_t rows_rejected,
+                            const bool failed_status) {
+    if (param_.code_path !=
+        "general_fsi") {  // validation is only applicable for the general fsi import path
+      return;
+    }
+
+    // Verify the string result set returend by COPY FROM
+    std::string expected_copy_from_result =
+        "Loaded: " + std::to_string(rows_completed) +
+        " recs, Rejected: " + std::to_string(rows_rejected) + " recs";
+    if (failed_status) {
+      expected_copy_from_result =
+          "Loader Failed due to : Load was cancelled due to max reject rows being "
+          "reached";
+    }
+    ASSERT_EQ(expected_copy_from_result,
+              copy_from_result_.substr(0, expected_copy_from_result.size()));
+
+    TImportStatus thrift_import_status =
+        DBHandlerTestFixture::getImportStatus(import_id_);
+    auto import_status = import_export::Importer::get_import_status(import_id_);
+
+    // ensure thrift import status matches expected values
+    ASSERT_EQ(import_status.rows_completed,
+              static_cast<size_t>(thrift_import_status.rows_completed));
+    ASSERT_EQ(import_status.rows_rejected,
+              static_cast<size_t>(thrift_import_status.rows_rejected));
+
+    if (failed_status) {  // if expecting a failed status, only check this condition as
+                          // number of rows completed could be indeterministic
+      ASSERT_EQ(failed_status, import_status.load_failed)
+          << " incorrect load_failed flag in import status";
+      ASSERT_EQ(import_status.load_msg,
+                "Load was cancelled due to max reject rows being reached");
+      return;
+    }
+    ASSERT_EQ(rows_completed, import_status.rows_completed)
+        << " incorrect rows completed in import status";
+    ASSERT_EQ(rows_rejected, import_status.rows_rejected)
+        << " incorrect rows rejected in import status";
+    ASSERT_EQ(failed_status, import_status.load_failed)
+        << " incorrect load_failed flag in import status";
+  }
+
+  TQueryResult createTableCopyFromAndSelect(
+      const std::string& in_schema,
+      const std::string& file_name_base,
+      const std::string& select_query,
+      const std::string& line_regex,
+      const std::string& odbc_select,
+      const int64_t max_byte_size_per_element,
+      const std::string& table_options = {},
+      const bool is_dir = false,
+      const bool is_odbc_geo = false,
+      const std::optional<int64_t> max_reject = std::nullopt) {
     auto& import_type = param_.import_type;
     auto& data_source_type = param_.data_source_type;
     auto& fragment_size = param_.fragment_size;
@@ -918,10 +968,28 @@ class ImportAndSelectTest
     if (isOdbc(import_type)) {
       UNREACHABLE();
     }
+
+    // strip quotations from `copy_from_source` which will be the `import_id` used by
+    // `Importer`
+    import_id_ = copy_from_source.substr(1, copy_from_source.size() - 2);
+
     EXPECT_NO_THROW(sql(query));
-    EXPECT_NO_THROW(sql("COPY import_test_new FROM " + copy_from_source +
-                        getCopyFromOptions(import_type, data_source_type, line_regex) +
-                        ";"));
+
+    TQueryResult copy_from_result;
+    EXPECT_NO_THROW(sql(
+        copy_from_result,
+        "COPY import_test_new FROM " + copy_from_source +
+            getCopyFromOptions(import_type, data_source_type, line_regex, max_reject) +
+            ";"));
+    {
+      auto row_set = copy_from_result.row_set;
+      CHECK(row_set.is_columnar);
+      CHECK_EQ(row_set.columns.size(), 1UL);
+      auto& str_col = row_set.columns[0].data.str_col;
+      CHECK_EQ(str_col.size(), 1UL);
+      copy_from_result_ = str_col[0];
+    }
+
     TQueryResult result;
     sql(result, select_query);
     validateTableChunkSizeAndMaxFragRows();
@@ -949,7 +1017,7 @@ class ImportAndSelectTest
         "COMPRESSED(32));";
 
     std::string copy_from_sql = "COPY import_test_new FROM '" + file_path + "'";
-    copy_from_sql += getCopyFromOptions(import_type, data_source_type, "");
+    copy_from_sql += getCopyFromOptions(import_type, data_source_type, "", std::nullopt);
     copy_from_sql += ";";
 
     EXPECT_NO_THROW(sql(create_sql));
@@ -962,8 +1030,12 @@ class ImportAndSelectTest
 
   std::string getCopyFromOptions(const std::string& import_type,
                                  const std::string& data_source_type,
-                                 const std::string& line_regex) {
+                                 const std::string& line_regex,
+                                 const std::optional<int64_t> max_reject) {
     std::vector<std::string> options;
+    if (max_reject.has_value()) {
+      options.emplace_back("max_reject=" + std::to_string(max_reject.value()) + "");
+    }
     if (import_type == "regex_parser") {
       options.emplace_back("source_type='regex_parsed_file'");
       options.emplace_back("line_regex='" + line_regex + "'");
@@ -1070,6 +1142,7 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
     }},
     query);
   // clang-format on
+  validateImportStatus(5, 0, false);
 }
 
 TEST_P(ImportAndSelectTest, GeoTypesRenderGroups) {
@@ -1140,6 +1213,7 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
     }},
     query);
   // clang-format on
+  validateImportStatus(3, 0, false);
 }
 
 TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
@@ -1180,6 +1254,7 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
     }},
     query);
   // clang-format on
+  validateImportStatus(3, 0, false);
 }
 
 TEST_P(ImportAndSelectTest, ScalarTypes) {
@@ -1210,6 +1285,9 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
   if (param_.data_source_type == "local") {
     expected_values.push_back(
         {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
+    validateImportStatus(4, 0, false);
+  } else {
+    validateImportStatus(3, 0, false);
   }
   assertResultSetEqual(expected_values, query);
 }
@@ -1243,6 +1321,9 @@ TEST_P(ImportAndSelectTest, Sharded) {
   if (param_.data_source_type == "local") {
     expected_values.push_back(
         {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null});
+    validateImportStatus(4, 0, false);
+  } else {
+    validateImportStatus(3, 0, false);
   }
   // clang-format off
     assertResultSetEqual(expected_values,
@@ -1276,6 +1357,220 @@ TEST_P(ImportAndSelectTest, Multifile) {
           {"aaa", 3L, 3.3f},
       },
       query);
+  validateImportStatus(6, 0, false);
+}
+
+TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+    GTEST_SKIP()
+        << "only CSV & regex_parser currently supported for error handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
+      "invalid_records/geo_types",
+      "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_geo_regex(4),
+      "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
+      "ST_AsText(multipoly) as multipoly FROM import_test;'",
+      256,
+      {},
+      false,
+      /*is_odbc_geo=*/true);
+  // clang-format off
+    assertResultSetEqual({
+    {
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+    },
+    {
+      i(2), Null, Null, Null, Null
+    },
+    {
+      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
+      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
+    },
+    {
+      i(5), Null, Null, Null, Null
+    }},
+    query);
+  // clang-format on
+  validateImportStatus(4, 1, false);
+}
+
+TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  if (isOdbc(param_.import_type)) {
+    GTEST_SKIP() << " array types are not supported for ODBC";
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+    GTEST_SKIP()
+        << "only CSV & regex_parser currently supported for error handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index INT, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[] NOT "
+      "NULL, f "
+      "FLOAT[], tm TIME[], tp TIMESTAMP[], d DATE[], txt TEXT[], fixedpoint "
+      "DECIMAL(10,5)[]",
+      "invalid_records/array_types",
+      "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_array_regex(11),
+      "",  // unused odbc_select
+      24);
+  // clang-format off
+  assertResultSetEqual({
+    {
+      1L, array({True}), array({50L, 100L}), array({30000L, 20000L}), array({2000000000L}),
+      array({9000000000000000000L}), array({10.1f, 11.1f}), array({"00:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1"}),array({1.23,2.34})
+    },
+    {
+      3L, array({True}), array({120L}), array({31000L}), array({2100000000L, 200000000L}),
+      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f}), array({"10:00:00"}),
+      array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
+      array({"text_4"}),array({6.78})
+    }},
+    query);
+  // clang-format on
+  validateImportStatus(2, 1, false);
+}
+
+TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  if (isOdbc(param_.import_type)) {
+    GTEST_SKIP() << " array types are not supported for ODBC";
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+    GTEST_SKIP()
+        << "only CSV & regex_parser currently supported for error handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index INT, b BOOLEAN[2], t TINYINT[2], s SMALLINT[2], i INTEGER[2], bi BIGINT[2] "
+      "NOT NULL, "
+      "f FLOAT[2], tm TIME[2], tp TIMESTAMP[2], d DATE[2], txt TEXT[2], fixedpoint "
+      "DECIMAL(10,5)[2]",
+      "invalid_records/array_fixed_len_types",
+      "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_array_regex(11),
+      "",  // unused odbc_select
+      24);
+  // clang-format off
+  assertResultSetEqual({
+    {
+      1L, array({True,False}), array({50L, 100L}), array({30000L, 20000L}), array({2000000000L,-100000L}),
+      array({9000000000000000000L,-9000000000000000000L}), array({10.1f, 11.1f}), array({"00:00:10","01:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1","text_2"}),array({1.23,2.34})
+    },
+    {
+      3L, array({True,True}), array({120L,44L}), array({31000L,8123L}), array({2100000000L, 200000000L}),
+      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f,1392.22f}), array({"10:00:00","20:00:00"}),
+      array({"12/31/2500 23:59:59","1/1/2500 23:59:59"}), array({"12/31/2500","1/1/2500"}),
+      array({"text_5","text_6"}),array({6.78,5.6})
+    }},
+    query);
+  // clang-format on
+  validateImportStatus(2, 1, false);
+}
+
+TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+    GTEST_SKIP()
+        << "only CSV & regex_parser currently supported for error handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE",
+      "invalid_records/scalar_types",
+      "SELECT * FROM import_test_new ORDER BY s;",
+      get_line_regex(12),
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      14);
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+    {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null}
+  };
+  // clang-format on
+
+  validateImportStatus(3, 1, false);
+  assertResultSetEqual(expected_values, query);
+}
+
+TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+    GTEST_SKIP()
+        << "only CSV & regex_parser currently supported for error handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE, shard key(txt)",
+      "invalid_records/scalar_types",
+      "SELECT * FROM import_test_new ORDER BY s;",
+      get_line_regex(12),
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      14,
+      "SHARD_COUNT=2");
+
+  // clang-format off
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{
+      {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
+        "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+        "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
+    {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null}
+  };
+  // clang-format on
+
+  validateImportStatus(3, 1, false);
+  assertResultSetEqual(expected_values, query);
+}
+
+TEST_P(ImportAndSelectTest, MaxRejectReached) {
+  if (testShouldBeSkipped()) {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+    GTEST_SKIP()
+        << "only CSV & regex_parser currently supported for error handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE",
+      "invalid_records/scalar_types",
+      "SELECT * FROM import_test_new ORDER BY s;",
+      get_line_regex(12),
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      14,
+      {},
+      false,
+      false,
+      /*max_reject=*/0);
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
+
+  validateImportStatus(0, 0, true);
+  assertResultSetEqual(expected_values, query);
 }
 
 namespace {
