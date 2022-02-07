@@ -3896,6 +3896,7 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
                                                      "test_dashboard_" + name_suffix);
     ASSERT_NE(dashboard, nullptr);
     ASSERT_EQ(user_id, dashboard->userId);
+    ASSERT_EQ(user_name, dashboard->user);
 
     // Permission entries are not added for super users
     if (!user.isSuper) {
@@ -4014,6 +4015,7 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
       SysCatalog::instance().getMetadataForUser(user_name, user);
       for (const auto dashboard : catalog.getAllDashboardsMetadata()) {
         ASSERT_NE(dashboard->userId, user.userId);
+        ASSERT_NE(dashboard->user, user_name);
         ASSERT_EQ(catalog.getMetadataForDashboard(std::to_string(user.userId),
                                                   dashboard->dashboardName),
                   nullptr);
