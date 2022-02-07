@@ -720,9 +720,11 @@ class Catalog final {
   std::unique_ptr<CustomExpression> getCustomExpressionFromConnector(size_t row);
 
   void restoreOldOwners(
+      const std::map<int32_t, std::string>& old_owners_user_name_by_id,
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
   void restoreOldOwnersInMemory(
+      const std::map<int32_t, std::string>& old_owners_user_name_by_id,
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 

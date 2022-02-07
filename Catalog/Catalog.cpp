@@ -5193,11 +5193,13 @@ void Catalog::reassignOwners(const std::set<std::string>& old_owners,
                              const std::string& new_owner) {
   CHECK(!old_owners.empty());
   int32_t new_owner_id = validate_and_get_user_id(new_owner);
+  std::map<int32_t, std::string> old_owners_user_name_by_id;
   std::set<int32_t> old_owner_ids;
   for (const auto& old_owner : old_owners) {
     auto old_owner_id = validate_and_get_user_id(old_owner);
     if (old_owner_id != new_owner_id) {
       old_owner_ids.emplace(old_owner_id);
+      old_owners_user_name_by_id[old_owner_id] = old_owner;
     }
   }
 
@@ -5272,6 +5274,7 @@ void Catalog::reassignOwners(const std::set<std::string>& old_owners,
           CHECK(dashboardDescriptorMap_.find(new_key) == dashboardDescriptorMap_.end());
           new_owner_dashboard_map[new_key] = dashboard;
           dashboard->userId = new_owner_id;
+          dashboard->user = new_owner;
           it = dashboardDescriptorMap_.erase(it);
         } else {
           it++;
@@ -5304,7 +5307,8 @@ void Catalog::reassignOwners(const std::set<std::string>& old_owners,
       }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
-      restoreOldOwnersInMemory(old_owner_db_objects, new_owner_id);
+      restoreOldOwnersInMemory(
+          old_owners_user_name_by_id, old_owner_db_objects, new_owner_id);
       throw;
     }
     sqliteConnector_.query("END TRANSACTION");
@@ -5314,12 +5318,13 @@ void Catalog::reassignOwners(const std::set<std::string>& old_owners,
     SysCatalog::instance().reassignObjectOwners(
         old_owner_db_objects, new_owner_id, *this);
   } catch (std::exception& e) {
-    restoreOldOwners(old_owner_db_objects, new_owner_id);
+    restoreOldOwners(old_owners_user_name_by_id, old_owner_db_objects, new_owner_id);
     throw;
   }
 }
 
 void Catalog::restoreOldOwners(
+    const std::map<int32_t, std::string>& old_owners_user_name_by_id,
     const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
     int32_t new_owner_id) {
   cat_write_lock write_lock(this);
@@ -5354,7 +5359,8 @@ void Catalog::restoreOldOwners(
         }
       }
     }
-    restoreOldOwnersInMemory(old_owner_db_objects, new_owner_id);
+    restoreOldOwnersInMemory(
+        old_owners_user_name_by_id, old_owner_db_objects, new_owner_id);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     LOG(FATAL)
@@ -5367,6 +5373,7 @@ void Catalog::restoreOldOwners(
 }
 
 void Catalog::restoreOldOwnersInMemory(
+    const std::map<int32_t, std::string>& old_owners_user_name_by_id,
     const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
     int32_t new_owner_id) {
   for (const auto& [old_owner_id, db_objects] : old_owner_db_objects) {
@@ -5385,6 +5392,9 @@ void Catalog::restoreOldOwnersInMemory(
         CHECK(it != dashboardDescriptorMap_.end());
         CHECK(it->second);
         it->second->userId = old_owner_id;
+        auto user_name_it = old_owners_user_name_by_id.find(old_owner_id);
+        CHECK(user_name_it != old_owners_user_name_by_id.end());
+        it->second->user = user_name_it->second;
         dashboardDescriptorMap_[std::to_string(old_owner_id) + ":" +
                                 db_object.getName()] = it->second;
         dashboardDescriptorMap_.erase(it);
