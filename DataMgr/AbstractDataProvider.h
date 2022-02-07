@@ -84,7 +84,10 @@ class AbstractDataProvider : public Data_Namespace::AbstractBufferMgr {
     return 0;
   }
 
-  bool isAllocationCapped() override { UNREACHABLE(); }
+  bool isAllocationCapped() override {
+    UNREACHABLE();
+    return false;
+  }
 
   void checkpoint() override { UNREACHABLE(); }
 
@@ -98,6 +101,7 @@ class AbstractDataProvider : public Data_Namespace::AbstractBufferMgr {
                                         int dict_id,
                                         bool load_dict = true) override {
     UNREACHABLE();
+    return nullptr;
   }
 
   Data_Namespace::AbstractBuffer* alloc(const size_t numBytes = 0) override {

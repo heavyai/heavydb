@@ -716,6 +716,7 @@ add_subdirectory(Calcite)
 get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
+add_subdirectory(ArrowStorage)
 add_subdirectory(Catalog)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)

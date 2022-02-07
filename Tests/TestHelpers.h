@@ -24,8 +24,6 @@
 
 #include "LeafHostInfo.h"
 
-#include "arrow/api.h"
-
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
@@ -308,68 +306,6 @@ inline V inline_null_value() {
 template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
 inline V inline_null_value() {
   return inline_fp_null_value<V>();
-}
-
-template <typename TYPE>
-void compare_arrow_array(const std::vector<TYPE>& expected,
-                         const std::shared_ptr<arrow::ChunkedArray>& actual) {
-  ASSERT_EQ(actual->type()->ToString(),
-            arrow::CTypeTraits<TYPE>::type_singleton()->ToString());
-  using ArrowColType = arrow::NumericArray<typename arrow::CTypeTraits<TYPE>::ArrowType>;
-  const arrow::ArrayVector& chunks = actual->chunks();
-
-  TYPE null_val = inline_null_value<TYPE>();
-  size_t compared = 0;
-
-  for (int i = 0; i < actual->num_chunks(); i++) {
-    auto chunk = chunks[i];
-    auto arrow_row_array = std::static_pointer_cast<ArrowColType>(chunk);
-
-    const TYPE* chunk_data = arrow_row_array->raw_values();
-    for (int64_t j = 0; j < arrow_row_array->length(); j++, compared++) {
-      if (expected[compared] == null_val) {
-        CHECK(chunk->IsNull(j));
-      } else {
-        CHECK(chunk->IsValid(j));
-        ASSERT_EQ(expected[compared], chunk_data[j]);
-      }
-    }
-  }
-
-  ASSERT_EQ(compared, expected.size());
-}
-
-void compare_arrow_table_impl(std::shared_ptr<arrow::Table> at, int col_idx) {}
-
-template <typename T, typename... Ts>
-void compare_arrow_table_impl(std::shared_ptr<arrow::Table> at,
-                              int col_idx,
-                              const std::vector<T>& expected,
-                              const std::vector<Ts>... expected_rem) {
-  ASSERT_LT(col_idx, at->columns().size());
-  auto col = at->column(col_idx);
-  compare_arrow_array(expected, at->column(col_idx));
-  compare_arrow_table_impl(at, col_idx + 1, expected_rem...);
-}
-
-template <typename... Ts>
-void compare_arrow_table(std::shared_ptr<arrow::Table> at,
-                         const std::vector<Ts>&... expected) {
-  ASSERT_EQ(at->columns().size(), sizeof...(Ts));
-  compare_arrow_table_impl(at, 0, expected...);
-}
-
-template <typename... Ts>
-void compare_res_data(const ExecutionResult& res, const std::vector<Ts>&... expected) {
-  std::vector<std::string> col_names;
-  for (auto& target : res.getTargetsMeta()) {
-    col_names.push_back(target.get_resname());
-  }
-  auto converter =
-      std::make_unique<ArrowResultSetConverter>(res.getDataPtr(), col_names, -1);
-  auto at = converter->convertToArrowTable();
-
-  compare_arrow_table(at, expected...);
 }
 
 }  // namespace TestHelpers

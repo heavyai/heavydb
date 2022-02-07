@@ -156,7 +156,7 @@ void PersistentStorageMgr::removeTableRelatedDS(const int db_id, const int table
 const DictDescriptor* PersistentStorageMgr::getDictMetadata(int db_id,
                                                             int dict_id,
                                                             bool load_dict) {
-  return getGlobalFileMgr()->getDictMetadata(db_id, dict_id, load_dict);
+  return getStorageMgr(db_id)->getDictMetadata(db_id, dict_id, load_dict);
 }
 
 Fragmenter_Namespace::TableInfo PersistentStorageMgr::getTableMetadata(
@@ -170,13 +170,17 @@ AbstractBufferMgr* PersistentStorageMgr::getStorageMgrForTableKey(
   return mgr_by_schema_id_.at(table_key[CHUNK_KEY_DB_IDX] >> 24).get();
 }
 
+AbstractBufferMgr* PersistentStorageMgr::getStorageMgr(int db_id) const {
+  return mgr_by_schema_id_.at(db_id >> 24).get();
+}
+
 foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const {
   return disk_cache_ ? disk_cache_.get() : nullptr;
 }
 
 void PersistentStorageMgr::registerDataProvider(
     int schema_id,
-    std::unique_ptr<AbstractBufferMgr> provider) {
+    std::shared_ptr<AbstractBufferMgr> provider) {
   CHECK_EQ(mgr_by_schema_id_.count(schema_id), 0);
-  mgr_by_schema_id_[schema_id] = std::move(provider);
+  mgr_by_schema_id_[schema_id] = provider;
 }

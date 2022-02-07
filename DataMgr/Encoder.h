@@ -230,6 +230,13 @@ class Encoder {
    */
   virtual void resetChunkStats() = 0;
 
+  /**
+   * @brief: Copy current chunk level stats (min, max, nulls) to the output arg.
+   */
+  virtual void fillChunkStats(ChunkStats&, const SQLTypeInfo&) {
+    UNREACHABLE() << "Attempting to get stats for unsupported type.";
+  }
+
   size_t getNumElems() const { return num_elems_; }
   void setNumElems(const size_t num_elems) { num_elems_ = num_elems; }
 

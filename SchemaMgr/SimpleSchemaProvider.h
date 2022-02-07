@@ -60,6 +60,8 @@ class SimpleSchemaProvider : public SchemaProvider {
     return res;
   }
 
+  using SchemaProvider::listColumns;
+
   TableInfoPtr getTableInfo(int db_id, int table_id) const override {
     auto it = table_infos_.find({db_id, table_id});
     if (it != table_infos_.end()) {
@@ -78,6 +80,8 @@ class SimpleSchemaProvider : public SchemaProvider {
     }
     return nullptr;
   }
+
+  using SchemaProvider::getTableInfo;
 
   ColumnInfoPtr getColumnInfo(int db_id, int table_id, int col_id) const override {
     auto it = column_infos_.find({db_id, table_id, col_id});
@@ -99,6 +103,8 @@ class SimpleSchemaProvider : public SchemaProvider {
     }
     return nullptr;
   }
+
+  using SchemaProvider::getColumnInfo;
 
  protected:
   TableInfoPtr addTableInfo(TableInfoPtr table_info) {

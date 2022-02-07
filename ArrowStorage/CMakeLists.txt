@@ -1,0 +1,8 @@
+set(arrow_storage_source_files
+    ArrowStorage.cpp
+    ArrowStorageUtils.cpp
+)
+
+add_library(ArrowStorage ${arrow_storage_source_files})
+
+target_link_libraries(ArrowStorage ImportExport $<$<BOOL:${ENABLE_FOLLY}>:${Folly_LIBRARIES}> Shared SchemaMgr ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})

@@ -63,7 +63,7 @@ struct DictDescriptor {
                  int nbits,
                  bool shared,
                  const int rc,
-                 std::string& fname,
+                 const std::string& fname,
                  bool temp)
       : dictName(name)
       , dictNBits(nbits)

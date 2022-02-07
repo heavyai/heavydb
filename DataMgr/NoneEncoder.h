@@ -215,6 +215,10 @@ class NoneEncoder : public Encoder {
     has_nulls = false;
   }
 
+  void fillChunkStats(ChunkStats& stats, const SQLTypeInfo& ti) override {
+    ::fillChunkStats(stats, ti, dataMin, dataMax, has_nulls);
+  }
+
   T dataMin;
   T dataMax;
   bool has_nulls;

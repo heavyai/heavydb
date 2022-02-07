@@ -28,6 +28,133 @@ struct ChunkStats {
   bool has_nulls;
 };
 
+template <typename T>
+void fillChunkStats(ChunkStats& stats,
+                    const SQLTypeInfo& type,
+                    const T min,
+                    const T max,
+                    const bool has_nulls) {
+  stats.has_nulls = has_nulls;
+  switch (type.get_type()) {
+    case kBOOLEAN: {
+      stats.min.tinyintval = min;
+      stats.max.tinyintval = max;
+      break;
+    }
+    case kTINYINT: {
+      stats.min.tinyintval = min;
+      stats.max.tinyintval = max;
+      break;
+    }
+    case kSMALLINT: {
+      stats.min.smallintval = min;
+      stats.max.smallintval = max;
+      break;
+    }
+    case kINT: {
+      stats.min.intval = min;
+      stats.max.intval = max;
+      break;
+    }
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL: {
+      stats.min.bigintval = min;
+      stats.max.bigintval = max;
+      break;
+    }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE: {
+      stats.min.bigintval = min;
+      stats.max.bigintval = max;
+      break;
+    }
+    case kFLOAT: {
+      stats.min.floatval = min;
+      stats.max.floatval = max;
+      break;
+    }
+    case kDOUBLE: {
+      stats.min.doubleval = min;
+      stats.max.doubleval = max;
+      break;
+    }
+    case kVARCHAR:
+    case kCHAR:
+    case kTEXT:
+      if (type.get_compression() == kENCODING_DICT) {
+        stats.min.intval = min;
+        stats.max.intval = max;
+      }
+      break;
+    default: {
+      break;
+    }
+  }
+}
+
+inline void mergeStats(ChunkStats& lhs, const ChunkStats& rhs, const SQLTypeInfo& type) {
+  lhs.has_nulls |= rhs.has_nulls;
+  switch (type.get_type()) {
+    case kBOOLEAN: {
+      lhs.min.tinyintval = std::min(lhs.min.tinyintval, rhs.min.tinyintval);
+      lhs.max.tinyintval = std::max(lhs.max.tinyintval, rhs.max.tinyintval);
+      break;
+    }
+    case kTINYINT: {
+      lhs.min.tinyintval = std::min(lhs.min.tinyintval, rhs.min.tinyintval);
+      lhs.max.tinyintval = std::max(lhs.max.tinyintval, rhs.max.tinyintval);
+      break;
+    }
+    case kSMALLINT: {
+      lhs.min.smallintval = std::min(lhs.min.smallintval, rhs.min.smallintval);
+      lhs.max.smallintval = std::max(lhs.max.smallintval, rhs.max.smallintval);
+      break;
+    }
+    case kINT: {
+      lhs.min.intval = std::min(lhs.min.intval, rhs.min.intval);
+      lhs.max.intval = std::max(lhs.max.intval, rhs.max.intval);
+      break;
+    }
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL: {
+      lhs.min.bigintval = std::min(lhs.min.bigintval, rhs.min.bigintval);
+      lhs.max.bigintval = std::max(lhs.max.bigintval, rhs.max.bigintval);
+      break;
+    }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE: {
+      lhs.min.bigintval = std::min(lhs.min.bigintval, rhs.min.bigintval);
+      lhs.max.bigintval = std::max(lhs.max.bigintval, rhs.max.bigintval);
+      break;
+    }
+    case kFLOAT: {
+      lhs.min.floatval = std::min(lhs.min.floatval, rhs.min.floatval);
+      lhs.max.floatval = std::max(lhs.max.floatval, rhs.max.floatval);
+      break;
+    }
+    case kDOUBLE: {
+      lhs.min.doubleval = std::min(lhs.min.doubleval, rhs.min.doubleval);
+      lhs.max.doubleval = std::max(lhs.max.doubleval, rhs.max.doubleval);
+      break;
+    }
+    case kVARCHAR:
+    case kCHAR:
+    case kTEXT:
+      if (type.get_compression() == kENCODING_DICT) {
+        lhs.min.intval = std::min(lhs.min.intval, rhs.min.intval);
+        lhs.max.intval = std::max(lhs.max.intval, rhs.max.intval);
+      }
+      break;
+    default: {
+      break;
+    }
+  }
+}
+
 struct ChunkMetadata {
   SQLTypeInfo sqlType;
   size_t numBytes;
@@ -71,64 +198,7 @@ struct ChunkMetadata {
 
   template <typename T>
   void fillChunkStats(const T min, const T max, const bool has_nulls) {
-    chunkStats.has_nulls = has_nulls;
-    switch (sqlType.get_type()) {
-      case kBOOLEAN: {
-        chunkStats.min.tinyintval = min;
-        chunkStats.max.tinyintval = max;
-        break;
-      }
-      case kTINYINT: {
-        chunkStats.min.tinyintval = min;
-        chunkStats.max.tinyintval = max;
-        break;
-      }
-      case kSMALLINT: {
-        chunkStats.min.smallintval = min;
-        chunkStats.max.smallintval = max;
-        break;
-      }
-      case kINT: {
-        chunkStats.min.intval = min;
-        chunkStats.max.intval = max;
-        break;
-      }
-      case kBIGINT:
-      case kNUMERIC:
-      case kDECIMAL: {
-        chunkStats.min.bigintval = min;
-        chunkStats.max.bigintval = max;
-        break;
-      }
-      case kTIME:
-      case kTIMESTAMP:
-      case kDATE: {
-        chunkStats.min.bigintval = min;
-        chunkStats.max.bigintval = max;
-        break;
-      }
-      case kFLOAT: {
-        chunkStats.min.floatval = min;
-        chunkStats.max.floatval = max;
-        break;
-      }
-      case kDOUBLE: {
-        chunkStats.min.doubleval = min;
-        chunkStats.max.doubleval = max;
-        break;
-      }
-      case kVARCHAR:
-      case kCHAR:
-      case kTEXT:
-        if (sqlType.get_compression() == kENCODING_DICT) {
-          chunkStats.min.intval = min;
-          chunkStats.max.intval = max;
-        }
-        break;
-      default: {
-        break;
-      }
-    }
+    ::fillChunkStats(chunkStats, sqlType, min, max, has_nulls);
   }
 
   void fillChunkStats(const Datum min, const Datum max, const bool has_nulls) {

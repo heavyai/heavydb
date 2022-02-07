@@ -76,6 +76,8 @@ add_executable(LoadTableTest LoadTableTest.cpp)
 add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
 add_executable(NoCatalogRelAlgTest NoCatalogRelAlgTest.cpp TestRelAlgDagBuilder.cpp)
 add_executable(NoCatalogSqlTest NoCatalogSqlTest.cpp SchemaJson.cpp)
+add_executable(ArrowStorageTest ArrowStorageTest.cpp)
+add_executable(ArrowStorageSqlTest ArrowStorageSqlTest.cpp SchemaJson.cpp)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
@@ -92,7 +94,7 @@ endif()
 
 # Tests + Microbenchmarks
 
-set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 # Replace Licensing library with TestLicensing library
@@ -175,6 +177,8 @@ target_link_libraries(JSONTest gtest Logger Shared)
 target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(NoCatalogRelAlgTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(NoCatalogSqlTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ArrowStorageTest ArrowStorage ${EXECUTE_TEST_LIBS})
+target_link_libraries(ArrowStorageSqlTest ArrowStorage ${EXECUTE_TEST_LIBS})
 
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -259,6 +263,8 @@ add_test(JSONTest JSONTest ${TEST_ARGS})
 add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 add_test(NoCatalogRelAlgTest NoCatalogRelAlgTest ${TEST_ARGS})
 add_test(NoCatalogSqlTest NoCatalogSqlTest ${TEST_ARGS})
+add_test(ArrowStorageTest ArrowStorageTest ${TEST_ARGS})
+add_test(ArrowStorageSqlTest ArrowStorageSqlTest ${TEST_ARGS})
 
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
@@ -349,6 +355,10 @@ set(TEST_PROGRAMS
   LoadTableTest
   JSONTest
   DataMgrTest
+  NoCatalogRelAlgTest
+  NoCatalogSqlTest
+  ArrowStorageTest
+  ArrowStorageSqlTest
 )
 
 if(ENABLE_CUDA)

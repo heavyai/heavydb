@@ -15,6 +15,7 @@
 #include "QueryEngine/RelAlgExecutor.h"
 #include "SchemaMgr/SimpleSchemaProvider.h"
 
+#include "ArrowTestHelpers.h"
 #include "TestDataProvider.h"
 #include "TestHelpers.h"
 #include "TestRelAlgDagBuilder.h"
@@ -27,7 +28,7 @@ constexpr int TEST1_TABLE_ID = 1;
 constexpr int TEST2_TABLE_ID = 2;
 constexpr int TEST_AGG_TABLE_ID = 3;
 
-using TestHelpers::compare_res_data;
+using ArrowTestHelpers::compare_res_data;
 using TestHelpers::inline_null_value;
 
 class TestSchemaProvider : public SimpleSchemaProvider {

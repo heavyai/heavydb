@@ -19,6 +19,7 @@
 
 #include "gen-cpp/CalciteServer.h"
 
+#include "ArrowTestHelpers.h"
 #include "SchemaJson.h"
 #include "TestDataProvider.h"
 #include "TestHelpers.h"
@@ -34,7 +35,7 @@ constexpr int TEST_AGG_TABLE_ID = 3;
 
 constexpr int CALCITE_PORT = 3278;
 
-using TestHelpers::compare_res_data;
+using ArrowTestHelpers::compare_res_data;
 using TestHelpers::inline_null_value;
 
 class TestSchemaProvider : public SimpleSchemaProvider {
@@ -139,7 +140,7 @@ class NoCatalogSqlTest : public ::testing::Test {
     data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
-                                 std::make_unique<TestDataProvider>(schema_provider_));
+                                 std::make_shared<TestDataProvider>(schema_provider_));
 
     executor_ = std::make_shared<Executor>(0,
                                            data_mgr_.get(),
