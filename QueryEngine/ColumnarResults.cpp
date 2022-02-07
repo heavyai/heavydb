@@ -26,6 +26,7 @@
 #include <future>
 #include <numeric>
 
+extern bool g_enable_non_kernel_time_query_interrupt;
 namespace {
 
 inline int64_t fixed_encoding_nullable_val(const int64_t val,

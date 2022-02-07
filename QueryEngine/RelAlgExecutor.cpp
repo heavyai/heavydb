@@ -33,6 +33,7 @@
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgTranslator.h"
 #include "QueryEngine/RelAlgVisitor.h"
+#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/RexVisitor.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -54,7 +55,16 @@ bool g_enable_union{false};
 size_t g_estimator_failure_max_groupby_size{256000000};
 
 extern bool g_enable_bump_allocator;
+extern bool g_enable_watchdog;
 extern size_t g_default_max_groups_buffer_entry_guess;
+extern bool g_from_table_reordering;
+extern bool g_allow_cpu_retry;
+extern size_t g_big_group_threshold;
+extern bool g_enable_window_functions;
+extern bool g_enable_table_functions;
+extern bool g_enable_multifrag_rs;
+extern bool g_allow_query_step_cpu_retry;
+extern bool g_enable_dynamic_watchdog;
 
 namespace {
 
@@ -151,21 +161,15 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
-    if (compound->isDeleteViaSelect()) {
+    if (compound->isAggregate()) {
       return 0;
-    } else if (compound->isUpdateViaSelect()) {
-      return 0;
-    } else {
-      if (compound->isAggregate()) {
-        return 0;
-      }
-
-      const auto work_unit =
-          createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
-
-      return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
-                                     executor_);
     }
+
+    const auto work_unit =
+        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
+
+    return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
+                                   executor_);
   }
 
   return 0;
@@ -803,11 +807,6 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   if (logical_values) {
     exec_desc.setResult(executeLogicalValues(logical_values, hint_applied.second));
     addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
-    return;
-  }
-  const auto modify = dynamic_cast<const RelModify*>(body);
-  if (modify) {
-    exec_desc.setResult(executeModify(modify, hint_applied.second));
     return;
   }
   const auto logical_union = dynamic_cast<const RelLogicalUnion*>(body);
@@ -1881,26 +1880,6 @@ int64_t insert_one_dict_str(T* col_data,
 }
 
 }  // namespace
-
-ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
-                                              const ExecutionOptions& eo) {
-  auto timer = DEBUG_TIMER(__func__);
-  if (eo.just_explain) {
-    throw std::runtime_error("EXPLAIN not supported for ModifyTable");
-  }
-
-  auto rs = std::make_shared<ResultSet>(TargetInfoList{},
-                                        ExecutorDeviceType::CPU,
-                                        QueryMemoryDescriptor(),
-                                        executor_->getRowSetMemoryOwner(),
-                                        executor_->getDataMgr(),
-                                        executor_->getCatalog()->getDatabaseId(),
-                                        executor_->blockSize(),
-                                        executor_->gridSize());
-
-  std::vector<TargetMetaInfo> empty_targets;
-  return {rs, empty_targets};
-}
 
 ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query) {
   // Note: We currently obtain an executor for this method, but we do not need it.

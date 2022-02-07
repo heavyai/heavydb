@@ -1754,8 +1754,7 @@ class ExportTest : public ImportExportTestBase {
 
   void doCreateAndImport() {
     ASSERT_NO_THROW(sql(std::string("CREATE TABLE query_export_test (") +
-                        NON_GEO_COLUMN_NAMES_AND_TYPES + 
-			");"));
+                        NON_GEO_COLUMN_NAMES_AND_TYPES + ");"));
     ASSERT_NO_THROW(sql(
         "COPY query_export_test FROM "
         "'../../Tests/Export/QueryExport/datafiles/query_export_test_source.csv' WITH "
@@ -1806,7 +1805,7 @@ class ExportTest : public ImportExportTestBase {
 
       std::string ddl = "CREATE TABLE query_export_test_reimport (";
       ddl += NON_GEO_COLUMN_NAMES_AND_TYPES;
-      ddl += ");";      
+      ddl += ");";
       ASSERT_NO_THROW(sql(ddl));
 
       // import to that table
@@ -1815,7 +1814,7 @@ class ExportTest : public ImportExportTestBase {
       ASSERT_NO_THROW(sql("COPY query_export_test_reimport FROM '" + actual_file +
                           "' WITH (" + import_options + ");"));
     } else {
-      ASSERT_NO_THROW(false);
+      ASSERT_TRUE(false);  // unsupported format
     }
 
     // select a comparable value from the first row
@@ -1891,11 +1890,8 @@ class ExportTest : public ImportExportTestBase {
   }
 
   constexpr static bool WITH_ARRAYS = true;
-  constexpr static bool NO_ARRAYS = false;
-  constexpr static bool GZIPPED = true;
   constexpr static bool PLAIN_TEXT = false;
   constexpr static bool COMPARE_IGNORING_COMMA_DIFF = true;
-  constexpr static bool COMPARE_EXPLICIT = false;
 
  private:
   std::vector<std::string> readTextFile(
@@ -2044,16 +2040,14 @@ TEST_F(ExportTest, CSV_InvalidName) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string exp_file = "query_export_test_csv.jpg";
-  EXPECT_THROW(doExport(exp_file, "CSV", "", WITH_ARRAYS),
-               TOmniSciException);
+  EXPECT_THROW(doExport(exp_file, "CSV", "", WITH_ARRAYS), TOmniSciException);
 }
 
 TEST_F(ExportTest, CSV_Zip_Unimplemented) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string exp_file = "query_export_test_csv.csv";
-  EXPECT_THROW(doExport(exp_file, "CSV", "Zip", WITH_ARRAYS),
-               TOmniSciException);
+  EXPECT_THROW(doExport(exp_file, "CSV", "Zip", WITH_ARRAYS), TOmniSciException);
 }
 
 }  // namespace

@@ -20,7 +20,6 @@
 #include "CompilationOptions.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "GpuMemUtils.h"
-#include "Rendering/RenderInfo.h"
 #include "ResultSet.h"
 
 #include "QueryMemoryInitializer.h"
@@ -34,6 +33,7 @@ class CpuCompilationContext;
 struct RelAlgExecutionUnit;
 class QueryMemoryDescriptor;
 class Executor;
+class RenderInfo;
 
 class QueryExecutionContext : boost::noncopyable {
  public:

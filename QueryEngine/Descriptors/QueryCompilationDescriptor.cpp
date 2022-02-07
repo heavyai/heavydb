@@ -18,6 +18,8 @@
 
 #include "QueryEngine/Execute.h"
 
+extern bool g_enable_lazy_fetch;
+
 std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     const size_t max_groups_buffer_entry_guess,
     const int8_t crt_min_byte_width,

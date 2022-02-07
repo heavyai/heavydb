@@ -37,6 +37,8 @@ using path = bf::path;
 
 static const std::string default_table_name = "test_table";
 
+extern bool g_enable_fsi;
+
 class TableTest : public DBHandlerTestFixture {
  protected:
   inline static Catalog_Namespace::Catalog* cat_;

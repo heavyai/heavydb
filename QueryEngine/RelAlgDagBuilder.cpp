@@ -18,6 +18,7 @@
 #include "CalciteDeserializerUtils.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "JsonAccessors.h"
+#include "QueryEngine/Rendering/RenderInfo.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
 #include "Rendering/RenderRelAlgUtils.h"
@@ -334,7 +335,6 @@ void RelCompound::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
 
 RelProject::RelProject(RelProject const& rhs)
     : RelAlgNode(rhs)
-    , ModifyManipulationTarget(rhs)
     , fields_(rhs.fields_)
     , hint_applied_(false)
     , hints_(std::make_unique<Hints>()) {
@@ -439,7 +439,6 @@ std::vector<const Rex*> remapTargetPointers(
 
 RelCompound::RelCompound(RelCompound const& rhs)
     : RelAlgNode(rhs)
-    , ModifyManipulationTarget(rhs)
     , groupby_count_(rhs.groupby_count_)
     , agg_exprs_(copyAggExprs(rhs.agg_exprs_))
     , fields_(rhs.fields_)
@@ -1358,7 +1357,6 @@ void create_compound(
   bool is_agg{false};
   RelAlgNode* last_node{nullptr};
 
-  std::shared_ptr<ModifyManipulationTarget> manipulation_target;
   size_t node_hash{0};
   bool hint_registered{false};
   RegisteredQueryHint registered_query_hint = RegisteredQueryHint::defaults();
@@ -1381,7 +1379,6 @@ void create_compound(
     const auto ra_project = std::dynamic_pointer_cast<RelProject>(ra_node);
     if (ra_project) {
       fields = ra_project->getFields();
-      manipulation_target = ra_project;
 
       if (first_project) {
         CHECK_EQ(size_t(1), ra_project->inputCount());
@@ -1445,19 +1442,8 @@ void create_compound(
     }
   }
 
-  auto compound_node =
-      std::make_shared<RelCompound>(filter_rex,
-                                    target_exprs,
-                                    groupby_count,
-                                    agg_exprs,
-                                    fields,
-                                    scalar_sources,
-                                    is_agg,
-                                    manipulation_target->isUpdateViaSelect(),
-                                    manipulation_target->isDeleteViaSelect(),
-                                    manipulation_target->isVarlenUpdateRequired(),
-                                    manipulation_target->getModifiedTableDescriptor(),
-                                    manipulation_target->getTargetColumns());
+  auto compound_node = std::make_shared<RelCompound>(
+      filter_rex, target_exprs, groupby_count, agg_exprs, fields, scalar_sources, is_agg);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];

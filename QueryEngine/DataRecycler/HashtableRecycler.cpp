@@ -17,6 +17,8 @@
 #include "HashtableRecycler.h"
 
 extern bool g_is_test_env;
+extern bool g_use_hashtable_cache;
+extern bool g_enable_data_recycler;
 
 bool HashtableRecycler::hasItemInCache(
     QueryPlanHash key,

@@ -40,6 +40,9 @@ double RUNNING_QUERY_INTERRUPT_CHECK_FREQ = 0.9;
 #define BASE_PATH "./tmp"
 #endif
 
+extern bool g_enable_runtime_query_interrupt;
+extern bool g_enable_non_kernel_time_query_interrupt;
+
 bool g_cpu_only{false};
 // nested loop over 1M * 1M
 std::string test_query_large{

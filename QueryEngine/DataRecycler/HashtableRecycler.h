@@ -19,6 +19,9 @@
 #include "DataRecycler.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
+extern size_t g_hashtable_cache_total_bytes;
+extern size_t g_max_cacheable_hashtable_size_bytes;
+
 struct QueryPlanMetaInfo {
   QueryPlan query_plan_dag;
   std::string inner_col_info_string;

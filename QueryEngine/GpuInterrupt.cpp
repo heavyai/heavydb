@@ -17,6 +17,10 @@
 #include "DynamicWatchdog.h"
 #include "Execute.h"
 
+extern bool g_enable_runtime_query_interrupt;
+extern bool g_enable_non_kernel_time_query_interrupt;
+extern bool g_enable_dynamic_watchdog;
+
 void Executor::registerActiveModule(void* module, const int device_id) const {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);

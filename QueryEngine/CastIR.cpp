@@ -17,6 +17,8 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
+extern bool g_enable_watchdog;
+
 llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
                                         const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);

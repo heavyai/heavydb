@@ -61,6 +61,7 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/WindowContext.h"
 
+#include "Catalog/Catalog.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "Logger/Logger.h"
 #include "SchemaMgr/SchemaProvider.h"
@@ -73,7 +74,6 @@
 #include "StringDictionary/LruCache.hpp"
 #include "StringDictionary/StringDictionary.h"
 #include "StringDictionary/StringDictionaryProxy.h"
-#include "ThriftHandler/CommandLineOptions.h"
 
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
 class QueryMemoryDescriptor;

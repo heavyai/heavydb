@@ -391,12 +391,6 @@ size_t RaExecutionSequence::stepsToNextBroadcast() const {
     if (dynamic_cast<const RelScan*>(node)) {
       return steps_to_next_broadcast;
     }
-    if (dynamic_cast<const RelModify*>(node)) {
-      // Modify runs on the leaf automatically, run the same node as a noop on the
-      // aggregator
-      ++steps_to_next_broadcast;
-      continue;
-    }
     if (auto project = dynamic_cast<const RelProject*>(node)) {
       if (project->hasWindowFunctionExpr()) {
         ++steps_to_next_broadcast;

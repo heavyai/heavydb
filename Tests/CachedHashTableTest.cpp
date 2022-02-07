@@ -62,6 +62,8 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
+extern bool g_enable_overlaps_hashjoin;
+
 namespace {
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {

@@ -45,7 +45,6 @@ class RelRexDagVisitor {
   virtual void visit(RelLeftDeepInnerJoin const*);
   virtual void visit(RelLogicalUnion const*) {}
   virtual void visit(RelLogicalValues const*);
-  virtual void visit(RelModify const*) {}
   virtual void visit(RelProject const*);
   virtual void visit(RelScan const*) {}
   virtual void visit(RelSort const*) {}

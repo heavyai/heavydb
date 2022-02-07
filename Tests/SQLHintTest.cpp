@@ -33,6 +33,7 @@ namespace po = boost::program_options;
 using namespace Catalog_Namespace;
 
 extern bool g_enable_table_functions;
+extern bool g_enable_overlaps_hashjoin;
 
 using QR = QueryRunner::QueryRunner;
 

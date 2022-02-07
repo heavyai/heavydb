@@ -26,6 +26,9 @@
 #include "Parser/ParserNode.h"
 #include "Shared/sqltypes.h"
 
+extern size_t g_constrained_by_in_threshold;
+extern bool g_enable_overlaps_hashjoin;
+
 RelAlgExecutionUnit QueryRewriter::rewrite(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {
   auto rewritten_exe_unit = rewriteConstrainedByIn(ra_exe_unit_in);

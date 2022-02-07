@@ -28,6 +28,8 @@
 #include <cfenv>
 #include <cmath>
 
+extern bool g_null_div_by_zero;
+
 #define DEF_OPERATOR(fname, op)                                                    \
   ExpressionRange fname(const ExpressionRange& other) const {                      \
     if (type_ == ExpressionRangeType::Invalid ||                                   \

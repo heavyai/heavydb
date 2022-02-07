@@ -17,6 +17,9 @@
 #include "HashingSchemeRecycler.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
+extern bool g_use_hashtable_cache;
+extern bool g_enable_data_recycler;
+
 std::optional<HashType> HashingSchemeRecycler::getItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,

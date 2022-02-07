@@ -76,6 +76,9 @@ bool g_enable_calcite_ddl_parser{true};
 bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_fsi;
+extern bool g_enable_non_kernel_time_query_interrupt;
+extern double g_running_query_interrupt_freq;
+extern unsigned g_pending_query_interrupt_freq;
 
 #ifdef ENABLE_IMPORT_PARQUET
 bool g_enable_parquet_import_fsi{false};

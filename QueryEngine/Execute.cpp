@@ -56,6 +56,7 @@
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
+#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/SpeculativeTopN.h"

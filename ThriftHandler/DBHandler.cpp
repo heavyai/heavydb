@@ -70,6 +70,7 @@
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
+#include "ThriftHandler/CommandLineOptions.h"
 #include "UdfCompiler/UdfCompiler.h"
 
 #ifdef HAVE_AWS_S3

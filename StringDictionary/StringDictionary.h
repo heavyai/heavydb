@@ -20,7 +20,6 @@
 #include "../Shared/mapd_shared_mutex.h"
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
-#include "LeafHostInfo.h"
 
 #include <future>
 #include <map>
@@ -31,6 +30,7 @@
 extern bool g_enable_stringdict_parallel;
 
 class StringDictionaryClient;
+class LeafHostInfo;
 
 class DictPayloadUnavailable : public std::runtime_error {
  public:

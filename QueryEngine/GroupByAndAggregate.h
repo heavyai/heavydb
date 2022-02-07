@@ -24,7 +24,6 @@
 #include "GpuSharedMemoryContext.h"
 #include "InputMetadata.h"
 #include "QueryExecutionContext.h"
-#include "Rendering/RenderInfo.h"
 #include "RuntimeFunctions.h"
 
 #include "QueryEngine/Utils/DiamondCodegen.h"
@@ -44,6 +43,8 @@
 
 extern bool g_enable_smem_group_by;
 extern bool g_bigint_count;
+
+class RenderInfo;
 
 struct ColRangeInfo {
   QueryDescriptionType hash_type_;

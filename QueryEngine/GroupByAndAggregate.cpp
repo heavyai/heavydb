@@ -27,6 +27,7 @@
 #include "LLVMFunctionAttributesUtil.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
+#include "QueryEngine/Rendering/RenderInfo.h"
 #include "TargetExprBuilder.h"
 
 #include "../CudaMgr/CudaMgr.h"
@@ -53,6 +54,7 @@ bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 size_t g_watchdog_baseline_max_groups{120000000};
 
+extern bool g_enable_watchdog;
 namespace {
 
 int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {

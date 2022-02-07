@@ -29,6 +29,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
+extern bool g_enable_auto_metadata_update;
 namespace {
 
 #define ASSERT_METADATA(type, tag)                                   \

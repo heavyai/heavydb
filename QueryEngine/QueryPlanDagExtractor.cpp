@@ -40,7 +40,7 @@ std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_right_operand());
 
   CHECK_EQ(static_cast<bool>(lhs_tuple_expr), static_cast<bool>(rhs_tuple_expr));
-  auto do_normalize_inner_outer_pair = [this, &result, &condition](
+  auto do_normalize_inner_outer_pair = [this, &result](
                                            const Analyzer::Expr* lhs,
                                            const Analyzer::Expr* rhs,
                                            const TemporaryTables* temporary_table) {

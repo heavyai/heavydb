@@ -21,6 +21,8 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "TestHelpers.h"
 
+#include <boost/locale/generator.hpp>
+
 // uncomment to run full test suite
 // #define RUN_ALL_TEST
 
@@ -28,6 +30,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
+extern bool g_enable_experimental_string_functions;
 class TestColumnDescriptor {
  public:
   virtual std::string get_column_definition() = 0;
@@ -1885,63 +1888,64 @@ TIME_COLUMN_TEST(TIMESTAMP_32,
                  160 * 60 * 100);
 ARRAY_COLUMN_TEST(TIMESTAMP, "TIMESTAMP");
 
-const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE,
-                                                                BOOLEAN,
-                                                                BOOLEAN_ARRAY,
-                                                                BOOLEAN_FIXED_LEN_ARRAY,
-                                                                TINYINT,
-                                                                TINYINT_ARRAY,
-                                                                TINYINT_FIXED_LEN_ARRAY,
-                                                                SMALLINT_8,
-                                                                SMALLINT,
-                                                                SMALLINT_ARRAY,
-                                                                SMALLINT_FIXED_LEN_ARRAY,
-                                                                INTEGER_8,
-                                                                INTEGER_16,
-                                                                INTEGER,
-                                                                INTEGER_ARRAY,
-                                                                INTEGER_FIXED_LEN_ARRAY,
-                                                                BIGINT_8,
-                                                                BIGINT_16,
-                                                                BIGINT_32,
-                                                                BIGINT,
-                                                                BIGINT_ARRAY,
-                                                                BIGINT_FIXED_LEN_ARRAY,
-                                                                FLOAT,
-                                                                FLOAT_ARRAY,
-                                                                FLOAT_FIXED_LEN_ARRAY,
-                                                                DOUBLE,
-                                                                DOUBLE_ARRAY,
-                                                                DOUBLE_FIXED_LEN_ARRAY,
-                                                                NUMERIC_16,
-                                                                NUMERIC_32,
-                                                                NUMERIC,
-                                                                NUMERIC_ARRAY,
-                                                                NUMERIC_FIXED_LEN_ARRAY,
-                                                                DECIMAL_16,
-                                                                DECIMAL_32,
-                                                                DECIMAL,
-                                                                DECIMAL_ARRAY,
-                                                                DECIMAL_FIXED_LEN_ARRAY,
-                                                                TEXT_NONE,
-                                                                TEXT_DICT,
-                                                                TEXT_DICT_8,
-                                                                TEXT_DICT_16,
-                                                                TEXT,
-                                                                TEXT_ARRAY,
-                                                                TEXT_FIXED_LEN_ARRAY,
-                                                                TIME_32,
-                                                                TIME,
-                                                                TIME_ARRAY,
-                                                                TIME_FIXED_LEN_ARRAY,
-                                                                DATE_16,
-                                                                DATE,
-                                                                DATE_ARRAY,
-                                                                DATE_FIXED_LEN_ARRAY,
-                                                                TIMESTAMP_32,
-                                                                TIMESTAMP,
-                                                                TIMESTAMP_ARRAY,
-                                                                TIMESTAMP_FIXED_LEN_ARRAY};
+const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {
+    STRING_NONE_BASE,
+    BOOLEAN,
+    BOOLEAN_ARRAY,
+    BOOLEAN_FIXED_LEN_ARRAY,
+    TINYINT,
+    TINYINT_ARRAY,
+    TINYINT_FIXED_LEN_ARRAY,
+    SMALLINT_8,
+    SMALLINT,
+    SMALLINT_ARRAY,
+    SMALLINT_FIXED_LEN_ARRAY,
+    INTEGER_8,
+    INTEGER_16,
+    INTEGER,
+    INTEGER_ARRAY,
+    INTEGER_FIXED_LEN_ARRAY,
+    BIGINT_8,
+    BIGINT_16,
+    BIGINT_32,
+    BIGINT,
+    BIGINT_ARRAY,
+    BIGINT_FIXED_LEN_ARRAY,
+    FLOAT,
+    FLOAT_ARRAY,
+    FLOAT_FIXED_LEN_ARRAY,
+    DOUBLE,
+    DOUBLE_ARRAY,
+    DOUBLE_FIXED_LEN_ARRAY,
+    NUMERIC_16,
+    NUMERIC_32,
+    NUMERIC,
+    NUMERIC_ARRAY,
+    NUMERIC_FIXED_LEN_ARRAY,
+    DECIMAL_16,
+    DECIMAL_32,
+    DECIMAL,
+    DECIMAL_ARRAY,
+    DECIMAL_FIXED_LEN_ARRAY,
+    TEXT_NONE,
+    TEXT_DICT,
+    TEXT_DICT_8,
+    TEXT_DICT_16,
+    TEXT,
+    TEXT_ARRAY,
+    TEXT_FIXED_LEN_ARRAY,
+    TIME_32,
+    TIME,
+    TIME_ARRAY,
+    TIME_FIXED_LEN_ARRAY,
+    DATE_16,
+    DATE,
+    DATE_ARRAY,
+    DATE_FIXED_LEN_ARRAY,
+    TIMESTAMP_32,
+    TIMESTAMP,
+    TIMESTAMP_ARRAY,
+    TIMESTAMP_FIXED_LEN_ARRAY};
 
 INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Ctas, testing::Values(ALL));
 INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Itas_P, testing::Values(ALL));
@@ -2443,7 +2447,6 @@ class ItasStringTest : public DBHandlerTestFixture {
     sql("insert into lower_function_test_countries values('Gb', 'United Kingdom', "
         "'London');");
     sql("insert into lower_function_test_countries values('dE', 'Germany', 'Berlin');");
-
   }
 
   void TearDown() override {

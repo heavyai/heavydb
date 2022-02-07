@@ -21,6 +21,9 @@
 
 #include "../Parser/ParserNode.h"
 
+extern bool g_enable_watchdog;
+extern bool g_enable_overlaps_hashjoin;
+
 namespace {
 
 llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {

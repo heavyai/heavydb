@@ -87,6 +87,8 @@ size_t g_max_import_threads =
          // option)
 size_t g_archive_read_buf_size = 1 << 20;
 
+extern bool g_enable_non_kernel_time_query_interrupt;
+
 inline auto get_filesize(const std::string& file_path) {
   boost::filesystem::path boost_file_path{file_path};
   boost::system::error_code ec;

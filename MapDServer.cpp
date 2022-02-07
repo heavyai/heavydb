@@ -38,6 +38,7 @@
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/scope.h"
+#include "ThriftHandler/CommandLineOptions.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -247,10 +248,10 @@ void run_warmup_queries(std::shared_ptr<DBHandler> handler,
         while (std::getline(query_file, single_query)) {
           boost::algorithm::trim(single_query);
           if (single_query.length() == 0 || single_query[0] == '-') {
-#if ENABLE_ITT          
-            if(single_query == "--itt_resume")
+#if ENABLE_ITT
+            if (single_query == "--itt_resume")
               __itt_resume();
-            else if(single_query == "--itt_pause")
+            else if (single_query == "--itt_pause")
               __itt_pause();
 #endif
             single_query.clear();
@@ -267,15 +268,16 @@ void run_warmup_queries(std::shared_ptr<DBHandler> handler,
           }
 
           try {
-#if ENABLE_ITT            
+#if ENABLE_ITT
             __itt_frame_begin_v3(ittquery, (__itt_id*)single_query.c_str());
 #endif
             g_warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
 #if ENABLE_ITT
             __itt_frame_end_v3(ittquery, (__itt_id*)single_query.c_str());
 #endif
-          } catch (std::exception &e) {
-            LOG(WARNING) << "Exception " << e.what() << " while executing '" << single_query;
+          } catch (std::exception& e) {
+            LOG(WARNING) << "Exception " << e.what() << " while executing '"
+                         << single_query;
             stop = true;
             break;
           } catch (...) {

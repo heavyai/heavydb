@@ -40,6 +40,7 @@
 #include <numeric>
 
 extern bool g_enable_dynamic_watchdog;
+extern bool g_enable_non_kernel_time_query_interrupt;
 
 namespace {
 

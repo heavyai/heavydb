@@ -32,8 +32,6 @@ LogicalSort            RelSort                  Imposes a particular sort order 
                                                 represent a `LIMIT` or `OFFSET`.
 LogicalValues          RelLogicalValues         Relational expression whose value is a sequence of zero or more
                                                 literal row values.
-LogicalTableModify     RelModify                Modifies a table. Expression occurs
-                                                as a result of `DELETE`, or `UPDATE` SQL statements.
 =====================  =======================  ==================================================================
 
 ``RelAlgNode``

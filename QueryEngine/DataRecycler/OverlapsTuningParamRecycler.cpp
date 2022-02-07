@@ -16,6 +16,9 @@
 
 #include "OverlapsTuningParamRecycler.h"
 
+extern bool g_use_hashtable_cache;
+extern bool g_enable_data_recycler;
+
 std::optional<AutoTunerMetaInfo> OverlapsTuningParamRecycler::getItemFromCache(
     QueryPlanHash key,
     CacheItemType item_type,

@@ -26,6 +26,9 @@
 #include "QueryEngine/ExternalExecutor.h"
 #include "QueryEngine/SerializeToSql.h"
 
+#include "QueryEngine/Rendering/RenderInfo.h"
+
+extern size_t g_cpu_sub_task_size;
 namespace {
 
 bool needs_skip_result(const ResultSetPtr& res) {

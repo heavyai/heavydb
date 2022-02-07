@@ -23,6 +23,8 @@
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
 
+#include "QueryEngine/Rendering/RenderInfo.h"
+
 #include <boost/algorithm/cxx11/any_of.hpp>
 
 bool g_enable_smem_group_by{true};

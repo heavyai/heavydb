@@ -21,7 +21,9 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include "ThriftHandler/CommandLineOptions.h"
+extern bool g_enable_columnar_output;
+extern size_t g_overlaps_max_table_size_bytes;
+extern double g_overlaps_target_entries_per_bin;
 
 // we expect query hint enum val starts with zero,
 // and let remaining enum value to be auto-incremented

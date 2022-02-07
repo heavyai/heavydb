@@ -24,12 +24,17 @@
 #include "ResultSet.h"
 #include "StreamingTopN.h"
 
+#include "QueryEngine/Rendering/RenderInfo.h"
+
 #include <Shared/checked_alloc.h>
 #include <ThirdParty/robin_hood.h>
 #include <x86intrin.h>
 
 // 8 GB, the limit of perfect hash group by under normal conditions
 int64_t g_bitmap_memory_limit{8LL * 1000 * 1000 * 1000};
+
+extern bool g_optimize_row_initialization;
+extern size_t g_max_memory_allocation_size;
 
 namespace {
 

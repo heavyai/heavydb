@@ -48,7 +48,6 @@ void RelRexDagVisitor::visit(RelAlgNode const* rel_alg_node) {
                                              RelLeftDeepInnerJoin,
                                              RelLogicalUnion,
                                              RelLogicalValues,
-                                             RelModify,
                                              RelProject,
                                              RelScan,
                                              RelSort,

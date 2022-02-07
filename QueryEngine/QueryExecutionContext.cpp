@@ -20,12 +20,17 @@
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
+#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
 #include "Shared/likely.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
+
+extern bool g_enable_non_kernel_time_query_interrupt;
+extern bool g_enable_dynamic_watchdog;
+extern unsigned g_dynamic_watchdog_time_limit;
 
 QueryExecutionContext::QueryExecutionContext(
     const RelAlgExecutionUnit& ra_exe_unit,

@@ -34,6 +34,8 @@
 #include <llvm/Support/raw_os_ostream.h>
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
+extern bool g_enable_dynamic_watchdog;
+extern bool g_enable_non_kernel_time_query_interrupt;
 
 CodeCache ResultSetReductionJIT::s_code_cache(10000);
 

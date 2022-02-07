@@ -50,6 +50,9 @@ size_t g_parallel_top_max = 20e6;  // In effect only with g_enable_watchdog.
 
 constexpr int64_t uninitialized_cached_row_count{-1};
 
+extern bool g_enable_direct_columnarization;
+extern bool g_enable_watchdog;
+
 void ResultSet::keepFirstN(const size_t n) {
   invalidateCachedRowCount();
   keep_first_ = n;

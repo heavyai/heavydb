@@ -1000,20 +1000,6 @@ static void set_chunk_stats(const SQLTypeInfo& col_type,
   }
 }
 
-static void set_chunk_metadata(const Catalog_Namespace::Catalog* catalog,
-                               FragmentInfo& fragment,
-                               const std::shared_ptr<Chunk_NS::Chunk>& chunk,
-                               const size_t nrows_to_keep,
-                               UpdelRoll& updel_roll) {
-  auto td = catalog->getMetadataForTable(chunk->getTableId());
-  auto data_buffer = chunk->getBuffer();
-  auto chunkMetadata =
-      updel_roll.getChunkMetadata({td, &fragment}, chunk->getColumnId(), fragment);
-  chunkMetadata->numElements = nrows_to_keep;
-  chunkMetadata->numBytes = data_buffer->size();
-  updel_roll.addDirtyChunk(chunk, fragment.fragmentId);
-}
-
 // Gets the initial padding required for the chunk buffer. For variable length array
 // columns, if the first element after vacuuming is going to be a null array, a padding
 // with a value that is greater than 0 is expected.

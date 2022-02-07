@@ -25,6 +25,8 @@
 #include "Shared/likely.h"
 #include "Shared/sqltypes.h"
 
+extern bool g_enable_non_kernel_time_query_interrupt;
+extern size_t g_enable_parallel_linearization;
 namespace {
 
 inline const ColumnarResults* columnarize_result(

@@ -50,7 +50,6 @@ class QueryPlanDagChecker final : public RelRexDagVisitor {
 
  private:
   void visit(const RelLogicalValues*) override;
-  void visit(const RelModify*) override;
   void visit(const RelTableFunction*) override;
   void visit(const RelProject*) override;
   void visit(const RelScan*) override;

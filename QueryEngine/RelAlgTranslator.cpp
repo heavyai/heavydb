@@ -800,7 +800,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       const auto needle_null_val = inline_int_null_val(arg_type);
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [this, &val_set, &total_in_vals_count, sd, dd, needle_null_val](
+          [&val_set, &total_in_vals_count, sd, dd, needle_null_val](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
             fill_dictionary_encoded_in_vals(in_vals,
                                             total_in_vals_count,

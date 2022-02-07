@@ -40,31 +40,16 @@ void QueryPlanDagChecker::visit(const RelLogicalValues* rel_alg_node) {
   return;
 }
 
-void QueryPlanDagChecker::visit(const RelModify* rel_alg_node) {
-  detectNotSupportedNode();
-  return;
-}
-
 void QueryPlanDagChecker::visit(const RelTableFunction* rel_alg_node) {
   detectNotSupportedNode();
   return;
 }
 
 void QueryPlanDagChecker::visit(const RelProject* rel_alg_node) {
-  if (rel_alg_node->isDeleteViaSelect() || rel_alg_node->isUpdateViaSelect() ||
-      rel_alg_node->isVarlenUpdateRequired()) {
-    detectNotSupportedNode();
-    return;
-  }
   RelRexDagVisitor::visit(rel_alg_node);
 }
 
 void QueryPlanDagChecker::visit(const RelCompound* rel_alg_node) {
-  if (rel_alg_node->isDeleteViaSelect() || rel_alg_node->isUpdateViaSelect() ||
-      rel_alg_node->isVarlenUpdateRequired()) {
-    detectNotSupportedNode();
-    return;
-  }
   // SINGLE_VALUE / SAMPLE query
   if (rel_alg_node->isAggregate() && rel_alg_node->size() > 0) {
     for (size_t i = 0; i < rel_alg_node->size(); ++i) {

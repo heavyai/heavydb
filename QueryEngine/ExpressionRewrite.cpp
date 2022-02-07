@@ -30,6 +30,7 @@
 #include "QueryEngine/WindowExpressionRewrite.h"
 #include "Shared/sqldefs.h"
 
+extern bool g_strip_join_covered_quals;
 namespace {
 
 class OrToInVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::InValues>> {

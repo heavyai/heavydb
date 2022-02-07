@@ -25,9 +25,9 @@
 
 #pragma once
 
-#include "../Shared/mapd_shared_mutex.h"
 #include "DataMgr/AbstractBufferMgr.h"
 #include "DataMgr/FileMgr/CachingFileMgr.h"
+#include "Shared/mapd_shared_mutex.h"
 
 class CacheTooSmallException : public std::runtime_error {
  public:

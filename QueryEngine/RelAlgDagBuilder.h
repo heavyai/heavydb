@@ -29,10 +29,12 @@
 #include <rapidjson/document.h>
 #include <boost/core/noncopyable.hpp>
 #include <boost/functional/hash.hpp>
+#include <boost/variant.hpp>
 
+#include "Analyzer/Analyzer.h"
+#include "Catalog/Defs.h"
 #include "Descriptors/InputDescriptors.h"
 #include "QueryEngine/QueryHint.h"
-#include "QueryEngine/Rendering/RenderInfo.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TypePunning.h"
 #include "QueryHint.h"
@@ -990,60 +992,8 @@ class RelScan : public RelAlgNode {
   std::unique_ptr<Hints> hints_;
 };
 
-class ModifyManipulationTarget {
+class RelProject : public RelAlgNode {
  public:
-  ModifyManipulationTarget(bool const update_via_select = false,
-                           bool const delete_via_select = false,
-                           bool const varlen_update_required = false,
-                           TableDescriptor const* table_descriptor = nullptr,
-                           ColumnInfoList target_columns = ColumnInfoList())
-      : is_update_via_select_(update_via_select)
-      , is_delete_via_select_(delete_via_select)
-      , varlen_update_required_(varlen_update_required)
-      , table_descriptor_(table_descriptor)
-      , target_columns_(target_columns) {}
-
-  void setUpdateViaSelectFlag() const { is_update_via_select_ = true; }
-  void setDeleteViaSelectFlag() const { is_delete_via_select_ = true; }
-  void setVarlenUpdateRequired(bool required) const {
-    varlen_update_required_ = required;
-  }
-
-  TableDescriptor const* getModifiedTableDescriptor() const { return table_descriptor_; }
-  void setModifiedTableDescriptor(TableDescriptor const* td) const {
-    table_descriptor_ = td;
-  }
-
-  auto const isUpdateViaSelect() const { return is_update_via_select_; }
-  auto const isDeleteViaSelect() const { return is_delete_via_select_; }
-  auto const isVarlenUpdateRequired() const { return varlen_update_required_; }
-
-  void setTargetColumns(ColumnInfoList const& target_columns) const {
-    target_columns_ = target_columns;
-  }
-  ColumnInfoList const& getTargetColumns() const { return target_columns_; }
-
-  template <typename VALIDATION_FUNCTOR>
-  bool validateTargetColumns(VALIDATION_FUNCTOR validator) const {
-    for (auto const& column_name : target_columns_) {
-      if (validator(column_name) == false) {
-        return false;
-      }
-    }
-    return true;
-  }
-
- private:
-  mutable bool is_update_via_select_ = false;
-  mutable bool is_delete_via_select_ = false;
-  mutable bool varlen_update_required_ = false;
-  mutable TableDescriptor const* table_descriptor_ = nullptr;
-  mutable ColumnInfoList target_columns_;
-};
-
-class RelProject : public RelAlgNode, public ModifyManipulationTarget {
- public:
-  friend class RelModify;
   using ConstRexScalarPtr = std::unique_ptr<const RexScalar>;
   using ConstRexScalarPtrVector = std::vector<ConstRexScalarPtr>;
 
@@ -1051,8 +1001,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   RelProject(std::vector<std::unique_ptr<const RexScalar>> scalar_exprs,
              const std::vector<std::string>& fields,
              std::shared_ptr<const RelAlgNode> input)
-      : ModifyManipulationTarget(false, false, false, nullptr)
-      , scalar_exprs_(std::move(scalar_exprs))
+      : scalar_exprs_(std::move(scalar_exprs))
       , fields_(fields)
       , hint_applied_(false)
       , hints_(std::make_unique<Hints>()) {
@@ -1607,7 +1556,7 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 // It's the result of combining a sequence of 'RelFilter' (optional), 'RelProject',
 // 'RelAggregate' (optional) and a simple 'RelProject' (optional) into a single node
 // which can be efficiently executed with no intermediate buffers.
-class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
+class RelCompound : public RelAlgNode {
  public:
   // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
@@ -1618,18 +1567,8 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
               std::vector<std::unique_ptr<const RexScalar>>& scalar_sources,
-              const bool is_agg,
-              bool update_disguised_as_select = false,
-              bool delete_disguised_as_select = false,
-              bool varlen_update_required = false,
-              TableDescriptor const* manipulation_target_table = nullptr,
-              ColumnInfoList target_columns = ColumnInfoList())
-      : ModifyManipulationTarget(update_disguised_as_select,
-                                 delete_disguised_as_select,
-                                 varlen_update_required,
-                                 manipulation_target_table,
-                                 target_columns)
-      , filter_expr_(std::move(filter_expr))
+              const bool is_agg)
+      : filter_expr_(std::move(filter_expr))
       , groupby_count_(groupby_count)
       , fields_(fields)
       , is_agg_(is_agg)
@@ -1807,168 +1746,6 @@ class RelSort : public RelAlgNode {
   bool empty_result_;
 
   bool hasEquivCollationOf(const RelSort& that) const;
-};
-
-class RelModify : public RelAlgNode {
- public:
-  enum class ModifyOperation { Insert, Delete, Update };
-  using RelAlgNodeInputPtr = std::shared_ptr<const RelAlgNode>;
-  using TargetColumnList = std::vector<ColumnInfoPtr>;
-
-  static std::string yieldModifyOperationString(ModifyOperation const op) {
-    switch (op) {
-      case ModifyOperation::Delete:
-        return "DELETE";
-      case ModifyOperation::Insert:
-        return "INSERT";
-      case ModifyOperation::Update:
-        return "UPDATE";
-      default:
-        break;
-    }
-    throw std::runtime_error("Unexpected ModifyOperation enum encountered.");
-  }
-
-  static ModifyOperation yieldModifyOperationEnum(std::string const& op_string) {
-    if (op_string == "INSERT") {
-      return ModifyOperation::Insert;
-    } else if (op_string == "DELETE") {
-      return ModifyOperation::Delete;
-    } else if (op_string == "UPDATE") {
-      return ModifyOperation::Update;
-    }
-
-    throw std::runtime_error(
-        std::string("Unsupported logical modify operation encountered " + op_string));
-  }
-
-  // TODO: remove catalog from constructor
-  RelModify(Catalog_Namespace::Catalog const& cat,
-            TableDescriptor const* const td,
-            bool flattened,
-            std::string const& op_string,
-            TargetColumnList const& target_column_list,
-            RelAlgNodeInputPtr input)
-      : table_descriptor_(td)
-      , flattened_(flattened)
-      , operation_(yieldModifyOperationEnum(op_string))
-      , target_column_list_(target_column_list) {
-    inputs_.push_back(input);
-  }
-
-  RelModify(Catalog_Namespace::Catalog const& cat,
-            TableDescriptor const* const td,
-            bool flattened,
-            ModifyOperation op,
-            TargetColumnList const& target_column_list,
-            RelAlgNodeInputPtr input)
-      : table_descriptor_(td)
-      , flattened_(flattened)
-      , operation_(op)
-      , target_column_list_(target_column_list) {
-    inputs_.push_back(input);
-  }
-
-  TableDescriptor const* const getTableDescriptor() const { return table_descriptor_; }
-  bool const isFlattened() const { return flattened_; }
-  ModifyOperation getOperation() const { return operation_; }
-  TargetColumnList const& getUpdateColumnInfos() const { return target_column_list_; }
-  int getUpdateColumnCount() const { return target_column_list_.size(); }
-
-  size_t size() const override { return 0; }
-  std::shared_ptr<RelAlgNode> deepCopy() const override {
-    return std::make_shared<RelModify>(*this);
-  }
-
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               table_descriptor_->tableName,
-               ", flattened=",
-               std::to_string(flattened_),
-               ", op=",
-               yieldModifyOperationString(operation_),
-               ", target_column_list=",
-               ::toString(target_column_list_),
-               ", inputs=",
-               ::toString(inputs_),
-               ")");
-  }
-
-  size_t toHash() const override {
-    if (!hash_) {
-      hash_ = typeid(RelModify).hash_code();
-      boost::hash_combine(*hash_, table_descriptor_->tableName);
-      boost::hash_combine(*hash_, flattened_);
-      boost::hash_combine(*hash_, yieldModifyOperationString(operation_));
-      boost::hash_combine(*hash_, ::toString(target_column_list_));
-      for (auto& node : inputs_) {
-        boost::hash_combine(*hash_, node->toHash());
-      }
-    }
-    return *hash_;
-  }
-
-  void applyUpdateModificationsToInputNode() {
-    RelProject const* previous_project_node =
-        dynamic_cast<RelProject const*>(inputs_[0].get());
-    CHECK(previous_project_node != nullptr);
-
-    if (previous_project_node->hasWindowFunctionExpr()) {
-      throw std::runtime_error(
-          "UPDATE of a column using a window function is not currently supported.");
-    }
-
-    previous_project_node->setUpdateViaSelectFlag();
-    // remove the offset column in the projection for update handling
-    target_column_list_.pop_back();
-
-    previous_project_node->setModifiedTableDescriptor(table_descriptor_);
-    previous_project_node->setTargetColumns(target_column_list_);
-
-    int target_update_column_expr_start = 0;
-    int target_update_column_expr_end = (int)(target_column_list_.size() - 1);
-    CHECK(target_update_column_expr_start >= 0);
-    CHECK(target_update_column_expr_end >= 0);
-
-    bool varlen_update_required = false;
-
-    auto varlen_scan_visitor = [this,
-                                &varlen_update_required,
-                                target_update_column_expr_start,
-                                target_update_column_expr_end](int index) {
-      if (index >= target_update_column_expr_start &&
-          index <= target_update_column_expr_end) {
-        auto target_index = index - target_update_column_expr_start;
-        auto& column_info = target_column_list_[target_index];
-
-        // Check for valid types
-        if (column_info->type.is_varlen()) {
-          varlen_update_required = true;
-        }
-        if (column_info->type.is_geometry()) {
-          throw std::runtime_error("UPDATE of a geo column is unsupported.");
-        }
-      }
-    };
-
-    previous_project_node->visitScalarExprs(varlen_scan_visitor);
-    previous_project_node->setVarlenUpdateRequired(varlen_update_required);
-  }
-
-  void applyDeleteModificationsToInputNode() {
-    RelProject const* previous_project_node =
-        dynamic_cast<RelProject const*>(inputs_[0].get());
-    CHECK(previous_project_node != nullptr);
-    previous_project_node->setDeleteViaSelectFlag();
-    previous_project_node->setModifiedTableDescriptor(table_descriptor_);
-  }
-
- private:
-  const TableDescriptor* table_descriptor_;
-  bool flattened_;
-  ModifyOperation operation_;
-  TargetColumnList target_column_list_;
 };
 
 class RelTableFunction : public RelAlgNode {
@@ -2230,6 +2007,8 @@ class RelAlgDag {
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   std::unordered_map<size_t, RegisteredQueryHint> query_hint_;
 };
+
+class RenderInfo;
 
 /**
  * Builder class to create an in-memory, easy-to-navigate relational algebra DAG

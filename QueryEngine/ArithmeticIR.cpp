@@ -20,7 +20,8 @@
 #include "Parser/ParserNode.h"
 
 // Code generation routines and helpers for basic arithmetic and unary minus.
-
+extern bool g_null_div_by_zero;
+extern bool g_inf_div_by_zero;
 namespace {
 
 std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1,

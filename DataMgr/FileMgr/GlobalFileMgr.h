@@ -30,7 +30,7 @@
 #include <map>
 #include <mutex>
 #include <set>
-#include "../Shared/mapd_shared_mutex.h"
+#include "Shared/mapd_shared_mutex.h"
 
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"

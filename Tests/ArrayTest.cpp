@@ -36,6 +36,7 @@
 bool g_keep_data{false};
 
 extern bool g_is_test_env;
+extern bool g_enable_parallel_linearization;
 
 using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;

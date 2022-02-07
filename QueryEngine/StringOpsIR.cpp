@@ -23,6 +23,8 @@
 
 #include <boost/locale/conversion.hpp>
 
+extern bool g_enable_watchdog;
+
 extern "C" RUNTIME_EXPORT uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;

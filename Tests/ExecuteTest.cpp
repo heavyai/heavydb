@@ -56,11 +56,16 @@ extern bool g_allow_query_step_cpu_retry;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
+extern bool g_from_table_reordering;
+extern bool g_inf_div_by_zero;
+extern bool g_null_div_by_zero;
 
+extern size_t g_big_group_threshold;
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
+extern size_t g_constrained_by_in_threshold;
 
 extern bool g_enable_window_functions;
 extern bool g_enable_calcite_view_optimize;
@@ -7494,11 +7499,10 @@ void import_varlen_lazy_fetch() {
   run_ddl_statement(create_query);
   std::string insert_query("INSERT INTO " + table_name + " VALUES(");
   for (int i = 0; i < 255; i++) {
-    run_multiple_agg(
-        insert_query + std::to_string(i - 127) + ", " + 
-            "\'number" + std::to_string(i) + "\', " + "{" +
-            std::to_string(2 * i) + ", " + std::to_string(2 * i + 1) + "}" + ");",
-        ExecutorDeviceType::CPU);
+    run_multiple_agg(insert_query + std::to_string(i - 127) + ", " + "\'number" +
+                         std::to_string(i) + "\', " + "{" + std::to_string(2 * i) + ", " +
+                         std::to_string(2 * i + 1) + "}" + ");",
+                     ExecutorDeviceType::CPU);
   }
 }
 

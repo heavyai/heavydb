@@ -69,6 +69,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include "QueryEngine/Optimization/AnnotateInternalFunctionsPass.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
+#include "QueryEngine/Rendering/RenderInfo.h"
 #include "Shared/InlineNullValues.h"
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
@@ -98,6 +99,13 @@ std::unique_ptr<std::string> g_libgeos_so_filename(
     new std::string(GEOS_LIBRARY_FILENAME));
 static llvm::sys::DynamicLibrary geos_dynamic_library;
 static std::mutex geos_init_mutex;
+
+extern bool g_enable_smem_non_grouped_agg;
+extern bool g_enable_filter_function;
+extern size_t g_gpu_smem_threshold;
+extern bool g_enable_smem_grouped_non_count_agg;
+extern bool g_enable_dynamic_watchdog;
+extern double g_running_query_interrupt_freq;
 
 namespace {
 

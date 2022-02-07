@@ -28,6 +28,8 @@
 #define BASE_PATH "./tmp"
 #endif
 
+extern bool g_enable_fsi;
+
 class AlterSystemTest : public DBHandlerTestFixture {
  public:
   void SetUp() override { DBHandlerTestFixture::SetUp(); }
