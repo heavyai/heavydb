@@ -224,25 +224,6 @@ void BaselineJoinHashTable::reify(const HashType preferred_layout) {
   const auto composite_key_info =
       HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
 
-  if (condition_->is_overlaps_oper()) {
-    CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
-    HashType layout;
-
-    if (inner_outer_pairs_[0].second->get_type_info().is_array()) {
-      layout = HashType::ManyToMany;
-    } else {
-      layout = HashType::OneToMany;
-    }
-    try {
-      reifyWithLayout(layout);
-      return;
-    } catch (const std::exception& e) {
-      VLOG(1) << "Caught exception while building overlaps baseline hash table: "
-              << e.what();
-      throw;
-    }
-  }
-
   try {
     reifyWithLayout(preferred_layout);
   } catch (const std::exception& e) {

@@ -855,14 +855,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       return date_plus_minus;
     }
   }
-  if (sql_op == kOVERLAPS) {
-    return translateOverlapsOper(rex_operator);
-  } else if (IS_COMPARISON(sql_op)) {
-    auto geo_comp = translateGeoComparison(rex_operator);
-    if (geo_comp) {
-      return geo_comp;
-    }
-  }
   auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {
     std::shared_ptr<Analyzer::Expr> rhs;
@@ -876,21 +868,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
     lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
   }
   return lhs;
-}
-
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOverlapsOper(
-    const RexOperator* rex_operator) const {
-  const auto sql_op = rex_operator->getOperator();
-  CHECK(sql_op == kOVERLAPS);
-
-  const auto lhs = translateScalarRex(rex_operator->getOperand(0));
-  const auto lhs_ti = lhs->get_type_info();
-  if (lhs_ti.is_geometry()) {
-    return translateGeoOverlapsOper(rex_operator);
-  } else {
-    throw std::runtime_error(
-        "Overlaps equivalence is currently only supported for geospatial types");
-  }
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
@@ -1567,49 +1544,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     CHECK_EQ(size_t(1), rex_function->size());
     return translateScalarRex(rex_function->getOperand(0));
   }
-  if (func_resolve(rex_function->getName(),
-                   "ST_X"sv,
-                   "ST_Y"sv,
-                   "ST_XMin"sv,
-                   "ST_YMin"sv,
-                   "ST_XMax"sv,
-                   "ST_YMax"sv,
-                   "ST_NRings"sv,
-                   "ST_NPoints"sv,
-                   "ST_Length"sv,
-                   "ST_Perimeter"sv,
-                   "ST_Area"sv,
-                   "ST_SRID"sv,
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "OmniSci_Geo_PolyBoundsPtr"sv,
-                   "OmniSci_Geo_PolyRenderGroup"sv)) {
-    CHECK_EQ(rex_function->size(), size_t(1));
-    return translateUnaryGeoFunction(rex_function);
-  }
-  if (func_resolve(rex_function->getName(),
-                   "convert_meters_to_pixel_width"sv,
-                   "convert_meters_to_pixel_height"sv,
-                   "is_point_in_view"sv,
-                   "is_point_size_in_view"sv)) {
-    return translateFunctionWithGeoArg(rex_function);
-  }
-  if (func_resolve(rex_function->getName(),
-                   "ST_Distance"sv,
-                   "ST_MaxDistance"sv,
-                   "ST_Intersects"sv,
-                   "ST_Disjoint"sv,
-                   "ST_Contains"sv,
-                   "ST_Overlaps"sv,
-                   "ST_Approx_Overlaps"sv,
-                   "ST_Within"sv)) {
-    CHECK_EQ(rex_function->size(), size_t(2));
-    return translateBinaryGeoFunction(rex_function);
-  }
-  if (func_resolve(rex_function->getName(), "ST_DWithin"sv, "ST_DFullyWithin"sv)) {
-    CHECK_EQ(rex_function->size(), size_t(3));
-    return translateTernaryGeoFunction(rex_function);
-  }
   if (rex_function->getName() == "OFFSET_IN_FRAGMENT"sv) {
     CHECK_EQ(size_t(0), rex_function->size());
     return translateOffsetInFragment();
@@ -1617,41 +1551,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "ARRAY"sv) {
     // Var args; currently no check.  Possible fix-me -- can array have 0 elements?
     return translateArrayFunction(rex_function);
-  }
-  if (func_resolve(rex_function->getName(),
-                   "ST_GeomFromText"sv,
-                   "ST_GeogFromText"sv,
-                   "ST_Centroid"sv,
-                   "ST_SetSRID"sv,
-                   "ST_Point"sv,  // TODO: where should this and below live?
-                   "ST_PointN"sv,
-                   "ST_StartPoint"sv,
-                   "ST_EndPoint"sv,
-                   "ST_Transform"sv)) {
-    SQLTypeInfo ti;
-    return translateGeoProjection(rex_function, ti, false);
-  }
-  if (func_resolve(rex_function->getName(),
-                   "ST_Intersection"sv,
-                   "ST_Difference"sv,
-                   "ST_Union"sv,
-                   "ST_Buffer"sv)) {
-    SQLTypeInfo ti;
-    return translateBinaryGeoConstructor(rex_function, ti, false);
-  }
-  if (func_resolve(rex_function->getName(), "ST_IsEmpty"sv, "ST_IsValid"sv)) {
-    CHECK_EQ(rex_function->size(), size_t(1));
-    SQLTypeInfo ti;
-    return translateUnaryGeoPredicate(rex_function, ti, false);
-  }
-  if (func_resolve(rex_function->getName(), "ST_Equals"sv)) {
-    CHECK_EQ(rex_function->size(), size_t(2));
-    // Attempt to generate a distance based check for points
-    if (auto distance_check = translateBinaryGeoFunction(rex_function)) {
-      return distance_check;
-    }
-    SQLTypeInfo ti;
-    return translateBinaryGeoPredicate(rex_function, ti, false);
   }
 
   auto arg_expr_list = translateFunctionArgs(rex_function);

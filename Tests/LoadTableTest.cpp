@@ -38,10 +38,6 @@ class LoadTableTest : public DBHandlerTestFixture {
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS load_test");
-    sql("DROP TABLE IF EXISTS geo_load_test");
-    sql("CREATE TABLE geo_load_test(i1 INTEGER, ls LINESTRING DEFAULT 'LINESTRING(0 0, 1 "
-        "1)', s TEXT, mp MULTIPOLYGON, "
-        "nns TEXT not null)");
     sql("CREATE TABLE load_test(i1 INTEGER, s TEXT DEFAULT 'default str' ENCODING "
         "DICT(8), nns TEXT not null)");
     initData();
@@ -49,7 +45,6 @@ class LoadTableTest : public DBHandlerTestFixture {
 
   void TearDown() override {
     sql("DROP TABLE IF EXISTS load_test");
-    sql("DROP TABLE IF EXISTS geo_load_test");
     DBHandlerTestFixture::TearDown();
   }
 
@@ -67,150 +62,35 @@ class LoadTableTest : public DBHandlerTestFixture {
     return v;
   }
 
-  const std::string LINESTRING = "LINESTRING (0 0,1 1,1 2)";
-  const std::string DEFAULT_LINESTRING = "LINESTRING (0 0,1 1)";
-  const std::string MULTIPOLYGON =
-      "MULTIPOLYGON (((0 0,4 0,4 4,0 4,0 0),"
-      "(1 1,1 2,2 2,2 1,1 1)),((-1 -1,-2 -1,-2 -2,-1 -2,-1 -1)))";
-  TColumn i1_column, s_column, nns_column, ls_column, mp_column;
-  TDatum i1_datum, s_datum, nns_datum, ls_datum, mp_datum;
-  std::shared_ptr<arrow::Field> i1_field, s_field, nns_field, ls_field, mp_field;
+  TColumn i1_column, s_column, nns_column;
+  TDatum i1_datum, s_datum, nns_datum;
+  std::shared_ptr<arrow::Field> i1_field, s_field, nns_field;
 
  private:
   void initData() {
-    i1_column.nulls = s_column.nulls = nns_column.nulls = ls_column.nulls =
-        mp_column.nulls = {false};
+    i1_column.nulls = s_column.nulls = nns_column.nulls = {false};
     i1_column.data.int_col = {1};
     s_column.data.str_col = {"s"};
     nns_column.data.str_col = {"nns"};
-    ls_column.data.str_col = {LINESTRING};
-    mp_column.data.str_col = {MULTIPOLYGON};
 
-    i1_datum.is_null = s_datum.is_null = nns_datum.is_null = ls_datum.is_null =
-        mp_datum.is_null = false;
+    i1_datum.is_null = s_datum.is_null = nns_datum.is_null = false;
     i1_datum.val.int_val = 1;
     s_datum.val.str_val = "s";
     nns_datum.val.str_val = "nns";
-    ls_datum.val.str_val = LINESTRING;
-    mp_datum.val.str_val = MULTIPOLYGON;
 
     i1_field = arrow::field("i1", arrow::int32());
     s_field = arrow::field("s", arrow::utf8());
     nns_field = arrow::field("nns", arrow::utf8());
-    ls_field = arrow::field("ls", arrow::utf8());
-    mp_field = arrow::field("mp", arrow::utf8());
   }
 };
 
-TEST_F(LoadTableTest, AllColumnsNoGeo) {
+TEST_F(LoadTableTest, AllColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TStringRow row;
   row.cols = {getSV("1"), getSV("s"), getSV("nns")};
   handler->load_table(session, "load_test", {row}, {});
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "s", "nns"}});
-}
-
-TEST_F(LoadTableTest, AllColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TStringRow row;
-  row.cols = {
-      getSV("1"), getSV(LINESTRING), getSV("s"), getSV(MULTIPOLYGON), getSV("nns")};
-  handler->load_table(session, "geo_load_test", {row}, {});
-  sqlAndCompareResult("SELECT * FROM geo_load_test",
-                      {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
-}
-
-TEST_F(LoadTableTest, AllColumnsReordered) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "nns", "ls", "i1", "s"};
-  TStringRow row;
-  row.cols = {
-      getSV(MULTIPOLYGON), getSV("nns"), getSV(LINESTRING), getSV("1"), getSV("s")};
-  handler->load_table(session, "geo_load_test", {row}, column_names);
-  sqlAndCompareResult("SELECT mp, nns, ls, i1, s FROM geo_load_test",
-                      {{MULTIPOLYGON, "nns", LINESTRING, i(1), "s"}});
-}
-
-TEST_F(LoadTableTest, SomeColumnsReordered) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "nns", "ls"};
-  TStringRow row;
-  row.cols = {getSV(MULTIPOLYGON), getSV("nns"), getSV(LINESTRING)};
-  handler->load_table(session, "geo_load_test", {row}, column_names);
-  sqlAndCompareResult("SELECT mp, nns, ls, i1, s FROM geo_load_test",
-                      {{MULTIPOLYGON, "nns", LINESTRING, nullptr, nullptr}});
-}
-
-TEST_F(LoadTableTest, OmitNotNullableColumn) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls"};
-  TStringRow row;
-  row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING)};
-  executeLambdaAndAssertException(
-      [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
-      "Column 'nns' cannot be omitted due to NOT NULL constraint)");
-}
-
-TEST_F(LoadTableTest, OmitGeoColumn) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"i1", "s", "nns", "ls"};
-  TStringRow row;
-  row.cols = {getSV("1"), getSV("s"), getSV("nns"), getSV(LINESTRING)};
-  handler->load_table(session, "geo_load_test", {row}, column_names);
-  sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
-                      {{i(1), "s", "nns", (void*)0, LINESTRING}});
-}
-
-TEST_F(LoadTableTest, DuplicateColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls", "mp", "nns"};
-  TStringRow row;
-  row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
-  executeLambdaAndAssertException(
-      [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
-      "Column mp is mentioned multiple times)");
-}
-
-TEST_F(LoadTableTest, UnexistingColumn) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls", "mp2", "nns"};
-  TStringRow row;
-  row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
-  executeLambdaAndAssertException(
-      [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
-      "Column mp2 does not exist)");
-}
-
-TEST_F(LoadTableTest, ColumnNumberMismatch) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls", "i1", "nns"};
-  TStringRow row;
-  row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV("nns")};
-  executeLambdaAndAssertException(
-      [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
-      "Number of columns specified does not match the number of columns given (3 vs 4))");
-}
-
-TEST_F(LoadTableTest, NoColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  executeLambdaAndAssertException(
-      [&]() { handler->load_table(session, "geo_load_test", {}, {}); },
-      "TException - service has thrown: TOmniSciException(error_msg="
-      "No rows to insert)");
 }
 
 TEST_F(LoadTableTest, DefaultString) {
@@ -221,17 +101,6 @@ TEST_F(LoadTableTest, DefaultString) {
   row.cols = {getSV("1"), getSV("nns")};
   handler->load_table(session, "load_test", {row}, column_names);
   sqlAndCompareResult("SELECT i1, s, nns FROM load_test", {{i(1), "default str", "nns"}});
-}
-
-TEST_F(LoadTableTest, DefaultGeo) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"i1", "s", "nns", "mp"};
-  TStringRow row;
-  row.cols = {getSV("1"), getSV("s"), getSV("nns"), getSV(MULTIPOLYGON)};
-  handler->load_table(session, "geo_load_test", {row}, column_names);
-  sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
-                      {{i(1), "s", "nns", MULTIPOLYGON, DEFAULT_LINESTRING}});
 }
 
 TEST_F(LoadTableTest, BinaryAllColumnsNoGeo) {
@@ -264,17 +133,6 @@ TEST_F(LoadTableTest, DictOutOfBounds) {
       "Dictionary Capacity");
 
   sqlAndCompareResult("SELECT count(*) FROM load_test", {{i(0)}});
-}
-
-// TODO(max): load_table_binary doesn't support tables with geo columns yet
-TEST_F(LoadTableTest, DISABLED_BinaryAllColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRow row;
-  row.cols = {i1_datum, ls_datum, s_datum, mp_datum, nns_datum};
-  handler->load_table_binary(session, "geo_load_test", {row}, {});
-  sqlAndCompareResult("SELECT * FROM geo_load_test",
-                      {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
 }
 
 TEST_F(LoadTableTest, BinaryAllColumnsReorderedNoGeo) {
@@ -373,109 +231,6 @@ TEST_F(LoadTableTest, ColumnarAllColumnsNoGeo) {
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "s", "nns"}});
 }
 
-TEST_F(LoadTableTest, ColumnarAllColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  handler->load_table_binary_columnar(
-      session,
-      "geo_load_test",
-      {i1_column, ls_column, s_column, mp_column, nns_column},
-      {});
-  sqlAndCompareResult("SELECT * FROM geo_load_test",
-                      {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
-}
-
-TEST_F(LoadTableTest, ColumnarAllColumnsReordered) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "nns", "ls", "i1", "s"};
-  handler->load_table_binary_columnar(
-      session,
-      "geo_load_test",
-      {mp_column, nns_column, ls_column, i1_column, s_column},
-      column_names);
-  sqlAndCompareResult("SELECT mp, nns, ls, i1, s FROM geo_load_test",
-                      {{MULTIPOLYGON, "nns", LINESTRING, i(1), "s"}});
-}
-
-TEST_F(LoadTableTest, ColumnarSomeColumnsReordered) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "nns", "ls"};
-  handler->load_table_binary_columnar(
-      session, "geo_load_test", {mp_column, nns_column, ls_column}, column_names);
-  sqlAndCompareResult("SELECT mp, nns, ls, i1, s FROM geo_load_test",
-                      {{MULTIPOLYGON, "nns", LINESTRING, nullptr, nullptr}});
-}
-
-TEST_F(LoadTableTest, ColumnarOmitNotNullableColumn) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls"};
-  executeLambdaAndAssertException(
-      [&]() {
-        handler->load_table_binary_columnar(
-            session, "geo_load_test", {mp_column, ls_column}, column_names);
-      },
-      "Column 'nns' cannot be omitted due to NOT NULL constraint");
-}
-
-TEST_F(LoadTableTest, ColumnarOmitGeoColumn) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"i1", "s", "nns", "ls"};
-  handler->load_table_binary_columnar(session,
-                                      "geo_load_test",
-                                      {i1_column, s_column, nns_column, ls_column},
-                                      column_names);
-  sqlAndCompareResult("SELECT i1, s, nns, mp, ls FROM geo_load_test",
-                      {{i(1), "s", "nns", (void*)0, LINESTRING}});
-}
-
-TEST_F(LoadTableTest, ColumnarDuplicateColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls", "mp"};
-  executeLambdaAndAssertException(
-      [&]() {
-        handler->load_table_binary_columnar(
-            session, "geo_load_test", {mp_column, ls_column, mp_column}, column_names);
-      },
-      "Column mp is mentioned multiple times");
-}
-
-TEST_F(LoadTableTest, ColumnarUnexistingColumn) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls", "mp2"};
-  executeLambdaAndAssertException(
-      [&]() {
-        handler->load_table_binary_columnar(
-            session, "geo_load_test", {mp_column, ls_column, mp_column}, column_names);
-      },
-      "Column mp2 does not exist");
-}
-
-TEST_F(LoadTableTest, ColumnarColumnNumberMismatch) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"mp", "ls", "i1"};
-  executeLambdaAndAssertException(
-      [&]() {
-        handler->load_table_binary_columnar(
-            session, "geo_load_test", {mp_column, ls_column}, column_names);
-      },
-      "Number of columns specified does not match the number of columns given (2 vs 3)");
-}
-
-TEST_F(LoadTableTest, ColumnarNoColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  executeLambdaAndAssertException(
-      [&]() { handler->load_table_binary_columnar(session, "geo_load_test", {}, {}); },
-      "No columns to insert");
-}
-
 TEST_F(LoadTableTest, ColumnarDefaultStr) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
@@ -483,18 +238,6 @@ TEST_F(LoadTableTest, ColumnarDefaultStr) {
   handler->load_table_binary_columnar(
       session, "load_test", {i1_column, nns_column}, column_names);
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
-}
-
-TEST_F(LoadTableTest, ColumnarDefaultGeo) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  std::vector<std::string> column_names{"i1", "s", "mp", "nns"};
-  handler->load_table_binary_columnar(session,
-                                      "geo_load_test",
-                                      {i1_column, s_column, mp_column, nns_column},
-                                      column_names);
-  sqlAndCompareResult("SELECT * FROM geo_load_test",
-                      {{i(1), DEFAULT_LINESTRING, "s", MULTIPOLYGON, "nns"}});
 }
 
 // A small helper to build Arrow stream for load_table_binary_arrow
@@ -554,22 +297,6 @@ TEST_F(LoadTableTest, ArrowAllColumnsNoGeo) {
   builder.appendString({"nns"});
   handler->load_table_binary_arrow(session, "load_test", builder.finish(), false);
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "s", "nns"}});
-}
-
-// TODO (max) load_table_binary_arrow doesn't support tables with geocolumns properly yet
-TEST_F(LoadTableTest, DISABLED_ArrowAllColumns) {
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  auto schema = arrow::schema({i1_field, ls_field, s_field, mp_field, nns_field});
-  ArrowStreamBuilder builder(schema);
-  builder.appendInt32({1});
-  builder.appendString({LINESTRING});
-  builder.appendString({"s"});
-  builder.appendString({MULTIPOLYGON});
-  builder.appendString({"nns"});
-  handler->load_table_binary_arrow(session, "geo_load_test", builder.finish(), false);
-  sqlAndCompareResult("SELECT * FROM geo_load_test",
-                      {{i(1), LINESTRING, "s", MULTIPOLYGON, "nns"}});
 }
 
 TEST_F(LoadTableTest, ArrowAllColumnsReorderedNoGeo) {
@@ -661,240 +388,6 @@ TEST_F(LoadTableTest, ArrowDefaultStr) {
   builder.appendString({"nns"});
   handler->load_table_binary_arrow(session, "load_test", builder.finish(), true);
   sqlAndCompareResult("SELECT * FROM load_test", {{i(1), "default str", "nns"}});
-}
-
-class ImportGeoTableTest : public DBHandlerTestFixture {
- protected:
-  void SetUp() override {
-    DBHandlerTestFixture::SetUp();
-    sql("DROP TABLE IF EXISTS import_geo_table_test");
-  }
-
-  const std::string getGeoFileName() const {
-    auto geo_file_name =
-        boost::filesystem::absolute(
-            boost::filesystem::path(
-                "../../Tests/ImportGeoTableTest/datafiles/geospatial_poly.geojson"))
-            .string();
-    return geo_file_name;
-  }
-
-  const TCopyParams getCopyParams() const {
-    TCopyParams copy_params;
-    return copy_params;
-  }
-
-  const TCreateParams getCreateParams() const {
-    TCreateParams create_params;
-    create_params.is_replicated = false;
-    return create_params;
-  }
-
-  TColumnType getScalarColumnType(const std::string& name,
-                                  const TDatumType::type type) const {
-    TColumnType ct;
-    ct.col_name = name;
-    ct.col_type.type = type;
-    ct.col_type.encoding = TEncodingType::type::NONE;
-    ct.col_type.nullable = true;
-    ct.col_type.is_array = false;
-    ct.col_type.precision = 0;
-    ct.col_type.scale = 0;
-    ct.col_type.comp_param = 0;
-    ct.col_type.size = 0;
-    ct.is_reserved_keyword = false;
-    ct.src_name = name;
-    ct.is_system = false;
-    ct.is_physical = false;
-    ct.col_id = 0;
-    return ct;
-  };
-
-  TColumnType getPolyColumnType(const std::string& name) const {
-    TColumnType ct;
-    ct.col_name = name;
-    ct.col_type.type = TDatumType::type::POLYGON;
-    ct.col_type.encoding = TEncodingType::type::GEOINT;
-    ct.col_type.nullable = true;
-    ct.col_type.is_array = false;
-    ct.col_type.precision = 23;  // aka subtype = SQLTypes::kGEOMETRY (not the same as
-                                 // TDatumType::type::GEOMETRY)
-    ct.col_type.scale = 4326;    // aka output_srid = WGS84
-    ct.col_type.comp_param = 32;
-    ct.col_type.size = 0;
-    ct.is_reserved_keyword = false;
-    ct.src_name = name;
-    ct.is_system = false;
-    ct.is_physical = false;
-    ct.col_id = 0;
-    return ct;
-  };
-
-  void TearDown() override {
-    sql("DROP TABLE IF EXISTS import_geo_table_test");
-    DBHandlerTestFixture::TearDown();
-  }
-};
-
-TEST_F(ImportGeoTableTest, ImportGeoTableAuto) {
-  // geo import with empty row descriptor
-  // will automatically create table
-  // equivalent to COPY FROM WITH (geo='true')
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRowDescriptor row_descriptor;
-  EXPECT_NO_THROW(handler->import_geo_table(session,
-                                            "import_geo_table_test",
-                                            getGeoFileName(),
-                                            getCopyParams(),
-                                            row_descriptor,
-                                            getCreateParams()));
-  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
-  sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{0.0f}});
-}
-
-TEST_F(ImportGeoTableTest, ImportGeoTableExplicit) {
-  // geo import with explicit row descriptor (e.g. Immerse import)
-  // must create table first
-  // correct types
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
-                                getPolyColumnType("omnisci_geo")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::POLYGON,
-                                        getCreateParams()));
-  EXPECT_NO_THROW(handler->import_geo_table(session,
-                                            "import_geo_table_test",
-                                            getGeoFileName(),
-                                            getCopyParams(),
-                                            row_descriptor,
-                                            getCreateParams()));
-  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
-  sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{0.0f}});
-}
-
-TEST_F(ImportGeoTableTest, ImportGeoTableOverride) {
-  // geo import with explicit row descriptor (e.g. Immerse import)
-  // must create table first
-  // type of column 'trip' overridden from FLOAT to INT (valid)
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::INT),
-                                getPolyColumnType("omnisci_geo")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::POLYGON,
-                                        getCreateParams()));
-  EXPECT_NO_THROW(handler->import_geo_table(session,
-                                            "import_geo_table_test",
-                                            getGeoFileName(),
-                                            getCopyParams(),
-                                            row_descriptor,
-                                            getCreateParams()));
-  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
-  sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{i(0)}});
-}
-
-TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
-  // geo import with explicit row descriptor (e.g. Immerse import)
-  // must create table first
-  // types of columns swapped (possible in Immerse for now)
-  // import will not fail, but should reject all rows
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRowDescriptor row_descriptor{
-      getPolyColumnType("trip"),
-      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::POLYGON,
-                                        getCreateParams()));
-  EXPECT_THROW(handler->import_geo_table(session,
-                                         "import_geo_table_test",
-                                         getGeoFileName(),
-                                         getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
-               TOmniSciException);
-  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
-}
-
-TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
-  // geo import with explicit row descriptor (e.g. Immerse import)
-  // must create table first
-  // column types valid but columns swapped (possible in Immerse for now)
-  // import will not fail, but should reject all rows
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRowDescriptor row_descriptor{
-      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT),
-      getPolyColumnType("trip")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::POLYGON,
-                                        getCreateParams()));
-  EXPECT_THROW(handler->import_geo_table(session,
-                                         "import_geo_table_test",
-                                         getGeoFileName(),
-                                         getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
-               TOmniSciException);
-  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
-}
-
-TEST_F(ImportGeoTableTest, ImportGeoTableFailNoGeoColumns) {
-  // geo import with explicit row descriptor (e.g. Immerse import)
-  // must create table first
-  // no geo columns in row descriptor
-  // import should fail
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::POLYGON,
-                                        getCreateParams()));
-  EXPECT_THROW(handler->import_geo_table(session,
-                                         "import_geo_table_test",
-                                         getGeoFileName(),
-                                         getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
-               TOmniSciException);
-  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
-}
-
-TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
-  // geo import with explicit row descriptor (e.g. Immerse import)
-  // must create table first
-  // more than one geo column in row descriptor
-  // import should fail
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto& session = getDbHandlerAndSessionId().second;
-  TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
-                                getPolyColumnType("omnisci_geo1"),
-                                getPolyColumnType("omnisci_geo2")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TFileType::type::POLYGON,
-                                        getCreateParams()));
-  EXPECT_THROW(handler->import_geo_table(session,
-                                         "import_geo_table_test",
-                                         getGeoFileName(),
-                                         getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
-               TOmniSciException);
-  sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
 #ifdef HAVE_AWS_S3

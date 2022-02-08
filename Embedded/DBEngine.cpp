@@ -209,6 +209,7 @@ class DBEngineImpl : public DBEngine {
                                                        nullptr,
                                                        nullptr,
                                                        0,
+                                                       0,
                                                        0),
                            {}};
     db_handler_->sql_execute(
@@ -273,10 +274,6 @@ class DBEngineImpl : public DBEngine {
     auto& catalog = db_handler_->get_session_copy(session_id_).getCatalog();
     const auto tables = catalog.getAllTableMetadata();
     for (const auto td : tables) {
-      if (td->shard >= 0) {
-        // skip shards, they're not standalone tables
-        continue;
-      }
       table_names.push_back(td->tableName);
     }
     return table_names;

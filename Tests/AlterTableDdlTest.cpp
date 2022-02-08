@@ -23,7 +23,6 @@
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
@@ -99,31 +98,6 @@ bool alter_common(const std::string& table,
       if (0 == crt_row.size()) {
         break;
       }
-      auto geo = v<NullableString>(crt_row[0]);
-      auto geo_s = boost::get<std::string>(&geo);
-      auto geo_v = boost::get<void*>(&geo);
-
-#if 1
-      if (!geo_s && geo_v && *geo_v == nullptr && val2 == "NULL") {
-        ++r_cnt;
-      }
-      if (!geo_v && geo_s && *geo_s == val2) {
-        ++r_cnt;
-      }
-#else
-      // somehow these do not work as advertised ...
-      using namespace Geospatial;
-      if (boost::iequals(type, "POINT") && GeoPoint(geo) == GeoPoint(val2))
-        ++r_cnt;
-      else if (boost::iequals(type, "LINESTRING") &&
-               GeoLineString(geo) == GeoLineString(val2))
-        ++r_cnt;
-      else if (boost::iequals(type, "POLYGON") && GeoPolygon(geo) == GeoPolygon(val2))
-        ++r_cnt;
-      else if (boost::iequals(type, "MULTIPOLYGON") &&
-               GeoMultiPolygon(geo) == GeoMultiPolygon(val2))
-        ++r_cnt;
-#endif
     }
     return r_cnt == 100;
   } else {
@@ -207,16 +181,6 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> type
     MT("date", "", "'2011-10-23'", ""),
     MT("time", "", "'10:23:45'", ""),
     MT("timestamp", "", "'2011-10-23 10:23:45'", ""),
-    MT("POINT", "", "'POINT (1 2)'", "POINT (1 2)"),
-    MT("LINESTRING", "", "'LINESTRING (1 1,2 2,3 3)'", "LINESTRING (1 1,2 2,3 3)"),
-    MT("POLYGON",
-       "",
-       "'POLYGON((0 0,0 9,9 9,9 0),(1 1,2 2,3 3))'",
-       "POLYGON ((9 0,9 9,0 9,0 0,9 0),(3 3,2 2,1 1,3 3))"),
-    MT("MULTIPOLYGON",
-       "",
-       "'MULTIPOLYGON(((0 0,0 9,9 9,9 0),(1 1,2 2,3 3)))'",
-       "MULTIPOLYGON (((9 0,9 9,0 9,0 0,9 0),(3 3,2 2,1 1,3 3)))"),
 };
 #undef MT
 

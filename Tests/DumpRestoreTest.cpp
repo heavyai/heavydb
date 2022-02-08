@@ -245,82 +245,6 @@ class DumpAndRestoreTest : public ::testing::Test {
   }
 };
 
-TEST_F(DumpAndRestoreTest, Geo_DifferentEncodings) {
-  run_ddl_statement(
-      "CREATE TABLE test_table ("
-      "p1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), p2 GEOMETRY(POINT, 4326) "
-      "ENCODING NONE, "
-      "l1 GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), l2 GEOMETRY(LINESTRING, "
-      "4326) ENCODING NONE, "
-      "poly1 GEOMETRY(POLYGON, 4326) ENCODING COMPRESSED(32), poly2 GEOMETRY(POLYGON, "
-      "4326) ENCODING NONE, "
-      "mpoly1 GEOMETRY(MULTIPOLYGON, 4326) ENCODING COMPRESSED(32), "
-      "mpoly2 GEOMETRY(MULTIPOLYGON, 4326) ENCODING NONE);");
-
-  run_multiple_agg(
-      "INSERT INTO test_table VALUES("
-      "'POINT(1 0)', 'POINT(1 0)', 'LINESTRING(1 0,0 1)', 'LINESTRING(1 0,0 1)', "
-      "'POLYGON((0 0,1 0,0 1,0 0))', 'POLYGON((0 0,1 0,0 1,0 0)))', "
-      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))', "
-      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))');");
-
-  std::vector<std::string> expected_result{
-      "POINT (0.999999940861017 0.0)",
-      "POINT (1 0)",
-      "LINESTRING (0.999999940861017 0.0,0.0 0.999999982770532)",
-      "LINESTRING (1 0,0 1)",
-      "POLYGON ((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0))",
-      "POLYGON ((0 0,1 0,0 1,0 0))",
-      "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 "
-      "0,1.99999996554106 0.0,0.0 1.99999996554106,0 0)))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"};
-
-  sqlAndCompareResult("SELECT * FROM test_table;", expected_result);
-  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
-  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
-  sqlAndCompareResult("SELECT * FROM test_table_2;", expected_result);
-}
-
-TEST_F(DumpAndRestoreTest, Geo_DifferentSRIDs) {
-  run_ddl_statement(
-      "CREATE TABLE test_table ("
-      "p1 POINT, p2 GEOMETRY(POINT, 4326), p3 GEOMETRY(POINT, 900913), "
-      "l1 LINESTRING, l2 GEOMETRY(LINESTRING, 4326), l3 GEOMETRY(LINESTRING, 900913), "
-      "poly1 POLYGON, poly2 GEOMETRY(POLYGON, 4326), poly3 GEOMETRY(POLYGON, 900913), "
-      "mpoly1 MULTIPOLYGON, mpoly2 GEOMETRY(MULTIPOLYGON, 4326), mpoly3 "
-      "GEOMETRY(MULTIPOLYGON, 900913));");
-
-  run_multiple_agg(
-      "INSERT INTO test_table VALUES("
-      "'POINT(1 0)', 'POINT(1 0)', 'POINT(1 0)', "
-      "'LINESTRING(1 0,0 1)', 'LINESTRING(1 0,0 1)', 'LINESTRING(1 0,0 1)', "
-      "'POLYGON((0 0,1 0,0 1,0 0))', 'POLYGON((0 0,1 0,0 1,0 0))', 'POLYGON((0 0,1 0,0 "
-      "1,0 0)))', "
-      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))',"
-      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))', "
-      "'MULTIPOLYGON(((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))');");
-
-  std::vector<std::string> expected_result{
-      "POINT (1 0)",
-      "POINT (0.999999940861017 0.0)",
-      "POINT (1 0)",
-      "LINESTRING (1 0,0 1)",
-      "LINESTRING (0.999999940861017 0.0,0.0 0.999999982770532)",
-      "LINESTRING (1 0,0 1)",
-      "POLYGON ((0 0,1 0,0 1,0 0))",
-      "POLYGON ((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0))",
-      "POLYGON ((0 0,1 0,0 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))",
-      "MULTIPOLYGON (((0 0,0.999999940861017 0.0,0.0 0.999999982770532,0 0)),((0 "
-      "0,1.99999996554106 0.0,0.0 1.99999996554106,0 0)))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"};
-
-  sqlAndCompareResult("SELECT * FROM test_table;", expected_result);
-  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
-  run_ddl_statement("RESTORE TABLE test_table_2 FROM '" + tar_ball_path + "';");
-  sqlAndCompareResult("SELECT * FROM test_table_2;", expected_result);
-}
-
 TEST_F(DumpAndRestoreTest, TextArray) {
   run_ddl_statement("CREATE TABLE test_table (t1 TEXT[], t2 TEXT[5]);");
   run_multiple_agg(
@@ -371,9 +295,8 @@ TEST_F(DumpAndRestoreTest, TableWithDefaultColumnValues) {
       "CREATE TABLE test_table (idx INTEGER NOT NULL, i INTEGER DEFAULT 14,"
       "big_i BIGINT DEFAULT 314958734, null_i INTEGER, int_a INTEGER[] "
       "DEFAULT ARRAY[1, 2, 3], text_a TEXT[] DEFAULT ARRAY['a', 'b'] ENCODING DICT(32),"
-      "dt TEXT DEFAULT 'World' ENCODING DICT(32), ls GEOMETRY(LINESTRING) "
-      "DEFAULT 'LINESTRING (1 1,2 2,3 3)' ENCODING NONE, p GEOMETRY(POINT) DEFAULT "
-      "'POINT (1 2)' ENCODING NONE,  d DATE DEFAULT '2011-10-23' ENCODING DAYS(32), "
+      "dt TEXT DEFAULT 'World' ENCODING DICT(32), "
+      "d DATE DEFAULT '2011-10-23' ENCODING DAYS(32), "
       "ta TIMESTAMP[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'], "
       "f FLOAT DEFAULT 1.15, n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));");
   run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
@@ -385,9 +308,8 @@ TEST_F(DumpAndRestoreTest, TableWithDefaultColumnValues) {
       "DEFAULT 14, big_i "
       "BIGINT DEFAULT 314958734, null_i INTEGER, int_a INTEGER[] DEFAULT "
       "ARRAY[1, 2, 3], text_a TEXT[] DEFAULT ARRAY['a', 'b'] ENCODING DICT(32), "
-      "dt TEXT DEFAULT 'World' ENCODING DICT(32), ls GEOMETRY(LINESTRING) DEFAULT "
-      "'LINESTRING (1 1,2 2,3 3)' ENCODING NONE, p GEOMETRY(POINT) DEFAULT 'POINT "
-      "(1 2)' ENCODING NONE, d DATE DEFAULT '2011-10-23' ENCODING DAYS(32), ta "
+      "dt TEXT DEFAULT 'World' ENCODING DICT(32), "
+      "d DATE DEFAULT '2011-10-23' ENCODING DAYS(32), ta "
       "TIMESTAMP(0)[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'], f "
       "FLOAT DEFAULT 1.15, n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));";
   ASSERT_EQ(schema, expected_schema);

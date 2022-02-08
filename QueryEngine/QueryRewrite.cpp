@@ -51,22 +51,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
     JoinCondition join_condition{{}, join_condition_in.type};
 
     for (const auto& join_qual_expr_in : join_condition_in.quals) {
-      auto new_overlaps_quals = rewrite_overlaps_conjunction(join_qual_expr_in);
-      if (new_overlaps_quals) {
-        const auto& overlaps_quals = *new_overlaps_quals;
-
-        // Add overlaps qual
-        join_condition.quals.insert(join_condition.quals.end(),
-                                    overlaps_quals.join_quals.begin(),
-                                    overlaps_quals.join_quals.end());
-
-        // Add original quals
-        join_condition.quals.insert(join_condition.quals.end(),
-                                    overlaps_quals.quals.begin(),
-                                    overlaps_quals.quals.end());
-      } else {
-        join_condition.quals.push_back(join_qual_expr_in);
-      }
+      join_condition.quals.push_back(join_qual_expr_in);
     }
     join_condition_per_nesting_level.push_back(join_condition);
   }

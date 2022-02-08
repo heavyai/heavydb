@@ -50,13 +50,12 @@ enum SQLOps {
   kARRAY_AT,
   kUNNEST,
   kFUNCTION,
-  kIN,
-  kOVERLAPS
+  kIN
 };
 
-#define IS_COMPARISON(X)                                                          \
-  ((X) == kEQ || (X) == kBW_EQ || (X) == kOVERLAPS || (X) == kNE || (X) == kLT || \
-   (X) == kGT || (X) == kLE || (X) == kGE)
+#define IS_COMPARISON(X)                                                    \
+  ((X) == kEQ || (X) == kBW_EQ || (X) == kNE || (X) == kLT || (X) == kGT || \
+   (X) == kLE || (X) == kGE)
 #define IS_LOGIC(X) ((X) == kAND || (X) == kOR)
 #define IS_ARITHMETIC(X) \
   ((X) == kMINUS || (X) == kPLUS || (X) == kMULTIPLY || (X) == kDIVIDE || (X) == kMODULO)
@@ -64,7 +63,7 @@ enum SQLOps {
   ((X) == kLT ? kGT : (X) == kLE ? kGE : (X) == kGT ? kLT : (X) == kGE ? kLE : (X))
 #define IS_UNARY(X) \
   ((X) == kNOT || (X) == kUMINUS || (X) == kISNULL || (X) == kEXISTS || (X) == kCAST)
-#define IS_EQUIVALENCE(X) ((X) == kEQ || (X) == kBW_EQ || (X) == kOVERLAPS)
+#define IS_EQUIVALENCE(X) ((X) == kEQ || (X) == kBW_EQ)
 
 enum SQLQualifier { kONE, kANY, kALL };
 
@@ -215,8 +214,6 @@ inline std::string toString(const SQLOps& op) {
       return "FUNCTION";
     case kIN:
       return "IN";
-    case kOVERLAPS:
-      return "OVERLAPS";
   }
   LOG(FATAL) << "Invalid operation kind: " << op;
   return "";

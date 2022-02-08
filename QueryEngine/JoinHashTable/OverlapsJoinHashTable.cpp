@@ -72,15 +72,6 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
       [](const std::shared_ptr<Analyzer::BinOper> condition,
          const std::vector<InnerOuter>& inner_outer_pairs) -> HashType {
     HashType layout = HashType::OneToMany;
-    if (condition->is_overlaps_oper()) {
-      CHECK_EQ(inner_outer_pairs.size(), size_t(1));
-      if (inner_outer_pairs[0].first->get_type_info().is_array() &&
-          inner_outer_pairs[0].second->get_type_info().is_array() &&
-          // Bounds vs constructed points, former should yield ManyToMany
-          inner_outer_pairs[0].second->get_type_info().get_size() == 32) {
-        layout = HashType::ManyToMany;
-      }
-    }
     return layout;
   };
 
@@ -1107,28 +1098,7 @@ size_t OverlapsJoinHashTable::getKeyComponentCount() const {
 }
 
 void OverlapsJoinHashTable::reify(const HashType preferred_layout) {
-  auto timer = DEBUG_TIMER(__func__);
-  CHECK_LT(0, device_count_);
-  composite_key_info_ = HashJoin::getCompositeKeyInfo(inner_outer_pairs_, executor_);
-
-  CHECK(condition_->is_overlaps_oper());
-  CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
-  HashType layout;
-  if (inner_outer_pairs_[0].second->get_type_info().is_fixlen_array() &&
-      inner_outer_pairs_[0].second->get_type_info().get_size() == 32) {
-    // bounds array
-    layout = HashType::ManyToMany;
-  } else {
-    layout = HashType::OneToMany;
-  }
-  try {
-    reifyWithLayout(layout);
-    return;
-  } catch (const std::exception& e) {
-    VLOG(1) << "Caught exception while building overlaps baseline hash table: "
-            << e.what();
-    throw;
-  }
+  UNREACHABLE();
 }
 
 void OverlapsJoinHashTable::reifyImpl(std::vector<ColumnsForDevice>& columns_per_device,

@@ -528,7 +528,7 @@ void check_valid_join_qual(std::shared_ptr<Analyzer::BinOper>& bin_oper) {
 
   auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
   auto rhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
-  if (lhs_cv && rhs_cv && !bin_oper->is_overlaps_oper()) {
+  if (lhs_cv && rhs_cv) {
     auto lhs_type = lhs_cv->get_type_info().get_type();
     auto rhs_type = rhs_cv->get_type_info().get_type();
     // check #1. avoid a join btw full array columns

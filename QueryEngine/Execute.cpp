@@ -3328,9 +3328,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint,
     const TableIdToNodeMap& table_id_to_node_map) {
-  if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
-    return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
-  }
   if (g_enable_dynamic_watchdog && interrupted_.load()) {
     throw QueryExecutionError(ERR_INTERRUPTED);
   }

@@ -737,8 +737,7 @@ void simple_insert_test_omitting_columns(const std::string& table_name,
       {"ia", "ARRAY[1, 2, 3, 2, 1]"},
       {"b", "False"},
       {"dt", "Dict str"},
-      {"t", "Str"},
-      {"ls", "LINESTRING (1 1,2 15)"}};
+      {"t", "Str"}};
   for (size_t i = 0; i < columns.size(); ++i) {
     std::string value =
         (i == 0 || i == 1 ? columns[i].second : "'" + columns[i].second + "'");
@@ -779,7 +778,7 @@ TEST(Insert, OmitColumnsWithNulls) {
     run_ddl_statement("DROP TABLE IF EXISTS not_sharded_simple_inserts_table;");
     EXPECT_NO_THROW(run_ddl_statement(
         "create table not_sharded_simple_inserts_table(id integer, i integer not null, "
-        "b boolean, dt text encoding dict, t text encoding none, ls linestring, "
+        "b boolean, dt text encoding dict, t text encoding none, "
         "ia int[]);"));
     simple_insert_test_omitting_columns("not_sharded_simple_inserts_table", dt);
   }
@@ -2253,28 +2252,6 @@ TEST(Select, ConstantWidthBucketExpr) {
       auto queries = test_queries(col);
       c(queries.first, queries.second, dt);
     }
-
-    // check when target_expr has an invalid range due to geo exprs such as st_x and st_y
-    EXPECT_EQ(
-        int64_t(255),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), 0, "
-                                  "254, 255) FROM varlen_table);",
-                                  dt)));
-    EXPECT_EQ(
-        int64_t(255),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), "
-                                  "st_y(p), 254, 255) FROM varlen_table);",
-                                  dt)));
-    EXPECT_EQ(
-        int64_t(255),
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), 0, "
-                                  "st_y(p), 255) FROM varlen_table);",
-                                  dt)));
-    EXPECT_EQ(int64_t(255),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM (SELECT WIDTH_BUCKET(st_x(p), 0, 254, 255) x, "
-                  "WIDTH_BUCKET(st_y(p), 0, 254, 255) y FROM varlen_table GROUP BY x,y);",
-                  dt)));
   }
   run_ddl_statement(drop);
   g_sqlite_comparator.query(drop);
@@ -7512,14 +7489,14 @@ void import_varlen_lazy_fetch() {
   const std::string drop_varlen_table("DROP TABLE IF EXISTS " + table_name + ";");
   run_ddl_statement(drop_varlen_table);
   std::string create_query("CREATE TABLE " + table_name +
-                           " (t tinyint, p POINT, real_str TEXT ENCODING NONE, "
+                           " (t tinyint, real_str TEXT ENCODING NONE, "
                            "array_i16 smallint[]) with (FRAGMENT_SIZE = 256);");
   run_ddl_statement(create_query);
   std::string insert_query("INSERT INTO " + table_name + " VALUES(");
   for (int i = 0; i < 255; i++) {
     run_multiple_agg(
-        insert_query + std::to_string(i - 127) + ", \'POINT(" + std::to_string(i) + " " +
-            std::to_string(i) + ")\', " + "\'number" + std::to_string(i) + "\', " + "{" +
+        insert_query + std::to_string(i - 127) + ", " + 
+            "\'number" + std::to_string(i) + "\', " + "{" +
             std::to_string(2 * i) + ", " + std::to_string(2 * i + 1) + "}" + ");",
         ExecutorDeviceType::CPU);
   }
@@ -17836,15 +17813,13 @@ TEST(Select, VarlenLazyFetch) {
       // rowid not meaningful in dstributed mode
       SKIP_ALL_ON_AGGREGATOR();
       const auto query(
-          "SELECT t, p, real_str, array_i16 FROM varlen_table where rowid = 222;");
+          "SELECT t, real_str, array_i16 FROM varlen_table where rowid = 222;");
       auto result = run_multiple_agg(query, dt);
       const auto first_row = result->getNextRow(true, true);
-      ASSERT_EQ(size_t(4), first_row.size());
+      ASSERT_EQ(size_t(3), first_row.size());
       ASSERT_EQ(int64_t(95), v<int64_t>(first_row[0]));
-      ASSERT_EQ(boost::get<std::string>(v<NullableString>(first_row[1])),
-                "POINT (222 222)");
-      ASSERT_EQ(boost::get<std::string>(v<NullableString>(first_row[2])), "number222");
-      compare_array(first_row[3], std::vector<int64_t>({444, 445}));
+      ASSERT_EQ(boost::get<std::string>(v<NullableString>(first_row[1])), "number222");
+      compare_array(first_row[2], std::vector<int64_t>({444, 445}));
     }
   }
 }

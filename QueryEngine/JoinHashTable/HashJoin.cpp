@@ -246,24 +246,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
   CHECK_GT(device_count, 0);
-  if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
-    throw std::runtime_error(
-        "Overlaps hash join disabled, attempting to fall back to loop join");
-  }
-  if (qual_bin_oper->is_overlaps_oper()) {
-    VLOG(1) << "Trying to build geo hash table:";
-    join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
-                                                         query_infos,
-                                                         memory_level,
-                                                         join_type,
-                                                         device_count,
-                                                         column_cache,
-                                                         executor,
-                                                         hashtable_build_dag_map,
-                                                         query_hint,
-                                                         table_id_to_node_map);
-  } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
-                 qual_bin_oper->get_left_operand())) {
+  if (dynamic_cast<const Analyzer::ExpressionTuple*>(qual_bin_oper->get_left_operand())) {
     VLOG(1) << "Trying to build keyed hash table:";
     join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                          query_infos,
@@ -575,25 +558,22 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
 InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
                                          const Analyzer::Expr* rhs,
                                          SchemaProviderPtr schema_provider,
-                                         const TemporaryTables* temporary_tables,
-                                         const bool is_overlaps_join) {
+                                         const TemporaryTables* temporary_tables) {
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
-  if (!is_overlaps_join) {
-    if (lhs_ti.get_type() != rhs_ti.get_type()) {
-      throw HashJoinFail("Equijoin types must be identical, found: " +
-                         lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
-    }
-    if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string() &&
-        !lhs_ti.is_decimal()) {
-      throw HashJoinFail("Cannot apply hash join to inner column type " +
-                         lhs_ti.get_type_name());
-    }
-    // Decimal types should be identical.
-    if (lhs_ti.is_decimal() && (lhs_ti.get_scale() != rhs_ti.get_scale() ||
-                                lhs_ti.get_precision() != rhs_ti.get_precision())) {
-      throw HashJoinFail("Equijoin with different decimal types");
-    }
+  if (lhs_ti.get_type() != rhs_ti.get_type()) {
+    throw HashJoinFail("Equijoin types must be identical, found: " +
+                       lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
+  }
+  if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string() &&
+      !lhs_ti.is_decimal()) {
+    throw HashJoinFail("Cannot apply hash join to inner column type " +
+                       lhs_ti.get_type_name());
+  }
+  // Decimal types should be identical.
+  if (lhs_ti.is_decimal() && (lhs_ti.get_scale() != rhs_ti.get_scale() ||
+                              lhs_ti.get_precision() != rhs_ti.get_precision())) {
+    throw HashJoinFail("Equijoin with different decimal types");
   }
 
   const auto lhs_cast = dynamic_cast<const Analyzer::UOper*>(lhs);
@@ -669,33 +649,14 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
       (lhs_cast || rhs_cast)) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
-  if (is_overlaps_join) {
-    if (!inner_col_real_ti.is_array()) {
-      throw HashJoinFail(
-          "Overlaps join only supported for inner columns with array type");
-    }
-    auto is_bounds_array = [](const auto ti) {
-      return ti.is_fixlen_array() && ti.get_size() == 32;
-    };
-    if (!is_bounds_array(inner_col_real_ti)) {
-      throw HashJoinFail(
-          "Overlaps join only supported for 4-element double fixed length arrays");
-    }
-    if (!(outer_col_ti.get_type() == kPOINT || is_bounds_array(outer_col_ti) ||
-          is_constructed_point(outer_expr))) {
-      throw HashJoinFail(
-          "Overlaps join only supported for geometry outer columns of type point, "
-          "geometry columns with bounds or constructed points");
-    }
-  } else {
-    if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
-          inner_col_real_ti.is_decimal() ||
-          (inner_col_real_ti.is_string() &&
-           inner_col_real_ti.get_compression() == kENCODING_DICT))) {
-      throw HashJoinFail(
-          "Can only apply hash join to integer-like types and dictionary encoded "
-          "strings");
-    }
+
+  if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
+        inner_col_real_ti.is_decimal() ||
+        (inner_col_real_ti.is_string() &&
+         inner_col_real_ti.get_compression() == kENCODING_DICT))) {
+    throw HashJoinFail(
+        "Can only apply hash join to integer-like types and dictionary encoded "
+        "strings");
   }
 
   auto normalized_inner_col = inner_col;
@@ -729,19 +690,15 @@ std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
     const auto& rhs_tuple = rhs_tuple_expr->getTuple();
     CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
     for (size_t i = 0; i < lhs_tuple.size(); ++i) {
-      result.push_back(normalizeColumnPair(lhs_tuple[i].get(),
-                                           rhs_tuple[i].get(),
-                                           schema_provider,
-                                           temporary_tables,
-                                           condition->is_overlaps_oper()));
+      result.push_back(normalizeColumnPair(
+          lhs_tuple[i].get(), rhs_tuple[i].get(), schema_provider, temporary_tables));
     }
   } else {
     CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
     result.push_back(normalizeColumnPair(condition->get_left_operand(),
                                          condition->get_right_operand(),
                                          schema_provider,
-                                         temporary_tables,
-                                         condition->is_overlaps_oper()));
+                                         temporary_tables));
   }
 
   return result;

@@ -222,8 +222,7 @@ class HashJoin {
   static InnerOuter normalizeColumnPair(const Analyzer::Expr* lhs,
                                         const Analyzer::Expr* rhs,
                                         SchemaProviderPtr schema_provider,
-                                        const TemporaryTables* temporary_tables,
-                                        const bool is_overlaps_join = false);
+                                        const TemporaryTables* temporary_tables);
 
   // Normalize each expression tuple
   static std::vector<InnerOuter> normalizeColumnPairs(

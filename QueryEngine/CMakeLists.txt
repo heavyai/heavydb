@@ -85,7 +85,6 @@ set(query_engine_source_files
     RelLeftDeepInnerJoin.cpp
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp
-    RelAlgTranslatorGeo.cpp
     RelAlgOptimizer.cpp
     RelAlgSchemaProvider.cpp
     ResultSet.cpp

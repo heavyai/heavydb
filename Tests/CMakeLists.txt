@@ -8,7 +8,6 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Udf/udf_sample.cpp DESTINATION ${CMAKE_BIN
 
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
-add_executable(GeospatialTest GeospatialTest.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
@@ -61,7 +60,6 @@ add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
 add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
 add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
-add_executable(OverlapsJoinTest OverlapsJoinTest.cpp)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
 add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
 add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
@@ -94,7 +92,6 @@ if(("${MAPD_EDITION_LOWER}" STREQUAL "ee") AND ENABLE_AWS_S3)
 endif()
 
 # Tests + Microbenchmarks
-add_executable(GeospatialBenchmark GeospatialBenchmark.cpp)
 
 set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
@@ -117,7 +114,6 @@ target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd
 target_link_libraries(DumpRestoreTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(GeospatialTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(AlterTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -145,7 +141,6 @@ else()
 endif()
 
 target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${CMAKE_DL_LIBS})
-target_link_libraries(OverlapsJoinTest ${EXECUTE_TEST_LIBS})
 
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
@@ -189,8 +184,6 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest UdfCompiler ${EXECUTE_TEST_LIBS})
 endif()
 
-target_link_libraries(GeospatialBenchmark benchmark ${EXECUTE_TEST_LIBS})
-
 if(ENABLE_CUDA)
   target_link_libraries(GpuSharedMemoryTest ${EXECUTE_TEST_LIBS})
 elseif(ENABLE_DBE)
@@ -214,7 +207,6 @@ add_test(AlterTableDdlTest AlterTableDdlTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
 add_test(NAME ExecuteTestTemporaryTables COMMAND ExecuteTest ${TEST_ARGS} "--use-temporary-tables")
-add_test(GeospatialTest GeospatialTest ${TEST_ARGS})
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
@@ -310,7 +302,6 @@ endif()
 set(TEST_PROGRAMS 
   DumpRestoreTest
   ExecuteTest
-  GeospatialTest
   CodeGeneratorTest
   ResultSetTest
   ColumnarResultsTest
@@ -334,7 +325,6 @@ set(TEST_PROGRAMS
   OmniSQLUtilitiesTest
   DBObjectPrivilegesTest
   GeoTypesTest
-  OverlapsJoinTest
   CtasUpdateTest
   CorrelatedSubqueryTest
   DateTimeUtilsTest

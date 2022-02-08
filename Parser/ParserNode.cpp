@@ -64,6 +64,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
+#include "Shared/likely.h"
 #include "Shared/measure.h"
 #include "TableArchiver/TableArchiver.h"
 
@@ -328,8 +329,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
   }
 
   if (IS_COMPARISON(optype)) {
-    if (optype != kOVERLAPS && new_left_type.is_geometry() &&
-        new_right_type.is_geometry()) {
+    if (new_left_type.is_geometry() && new_right_type.is_geometry()) {
       throw std::runtime_error(
           "Comparison operators are not yet supported for geospatial types.");
     }

@@ -245,13 +245,6 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
     const auto bw_eq_oper = lower_bw_eq(bin_oper);
     return codegenLogical(bw_eq_oper.get(), co);
   }
-  if (optype == kOVERLAPS) {
-    return codegenOverlaps(optype,
-                           qualifier,
-                           bin_oper->get_own_left_operand(),
-                           bin_oper->get_own_right_operand(),
-                           co);
-  }
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
   }
@@ -458,14 +451,8 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
   }
   auto rhs_lvs = codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
-  if (optype == kOVERLAPS) {
-    CHECK(lhs_ti.is_geometry());
-    CHECK(rhs_ti.is_array() ||
-          rhs_ti.is_geometry());  // allow geo col or bounds col to pass
-  } else {
-    CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
-          (lhs_ti.is_string() && rhs_ti.is_string()));
-  }
+  CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
+        (lhs_ti.is_string() && rhs_ti.is_string()));
   const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
   if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() ||
       lhs_ti.is_boolean() || lhs_ti.is_string() || lhs_ti.is_timeinterval()) {

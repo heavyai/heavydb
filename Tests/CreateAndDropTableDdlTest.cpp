@@ -537,154 +537,6 @@ TEST_P(CreateTableTest, TextTypes) {
   assertColumnDetails(expected_attributes, column);
 }
 
-TEST_P(CreateTableTest, GeoTypes) {
-  std::string query = getCreateTableQuery(
-      GetParam(),
-      "test_table",
-      "(ls LINESTRING, mpoly MULTIPOLYGON, p POINT, poly POLYGON, p1 GEOMETRY(POINT), "
-      "p2 GEOMETRY(POINT, 4326), p3 GEOMETRY(POINT, 4326) ENCODING NONE, p4 "
-      "GEOMETRY(POINT, 900913), "
-      "ls1 GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), ls2 GEOMETRY(LINESTRING, "
-      "4326) ENCODING NONE, "
-      "poly1 GEOMETRY(POLYGON, 4326) ENCODING COMPRESSED(32), mpoly1 "
-      "GEOMETRY(MULTIPOLYGON, 4326))");
-  sql(query);
-
-  auto& catalog = getCatalog();
-  auto table = catalog.getMetadataForTable("test_table", false);
-  /**
-   * LINESTRING adds 2 additional columns, MULTIPOLYGON adds 5 additional columns,
-   * POLYGON adds 1 additional column, and POLYGON adds 4 additional columns when
-   * expanded.
-   */
-  assertTableDetails(table, GetParam(), "test_table", 41);
-
-  auto columns = catalog.getAllColumnMetadataForTable(table->tableId, true, true, true);
-  auto it = columns.begin();
-  auto column = *it;
-  ColumnAttributes expected_attributes{};
-  expected_attributes.column_name = "ls";
-  expected_attributes.type = kLINESTRING;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 3);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "mpoly";
-  expected_attributes.type = kMULTIPOLYGON;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 6);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "p";
-  expected_attributes.type = kPOINT;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 2);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "poly";
-  expected_attributes.type = kPOLYGON;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 5);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "p1";
-  expected_attributes.type = kPOINT;
-  expected_attributes.sub_type = kGEOMETRY;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 2);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "p2";
-  expected_attributes.type = kPOINT;
-  expected_attributes.sub_type = kGEOMETRY;
-  expected_attributes.precision = 4326;
-  expected_attributes.scale = 4326;
-  expected_attributes.encoding_type = kENCODING_GEOINT;
-  expected_attributes.encoding_size = 32;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 2);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "p3";
-  expected_attributes.type = kPOINT;
-  expected_attributes.sub_type = kGEOMETRY;
-  expected_attributes.precision = 4326;
-  expected_attributes.scale = 4326;
-  expected_attributes.encoding_type = kENCODING_NONE;
-  expected_attributes.encoding_size = 0;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 2);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "p4";
-  expected_attributes.type = kPOINT;
-  expected_attributes.sub_type = kGEOMETRY;
-  expected_attributes.precision = 900913;
-  expected_attributes.scale = 900913;
-  expected_attributes.encoding_type = kENCODING_NONE;
-  expected_attributes.encoding_size = 0;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 2);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "ls1";
-  expected_attributes.type = kLINESTRING;
-  expected_attributes.sub_type = kGEOMETRY;
-  expected_attributes.precision = 4326;
-  expected_attributes.scale = 4326;
-  expected_attributes.encoding_type = kENCODING_GEOINT;
-  expected_attributes.encoding_size = 32;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 3);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "ls2";
-  expected_attributes.type = kLINESTRING;
-  expected_attributes.sub_type = kGEOMETRY;
-  expected_attributes.precision = 4326;
-  expected_attributes.scale = 4326;
-  expected_attributes.encoding_type = kENCODING_NONE;
-  expected_attributes.encoding_size = 0;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 3);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "poly1";
-  expected_attributes.type = kPOLYGON;
-  expected_attributes.sub_type = kGEOMETRY;
-  expected_attributes.precision = 4326;
-  expected_attributes.scale = 4326;
-  expected_attributes.encoding_type = kENCODING_GEOINT;
-  expected_attributes.encoding_size = 32;
-  assertColumnDetails(expected_attributes, column);
-
-  std::advance(it, 5);
-  column = *it;
-  expected_attributes = {};
-  expected_attributes.column_name = "mpoly1";
-  expected_attributes.type = kMULTIPOLYGON;
-  expected_attributes.sub_type = kGEOMETRY;
-  expected_attributes.precision = 4326;
-  expected_attributes.scale = 4326;
-  expected_attributes.encoding_type = kENCODING_GEOINT;
-  expected_attributes.encoding_size = 32;
-  assertColumnDetails(expected_attributes, column);
-}
-
 TEST_P(CreateTableTest, ArrayTypes) {
   std::string query = getCreateTableQuery(
       GetParam(),
@@ -929,20 +781,6 @@ TEST_P(CreateTableTest, DictEncodingNonTextType) {
   queryAndAssertException(query,
                           "col1: Dictionary encoding is only supported on "
                           "string or string array columns.");
-}
-
-TEST_P(CreateTableTest, CompressedEncodingNonWGS84GeoType) {
-  std::string query = getCreateTableQuery(
-      GetParam(), "test_table", "(col1 GEOMETRY(POINT, 900913) ENCODING COMPRESSED(32))");
-  queryAndAssertException(
-      query, "col1: COMPRESSED encoding is only supported on WGS84 geo columns.");
-}
-
-TEST_P(CreateTableTest, CompressedEncodingNon32Bit) {
-  std::string query = getCreateTableQuery(
-      GetParam(), "test_table", "(col1 GEOMETRY(POINT, 4326) ENCODING COMPRESSED(16))");
-  queryAndAssertException(query,
-                          "col1: only 32-bit COMPRESSED geo encoding is supported");
 }
 
 TEST_P(CreateTableTest, DaysEncodingNonDateType) {  // Param for DECIMAL and NUMERIC
@@ -1347,7 +1185,7 @@ TEST_F(CreateNonReservedKeywordsTest, NonReservedKeywords) {
   sql(getCreateTableQuery(
       ddl_utils::TableType::TABLE,
       "test_table",
-      R"((QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double, disk point, cache polygon, stored date))"));
+      R"((QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double, stored date))"));
   sql("SELECT query FROM test_table LIMIT 1");
 }
 
@@ -1355,7 +1193,7 @@ TEST_F(CreateNonReservedKeywordsTest, NonReservedAndReserved) {
   EXPECT_ANY_THROW(sql(getCreateTableQuery(
       ddl_utils::TableType::TABLE,
       "test_table",
-      R"((POLYGON INT, QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double, disk point, cache polygon))")));
+      R"((POLYGON INT, QUERY text, QUERIES text, SESSIONS int[], TABLES text[], databases DECIMAL(6, 2), servers int, mapping int, owner float, rename double))")));
 }
 
 TEST_F(CreateNonReservedKeywordsTest, NonReservedRename) {
@@ -1562,10 +1400,10 @@ class DefaultValuesTest : public DBHandlerTestFixture {
   void insertNotDefaultValues() {
     EXPECT_NO_THROW(
         sql("INSERT INTO defval_tbl(idx, i, big_i, null_i, int_a, text_a,"
-            "t, dt, ls, p, d) values(2, 15, 314958735, NULL, "
+            "t, dt, d) values(2, 15, 314958735, NULL, "
             "ARRAY[4, 5, 6], ARRAY['b', 'c'],"
-            "'World', '!!!', 'LINESTRING (2 2,3 3, 4 4)',"
-            "'POINT (2 3)', '2012-11-24')"));
+            "'World', '!!!',"
+            "'2012-11-24')"));
   }
 
   void verifyData() {
@@ -1582,8 +1420,6 @@ class DefaultValuesTest : public DBHandlerTestFixture {
        array({"a", "b"}),
        "Hello",
        "World",
-       "LINESTRING (1 1,2 2,3 3)",
-       "POINT (1 2)",
        "2011-10-23"}};
 
   const std::vector<std::vector<NullableTargetValue>> not_default_values = {
@@ -1595,8 +1431,6 @@ class DefaultValuesTest : public DBHandlerTestFixture {
        array({"b", "c"}),
        "World",
        "!!!",
-       "LINESTRING (2 2,3 3,4 4)",
-       "POINT (2 3)",
        "2012-11-24"}};
 
   std::string col_defs =
@@ -1607,8 +1441,6 @@ class DefaultValuesTest : public DBHandlerTestFixture {
       "text_a text[] default ARRAY['a', 'b'],"
       "t text default 'Hello' encoding none ,"
       "dt text default 'World' encoding dict,"
-      "ls LINESTRING default 'LINESTRING (1 1,2 2,3 3)',"
-      "p POINT default 'POINT (1 2)',"
       "d date default '2011-10-23'";
 };
 
@@ -1706,7 +1538,6 @@ SQLTypeInfo timestamp = SQLTypeInfo(SQLTypes::kTIMESTAMP);
 SQLTypeInfo date_in_days_16 =
     SQLTypeInfo(SQLTypes::kDATE, kENCODING_DATE_IN_DAYS, 16, SQLTypes::kNULLT);
 SQLTypeInfo dict_encoded_text = SQLTypeInfo(SQLTypes::kTEXT, false, kENCODING_DICT);
-SQLTypeInfo linestring_notnull = SQLTypeInfo(SQLTypes::kLINESTRING, 0, 0, true);
 SQLTypeInfo text_array =
     SQLTypeInfo(SQLTypes::kARRAY, kENCODING_DICT, 32, SQLTypes::kTEXT);
 SQLTypeInfo integer_array =
@@ -1786,29 +1617,6 @@ INSTANTIATE_TEST_SUITE_P(
                            "String too long for column c was 32768 max is 32767",
                            false,
                            "LongDictEncodedString"),
-        DefaultValueParams(linestring_notnull,
-                           "",
-                           "c: cannot set default value to NULL for NOT NULL column",
-                           false,
-                           "EmptyNotNullGeo"),
-        DefaultValueParams(linestring_notnull,
-                           "Hello world",
-                           "Unexpected geo literal 'Hello world' for column c: "
-                           "GeoGeoFactory Error: unsupported geometry type",
-                           false,
-                           "HelloGeoString"),
-        DefaultValueParams(linestring_notnull,
-                           "LINESTRING(1)",
-                           "Unexpected geo literal 'LINESTRING(1)' for column c: "
-                           "GeoGeoFactory Error: corrupt input data",
-                           false,
-                           "MalformedGeoString"),
-        DefaultValueParams(
-            linestring_notnull,
-            "POINT(1 -1)",
-            "Geo literal 'POINT(1 -1)' doesn't match the type of column column c",
-            false,
-            "GeoTypeMismatch"),
         DefaultValueParams(integer_array,
                            "{1, 2, 3",
                            "c: arrays should start and end with curly braces",

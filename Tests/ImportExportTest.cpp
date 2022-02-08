@@ -681,38 +681,6 @@ class ImportAndSelectTest
   }
 };
 
-TEST_P(ImportAndSelectTest, GeoTypes) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
-  auto query = createTableCopyFromAndSelect(
-      "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
-      "geo_types",
-      "SELECT * FROM import_test_new ORDER BY index;");
-  // clang-format off
-    assertResultSetEqual({
-    {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
-    },
-    {
-      i(2), Null, Null, Null, Null
-    },
-    {
-      i(3), "POINT (1 1)", "LINESTRING (1 1,2 2,3 3)", "POLYGON ((5 4,7 4,6 5,5 4))",
-      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-    },
-    {
-      i(4), "POINT (2 2)", "LINESTRING (2 2,3 3)", "POLYGON ((1 1,3 1,2 3,1 1))",
-      "MULTIPOLYGON (((0 0,3 0,0 3,0 0)),((0 0,1 0,0 1,0 0)),((0 0,2 0,0 2,0 0)))"
-    },
-    {
-      i(5), Null, Null, Null, Null
-    }},
-    query);
-  // clang-format on
-}
-
 TEST_P(ImportAndSelectTest, ArrayTypes) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
@@ -1190,19 +1158,6 @@ TEST_F(ImportTest, All_parquet_file_gzip) {
 TEST_F(ImportTest, All_parquet_file_drop) {
   EXPECT_TRUE(importTestLocalParquet("trip+1.parquet", "*.parquet", 1200, 1.0));
 }
-TEST_F(ImportTest, One_parquet_file_with_geo_point) {
-  sql("alter table trips add column pt_dropoff point;");
-  EXPECT_TRUE(importTestLocalParquet(
-      "trip_data_with_point.parquet",
-      "part-00000-6dbefb0c-abbd-4c39-93e7-0026e36b7b7c-c000.snappy.parquet",
-      100,
-      1.0));
-  std::string query_str =
-      "select count(*) from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 and "
-      "abs(dropoff_latitude-st_y(pt_dropoff))<0.01;";
-
-  sqlAndCompareResult(query_str, {{100L}});
-}
 TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
   sql("DROP TABLE IF EXISTS unique_rowgroups;");
   sql("CREATE TABLE unique_rowgroups (a float, b float, c float, d float);");
@@ -1387,573 +1342,6 @@ TEST_F(ImportTest, Regex_path_filter_no_match) {
       TOmniSciException);
 }
 
-namespace {
-const char* create_table_geo = R"(
-    CREATE TABLE geospatial (
-      p1 POINT,
-      l LINESTRING,
-      poly POLYGON NOT NULL,
-      mpoly MULTIPOLYGON,
-      p2 GEOMETRY(POINT, 4326) ENCODING NONE,
-      p3 GEOMETRY(POINT, 4326) NOT NULL ENCODING NONE,
-      p4 GEOMETRY(POINT) NOT NULL,
-      trip_distance DOUBLE
-    ) WITH (FRAGMENT_SIZE=65000000);
-  )";
-
-const char* create_table_geo_transform = R"(
-    CREATE TABLE geospatial_transform (
-      pt0 GEOMETRY(POINT, 4326),
-      pt1 GEOMETRY(POINT)
-    ) WITH (FRAGMENT_SIZE=65000000);
-  )";
-
-}  // namespace
-
-class ImportTestGeo : public ImportExportTestBase {
- protected:
-  void SetUp() override {
-    ImportExportTestBase::SetUp();
-    import_export::delimited_parser::set_max_buffer_resize(max_buffer_resize_);
-    sql("drop table if exists geospatial;");
-    sql(create_table_geo);
-    sql("drop table if exists geospatial_transform;");
-    sql(create_table_geo_transform);
-  }
-
-  void TearDown() override {
-    sql("drop table if exists geospatial;");
-    sql("drop table if exists geospatial;");
-    sql("drop table if exists geospatial_transform;");
-    ImportExportTestBase::TearDown();
-  }
-
-  inline static size_t max_buffer_resize_ =
-      import_export::delimited_parser::get_max_buffer_resize();
-
-  bool importTestCommonGeo(const string& query_str) {
-    sql(query_str);
-    return true;
-  }
-
-  bool importTestLocalGeo(const string& filename, const string& other_options) {
-    bool is_csv = boost::iends_with(filename, ".csv");
-    return importTestCommonGeo(
-        string("COPY geospatial FROM '") +
-        boost::filesystem::canonical("../../Tests/Import/datafiles/" + filename)
-            .string() +
-        "' WITH (geo=" + (is_csv ? "'false'" : "'true'") + " " + other_options + ");");
-  }
-
-  void checkGeoNumRows(const std::string& project_columns,
-                       const size_t num_expected_rows) {
-    TQueryResult result;
-    sql(result, "SELECT " + project_columns + " FROM geospatial");
-    ASSERT_EQ(getRowCount(result), num_expected_rows);
-  }
-
-  void checkGeoImport(bool expect_nulls = false) {
-    const std::string select_query_str = R"(
-      SELECT p1, l, poly, mpoly, p2, p3, p4, trip_distance
-        FROM geospatial
-        WHERE trip_distance = 1.0;
-    )";
-
-    if (!expect_nulls) {
-      sqlAndCompareResult(select_query_str,
-                          {{"POINT (1 1)",
-                            "LINESTRING (1 0,2 2,3 3)",
-                            "POLYGON ((0 0,2 0,0 2,0 0))",
-                            "MULTIPOLYGON (((0 0,2 0,0 2,0 0)))",
-                            "POINT (1 1)",
-                            "POINT (1 1)",
-                            "POINT (1 1)",
-                            1.0f}});
-    } else {
-      sqlAndCompareResult(select_query_str,
-                          {{Null,
-                            Null,
-                            "POLYGON ((0 0,2 0,0 2,0 0))",
-                            Null,
-                            Null,
-                            "POINT (1 1)",
-                            "POINT (1 1)",
-                            1.0f}});
-    }
-  }
-};
-
-TEST_F(ImportTestGeo, CSV_Import) {
-  const auto file_path =
-      boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
-  sql("COPY geospatial FROM '" + file_path.string() + "';");
-  checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
-}
-
-TEST_F(ImportTestGeo, CSV_Import_Buffer_Size_Less_Than_Row_Size) {
-  const auto file_path =
-      boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
-  sql("COPY geospatial FROM '" + file_path.string() + "' WITH (buffer_size = 80);");
-  checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 10);
-}
-
-TEST_F(ImportTestGeo, CSV_Import_Max_Buffer_Resize_Less_Than_Row_Size) {
-  import_export::delimited_parser::set_max_buffer_resize(170);
-  const auto file_path =
-      boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
-
-  std::string expected_error_message{
-      "Unable to find an end of line character after reading 170 characters. "
-      "Please ensure that the correct \"line_delimiter\" option is specified "
-      "or update the \"buffer_size\" option appropriately. Row number: 10. "
-      "First few characters in row: "
-      "\"POINT(9 9)\", \"LINESTRING(9 0, 18 18, 19 19)\", \"PO"};
-  queryAndAssertException(
-      "COPY geospatial FROM '" + file_path.string() + "' WITH (buffer_size = 80);",
-      expected_error_message);
-}
-
-TEST_F(ImportTestGeo, CSV_Import_Empties) {
-  const auto file_path =
-      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_empties.csv");
-  sql("COPY geospatial FROM '" + file_path.string() + "';");
-  checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
-                  6);  // we expect it to drop the 4 rows containing 'EMPTY'
-}
-
-TEST_F(ImportTestGeo, CSV_Import_Nulls) {
-  const auto file_path =
-      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_nulls.csv");
-  sql("COPY geospatial FROM '" + file_path.string() + "';");
-  checkGeoImport(true);
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
-                  7);  // drop 3 rows containing NULL geo for NOT NULL columns
-}
-
-TEST_F(ImportTestGeo, CSV_Import_Degenerate) {
-  const auto file_path =
-      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_degenerate.csv");
-  sql("COPY geospatial FROM '" + file_path.string() + "';");
-  checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
-                  6);  // we expect it to drop the 4 rows containing degenerate polys
-}
-
-TEST_F(ImportTestGeo, CSV_Import_Transform_Point_2263) {
-  const auto file_path = boost::filesystem::path(
-      "../../Tests/Import/datafiles/geospatial_transform/point_2263.csv");
-  sql("COPY geospatial_transform FROM '" + file_path.string() +
-      "' WITH (source_srid=2263);");
-  sqlAndCompareResult(R"(
-      SELECT count(*) FROM geospatial_transform
-        WHERE ST_Distance(pt0, ST_SetSRID(pt1,4326))<0.00000000001;
-    )",
-                      {{7L}});
-}
-
-TEST_F(ImportTestGeo, CSV_Import_Transform_Point_Coords_2263) {
-  const auto file_path = boost::filesystem::path(
-      "../../Tests/Import/datafiles/geospatial_transform/point_coords_2263.csv");
-  sql("COPY geospatial_transform FROM '" + file_path.string() +
-      "' WITH (source_srid=2263);");
-  sqlAndCompareResult(R"(
-      SELECT count(*) FROM geospatial_transform
-        WHERE ST_Distance(pt0, ST_SetSRID(pt1,4326))<0.00000000001;
-    )",
-                      {{7L}});
-}
-
-// the remaining tests in this group are incomplete but leave them as placeholders
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Geometry) {
-  EXPECT_TRUE(importTestLocalGeo("geospatial.csv", ", geo_coords_type='geometry'"));
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Geography) {
-  EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_type='geography'"),
-               TOmniSciException);
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Other) {
-  EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_type='other'"),
-               TOmniSciException);
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_NONE) {
-  EXPECT_TRUE(importTestLocalGeo("geospatial.csv", ", geo_coords_encoding='none'"));
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_GEOINT32) {
-  EXPECT_TRUE(
-      importTestLocalGeo("geospatial.csv", ", geo_coords_encoding='compressed(32)'"));
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_Other) {
-  EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_encoding='other'"),
-               TOmniSciException);
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_LonLat) {
-  EXPECT_TRUE(importTestLocalGeo("geospatial.csv", ", geo_coords_srid=4326"));
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_Mercator) {
-  EXPECT_TRUE(importTestLocalGeo("geospatial.csv", ", geo_coords_srid=900913"));
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_Other) {
-  EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_srid=12345"),
-               TOmniSciException);
-}
-
-TEST_F(ImportTestGeo, Geo_CSV_WKB) {
-  const auto file_path =
-      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_wkb.csv");
-  sql("COPY geospatial FROM '" + file_path.string() + "';");
-  checkGeoImport();
-  checkGeoNumRows("p1, l, poly, mpoly, p2, p3, p4, trip_distance", 1);
-}
-
-class ImportTestGDAL : public ImportTestGeo {
- protected:
-  void SetUp() override {
-    ImportTestGeo::SetUp();
-    sql("drop table if exists geospatial;");
-  }
-
-  void TearDown() override {
-    sql("drop table if exists geospatial;");
-    ImportTestGeo::TearDown();
-  }
-
-  void importGeoTable(const std::string& file_path,
-                      const std::string& table_name,
-                      const bool compression,
-                      const bool create_table,
-                      const bool explode_collections) {
-    std::string options = "";
-    if (compression) {
-      options += ", geo_coords_encoding = 'COMPRESSED(32)'";
-    } else {
-      options += ", geo_coords_encoding = 'none'";
-    }
-    if (explode_collections) {
-      options += ", geo_explode_collections = 'true'";
-    } else {
-      options += ", geo_explode_collections = 'false'";
-    }
-    std::string copy_query = "COPY " + table_name + " FROM '" + file_path +
-                             "' WITH (geo='true' " + options + ");";
-
-    auto& cat = getCatalog();
-    const std::string geo_column_name(OMNISCI_GEO_PREFIX);
-
-    import_export::CopyParams copy_params;
-    if (compression) {
-      copy_params.geo_coords_encoding = EncodingType::kENCODING_GEOINT;
-      copy_params.geo_coords_comp_param = 32;
-    } else {
-      copy_params.geo_coords_encoding = EncodingType::kENCODING_NONE;
-      copy_params.geo_coords_comp_param = 0;
-    }
-    copy_params.geo_assign_render_groups = true;
-    copy_params.geo_explode_collections = explode_collections;
-
-    // direct Importer calls assume that any GDAL VSI prefixes have
-    // already been added, so we must check for the file types we
-    // are going to encounter, and add the appropriate prefixes here
-    auto vsi_file_path{file_path};
-    if (boost::filesystem::path(vsi_file_path).extension() == ".gz") {
-      vsi_file_path = "/vsigzip/" + vsi_file_path;
-    }
-
-    std::map<std::string, std::string> colname_to_src;
-    auto cds = import_export::Importer::gdalToColumnDescriptors(
-        vsi_file_path, geo_column_name, copy_params);
-
-    for (auto& cd : cds) {
-      const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
-      const auto ret =
-          colname_to_src.insert(std::make_pair(col_name_sanitized, cd.columnName));
-      CHECK(ret.second);
-      cd.columnName = col_name_sanitized;
-    }
-
-    if (create_table) {
-      const auto td = cat.getMetadataForTable(table_name);
-      if (td != nullptr) {
-        throw std::runtime_error(
-            "Error: Table " + table_name +
-            " already exists. Possible failure to correctly re-create "
-            "mapd_data directory.");
-      }
-      if (table_name != ImportHelpers::sanitize_name(table_name)) {
-        throw std::runtime_error("Invalid characters in table name: " + table_name);
-      }
-
-      std::string stmt{"CREATE TABLE " + table_name};
-      std::vector<std::string> col_stmts;
-
-      for (auto& cd : cds) {
-        if (cd.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
-            cd.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
-          throw std::runtime_error(
-              "Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " +
-              cd.columnName + " (table: " + table_name + ")");
-        }
-
-        if (cd.columnType.get_type() == SQLTypes::kDECIMAL) {
-          if (cd.columnType.get_precision() == 0 && cd.columnType.get_scale() == 0) {
-            cd.columnType.set_precision(14);
-            cd.columnType.set_scale(7);
-          }
-        }
-
-        std::string col_stmt;
-        col_stmt.append(cd.columnName + " " + cd.columnType.get_type_name() + " ");
-
-        if (cd.columnType.get_compression() != EncodingType::kENCODING_NONE) {
-          col_stmt.append("ENCODING " + cd.columnType.get_compression_name() + " ");
-        } else {
-          if (cd.columnType.is_string()) {
-            col_stmt.append("ENCODING NONE");
-          } else if (cd.columnType.is_geometry()) {
-            if (cd.columnType.get_output_srid() == 4326) {
-              col_stmt.append("ENCODING NONE");
-            }
-          }
-        }
-        col_stmts.push_back(col_stmt);
-      }
-
-      stmt.append(" (" + boost::algorithm::join(col_stmts, ",") + ");");
-      sql(stmt);
-
-      LOG(INFO) << "Created table: " << table_name;
-    } else {
-      LOG(INFO) << "Not creating table: " << table_name;
-    }
-
-    const auto td = cat.getMetadataForTable(table_name);
-    if (td == nullptr) {
-      throw std::runtime_error("Error: Failed to create table " + table_name);
-    }
-
-    sql(copy_query);
-  }
-
-  void importTestGeofileImporter(const std::string& file_str,
-                                 const std::string& table_name,
-                                 const bool compression,
-                                 const bool create_table,
-                                 const bool explode_collections) {
-    auto file_path =
-        boost::filesystem::canonical("../../Tests/Import/datafiles/" + file_str);
-
-    ASSERT_TRUE(boost::filesystem::exists(file_path));
-
-    ASSERT_NO_THROW(importGeoTable(
-        file_path.string(), table_name, compression, create_table, explode_collections));
-  }
-
-  void checkGeoGdalPointImport() { checkGeoGdalAgainstWktString("POINT (1 1)"); }
-
-  void checkGeoGdalPolyOrMpolyImport(const bool mpoly, const bool exploded) {
-    TQueryResult result;
-    sql(result, "SELECT omnisci_geo, trip FROM geospatial WHERE trip = 1.0");
-
-    if (mpoly && exploded) {
-      // mpoly explodes to poly (not promoted)
-      assertResultSetEqual(
-          {{"POLYGON ((0 0,2 0,0 2,0 0))", 1.0f}, {"POLYGON ((0 0,2 0,0 2,0 0))", 1.0f}},
-          result);
-    } else if (mpoly) {
-      // mpoly imports as mpoly
-      assertResultSetEqual(
-          {{"MULTIPOLYGON (((0 0,2 0,0 2,0 0)),((0 0,2 0,0 2,0 0)))", 1.0f}}, result);
-    } else {
-      // poly imports as mpoly (promoted)
-      assertResultSetEqual({{"MULTIPOLYGON (((0 0,2 0,0 2,0 0)))", 1.0f}}, result);
-    }
-  }
-
-  void checkGeoGdalAgainstWktString(const std::string wkt_string) {
-    sqlAndCompareResult("SELECT omnisci_geo, trip FROM geospatial WHERE trip = 1.0",
-                        {{wkt_string, 1.0f}});
-  }
-
-  void checkGeoGdalPointImport(const std::string wkt_string) {
-    checkGeoGdalAgainstWktString(wkt_string);
-  }
-
-  void checkGeoGdalMpolyImport(const std::string wkt_string) {
-    checkGeoGdalAgainstWktString(wkt_string);
-  }
-};
-
-TEST_F(ImportTestGDAL, Geojson_Point_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_point/geospatial_point.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPointImport();
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Geojson_Poly_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_poly.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPolyOrMpolyImport(false, false);  // poly, not exploded
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPolyOrMpolyImport(true, false);  // mpoly, not exploded
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_MPoly_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, true);
-  checkGeoGdalPolyOrMpolyImport(true, true);  // mpoly, exploded
-  checkGeoNumRows("omnisci_geo, trip", 20);   // 10M -> 20P
-}
-
-TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_Mixed_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_mixed.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, true);
-  checkGeoGdalPolyOrMpolyImport(true, true);  // mpoly, exploded
-  checkGeoNumRows("omnisci_geo, trip", 15);   // 5M + 5P -> 15P
-}
-
-TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Empties) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_empties.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPolyOrMpolyImport(true, false);  // mpoly, not exploded
-  checkGeoNumRows("omnisci_geo, trip", 8);     // we expect it to drop 2 of the 10 rows
-}
-
-TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Degenerate) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_degenerate.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPolyOrMpolyImport(true, false);  // mpoly, not exploded
-  checkGeoNumRows("omnisci_geo, trip", 8);     // we expect it to drop 2 of the 10 rows
-}
-
-TEST_F(ImportTestGDAL, Shapefile_Point_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPointImport();
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPolyOrMpolyImport(false, false);  // poly, not exploded
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Shapefile_Point_Import_Compressed) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
-  importTestGeofileImporter(file_path.string(), "geospatial", true, true, false);
-  checkGeoGdalPointImport("POINT (0.999999940861017 0.999999982770532)");
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_Compressed) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
-  importTestGeofileImporter(file_path.string(), "geospatial", true, true, false);
-  checkGeoGdalMpolyImport(
-      "MULTIPOLYGON (((0 0,1.99999996554106 0.0,0.0 1.99999996554106,0 0)))");
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Shapefile_Point_Import_3857) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPointImport("POINT (1.0 1.0)");
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_3857) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalMpolyImport("MULTIPOLYGON (((0 0,2.0 0.0,0.0 2.0,0 0)))");
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Append) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoNumRows("omnisci_geo, trip", 10);
-  ASSERT_NO_THROW(
-      importTestGeofileImporter(file_path.string(), "geospatial", false, false, false));
-  checkGeoNumRows("omnisci_geo, trip", 20);
-}
-
-TEST_F(ImportTestGDAL, Geodatabase_Simple) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path =
-      boost::filesystem::path("geodatabase/S_USA.Experimental_Area_Locations.gdb.zip");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoNumRows("omnisci_geo, ESTABLISHED", 87);
-}
-
-TEST_F(ImportTestGDAL, KML_Simple) {
-  SKIP_ALL_ON_AGGREGATOR();
-  if (!Geospatial::GDAL::supportsDriver("libkml")) {
-    LOG(ERROR) << "Test requires LibKML support in GDAL";
-  } else {
-    const auto file_path = boost::filesystem::path("KML/test.kml");
-    importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-    checkGeoNumRows("omnisci_geo, FID", 10);
-  }
-}
-
-TEST_F(ImportTestGDAL, FlatGeobuf_Point_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.fgb");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPointImport();
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
-TEST_F(ImportTestGDAL, FlatGeobuf_MultiPolygon_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.fgb");
-  importTestGeofileImporter(file_path.string(), "geospatial", false, true, false);
-  checkGeoGdalPolyOrMpolyImport(false, false);  // poly, not exploded
-  checkGeoNumRows("omnisci_geo, trip", 10);
-}
-
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
 TEST_F(ImportTest, S3_One_csv_file) {
@@ -2010,14 +1398,6 @@ TEST_F(ImportTest, S3_GCS_One_gz_file) {
           "WITH (header='true', s3_endpoint='storage.googleapis.com');"),
       100,
       1.0));
-}
-
-TEST_F(ImportTestGeo, S3_GCS_One_geo_file) {
-  EXPECT_TRUE(
-      importTestCommonGeo("COPY geopatial FROM "
-                          "'s3://omnisci-importtest-data/geo-data/"
-                          "S_USA.Experimental_Area_Locations.gdb.zip' "
-                          "WITH (geo='true', s3_endpoint='storage.googleapis.com');"));
 }
 
 class ImportServerPrivilegeTest : public ImportExportTestBase {
@@ -2287,7 +1667,7 @@ TEST_P(SortedImportTest, SortedOnRegexWithoutSortRegex) {
                           "\"FILE_SORT_ORDER_BY='REGEX'\".");
 }
 
-class ExportTest : public ImportTestGDAL {
+class ExportTest : public ImportExportTestBase {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
@@ -2346,11 +1726,6 @@ class ExportTest : public ImportTestGDAL {
     "col_ts3 TIMESTAMP(3),"
     "col_ts6 TIMESTAMP(6),"
     "col_ts9 TIMESTAMP(9)";
-  constexpr static const char* GEO_COLUMN_NAMES_AND_TYPES =
-    "col_point GEOMETRY(POINT, 4326),"
-    "col_linestring GEOMETRY(LINESTRING, 4326),"
-    "col_polygon GEOMETRY(POLYGON, 4326),"
-    "col_multipolygon GEOMETRY(MULTIPOLYGON, 4326)";
   constexpr static const char* NON_GEO_COLUMN_NAMES =
     "col_big,"
     "col_big_var_array,"
@@ -2404,8 +1779,8 @@ class ExportTest : public ImportTestGDAL {
 
   void doCreateAndImport() {
     ASSERT_NO_THROW(sql(std::string("CREATE TABLE query_export_test (") +
-                        NON_GEO_COLUMN_NAMES_AND_TYPES + ", " +
-                        GEO_COLUMN_NAMES_AND_TYPES + ");"));
+                        NON_GEO_COLUMN_NAMES_AND_TYPES + 
+			");"));
     ASSERT_NO_THROW(sql(
         "COPY query_export_test FROM "
         "'../../Tests/Export/QueryExport/datafiles/query_export_test_source.csv' WITH "
@@ -2415,17 +1790,9 @@ class ExportTest : public ImportTestGDAL {
   void doExport(const std::string& file_path,
                 const std::string& file_type,
                 const std::string& file_compression,
-                const std::string& geo_type,
-                const bool with_array_columns,
-                const bool force_invalid_srid) {
+                const bool with_array_columns) {
     std::string ddl = "COPY (SELECT ";
     ddl += (with_array_columns ? NON_GEO_COLUMN_NAMES : NON_GEO_COLUMN_NAMES_NO_ARRAYS);
-    ddl += ", ";
-    if (force_invalid_srid) {
-      ddl += "ST_SetSRID(col_" + geo_type + ", 0)";
-    } else {
-      ddl += "col_" + geo_type;
-    }
     ddl += " FROM query_export_test) TO '" + file_path + "'";
 
     auto f = (file_type.size() > 0);
@@ -2454,7 +1821,6 @@ class ExportTest : public ImportTestGDAL {
 
   void doImportAgainAndCompare(const std::string& file,
                                const std::string& file_type,
-                               const std::string& geo_type,
                                const bool with_array_columns) {
     // re-import exported file(s) to new table
     auto actual_file =
@@ -2462,19 +1828,10 @@ class ExportTest : public ImportTestGDAL {
     actual_file = boost::filesystem::canonical(actual_file).string();
     if (file_type == "" || file_type == "CSV") {
       // create table
+
       std::string ddl = "CREATE TABLE query_export_test_reimport (";
       ddl += NON_GEO_COLUMN_NAMES_AND_TYPES;
-      if (geo_type == "point") {
-        ddl += ", col_point GEOMETRY(POINT, 4326));";
-      } else if (geo_type == "linestring") {
-        ddl += ", col_linestring GEOMETRY(LINESTRING, 4326));";
-      } else if (geo_type == "polygon") {
-        ddl += ", col_polygon GEOMETRY(POLYGON, 4326));";
-      } else if (geo_type == "multipolygon") {
-        ddl += ", col_multipolygon GEOMETRY(MULTIPOLYGON, 4326));";
-      } else {
-        CHECK(false);
-      }
+      ddl += ");";      
       ASSERT_NO_THROW(sql(ddl));
 
       // import to that table
@@ -2483,8 +1840,7 @@ class ExportTest : public ImportTestGDAL {
       ASSERT_NO_THROW(sql("COPY query_export_test_reimport FROM '" + actual_file +
                           "' WITH (" + import_options + ");"));
     } else {
-      ASSERT_NO_THROW(
-          importGeoTable(actual_file, "query_export_test_reimport", false, true, false));
+      ASSERT_NO_THROW(false);
     }
 
     // select a comparable value from the first row
@@ -2559,58 +1915,12 @@ class ExportTest : public ImportTestGDAL {
     ASSERT_NO_THROW(boost::filesystem::remove(exported_file));
   }
 
-  void doTestArrayNullHandling(const std::string& file,
-                               const std::string& other_options) {
-    std::string exp_file =
-        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
-    ASSERT_NO_THROW(
-        sql("CREATE TABLE query_export_test (col_int INTEGER, "
-            "col_int_var_array INTEGER[], col_point GEOMETRY(POINT, 4326));"));
-    ASSERT_NO_THROW(
-        sql("COPY query_export_test FROM "
-            "'../../Tests/Export/QueryExport/datafiles/"
-            "query_export_test_array_null_handling.csv' WITH "
-            "(header='true', array_delimiter='|');"));
-    // this may or may not throw
-    sql("COPY (SELECT * FROM query_export_test) TO '" + exp_file +
-        "' WITH (file_type='GeoJSON'" + other_options + ");");
-    ASSERT_NO_THROW(doCompareText(file, PLAIN_TEXT));
-    ASSERT_NO_THROW(removeExportedFile(file));
-  }
-
-  void doTestNulls(const std::string& file,
-                   const std::string& file_type,
-                   const std::string& select) {
-    std::string exp_file =
-        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
-    ASSERT_NO_THROW(
-        sql("CREATE TABLE query_export_test (a GEOMETRY(POINT, 4326), b "
-            "GEOMETRY(LINESTRING, 4326), c GEOMETRY(POLYGON, 4326), d "
-            "GEOMETRY(MULTIPOLYGON, 4326));"));
-    ASSERT_NO_THROW(
-        sql("COPY query_export_test FROM "
-            "'../../Tests/Export/QueryExport/datafiles/"
-            "query_export_test_nulls.csv' WITH (header='true');"));
-    ASSERT_NO_THROW(sql("COPY (SELECT " + select + " FROM query_export_test) TO '" +
-                        exp_file + "' WITH (file_type='" + file_type + "');"));
-    ASSERT_NO_THROW(doCompareText(file, PLAIN_TEXT));
-    ASSERT_NO_THROW(removeExportedFile(file));
-    ASSERT_NO_THROW(sql("DROP TABLE query_export_test;"));
-  }
-
   constexpr static bool WITH_ARRAYS = true;
   constexpr static bool NO_ARRAYS = false;
-  constexpr static bool INVALID_SRID = true;
-  constexpr static bool DEFAULT_SRID = false;
   constexpr static bool GZIPPED = true;
   constexpr static bool PLAIN_TEXT = false;
   constexpr static bool COMPARE_IGNORING_COMMA_DIFF = true;
   constexpr static bool COMPARE_EXPLICIT = false;
-
-  constexpr static std::array<const char*, 4> GEO_TYPES = {"point",
-                                                           "linestring",
-                                                           "polygon",
-                                                           "multipolygon"};
 
  private:
   std::vector<std::string> readTextFile(
@@ -2712,460 +2022,63 @@ class ExportTest : public ImportTestGDAL {
   }
 };
 
-#define RUN_TEST_ON_ALL_GEO_TYPES()        \
-  for (const char* geo_type : GEO_TYPES) { \
-    run_test(std::string(geo_type));       \
-  }
-
 TEST_F(ExportTest, Default) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_csv_no_header_" + geo_type + ".csv";
-    ASSERT_NO_THROW(doExport(exp_file, "", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
-    doImportAgainAndCompare(exp_file, "", geo_type, WITH_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
+  std::string exp_file = "query_export_test_csv_no_header.csv";
+  ASSERT_NO_THROW(doExport(exp_file, "", "", WITH_ARRAYS));
+  ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
+  doImportAgainAndCompare(exp_file, "", WITH_ARRAYS);
+  removeExportedFile(exp_file);
 }
 
 TEST_F(ExportTest, InvalidFileType) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
-  std::string geo_type = "point";
-  std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-  EXPECT_THROW(doExport(exp_file, "Fred", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+  std::string exp_file = "query_export_test_csv.csv";
+  EXPECT_THROW(doExport(exp_file, "Fred", "", WITH_ARRAYS), TOmniSciException);
 }
 
 TEST_F(ExportTest, InvalidCompressionType) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
-  std::string geo_type = "point";
-  std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-  EXPECT_THROW(doExport(exp_file, "", "Fred", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+  std::string exp_file = "query_export_test_csv.csv";
+  EXPECT_THROW(doExport(exp_file, "", "Fred", WITH_ARRAYS), TOmniSciException);
 }
 
 TEST_F(ExportTest, CSV) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-    ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
-    doImportAgainAndCompare(exp_file, "CSV", geo_type, WITH_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
+  std::string exp_file = "query_export_test_csv.csv";
+  ASSERT_NO_THROW(doExport(exp_file, "CSV", "", WITH_ARRAYS));
+  ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
+  doImportAgainAndCompare(exp_file, "CSV", WITH_ARRAYS);
+  removeExportedFile(exp_file);
 }
 
 TEST_F(ExportTest, CSV_Overwrite) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-    ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
+  std::string exp_file = "query_export_test_csv.csv";
+  ASSERT_NO_THROW(doExport(exp_file, "CSV", "", WITH_ARRAYS));
+  ASSERT_NO_THROW(doExport(exp_file, "CSV", "", WITH_ARRAYS));
+  removeExportedFile(exp_file);
 }
 
 TEST_F(ExportTest, CSV_InvalidName) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
-  std::string geo_type = "point";
-  std::string exp_file = "query_export_test_csv_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
+  std::string exp_file = "query_export_test_csv.jpg";
+  EXPECT_THROW(doExport(exp_file, "CSV", "", WITH_ARRAYS),
                TOmniSciException);
 }
 
 TEST_F(ExportTest, CSV_Zip_Unimplemented) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
-    EXPECT_THROW(doExport(exp_file, "CSV", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-                 TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, CSV_GZip_Unimplemented) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    EXPECT_THROW(doExport(exp_file, "CSV", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-                 TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, CSV_Nulls) {
-  SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(doTestNulls("query_export_test_csv_nulls.csv", "CSV", "*"));
-}
-
-TEST_F(ExportTest, GeoJSON) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    ASSERT_NO_THROW(
-        doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
-    doImportAgainAndCompare(exp_file, "GeoJSON", geo_type, WITH_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSON_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    ASSERT_NO_THROW(
-        doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(
-        doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSON_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  std::string geo_type = "point";
-  std::string exp_file = "query_export_test_geojson_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
+  std::string exp_file = "query_export_test_csv.csv";
+  EXPECT_THROW(doExport(exp_file, "CSV", "Zip", WITH_ARRAYS),
                TOmniSciException);
-}
-
-TEST_F(ExportTest, GeoJSON_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    EXPECT_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSON_GZip) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string req_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    std::string exp_file = req_file + ".gz";
-    ASSERT_NO_THROW(
-        doExport(req_file, "GeoJSON", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, GZIPPED));
-    doImportAgainAndCompare(exp_file, "GeoJSON", geo_type, WITH_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSON_Zip_Unimplemented) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
-    EXPECT_THROW(
-        doExport(exp_file, "GeoJSON", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSON_Nulls) {
-  SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(
-      doTestNulls("query_export_test_geojson_nulls_point.geojson", "GeoJSON", "a"));
-  ASSERT_NO_THROW(
-      doTestNulls("query_export_test_geojson_nulls_linestring.geojson", "GeoJSON", "b"));
-  ASSERT_NO_THROW(
-      doTestNulls("query_export_test_geojson_nulls_polygon.geojson", "GeoJSON", "c"));
-  ASSERT_NO_THROW(doTestNulls(
-      "query_export_test_geojson_nulls_multipolygon.geojson", "GeoJSON", "d"));
-}
-
-TEST_F(ExportTest, GeoJSONL_GeoJSON) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    ASSERT_NO_THROW(
-        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
-    doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSONL_Json) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".json";
-    ASSERT_NO_THROW(
-        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
-    doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSONL_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    ASSERT_NO_THROW(
-        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(
-        doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSONL_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  std::string geo_type = "point";
-  std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
-}
-
-TEST_F(ExportTest, GeoJSONL_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    EXPECT_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSONL_GZip) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string req_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    std::string exp_file = req_file + ".gz";
-    ASSERT_NO_THROW(
-        doExport(req_file, "GeoJSONL", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(doCompareText(exp_file, GZIPPED));
-    doImportAgainAndCompare(exp_file, "GeoJSONL", geo_type, WITH_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSONL_Zip_Unimplemented) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
-    EXPECT_THROW(
-        doExport(exp_file, "GeoJSONL", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, GeoJSONL_Nulls) {
-  SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(
-      doTestNulls("query_export_test_geojsonl_nulls_point.geojson", "GeoJSONL", "a"));
-  ASSERT_NO_THROW(doTestNulls(
-      "query_export_test_geojsonl_nulls_linestring.geojson", "GeoJSONL", "b"));
-  ASSERT_NO_THROW(
-      doTestNulls("query_export_test_geojsonl_nulls_polygon.geojson", "GeoJSONL", "c"));
-  ASSERT_NO_THROW(doTestNulls(
-      "query_export_test_geojsonl_nulls_multipolygon.geojson", "GeoJSONL", "d"));
-}
-
-TEST_F(ExportTest, Shapefile) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    std::string shx_file = "query_export_test_shapefile_" + geo_type + ".shx";
-    std::string prj_file = "query_export_test_shapefile_" + geo_type + ".prj";
-    std::string dbf_file = "query_export_test_shapefile_" + geo_type + ".dbf";
-    ASSERT_NO_THROW(
-        doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    std::string layer_name = "query_export_test_shapefile_" + geo_type;
-    ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
-    doImportAgainAndCompare(shp_file, "Shapefile", geo_type, NO_ARRAYS);
-    removeExportedFile(shp_file);
-    removeExportedFile(shx_file);
-    removeExportedFile(prj_file);
-    removeExportedFile(dbf_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, Shapefile_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    std::string shx_file = "query_export_test_shapefile_" + geo_type + ".shx";
-    std::string prj_file = "query_export_test_shapefile_" + geo_type + ".prj";
-    std::string dbf_file = "query_export_test_shapefile_" + geo_type + ".dbf";
-    ASSERT_NO_THROW(
-        doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(
-        doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    removeExportedFile(shp_file);
-    removeExportedFile(shx_file);
-    removeExportedFile(prj_file);
-    removeExportedFile(dbf_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, Shapefile_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  std::string geo_type = "point";
-  std::string shp_file = "query_export_test_shapefile_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
-}
-
-TEST_F(ExportTest, Shapefile_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, Shapefile_RejectArrayColumns) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  std::string geo_type = "point";
-  std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-  EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
-}
-
-TEST_F(ExportTest, Shapefile_GZip_Unimplemented) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    EXPECT_THROW(
-        doExport(shp_file, "Shapefile", "GZip", geo_type, NO_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, Shapefile_Zip_Unimplemented) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
-    EXPECT_THROW(
-        doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, FlatGeobuf) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_fgb_" + geo_type + ".fgb";
-    ASSERT_NO_THROW(
-        doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    std::string layer_name = "query_export_test_fgb_" + geo_type;
-    ASSERT_NO_THROW(doCompareWithOGRInfo(exp_file, layer_name, COMPARE_EXPLICIT));
-    doImportAgainAndCompare(exp_file, "FlatGeobuf", geo_type, NO_ARRAYS);
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, FlatGeobuf_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_fgb_" + geo_type + ".fgb";
-    ASSERT_NO_THROW(
-        doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    ASSERT_NO_THROW(
-        doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    removeExportedFile(exp_file);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, FlatGeobuf_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  std::string geo_type = "point";
-  std::string exp_file = "query_export_test_fgb_" + geo_type + ".jpg";
-  EXPECT_THROW(doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
-}
-
-TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
-  doCreateAndImport();
-  auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".fgb";
-    EXPECT_THROW(doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
-  };
-  RUN_TEST_ON_ALL_GEO_TYPES();
-}
-
-TEST_F(ExportTest, Array_Null_Handling_Default) {
-  SKIP_ALL_ON_AGGREGATOR();
-  EXPECT_THROW(doTestArrayNullHandling(
-                   "query_export_test_array_null_handling_default.geojson", ""),
-               TOmniSciException);
-}
-
-TEST_F(ExportTest, Array_Null_Handling_Raw) {
-  SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(
-      doTestArrayNullHandling("query_export_test_array_null_handling_raw.geojson",
-                              ", array_null_handling='raw'"));
-}
-
-TEST_F(ExportTest, Array_Null_Handling_Zero) {
-  SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(
-      doTestArrayNullHandling("query_export_test_array_null_handling_zero.geojson",
-                              ", array_null_handling='zero'"));
-}
-
-TEST_F(ExportTest, Array_Null_Handling_NullField) {
-  SKIP_ALL_ON_AGGREGATOR();
-  ASSERT_NO_THROW(
-      doTestArrayNullHandling("query_export_test_array_null_handling_nullfield.geojson",
-                              ", array_null_handling='nullfield'"));
 }
 
 }  // namespace

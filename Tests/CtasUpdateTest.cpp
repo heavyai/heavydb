@@ -493,221 +493,6 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
   }
 };
 
-class GeoPointColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
-  std::string prefix;
-
- public:
-  GeoPointColumnDescriptor(SQLTypes sql_type = kPOINT) : rs_type(sql_type){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "POINT"; };
-
-  std::string getColumnWktStringValue(int row) {
-    return "POINT (" + std::to_string(row) + " 0)";
-  }
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-  std::string get_column_comparison(int row, std::string colname) override {
-    return colname + " = ST_GeomFromText('" + getColumnWktStringValue(row) + "')";
-  }
-  bool check_column_value(int row,
-                          const SQLTypeInfo& type,
-                          const ScalarTargetValue* value) override {
-    if (!(type.get_type() == rs_type)) {
-      return false;
-    }
-
-    const auto mapd_as_str_p = boost::get<NullableString>(value);
-    if (nullptr == mapd_as_str_p) {
-      return false;
-    }
-
-    const auto mapd_str_p = boost::get<std::string>(mapd_as_str_p);
-    if (nullptr == mapd_str_p) {
-      return false;
-    }
-
-    const auto mapd_val = *mapd_str_p;
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
-class GeoLinestringColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
-  std::string prefix;
-
- public:
-  GeoLinestringColumnDescriptor(SQLTypes sql_type = kLINESTRING) : rs_type(sql_type){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "LINESTRING"; };
-
-  std::string getColumnWktStringValue(int row) {
-    std::string linestring = "LINESTRING (0 0";
-    for (int i = 0; i <= row; i++) {
-      linestring += "," + std::to_string(row) + " 0";
-    }
-    linestring += ")";
-    return linestring;
-  }
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-  std::string get_column_comparison(int row, std::string colname) override {
-    return colname + " = ST_GeomFromText('" + getColumnWktStringValue(row) + "')";
-    ;
-  }
-  bool check_column_value(int row,
-                          const SQLTypeInfo& type,
-                          const ScalarTargetValue* value) override {
-    if (!(type.get_type() == rs_type)) {
-      return false;
-    }
-
-    const auto mapd_as_str_p = boost::get<NullableString>(value);
-    if (nullptr == mapd_as_str_p) {
-      return false;
-    }
-
-    const auto mapd_str_p = boost::get<std::string>(mapd_as_str_p);
-    if (nullptr == mapd_str_p) {
-      return false;
-    }
-
-    const auto mapd_val = *mapd_str_p;
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
-class GeoMultiPolygonColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
-  std::string prefix;
-
- public:
-  GeoMultiPolygonColumnDescriptor(SQLTypes sql_type = kMULTIPOLYGON)
-      : rs_type(sql_type){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "MULTIPOLYGON"; };
-
-  std::string getColumnWktStringValue(int row) {
-    std::string polygon =
-        "MULTIPOLYGON (((0 " + std::to_string(row) + ",4 " + std::to_string(row) + ",4 " +
-        std::to_string(row + 4) + ",0 " + std::to_string(row + 4) + ",0 " +
-        std::to_string(row) + "),(1 " + std::to_string(row + 1) + ",1 " +
-        std::to_string(row + 2) + ",2 " + std::to_string(row + 2) + ",2 " +
-        std::to_string(row + 1) + ",1 " + std::to_string(row + 1) + ")))";
-    return polygon;
-  }
-
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-  std::string get_column_comparison(int row, std::string colname) override {
-    return colname + " = ST_GeomFromText('" + getColumnWktStringValue(row) + "')";
-  }
-
-  bool check_column_value(int row,
-                          const SQLTypeInfo& type,
-                          const ScalarTargetValue* value) override {
-    if (!(type.get_type() == rs_type)) {
-      return false;
-    }
-
-    const auto mapd_as_str_p = boost::get<NullableString>(value);
-    if (nullptr == mapd_as_str_p) {
-      return false;
-    }
-
-    const auto mapd_str_p = boost::get<std::string>(mapd_as_str_p);
-    if (nullptr == mapd_str_p) {
-      return false;
-    }
-
-    const auto mapd_val = *mapd_str_p;
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
-class GeoPolygonColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
-  std::string prefix;
-
- public:
-  GeoPolygonColumnDescriptor(SQLTypes sql_type = kPOLYGON) : rs_type(sql_type){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "POLYGON"; };
-
-  std::string getColumnWktStringValue(int row) {
-    std::string polygon =
-        "POLYGON ((0 " + std::to_string(row) + ",4 " + std::to_string(row) + ",4 " +
-        std::to_string(row + 4) + ",0 " + std::to_string(row + 4) + ",0 " +
-        std::to_string(row) + "),(1 " + std::to_string(row + 1) + ",1 " +
-        std::to_string(row + 2) + ",2 " + std::to_string(row + 2) + ",2 " +
-        std::to_string(row + 1) + ",1 " + std::to_string(row + 1) + "))";
-    return polygon;
-  }
-
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-  std::string get_column_comparison(int row, std::string colname) override {
-    return colname + " = ST_GeomFromText('" + getColumnWktStringValue(row) + "')";
-  }
-
-  bool check_column_value(int row,
-                          const SQLTypeInfo& type,
-                          const ScalarTargetValue* value) override {
-    if (!(type.get_type() == rs_type)) {
-      return false;
-    }
-
-    const auto mapd_as_str_p = boost::get<NullableString>(value);
-    if (nullptr == mapd_as_str_p) {
-      return false;
-    }
-
-    const auto mapd_str_p = boost::get<std::string>(mapd_as_str_p);
-    if (nullptr == mapd_str_p) {
-      return false;
-    }
-
-    const auto mapd_val = *mapd_str_p;
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
 class Itas : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -1445,52 +1230,6 @@ TEST_P(Ctas, ValidationCheck) {
       sql("CREATE TABLE ctas_target AS SELECT id, CEIL(dd*10000) FROM ctas_source;"));
 }
 
-TEST_P(Ctas, GeoTest) {
-  std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
-  sql(ddl);
-  ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
-  sql(ddl);
-
-  sql("CREATE TABLE CTAS_SOURCE ("
-      "pu GEOMETRY(POINT, 4326) ENCODING NONE, "
-      "pc GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), "
-      "lc GEOMETRY(LINESTRING, 4326), "
-      "poly GEOMETRY(POLYGON), "
-      "mpoly GEOMETRY(MULTIPOLYGON, 4326)"
-      ");");
-
-  sql("INSERT INTO CTAS_SOURCE VALUES("
-      "'POINT (-118.480499954187 34.2662998541567)', "
-      "'POINT (-118.480499954187 34.2662998541567)', "
-      "'LINESTRING (-118.480499954187 34.2662998541567, "
-      "             -117.480499954187 35.2662998541567)', "
-      "'POLYGON ((-118.480499954187 34.2662998541567, "
-      "           -117.480499954187 35.2662998541567, "
-      "           -110.480499954187 45.2662998541567))', "
-      "'MULTIPOLYGON (((-118.480499954187 34.2662998541567, "
-      "                 -117.480499954187 35.2662998541567, "
-      "                 -110.480499954187 45.2662998541567)))' "
-      "); ");
-
-  ddl = "CREATE TABLE CTAS_TARGET AS select * FROM CTAS_SOURCE;";
-  sql(ddl);
-
-  TQueryResult rows;
-  sql(rows, "SELECT * FROM CTAS_TARGET;");
-  assertResultSetEqual(
-      {{"POINT (-118.480499954187 34.2662998541567)",
-        "POINT (-118.480499954187 34.2662998541567)",
-        "LINESTRING (-118.480499954187 34.2662998541567,-117.480499929507 "
-        "35.2662998369272)",
-        "POLYGON ((-118.480499954187 34.2662998541567,-117.480499954187 "
-        "35.2662998541567,-110.480499954187 45.2662998541567,-118.480499954187 "
-        "34.2662998541567))",
-        "MULTIPOLYGON (((-118.480499954187 34.2662998541567,-117.480499929507 "
-        "35.2662998369272,-110.480499924384 45.2662998322706,-118.480499954187 "
-        "34.2662998541567)))"}},
-      rows);
-}
-
 TEST_P(Ctas, CreateTableAsSelect_IfNotExists) {
   sql("DROP TABLE IF EXISTS CTAS_SOURCE;");
   sql("DROP TABLE IF EXISTS CTAS_TARGET;");
@@ -1738,22 +1477,6 @@ TEST_F(Itas, UnsupportedBooleanCast) {
   EXPECT_ANY_THROW(sql("INSERT INTO ITAS_TARGET (SELECT g FROM ITAS_SOURCE);"));
   EXPECT_NO_THROW(
       sql("INSERT INTO ITAS_TARGET (SELECT CAST(id AS boolean) FROM ITAS_SOURCE);"));
-
-  sql("DROP TABLE ITAS_TARGET;");
-  sql("DROP TABLE ITAS_SOURCE;");
-}
-
-TEST_F(Itas, UnsupportedGeo) {
-  sql("DROP TABLE IF EXISTS ITAS_TARGET;");
-  sql("DROP TABLE IF EXISTS ITAS_SOURCE;");
-
-  sql("CREATE TABLE ITAS_TARGET (p point);");
-  sql("CREATE TABLE ITAS_SOURCE (id int, str text, val timestamp(3), g linestring);");
-
-  EXPECT_ANY_THROW(sql("INSERT INTO ITAS_TARGET (SELECT id FROM ITAS_SOURCE);"));
-  EXPECT_ANY_THROW(sql("INSERT INTO ITAS_TARGET (SELECT str FROM ITAS_SOURCE);"));
-  EXPECT_ANY_THROW(sql("INSERT INTO ITAS_TARGET (SELECT val FROM ITAS_SOURCE);"));
-  EXPECT_ANY_THROW(sql("INSERT INTO ITAS_TARGET (SELECT g FROM ITAS_SOURCE);"));
 
   sql("DROP TABLE ITAS_TARGET;");
   sql("DROP TABLE ITAS_SOURCE;");
@@ -2162,23 +1885,6 @@ TIME_COLUMN_TEST(TIMESTAMP_32,
                  160 * 60 * 100);
 ARRAY_COLUMN_TEST(TIMESTAMP, "TIMESTAMP");
 
-const std::shared_ptr<TestColumnDescriptor> GEO_POINT =
-    std::shared_ptr<TestColumnDescriptor>(new GeoPointColumnDescriptor(kPOINT));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_POINT);
-
-const std::shared_ptr<TestColumnDescriptor> GEO_LINESTRING =
-    std::shared_ptr<TestColumnDescriptor>(new GeoLinestringColumnDescriptor(kLINESTRING));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_LINESTRING);
-
-const std::shared_ptr<TestColumnDescriptor> GEO_POLYGON =
-    std::shared_ptr<TestColumnDescriptor>(new GeoPolygonColumnDescriptor(kPOLYGON));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_POLYGON);
-
-const std::shared_ptr<TestColumnDescriptor> GEO_MULTI_POLYGON =
-    std::shared_ptr<TestColumnDescriptor>(
-        new GeoMultiPolygonColumnDescriptor(kMULTIPOLYGON));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_MULTI_POLYGON);
-
 const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE,
                                                                 BOOLEAN,
                                                                 BOOLEAN_ARRAY,
@@ -2235,11 +1941,7 @@ const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE
                                                                 TIMESTAMP_32,
                                                                 TIMESTAMP,
                                                                 TIMESTAMP_ARRAY,
-                                                                TIMESTAMP_FIXED_LEN_ARRAY,
-                                                                GEO_POINT,
-                                                                GEO_LINESTRING,
-                                                                GEO_POLYGON,
-                                                                GEO_MULTI_POLYGON};
+                                                                TIMESTAMP_FIXED_LEN_ARRAY};
 
 INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Ctas, testing::Values(ALL));
 INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Itas_P, testing::Values(ALL));
@@ -2281,11 +1983,7 @@ std::vector<std::shared_ptr<TestColumnDescriptor>> partialDescriptors = {
     // TEXT_ARRAY,
     TIME,
     DATE,
-    TIMESTAMP,
-    GEO_POINT,
-    GEO_LINESTRING,
-    GEO_POLYGON,
-    GEO_MULTI_POLYGON};
+    TIMESTAMP};
 }  // namespace
 
 TEST_P(Itas_P, PartialInsertIntoTableFromSelect) {
@@ -2433,65 +2131,6 @@ TEST_F(Select, CtasItasValidation) {
                       {{i(750000)}});
   drop_table();
   drop_ctas_itas_table();
-}
-
-TEST_F(Select, CtasItasNullGeoPoint) {
-  auto run_test = [this](const std::string col_type) {
-    auto drop_table = []() {
-      sql("DROP TABLE IF EXISTS T_With_Null_GeoPoint;");
-      sql("DROP TABLE IF EXISTS CTAS_GeoNull;");
-      sql("DROP TABLE IF EXISTS ITAS_GeoNull;");
-    };
-
-    auto create_table = [&col_type]() {
-      sql("CREATE TABLE T_With_Null_GeoPoint (pt " + col_type + ");");
-      sql("CREATE TABLE ITAS_GeoNull (pt " + col_type + ");");
-    };
-
-    drop_table();
-    create_table();
-
-    sql("INSERT INTO T_With_Null_GeoPoint VALUES (\'POINT(1 1)\');");
-    sql("INSERT INTO T_With_Null_GeoPoint VALUES (NULL);");
-    sqlAndCompareResult(
-        "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is not null;",
-        {{i(1)}});
-    sqlAndCompareResult(
-        "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is null;", {{i(1)}});
-    sql("INSERT INTO ITAS_GeoNull SELECT * FROM T_With_Null_GeoPoint;");
-    sqlAndCompareResult("SELECT COUNT(1) FROM ITAS_GeoNull WHERE ST_X(pt) is not null;",
-                        {{i(1)}});
-    sqlAndCompareResult("SELECT COUNT(1) FROM ITAS_GeoNull WHERE ST_X(pt) is null;",
-                        {{i(1)}});
-    sql("CREATE TABLE CTAS_GeoNull AS SELECT * FROM T_With_Null_GeoPoint;");
-    sqlAndCompareResult("SELECT COUNT(1) FROM CTAS_GeoNull WHERE ST_X(pt) is not null;",
-                        {{i(1)}});
-    sqlAndCompareResult("SELECT COUNT(1) FROM CTAS_GeoNull WHERE ST_X(pt) is null;",
-                        {{i(1)}});
-    /* The following query fails in the master but is orthogonal issue so will re-enable
-     * this after resolving the issue
-    sql("INSERT INTO T_With_Null_GeoPoint SELECT * FROM T_With_Null_GeoPoint;");
-    sqlAndCompareResult("SELECT COUNT(1) FROM T_With_Null_GeoPoint", {{i(4)}});
-    sqlAndCompareResult(
-        "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is not null;",
-        {{i(2)}});
-    sqlAndCompareResult(
-        "SELECT COUNT(1) FROM T_With_Null_GeoPoint WHERE ST_X(pt) is null;", {{i(2)}});
-    */
-    drop_table();
-  };
-
-  std::vector<std::string> geo_point_types{
-      "POINT",
-      "GEOMETRY(POINT)",
-      "GEOMETRY(POINT, 4326)",
-      "GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32)",
-      "GEOMETRY(POINT, 4326) ENCODING NONE",
-      "GEOMETRY(POINT, 900913)",
-      "GEOMETRY(POINT, 900913) ENCODING NONE"};
-  for (auto& col_type : geo_point_types) {
-    run_test(col_type);
-  }
 }
 
 class Errors : public DBHandlerTestFixture {
@@ -2804,6 +2443,7 @@ class ItasStringTest : public DBHandlerTestFixture {
     sql("insert into lower_function_test_countries values('Gb', 'United Kingdom', "
         "'London');");
     sql("insert into lower_function_test_countries values('dE', 'Germany', 'Berlin');");
+
   }
 
   void TearDown() override {

@@ -2591,9 +2591,6 @@ std::string BinOper::toString() const {
     case kARRAY_AT:
       op = "[] ";
       break;
-    case kOVERLAPS:
-      op = "OVERLAPS ";
-      break;
     default:
       break;
   }

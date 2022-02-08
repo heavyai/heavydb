@@ -25,7 +25,6 @@
 #include "rapidjson/document.h"
 
 #include "Fragmenter/FragmentDefaultValues.h"
-#include "Geospatial/Types.h"
 #include "Parser/ReservedKeywords.h"
 #include "Shared/file_path_util.h"
 #include "Shared/misc.h"
@@ -576,43 +575,6 @@ void validate_literal(const std::string& val,
       }
       break;
     }
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      if (val.empty()) {
-        return;
-      }
-      try {
-        auto geo = Geospatial::GeoTypesFactory::createGeoType(val);
-        if (!geo) {
-          throw std::runtime_error("Unexpected geo literal '" + val + "' for column " +
-                                   column_name);
-        }
-        if (!geo->transform(column_type)) {
-          throw std::runtime_error("Cannot transform SRID for literal '" + val +
-                                   "' for column " + column_name);
-        } else {
-          auto sql_type = column_type.get_type();
-          auto geo_type = geo->getType();
-          if ((geo_type == Geospatial::GeoBase::GeoType::kPOINT && sql_type != kPOINT) ||
-              (geo_type == Geospatial::GeoBase::GeoType::kLINESTRING &&
-               sql_type != kLINESTRING) ||
-              (geo_type == Geospatial::GeoBase::GeoType::kPOLYGON &&
-               sql_type != kPOLYGON) ||
-              (geo_type == Geospatial::GeoBase::GeoType::kMULTIPOLYGON &&
-               sql_type != kMULTIPOLYGON)) {
-            throw std::runtime_error("Geo literal '" + val +
-                                     "' doesn't match the type "
-                                     "of column column " +
-                                     column_name);
-          }
-        }
-      } catch (Geospatial::GeoTypesError& e) {
-        throw std::runtime_error("Unexpected geo literal '" + val + "' for column " +
-                                 column_name + ": " + e.what());
-      }
-      break;
     default:
       CHECK(false) << "validate_literal() does not support type "
                    << column_type.get_type();

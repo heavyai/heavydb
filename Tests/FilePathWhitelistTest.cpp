@@ -363,39 +363,6 @@ TEST_F(FilePathWhitelistTest, ImportTableBlacklist) {
       "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
-TEST_F(FilePathWhitelistTest, ImportGeoTableBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
-  auto db_handler_and_session_id = getDbHandlerAndSessionId();
-  auto db_handler = db_handler_and_session_id.first;
-  auto session_id = db_handler_and_session_id.second;
-  executeLambdaAndAssertException(
-      [&] {
-        db_handler->import_geo_table(session_id,
-                                     "test1",
-                                     file_path,
-                                     TCopyParams{},
-                                     TRowDescriptor{},
-                                     TCreateParams{});
-      },
-      "Access to file or directory path \"" + file_path + "\" is not allowed.");
-}
-
-TEST_F(FilePathWhitelistTest, GetFirstGeoFileBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
-  auto db_handler_and_session_id = getDbHandlerAndSessionId();
-  auto db_handler = db_handler_and_session_id.first;
-  auto session_id = db_handler_and_session_id.second;
-  std::string temp;
-  executeLambdaAndAssertException(
-      [&] {
-        db_handler->get_first_geo_file_in_archive(
-            temp, session_id, file_path, TCopyParams());
-      },
-      "Access to file or directory path \"" + file_path + "\" is not allowed.");
-}
-
 TEST_F(FilePathWhitelistTest, GetAllFilesBlacklist) {
   const auto& file_path = temp_file_path_;
   ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
@@ -406,20 +373,6 @@ TEST_F(FilePathWhitelistTest, GetAllFilesBlacklist) {
   executeLambdaAndAssertException(
       [&] {
         db_handler->get_all_files_in_archive(temp, session_id, file_path, TCopyParams());
-      },
-      "Access to file or directory path \"" + file_path + "\" is not allowed.");
-}
-
-TEST_F(FilePathWhitelistTest, GetLayersInGeoFileBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
-  auto db_handler_and_session_id = getDbHandlerAndSessionId();
-  auto db_handler = db_handler_and_session_id.first;
-  auto session_id = db_handler_and_session_id.second;
-  std::vector<TGeoFileLayerInfo> temp;
-  executeLambdaAndAssertException(
-      [&] {
-        db_handler->get_layers_in_geo_file(temp, session_id, file_path, TCopyParams());
       },
       "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
@@ -556,63 +509,16 @@ TEST_P(DBHandlerFilePathTest, DetectColumnTypes) {
       result, session_id, getFilePath("example.csv"), TCopyParams{});
 }
 
-TEST_P(DBHandlerFilePathTest, DetectColumnTypes_GeoFile) {
-  auto [db_handler, session_id] = getDbHandlerAndSessionId();
-  TDetectResult result;
-  db_handler->detect_column_types(
-      result, session_id, getFilePath("example.geojson"), TCopyParams{});
-}
-
 TEST_P(DBHandlerFilePathTest, ImportTable) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_table(
       session_id, "test_table", getFilePath("example.csv"), TCopyParams{});
 }
 
-TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
-// TODO: Undo test case skipping when GDAL failure is resolved
-#ifdef HAVE_AWS_S3
-  if (auto [file_location_type, suffix] = getTestParams();
-      file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
-    GTEST_SKIP();
-  }
-#endif  // HAVE_AWS_S3
-
-  auto [db_handler, session_id] = getDbHandlerAndSessionId();
-  db_handler->import_geo_table(session_id,
-                               "test_table_2",
-                               getFilePath("example.geojson"),
-                               TCopyParams{},
-                               TRowDescriptor{},
-                               TCreateParams{});
-}
-
-TEST_P(DBHandlerFilePathTest, GetFirstGeoFileInArchive) {
-  auto [db_handler, session_id] = getDbHandlerAndSessionId();
-  std::string result;
-  db_handler->get_first_geo_file_in_archive(
-      result, session_id, getFilePath("example.geojson"), TCopyParams());
-}
-
 TEST_P(DBHandlerFilePathTest, GetAllFilesInArchive) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::vector<std::string> result;
   db_handler->get_all_files_in_archive(
-      result, session_id, getFilePath("example.geojson"), TCopyParams());
-}
-
-TEST_P(DBHandlerFilePathTest, GetLayersInGeoFile) {
-// TODO: Undo test case skipping when GDAL failure is resolved
-#ifdef HAVE_AWS_S3
-  if (auto [file_location_type, suffix] = getTestParams();
-      file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
-    GTEST_SKIP();
-  }
-#endif  // HAVE_AWS_S3
-
-  auto [db_handler, session_id] = getDbHandlerAndSessionId();
-  std::vector<TGeoFileLayerInfo> result;
-  db_handler->get_layers_in_geo_file(
       result, session_id, getFilePath("example.geojson"), TCopyParams());
 }
 
