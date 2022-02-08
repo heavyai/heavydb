@@ -240,7 +240,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const bool read_only,
                      const bool allow_loop_joins,
                      const bool enable_rendering,
-                     const bool renderer_use_vulkan_driver,
                      const bool renderer_use_ppll_polys,
                      const bool renderer_prefer_igpu,
                      const unsigned renderer_vulkan_timeout_ms,
@@ -287,7 +286,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , runtime_udf_registration_enabled_(enable_runtime_udf_registration)
 
     , enable_rendering_(enable_rendering)
-    , renderer_use_vulkan_driver_(renderer_use_vulkan_driver)
     , renderer_use_ppll_polys_(renderer_use_ppll_polys)
     , renderer_prefer_igpu_(renderer_prefer_igpu)
     , renderer_vulkan_timeout_(renderer_vulkan_timeout_ms)
@@ -466,7 +464,6 @@ void DBHandler::initialize(const bool is_new_db) {
                                               render_compositor_use_last_gpu_,
                                               false,
                                               0,
-                                              false,
                                               false,
                                               renderer_prefer_igpu_,
                                               renderer_vulkan_timeout_,
