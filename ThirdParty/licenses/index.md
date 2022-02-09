@@ -27,6 +27,7 @@ muparserx | [BSD](<https://github.com/beltoforion/muparserx/blob/master/License.
 ncurses | [X11](<http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_it>) | CLI/password entry |
 PicoSHA2 | [MIT](<https://github.com/okdshin/PicoSHA2/blob/master/LICENSE>) | SHA256 Library |
 rapidjson | [MIT](<https://github.com/miloyip/rapidjson/blob/master/license.txt>) | JSON parsing |
+robin_hood | [MIT](<https://github.com/martinus/robin-hood-hashing/blob/master/LICENSE>) | Unordered Map and Set |
 SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog management |
 TBB | [Apache-2.0](https://raw.githubusercontent.com/oneapi-src/oneTBB/tbb_2020/LICENSE) | Threadpool support |
 TimeGM | [BSD](<https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/libnbcompat/files/timegm.c>) | Date/time support |
