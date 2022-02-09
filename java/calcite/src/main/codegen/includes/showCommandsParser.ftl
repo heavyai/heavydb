@@ -27,7 +27,7 @@ SqlDdl SqlCustomShow(Span s) :
 {
     <SHOW>
     (
-        LOOKAHEAD(2) show = SqlShowUserDetails(s)
+        LOOKAHEAD(3) show = SqlShowUserDetails(s)
         |
         LOOKAHEAD(2) show = SqlShowUserSessions(s)
         |
@@ -66,8 +66,10 @@ SqlDdl SqlShowUserDetails(Span s) :
 {
     SqlIdentifier userName = null;
     List<String> userNames = null;
+    boolean all = false;
 }
 {
+    [<ALL> {all = true;}]
     <USER>
     <DETAILS>
     [
@@ -85,7 +87,7 @@ SqlDdl SqlShowUserDetails(Span s) :
         )*
     ]
     {
-        return new SqlShowUserDetails(s.end(this), userNames);
+        return new SqlShowUserDetails(s.end(this), userNames, all);
     }
 }
 

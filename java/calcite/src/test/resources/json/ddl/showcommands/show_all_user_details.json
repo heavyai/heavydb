@@ -2,6 +2,6 @@
   "statementType": "DDL",
   "payload": {
     "command": "SHOW_USER_DETAILS",
-    "all": false
+    "all": true
   }
 }

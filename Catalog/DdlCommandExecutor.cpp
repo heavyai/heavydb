@@ -1669,23 +1669,62 @@ ShowUserDetailsCommand::ShowUserDetailsCommand(
       CHECK(user_name.IsString());
     }
   }
+  CHECK(ddl_payload.HasMember("all"));
+  CHECK(ddl_payload["all"].IsBool());
 }
 
 ExecutionResult ShowUserDetailsCommand::execute() {
   auto& ddl_payload = extractPayload(ddl_data_);
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
+  Catalog_Namespace::UserMetadata self = session_ptr_->get_currentUser();
+  bool all = ddl_payload.HasMember("all") ? ddl_payload["all"].GetBool() : false;
+  if (all && !self.isSuper) {
+    throw std::runtime_error(
+        "SHOW ALL USER DETAILS is only available to superusers. (Try SHOW USER "
+        "DETAILS instead?)");
+  }
+
   // label_infos -> column labels
-  std::vector<std::string> labels{"NAME", "ID", "IS_SUPER", "DEFAULT_DB", "CAN_LOGIN"};
   std::vector<TargetMetaInfo> label_infos;
-  label_infos.emplace_back(labels[0], SQLTypeInfo(kTEXT, true));
-  label_infos.emplace_back(labels[1], SQLTypeInfo(kBIGINT, true));
-  label_infos.emplace_back(labels[2], SQLTypeInfo(kBOOLEAN, true));
-  label_infos.emplace_back(labels[3], SQLTypeInfo(kTEXT, true));
-  label_infos.emplace_back(labels[4], SQLTypeInfo(kBOOLEAN, true));
+  label_infos.emplace_back("NAME", SQLTypeInfo(kTEXT, true));
+  label_infos.emplace_back("ID", SQLTypeInfo(kBIGINT, true));
+  if (all) {
+    label_infos.emplace_back("IS_SUPER", SQLTypeInfo(kBOOLEAN, true));
+  }
+  label_infos.emplace_back("DEFAULT_DB", SQLTypeInfo(kTEXT, true));
+  if (self.isSuper) {
+    label_infos.emplace_back("CAN_LOGIN", SQLTypeInfo(kBOOLEAN, true));
+  }
   std::vector<RelLogicalValues::RowValues> logical_values;
 
-  Catalog_Namespace::UserMetadata self = session_ptr_->get_currentUser();
+  auto cat = session_ptr_->get_catalog_ptr();
+  DBObject dbObject(cat->name(), DatabaseDBObjectType);
+  dbObject.loadKey();
+  dbObject.setPrivileges(AccessPrivileges::ACCESS);
+
+  std::map<std::string, Catalog_Namespace::UserMetadata> user_map;
+  auto user_list = !all ? sys_cat.getAllUserMetadata(cat->getDatabaseId())
+                        : sys_cat.getAllUserMetadata();
+  for (auto& user : user_list) {
+    if (user.can_login || self.isSuper) {  // hide users who have disabled accounts
+      user_map[user.userName] = user;
+    }
+  }
+
+  if (ddl_payload.HasMember("userNames")) {
+    std::map<std::string, Catalog_Namespace::UserMetadata> user_map2;
+    for (const auto& user_name_json : ddl_payload["userNames"].GetArray()) {
+      std::string user_name = user_name_json.GetString();
+      auto uit = user_map.find(user_name);
+      if (uit == user_map.end()) {
+        throw std::runtime_error("User \"" + user_name + "\" not found. ");
+      }
+      user_map2[uit->first] = uit->second;
+    }
+    user_map = user_map2;
+  }
+
   Catalog_Namespace::DBSummaryList dbsums = sys_cat.getDatabaseListForUser(self);
   std::unordered_set<std::string> visible_databases;
   if (!self.isSuper) {
@@ -1694,31 +1733,16 @@ ExecutionResult ShowUserDetailsCommand::execute() {
     }
   }
 
-  std::list<Catalog_Namespace::UserMetadata> user_list;
-  if (ddl_payload.HasMember("userNames")) {
-    for (const auto& user_name_json : ddl_payload["userNames"].GetArray()) {
-      std::string user_name = user_name_json.GetString();
-      Catalog_Namespace::UserMetadata user;
-      if (!sys_cat.getMetadataForUser(user_name, user)) {
-        throw std::runtime_error("User with username \"" + user_name +
-                                 "\" does not exist. ");
-      }
-      user_list.emplace_back(std::move(user));
-    }
-  } else {
-    user_list = sys_cat.getAllUserMetadata();
-  }
-
-  for (const auto& user : user_list) {
+  for (const auto& [user_name, user] : user_map) {
     // database
     std::string dbname;
     Catalog_Namespace::DBMetadata db;
     if (sys_cat.getMetadataForDBById(user.defaultDbId, db)) {
-      if (self.isSuper.load() || visible_databases.count(db.dbName)) {
+      if (self.isSuper || visible_databases.count(db.dbName)) {
         dbname = db.dbName;
       }
     }
-    if (self.isSuper.load()) {
+    if (self.isSuper) {
       dbname += "(" + std::to_string(user.defaultDbId) + ")";
     }
 
@@ -1726,12 +1750,20 @@ ExecutionResult ShowUserDetailsCommand::execute() {
     logical_values.emplace_back(RelLogicalValues::RowValues{});
     logical_values.back().emplace_back(genLiteralStr(user.userName));
     logical_values.back().emplace_back(genLiteralBigInt(user.userId));
-    logical_values.back().emplace_back(genLiteralBoolean(user.isSuper.load()));
+    if (all) {
+      logical_values.back().emplace_back(genLiteralBoolean(user.isSuper));
+    }
     logical_values.back().emplace_back(genLiteralStr(dbname));
-    logical_values.back().emplace_back(genLiteralBoolean(user.can_login));
+    if (self.isSuper) {
+      logical_values.back().emplace_back(genLiteralBoolean(user.can_login));
+    }
   }
 
   // Create ResultSet
+  CHECK_EQ(logical_values.size(), user_map.size());
+  if (logical_values.size() >= 1U) {
+    CHECK_EQ(logical_values[0].size(), label_infos.size());
+  }
   std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
       ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
 

@@ -398,87 +398,114 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
 
   static void SetUpTestSuite() {
     createDBHandler();
-    users_ = {"user1", "user2"};
-    superusers_ = {"super1", "super2"};
-    dbs_ = {"omnisci"};
-    createUsers();
-    createSuperUsers();
+    createDatabase("db1");
+    createDatabase("db2");
+    createUser("user1", /*is_super=*/false, "db1");
+    createUser("user2", /*is_super=*/false, "db1");
+    createUser("user3", /*is_super=*/false, "db1", /*can_login=*/false);
+    createUser("super1", /*is_super=*/true, "db1");
+    createUser("user4", /*is_super=*/false, "db2");
+    createUser("user5", /*is_super=*/false, "db2");
+    createUser("user6", /*is_super=*/false, "db2", /*can_login=*/false);
+    createUser("super2", /*is_super=*/true, "db2");
   }
 
   static void TearDownTestSuite() {
     dropUsers();
-    dropSuperUsers();
+    dropDatabases();
   }
 
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
-  static void createUsers() {
-    for (const auto& user : users_) {
-      std::stringstream create;
-      create << "CREATE USER " << user
-             << " (password = 'HyperInteractive', is_super = 'false', "
-                "default_db='omnisci');";
-      sql(create.str());
-      for (const auto& db : dbs_) {
-        std::stringstream grant;
-        grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
-        sql(grant.str());
-      }
+  static void createDatabase(std::string const& database) {
+    databases_.push_back(database);
+    std::stringstream create;
+    create << "CREATE DATABASE " << database << ";";
+    sql(create.str());
+  }
+
+  static void createUser(std::string const& user,
+                         bool is_super,
+                         std::string const& database,
+                         bool can_login = true) {
+    users_.push_back(user);
+    std::stringstream create;
+    create << "CREATE USER " << user << " (password = 'HyperInteractive', is_super = '"
+           << (is_super ? "true" : "false") << "', can_login = '"
+           << (can_login ? "true" : "false") << "'";
+    if (!database.empty()) {
+      create << ", default_db='" << database << "'";
+    }
+    create << ");";
+    sql(create.str());
+    if (!is_super) {
+      std::stringstream grant;
+      grant << "GRANT ALL ON DATABASE  " << database << " to " << user << ";";
+      sql(grant.str());
     }
   }
 
-  static void createSuperUsers() {
-    for (const auto& user : superusers_) {
-      std::stringstream create;
-      create
-          << "CREATE USER " << user
-          << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
-      sql(create.str());
-      for (const auto& db : dbs_) {
-        std::stringstream grant;
-        grant << "GRANT ALL ON DATABASE  " << db << " to " << user << ";";
-        sql(grant.str());
-      }
+  static void dropDatabases() {
+    login("admin", "HyperInteractive", "omnisci");
+    for (const auto& database : databases_) {
+      std::stringstream drop;
+      drop << "DROP DATABASE IF EXISTS " << database << ";";
+      sql(drop.str());
     }
   }
 
   static void dropUsers() {
+    login("admin", "HyperInteractive", "omnisci");
     for (const auto& user : users_) {
       std::stringstream drop;
-      drop << "DROP USER " << user << ";";
+      drop << "DROP USER IF EXISTS " << user << ";";
       sql(drop.str());
     }
   }
 
-  static void dropSuperUsers() {
-    for (const auto& user : superusers_) {
-      std::stringstream drop;
-      drop << "DROP USER " << user << ";";
-      sql(drop.str());
-    }
-  }
-
-  enum ColumnIndex { NAME, ID, IS_SUPER, DEFAULT_DB, CAN_LOGIN };
-
-  void assertExpectedFormat(const TQueryResult& result) {
+  void assertExpectedFormatForSuperUserWithAll(const TQueryResult& result) {
     ASSERT_EQ(result.row_set.is_columnar, true);
     ASSERT_EQ(result.row_set.columns.size(), size_t(5));
-    ASSERT_EQ(result.row_set.row_desc[NAME].col_type.type, TDatumType::STR);
-    ASSERT_EQ(result.row_set.row_desc[NAME].col_name, "NAME");
-    ASSERT_EQ(result.row_set.row_desc[ID].col_type.type, TDatumType::BIGINT);
-    ASSERT_EQ(result.row_set.row_desc[ID].col_name, "ID");
-    ASSERT_EQ(result.row_set.row_desc[IS_SUPER].col_type.type, TDatumType::BOOL);
-    ASSERT_EQ(result.row_set.row_desc[IS_SUPER].col_name, "IS_SUPER");
-    ASSERT_EQ(result.row_set.row_desc[DEFAULT_DB].col_type.type, TDatumType::STR);
-    ASSERT_EQ(result.row_set.row_desc[DEFAULT_DB].col_name, "DEFAULT_DB");
-    ASSERT_EQ(result.row_set.row_desc[CAN_LOGIN].col_type.type, TDatumType::BOOL);
-    ASSERT_EQ(result.row_set.row_desc[CAN_LOGIN].col_name, "CAN_LOGIN");
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "NAME");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "ID");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "IS_SUPER");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "DEFAULT_DB");
+    ASSERT_EQ(result.row_set.row_desc[4].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[4].col_name, "CAN_LOGIN");
+  }
+
+  void assertExpectedFormatForSuperUser(const TQueryResult& result) {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), size_t(4));
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "NAME");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "ID");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "DEFAULT_DB");
+    ASSERT_EQ(result.row_set.row_desc[3].col_type.type, TDatumType::BOOL);
+    ASSERT_EQ(result.row_set.row_desc[3].col_name, "CAN_LOGIN");
+  }
+
+  void assertExpectedFormatForUser(const TQueryResult& result) {
+    ASSERT_EQ(result.row_set.is_columnar, true);
+    ASSERT_EQ(result.row_set.columns.size(), size_t(3));
+    ASSERT_EQ(result.row_set.row_desc[0].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[0].col_name, "NAME");
+    ASSERT_EQ(result.row_set.row_desc[1].col_type.type, TDatumType::BIGINT);
+    ASSERT_EQ(result.row_set.row_desc[1].col_name, "ID");
+    ASSERT_EQ(result.row_set.row_desc[2].col_type.type, TDatumType::STR);
+    ASSERT_EQ(result.row_set.row_desc[2].col_name, "DEFAULT_DB");
   }
 
   void assertUserResultFound(const TQueryResult& result, const std::string& username) {
     int num_matches = 0;
-    for (size_t i = 0; i < result.row_set.columns[NAME].data.str_col.size(); ++i) {
-      if (result.row_set.columns[NAME].data.str_col[i] == username) {
+    for (size_t i = 0; i < result.row_set.columns[0].data.str_col.size(); ++i) {
+      if (result.row_set.columns[0].data.str_col[i] == username) {
         num_matches++;
       }
     }
@@ -486,16 +513,17 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
   }
 
   template <typename T>
-  void assertUserResultFound(const TQueryResult& result,
+  void assertUserColumnFound(const TQueryResult& result,
                              const std::string& username,
-                             ColumnIndex col,
+                             size_t col,
                              T val) {
     using CLEANT = std::remove_reference_t<std::remove_cv_t<T>>;
     static_assert(std::is_integral_v<CLEANT> || std::is_floating_point_v<CLEANT> ||
                   std::is_same_v<std::string, CLEANT>);
+    ASSERT_LT(col, result.row_set.columns.size());
     int num_matches = 0;
-    for (size_t i = 0; i < result.row_set.columns[NAME].data.str_col.size(); ++i) {
-      if (result.row_set.columns[NAME].data.str_col[i] == username) {
+    for (size_t i = 0; i < result.row_set.columns[0].data.str_col.size(); ++i) {
+      if (result.row_set.columns[0].data.str_col[i] == username) {
         num_matches++;
         // integral
         if constexpr (std::is_integral_v<CLEANT>) {  // NOLINT
@@ -513,54 +541,194 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
   }
 
   void assertNumUsers(const TQueryResult& result, size_t num_users) {
-    ASSERT_EQ(num_users, result.row_set.columns[NAME].data.str_col.size());
+    ASSERT_EQ(num_users, result.row_set.columns[0].data.str_col.size());
   }
-  std::vector<std::string> get_users() { return users_; }
-  std::vector<std::string> get_superusers() { return superusers_; }
+
+  void assertNumColumns(const TQueryResult& result, size_t num_columns) {
+    ASSERT_EQ(num_columns, result.row_set.columns.size());
+  }
 
  private:
   static inline std::vector<std::string> users_;
-  static inline std::vector<std::string> superusers_;
-  static inline std::vector<std::string> dbs_;
+  static inline std::vector<std::string> databases_;
 
   std::string admin_id;
 };
 
-TEST_F(ShowUserDetailsTest, AllUsers) {
+TEST_F(ShowUserDetailsTest, AsNonSuper) {
+  login("user1", "HyperInteractive", "db1");
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS;");
+    assertExpectedFormatForUser(result);
+    assertNumUsers(result, 2);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user2;");
+    assertExpectedFormatForUser(result);
+    assertNumUsers(result, 1);
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user1, user2;");
+    assertExpectedFormatForUser(result);
+    assertNumUsers(result, 2);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user3;"),
+                 TOmniSciException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"),
+                 TOmniSciException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super1;"),
+                 TOmniSciException);
+  }
+}
+
+TEST_F(ShowUserDetailsTest, AsSuper) {
+  login("super1", "HyperInteractive", "db1");
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS;");
+    assertExpectedFormatForSuperUser(result);
+    assertNumUsers(result, 3);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user2");
+    assertUserResultFound(result, "user3");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user2;");
+    assertExpectedFormatForSuperUser(result);
+    assertNumUsers(result, 1);
+    assertUserResultFound(result, "user2");
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user1, user3;");
+    assertExpectedFormatForSuperUser(result);
+    assertNumUsers(result, 2);
+    assertUserResultFound(result, "user1");
+    assertUserResultFound(result, "user3");
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user4;"),
+                 TOmniSciException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"),
+                 TOmniSciException);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super2;"),
+                 TOmniSciException);
+  }
+}
+
+TEST_F(ShowUserDetailsTest, AllAsNonSuper) {
+  login("user1", "HyperInteractive", "db1");
   TQueryResult result;
-  sql(result, "SHOW USER DETAILS;");
-  assertExpectedFormat(result);
-  assertNumUsers(result, 5);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS;"), TOmniSciException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1;"), TOmniSciException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1, super1;"), TOmniSciException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1, super1, notauser;"),
+               TOmniSciException);
+}
+
+TEST_F(ShowUserDetailsTest, AllAsSuper) {
+  TQueryResult result;
+  login("super1", "HyperInteractive", "db1");
+  sql(result, "SHOW ALL USER DETAILS;");
+  assertExpectedFormatForSuperUserWithAll(result);
+  assertNumUsers(result, 9);
   assertUserResultFound(result, "admin");
   assertUserResultFound(result, "user1");
   assertUserResultFound(result, "user2");
+  assertUserResultFound(result, "user3");
   assertUserResultFound(result, "super1");
+  assertUserResultFound(result, "user4");
+  assertUserResultFound(result, "user5");
+  assertUserResultFound(result, "user6");
   assertUserResultFound(result, "super2");
 }
 
-TEST_F(ShowUserDetailsTest, OneUser) {
-  TQueryResult result;
-  sql(result, "SHOW USER DETAILS user1;");
-  assertNumUsers(result, 1);
-  assertUserResultFound(result, "user1");
-}
-
-TEST_F(ShowUserDetailsTest, MultipleUsers) {
-  TQueryResult result;
-  sql(result, "SHOW USER DETAILS user1,super1;");
-  assertNumUsers(result, 2);
-  assertUserResultFound(result, "user1");
-  assertUserResultFound(result, "super1");
-}
-
-TEST_F(ShowUserDetailsTest, Columns) {
+TEST_F(ShowUserDetailsTest, ColumnsAsNonSuper) {
   using namespace std::string_literals;
+  login("user1", "HyperInteractive", "db1");
   TQueryResult result;
   sql(result, "SHOW USER DETAILS user1;");
+  assertNumColumns(result, 3);
   assertNumUsers(result, 1);
-  assertUserResultFound(result, "user1", IS_SUPER, false);
-  assertUserResultFound(result, "user1", DEFAULT_DB, "omnisci(1)"s);
-  assertUserResultFound(result, "user1", CAN_LOGIN, true);
+  assertUserColumnFound(result, "user1", 2, "db1"s);
+}
+
+TEST_F(ShowUserDetailsTest, ColumnsAsSuper) {
+  using namespace std::string_literals;
+  auto& syscat = Catalog_Namespace::SysCatalog::instance();
+  auto cat = syscat.getCatalog("db1");
+  std::string db1id = cat ? std::to_string(cat->getDatabaseId()) : "";
+  login("super1", "HyperInteractive", "db1");
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user1;");
+    assertNumColumns(result, 4);
+    assertNumUsers(result, 1);
+    assertUserColumnFound(result, "user1", 2, "db1("s + db1id + ")"s);
+    assertUserColumnFound(result, "user1", 3, true);
+  }
+
+  {
+    TQueryResult result;
+    sql(result, "SHOW USER DETAILS user3;");
+    assertNumColumns(result, 4);
+    assertNumUsers(result, 1);
+    assertUserColumnFound(result, "user3", 2, "db1("s + db1id + ")"s);
+    assertUserColumnFound(result, "user3", 3, false);
+  }
+}
+
+TEST_F(ShowUserDetailsTest, ColumnsAllAsSuper) {
+  using namespace std::string_literals;
+  auto& syscat = Catalog_Namespace::SysCatalog::instance();
+  auto cat = syscat.getCatalog("db1");
+  std::string db1id = cat ? std::to_string(cat->getDatabaseId()) : "";
+  login("super1", "HyperInteractive", "db1");
+
+  TQueryResult result;
+  sql(result, "SHOW ALL USER DETAILS user1;");
+  assertNumColumns(result, 5);
+  assertNumUsers(result, 1);
+  assertUserColumnFound(result, "user1", 2, false);
+  assertUserColumnFound(result, "user1", 3, "db1("s + db1id + ")"s);
+  assertUserColumnFound(result, "user1", 4, true);
 }
 
 class ShowTableDdlTest : public DBHandlerTestFixture {
