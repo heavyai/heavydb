@@ -6503,23 +6503,21 @@ CreateUserStmt::CreateUserStmt(const rapidjson::Value& payload) {
 }
 
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  std::string passwd;
-  bool is_super = false;
-  std::string default_db;
-  bool can_login = true;
+  Catalog_Namespace::UserAlterations alts;
   for (auto& p : options_) {
     if (boost::iequals(*p->get_name(), "password")) {
       checkStringLiteral("Password", p);
-      passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+      alts.passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "is_super")) {
       checkStringLiteral("IS_SUPER", p);
-      is_super = readBooleanLiteral("IS_SUPER", p);
+      alts.is_super = readBooleanLiteral("IS_SUPER", p);
     } else if (boost::iequals(*p->get_name(), "default_db")) {
       checkStringLiteral("DEFAULT_DB", p);
-      default_db = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+      alts.default_db =
+          *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "can_login")) {
       checkStringLiteral("CAN_LOGIN", p);
-      can_login = readBooleanLiteral("can_login", p);
+      alts.can_login = readBooleanLiteral("can_login", p);
     } else {
       throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
                                ". Should be PASSWORD, IS_SUPER, CAN_LOGIN"
@@ -6529,8 +6527,7 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can create new users.");
   }
-  SysCatalog::instance().createUser(
-      *user_name_, passwd, is_super, default_db, can_login, false);
+  SysCatalog::instance().createUser(*user_name_, alts, /*is_temporary=*/false);
 }
 
 AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
@@ -6542,35 +6539,27 @@ AlterUserStmt::AlterUserStmt(const rapidjson::Value& payload) {
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   // Parse the statement
-  const std::string* passwd = nullptr;
-  bool is_super = false;
-  bool* is_superp = nullptr;
-  const std::string* default_db = nullptr;
-  bool can_login = true;
-  bool* can_loginp = nullptr;
+  Catalog_Namespace::UserAlterations alts;
   for (auto& p : options_) {
     if (boost::iequals(*p->get_name(), "password")) {
       checkStringLiteral("Password", p);
-      passwd = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+      alts.passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "is_super")) {
       checkStringLiteral("IS_SUPER", p);
-      is_super = readBooleanLiteral("IS_SUPER", p);
-      is_superp = &is_super;
+      alts.is_super = readBooleanLiteral("IS_SUPER", p);
     } else if (boost::iequals(*p->get_name(), "default_db")) {
       if (dynamic_cast<const StringLiteral*>(p->get_value())) {
-        default_db = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        alts.default_db =
+            *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
       } else if (dynamic_cast<const NullLiteral*>(p->get_value())) {
-        static std::string blank;
-        default_db = &blank;
+        alts.default_db = "";
       } else {
         throw std::runtime_error(
             "DEFAULT_DB option must be either a string literal or a NULL "
             "literal.");
       }
     } else if (boost::iequals(*p->get_name(), "can_login")) {
-      checkStringLiteral("CAN_LOGIN", p);
-      can_login = readBooleanLiteral("CAN_LOGIN", p);
-      can_loginp = &can_login;
+      alts.can_login = readBooleanLiteral("CAN_LOGIN", p);
     } else {
       throw std::runtime_error("Invalid ALTER USER option " + *p->get_name() +
                                ". Should be PASSWORD, DEFAULT_DB, CAN_LOGIN"
@@ -6586,16 +6575,13 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     if (session.get_currentUser().userId != user.userId) {
       throw std::runtime_error("Only super user can change another user's attributes.");
-    } else if (is_superp || can_loginp) {
+    } else if (alts.is_super || alts.can_login) {
       throw std::runtime_error(
           "A user can only update their own password or default database.");
     }
   }
 
-  if (passwd || is_superp || default_db || can_loginp) {
-    SysCatalog::instance().alterUser(
-        *user_name_, passwd, is_superp, default_db, can_loginp);
-  }
+  SysCatalog::instance().alterUser(*user_name_, alts);
 }
 
 DropUserStmt::DropUserStmt(const rapidjson::Value& payload) {

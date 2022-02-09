@@ -855,29 +855,39 @@ void SysCatalog::check_for_session_encryption(const std::string& pki_cert,
   pki_server_->encrypt_session(pki_cert, session);
 }
 
-void SysCatalog::createUser(const string& name,
-                            const string& passwd,
-                            bool is_super,
-                            const std::string& dbname,
-                            bool can_login,
-                            bool is_temporary) {
+UserMetadata SysCatalog::createUser(const string& name,
+                                    UserAlterations alts,
+                                    bool is_temporary) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
+
+  if (!alts.passwd) {
+    alts.passwd = "";
+  }
+  if (!alts.is_super) {
+    alts.is_super = false;
+  }
+  if (!alts.default_db) {
+    alts.default_db = "";
+  }
+  if (!alts.can_login) {
+    alts.can_login = true;
+  }
 
   UserMetadata user;
   if (getMetadataForUser(name, user)) {
     throw runtime_error("User " + user.userLoggable() + " already exists.");
   }
-  std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
   if (getGrantee(name)) {
+    std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
     throw runtime_error(
         "User " + loggable +
         "is same as one of existing grantees. User and role names should be unique.");
   }
   DBMetadata db;
-  if (!dbname.empty()) {
-    if (!getMetadataForDB(dbname, db)) {
-      throw runtime_error("DEFAULT_DB " + dbname + " not found.");
+  if (!alts.default_db->empty()) {
+    if (!getMetadataForDB(*alts.default_db, db)) {
+      throw runtime_error("DEFAULT_DB " + *alts.default_db + " not found.");
     }
   }
 
@@ -890,37 +900,37 @@ void SysCatalog::createUser(const string& name,
     }
     auto user2 = std::make_shared<UserMetadata>(next_temporary_user_id_++,
                                                 name,
-                                                hash_with_bcrypt(passwd),
-                                                is_super,
-                                                !dbname.empty() ? db.dbId : -1,
-                                                can_login,
+                                                hash_with_bcrypt(*alts.passwd),
+                                                *alts.is_super,
+                                                !alts.default_db->empty() ? db.dbId : -1,
+                                                *alts.can_login,
                                                 true);
     temporary_users_by_name_[name] = user2;
     temporary_users_by_id_[user2->userId] = user2;
     createRole_unsafe(name, /*userPrivateRole=*/true, /*is_temporary=*/true);
-    VLOG(1) << "Created temporary user: " << loggable;
-    return;
+    VLOG(1) << "Created temporary user: " << user2->userLoggable();
+    return *user2;
   }
 
   // Normal user.
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     std::vector<std::string> vals;
-    if (!dbname.empty()) {
+    if (!alts.default_db->empty()) {
       vals = {name,
-              hash_with_bcrypt(passwd),
-              std::to_string(is_super),
+              hash_with_bcrypt(*alts.passwd),
+              std::to_string(*alts.is_super),
               std::to_string(db.dbId),
-              std::to_string(can_login)};
+              std::to_string(*alts.can_login)};
       sqliteConnector_->query_with_text_params(
           "INSERT INTO mapd_users (name, passwd_hash, issuper, default_db, can_login) "
           "VALUES (?, ?, ?, ?, ?)",
           vals);
     } else {
       vals = {name,
-              hash_with_bcrypt(passwd),
-              std::to_string(is_super),
-              std::to_string(can_login)};
+              hash_with_bcrypt(*alts.passwd),
+              std::to_string(*alts.is_super),
+              std::to_string(*alts.can_login)};
       sqliteConnector_->query_with_text_params(
           "INSERT INTO mapd_users (name, passwd_hash, issuper, can_login) "
           "VALUES (?, ?, ?, ?)",
@@ -932,7 +942,10 @@ void SysCatalog::createUser(const string& name,
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  VLOG(1) << "Created user: " << loggable;
+  auto u = getUser(name);
+  CHECK(u);
+  VLOG(1) << "Created user: " << u->userLoggable();
+  return *u;
 }
 
 void SysCatalog::dropUser(const string& name) {
@@ -997,11 +1010,64 @@ auto append_with_commas = [](string& s, const string& t) {
 
 }  // anonymous namespace
 
-void SysCatalog::alterUser(const string& name,
-                           const string* passwd,
-                           bool* is_super,
-                           const string* dbname,
-                           bool* can_login) {
+bool UserAlterations::wouldChange(UserMetadata const& user) const {
+  if (passwd && hash_with_bcrypt(*passwd) != user.passwd_hash) {
+    return true;
+  }
+  if (is_super && *is_super != user.isSuper) {
+    return true;
+  }
+  if (default_db) {
+    DBMetadata db;
+    if (!default_db->empty()) {
+      if (!SysCatalog::instance().getMetadataForDB(*default_db, db)) {
+        throw std::runtime_error(string("DEFAULT_DB ") + *default_db + " not found.");
+      }
+    } else {
+      db.dbId = -1;
+    }
+    if (db.dbId != user.defaultDbId) {
+      return true;
+    }
+  }
+  if (can_login && *can_login != user.can_login) {
+    return true;
+  }
+  return false;
+}
+
+std::string UserAlterations::toString(bool hide_password) const {
+  std::stringstream ss;
+  if (passwd) {
+    if (hide_password) {
+      ss << "PASSWORD='XXXXXXXX'";
+    } else {
+      ss << "PASSWORD='" << *passwd << "'";
+    }
+  }
+  if (is_super) {
+    if (!ss.str().empty()) {
+      ss << ", ";
+    }
+    ss << "IS_SUPER='" << (*is_super ? "TRUE" : "FALSE") << "'";
+  }
+  if (default_db) {
+    if (!ss.str().empty()) {
+      ss << ", ";
+    }
+    ss << "DEFAULT_DB='" << *default_db << "'";
+  }
+  if (can_login) {
+    if (!ss.str().empty()) {
+      ss << ", ";
+    }
+    ss << "CAN_LOGIN='" << *can_login << "'";
+  }
+  return ss.str();
+}
+
+UserMetadata SysCatalog::alterUser(string const& name, UserAlterations alts) {
+  sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
   UserMetadata user;
@@ -1009,31 +1075,34 @@ void SysCatalog::alterUser(const string& name,
     std::string const loggable = g_log_user_id ? std::string("") : name + ' ';
     throw runtime_error("Cannot alter user. User " + loggable + "does not exist.");
   }
+  if (!alts.wouldChange(user)) {
+    return user;
+  }
 
   // Temporary user.
   if (user.is_temporary) {
-    if (passwd) {
-      user.passwd_hash = hash_with_bcrypt(*passwd);
+    if (alts.passwd) {
+      user.passwd_hash = hash_with_bcrypt(*alts.passwd);
     }
-    if (is_super) {
-      user.isSuper = *is_super;
+    if (alts.is_super) {
+      user.isSuper = *alts.is_super;
     }
-    if (dbname) {
-      if (!dbname->empty()) {
+    if (alts.default_db) {
+      if (!alts.default_db->empty()) {
         DBMetadata db;
-        if (!getMetadataForDB(*dbname, db)) {
-          throw runtime_error(string("DEFAULT_DB ") + *dbname + " not found.");
+        if (!getMetadataForDB(*alts.default_db, db)) {
+          throw runtime_error(string("DEFAULT_DB ") + *alts.default_db + " not found.");
         }
         user.defaultDbId = db.dbId;
       } else {
         user.defaultDbId = -1;
       }
     }
-    if (can_login) {
-      user.can_login = *can_login;
+    if (alts.can_login) {
+      user.can_login = *alts.can_login;
     }
     *temporary_users_by_name_[name] = user;
-    return;
+    return user;
   }
 
   // Normal user.
@@ -1041,29 +1110,29 @@ void SysCatalog::alterUser(const string& name,
   try {
     string sql;
     std::vector<std::string> values;
-    if (passwd) {
+    if (alts.passwd) {
       append_with_commas(sql, "passwd_hash = ?");
-      values.push_back(hash_with_bcrypt(*passwd));
+      values.push_back(hash_with_bcrypt(*alts.passwd));
     }
-    if (is_super) {
+    if (alts.is_super) {
       append_with_commas(sql, "issuper = ?");
-      values.push_back(std::to_string(*is_super));
+      values.push_back(std::to_string(*alts.is_super));
     }
-    if (dbname) {
-      if (!dbname->empty()) {
+    if (alts.default_db) {
+      if (!alts.default_db->empty()) {
         append_with_commas(sql, "default_db = ?");
         DBMetadata db;
-        if (!getMetadataForDB(*dbname, db)) {
-          throw runtime_error(string("DEFAULT_DB ") + *dbname + " not found.");
+        if (!getMetadataForDB(*alts.default_db, db)) {
+          throw runtime_error(string("DEFAULT_DB ") + *alts.default_db + " not found.");
         }
         values.push_back(std::to_string(db.dbId));
       } else {
         append_with_commas(sql, "default_db = NULL");
       }
     }
-    if (can_login) {
+    if (alts.can_login) {
       append_with_commas(sql, "can_login = ?");
-      values.push_back(std::to_string(*can_login));
+      values.push_back(std::to_string(*alts.can_login));
     }
 
     sql = "UPDATE mapd_users SET " + sql + " WHERE userid = ?";
@@ -1075,6 +1144,10 @@ void SysCatalog::alterUser(const string& name,
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+  auto u = getUser(name);
+  CHECK(u);
+  VLOG(1) << "Altered user: " << u->userLoggable();
+  return *u;
 }
 
 auto SysCatalog::yieldTransactionStreamer() {
@@ -2636,29 +2709,24 @@ void SysCatalog::revokeDBObjectPrivilegesFromAllBatch(vector<DBObject>& objects,
 
 void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             std::vector<std::string> idp_roles,
-                                            bool* is_super,
-                                            const std::string& default_db) {
-  UserMetadata user_meta;
-  bool is_super_user = is_super ? *is_super : false;
+                                            UserAlterations alts) {
   // need to escalate to a write lock
   // need to unlock the read lock
   sys_read_lock read_lock(this);
   read_lock.unlock();
   sys_write_lock write_lock(this);
   bool enable_idp_temporary_users{g_enable_idp_temporary_users && g_read_only};
-  if (!getMetadataForUser(user_name, user_meta)) {
-    createUser(user_name,
-               generate_random_string(72),
-               is_super_user,
-               default_db,
-               /*can_login=*/true,
-               /*is_temporary=*/enable_idp_temporary_users);
-    LOG(INFO) << "User " << user_name << " has been created by remote identity provider"
-              << " with IS_SUPER = " << (is_super_user ? "'TRUE'" : "'FALSE'");
-  } else if (is_super && is_super_user != user_meta.isSuper) {
-    alterUser(user_meta.userName, nullptr, is_super, nullptr, nullptr);
-    LOG(INFO) << "IS_SUPER for user " << user_name << " has been changed to "
-              << (is_super_user ? "TRUE" : "FALSE") << " by remote identity provider";
+  if (auto user = getUser(user_name); !user) {
+    if (!alts.passwd) {
+      alts.passwd = generate_random_string(72);
+    }
+    user = createUser(user_name, alts, /*is_temporary=*/enable_idp_temporary_users);
+    LOG(INFO) << "Remote identity provider created user [" << user->userLoggable()
+              << "] with (" << alts.toString() << ")";
+  } else if (alts.wouldChange(*user)) {
+    user = alterUser(user->userName, alts);
+    LOG(INFO) << "Remote identity provider altered user [" << user->userLoggable()
+              << "] with (" << alts.toString() << ")";
   }
   std::vector<std::string> current_roles = {};
   auto* user_rl = getUserGrantee(user_name);

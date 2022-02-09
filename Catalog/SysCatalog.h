@@ -107,12 +107,22 @@ struct UserMetadata {
   std::string userName;
   std::string passwd_hash;
   std::atomic<bool> isSuper{false};
-  int32_t defaultDbId;
+  int32_t defaultDbId{-1};
   bool can_login{true};
   bool is_temporary{false};
 
   // Return a string that is safe to log for the username based on --log-user-id.
   std::string userLoggable() const;
+};
+
+struct UserAlterations {
+  std::optional<std::string> passwd;
+  std::optional<bool> is_super;
+  std::optional<std::string> default_db;
+  std::optional<bool> can_login;
+
+  bool wouldChange(UserMetadata const& user_meta) const;
+  std::string toString(bool hide_password = true) const;
 };
 
 /*
@@ -177,22 +187,39 @@ class SysCatalog : private CommonFileOperations {
                                  bool check_password = true);
   std::shared_ptr<Catalog> switchDatabase(std::string& dbname,
                                           const std::string& username);
-  void createUser(const std::string& name,
-                  const std::string& passwd,
-                  bool is_super,
-                  const std::string& dbname,
-                  bool can_login,
-                  bool is_temporary);
+  UserMetadata createUser(std::string const& name,
+                          UserAlterations alts,
+                          bool is_temporary);
   void dropUser(const std::string& name);
-  void alterUser(const std::string& name,
-                 const std::string* passwd,
-                 bool* issuper,
-                 const std::string* dbname,
-                 bool* can_login);
+  UserMetadata alterUser(std::string const& name, UserAlterations alts);
   void renameUser(std::string const& old_name, std::string const& new_name);
   void createDatabase(const std::string& dbname, int owner);
   void renameDatabase(std::string const& old_name, std::string const& new_name);
   void dropDatabase(const DBMetadata& db);
+  std::optional<UserMetadata> getUser(std::string const& uname) {
+    if (UserMetadata user; getMetadataForUser(uname, user)) {
+      return user;
+    }
+    return {};
+  }
+  std::optional<UserMetadata> getUser(int32_t const uid) {
+    if (UserMetadata user; getMetadataForUserById(uid, user)) {
+      return user;
+    }
+    return {};
+  }
+  std::optional<DBMetadata> getDB(std::string const& dbname) {
+    if (DBMetadata db; getMetadataForDB(dbname, db)) {
+      return db;
+    }
+    return {};
+  }
+  std::optional<DBMetadata> getDB(int32_t const dbid) {
+    if (DBMetadata db; getMetadataForDBById(dbid, db)) {
+      return db;
+    }
+    return {};
+  }
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
   bool checkPasswordForUser(const std::string& passwd,
@@ -324,8 +351,7 @@ class SysCatalog : private CommonFileOperations {
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,
                                   std::vector<std::string> idp_roles,
-                                  bool* issuper,
-                                  const std::string& default_db = {});
+                                  UserAlterations alts);
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);

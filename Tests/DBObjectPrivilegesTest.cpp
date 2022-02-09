@@ -58,19 +58,35 @@ inline auto sql(std::string_view sql_stmts) {
 struct Users {
   void setup_users() {
     if (!sys_cat.getMetadataForUser("Chelsea", g_user)) {
-      sys_cat.createUser("Chelsea", "password", true, "", true, false);
+      sys_cat.createUser(
+          "Chelsea",
+          Catalog_Namespace::UserAlterations{
+              "password", /*is_super=*/true, /*default_db=*/"", /*can_login=*/true},
+          false);
       CHECK(sys_cat.getMetadataForUser("Chelsea", g_user));
     }
     if (!sys_cat.getMetadataForUser("Arsenal", g_user)) {
-      sys_cat.createUser("Arsenal", "password", false, "", true, false);
+      sys_cat.createUser(
+          "Arsenal",
+          Catalog_Namespace::UserAlterations{
+              "password", /*is_super=*/false, /*default_db=*/"", /*can_login=*/true},
+          false);
       CHECK(sys_cat.getMetadataForUser("Arsenal", g_user));
     }
     if (!sys_cat.getMetadataForUser("Juventus", g_user)) {
-      sys_cat.createUser("Juventus", "password", false, "", true, false);
+      sys_cat.createUser(
+          "Juventus",
+          Catalog_Namespace::UserAlterations{
+              "password", /*is_super=*/false, /*default_db=*/"", /*can_login=*/true},
+          false);
       CHECK(sys_cat.getMetadataForUser("Juventus", g_user));
     }
     if (!sys_cat.getMetadataForUser("Bayern", g_user)) {
-      sys_cat.createUser("Bayern", "password", false, "", true, false);
+      sys_cat.createUser(
+          "Bayern",
+          Catalog_Namespace::UserAlterations{
+              "password", /*is_super=*/false, /*default_db=*/"", /*can_login=*/true},
+          false);
       CHECK(sys_cat.getMetadataForUser("Bayern", g_user));
     }
   }
@@ -3714,19 +3730,20 @@ TEST(Temporary, Users) {
     user_cleanup();
   };
 
-  sys_cat.createUser("username1",
-                     "password1",
-                     /*is_super=*/true,
-                     /*dbname=*/"",
-                     /*can_login=*/true,
-                     /*is_temporary=*/true);
+  sys_cat.createUser(
+      "username1",
+      Catalog_Namespace::UserAlterations{
+          "password1", /*is_super=*/true, /*dbname=*/"", /*can_login=*/true},
+      /*is_temporary=*/true);
   CHECK(sys_cat.getMetadataForUser("username1", g_user));
 
   EXPECT_TRUE(g_user.is_temporary);
   EXPECT_EQ(g_user.can_login, true);
 
-  bool can_login{false};
-  EXPECT_NO_THROW(sys_cat.alterUser("username1", nullptr, nullptr, nullptr, &can_login));
+  EXPECT_NO_THROW(sys_cat.alterUser(
+      "username1",
+      Catalog_Namespace::UserAlterations{
+          /*password=*/{}, /*is_super=*/{}, /*default_db=*/{}, /*can_login=*/false}));
   CHECK(sys_cat.getMetadataForUser("username1", g_user));
   EXPECT_EQ(g_user.can_login, false);
 
@@ -4280,6 +4297,98 @@ TEST_F(AlterServerOwnerTest, ToSuperUser) {
   loginAdmin();
   sql("ALTER SERVER test_server_1 OWNER TO admin;");
   verifyOwnership("admin");
+}
+
+TEST(SyncUserWithRemoteProvider, DEFAULT_DB) {
+  run_ddl_statement("DROP DATABASE IF EXISTS db1;");
+  run_ddl_statement("DROP DATABASE IF EXISTS db2;");
+  ScopeGuard dbguard = [] {
+    run_ddl_statement("DROP DATABASE IF EXISTS db1;");
+    run_ddl_statement("DROP DATABASE IF EXISTS db2;");
+  };
+  run_ddl_statement("CREATE DATABASE db1;");
+  run_ddl_statement("CREATE DATABASE db2;");
+
+  auto db1 = sys_cat.getDB("db1");
+  ASSERT_TRUE(db1);
+  auto db2 = sys_cat.getDB("db2");
+  ASSERT_TRUE(db2);
+
+  run_ddl_statement("DROP USER IF EXISTS u1;");
+  ScopeGuard u1guard = [] { run_ddl_statement("DROP USER IF EXISTS u1;"); };
+  Catalog_Namespace::UserAlterations alts;
+
+  // create u1 w/db1
+  alts.default_db = "db1";
+  sys_cat.syncUserWithRemoteProvider("u1", {}, alts);
+  auto u1 = sys_cat.getUser("u1");
+  ASSERT_TRUE(u1);
+  ASSERT_EQ(u1->defaultDbId, db1->dbId);
+
+  // alter u1 w/db2
+  alts.default_db = "db2";
+  sys_cat.syncUserWithRemoteProvider("u1", {}, alts);
+  u1 = sys_cat.getUser("u1");
+  ASSERT_TRUE(u1);
+  ASSERT_EQ(u1->defaultDbId, db2->dbId);
+
+  // alter u1 no-op
+  alts.default_db = std::nullopt;
+  sys_cat.syncUserWithRemoteProvider("u1", {}, alts);
+  u1 = sys_cat.getUser("u1");
+  ASSERT_TRUE(u1);
+  ASSERT_EQ(u1->defaultDbId, db2->dbId);
+
+  // alter u1 to clear out the default_db
+  alts.default_db = "";
+  sys_cat.syncUserWithRemoteProvider("u1", {}, alts);
+  u1 = sys_cat.getUser("u1");
+  ASSERT_TRUE(u1);
+  ASSERT_EQ(u1->defaultDbId, -1);
+}
+
+TEST(SyncUserWithRemoteProvider, IS_SUPER) {
+  run_ddl_statement("DROP USER IF EXISTS u1;");
+  run_ddl_statement("DROP USER IF EXISTS u2;");
+  ScopeGuard uguard = [] {
+    run_ddl_statement("DROP USER IF EXISTS u1;");
+    run_ddl_statement("DROP USER IF EXISTS u2;");
+  };
+  Catalog_Namespace::UserAlterations alts;
+
+  // create u1 non-super
+  alts.is_super = false;
+  sys_cat.syncUserWithRemoteProvider("u1", {}, alts);
+  auto u1 = sys_cat.getUser("u1");
+  ASSERT_TRUE(u1);
+  ASSERT_EQ(u1->isSuper, false);
+
+  // alter u1 no-op
+  alts.is_super = std::nullopt;
+  sys_cat.syncUserWithRemoteProvider("u1", {}, alts);
+  u1 = sys_cat.getUser("u1");
+  ASSERT_TRUE(u1);
+  ASSERT_EQ(u1->isSuper, false);
+
+  // alter u1 super
+  alts.is_super = true;
+  sys_cat.syncUserWithRemoteProvider("u1", {}, alts);
+  u1 = sys_cat.getUser("u1");
+  ASSERT_TRUE(u1);
+  ASSERT_EQ(u1->isSuper, true);
+
+  // create u2 super
+  sys_cat.syncUserWithRemoteProvider("u2", {}, alts);
+  auto u2 = sys_cat.getUser("u2");
+  ASSERT_TRUE(u2);
+  ASSERT_EQ(u2->isSuper, true);
+
+  // alter u2 non-super
+  alts.is_super = false;
+  sys_cat.syncUserWithRemoteProvider("u2", {}, alts);
+  u2 = sys_cat.getUser("u2");
+  ASSERT_TRUE(u2);
+  ASSERT_EQ(u2->isSuper, false);
 }
 
 int main(int argc, char* argv[]) {
