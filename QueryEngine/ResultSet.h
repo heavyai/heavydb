@@ -822,8 +822,7 @@ class ResultSet {
 
   void fixupCountDistinctPointers();
 
-  using BufferSet = std::set<int64_t>;
-  void create_active_buffer_set(BufferSet& count_distinct_active_buffer_set) const;
+  void create_active_buffer_set(CountDistinctSet& count_distinct_active_buffer_set) const;
 
   int64_t getDistinctBufferRefFromBufferRowwise(int8_t* rowwise_target_ptr,
                                                 const TargetInfo& target_info) const;

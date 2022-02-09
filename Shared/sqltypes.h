@@ -1072,6 +1072,22 @@ int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
 #include "../QueryEngine/DateTruncate.h"
 #include "../QueryEngine/ExtractFromTime.h"
 
+inline SQLTypes get_int_type_by_size(size_t const nbytes) {
+  switch (nbytes) {
+    case 1:
+      return kTINYINT;
+    case 2:
+      return kSMALLINT;
+    case 4:
+      return kINT;
+    case 8:
+      return kBIGINT;
+    default:
+      UNREACHABLE() << "Invalid number of bytes=" << nbytes;
+      return {};
+  }
+}
+
 inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
   EncodingType encoding = type_info.get_compression();
   if (encoding == kENCODING_DATE_IN_DAYS ||

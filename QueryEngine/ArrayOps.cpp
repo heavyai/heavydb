@@ -290,8 +290,6 @@ extern "C" DEVICE RUNTIME_EXPORT int8_t* array_buff(int8_t* chunk_iter_,
 
 #ifndef __CUDACC__
 
-#include <set>
-
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t elem_bitcast_int8_t(const int8_t val) {
   return val;
 }
@@ -328,7 +326,7 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t elem_bitcast_double(const double
     for (size_t i = 0; i < elem_count; ++i) {                                           \
       const auto val = reinterpret_cast<type*>(ad.pointer)[i];                          \
       if (val != null_val) {                                                            \
-        reinterpret_cast<std::set<int64_t>*>(*agg)->insert(elem_bitcast_##type(val));   \
+        reinterpret_cast<CountDistinctSet*>(*agg)->insert(elem_bitcast_##type(val));    \
       }                                                                                 \
     }                                                                                   \
   }

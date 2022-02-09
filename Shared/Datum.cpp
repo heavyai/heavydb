@@ -491,19 +491,7 @@ double extract_fp_type_from_datum(const Datum datum, const SQLTypeInfo& ti) {
 }
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
-  switch (ti.get_size()) {
-    case 1:
-      return kTINYINT;
-    case 2:
-      return kSMALLINT;
-    case 4:
-      return kINT;
-    case 8:
-      return kBIGINT;
-    default:
-      CHECK(false);
-  }
-  return kNULLT;
+  return get_int_type_by_size(ti.get_size());
 }
 
 SQLTypes string_dict_to_int_type(const SQLTypeInfo& ti) {

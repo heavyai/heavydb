@@ -2157,8 +2157,8 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
         continue;
       }
-      if (count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet) {
-        auto count_distinct_set = new std::set<int64_t>();
+      if (count_distinct_desc.impl_type_ == CountDistinctImplType::UnorderedSet) {
+        auto count_distinct_set = new CountDistinctSet();
         CHECK(row_set_mem_owner);
         row_set_mem_owner->addCountDistinctSet(count_distinct_set);
         entry.push_back(reinterpret_cast<int64_t>(count_distinct_set));

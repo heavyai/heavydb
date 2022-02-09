@@ -44,6 +44,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include <cstring>  // strcat()
+#include <limits>
 #include <numeric>
 #include <string_view>
 #include <thread>
@@ -52,6 +53,7 @@ bool g_cluster{false};
 bool g_bigint_count{false};
 int g_hll_precision_bits{11};
 size_t g_watchdog_baseline_max_groups{120000000};
+extern int64_t g_bitmap_memory_limit;
 extern size_t g_leaf_count;
 
 namespace {
@@ -304,6 +306,22 @@ int64_t GroupByAndAggregate::getBucketedCardinality(const ColRangeInfo& col_rang
   return static_cast<int64_t>(crt_col_cardinality +
                               (1 + (col_range_info.has_nulls ? 1 : 0)));
 }
+
+namespace {
+// Like getBucketedCardinality() without counting nulls.
+int64_t get_bucketed_cardinality_without_nulls(const ColRangeInfo& col_range_info) {
+  if (col_range_info.min <= col_range_info.max) {
+    size_t size = col_range_info.max - col_range_info.min;
+    if (col_range_info.bucket) {
+      size /= col_range_info.bucket;
+    }
+    CHECK_LT(size, std::numeric_limits<int64_t>::max());
+    return static_cast<int64_t>(size + 1);
+  } else {
+    return 0;
+  }
+}
+}  // namespace
 
 #define LL_CONTEXT executor_->cgen_state_->context_
 #define LL_BUILDER executor_->cgen_state_->ir_builder_
@@ -590,7 +608,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
           arg_ti.is_fp() ? no_range_info
                          : get_expr_range_info(
                                ra_exe_unit, query_infos, agg_expr->get_arg(), executor);
-      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
+      CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::UnorderedSet};
       int64_t bitmap_sz_bits{0};
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
         const auto error_rate = agg_expr->get_arg1();
@@ -617,21 +635,20 @@ CountDistinctDescriptors init_count_distinct_descriptors(
                                                             // implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
-          bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-          const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000LL};
-          if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
-            count_distinct_impl_type = CountDistinctImplType::StdSet;
+          bitmap_sz_bits = get_bucketed_cardinality_without_nulls(arg_range_info);
+          if (bitmap_sz_bits <= 0 || g_bitmap_memory_limit <= bitmap_sz_bits) {
+            count_distinct_impl_type = CountDistinctImplType::UnorderedSet;
           }
         }
       }
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet &&
+          count_distinct_impl_type == CountDistinctImplType::UnorderedSet &&
           !(arg_ti.is_array() || arg_ti.is_geometry())) {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
 
       if (g_enable_watchdog && !(arg_range_info.isEmpty()) &&
-          count_distinct_impl_type == CountDistinctImplType::StdSet) {
+          count_distinct_impl_type == CountDistinctImplType::UnorderedSet) {
         throw WatchdogException("Cannot use a fast path for COUNT distinct");
       }
       const auto sub_bitmap_count =
@@ -1632,7 +1649,7 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
 }
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct(int64_t* agg, const int64_t val) {
-  reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
+  reinterpret_cast<CountDistinctSet*>(*agg)->insert(val);
 }
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct_skip_val(int64_t* agg,

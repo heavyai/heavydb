@@ -705,7 +705,7 @@ std::vector<int64_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
           init_agg_vals_[agg_col_idx] = allocateCountDistinctBitmap(bitmap_byte_sz);
         }
       } else {
-        CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
+        CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::UnorderedSet);
         if (deferred) {
           agg_bitmap_size[agg_col_idx] = -1;
         } else {
@@ -732,7 +732,7 @@ int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_
 }
 
 int64_t QueryMemoryInitializer::allocateCountDistinctSet() {
-  auto count_distinct_set = new std::set<int64_t>();
+  auto count_distinct_set = new CountDistinctSet();
   row_set_mem_owner_->addCountDistinctSet(count_distinct_set);
   return reinterpret_cast<int64_t>(count_distinct_set);
 }

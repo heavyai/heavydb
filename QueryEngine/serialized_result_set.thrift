@@ -23,7 +23,7 @@ struct TColSlotContext {
 enum TCountDistinctImplType {
   Invalid,
   Bitmap,
-  StdSet
+  UnorderedSet
 }
 
 struct TCountDistinctDescriptor {

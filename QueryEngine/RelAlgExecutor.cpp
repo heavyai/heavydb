@@ -1484,6 +1484,23 @@ QualsConjunctiveForm translate_quals(const RelCompound* compound,
                      : QualsConjunctiveForm{};
 }
 
+namespace {
+// If an encoded type is used in the context of COUNT(DISTINCT ...) then don't
+// bother decoding it. This is done by changing the sql type to an integer.
+void conditionally_change_arg_to_int_type(std::shared_ptr<Analyzer::Expr>& target_expr) {
+  auto* agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr.get());
+  CHECK(agg_expr);
+  if (agg_expr->get_is_distinct()) {
+    SQLTypeInfo const& ti = agg_expr->get_arg()->get_type_info();
+    if (ti.get_type() != kARRAY && ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+      target_expr = target_expr->deep_copy();
+      auto* arg = dynamic_cast<Analyzer::AggExpr*>(target_expr.get())->get_arg();
+      arg->set_type_info({get_int_type_by_size(ti.get_size()), ti.get_notnull()});
+    }
+  }
+}
+}  // namespace
+
 std::vector<Analyzer::Expr*> translate_targets(
     std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
@@ -1499,6 +1516,7 @@ std::vector<Analyzer::Expr*> translate_targets(
     if (target_rex_agg) {
       target_expr =
           RelAlgTranslator::translateAggregateRex(target_rex_agg, scalar_sources);
+      conditionally_change_arg_to_int_type(target_expr);
     } else {
       const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
       const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
