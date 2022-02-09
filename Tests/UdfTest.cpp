@@ -260,24 +260,12 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   run_ddl_statement("DROP TABLE IF EXISTS stocks;");
   run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");
-  run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
-  run_ddl_statement("DROP TABLE IF EXISTS geospatial_linestring;");
-  run_ddl_statement("DROP TABLE IF EXISTS geo_poly;");
-  run_ddl_statement("DROP TABLE IF EXISTS geo_mpoly;");
 
   run_ddl_statement(
       "CREATE TABLE stocks(symbol text, open_p int, high_p int, "
       "low_p int, close_p int, entry_d DATE);");
-  run_ddl_statement(
-      "CREATE TABLE geospatial_test (id INT, p POINT, "
-      "gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), "
-      "gp4326none GEOMETRY(POINT,4326) ENCODING NONE) ;");
 
   run_ddl_statement("CREATE TABLE sal_emp(name text, pay_by_quarter integer[]);");
-
-  run_ddl_statement("CREATE TABLE geospatial_linestring (id INT, l LINESTRING)");
-  run_ddl_statement("CREATE TABLE geo_poly (id INT, p POLYGON);");
-  run_ddl_statement("CREATE TABLE geo_mpoly (id INT, p MULTIPOLYGON);");
 
   std::string insert1(
       "INSERT into stocks VALUES ('NVDA', '178', '178', '171', '173', '2019-05-07');");
@@ -307,32 +295,6 @@ TEST_F(UDFCompilerTest, UdfQuery) {
       "INSERT into sal_emp VALUES ('Carla', ARRAY[7000, NULL, NULL, 9000]);");
 
   EXPECT_NO_THROW(run_multiple_agg(array_insert4, ExecutorDeviceType::CPU));
-
-  std::string point_insert1(
-      "INSERT into geospatial_test VALUES(0, 'POINT(55.8659449685365 "
-      "-4.25072511658072)', "
-      "'POINT(51.4618933852762 -0.926690306514502)', "
-      "'POINT(55.9523783996701 -3.20510306395594326)');");
-  EXPECT_NO_THROW(run_multiple_agg(point_insert1, ExecutorDeviceType::CPU));
-  std::string linestring_insert1(
-      "INSERT into geospatial_linestring VALUES(0, 'LINESTRING(1 0, 2 3, 3 4)');");
-  std::string linestring_insert2(
-      "INSERT into geospatial_linestring VALUES(1, 'LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 "
-      "0)');");
-
-  EXPECT_NO_THROW(run_multiple_agg(linestring_insert1, ExecutorDeviceType::CPU));
-  EXPECT_NO_THROW(run_multiple_agg(linestring_insert2, ExecutorDeviceType::CPU));
-
-  std::string polygon_insert1(
-      "INSERT into geo_poly VALUES(0, 'POLYGON((1 0, "
-      "0 1, -1 0, 0 -1, 1 0), (0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0))');");
-  EXPECT_NO_THROW(run_multiple_agg(polygon_insert1, ExecutorDeviceType::CPU));
-
-  std::string multipolygon_insert1(
-      "INSERT into geo_mpoly VALUES(0, 'MULTIPOLYGON(((1 0, 0 1, -1 0, 0 -1, 1 0), "
-      "(0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0)), ((2 0, 0 2, -2 0, 0 -2, 2 0), "
-      "(0.2 0, 0 0.2, -0.2 0, 0 -0.2, 0.2 0)))');");
-  EXPECT_NO_THROW(run_multiple_agg(multipolygon_insert1, ExecutorDeviceType::CPU));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -392,113 +354,6 @@ TEST_F(UDFCompilerTest, UdfQuery) {
                   "where name = 'Carla';",
                   dt)));
 
-    ASSERT_DOUBLE_EQ(55.8659449685365,
-                     v<double>(run_simple_agg(
-                         "select point_x(p) from geospatial_test WHERE id = 0;", dt)));
-    ASSERT_DOUBLE_EQ(-4.25072511658072,
-                     v<double>(run_simple_agg(
-                         "select point_y(p) from geospatial_test WHERE id = 0;", dt)));
-
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg(
-                  "select point_compression(p) from geospatial_test WHERE id = 0;", dt)));
-
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg(
-                  "select point_input_srid(p) from geospatial_test WHERE id = 0;", dt)));
-
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg(
-                  "select point_output_srid(p) from geospatial_test WHERE id = 0;", dt)));
-
-    ASSERT_EQ(
-        1,
-        v<int64_t>(run_simple_agg(
-            "select point_compression(gp4326) from geospatial_test WHERE id = 0;", dt)));
-
-    ASSERT_EQ(
-        4326,
-        v<int64_t>(run_simple_agg(
-            "select point_input_srid(gp4326) from geospatial_test WHERE id = 0;", dt)));
-
-    ASSERT_EQ(
-        4326,
-        v<int64_t>(run_simple_agg(
-            "select point_output_srid(gp4326) from geospatial_test WHERE id = 0;", dt)));
-
-    ASSERT_EQ(
-        0,
-        v<int64_t>(run_simple_agg(
-            "select point_compression(gp4326none) from geospatial_test WHERE id = 0;",
-            dt)));
-
-    ASSERT_DOUBLE_EQ(
-        0,
-        v<double>(run_simple_agg(
-            "select linestring_x_mod(l, 2) from geospatial_linestring WHERE id = 0;",
-            dt)));
-    ASSERT_DOUBLE_EQ(
-        1,
-        v<double>(run_simple_agg(
-            "select linestring_x_mod(l, 3) from geospatial_linestring WHERE id = 0;",
-            dt)));
-
-    ASSERT_DOUBLE_EQ(
-        1,
-        v<double>(run_simple_agg(
-            "select linestring_y_mod(l, 2) from geospatial_linestring WHERE id = 0;",
-            dt)));
-    ASSERT_DOUBLE_EQ(
-        0,
-        v<double>(run_simple_agg(
-            "select linestring_y_mod(l, 3) from geospatial_linestring WHERE id = 0;",
-            dt)));
-
-    ASSERT_DOUBLE_EQ(
-        5.656854249492381,
-        v<double>(run_simple_agg(
-            "select linestring_length(l) from geospatial_linestring WHERE id = 1;", dt)));
-
-    ASSERT_DOUBLE_EQ(1.98,
-                     v<double>(run_simple_agg(
-                         "select polygon_area(p) from geo_poly WHERE id = 0;", dt)));
-
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg(
-                  "select polygon_compression(p) from geo_poly WHERE id = 0;", dt)));
-
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg(
-                  "select polygon_input_srid(p) from geo_poly WHERE id = 0;", dt)));
-
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg(
-                  "select polygon_output_srid(p) from geo_poly WHERE id = 0;", dt)));
-
-    ASSERT_NEAR(static_cast<double>(2.0 - 0.02 + 8.0 - 0.08),
-                v<double>(run_simple_agg(
-                    "select multipolygon_area(p) from geo_mpoly WHERE id = 0;", dt)),
-                static_cast<double>(0.0001));
-
-    ASSERT_NEAR(static_cast<double>(4 * 1.41421 + 4 * 2.82842),
-                v<double>(run_simple_agg(
-                    "select multipolygon_perimeter(p) from geo_mpoly WHERE id = 0;", dt)),
-                static_cast<double>(0.0001));
-
-    ASSERT_EQ(
-        0,
-        v<int64_t>(run_simple_agg(
-            "select multipolygon_compression(p) from geo_mpoly WHERE id = 0;", dt)));
-
-    ASSERT_EQ(0,
-              v<int64_t>(run_simple_agg(
-                  "select multipolygon_input_srid(p) from geo_mpoly WHERE id = 0;", dt)));
-
-    ASSERT_EQ(
-        0,
-        v<int64_t>(run_simple_agg(
-            "select multipolygon_output_srid(p) from geo_mpoly WHERE id = 0;", dt)));
-
     {
       auto check_row_result = [](const auto& crt_row, const auto& expected) {
         compare_array(crt_row[0], expected);
@@ -527,10 +382,6 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   run_ddl_statement("DROP TABLE stocks;");
   run_ddl_statement("DROP TABLE sal_emp;");
-  run_ddl_statement("DROP TABLE geospatial_test;");
-  run_ddl_statement("DROP TABLE geospatial_linestring;");
-  run_ddl_statement("DROP TABLE geo_poly;");
-  run_ddl_statement("DROP TABLE geo_mpoly;");
 }
 
 int main(int argc, char** argv) {

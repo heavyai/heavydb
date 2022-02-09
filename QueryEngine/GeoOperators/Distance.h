@@ -153,24 +153,8 @@ class Distance : public Codegen {
     const auto& first_operand_ti = getOperand(0)->get_type_info();
     const auto& second_operand_ti = getOperand(1)->get_type_info();
 
-    const bool is_geodesic = first_operand_ti.get_subtype() == kGEOGRAPHY &&
-                             first_operand_ti.get_output_srid() == 4326;
-
-    if (is_geodesic && !((first_operand_ti.get_type() == kPOINT &&
-                          second_operand_ti.get_type() == kPOINT) ||
-                         (first_operand_ti.get_type() == kLINESTRING &&
-                          second_operand_ti.get_type() == kPOINT) ||
-                         (first_operand_ti.get_type() == kPOINT &&
-                          second_operand_ti.get_type() == kLINESTRING))) {
-      throw std::runtime_error(getName() +
-                               " currently doesn't accept non-POINT geographies");
-    }
-
     std::string func_name = getName() + suffix(first_operand_ti.get_type()) +
                             suffix(second_operand_ti.get_type());
-    if (is_geodesic) {
-      func_name += "_Geodesic";
-    }
     auto& builder = cgen_state->ir_builder_;
 
     std::vector<llvm::Value*> operand_lvs;
@@ -194,7 +178,7 @@ class Distance : public Codegen {
     operand_lvs.push_back(
         cgen_state->llInt(srid_override ? *srid_override : 0));  // out srid
 
-    if (getName() == "ST_Distance" && first_operand_ti.get_subtype() != kGEOGRAPHY &&
+    if (getName() == "ST_Distance" &&
         (first_operand_ti.get_type() != kPOINT ||
          second_operand_ti.get_type() != kPOINT)) {
       operand_lvs.push_back(cgen_state->llFp(double(0.0)));

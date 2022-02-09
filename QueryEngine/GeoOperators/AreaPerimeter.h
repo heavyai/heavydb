@@ -93,13 +93,8 @@ class AreaPerimeter : public Codegen {
 
     const auto& operand_ti = getOperand(0)->get_type_info();
     CHECK(operand_ti.get_type() == kPOLYGON || operand_ti.get_type() == kMULTIPOLYGON);
-    const bool is_geodesic =
-        operand_ti.get_subtype() == kGEOGRAPHY && operand_ti.get_output_srid() == 4326;
 
     std::string func_name = getName() + suffix(operand_ti.get_type());
-    if (is_geodesic && getName() == "ST_Perimeter") {
-      func_name += "_Geodesic";
-    }
 
     // push back ic, isr, osr for now
     operand_lvs.push_back(

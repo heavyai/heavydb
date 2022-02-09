@@ -63,13 +63,12 @@ enum SQLTypes {
   kMULTIPOLYGON = 21,
   kTINYINT = 22,
   kGEOMETRY = 23,
-  kGEOGRAPHY = 24,
-  kEVAL_CONTEXT_TYPE = 25,  // Placeholder Type for ANY
-  kVOID = 26,
-  kCURSOR = 27,
-  kCOLUMN = 28,
-  kCOLUMN_LIST = 29,
-  kSQLTYPE_LAST = 30
+  kEVAL_CONTEXT_TYPE = 24,  // Placeholder Type for ANY
+  kVOID = 25,
+  kCURSOR = 26,
+  kCOLUMN = 27,
+  kCOLUMN_LIST = 28,
+  kSQLTYPE_LAST = 29
 };
 
 #ifndef __CUDACC__
@@ -124,8 +123,6 @@ inline std::string toString(const SQLTypes& type) {
       return "TINYINT";
     case kGEOMETRY:
       return "GEOMETRY";
-    case kGEOGRAPHY:
-      return "GEOGRAPHY";
     case kEVAL_CONTEXT_TYPE:
       return "UNEVALUATED ANY";
     case kVOID:

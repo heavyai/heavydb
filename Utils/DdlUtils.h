@@ -28,12 +28,10 @@ class SqlType {
    * @param type - Column type.
    * @param param1 - For column types followed by parenthesis with more information,
    * this represents the first parameter in the parenthesis. For example, in
-   * DECIMAL(5, 2), this would represent the precision value of 5. In GEOMETRY(POINT,
-   * 4326), this would represent the integer value of the kPOINT enum.
+   * DECIMAL(5, 2), this would represent the precision value of 5.
    * @param param2 - For column types followed by parenthesis with more information,
    * this represents the second parameter in the parenthesis. For example, in
-   * DECIMAL(5, 2), this would represent the scale value of 2. In GEOMETRY(POINT, 4326),
-   * this would represent the coordinate type integer value of 4326.
+   * DECIMAL(5, 2), this would represent the scale value of 2.
    * @param is_array - Flag that indicates whether or not column type is an array.
    * @param array_size - For array column types, this is the specified size of the array.
    */

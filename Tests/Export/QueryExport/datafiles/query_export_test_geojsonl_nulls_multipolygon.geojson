@@ -1,6 +1,0 @@
-{ "type": "Feature", "properties": { }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ], [ 3.0, 3.0 ], [ 3.9999999, 4.0 ], [ 0.9999999, 1.0 ] ] ] ] } }
-{ "type": "Feature", "properties": { }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ], [ 3.0, 3.0 ], [ 3.9999999, 4.0 ], [ 0.9999999, 1.0 ] ] ] ] } }
-{ "type": "Feature", "properties": { }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ], [ 3.0, 3.0 ], [ 3.9999999, 4.0 ], [ 0.9999999, 1.0 ] ] ] ] } }
-{ "type": "Feature", "properties": { }, "geometry": { "type": "MultiPolygon", "coordinates": [ [ [ [ 0.9999999, 1.0 ], [ 2.0, 2.0 ], [ 3.0, 3.0 ], [ 3.9999999, 4.0 ], [ 0.9999999, 1.0 ] ] ] ] } }
-{ "type": "Feature", "properties": { }, "geometry": null }
-{ "type": "Feature", "properties": { }, "geometry": null }

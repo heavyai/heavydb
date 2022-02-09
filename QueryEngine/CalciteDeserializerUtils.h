@@ -200,9 +200,6 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("GEOMETRY")) {
     return kGEOMETRY;
   }
-  if (type_name == std::string("GEOGRAPHY")) {
-    return kGEOGRAPHY;
-  }
 
   throw std::runtime_error("Unsupported type: " + type_name);
 }

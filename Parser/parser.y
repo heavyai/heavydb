@@ -106,7 +106,7 @@ using namespace Parser;
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE CLUSTER COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token CURSOR DATABASE DATAFRAME DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token DUMP ELSE END EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
-%token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
+%token GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
 %token OPTIMIZED OPTION ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token SERVER SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION USAGE
@@ -967,8 +967,6 @@ data_type:
 	| TIME '(' non_neg_int ')' { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTIME, $<intval>3)); }
 	| TIMESTAMP { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTIMESTAMP)); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTIMESTAMP, $<intval>3)); }
-	| geo_type { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>1), static_cast<int>(kGEOMETRY), 0, false)); }
-        /* | geography_type { $<nodeval>$ = $<nodeval>1; } */
 	| geometry_type { $<nodeval>$ = $<nodeval>1; }
 	| data_type '[' ']'
 	{
@@ -991,12 +989,6 @@ geo_type:	POINT { $<intval>$ = kPOINT; }
 	|	LINESTRING { $<intval>$ = kLINESTRING; }
 	|	POLYGON { $<intval>$ = kPOLYGON; }
 	|	MULTIPOLYGON { $<intval>$ = kMULTIPOLYGON; }
-	;
-
-geography_type:	GEOGRAPHY '(' geo_type ')'
-		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOGRAPHY), 4326, false)); }
-	|	GEOGRAPHY '(' geo_type ',' INTNUM ')'
-		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOGRAPHY), $<intval>5, false)); }
 	;
 
 geometry_type:	GEOMETRY '(' geo_type ')'

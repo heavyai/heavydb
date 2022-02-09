@@ -372,7 +372,6 @@ static int match_arguments(const SQLTypeInfo& arg_type,
          kINTERVAL_DAY_TIME
          kINTERVAL_YEAR_MONTH
          kGEOMETRY
-         kGEOGRAPHY
          kEVAL_CONTEXT_TYPE
          kVOID
          kCURSOR

@@ -84,7 +84,6 @@ cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase::ColumnType':
     cdef ColumnType MULTIPOLYGON
     cdef ColumnType TINYINT
     cdef ColumnType GEOMETRY
-    cdef ColumnType GEOGRAPHY
     cdef ColumnType UNKNOWN
 
 

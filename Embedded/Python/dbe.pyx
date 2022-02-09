@@ -56,7 +56,6 @@ cdef class PyColumnType:
         <int>MULTIPOLYGON : "MULTIPOLYGON",
         <int>TINYINT : "TINYINT",
         <int>GEOMETRY : "GEOMETRY",
-        <int>GEOGRAPHY : "TIME",
         <int>UNKNOWN : "UNKNOWN"}
     return c[<int>self.c_column_type]
 

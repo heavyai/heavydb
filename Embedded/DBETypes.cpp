@@ -151,8 +151,6 @@ ColumnType sqlToColumnType(const SQLTypes& type) {
       return ColumnType::MULTIPOLYGON;
     case kGEOMETRY:
       return ColumnType::GEOMETRY;
-    case kGEOGRAPHY:
-      return ColumnType::GEOGRAPHY;
     default:
       return ColumnType::UNKNOWN;
   }

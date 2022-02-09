@@ -52,7 +52,6 @@ _typeattr = {
     'MULTIPOLYGON': 'str',
     'TINYINT': 'int',
     'GEOMETRY': 'str',
-    'GEOGRAPHY': 'str',
 }
 _thrift_types_to_values = T.TDatumType._NAMES_TO_VALUES
 _thrift_values_to_types = T.TDatumType._VALUES_TO_NAMES

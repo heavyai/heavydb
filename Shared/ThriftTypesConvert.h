@@ -68,10 +68,6 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::POLYGON;
     case kMULTIPOLYGON:
       return TDatumType::MULTIPOLYGON;
-    case kGEOMETRY:
-      return TDatumType::GEOMETRY;
-    case kGEOGRAPHY:
-      return TDatumType::GEOGRAPHY;
     default:
       break;
   }
@@ -116,10 +112,6 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kPOLYGON;
     case TDatumType::MULTIPOLYGON:
       return kMULTIPOLYGON;
-    case TDatumType::GEOMETRY:
-      return kGEOMETRY;
-    case TDatumType::GEOGRAPHY:
-      return kGEOGRAPHY;
     default:
       break;
   }

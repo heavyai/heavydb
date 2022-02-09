@@ -238,8 +238,6 @@ TEST_F(ImportTestSkipHeader, Skip_Header) {
 
 const char* create_table_mixed_varlen = R"(
     CREATE TABLE import_test_mixed_varlen(
-      pt GEOMETRY(POINT),
-      ls GEOMETRY(LINESTRING),
       faii INTEGER[2],
       fadc DECIMAL(5,2)[2],
       fatx TEXT[] ENCODING DICT(32),
@@ -260,14 +258,6 @@ class ImportTestMixedVarlen : public ImportExportTestBase {
     ImportExportTestBase::TearDown();
   }
 };
-
-TEST_F(ImportTestMixedVarlen, Fix_failed_import_arrays_after_geos) {
-  sql("copy import_test_mixed_varlen from "
-      "'../../Tests/Import/datafiles/mixed_varlen.txt' with "
-      "(header='false');");
-  std::string query_str = "SELECT COUNT(*) FROM import_test_mixed_varlen;";
-  sqlAndCompareResult(query_str, {{1L}});
-}
 
 const char* create_table_date = R"(
     CREATE TABLE import_test_date(
@@ -1039,7 +1029,6 @@ class ImportTest : public ImportExportTestBase {
     sql("drop table trips;");
     sql("drop table random_strings_with_line_endings;");
     sql("drop table with_quoted_fields;");
-    sql("drop table if exists geo;");
     sql("drop table if exists array_including_quoted_fields;");
     sql("drop table if exists unique_rowgroups;");
     ImportExportTestBase::TearDown();
@@ -1057,20 +1046,6 @@ class ImportTest : public ImportExportTestBase {
   bool importTestParquetWithNull(const int64_t cnt) {
     sqlAndCompareResult("select count(*) from trips where rate_code_id is null;",
                         {{ cnt }});
-    return true;
-  }
-
-  bool importTestLocalParquetWithGeoPoint(const string& prefix,
-                                          const string& filename,
-                                          const int64_t cnt,
-                                          const double avg) {
-    sql("alter table trips add column pt_dropoff point;");
-    EXPECT_TRUE(importTestLocalParquet(prefix, filename, cnt, avg));
-    std::string query_str =
-        "select count(*) from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 "
-        "and "
-        "abs(dropoff_latitude-st_y(pt_dropoff))<0.01;";
-    sqlAndCompareResult(query_str, {{ cnt }});
     return true;
   }
 

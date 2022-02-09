@@ -41,7 +41,6 @@ static std::set<std::string> reserved_keywords{
     "EDITOR",
     "FIRST",
     "FOUND",
-    "GEOGRAPHY",  // geo type
     "GEOMETRY",   // geo type
     "IF",
     "ILIKE",

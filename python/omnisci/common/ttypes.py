@@ -51,7 +51,6 @@ class TDatumType(object):
     MULTIPOLYGON = 16
     TINYINT = 17
     GEOMETRY = 18
-    GEOGRAPHY = 19
 
     _VALUES_TO_NAMES = {
         0: "SMALLINT",
@@ -73,7 +72,6 @@ class TDatumType(object):
         16: "MULTIPOLYGON",
         17: "TINYINT",
         18: "GEOMETRY",
-        19: "GEOGRAPHY",
     }
 
     _NAMES_TO_VALUES = {
@@ -96,7 +94,6 @@ class TDatumType(object):
         "MULTIPOLYGON": 16,
         "TINYINT": 17,
         "GEOMETRY": 18,
-        "GEOGRAPHY": 19,
     }
 
 

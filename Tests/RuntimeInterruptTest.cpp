@@ -77,17 +77,6 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
   QR::get()->runDDLStatement(create_table_stmt);
 }
 
-void geofile_importer_for_interrupt_test(const std::string& session_id) {
-  std::string file_path_str{"../../Tests/Import/datafiles/interrupt_table_gdal.geojson"};
-  QueryRunner::ImportDriver import_driver(QR::get()->getCatalog(),
-                                          QR::get()->getSession()->get_currentUser(),
-                                          ExecutorDeviceType::CPU,
-                                          session_id);
-  auto file_path = boost::filesystem::path(file_path_str);
-  ASSERT_TRUE(boost::filesystem::exists(file_path));
-  import_driver.importGeoTable(file_path_str, "t_gdal", false, false, false);
-}
-
 int create_and_populate_table() {
   try {
     run_ddl_statement("DROP TABLE IF EXISTS t_very_large_agg;");
@@ -97,8 +86,6 @@ int create_and_populate_table() {
     run_ddl_statement("DROP TABLE IF EXISTS t_large;");
     run_ddl_statement("DROP TABLE IF EXISTS t_medium;");
     run_ddl_statement("DROP TABLE IF EXISTS t_small;");
-    run_ddl_statement("DROP TABLE IF EXISTS t_geo");
-    run_ddl_statement("DROP TABLE IF EXISTS t_gdal");
     run_ddl_statement(
         "CREATE TABLE t_very_large_csv (x int not null, y int not null, z int not "
         "null);");
@@ -113,11 +100,6 @@ int create_and_populate_table() {
     run_ddl_statement("CREATE TABLE t_large (x int not null);");
     run_ddl_statement("CREATE TABLE t_medium (x int not null);");
     run_ddl_statement("CREATE TABLE t_small (x int not null);");
-    const char* create_table_geo = "CREATE TABLE t_geo (p1 POINT);";
-    run_ddl_statement(create_table_geo);
-    run_ddl_statement(
-        "CREATE TABLE t_gdal (trip DOUBLE, omnisci_geo GEOMETRY(POINT, 4326) ENCODING "
-        "NONE);");
 
     // write a temporary datafile used in the test
     // because "INSERT INTO ..." stmt for this takes too much time
@@ -173,90 +155,6 @@ int create_and_populate_table() {
       }
     }
     very_large_out.close();
-
-    std::vector<std::string> geo_dataset;
-    geo_dataset.push_back("\"POINT(0 0)\"");
-    geo_dataset.push_back("\"POINT(1 0)\"");
-    geo_dataset.push_back("\"POINT(2 0)\"");
-    geo_dataset.push_back("\"POINT(3 0)\"");
-    geo_dataset.push_back("\"POINT(4 0)\"");
-    geo_dataset.push_back("\"POINT(5 0)\"");
-    geo_dataset.push_back("\"POINT(6 0)\"");
-    geo_dataset.push_back("\"POINT(7 0)\"");
-    geo_dataset.push_back("\"POINT(8 0)\"");
-    geo_dataset.push_back("\"POINT(9 0)\"");
-
-    const auto file_path_geo =
-        boost::filesystem::path("../../Tests/Import/datafiles/interrupt_table_geo.csv");
-    if (boost::filesystem::exists(file_path_geo)) {
-      boost::filesystem::remove(file_path_geo);
-    }
-
-    std::ofstream geo_out(file_path_geo.string());
-    geo_out << "\"point\"\n";
-    for (int i = 0; i < 10000; i++) {
-      for (auto& s : geo_dataset) {
-        geo_out << s << "\n";
-      }
-    }
-    geo_out.close();
-
-    std::vector<std::string> gdal_dataset;
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 0.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 0.0, 1.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 1.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 1.0, 2.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 2.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 2.0, 3.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 3.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 3.0, 4.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 4.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 4.0, 5.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 5.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 5.0, 6.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 6.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 6.0, 7.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 7.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 7.0, 8.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 8.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 8.0, 9.0 ] } },");
-    gdal_dataset.push_back(
-        "{ \"type\": \"Feature\", \"properties\": { \"trip\": 9.0 }, \"geometry\": { "
-        "\"type\": \"Point\", \"coordinates\": [ 9.0, 0.0 ] } },");
-
-    const auto file_path_gdal = boost::filesystem::path(
-        "../../Tests/Import/datafiles/interrupt_table_gdal.geojson");
-    if (boost::filesystem::exists(file_path_gdal)) {
-      boost::filesystem::remove(file_path_gdal);
-    }
-
-    std::ofstream gdal_out(file_path_gdal.string());
-    gdal_out << "{\n"
-             << "\"type\": \"FeatureCollection\",\n"
-             << "\"name\": \"geospatial_point\",\n"
-             << "\"crs\": { \"type\": \"name\", \"properties\": { \"name\": "
-                "\"urn:ogc:def:crs:OGC:1.3:CRS84\" } },\n"
-             << "\"features\": [\n";
-    for (int i = 0; i < 10000; i++) {
-      for (auto& s : gdal_dataset) {
-        gdal_out << s << "\n";
-      }
-    }
-    gdal_out
-        << "{ \"type\": \"Feature\", \"properties\": { \"trip\": 10.0 }, \"geometry\": { "
-           "\"type\": \"Point\", \"coordinates\": [ 10.0, 9.0 ] } }\n";
-    gdal_out << "]\n"
-             << "}";
-    gdal_out.close();
 
     const auto file_path_very_large_agg = boost::filesystem::path(
         "../../Tests/Import/datafiles/interrupt_table_very_large_agg.csv");
@@ -318,7 +216,6 @@ int drop_table() {
     boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_large.csv");
     boost::filesystem::remove(
         "../../Tests/Import/datafiles/interrupt_table_very_large.csv");
-    boost::filesystem::remove("../../Tests/Import/datafiles/interrupt_table_geo.csv");
     boost::filesystem::remove(
         "../../Tests/Import/datafiles/interrupt_table_very_large_agg.csv");
   } catch (...) {

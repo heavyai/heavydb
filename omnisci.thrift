@@ -182,16 +182,8 @@ struct TCopyParams {
   13: string s3_access_key;
   14: string s3_secret_key;
   15: string s3_region;
-  16: common.TEncodingType geo_coords_encoding=TEncodingType.GEOINT;
-  17: i32 geo_coords_comp_param=32;
-  18: common.TDatumType geo_coords_type=TDatumType.GEOMETRY;
-  19: i32 geo_coords_srid=4326;
   20: bool sanitize_column_names=true;
-  21: string geo_layer_name;
   22: string s3_endpoint;
-  23: bool geo_assign_render_groups=true;
-  24: bool geo_explode_collections=false;
-  25: i32 source_srid=0;
   26: string s3_session_token;
 }
 

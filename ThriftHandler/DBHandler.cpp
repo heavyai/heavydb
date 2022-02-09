@@ -3558,47 +3558,7 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
                            std::to_string((int)cp.file_type));
       break;
   }
-  switch (cp.geo_coords_encoding) {
-    case TEncodingType::GEOINT:
-      copy_params.geo_coords_encoding = kENCODING_GEOINT;
-      break;
-    case TEncodingType::NONE:
-      copy_params.geo_coords_encoding = kENCODING_NONE;
-      break;
-    default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_encoding in TCopyParams: " +
-                           std::to_string((int)cp.geo_coords_encoding));
-      break;
-  }
-  copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
-  switch (cp.geo_coords_type) {
-    case TDatumType::GEOGRAPHY:
-      copy_params.geo_coords_type = kGEOGRAPHY;
-      break;
-    case TDatumType::GEOMETRY:
-      copy_params.geo_coords_type = kGEOMETRY;
-      break;
-    default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_type in TCopyParams: " +
-                           std::to_string((int)cp.geo_coords_type));
-      break;
-  }
-  switch (cp.geo_coords_srid) {
-    case 4326:
-    case 3857:
-    case 900913:
-      copy_params.geo_coords_srid = cp.geo_coords_srid;
-      break;
-    default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_srid in TCopyParams (" +
-                           std::to_string((int)cp.geo_coords_srid));
-      break;
-  }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
-  copy_params.geo_layer_name = cp.geo_layer_name;
-  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
-  copy_params.geo_explode_collections = cp.geo_explode_collections;
-  copy_params.source_srid = cp.source_srid;
   return copy_params;
 }
 
@@ -3641,32 +3601,7 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
       copy_params.file_type = TFileType::DELIMITED;
       break;
   }
-  switch (cp.geo_coords_encoding) {
-    case kENCODING_GEOINT:
-      copy_params.geo_coords_encoding = TEncodingType::GEOINT;
-      break;
-    default:
-      copy_params.geo_coords_encoding = TEncodingType::NONE;
-      break;
-  }
-  copy_params.geo_coords_comp_param = cp.geo_coords_comp_param;
-  switch (cp.geo_coords_type) {
-    case kGEOGRAPHY:
-      copy_params.geo_coords_type = TDatumType::GEOGRAPHY;
-      break;
-    case kGEOMETRY:
-      copy_params.geo_coords_type = TDatumType::GEOMETRY;
-      break;
-    default:
-      CHECK(false);
-      break;
-  }
-  copy_params.geo_coords_srid = cp.geo_coords_srid;
   copy_params.sanitize_column_names = cp.sanitize_column_names;
-  copy_params.geo_layer_name = cp.geo_layer_name;
-  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
-  copy_params.geo_explode_collections = cp.geo_explode_collections;
-  copy_params.source_srid = cp.source_srid;
   return copy_params;
 }
 
@@ -4786,12 +4721,6 @@ std::string TTypeInfo_TypeToString(const TDatumType::type& t) {
 std::string TTypeInfo_GeoSubTypeToString(const int32_t p) {
   std::string result;
   switch (p) {
-    case SQLTypes::kGEOGRAPHY:
-      result = "GEOGRAPHY";
-      break;
-    case SQLTypes::kGEOMETRY:
-      result = "GEOMETRY";
-      break;
     default:
       result = "INVALID";
       break;
@@ -5045,7 +4974,6 @@ void DBHandler::import_geo_table(const TSessionId& session,
       // we have to detect the file ourselves
       TDetectResult cds;
       TCopyParams cp_copy = cp;  // retain S3 auth tokens
-      cp_copy.geo_layer_name = layer_name;
       cp_copy.file_type = TFileType::POLYGON;
       try {
         detect_column_types(cds, session, file_name_in, cp_copy);

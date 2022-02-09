@@ -41,8 +41,7 @@ enum class ColumnType {
   MULTIPOLYGON = 16,
   TINYINT = 17,
   GEOMETRY = 18,
-  GEOGRAPHY = 19,
-  UNKNOWN = 20
+  UNKNOWN = 19
 };
 
 enum class ColumnEncoding {

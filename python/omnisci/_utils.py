@@ -59,7 +59,6 @@ mapd_to_slot = {
     'MULTIPOLYGON': 'str_col',
     'TINYINT': 'int_col',
     'GEOMETRY': 'str_col',
-    'GEOGRAPHY': 'str_col',
 }
 
 
@@ -83,5 +82,4 @@ mapd_to_na = {
     'MULTIPOLYGON': '',
     'TINYINT': -128,
     'GEOMETRY': '',
-    'GEOGRAPHY': '',
 }

@@ -36,7 +36,6 @@ STRING = DataType(
         T.POLYGON,
         T.MULTIPOLYGON,
         T.GEOMETRY,
-        T.GEOGRAPHY,
     ]
 )
 NUMBER = DataType(
