@@ -64,7 +64,17 @@ const std::string ParserWrapper::validate_str = {"validate"};
 extern bool g_enable_fsi;
 extern bool g_enable_calcite_ddl_parser;
 
+namespace {
+void validate_no_leading_comments(const std::string& query_str) {
+  if (boost::starts_with(query_str, "--") || boost::starts_with(query_str, "//") ||
+      boost::starts_with(query_str, "/*")) {
+    throw std::runtime_error(
+        "SQL statements starting with comments are currently not allowed.");
+  }
+}
+}  // namespace
 ParserWrapper::ParserWrapper(std::string query_string) {
+  validate_no_leading_comments(query_string);
   query_type_ = QueryType::SchemaRead;
   if (boost::istarts_with(query_string, calcite_explain_str)) {
     actual_query = boost::trim_copy(query_string.substr(calcite_explain_str.size()));

@@ -2271,6 +2271,30 @@ INSTANTIATE_TEST_SUITE_P(
             "TooManyElementsInFixedTextArray")),
     [](const auto& param_info) { return param_info.param.description; });
 
+class CommentsBeforeCommandTest : public DBHandlerTestFixture {
+ protected:
+  inline static const std::string kCreateTableCommand{
+      "CREATE TABLE test_table (i INTEGER);"};
+};
+
+TEST_F(CommentsBeforeCommandTest, SingleLineHyphenCommentBeforeCommand) {
+  queryAndAssertException(
+      " -- test comment\n" + kCreateTableCommand,
+      "SQL statements starting with comments are currently not allowed.");
+}
+
+TEST_F(CommentsBeforeCommandTest, SingleLineSlashCommentBeforeCommand) {
+  queryAndAssertException(
+      "//test comment\n" + kCreateTableCommand,
+      "SQL statements starting with comments are currently not allowed.");
+}
+
+TEST_F(CommentsBeforeCommandTest, MultiLineCommentBeforeCommand) {
+  queryAndAssertException(
+      "/* test comment 1\n test comment2*/" + kCreateTableCommand,
+      "SQL statements starting with comments are currently not allowed.");
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
