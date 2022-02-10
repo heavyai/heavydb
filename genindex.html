@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                6.0.0dev 91042dc
+                6.0.0dev 198c3ea
               </div>
             
           
@@ -775,6 +775,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_string_dictionary_proxy.html">Class StringDictionaryProxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_string_dictionary_translation_mgr.html">Class StringDictionaryTranslationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_sub_condition_remover.html">Class SubConditionRemover</a></li>
@@ -1038,6 +1039,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_privilege.html">Class com::mapd::parser::extension::ddl::SqlRevokePrivilege</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_role.html">Class com::mapd::parser::extension::ddl::SqlRevokeRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_create_table.html">Class com::mapd::parser::extension::ddl::SqlShowCreateTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_data_sources.html">Class com::mapd::parser::extension::ddl::SqlShowDataSources</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_disk_cache_usage.html">Class com::mapd::parser::extension::ddl::SqlShowDiskCacheUsage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
@@ -6112,6 +6114,8 @@
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState18moveInValuesBitmapERNSt10unique_ptrIK14InValuesBitmapEE">CgenState::moveInValuesBitmap (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState34moveStringDictionaryTranslationMgrERRNSt10unique_ptrIK30StringDictionaryTranslationMgrEE">CgenState::moveStringDictionaryTranslationMgr (C++ function)</a>
+</li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState18needs_error_check_E">CgenState::needs_error_check_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState11needs_geos_E">CgenState::needs_geos_ (C++ member)</a>
@@ -6139,6 +6143,8 @@
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState23set_module_shallow_copyERKNSt10unique_ptrIN4llvm6ModuleEEEb">CgenState::set_module_shallow_copy (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState14str_constants_E">CgenState::str_constants_ (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState26str_dict_translation_mgrs_E">CgenState::str_dict_translation_mgrs_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_cgen_state.html#_CPPv4N9CgenState5vmap_E">CgenState::vmap_ (C++ member)</a>
 </li>
@@ -6294,10 +6300,10 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator30codegenBinOpWithOverflowForCPUEPKN8Analyzer7BinOperEPN4llvm5ValueEPN4llvm5ValueERKNSt6stringERK11SQLTypeInfo">CodeGenerator::codegenBinOpWithOverflowForCPU (C++ function)</a>
 </li>
-      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator17codegenBufferArgsERKNSt6stringE6size_tPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueERNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenBufferArgs (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator17codegenBufferArgsERKNSt6stringE6size_tPN4llvm5ValueEPN4llvm5ValueEPN4llvm5ValueERNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::codegenBufferArgs (C++ function)</a>
+</li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11codegenCaseEPKN8Analyzer8CaseExprEPN4llvm4TypeEKbRK18CompilationOptions">CodeGenerator::codegenCase (C++ function)</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11codegenCastEPKN8Analyzer5UOperERK18CompilationOptions">CodeGenerator::codegenCast (C++ function)</a>, <a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator11codegenCastEPN4llvm5ValueERK11SQLTypeInfoRK11SQLTypeInfoKbRK18CompilationOptions">[1]</a>
@@ -10092,10 +10098,10 @@
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor10ExecutorIdE">Executor::ExecutorId (C++ type)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor19ExecutorMutexHolderE">Executor::ExecutorMutexHolder (C++ class)</a>, <a href="api/struct/struct_executor_1_1_executor_mutex_holder.html#_CPPv4N8Executor19ExecutorMutexHolderE">[1]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor19ExecutorMutexHolder11shared_lockE">Executor::ExecutorMutexHolder::shared_lock (C++ member)</a>, <a href="api/struct/struct_executor_1_1_executor_mutex_holder.html#_CPPv4N8Executor19ExecutorMutexHolder11shared_lockE">[1]</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor19ExecutorMutexHolder11unique_lockE">Executor::ExecutorMutexHolder::unique_lock (C++ member)</a>, <a href="api/struct/struct_executor_1_1_executor_mutex_holder.html#_CPPv4N8Executor19ExecutorMutexHolder11unique_lockE">[1]</a>
@@ -10197,6 +10203,8 @@
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor14getSessionLockEv">Executor::getSessionLock (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4NK8Executor24getStringDictionaryProxyEKiKNSt10shared_ptrI17RowSetMemoryOwnerEEKb">Executor::getStringDictionaryProxy (C++ function)</a>, <a href="api/class/class_executor.html#_CPPv4NK8Executor24getStringDictionaryProxyEKiKb">[1]</a>
+</li>
+      <li><a href="api/class/class_executor.html#_CPPv4NK8Executor28getStringProxyTranslationMapEKiKiNSt10shared_ptrI17RowSetMemoryOwnerEEKb">Executor::getStringProxyTranslationMap (C++ function)</a>
 </li>
       <li><a href="api/class/class_executor.html#_CPPv4N8Executor23getTableFragmentIndicesERK19RelAlgExecutionUnitK18ExecutorDeviceTypeK6size_tK6size_tRNSt3mapIiPK14TableFragmentsEERKNSt13unordered_mapIiPKN8Analyzer7BinOperEEE">Executor::getTableFragmentIndices (C++ function)</a>
 </li>
@@ -13578,7 +13586,7 @@
 </li>
       <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper20regex_table_options_E">foreign_storage::RegexParserDataWrapper::regex_table_options_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEKiPK12ForeignTable">foreign_storage::RegexParserDataWrapper::RegexParserDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEKiPK12ForeignTablePK11UserMapping">[1]</a>, <a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEv">[2]</a>
+      <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEKiPK12ForeignTable">foreign_storage::RegexParserDataWrapper::RegexParserDataWrapper (C++ function)</a>, <a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEKiPK12ForeignTablePK11UserMappingKb">[1]</a>, <a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4N15foreign_storage22RegexParserDataWrapper22RegexParserDataWrapperEv">[2]</a>
 </li>
       <li><a href="api/class/classforeign__storage_1_1_regex_parser_data_wrapper.html#_CPPv4NK15foreign_storage22RegexParserDataWrapper20validateTableOptionsEPK12ForeignTable">foreign_storage::RegexParserDataWrapper::validateTableOptions (C++ function)</a>
 </li>
@@ -15650,6 +15658,10 @@
 </li>
       <li><a href="api/struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParams10line_delimE">import_export::CopyParams::line_delim (C++ member)</a>
 </li>
+      <li><a href="api/struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParams10line_regexE">import_export::CopyParams::line_regex (C++ member)</a>
+</li>
+      <li><a href="api/struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParams16line_start_regexE">import_export::CopyParams::line_start_regex (C++ member)</a>
+</li>
       <li><a href="api/struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParams6lonlatE">import_export::CopyParams::lonlat (C++ member)</a>
 </li>
       <li><a href="api/struct/structimport__export_1_1_copy_params.html#_CPPv4N13import_export10CopyParams10max_rejectE">import_export::CopyParams::max_reject (C++ member)</a>
@@ -15824,9 +15836,9 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_foreign_data_importer.html#_CPPv4N13import_export19ForeignDataImporter10connector_E">import_export::ForeignDataImporter::connector_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_foreign_data_importer.html#_CPPv4N13import_export19ForeignDataImporter12copy_params_E">import_export::ForeignDataImporter::copy_params_ (C++ member)</a>
+      <li><a href="api/class/classimport__export_1_1_foreign_data_importer.html#_CPPv4N13import_export19ForeignDataImporter17copy_from_source_E">import_export::ForeignDataImporter::copy_from_source_ (C++ member)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_foreign_data_importer.html#_CPPv4N13import_export19ForeignDataImporter10file_path_E">import_export::ForeignDataImporter::file_path_ (C++ member)</a>
+      <li><a href="api/class/classimport__export_1_1_foreign_data_importer.html#_CPPv4N13import_export19ForeignDataImporter12copy_params_E">import_export::ForeignDataImporter::copy_params_ (C++ member)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_foreign_data_importer.html#_CPPv4N13import_export19ForeignDataImporter8finalizeERKN17Catalog_Namespace11SessionInfoER12ImportStatusRKNSt6vectorINSt4pairIPK16ColumnDescriptorP16StringDictionaryEEEE">import_export::ForeignDataImporter::finalize (C++ function)</a>
 </li>
@@ -16114,10 +16126,10 @@
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporter14safeColumnNameERKNSt6stringEKi">import_export::QueryExporter::safeColumnName (C++ function)</a>
 </li>
-      <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4NK13import_export13QueryExporter22validateFileExtensionsERKNSt6stringERKNSt6stringERKNSt13unordered_setINSt6stringEEE">import_export::QueryExporter::validateFileExtensions (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4NK13import_export13QueryExporter22validateFileExtensionsERKNSt6stringERKNSt6stringERKNSt13unordered_setINSt6stringEEE">import_export::QueryExporter::validateFileExtensions (C++ function)</a>
+</li>
       <li><a href="api/class/classimport__export_1_1_query_exporter.html#_CPPv4N13import_export13QueryExporterD0Ev">import_export::QueryExporter::~QueryExporter (C++ function)</a>
 </li>
       <li><a href="api/class/classimport__export_1_1_query_exporter_c_s_v.html#_CPPv4N13import_export16QueryExporterCSVE">import_export::QueryExporterCSV (C++ class)</a>
@@ -19032,6 +19044,8 @@
 </li>
       <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmtE">Parser::CopyTableStmt (C++ class)</a>
 </li>
+      <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt25copy_from_source_pattern_E">Parser::CopyTableStmt::copy_from_source_pattern_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt13CopyTableStmtEPNSt6stringEPNSt6stringEPNSt4listIP15NameValueAssignEE">Parser::CopyTableStmt::CopyTableStmt (C++ function)</a>, <a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt13CopyTableStmtERKN9rapidjson5ValueE">[1]</a>
 </li>
       <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt31deferred_copy_from_copy_params_E">Parser::CopyTableStmt::deferred_copy_from_copy_params_ (C++ member)</a>
@@ -19041,8 +19055,6 @@
       <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt30deferred_copy_from_partitions_E">Parser::CopyTableStmt::deferred_copy_from_partitions_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt7executeERKN17Catalog_Namespace11SessionInfoE">Parser::CopyTableStmt::execute (C++ function)</a>, <a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt7executeERKN17Catalog_Namespace11SessionInfoERKNSt8functionIFNSt10unique_ptrIN13import_export16AbstractImporterEEERN17Catalog_Namespace7CatalogEPK15TableDescriptorRKNSt6stringERKN13import_export10CopyParamsEEEE">[1]</a>
-</li>
-      <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt13file_pattern_E">Parser::CopyTableStmt::file_pattern_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4N6Parser13CopyTableStmt30get_deferred_copy_from_payloadERNSt6stringERNSt6stringERN13import_export10CopyParamsERNSt6stringE">Parser::CopyTableStmt::get_deferred_copy_from_payload (C++ function)</a>
 </li>
@@ -19704,7 +19716,7 @@
 </li>
       <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4N6Parser8OperExpr5left_E">Parser::OperExpr::left_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEE">Parser::OperExpr::normalize (C++ function)</a>
+      <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEPK8Executor">Parser::OperExpr::normalize (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4N6Parser8OperExpr8OperExprE6SQLOps12SQLQualifierP4ExprP4Expr">Parser::OperExpr::OperExpr (C++ function)</a>, <a href="api/class/class_parser_1_1_oper_expr.html#_CPPv4N6Parser8OperExpr8OperExprE6SQLOpsP4ExprP4Expr">[1]</a>
 </li>
@@ -21550,7 +21562,7 @@
 </li>
       <li><a href="api/class/class_query_memory_initializer.html#_CPPv4N22QueryMemoryInitializer18row_set_mem_owner_E">QueryMemoryInitializer::row_set_mem_owner_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_query_memory_initializer.html#_CPPv4N22QueryMemoryInitializer28setupTableFunctionGpuBuffersERK21QueryMemoryDescriptorKiKjKj">QueryMemoryInitializer::setupTableFunctionGpuBuffers (C++ function)</a>
+      <li><a href="api/class/class_query_memory_initializer.html#_CPPv4N22QueryMemoryInitializer28setupTableFunctionGpuBuffersERK21QueryMemoryDescriptorKiKjKjKb">QueryMemoryInitializer::setupTableFunctionGpuBuffers (C++ function)</a>
 </li>
       <li><a href="api/class/class_query_memory_initializer.html#_CPPv4N22QueryMemoryInitializer18temporary_buffers_E">QueryMemoryInitializer::temporary_buffers_ (C++ member)</a>
 </li>
@@ -23262,10 +23274,10 @@
 </li>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMap18getRenderAllocatorE6size_t">RenderAllocatorMap::getRenderAllocator (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMapixE6size_t">RenderAllocatorMap::operator[] (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMap16prepForRenderingERKNSt10shared_ptrIN13QueryRenderer15QueryDataLayoutEEE">RenderAllocatorMap::prepForRendering (C++ function)</a>
 </li>
       <li><a href="api/class/class_render_allocator_map.html#_CPPv4N18RenderAllocatorMap21render_allocator_map_E">RenderAllocatorMap::render_allocator_map_ (C++ member)</a>
@@ -24506,6 +24518,8 @@
 </li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner13addStringDictENSt10shared_ptrI16StringDictionaryEEKiK7int64_t">RowSetMemoryOwner::addStringDict (C++ function)</a>
 </li>
+      <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner28addStringProxyTranslationMapEPK21StringDictionaryProxyPK21StringDictionaryProxy">RowSetMemoryOwner::addStringProxyTranslationMap (C++ function)</a>
+</li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner15addVarlenBufferEPv">RowSetMemoryOwner::addVarlenBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner20addVarlenInputBufferEPN14Data_Namespace14AbstractBufferE">RowSetMemoryOwner::addVarlenInputBuffer (C++ function)</a>
@@ -24540,6 +24554,8 @@
 </li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner23getOrAddStringDictProxyEKiKbPKN17Catalog_Namespace7CatalogE">RowSetMemoryOwner::getOrAddStringDictProxy (C++ function)</a>
 </li>
+      <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner33getOrAddStringProxyTranslationMapEKiKiKbPKN17Catalog_Namespace7CatalogE">RowSetMemoryOwner::getOrAddStringProxyTranslationMap (C++ function)</a>
+</li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner30getStringDictionaryGenerationsEv">RowSetMemoryOwner::getStringDictionaryGenerations (C++ function)</a>
 </li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4NK17RowSetMemoryOwner18getStringDictProxyEKi">RowSetMemoryOwner::getStringDictProxy (C++ function)</a>
@@ -24557,6 +24573,8 @@
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner12state_mutex_E">RowSetMemoryOwner::state_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner21str_dict_proxy_owned_E">RowSetMemoryOwner::str_dict_proxy_owned_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner33str_proxy_translation_maps_owned_E">RowSetMemoryOwner::str_proxy_translation_maps_owned_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_row_set_memory_owner.html#_CPPv4N17RowSetMemoryOwner30string_dictionary_generations_E">RowSetMemoryOwner::string_dictionary_generations_ (C++ member)</a>
 </li>
@@ -25420,8 +25438,6 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo14get_array_typeEv">SQLTypeInfo::get_array_type (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo15get_buffer_nameEv">SQLTypeInfo::get_buffer_name (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo20get_compression_nameEv">SQLTypeInfo::get_compression_name (C++ function)</a>
@@ -25440,6 +25456,8 @@
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo13get_type_nameEv">SQLTypeInfo::get_type_name (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo10has_boundsEv">SQLTypeInfo::has_bounds (C++ function)</a>
 </li>
       <li><a href="api/class/class_s_q_l_type_info.html#_CPPv4NK11SQLTypeInfo16has_render_groupEv">SQLTypeInfo::has_render_group (C++ function)</a>
@@ -26009,6 +26027,40 @@
       <li><a href="api/struct/struct_string_dictionary_proxy_translation_map.html#_CPPv4N35StringDictionaryProxyTranslationMap35StringDictionaryProxyTranslationMapEK26StringDictionaryProxyRange">StringDictionaryProxyTranslationMap::StringDictionaryProxyTranslationMap (C++ function)</a>, <a href="api/struct/struct_string_dictionary_proxy_translation_map.html#_CPPv4N35StringDictionaryProxyTranslationMap35StringDictionaryProxyTranslationMapEv">[1]</a>
 </li>
       <li><a href="api/struct/struct_string_dictionary_proxy_translation_map.html#_CPPv4N35StringDictionaryProxyTranslationMap16translation_map_E">StringDictionaryProxyTranslationMap::translation_map_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv430StringDictionaryTranslationMgr">StringDictionaryTranslationMgr (C++ class)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr19buildTranslationMapEv">StringDictionaryTranslationMgr::buildTranslationMap (C++ function)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4NK30StringDictionaryTranslationMgr11codegenCastEPN4llvm5ValueERK11SQLTypeInfoKb">StringDictionaryTranslationMgr::codegenCast (C++ function)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr19createKernelBuffersEv">StringDictionaryTranslationMgr::createKernelBuffers (C++ function)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4NK30StringDictionaryTranslationMgr4dataEv">StringDictionaryTranslationMgr::data (C++ function)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr9data_mgr_E">StringDictionaryTranslationMgr::data_mgr_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr20dest_string_dict_id_E">StringDictionaryTranslationMgr::dest_string_dict_id_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr15device_buffers_E">StringDictionaryTranslationMgr::device_buffers_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr13device_count_E">StringDictionaryTranslationMgr::device_count_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr9executor_E">StringDictionaryTranslationMgr::executor_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4NK30StringDictionaryTranslationMgr10isMapValidEv">StringDictionaryTranslationMgr::isMapValid (C++ function)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr24kernel_translation_maps_E">StringDictionaryTranslationMgr::kernel_translation_maps_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr13memory_level_E">StringDictionaryTranslationMgr::memory_level_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4NK30StringDictionaryTranslationMgr17minSourceStringIdEv">StringDictionaryTranslationMgr::minSourceStringId (C++ function)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr22source_string_dict_id_E">StringDictionaryTranslationMgr::source_string_dict_id_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgr30StringDictionaryTranslationMgrEK7int32_tK7int32_tKN14Data_Namespace11MemoryLevelEKiP8ExecutorPN14Data_Namespace7DataMgrE">StringDictionaryTranslationMgr::StringDictionaryTranslationMgr (C++ function)</a>
+</li>
+      <li><a href="api/class/class_string_dictionary_translation_mgr.html#_CPPv4N30StringDictionaryTranslationMgrD0Ev">StringDictionaryTranslationMgr::~StringDictionaryTranslationMgr (C++ function)</a>
 </li>
       <li><a href="api/class/class_string_none_encoder.html#_CPPv417StringNoneEncoder">StringNoneEncoder (C++ class)</a>
 </li>
@@ -27354,14 +27406,20 @@
 </li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4NK21WindowFunctionContext12elementCountEv">WindowFunctionContext::elementCount (C++ function)</a>
 </li>
+      <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext2EQE">WindowFunctionContext::EQ (C++ enumerator)</a>
+</li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext16fillPartitionEndEv">WindowFunctionContext::fillPartitionEnd (C++ function)</a>
 </li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext18fillPartitionStartEv">WindowFunctionContext::fillPartitionStart (C++ function)</a>
 </li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4NK21WindowFunctionContext17getWindowFunctionEv">WindowFunctionContext::getWindowFunction (C++ function)</a>
 </li>
+      <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext2GTE">WindowFunctionContext::GT (C++ enumerator)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext2LTE">WindowFunctionContext::LT (C++ enumerator)</a>
+</li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb">WindowFunctionContext::makeComparator (C++ function)</a>
 </li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4NK21WindowFunctionContext7offsetsEv">WindowFunctionContext::offsets (C++ function)</a>
@@ -27393,6 +27451,8 @@
       <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext18row_set_mem_owner_E">WindowFunctionContext::row_set_mem_owner_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext12window_func_E">WindowFunctionContext::window_func_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext22WindowComparatorResultE">WindowFunctionContext::WindowComparatorResult (C++ enum)</a>
 </li>
       <li><a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext21WindowFunctionContextEPKN8Analyzer14WindowFunctionEK6size_tK18ExecutorDeviceTypeNSt10shared_ptrI17RowSetMemoryOwnerEE">WindowFunctionContext::WindowFunctionContext (C++ function)</a>, <a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext21WindowFunctionContextEPKN8Analyzer14WindowFunctionERKNSt10shared_ptrI8HashJoinEEK6size_tK18ExecutorDeviceTypeNSt10shared_ptrI17RowSetMemoryOwnerEE">[1]</a>, <a href="api/class/class_window_function_context.html#_CPPv4N21WindowFunctionContext21WindowFunctionContextERK21WindowFunctionContext">[2]</a>
 </li>

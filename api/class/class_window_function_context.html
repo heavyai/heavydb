@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 91042dc
+                6.0.0dev 198c3ea
               </div>
             
           
@@ -776,6 +776,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_proxy.html">Class StringDictionaryProxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_translation_mgr.html">Class StringDictionaryTranslationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
@@ -1039,6 +1040,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_privilege.html">Class com::mapd::parser::extension::ddl::SqlRevokePrivilege</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_role.html">Class com::mapd::parser::extension::ddl::SqlRevokeRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_create_table.html">Class com::mapd::parser::extension::ddl::SqlShowCreateTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_data_sources.html">Class com::mapd::parser::extension::ddl::SqlShowDataSources</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_disk_cache_usage.html">Class com::mapd::parser::extension::ddl::SqlShowDiskCacheUsage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
@@ -2213,9 +2215,30 @@
 <span id="_CPPv321WindowFunctionContext"></span><span id="_CPPv221WindowFunctionContext"></span><span id="WindowFunctionContext"></span><span class="target" id="class_window_function_context"></span><em class="property">class </em><code class="sig-name descname">WindowFunctionContext</code><a class="headerlink" href="#_CPPv421WindowFunctionContext" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="enum">
+<dt id="_CPPv4N21WindowFunctionContext22WindowComparatorResultE">
+<span id="_CPPv3N21WindowFunctionContext22WindowComparatorResultE"></span><span id="_CPPv2N21WindowFunctionContext22WindowComparatorResultE"></span><span class="target" id="class_window_function_context_1a96c2de7b76711bd69ad91c4ba619a613"></span><em class="property">enum </em><code class="sig-name descname">WindowComparatorResult</code><a class="headerlink" href="#_CPPv4N21WindowFunctionContext22WindowComparatorResultE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p><em>Values:</em></p>
+<dl class="enumerator">
+<dt id="_CPPv4N21WindowFunctionContext2LTE">
+<span id="_CPPv3N21WindowFunctionContext2LTE"></span><span id="_CPPv2N21WindowFunctionContext2LTE"></span><span class="target" id="class_window_function_context_1a96c2de7b76711bd69ad91c4ba619a613ac562607189d77eb9dfb707464c1e7b0b"></span><code class="sig-name descname">LT</code><a class="headerlink" href="#_CPPv4N21WindowFunctionContext2LTE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N21WindowFunctionContext2EQE">
+<span id="_CPPv3N21WindowFunctionContext2EQE"></span><span id="_CPPv2N21WindowFunctionContext2EQE"></span><span class="target" id="class_window_function_context_1a96c2de7b76711bd69ad91c4ba619a613a2dcbad7477fd40561e8b8198f173bd47"></span><code class="sig-name descname">EQ</code><a class="headerlink" href="#_CPPv4N21WindowFunctionContext2EQE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="enumerator">
+<dt id="_CPPv4N21WindowFunctionContext2GTE">
+<span id="_CPPv3N21WindowFunctionContext2GTE"></span><span id="_CPPv2N21WindowFunctionContext2GTE"></span><span class="target" id="class_window_function_context_1a96c2de7b76711bd69ad91c4ba619a613acd6a9bd2a175104eed40f0d33a8b4020"></span><code class="sig-name descname">GT</code><a class="headerlink" href="#_CPPv4N21WindowFunctionContext2GTE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
 <dl class="type">
 <dt id="_CPPv4N21WindowFunctionContext10ComparatorE">
-<span id="_CPPv3N21WindowFunctionContext10ComparatorE"></span><span id="_CPPv2N21WindowFunctionContext10ComparatorE"></span><span class="target" id="class_window_function_context_1a8e4da1d075e6ab32e69e41955edec4db"></span><em class="property">using </em><code class="sig-name descname">Comparator</code> = std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> int64_t lhs, <em class="property">const</em> int64_t rhs<span class="sig-paren">)</span>&gt;<a class="headerlink" href="#_CPPv4N21WindowFunctionContext10ComparatorE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21WindowFunctionContext10ComparatorE"></span><span id="_CPPv2N21WindowFunctionContext10ComparatorE"></span><span class="target" id="class_window_function_context_1a1e463ad7aad8b940060d88a4e6b525c1"></span><em class="property">using </em><code class="sig-name descname">Comparator</code> = std::function&lt;<a class="reference internal" href="#_CPPv421WindowFunctionContext" title="WindowFunctionContext">WindowFunctionContext</a>::<a class="reference internal" href="#_CPPv4N21WindowFunctionContext22WindowComparatorResultE" title="WindowFunctionContext::WindowComparatorResult">WindowComparatorResult</a><span class="sig-paren">(</span><em class="property">const</em> int64_t lhs, <em class="property">const</em> int64_t rhs<span class="sig-paren">)</span>&gt;<a class="headerlink" href="#_CPPv4N21WindowFunctionContext10ComparatorE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2417,7 +2440,7 @@
 <p class="breathe-sectiondef-title rubric">Private Static Functions</p>
 <dl class="function">
 <dt id="_CPPv4N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb">
-<span id="_CPPv3N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb"></span><span id="_CPPv2N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb"></span><span id="WindowFunctionContext::makeComparator__Analyzer::ColumnVarCP.int8_tCP.int32_tCP.bC"></span><span class="target" id="class_window_function_context_1ad5ff75f973df3960fd43564754a2611f"></span>std::function&lt;bool<span class="sig-paren">(</span><em class="property">const</em> int64_t lhs, <em class="property">const</em> int64_t rhs<span class="sig-paren">)</span>&gt; <code class="sig-name descname">makeComparator</code><span class="sig-paren">(</span><em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_column_var.html#_CPPv4N8Analyzer9ColumnVarE" title="Analyzer::ColumnVar">ColumnVar</a> *<em>col_var</em>, <em class="property">const</em> int8_t *<em>partition_values</em>, <em class="property">const</em> int32_t *<em>partition_indices</em>, <em class="property">const</em> bool <em>nulls_first</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb"></span><span id="_CPPv2N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb"></span><span id="WindowFunctionContext::makeComparator__Analyzer::ColumnVarCP.int8_tCP.int32_tCP.bC"></span><span class="target" id="class_window_function_context_1a937aeec2004cfc0c13f2925dc65e8629"></span><a class="reference internal" href="#_CPPv421WindowFunctionContext" title="WindowFunctionContext">WindowFunctionContext</a>::<a class="reference internal" href="#_CPPv4N21WindowFunctionContext10ComparatorE" title="WindowFunctionContext::Comparator">Comparator</a> <code class="sig-name descname">makeComparator</code><span class="sig-paren">(</span><em class="property">const</em> Analyzer::<a class="reference internal" href="class_analyzer_1_1_column_var.html#_CPPv4N8Analyzer9ColumnVarE" title="Analyzer::ColumnVar">ColumnVar</a> *<em>col_var</em>, <em class="property">const</em> int8_t *<em>partition_values</em>, <em class="property">const</em> int32_t *<em>partition_indices</em>, <em class="property">const</em> bool <em>nulls_first</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21WindowFunctionContext14makeComparatorEPKN8Analyzer9ColumnVarEPK6int8_tPK7int32_tKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

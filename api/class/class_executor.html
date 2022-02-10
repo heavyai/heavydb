@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 91042dc
+                6.0.0dev 198c3ea
               </div>
             
           
@@ -776,6 +776,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_proxy.html">Class StringDictionaryProxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_translation_mgr.html">Class StringDictionaryTranslationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
@@ -1039,6 +1040,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_privilege.html">Class com::mapd::parser::extension::ddl::SqlRevokePrivilege</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_role.html">Class com::mapd::parser::extension::ddl::SqlRevokeRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_create_table.html">Class com::mapd::parser::extension::ddl::SqlShowCreateTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_data_sources.html">Class com::mapd::parser::extension::ddl::SqlShowDataSources</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_disk_cache_usage.html">Class com::mapd::parser::extension::ddl::SqlShowDiskCacheUsage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
@@ -2350,6 +2352,11 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4NK8Executor28getStringProxyTranslationMapEKiKiNSt10shared_ptrI17RowSetMemoryOwnerEEKb">
+<span id="_CPPv3NK8Executor28getStringProxyTranslationMapEKiKiNSt10shared_ptrI17RowSetMemoryOwnerEEKb"></span><span id="_CPPv2NK8Executor28getStringProxyTranslationMapEKiKiNSt10shared_ptrI17RowSetMemoryOwnerEEKb"></span><span id="Executor::getStringProxyTranslationMap__iC.iC.std::shared_ptr:RowSetMemoryOwner:.bCC"></span><span class="target" id="class_executor_1a621988401a173e32b05405a950bf36d5"></span><a class="reference internal" href="../struct/struct_string_dictionary_proxy_translation_map.html#_CPPv435StringDictionaryProxyTranslationMap" title="StringDictionaryProxyTranslationMap">StringDictionaryProxyTranslationMap</a> *<code class="sig-name descname">getStringProxyTranslationMap</code><span class="sig-paren">(</span><em class="property">const</em> int <em>source_dict_id</em>, <em class="property">const</em> int <em>dest_dict_id</em>, std::shared_ptr&lt;<a class="reference internal" href="class_row_set_memory_owner.html#_CPPv417RowSetMemoryOwner" title="RowSetMemoryOwner">RowSetMemoryOwner</a>&gt; <em>row_set_mem_owner</em>, <em class="property">const</em> bool <em>with_generation</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK8Executor28getStringProxyTranslationMapEKiKiNSt10shared_ptrI17RowSetMemoryOwnerEEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK8Executor9isCPUOnlyEv">
 <span id="_CPPv3NK8Executor9isCPUOnlyEv"></span><span id="_CPPv2NK8Executor9isCPUOnlyEv"></span><span id="Executor::isCPUOnlyC"></span><span class="target" id="class_executor_1a521a2d515420043efe417491d64a0ff4"></span>bool <code class="sig-name descname">isCPUOnly</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK8Executor9isCPUOnlyEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -3593,6 +3600,11 @@
 <dl class="function">
 <dt>
 <span class="target" id="class_executor_1aa53fd5726e2f4acc76a15f00e51c8add"></span><em class="property">friend </em><code class="sig-name descname">Executor::InValuesBitmap</code></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt>
+<span class="target" id="class_executor_1a17589d11280222f7f19fdfdb87373438"></span><em class="property">friend </em><code class="sig-name descname">Executor::StringDictionaryTranslationMgr</code></dt>
 <dd></dd></dl>
 
 <dl class="function">

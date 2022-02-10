@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 91042dc
+                6.0.0dev 198c3ea
               </div>
             
           
@@ -776,6 +776,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_proxy.html">Class StringDictionaryProxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_translation_mgr.html">Class StringDictionaryTranslationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
@@ -1039,6 +1040,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_privilege.html">Class com::mapd::parser::extension::ddl::SqlRevokePrivilege</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_revoke_role.html">Class com::mapd::parser::extension::ddl::SqlRevokeRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_create_table.html">Class com::mapd::parser::extension::ddl::SqlShowCreateTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_data_sources.html">Class com::mapd::parser::extension::ddl::SqlShowDataSources</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_databases.html">Class com::mapd::parser::extension::ddl::SqlShowDatabases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_disk_cache_usage.html">Class com::mapd::parser::extension::ddl::SqlShowDiskCacheUsage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_show_foreign_servers.html">Class com::mapd::parser::extension::ddl::SqlShowForeignServers</a></li>
@@ -2252,8 +2254,8 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEE">
-<span id="_CPPv3N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEE"></span><span id="_CPPv2N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEE"></span><span id="Parser::OperExpr::normalize__SQLOpsC.SQLQualifierC.std::shared_ptr:Analyzer::Expr:.std::shared_ptr:Analyzer::Expr:"></span><span class="target" id="class_parser_1_1_oper_expr_1a4a1b0747ba2466bb0affb4fd7f377526"></span>std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <code class="sig-name descname">normalize</code><span class="sig-paren">(</span><em class="property">const</em> SQLOps <em>optype</em>, <em class="property">const</em> SQLQualifier <em>qual</em>, std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <em>left_expr</em>, std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <em>right_expr</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEPK8Executor">
+<span id="_CPPv3N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEPK8Executor"></span><span id="_CPPv2N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEPK8Executor"></span><span id="Parser::OperExpr::normalize__SQLOpsC.SQLQualifierC.std::shared_ptr:Analyzer::Expr:.std::shared_ptr:Analyzer::Expr:.ExecutorCP"></span><span class="target" id="class_parser_1_1_oper_expr_1a8986da7ab9a3fea6a46fd83cbbf582ce"></span>std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <code class="sig-name descname">normalize</code><span class="sig-paren">(</span><em class="property">const</em> SQLOps <em>optype</em>, <em class="property">const</em> SQLQualifier <em>qual</em>, std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <em>left_expr</em>, std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <em>right_expr</em>, <em class="property">const</em> <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em> = nullptr<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Parser8OperExpr9normalizeEK6SQLOpsK12SQLQualifierNSt10shared_ptrIN8Analyzer4ExprEEENSt10shared_ptrIN8Analyzer4ExprEEEPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

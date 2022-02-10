@@ -1,0 +1,9 @@
+Class StringDictionaryTranslationMgr
+====================================
+
+.. doxygenclass:: StringDictionaryTranslationMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
