@@ -50,7 +50,11 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
       if (def_levels[i]) {
         CHECK(j < values_read);
         auto& byte_array = parquet_data_ptr[j++];
-        total_len += byte_array.len;
+        if (is_error_tracking_enabled_ && byte_array.len > StringDictionary::MAX_STRLEN) {
+          // no-op, or effectively inserting a null: total_len += 0;
+        } else {
+          total_len += byte_array.len;
+        }
       }
       offsets[i] = last_offset + total_len;
     }
@@ -63,11 +67,28 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
       if (def_levels[i]) {
         CHECK(j < values_read);
         auto& byte_array = parquet_data_ptr[j++];
-        memcpy(encode_buffer_.data() + total_len, byte_array.ptr, byte_array.len);
-        total_len += byte_array.len;
+        if (is_error_tracking_enabled_ && byte_array.len > StringDictionary::MAX_STRLEN) {
+          ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
+                                                  i);
+        } else {
+          memcpy(encode_buffer_.data() + total_len, byte_array.ptr, byte_array.len);
+          total_len += byte_array.len;
+        }
       }
     }
+    if (is_error_tracking_enabled_) {
+      ParquetEncoder::current_chunk_offset_ += levels_read;
+    }
     buffer_->append(encode_buffer_.data(), total_len);
+  }
+
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    CHECK(is_error_tracking_enabled_);
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
   }
 
  private:

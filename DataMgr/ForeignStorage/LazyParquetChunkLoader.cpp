@@ -28,7 +28,7 @@
 #include "ForeignStorageException.h"
 #include "FsiChunkUtils.h"
 #include "ParquetArrayImportEncoder.h"
-#include "ParquetDateFromTimestampEncoder.h"
+#include "ParquetDateInDaysFromTimestampEncoder.h"
 #include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"
 #include "ParquetFixedLengthArrayEncoder.h"
@@ -507,32 +507,33 @@ std::shared_ptr<ParquetEncoder> create_parquet_date_from_timestamp_encoder_with_
     switch (timestamp_logical_type->time_unit()) {
       case parquet::LogicalType::TimeUnit::MILLIS:
         if (is_metadata_scan_or_for_import) {
-          return std::make_shared<ParquetDateFromTimestampEncoder<V, T, 1000L, NullType>>(
+          return std::make_shared<
+              ParquetDateInSecondsFromTimestampEncoder<V, T, 1000L, NullType>>(
               buffer, omnisci_column, parquet_column);
         }
         return std::make_shared<
-            ParquetDateFromTimestampEncoder<V, T, 1000L * kSecsPerDay, NullType>>(
+            ParquetDateInDaysFromTimestampEncoder<V, T, 1000L, NullType>>(
             buffer, omnisci_column, parquet_column);
       case parquet::LogicalType::TimeUnit::MICROS:
         if (is_metadata_scan_or_for_import) {
           return std::make_shared<
-              ParquetDateFromTimestampEncoder<V, T, 1000L * 1000L, NullType>>(
+              ParquetDateInSecondsFromTimestampEncoder<V, T, 1000L * 1000L, NullType>>(
               buffer, omnisci_column, parquet_column);
         }
         return std::make_shared<
-            ParquetDateFromTimestampEncoder<V, T, 1000L * 1000L * kSecsPerDay, NullType>>(
+            ParquetDateInDaysFromTimestampEncoder<V, T, 1000L * 1000L, NullType>>(
             buffer, omnisci_column, parquet_column);
       case parquet::LogicalType::TimeUnit::NANOS:
         if (is_metadata_scan_or_for_import) {
           return std::make_shared<
-              ParquetDateFromTimestampEncoder<V, T, 1000L * 1000L * 1000L, NullType>>(
+              ParquetDateInSecondsFromTimestampEncoder<V,
+                                                       T,
+                                                       1000L * 1000L * 1000L,
+                                                       NullType>>(
               buffer, omnisci_column, parquet_column);
         }
         return std::make_shared<
-            ParquetDateFromTimestampEncoder<V,
-                                            T,
-                                            1000L * 1000L * 1000L * kSecsPerDay,
-                                            NullType>>(
+            ParquetDateInDaysFromTimestampEncoder<V, T, 1000L * 1000L * 1000L, NullType>>(
             buffer, omnisci_column, parquet_column);
       default:
         UNREACHABLE();
@@ -1549,7 +1550,8 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata
     const Interval<ColumnType>& column_interval,
     const ForeignTableSchema& schema,
     const ReaderPtr& reader,
-    const RenderGroupAnalyzerMap* render_group_analyzer_map) {
+    const RenderGroupAnalyzerMap* render_group_analyzer_map,
+    const bool do_metadata_stats_validation) {
   std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
   auto file_metadata = reader->parquet_reader()->metadata();
   for (int column_id = column_interval.start; column_id <= column_interval.end;
@@ -1559,6 +1561,9 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata
         file_metadata->schema()->Column(schema.getParquetColumnIndex(column_id));
     encoder_map[column_id] = create_parquet_encoder_for_metadata_scan(
         column_descriptor, parquet_column_descriptor, render_group_analyzer_map);
+    if (!do_metadata_stats_validation) {
+      shared::get_from_map(encoder_map, column_id)->disableMetadataStatsValidation();
+    }
     column_id += column_descriptor->columnType.get_physical_cols();
   }
   return encoder_map;
@@ -1570,7 +1575,8 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
     const int parquet_column_index,
     const ColumnDescriptor* column_descriptor,
     std::list<Chunk_NS::Chunk>& chunks,
-    StringDictionary* string_dictionary) {
+    StringDictionary* string_dictionary,
+    RejectedRowIndices* rejected_row_indices) {
   auto timer = DEBUG_TIMER(__func__);
   std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
   // `def_levels` and `rep_levels` below are used to store the read definition
@@ -1594,6 +1600,10 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                         chunk_metadata,
                                         render_group_analyzer_map_);
   CHECK(encoder.get());
+
+  if (rejected_row_indices) {  // error tracking is enabled
+    encoder->initializeErrorTracking(column_descriptor->columnType);
+  }
 
   for (const auto& row_group_interval : row_group_intervals) {
     const auto& file_path = row_group_interval.file_path;
@@ -1639,11 +1649,19 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                      levels_read,
                                      parquet_column_descriptor);
 
-          encoder->appendData(def_levels.data(),
-                              rep_levels.data(),
-                              values_read,
-                              levels_read,
-                              values.data());
+          if (rejected_row_indices) {  // error tracking is enabled
+            encoder->appendDataTrackErrors(def_levels.data(),
+                                           rep_levels.data(),
+                                           values_read,
+                                           levels_read,
+                                           values.data());
+          } else {  // no error tracking enabled
+            encoder->appendData(def_levels.data(),
+                                rep_levels.data(),
+                                values_read,
+                                levels_read,
+                                values.data());
+          }
         }
         if (auto array_encoder = dynamic_cast<ParquetArrayEncoder*>(encoder.get())) {
           array_encoder->finalizeRowGroup();
@@ -1655,6 +1673,10 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
             "', Parquet file: '" + file_path + "'");
       }
     }
+  }
+
+  if (rejected_row_indices) {  // error tracking is enabled
+    *rejected_row_indices = encoder->getRejectedRowIndices();
   }
   return chunk_metadata;
 }
@@ -1707,7 +1729,8 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
     const std::vector<RowGroupInterval>& row_group_intervals,
     const int parquet_column_index,
     std::list<Chunk_NS::Chunk>& chunks,
-    StringDictionary* string_dictionary) {
+    StringDictionary* string_dictionary,
+    RejectedRowIndices* rejected_row_indices) {
   CHECK(!chunks.empty());
   auto const& chunk = *chunks.begin();
   auto column_descriptor = chunk.getColumnDesc();
@@ -1719,7 +1742,8 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
                                     parquet_column_index,
                                     column_descriptor,
                                     chunks,
-                                    string_dictionary);
+                                    string_dictionary,
+                                    rejected_row_indices);
     return metadata;
   } catch (const std::exception& error) {
     throw ForeignStorageException(error.what());
@@ -1955,7 +1979,8 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
 
 std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
     const std::vector<std::string>& file_paths,
-    const ForeignTableSchema& schema) {
+    const ForeignTableSchema& schema,
+    const bool do_metadata_stats_validation) {
   auto timer = DEBUG_TIMER(__func__);
   auto column_interval =
       Interval<ColumnType>{schema.getLogicalAndPhysicalColumns().front()->columnId,
@@ -1968,8 +1993,11 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   auto first_reader = file_reader_cache_->insert(first_path, file_system_);
   validate_parquet_metadata(
       first_reader->parquet_reader()->metadata(), first_path, schema);
-  auto encoder_map = populate_encoder_map_for_metadata_scan(
-      column_interval, schema, first_reader, render_group_analyzer_map_);
+  auto encoder_map = populate_encoder_map_for_metadata_scan(column_interval,
+                                                            schema,
+                                                            first_reader,
+                                                            render_group_analyzer_map_,
+                                                            do_metadata_stats_validation);
   const auto num_row_groups = get_parquet_table_size(first_reader).first;
   auto row_group_metadata = metadata_scan_rowgroup_interval(
       encoder_map, {first_path, 0, num_row_groups - 1}, first_reader, schema);

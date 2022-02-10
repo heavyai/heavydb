@@ -32,16 +32,35 @@ namespace foreign_storage {
 // impact on the runtime of the conversion performed by this encoder since the
 // compiler can significantly optimize if this is known at compile time.
 template <typename V, typename T, T conversion_denominator, typename NullType = V>
-class ParquetDateFromTimestampEncoder
-    : public ParquetTimestampEncoder<V, T, conversion_denominator, NullType> {
+class ParquetDateInDaysFromTimestampEncoder
+    : public ParquetTimestampEncoder<V,
+                                     T,
+                                     conversion_denominator * kSecsPerDay,
+                                     NullType> {
  public:
-  ParquetDateFromTimestampEncoder(
+  ParquetDateInDaysFromTimestampEncoder(
       Data_Namespace::AbstractBuffer* buffer,
       const ColumnDescriptor* column_desciptor,
       const parquet::ColumnDescriptor* parquet_column_descriptor)
-      : ParquetTimestampEncoder<V, T, conversion_denominator, NullType>(
+      : ParquetTimestampEncoder<V, T, conversion_denominator * kSecsPerDay, NullType>(
             buffer,
             column_desciptor,
             parquet_column_descriptor) {}
+
+  void validate(const int8_t* parquet_data,
+                const int64_t j,
+                const SQLTypeInfo& column_type) const override {
+    const auto& parquet_data_value = reinterpret_cast<const T*>(parquet_data)[j];
+    CHECK(column_type.is_date());
+    DateInDaysBoundsValidator<T>::validateValue(this->convert(parquet_data_value),
+                                                column_type);
+  }
+
+  void validate(std::shared_ptr<parquet::Statistics> stats,
+                const SQLTypeInfo& column_type) const override {
+    UNREACHABLE() << "ParquetDateInDaysFromTimestampEncoder should never be used during "
+                     "metadata scan"
+                  << std::endl;
+  }
 };
 }  // namespace foreign_storage

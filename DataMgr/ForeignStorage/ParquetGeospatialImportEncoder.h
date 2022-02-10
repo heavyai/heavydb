@@ -155,6 +155,14 @@ class ParquetGeospatialImportEncoder : public ParquetEncoder,
     current_batch_offset_ += levels_read;
   }
 
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    UNREACHABLE() << "unexpected call to appendDataTrackErrors from unsupported encoder";
+  }
+
  private:
   void appendArrayDatumsIfApplicable(TypedParquetStorageBuffer<ArrayDatum>* column_buffer,
                                      const std::vector<ArrayDatum>& datum_buffer) {

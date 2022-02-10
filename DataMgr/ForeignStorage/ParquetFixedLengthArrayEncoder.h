@@ -49,7 +49,10 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
   }
 
  protected:
-  void processLastArray() override { appendNullArrayOrCheckArraySize(); }
+  void processLastArray() override {
+    ParquetArrayEncoder::processLastArray();
+    appendNullArrayOrCheckArraySize();
+  }
 
  private:
   void appendNullFixedLengthArray() {

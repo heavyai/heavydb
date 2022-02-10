@@ -38,7 +38,8 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   ParquetDataWrapper(const int db_id,
                      const ForeignTable* foreign_table,
-                     const UserMapping* user_mapping);
+                     const UserMapping* user_mapping,
+                     const bool do_metadata_stats_validation = true);
 
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
@@ -72,7 +73,8 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   void fetchChunkMetadata();
   void loadBuffersUsingLazyParquetChunkLoader(const int logical_column_id,
                                               const int fragment_id,
-                                              const ChunkToBufferMap& required_buffers);
+                                              const ChunkToBufferMap& required_buffers,
+                                              AbstractBuffer* delete_buffer);
 
   std::set<std::string> getProcessedFilePaths();
   std::vector<std::string> getAllFilePaths();
@@ -90,6 +92,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
 
   void metadataScanFiles(const std::vector<std::string>& file_paths);
 
+  const bool do_metadata_stats_validation_;
   std::map<int, std::vector<RowGroupInterval>> fragment_to_row_group_interval_map_;
   std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> chunk_metadata_map_;
   const int db_id_;
@@ -102,6 +105,8 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   std::unique_ptr<FileReaderMap> file_reader_cache_;
+
+  std::mutex delete_buffer_mutex_;
 
   // declared in three derived classes to avoid
   // polluting ForeignDataWrapper virtual base

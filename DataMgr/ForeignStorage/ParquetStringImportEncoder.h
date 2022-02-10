@@ -51,6 +51,14 @@ class ParquetStringImportEncoder : public ParquetEncoder, public ParquetImportEn
     }
   }
 
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    UNREACHABLE() << "unexpected call to appendDataTrackErrors from unsupported encoder";
+  }
+
   void validateAndAppendData(const int16_t* def_levels,
                              const int16_t* rep_levels,
                              const int64_t values_read,

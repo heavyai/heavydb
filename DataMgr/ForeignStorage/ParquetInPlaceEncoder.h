@@ -133,10 +133,39 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     // no-op by default
   }
 
+  void validateUsingEncodersColumnType(const int8_t* parquet_data,
+                                       const int64_t j) const override {
+    validate(parquet_data, j, column_type_);
+  }
+
   void reserve(const size_t num_elements) override {
     buffer_->reserve(num_elements * sizeof(V));
   }
 
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    CHECK(is_error_tracking_enabled_);
+    int64_t i, j;
+    for (i = 0, j = 0; i < levels_read; ++i) {
+      if (def_levels[i]) {
+        try {
+          CHECK(j < values_read);
+          validateUsingEncodersColumnType(values, j++);
+        } catch (const std::runtime_error& error) {
+          invalid_indices_.insert(current_chunk_offset_ + i);
+        }
+      }
+    }
+    current_chunk_offset_ += levels_read;
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
+
+  // TODO: this member largely mirrors `appendDataTrackErrors` but is only used
+  // by the parquet-secific import FSI cut-over, and will be removed in the
+  // future
   void validateAndAppendData(const int16_t* def_levels,
                              const int16_t* rep_levels,
                              const int64_t values_read,
@@ -238,33 +267,38 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
     // update statistics
     auto parquet_column_descriptor =
         group_metadata->schema()->Column(parquet_column_index);
-    auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
-    if (stats->HasMinMax()) {
-      // validate statistics if validation applicable as part of encoding
-      if (auto parquet_scalar_validator = dynamic_cast<ParquetMetadataValidator*>(this)) {
-        try {
-          parquet_scalar_validator->validate(
-              stats, column_type.is_array() ? column_type.get_elem_type() : column_type);
-        } catch (const std::exception& e) {
-          std::stringstream error_message;
-          error_message << e.what() << " Error validating statistics of Parquet column '"
-                        << group_metadata->schema()->Column(parquet_column_index)->name()
-                        << "'";
-          throw std::runtime_error(error_message.str());
-        }
-      }
 
-      auto [stats_min, stats_max] = getEncodedStats(parquet_column_descriptor, stats);
-      auto updated_chunk_stats = getUpdatedStats(stats_min, stats_max, column_type);
-      metadata->fillChunkStats(updated_chunk_stats.min,
-                               updated_chunk_stats.max,
-                               metadata->chunkStats.has_nulls);
+    if (ParquetEncoder::validate_metadata_stats_) {
+      auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
+      if (stats->HasMinMax()) {
+        // validate statistics if validation applicable as part of encoding
+        if (auto parquet_scalar_validator =
+                dynamic_cast<ParquetMetadataValidator*>(this)) {
+          try {
+            parquet_scalar_validator->validate(
+                stats,
+                column_type.is_array() ? column_type.get_elem_type() : column_type);
+          } catch (const std::exception& e) {
+            std::stringstream error_message;
+            error_message
+                << e.what() << " Error validating statistics of Parquet column '"
+                << group_metadata->schema()->Column(parquet_column_index)->name() << "'";
+            throw std::runtime_error(error_message.str());
+          }
+        }
+
+        auto [stats_min, stats_max] = getEncodedStats(parquet_column_descriptor, stats);
+        auto updated_chunk_stats = getUpdatedStats(stats_min, stats_max, column_type);
+        metadata->fillChunkStats(updated_chunk_stats.min,
+                                 updated_chunk_stats.max,
+                                 metadata->chunkStats.has_nulls);
+      }
+      auto null_count = stats->null_count();
+      validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
+                        null_count,
+                        column_type);
+      metadata->chunkStats.has_nulls = null_count > 0;
     }
-    auto null_count = stats->null_count();
-    validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
-                      null_count,
-                      column_type);
-    metadata->chunkStats.has_nulls = null_count > 0;
 
     // update sizing
     metadata->numBytes =

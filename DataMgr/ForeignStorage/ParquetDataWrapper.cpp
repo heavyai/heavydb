@@ -72,12 +72,15 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
 }
 }  // namespace
 
-ParquetDataWrapper::ParquetDataWrapper() : db_id_(-1), foreign_table_(nullptr) {}
+ParquetDataWrapper::ParquetDataWrapper()
+    : do_metadata_stats_validation_(true), db_id_(-1), foreign_table_(nullptr) {}
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id,
                                        const ForeignTable* foreign_table,
-                                       const UserMapping* user_mapping)
-    : db_id_(db_id)
+                                       const UserMapping* user_mapping,
+                                       const bool do_metadata_stats_validation)
+    : do_metadata_stats_validation_(do_metadata_stats_validation)
+    , db_id_(db_id)
     , foreign_table_(foreign_table)
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
@@ -95,7 +98,8 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id,
 }
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table)
-    : db_id_(db_id)
+    : do_metadata_stats_validation_(true)
+    , db_id_(db_id)
     , foreign_table_(foreign_table)
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
@@ -321,7 +325,8 @@ std::vector<std::string> ParquetDataWrapper::getAllFilePaths() {
 
 void ParquetDataWrapper::metadataScanFiles(const std::vector<std::string>& file_paths) {
   LazyParquetChunkLoader chunk_loader(file_system_, file_reader_cache_.get(), nullptr);
-  auto row_group_metadata = chunk_loader.metadataScan(file_paths, *schema_);
+  auto row_group_metadata =
+      chunk_loader.metadataScan(file_paths, *schema_, do_metadata_stats_validation_);
   auto column_interval =
       Interval<ColumnType>{schema_->getLogicalAndPhysicalColumns().front()->columnId,
                            schema_->getLogicalAndPhysicalColumns().back()->columnId};
@@ -383,7 +388,8 @@ void ParquetDataWrapper::populateChunkMetadata(
 void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     const int logical_column_id,
     const int fragment_id,
-    const ChunkToBufferMap& required_buffers) {
+    const ChunkToBufferMap& required_buffers,
+    AbstractBuffer* delete_buffer) {
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
   const ColumnDescriptor* logical_column =
@@ -433,10 +439,43 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     chunks.emplace_back(chunk);
   }
 
+  std::unique_ptr<RejectedRowIndices> rejected_row_indices;
+  if (delete_buffer) {
+    rejected_row_indices = std::make_unique<RejectedRowIndices>();
+  }
   LazyParquetChunkLoader chunk_loader(
       file_system_, file_reader_cache_.get(), &render_group_analyzer_map_);
-  auto metadata = chunk_loader.loadChunk(
-      row_group_intervals, parquet_column_index, chunks, string_dictionary);
+  auto metadata = chunk_loader.loadChunk(row_group_intervals,
+                                         parquet_column_index,
+                                         chunks,
+                                         string_dictionary,
+                                         rejected_row_indices.get());
+
+  if (delete_buffer) {
+    // all modifying operations on `delete_buffer` must be synchronized as it is a shared
+    // buffer
+    std::unique_lock<std::mutex> delete_buffer_lock(delete_buffer_mutex_);
+
+    CHECK(!chunks.empty());
+    CHECK(chunks.begin()->getBuffer()->hasEncoder());
+    auto num_rows_in_chunk = chunks.begin()->getBuffer()->getEncoder()->getNumElems();
+
+    // ensure delete buffer is sized appropriately
+    if (delete_buffer->size() < num_rows_in_chunk) {
+      auto remaining_rows = num_rows_in_chunk - delete_buffer->size();
+      std::vector<int8_t> data(remaining_rows, false);
+      delete_buffer->append(data.data(), remaining_rows);
+    }
+
+    // compute a logical OR with current `delete_buffer` contents and this chunks rejected
+    // indices
+    CHECK(rejected_row_indices);
+    auto delete_buffer_data = delete_buffer->getMemoryPtr();
+    for (const auto& rejected_index : *rejected_row_indices) {
+      CHECK_GT(delete_buffer->size(), static_cast<size_t>(rejected_index));
+      delete_buffer_data[rejected_index] = true;
+    }
+  }
 
   auto metadata_iter = metadata.begin();
   for (int column_id = column_interval.start; column_id <= column_interval.end;
@@ -500,7 +539,8 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
   for (const auto& hint_set : hints_per_thread) {
     futures.emplace_back(std::async(std::launch::async, [&, hint_set, this] {
       for (const auto& [col_id, frag_id] : hint_set) {
-        loadBuffersUsingLazyParquetChunkLoader(col_id, frag_id, buffers_to_load);
+        loadBuffersUsingLazyParquetChunkLoader(
+            col_id, frag_id, buffers_to_load, delete_buffer);
       }
     }));
   }

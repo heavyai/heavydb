@@ -367,9 +367,8 @@ ArrayDatum StringToArray(const std::string& s,
   }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
-    std::function<void(int8_t * ptr)> deleter = [](int8_t* ptr) { free(ptr); };
-    std::unique_ptr<int8_t, std::function<void(int8_t*)>> buf(
-        reinterpret_cast<int8_t*>(checked_malloc(len)), deleter);
+    std::unique_ptr<int8_t, FreeDeleter> buf(
+        reinterpret_cast<int8_t*>(checked_malloc(len)));
     int8_t* p = buf.get();
     for (auto& es : elem_strs) {
       auto e = trim_space(es.c_str(), es.length());

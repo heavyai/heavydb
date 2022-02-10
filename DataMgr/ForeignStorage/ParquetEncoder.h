@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "Catalog/ColumnDescriptor.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "ForeignStorageBuffer.h"
 #include "ParquetShared.h"
@@ -24,10 +25,22 @@
 
 namespace foreign_storage {
 
+using RejectedRowIndices = std::set<int64_t>;
+
 class ParquetEncoder {
  public:
-  ParquetEncoder(Data_Namespace::AbstractBuffer* buffer) : buffer_(buffer) {}
+  ParquetEncoder(Data_Namespace::AbstractBuffer* buffer)
+      : buffer_(buffer)
+      , is_error_tracking_enabled_(false)
+      , current_chunk_offset_(0)
+      , validate_metadata_stats_(true) {}
   virtual ~ParquetEncoder() = default;
+
+  virtual void appendDataTrackErrors(const int16_t* def_levels,
+                                     const int16_t* rep_levels,
+                                     const int64_t values_read,
+                                     const int64_t levels_read,
+                                     int8_t* values) = 0;
 
   virtual void appendData(const int16_t* def_levels,
                           const int16_t* rep_levels,
@@ -41,7 +54,8 @@ class ParquetEncoder {
       const SQLTypeInfo& column_type) {
     int64_t null_count{0};
     auto metadata = createMetadata(column_type);
-    if (group_metadata->num_rows() > 0) {
+
+    if (validate_metadata_stats_ && group_metadata->num_rows() > 0) {
       // update statistics
       auto column_metadata = group_metadata->ColumnChunk(parquet_column_index);
       auto stats = validate_and_get_column_metadata_statistics(column_metadata.get());
@@ -57,8 +71,26 @@ class ParquetEncoder {
     return metadata;
   }
 
+  RejectedRowIndices getRejectedRowIndices() const { return invalid_indices_; }
+
+  virtual void disableMetadataStatsValidation() { validate_metadata_stats_ = false; }
+
+  virtual void initializeErrorTracking(const SQLTypeInfo& column_type) {
+    column_type_ = column_type;
+    is_error_tracking_enabled_ = true;
+  }
+
  protected:
   Data_Namespace::AbstractBuffer* buffer_;
+
+  // Members utililzed for error tracking
+  bool is_error_tracking_enabled_;
+  RejectedRowIndices invalid_indices_;
+  size_t current_chunk_offset_;
+  SQLTypeInfo column_type_;
+
+  // flag to disable validation of stats
+  bool validate_metadata_stats_;
 
   static std::shared_ptr<ChunkMetadata> createMetadata(const SQLTypeInfo& column_type) {
     auto metadata = std::make_shared<ChunkMetadata>();
@@ -121,6 +153,9 @@ class ParquetScalarEncoder : public ParquetEncoder, public ParquetImportEncoder 
   virtual void validate(const int8_t* parquet_data,
                         const int64_t j,
                         const SQLTypeInfo& column_type) const = 0;
+
+  virtual void validateUsingEncodersColumnType(const int8_t* parquet_data,
+                                               const int64_t j) const = 0;
 };
 
 }  // namespace foreign_storage

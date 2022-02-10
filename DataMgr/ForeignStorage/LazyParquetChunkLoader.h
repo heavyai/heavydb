@@ -54,6 +54,8 @@ class LazyParquetChunkLoader {
    * @param chunks - a list containing the chunks to load
    * @param string_dictionary - a string dictionary for the column corresponding to the
    * column, if applicable
+   * @param rejected_row_indices - optional, if specified errors will be
+   * tracked in this data structure while loading
    *
    * @return An empty list when no metadata update is applicable, otherwise a
    * list of ChunkMetadata shared pointers with which to update the
@@ -71,18 +73,23 @@ class LazyParquetChunkLoader {
       const std::vector<RowGroupInterval>& row_group_intervals,
       const int parquet_column_index,
       std::list<Chunk_NS::Chunk>& chunks,
-      StringDictionary* string_dictionary = nullptr);
+      StringDictionary* string_dictionary = nullptr,
+      RejectedRowIndices* rejected_row_indices = nullptr);
 
   /**
    * @brief Perform a metadata scan for the paths specified
    *
    * @param file_paths -  (ordered) files of the metadata scan
    * @param schema - schema of the foreign table to perform metadata scan for
+   * @param do_metadata_stats_validation - validate stats in metadata of parquet files if
+   * true
    *
    * @return a list of the row group metadata extracted from `file_paths`
    */
-  std::list<RowGroupMetadata> metadataScan(const std::vector<std::string>& file_paths,
-                                           const ForeignTableSchema& schema);
+  std::list<RowGroupMetadata> metadataScan(
+      const std::vector<std::string>& file_paths,
+      const ForeignTableSchema& schema,
+      const bool do_metadata_stats_validation = true);
 
   /**
    * Determine if a Parquet to OmniSci column mapping is supported.
@@ -130,7 +137,8 @@ class LazyParquetChunkLoader {
       const int parquet_column_index,
       const ColumnDescriptor* column_descriptor,
       std::list<Chunk_NS::Chunk>& chunks,
-      StringDictionary* string_dictionary);
+      StringDictionary* string_dictionary,
+      RejectedRowIndices* rejected_row_indices);
 
   const RenderGroupAnalyzerMap* render_group_analyzer_map_;
 };

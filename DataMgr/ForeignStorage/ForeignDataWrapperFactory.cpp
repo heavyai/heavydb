@@ -74,14 +74,16 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralI
   CHECK(is_valid_data_wrapper(data_wrapper_type));
 
   if (data_wrapper_type == DataWrapperType::CSV) {
-    return std::make_unique<CsvDataWrapper>(db_id, foreign_table, user_mapping, true);
+    return std::make_unique<CsvDataWrapper>(
+        db_id, foreign_table, user_mapping, /*disable_cache=*/true);
   } else if (data_wrapper_type == DataWrapperType::REGEX_PARSER) {
     return std::make_unique<RegexParserDataWrapper>(
         db_id, foreign_table, user_mapping, true);
   }
 #ifdef ENABLE_IMPORT_PARQUET
   else if (data_wrapper_type == DataWrapperType::PARQUET) {
-    return std::make_unique<ParquetDataWrapper>(db_id, foreign_table, user_mapping);
+    return std::make_unique<ParquetDataWrapper>(
+        db_id, foreign_table, user_mapping, /*do_metadata_stats_validation=*/false);
   }
 #endif
 

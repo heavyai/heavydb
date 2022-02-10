@@ -106,6 +106,8 @@ class ParquetFixedLengthEncoder : public TypedParquetInPlaceEncoder<V, T, NullTy
       IntegralFixedLengthBoundsValidator<T>::validateValue(value, column_type);
     } else if (column_type.is_timestamp()) {
       TimestampBoundsValidator<T>::validateValue(value, column_type);
+    } else if (column_type.is_date()) {
+      DateInDaysBoundsValidator<T>::validateValue(value, column_type);
     }
   }
 

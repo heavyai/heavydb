@@ -40,6 +40,9 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       , current_batch_offset_(0)
       , invalid_indices_(nullptr) {}
 
+  // TODO: this member largely mirrors `appendDataTrackErrors` but is only used
+  // by the parquet-secific import FSI cut-over, and will be removed in the
+  // future
   void validateAndAppendData(const int16_t* def_levels,
                              const int16_t* rep_levels,
                              const int64_t values_read,
@@ -50,7 +53,7 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
     auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
     for (int64_t i = 0, j = 0; i < levels_read; ++i) {
       if (def_levels[i]) {
-        CHECK(j < values_read);
+        CHECK_LT(j, values_read);
         auto& byte_array = parquet_data_ptr[j++];
         if (byte_array.len > StringDictionary::MAX_STRLEN) {
           invalid_indices.insert(current_batch_offset_ + i);
@@ -58,6 +61,28 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       }
     }
     current_batch_offset_ += levels_read;
+    encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
+    appendData(def_levels, rep_levels, values_read, levels_read, values);
+  }
+
+  void appendDataTrackErrors(const int16_t* def_levels,
+                             const int16_t* rep_levels,
+                             const int64_t values_read,
+                             const int64_t levels_read,
+                             int8_t* values) override {
+    CHECK(ParquetEncoder::is_error_tracking_enabled_);
+    auto parquet_data_ptr = reinterpret_cast<const parquet::ByteArray*>(values);
+    for (int64_t i = 0, j = 0; i < levels_read; ++i) {
+      if (def_levels[i]) {
+        CHECK_LT(j, values_read);
+        auto& byte_array = parquet_data_ptr[j++];
+        if (byte_array.len > StringDictionary::MAX_STRLEN) {
+          ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
+                                                  i);
+        }
+      }
+    }
+    ParquetEncoder::current_chunk_offset_ += levels_read;
     encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
     appendData(def_levels, rep_levels, values_read, levels_read, values);
   }

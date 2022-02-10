@@ -50,7 +50,10 @@ class ParquetVariableLengthArrayEncoder : public ParquetArrayEncoder {
     ParquetArrayEncoder::appendArraysToBuffer();
   }
 
-  void processLastArray() override { appendLastArrayOffset(); }
+  void processLastArray() override {
+    ParquetArrayEncoder::processLastArray();
+    appendLastArrayOffset();
+  }
 
  private:
   void setFirstOffsetForBuffer(const int16_t def_level) {

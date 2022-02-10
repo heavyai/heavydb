@@ -639,13 +639,80 @@ TEST_F(RegexParserImportConfigurationErrorHandling, NoLineRegex) {
                           "Regex parser options must contain a line regex.");
 }
 
+using CodePath = std::string;
+using ErrorColumnType = std::string;
+using ImportType = std::string;
+using DataSourceType = std::string;
+using FragmentSize = int32_t;
+using MaxChunkSize = int32_t;
+
+namespace {
+void validate_import_status(const std::string& code_path,
+                            const std::string& import_id,
+                            const TImportStatus& thrift_import_status,
+                            const std::string& copy_from_result,
+                            const size_t rows_completed,
+                            const size_t rows_rejected,
+                            const bool failed_status) {
+  if (code_path !=
+      "general_fsi") {  // validation is only applicable for the general fsi import path
+    return;
+  }
+
+  // Verify the string result set returend by COPY FROM
+  std::string expected_copy_from_result =
+      "Loaded: " + std::to_string(rows_completed) +
+      " recs, Rejected: " + std::to_string(rows_rejected) + " recs";
+  if (failed_status) {
+    expected_copy_from_result =
+        "Loader Failed due to : Load was cancelled due to max reject rows being "
+        "reached";
+  }
+  ASSERT_EQ(expected_copy_from_result,
+            copy_from_result.substr(0, expected_copy_from_result.size()));
+
+  auto import_status = import_export::Importer::get_import_status(import_id);
+
+  // ensure thrift import status matches expected values
+  ASSERT_EQ(import_status.rows_completed,
+            static_cast<size_t>(thrift_import_status.rows_completed));
+  ASSERT_EQ(import_status.rows_rejected,
+            static_cast<size_t>(thrift_import_status.rows_rejected));
+
+  if (failed_status) {  // if expecting a failed status, only check this condition as
+                        // number of rows completed could be indeterministic
+    ASSERT_EQ(failed_status, import_status.load_failed)
+        << " incorrect load_failed flag in import status";
+    ASSERT_EQ(import_status.load_msg,
+              "Load was cancelled due to max reject rows being reached");
+    return;
+  }
+  ASSERT_EQ(rows_completed, import_status.rows_completed)
+      << " incorrect rows completed in import status";
+  ASSERT_EQ(rows_rejected, import_status.rows_rejected)
+      << " incorrect rows rejected in import status";
+  ASSERT_EQ(failed_status, import_status.load_failed)
+      << " incorrect load_failed flag in import status";
+}
+
+std::string get_copy_from_result_str(const TQueryResult& copy_from_query_result) {
+  std::string copy_from_result_str;
+  auto row_set = copy_from_query_result.row_set;
+  CHECK(row_set.is_columnar);
+  CHECK_EQ(row_set.columns.size(), 1UL);
+  auto& str_col = row_set.columns[0].data.str_col;
+  CHECK_EQ(str_col.size(), 1UL);
+  copy_from_result_str = str_col[0];
+  return copy_from_result_str;
+}
+}  // namespace
+
 #ifdef ENABLE_IMPORT_PARQUET
 class ParquetImportErrorHandling : public ImportExportTestBase {
  protected:
   void SetUp() override {
     g_enable_fsi = true;
     g_enable_s3_fsi = true;
-    g_enable_parquet_import_fsi = true;
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS test_table;"));
   }
@@ -655,28 +722,121 @@ class ParquetImportErrorHandling : public ImportExportTestBase {
     ImportExportTestBase::TearDown();
     g_enable_fsi = false;
     g_enable_s3_fsi = false;
-    g_enable_parquet_import_fsi = false;
+  }
+
+  bool testShouldBeSkipped(const std::string& code_path) {
+    if (isDistributedMode() && code_path == "general_fsi") {  // currently unsupported
+      return true;
+    }
+    return false;
+  }
+
+  void setupCodePath(const std::string& code_path) {
+    if (code_path == "general_fsi") {
+      g_enable_general_import_fsi = true;
+    } else if (code_path == "parquet_fsi") {
+      g_enable_parquet_import_fsi = true;
+    } else {
+      UNREACHABLE();
+    }
+  }
+
+  void teardownCodePath(const std::string& code_path) {
+    if (code_path == "general_fsi") {
+      g_enable_general_import_fsi = false;
+    } else if (code_path == "parquet_fsi") {
+      g_enable_parquet_import_fsi = false;
+    } else {
+      UNREACHABLE();
+    }
+  }
+
+  TImportStatus getImportStatus(const std::string& code_path,
+                                const std::string& import_id) {
+    if (code_path == "general_fsi") {
+      return DBHandlerTestFixture::getImportStatus(import_id);
+    }
+    return {};
+  }
+
+  void validateImportStatus(const std::string& code_path,
+                            const std::string& import_id,
+                            const std::string& copy_from_result,
+                            const size_t rows_completed,
+                            const size_t rows_rejected,
+                            const bool failed_status) {
+    validate_import_status(code_path,
+                           import_id,
+                           getImportStatus(code_path, import_id),
+                           copy_from_result,
+                           rows_completed,
+                           rows_rejected,
+                           failed_status);
   }
 
   const std::string fsi_file_base_dir = "../../Tests/FsiDataFiles/";
 };
 
-class ParquetImportErrorHandlingOfTypes
+class ParquetImportErrorHandlingOfCodePaths
     : public ParquetImportErrorHandling,
-      public ::testing::WithParamInterface<std::string> {};
+      public ::testing::WithParamInterface<CodePath> {
+ protected:
+  void SetUp() override {
+    ParquetImportErrorHandling::SetUp();
+    setupCodePath(GetParam());
+  }
 
-TEST_F(ParquetImportErrorHandling, GreaterThanMaxReject) {
+  void TearDown() override {
+    teardownCodePath(GetParam());
+    ParquetImportErrorHandling::TearDown();
+  }
+};
+
+class ParquetImportErrorHandlingOfCodePathsAndTypes
+    : public ParquetImportErrorHandling,
+      public ::testing::WithParamInterface<std::tuple<CodePath, ErrorColumnType>> {
+ protected:
+  void SetUp() override {
+    ParquetImportErrorHandling::SetUp();
+    setupCodePath(std::get<0>(GetParam()));
+  }
+
+  void TearDown() override {
+    teardownCodePath(std::get<0>(GetParam()));
+    ParquetImportErrorHandling::TearDown();
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(ParquetErrorHandling,
+                         ParquetImportErrorHandlingOfCodePaths,
+                         ::testing::Values("general_fsi", "parquet_fsi"),
+                         [](const auto& param_info) { return param_info.param; });
+
+TEST_P(ParquetImportErrorHandlingOfCodePaths, GreaterThanMaxReject) {
+  // TODO: this test is redundant with max_reject test below can probably remove in the
+  // future
+  if (testShouldBeSkipped(GetParam())) {
+    GTEST_SKIP();
+  }
   sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT, ts TIMESTAMP "
       "(0) ENCODING FIXED(32), days DATE ENCODING DAYS(16), ts2days DATE ENCODING DAYS "
       "(16) );");
-  sql("COPY test_table FROM '" + fsi_file_base_dir +
-      "/invalid_parquet/' WITH (source_type='parquet_file', max_reject=6);");
+  TQueryResult copy_from_result;
+  const std::string file_path = fsi_file_base_dir + "/invalid_parquet/";
+  sql(copy_from_result,
+      "COPY test_table FROM '" + file_path +
+          "' WITH (source_type='parquet_file', max_reject=6);");
   TQueryResult query;
   sql(query, "SELECT count(*) FROM test_table;");
   assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
+  validateImportStatus(
+      GetParam(), file_path, get_copy_from_result_str(copy_from_result), 0, 0, true);
 }
 
-TEST_F(ParquetImportErrorHandling, MismatchNumberOfColumns) {
+TEST_P(ParquetImportErrorHandlingOfCodePaths, MismatchNumberOfColumns) {
+  if (testShouldBeSkipped(GetParam())) {
+    GTEST_SKIP();
+  }
   sql("CREATE TABLE test_table (i INT);");
   queryAndAssertException(
       "COPY test_table FROM '" + fsi_file_base_dir +
@@ -685,7 +845,10 @@ TEST_F(ParquetImportErrorHandling, MismatchNumberOfColumns) {
       "'../../Tests/FsiDataFiles/two_col_1_2.parquet'");
 }
 
-TEST_F(ParquetImportErrorHandling, MismatchColumnType) {
+TEST_P(ParquetImportErrorHandlingOfCodePaths, MismatchColumnType) {
+  if (testShouldBeSkipped(GetParam())) {
+    GTEST_SKIP();
+  }
   sql("CREATE TABLE test_table (i INT, t TEXT);");
   queryAndAssertException(
       "COPY test_table FROM '" + fsi_file_base_dir +
@@ -696,22 +859,41 @@ TEST_F(ParquetImportErrorHandling, MismatchColumnType) {
 }
 
 INSTANTIATE_TEST_SUITE_P(ColumnType,
-                         ParquetImportErrorHandlingOfTypes,
-                         ::testing::Values("int",
-                                           "geo",
-                                           "array",
-                                           "text",
-                                           "timestamp",
-                                           "date",
-                                           "timestamp2date"),
-                         [](const auto& param_info) { return param_info.param; });
+                         ParquetImportErrorHandlingOfCodePathsAndTypes,
+                         ::testing::Combine(::testing::Values("general_fsi",
+                                                              "parquet_fsi"),
+                                            ::testing::Values("int",
+                                                              "geo",
+                                                              "array",
+                                                              "text",
+                                                              "timestamp",
+                                                              "date",
+                                                              "timestamp2date")),
+                         [](const auto& param_info) {
+                           return std::get<0>(param_info.param) + "_" +
+                                  std::get<1>(param_info.param);
+                         });
 
-TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
+TEST_P(ParquetImportErrorHandlingOfCodePathsAndTypes, OneInvalidType) {
+  if (testShouldBeSkipped(std::get<0>(GetParam()))) {
+    GTEST_SKIP();
+  }
   sql("CREATE TABLE test_table (id INT, i INT, p POINT, a INT[], t TEXT, ts TIMESTAMP "
       "(0) ENCODING FIXED(32), days DATE ENCODING DAYS(16), ts2days DATE ENCODING DAYS "
       "(16) );");
-  sql("COPY test_table FROM '" + fsi_file_base_dir + "/invalid_parquet/one_invalid_row_" +
-      GetParam() + ".parquet' WITH (source_type='parquet_file');");
+
+  TQueryResult copy_from_result;
+
+  const std::string filename = fsi_file_base_dir + "/invalid_parquet/one_invalid_row_" +
+                               std::get<1>(GetParam()) + ".parquet";
+  sql(copy_from_result,
+      "COPY test_table FROM '" + filename + "' WITH (source_type='parquet_file');");
+  validateImportStatus(std::get<0>(GetParam()),
+                       filename,
+                       get_copy_from_result_str(copy_from_result),
+                       3,
+                       1,
+                       false);
   TQueryResult query;
   sql(query, "SELECT * FROM test_table ORDER BY id;");
   // clang-format off
@@ -727,11 +909,8 @@ TEST_P(ParquetImportErrorHandlingOfTypes, OneInvalidType) {
 }
 #endif
 
-using ImportAndSelectTestParameters = std::tuple</*import_type=*/std::string,
-                                                 /*data_source_type=*/std::string,
-                                                 /*fragment_size=*/int32_t,
-                                                 /*max_chunk_size=*/int32_t,
-                                                 /*code_path=*/std::string>;
+using ImportAndSelectTestParameters =
+    std::tuple<ImportType, DataSourceType, FragmentSize, MaxChunkSize, CodePath>;
 
 class ImportAndSelectTest
     : public ImportExportTestBase,
@@ -873,50 +1052,23 @@ class ImportAndSelectTest
     return schema;
   }
 
+  TImportStatus getImportStatus() {
+    if (param_.code_path == "general_fsi") {
+      return DBHandlerTestFixture::getImportStatus(import_id_);
+    }
+    return {};
+  }
+
   void validateImportStatus(const size_t rows_completed,
                             const size_t rows_rejected,
                             const bool failed_status) {
-    if (param_.code_path !=
-        "general_fsi") {  // validation is only applicable for the general fsi import path
-      return;
-    }
-
-    // Verify the string result set returend by COPY FROM
-    std::string expected_copy_from_result =
-        "Loaded: " + std::to_string(rows_completed) +
-        " recs, Rejected: " + std::to_string(rows_rejected) + " recs";
-    if (failed_status) {
-      expected_copy_from_result =
-          "Loader Failed due to : Load was cancelled due to max reject rows being "
-          "reached";
-    }
-    ASSERT_EQ(expected_copy_from_result,
-              copy_from_result_.substr(0, expected_copy_from_result.size()));
-
-    TImportStatus thrift_import_status =
-        DBHandlerTestFixture::getImportStatus(import_id_);
-    auto import_status = import_export::Importer::get_import_status(import_id_);
-
-    // ensure thrift import status matches expected values
-    ASSERT_EQ(import_status.rows_completed,
-              static_cast<size_t>(thrift_import_status.rows_completed));
-    ASSERT_EQ(import_status.rows_rejected,
-              static_cast<size_t>(thrift_import_status.rows_rejected));
-
-    if (failed_status) {  // if expecting a failed status, only check this condition as
-                          // number of rows completed could be indeterministic
-      ASSERT_EQ(failed_status, import_status.load_failed)
-          << " incorrect load_failed flag in import status";
-      ASSERT_EQ(import_status.load_msg,
-                "Load was cancelled due to max reject rows being reached");
-      return;
-    }
-    ASSERT_EQ(rows_completed, import_status.rows_completed)
-        << " incorrect rows completed in import status";
-    ASSERT_EQ(rows_rejected, import_status.rows_rejected)
-        << " incorrect rows rejected in import status";
-    ASSERT_EQ(failed_status, import_status.load_failed)
-        << " incorrect load_failed flag in import status";
+    validate_import_status(param_.code_path,
+                           import_id_,
+                           getImportStatus(),
+                           copy_from_result_,
+                           rows_completed,
+                           rows_rejected,
+                           failed_status);
   }
 
   TQueryResult createTableCopyFromAndSelect(
@@ -981,14 +1133,7 @@ class ImportAndSelectTest
         "COPY import_test_new FROM " + copy_from_source +
             getCopyFromOptions(import_type, data_source_type, line_regex, max_reject) +
             ";"));
-    {
-      auto row_set = copy_from_result.row_set;
-      CHECK(row_set.is_columnar);
-      CHECK_EQ(row_set.columns.size(), 1UL);
-      auto& str_col = row_set.columns[0].data.str_col;
-      CHECK_EQ(str_col.size(), 1UL);
-      copy_from_result_ = str_col[0];
-    }
+    copy_from_result_ = get_copy_from_result_str(copy_from_result);
 
     TQueryResult result;
     sql(result, select_query);
@@ -1364,7 +1509,8 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
     GTEST_SKIP()
         << "only CSV & regex_parser currently supported for error handling tests";
   }
@@ -1407,7 +1553,8 @@ TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
   if (isOdbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
     GTEST_SKIP()
         << "only CSV & regex_parser currently supported for error handling tests";
   }
@@ -1447,7 +1594,8 @@ TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
   if (isOdbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
     GTEST_SKIP()
         << "only CSV & regex_parser currently supported for error handling tests";
   }
@@ -1484,7 +1632,8 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
     GTEST_SKIP()
         << "only CSV & regex_parser currently supported for error handling tests";
   }
