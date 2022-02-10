@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class StringDictionaryClient" href="class_string_dictionary_client.html" />
+    <link rel="next" title="Class StringDictionary::StringCallback" href="class_string_dictionary_1_1_string_callback.html" />
     <link rel="prev" title="Class StringConstInResultSet" href="class_string_const_in_result_set.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 198c3ea
+                6.0.0dev b9c95f1
               </div>
             
           
@@ -773,10 +773,14 @@
 <li class="toctree-l2"><a class="reference internal" href="class_streaming_top_n_o_o_m.html">Class StreamingTopNOOM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_const_in_result_set.html">Class StringConstInResultSet</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class StringDictionary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_1_1_string_callback.html">Class StringDictionary::StringCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_client.html">Class StringDictionaryClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_generations.html">Class StringDictionaryGenerations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_proxy.html">Class StringDictionaryProxy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_proxy_1_1_id_map.html">Class StringDictionaryProxy::IdMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_dictionary_translation_mgr.html">Class StringDictionaryTranslationMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_local_callback.html">Class StringLocalCallback</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_string_network_callback.html">Class StringNetworkCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
@@ -855,6 +859,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_sub_condition_replacer.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::SubConditionReplacer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_left_deep_inner_join_8cpp_03_1_1_rebind_rex_inputs_from_left_deep_join.html">Class anonymous_namespace{RelLeftDeepInnerJoin.cpp}::RebindRexInputsFromLeftDeepJoin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_scalar_code_generator_8cpp_03_1_1_used_column_expressions.html">Class anonymous_namespace{ScalarCodeGenerator.cpp}::UsedColumnExpressions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_string_dictionary_8cpp_03_1_1_map_maker.html">Class anonymous_namespace{StringDictionary.cpp}::MapMaker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_typed_data_accessors_8h_03_1_1_null_sentinel_supplier.html">Class anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_udf_compiler_8cpp_03_1_1_decl_a_s_t_consumer.html">Class anonymous_namespace{UdfCompiler.cpp}::DeclASTConsumer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_udf_compiler_8cpp_03_1_1_function_decl_visitor.html">Class anonymous_namespace{UdfCompiler.cpp}::FunctionDeclVisitor</a></li>
@@ -1943,7 +1948,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_payload_string.html">Struct StringDictionary::PayloadString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_string_idx_entry.html">Struct StringDictionary::StringIdxEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1compare__cache__value__t.html">Struct StringDictionary::compare_cache_value_t</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_proxy_translation_map.html">Struct StringDictionaryProxyTranslationMap</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_value_converter.html">Struct StringValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_system_parameters.html">Struct SystemParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_descriptor.html">Struct TableDescriptor</a></li>
@@ -2241,6 +2245,16 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4NK16StringDictionary18eachStringSeriallyEK7int64_tR14StringCallback">
+<span id="_CPPv3NK16StringDictionary18eachStringSeriallyEK7int64_tR14StringCallback"></span><span id="_CPPv2NK16StringDictionary18eachStringSeriallyEK7int64_tR14StringCallback"></span><span id="StringDictionary::eachStringSerially__int64_tC.StringCallbackRC"></span><span class="target" id="class_string_dictionary_1ada6f4dbd1cb12c0a1c938566c861e74a"></span>void <code class="sig-name descname">eachStringSerially</code><span class="sig-paren">(</span>int64_t <em class="property">const</em> <em>generation</em>, <a class="reference internal" href="#_CPPv4N16StringDictionary14StringCallbackE" title="StringDictionary::StringCallback">StringCallback</a> &amp;<em>serial_callback</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16StringDictionary18eachStringSeriallyEK7int64_tR14StringCallback" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK16StringDictionary20makeLambdaStringToIdEv">
+<span id="_CPPv3NK16StringDictionary20makeLambdaStringToIdEv"></span><span id="_CPPv2NK16StringDictionary20makeLambdaStringToIdEv"></span><span id="StringDictionary::makeLambdaStringToIdC"></span><span class="target" id="class_string_dictionary_1af4b04d2eeeb3a9613b2ffa377a486c0c"></span>std::function&lt;int32_t<span class="sig-paren">(</span>std::string <em class="property">const</em>&amp;<span class="sig-paren">)</span>&gt; <code class="sig-name descname">makeLambdaStringToId</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16StringDictionary20makeLambdaStringToIdEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4N16StringDictionary8getOrAddERKNSt6stringE">
 <span id="_CPPv3N16StringDictionary8getOrAddERKNSt6stringE"></span><span id="_CPPv2N16StringDictionary8getOrAddERKNSt6stringE"></span><span id="StringDictionary::getOrAdd__ssCR"></span><span class="target" id="class_string_dictionary_1ac3a45782b3f7444c293a714bde647e07"></span>int32_t <code class="sig-name descname">getOrAdd</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>str</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16StringDictionary8getOrAddERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2271,8 +2285,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK16StringDictionary13getIdOfStringERKNSt6stringE">
-<span id="_CPPv3NK16StringDictionary13getIdOfStringERKNSt6stringE"></span><span id="_CPPv2NK16StringDictionary13getIdOfStringERKNSt6stringE"></span><span id="StringDictionary::getIdOfString__ssCRC"></span><span class="target" id="class_string_dictionary_1aa1f860b0ec1d26389fe5332fe913fd8f"></span>int32_t <code class="sig-name descname">getIdOfString</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>str</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16StringDictionary13getIdOfStringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt>
+<span class="target" id="class_string_dictionary_1af054e7ad9178fb600c8910ef4335f021"></span><code class="sig-name descname">template&lt;class String&gt;template int32_t StringDictionary::getIdOfString(const  String &amp; str) const</code></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2335,12 +2349,22 @@
 <span id="_CPPv3N16StringDictionary10checkpointEv"></span><span id="_CPPv2N16StringDictionary10checkpointEv"></span><span id="StringDictionary::checkpoint"></span><span class="target" id="class_string_dictionary_1adefec8e614ee02018927787c045f939c"></span>bool <code class="sig-name descname">checkpoint</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16StringDictionary10checkpointEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4NK16StringDictionary8isClientEv">
+<span id="_CPPv3NK16StringDictionary8isClientEv"></span><span id="_CPPv2NK16StringDictionary8isClientEv"></span><span id="StringDictionary::isClientC"></span><span class="target" id="class_string_dictionary_1a81299eed3dda50a8800b47f05036cbc9"></span>bool <code class="sig-name descname">isClient</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16StringDictionary8isClientEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16StringDictionary11update_leafERK12LeafHostInfo">
+<span id="_CPPv3N16StringDictionary11update_leafERK12LeafHostInfo"></span><span id="_CPPv2N16StringDictionary11update_leafERK12LeafHostInfo"></span><span id="StringDictionary::update_leaf__LeafHostInfoCR"></span><span class="target" id="class_string_dictionary_1a051b91178b538832d6703d573f6ce5fd"></span>void <code class="sig-name descname">update_leaf</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_leaf_host_info.html#_CPPv412LeafHostInfo" title="LeafHostInfo">LeafHostInfo</a> &amp;<em>host_info</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16StringDictionary11update_leafERK12LeafHostInfo" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Static Functions</p>
 <dl class="function">
-<dt id="_CPPv4N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryKNSt3mapI7int32_tNSt6stringEEE">
-<span id="_CPPv3N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryKNSt3mapI7int32_tNSt6stringEEE"></span><span id="_CPPv2N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryKNSt3mapI7int32_tNSt6stringEEE"></span><span id="StringDictionary::populate_string_ids__std::vector:int32_t:R.StringDictionaryP.std::vector:int32_t:CR.StringDictionaryCP.std::map:int32_t.ss:C"></span><span class="target" id="class_string_dictionary_1a68821afb80b35a3292eb8e96063c3355"></span>void <code class="sig-name descname">populate_string_ids</code><span class="sig-paren">(</span>std::vector&lt;int32_t&gt; &amp;<em>dest_ids</em>, <a class="reference internal" href="#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *<em>dest_dict</em>, <em class="property">const</em> std::vector&lt;int32_t&gt; &amp;<em>source_ids</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *<em>source_dict</em>, <em class="property">const</em> std::map&lt;int32_t, std::string&gt; <em>transient_mapping</em> = {}<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryKNSt3mapI7int32_tNSt6stringEEE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryRKNSt6vectorIPKNSt6stringEEE">
+<span id="_CPPv3N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryRKNSt6vectorIPKNSt6stringEEE"></span><span id="_CPPv2N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryRKNSt6vectorIPKNSt6stringEEE"></span><span id="StringDictionary::populate_string_ids__std::vector:int32_t:R.StringDictionaryP.std::vector:int32_t:CR.StringDictionaryCP.std::vector:ssCP:CR"></span><span class="target" id="class_string_dictionary_1ad295b6bdd732499103b7e523f7b2dd55"></span>void <code class="sig-name descname">populate_string_ids</code><span class="sig-paren">(</span>std::vector&lt;int32_t&gt; &amp;<em>dest_ids</em>, <a class="reference internal" href="#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *<em>dest_dict</em>, <em class="property">const</em> std::vector&lt;int32_t&gt; &amp;<em>source_ids</em>, <em class="property">const</em> <a class="reference internal" href="#_CPPv416StringDictionary" title="StringDictionary">StringDictionary</a> *<em>source_dict</em>, <em class="property">const</em> std::vector&lt;std::string <em class="property">const</em> *&gt; &amp;<em>transient_string_vec</em> = {}<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16StringDictionary19populate_string_idsERNSt6vectorI7int32_tEEP16StringDictionaryRKNSt6vectorI7int32_tEEPK16StringDictionaryRKNSt6vectorIPKNSt6stringEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Populates provided <code class="docutils literal notranslate"><span class="pre">dest_ids</span></code> vector with string ids corresponding to given source strings. </p>
 <p>Given a vector of source string ids and corresponding source dictionary, this method populates a vector of destination string ids by either returning the string id of matching strings in the destination dictionary or creating new entries in the dictionary. Source string ids can also be transient if they were created by a function (e.g LOWER/UPPER functions). A map of transient string ids to string values is provided in order to handle this use case.</p>
 <p><dl class="simple">
@@ -2349,7 +2373,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">dest_dict</span></code>: - destination dictionary </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">source_ids</span></code>: - vector of source string ids for which destination ids are needed </p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">source_dict</span></code>: - source dictionary </p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">transient_mapping</span></code>: - map of transient source string ids to string values </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">transient_string_vec</span></code>: - ordered vector of string value pointers </p></li>
 </ul>
 </dd>
 </dl>
@@ -2435,23 +2459,8 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4I00EN16StringDictionary18getOrAddBulkRemoteEvRKNSt6vectorI6StringEEP1T">
-<span id="_CPPv3I00EN16StringDictionary18getOrAddBulkRemoteERKNSt6vectorI6StringEEP1T"></span><span id="_CPPv2I00EN16StringDictionary18getOrAddBulkRemoteERKNSt6vectorI6StringEEP1T"></span><span class="target" id="class_string_dictionary_1a5f20e364f415f582b183bed6c679a45a"></span>template&lt;class <code class="sig-name descname">T</code>, class <code class="sig-name descname">String</code>&gt;<br />void <code class="sig-name descname">getOrAddBulkRemote</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I00EN16StringDictionary18getOrAddBulkRemoteEvRKNSt6vectorI6StringEEP1T" title="StringDictionary::getOrAddBulkRemote::String">String</a>&gt; &amp;<em>string_vec</em>, <a class="reference internal" href="#_CPPv4I00EN16StringDictionary18getOrAddBulkRemoteEvRKNSt6vectorI6StringEEP1T" title="StringDictionary::getOrAddBulkRemote::T">T</a> *<em>encoded_vec</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I00EN16StringDictionary18getOrAddBulkRemoteEvRKNSt6vectorI6StringEEP1T" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1T">
-<span id="_CPPv3I00ENK16StringDictionary13getBulkRemoteERKNSt6vectorI6StringEEP1T"></span><span id="_CPPv2I00ENK16StringDictionary13getBulkRemoteERKNSt6vectorI6StringEEP1T"></span><span class="target" id="class_string_dictionary_1ae035b5e4d94fa6315e231ff392f68300"></span>template&lt;class <code class="sig-name descname">T</code>, class <code class="sig-name descname">String</code>&gt;<br />size_t <code class="sig-name descname">getBulkRemote</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1T" title="StringDictionary::getBulkRemote::String">String</a>&gt; &amp;<em>string_vec</em>, <a class="reference internal" href="#_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1T" title="StringDictionary::getBulkRemote::T">T</a> *<em>encoded_vec</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1T" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1TK7int64_t">
-<span id="_CPPv3I00ENK16StringDictionary13getBulkRemoteERKNSt6vectorI6StringEEP1TK7int64_t"></span><span id="_CPPv2I00ENK16StringDictionary13getBulkRemoteERKNSt6vectorI6StringEEP1TK7int64_t"></span><span class="target" id="class_string_dictionary_1a363f37f69d1711d2930e8f7acbb4cc2a"></span>template&lt;class <code class="sig-name descname">T</code>, class <code class="sig-name descname">String</code>&gt;<br />size_t <code class="sig-name descname">getBulkRemote</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1T" title="StringDictionary::getBulkRemote::String">String</a>&gt; &amp;<em>string_vec</em>, <a class="reference internal" href="#_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1T" title="StringDictionary::getBulkRemote::T">T</a> *<em>encoded_vec</em>, <em class="property">const</em> int64_t <em>generation</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I00ENK16StringDictionary13getBulkRemoteE6size_tRKNSt6vectorI6StringEEP1TK7int64_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK16StringDictionary11getUnlockedERKNSt6stringE">
-<span id="_CPPv3NK16StringDictionary11getUnlockedERKNSt6stringE"></span><span id="_CPPv2NK16StringDictionary11getUnlockedERKNSt6stringE"></span><span id="StringDictionary::getUnlocked__ssCRC"></span><span class="target" id="class_string_dictionary_1ae7b53c785b924199cb4d027a11fe6b60"></span>int32_t <code class="sig-name descname">getUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>str</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16StringDictionary11getUnlockedERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK16StringDictionary11getUnlockedEKNSt11string_viewE">
+<span id="_CPPv3NK16StringDictionary11getUnlockedEKNSt11string_viewE"></span><span id="_CPPv2NK16StringDictionary11getUnlockedEKNSt11string_viewE"></span><span id="StringDictionary::getUnlocked__std::string_viewCC"></span><span class="target" id="class_string_dictionary_1a634561a9ab7b265b480d641e896667f0"></span>int32_t <code class="sig-name descname">getUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::string_view <em>sv</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK16StringDictionary11getUnlockedEKNSt11string_viewE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2708,6 +2717,14 @@
 <dd></dd></dl>
 
 </div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Friends</p>
+<dl class="function">
+<dt>
+<span class="target" id="class_string_dictionary_1a1c9e01772e0b394c69a3fa2a0e7b48ee"></span><em class="property">friend </em><code class="sig-name descname">StringDictionary::StringLocalCallback</code></dt>
+<dd></dd></dl>
+
+</div>
 <dl class="class">
 <dt id="_CPPv4N16StringDictionary21compare_cache_value_tE">
 <span id="_CPPv3N16StringDictionary21compare_cache_value_tE"></span><span id="_CPPv2N16StringDictionary21compare_cache_value_tE"></span><span id="StringDictionary::compare_cache_value_t"></span><span class="target" id="struct_string_dictionary_1_1compare__cache__value__t"></span><em class="property">struct </em><code class="sig-name descname">compare_cache_value_t</code><a class="headerlink" href="#_CPPv4N16StringDictionary21compare_cache_value_tE" title="Permalink to this definition">¶</a><br /></dt>
@@ -2750,6 +2767,30 @@
 </dd></dl>
 
 <dl class="class">
+<dt id="_CPPv4N16StringDictionary14StringCallbackE">
+<span id="_CPPv3N16StringDictionary14StringCallbackE"></span><span id="_CPPv2N16StringDictionary14StringCallbackE"></span><span id="StringDictionary::StringCallback"></span><span class="target" id="class_string_dictionary_1_1_string_callback"></span><em class="property">class </em><code class="sig-name descname">StringCallback</code><a class="headerlink" href="#_CPPv4N16StringDictionary14StringCallbackE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Subclassed by <a class="reference internal" href="classanonymous__namespace_02_string_dictionary_8cpp_03_1_1_map_maker.html#classanonymous__namespace_02_string_dictionary_8cpp_03_1_1_map_maker"><span class="std std-ref">anonymous_namespace{StringDictionary.cpp}::MapMaker</span></a>, <a class="reference internal" href="class_string_local_callback.html#class_string_local_callback"><span class="std std-ref">StringLocalCallback</span></a>, <a class="reference internal" href="class_string_network_callback.html#class_string_network_callback"><span class="std std-ref">StringNetworkCallback</span></a></p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt id="_CPPv4N16StringDictionary14StringCallbackD0Ev">
+<span id="_CPPv3N16StringDictionary14StringCallbackD0Ev"></span><span id="_CPPv2N16StringDictionary14StringCallbackD0Ev"></span><span id="StringDictionary::StringCallback::~StringCallback"></span><span class="target" id="class_string_dictionary_1_1_string_callback_1a39b4d8f613f391a40bfd16d1363e0c4e"></span><em class="property">virtual</em> <code class="sig-name descname">~StringCallback</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16StringDictionary14StringCallbackD0Ev" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16StringDictionary14StringCallbackclERKNSt6stringEK7int32_t">
+<span id="_CPPv3N16StringDictionary14StringCallbackclERKNSt6stringEK7int32_t"></span><span id="_CPPv2N16StringDictionary14StringCallbackclERKNSt6stringEK7int32_t"></span><span id="StringDictionary::StringCallback::call-operator__ssCR.int32_tC"></span><span class="target" id="class_string_dictionary_1_1_string_callback_1a5166d3e12d7fb67e7c41ce17e9fd2b6c"></span><em class="property">virtual</em> void <code class="sig-name descname">operator()</code><span class="sig-paren">(</span>std::string <em class="property">const</em>&amp;, int32_t <em class="property">const</em> <em>string_id</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N16StringDictionary14StringCallbackclERKNSt6stringEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16StringDictionary14StringCallbackclEKNSt11string_viewEK7int32_t">
+<span id="_CPPv3N16StringDictionary14StringCallbackclEKNSt11string_viewEK7int32_t"></span><span id="_CPPv2N16StringDictionary14StringCallbackclEKNSt11string_viewEK7int32_t"></span><span id="StringDictionary::StringCallback::call-operator__std::string_viewC.int32_tC"></span><span class="target" id="class_string_dictionary_1_1_string_callback_1ad2ff9fac37beed1ce871ac93163b9610"></span><em class="property">virtual</em> void <code class="sig-name descname">operator()</code><span class="sig-paren">(</span>std::string_view <em class="property">const</em>, int32_t <em class="property">const</em> <em>string_id</em><span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N16StringDictionary14StringCallbackclEKNSt11string_viewEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="class">
 <dt id="_CPPv4N16StringDictionary14StringIdxEntryE">
 <span id="_CPPv3N16StringDictionary14StringIdxEntryE"></span><span id="_CPPv2N16StringDictionary14StringIdxEntryE"></span><span id="StringDictionary::StringIdxEntry"></span><span class="target" id="struct_string_dictionary_1_1_string_idx_entry"></span><em class="property">struct </em><code class="sig-name descname">StringIdxEntry</code><a class="headerlink" href="#_CPPv4N16StringDictionary14StringIdxEntryE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
@@ -2779,7 +2820,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="class_string_dictionary_client.html" class="btn btn-neutral float-right" title="Class StringDictionaryClient" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="class_string_dictionary_1_1_string_callback.html" class="btn btn-neutral float-right" title="Class StringDictionary::StringCallback" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="class_string_const_in_result_set.html" class="btn btn-neutral float-left" title="Class StringConstInResultSet" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

@@ -1,0 +1,9 @@
+Class anonymous_namespace{StringDictionary.cpp}::MapMaker
+=========================================================
+
+.. doxygenclass:: anonymous_namespace{StringDictionary.cpp}::MapMaker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

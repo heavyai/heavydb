@@ -1,0 +1,9 @@
+Class StringDictionary::StringCallback
+======================================
+
+.. doxygenclass:: StringDictionary::StringCallback
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
