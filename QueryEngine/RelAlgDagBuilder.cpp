@@ -650,11 +650,10 @@ void RelLogicalUnion::checkForMatchingMetaInfoTypes() const {
       VLOG(2) << "Types do not match for UNION:\n  tmis0[" << i
               << "].get_type_info().to_string() = " << ti0.to_string() << "\n  tmis1["
               << i << "].get_type_info().to_string() = " << ti1.to_string();
-      if (ti0.get_comp_param() != ti1.get_comp_param()) {
-        if (!ti0.is_dict_encoded_string() || !ti1.is_dict_encoded_string()) {
-          throw std::runtime_error(
-              "Subqueries of a UNION must have the exact same data types.");
-        }
+      // The only permitted difference is when both columns are dictionary-encoded.
+      if (!(ti0.is_dict_encoded_string() && ti1.is_dict_encoded_string())) {
+        throw std::runtime_error(
+            "Subqueries of a UNION must have the exact same data types.");
       }
     }
   }

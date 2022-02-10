@@ -21918,6 +21918,17 @@ TEST(Select, UnionAll) {
       " SELECT b0, b1, b2, b3, b4 FROM union_all_b"
       " WHERE b0 < 0;",
       dt);
+    c("SELECT SUM(x), y, z FROM TEST GROUP BY y, z"
+      " UNION ALL"
+      " SELECT SUM(x), y, CAST(NULL AS SMALLINT) FROM test GROUP BY y"
+      " ORDER BY y, z NULLS LAST;",
+      dt);
+    // Don't allow UNION of different types: z(SMALLINT) and CAST(NULL AS INT).
+    EXPECT_THROW(run_multiple_agg("SELECT SUM(x), y, z FROM TEST GROUP BY y, z UNION ALL"
+                                  " SELECT SUM(x), y, CAST(NULL AS INT)"
+                                  " FROM test GROUP BY y;",
+                                  dt),
+                 std::runtime_error);
     // The goal is that these should work.
     // Exception: Subqueries of a UNION must have exact same data types.
     EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
