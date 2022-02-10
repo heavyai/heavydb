@@ -35,25 +35,25 @@
     return funcname##_##impl(timeval);                                               \
   }
 
-inline int64_t datetrunc_minute_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_minute_impl(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerMin);
 }
 
 DATE_TRUNC_FUNC_JIT(datetrunc_minute)
 
-inline int64_t datetrunc_hour_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_hour_impl(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerHour);
 }
 
 DATE_TRUNC_FUNC_JIT(datetrunc_hour)
 
-inline int64_t datetrunc_quarterday_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_quarterday_impl(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerQuarterDay);
 }
 
 DATE_TRUNC_FUNC_JIT(datetrunc_quarterday)
 
-inline int64_t datetrunc_day_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_day_impl(int64_t timeval) {
   return timeval - unsigned_mod(timeval, kSecsPerDay);
 }
 
@@ -87,7 +87,7 @@ datetrunc_week_saturday(int64_t timeval) {
   return datetrunc_week<dtSATURDAY>(timeval);
 }
 
-inline int64_t datetrunc_month_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_month_impl(int64_t timeval) {
   if (timeval >= 0LL && timeval <= UINT32_MAX - (kEpochOffsetYear1900)) {
     STATIC_QUAL const uint32_t cumulative_month_epoch_starts[kMonsPerYear] = {0,
                                                                               2678400,
@@ -137,7 +137,7 @@ inline int64_t datetrunc_month_impl(int64_t timeval) {
 
 DATE_TRUNC_FUNC_JIT(datetrunc_month)
 
-inline int64_t datetrunc_quarter_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_quarter_impl(int64_t timeval) {
   if (timeval >= 0LL && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
     STATIC_QUAL const uint32_t cumulative_quarter_epoch_starts[4] = {
         0, 7776000, 15638400, 23587200};
@@ -182,7 +182,7 @@ inline int64_t datetrunc_quarter_impl(int64_t timeval) {
 
 DATE_TRUNC_FUNC_JIT(datetrunc_quarter)
 
-inline int64_t datetrunc_year_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_year_impl(int64_t timeval) {
   if (timeval >= 0LL && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
     // Handles times from Thu 01 Jan 1970 00:00:00 - Thu 07 Feb 2036 06:28:15.
     uint32_t seconds_1900 = static_cast<uint32_t>(timeval) + kEpochOffsetYear1900;
@@ -209,7 +209,7 @@ inline int64_t datetrunc_year_impl(int64_t timeval) {
 
 DATE_TRUNC_FUNC_JIT(datetrunc_year)
 
-inline int64_t datetrunc_decade_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_decade_impl(int64_t timeval) {
   // Number of days from x00301 to (x+1)00101. Always includes exactly two leap days.
   constexpr unsigned decmarjan = MARJAN + 9 * 365 + 2;
   int64_t const day = floor_div(timeval, kSecsPerDay);
@@ -229,7 +229,7 @@ inline int64_t datetrunc_decade_impl(int64_t timeval) {
 
 DATE_TRUNC_FUNC_JIT(datetrunc_decade)
 
-inline int64_t datetrunc_century_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_century_impl(int64_t timeval) {
   int64_t const day = floor_div(timeval, kSecsPerDay);
   unsigned const doe = unsigned_mod(day - kEpochAdjustedDays, kDaysPer400Years);
   // Day-of-century = Days since last 010101 (Jan 1 1901, 2001, 2101, etc.)
@@ -239,7 +239,7 @@ inline int64_t datetrunc_century_impl(int64_t timeval) {
 
 DATE_TRUNC_FUNC_JIT(datetrunc_century)
 
-inline int64_t datetrunc_millennium_impl(int64_t timeval) {
+inline int64_t DEVICE datetrunc_millennium_impl(int64_t timeval) {
   constexpr unsigned millennium2001 = 365242;  // Days from Jan 1 2001 to 3001.
   int64_t const day = floor_div(timeval, kSecsPerDay);
   // lcm(400, 1000) = 2000 so use 5*400-year eras at a time.
@@ -302,13 +302,14 @@ int64_t DateTruncate(DatetruncField field, const int64_t timeval) {
 }
 
 // scale is 10^{3,6,9}
-inline int64_t truncate_high_precision_timestamp_to_date_impl(const int64_t timeval,
-                                                              const int64_t scale) {
+inline int64_t DEVICE
+truncate_high_precision_timestamp_to_date_impl(const int64_t timeval,
+                                               const int64_t scale) {
   return floor_div(timeval, scale * kSecsPerDay) * kSecsPerDay;
 }
 
-int64_t truncate_high_precision_timestamp_to_date(const int64_t timeval,
-                                                  const int64_t scale) {
+int64_t DEVICE truncate_high_precision_timestamp_to_date(const int64_t timeval,
+                                                         const int64_t scale) {
   return truncate_high_precision_timestamp_to_date_impl(timeval, scale);
 }
 
@@ -483,9 +484,8 @@ DateDiffHighPrecision(const DatetruncField datepart,
       // sub-second values must be accounted for when calling DateDiff. Examples:
       // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.005 is 0 months.
       // 2000-02-15 12:00:00.006 to 2000-03-15 12:00:00.006 is 1 month.
-      int const adj_sec = 0 < delta_s && delta_ns < 0   ? -1
-                          : delta_s < 0 && 0 < delta_ns ? 1
-                                                        : 0;
+      int const adj_sec =
+          0 < delta_s && delta_ns < 0 ? -1 : delta_s < 0 && 0 < delta_ns ? 1 : 0;
       return DateDiff(datepart, start_seconds, end_seconds + adj_sec);
   }
 }
