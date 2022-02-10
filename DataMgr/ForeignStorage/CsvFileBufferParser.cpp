@@ -320,30 +320,15 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
     const ForeignTable* foreign_table) const {
   import_export::CopyParams copy_params{};
   copy_params.plain_text = true;
-  if (const auto& value =
-          validate_and_get_string_with_length(foreign_table, "ARRAY_DELIMITER", 1);
-      !value.empty()) {
-    copy_params.array_delim = value[0];
-  }
-  if (const auto& value =
-          validate_and_get_string_with_length(foreign_table, "ARRAY_MARKER", 2);
-      !value.empty()) {
-    copy_params.array_begin = value[0];
-    copy_params.array_end = value[1];
-  }
-  if (auto it = foreign_table->options.find("BUFFER_SIZE");
-      it != foreign_table->options.end()) {
-    copy_params.buffer_size = std::stoi(it->second);
-  }
-  if (const auto& value = validate_and_get_delimiter(foreign_table, "DELIMITER");
+  if (const auto& value = validate_and_get_delimiter(foreign_table, DELIMITER_KEY);
       !value.empty()) {
     copy_params.delimiter = value[0];
   }
-  if (const auto& value = validate_and_get_string_with_length(foreign_table, "ESCAPE", 1);
-      !value.empty()) {
-    copy_params.escape = value[0];
+  if (auto it = foreign_table->options.find(NULLS_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.null_str = it->second;
   }
-  auto has_header = validate_and_get_bool_value(foreign_table, "HEADER");
+  auto has_header = validate_and_get_bool_value(foreign_table, HEADER_KEY);
   if (has_header.has_value()) {
     if (has_header.value()) {
       copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
@@ -351,23 +336,46 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
       copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
     }
   }
-  if (const auto& value = validate_and_get_delimiter(foreign_table, "LINE_DELIMITER");
-      !value.empty()) {
-    copy_params.line_delim = value[0];
-  }
-  copy_params.lonlat =
-      validate_and_get_bool_value(foreign_table, "LONLAT").value_or(copy_params.lonlat);
-
-  if (auto it = foreign_table->options.find("NULLS");
-      it != foreign_table->options.end()) {
-    copy_params.null_str = it->second;
-  }
-  if (const auto& value = validate_and_get_string_with_length(foreign_table, "QUOTE", 1);
+  copy_params.quoted =
+      validate_and_get_bool_value(foreign_table, QUOTED_KEY).value_or(copy_params.quoted);
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, QUOTE_KEY, 1);
       !value.empty()) {
     copy_params.quote = value[0];
   }
-  copy_params.quoted =
-      validate_and_get_bool_value(foreign_table, "QUOTED").value_or(copy_params.quoted);
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, ESCAPE_KEY, 1);
+      !value.empty()) {
+    copy_params.escape = value[0];
+  }
+  if (const auto& value = validate_and_get_delimiter(foreign_table, LINE_DELIMITER_KEY);
+      !value.empty()) {
+    copy_params.line_delim = value[0];
+  }
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, ARRAY_DELIMITER_KEY, 1);
+      !value.empty()) {
+    copy_params.array_delim = value[0];
+  }
+  if (const auto& value =
+          validate_and_get_string_with_length(foreign_table, ARRAY_MARKER_KEY, 2);
+      !value.empty()) {
+    copy_params.array_begin = value[0];
+    copy_params.array_end = value[1];
+  }
+  copy_params.lonlat =
+      validate_and_get_bool_value(foreign_table, LONLAT_KEY).value_or(copy_params.lonlat);
+  copy_params.geo_assign_render_groups =
+      validate_and_get_bool_value(foreign_table, GEO_ASSIGN_RENDER_GROUPS_KEY)
+          .value_or(copy_params.geo_assign_render_groups);
+  copy_params.geo_explode_collections =
+      validate_and_get_bool_value(foreign_table, GEO_EXPLODE_COLLECTIONS_KEY)
+          .value_or(copy_params.geo_explode_collections);
+  if (auto it = foreign_table->options.find(BUFFER_SIZE_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.buffer_size = std::stoi(it->second);
+  }
+
   return copy_params;
 }
 

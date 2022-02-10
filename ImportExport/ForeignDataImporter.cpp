@@ -130,11 +130,10 @@ import_export::ImportStatus import_foreign_data(
   }
   CHECK_GE(max_fragment_id, 0);
 
-  if (g_enable_assign_render_groups) {
-    // if render group assignment is globally enabled,
-    // tell the wrapper to create any RenderGroupAnalyzers it
-    // may need for any poly columns in the table, if that
-    // wrapper type supports it
+  if (g_enable_assign_render_groups && copy_params.geo_assign_render_groups) {
+    // if render group assignment is enabled, tell the wrapper to create any
+    // RenderGroupAnalyzers it may need for any poly columns in the table, if
+    // that wrapper type supports it
     data_wrapper->createRenderGroupAnalyzers();
   }
 

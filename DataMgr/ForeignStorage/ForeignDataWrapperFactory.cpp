@@ -66,6 +66,10 @@ bool is_valid_source_type(const import_export::CopyParams& copy_params) {
       copy_params.source_type == import_export::SourceType::kRegexParsedFile;
 }
 
+std::string bool_to_option_value(const bool value) {
+  return value ? "TRUE" : "FALSE";
+}
+
 std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralImport(
     const std::string& data_wrapper_type,
     const int db_id,
@@ -184,6 +188,46 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     throw std::runtime_error("AWS storage not supported");
   } else {
     foreign_table->options["FILE_PATH"] = copy_from_source;
+  }
+
+  // for CSV import
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
+    foreign_table->options[CsvFileBufferParser::DELIMITER_KEY] = copy_params.delimiter;
+    foreign_table->options[CsvFileBufferParser::NULLS_KEY] = copy_params.null_str;
+    switch (copy_params.has_header) {
+      case import_export::ImportHeaderRow::kNoHeader:
+        foreign_table->options[CsvFileBufferParser::HEADER_KEY] = "FALSE";
+        break;
+      case import_export::ImportHeaderRow::kHasHeader:
+      case import_export::ImportHeaderRow::kAutoDetect:
+        foreign_table->options[CsvFileBufferParser::HEADER_KEY] = "TRUE";
+        break;
+      default:
+        CHECK(false);
+    }
+    foreign_table->options[CsvFileBufferParser::QUOTED_KEY] =
+        bool_to_option_value(copy_params.quoted);
+    foreign_table->options[CsvFileBufferParser::QUOTE_KEY] = copy_params.quote;
+    foreign_table->options[CsvFileBufferParser::ESCAPE_KEY] = copy_params.escape;
+    foreign_table->options[CsvFileBufferParser::LINE_DELIMITER_KEY] =
+        copy_params.line_delim;
+    foreign_table->options[CsvFileBufferParser::ARRAY_DELIMITER_KEY] =
+        copy_params.array_delim;
+    const std::array<char, 3> array_marker{
+        copy_params.array_begin, copy_params.array_end, 0};
+    foreign_table->options[CsvFileBufferParser::ARRAY_MARKER_KEY] = array_marker.data();
+    foreign_table->options[CsvFileBufferParser::LONLAT_KEY] =
+        bool_to_option_value(copy_params.lonlat);
+    foreign_table->options[CsvFileBufferParser::GEO_ASSIGN_RENDER_GROUPS_KEY] =
+        bool_to_option_value(copy_params.geo_assign_render_groups);
+    if (copy_params.geo_explode_collections) {
+      throw std::runtime_error(
+          "geo_explode_collections is not yet supported for FSI CSV import");
+    }
+    foreign_table->options[CsvFileBufferParser::GEO_EXPLODE_COLLECTIONS_KEY] =
+        bool_to_option_value(copy_params.geo_explode_collections);
+    foreign_table->options[CsvFileBufferParser::BUFFER_SIZE_KEY] =
+        std::to_string(copy_params.buffer_size);
   }
 
   foreign_table->initializeOptions();
