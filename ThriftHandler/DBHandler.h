@@ -298,7 +298,8 @@ class DBHandler : public OmniSciIf {
                    const std::string& query,
                    const bool column_format,
                    const int32_t first_n,
-                   const int32_t at_most_n);
+                   const int32_t at_most_n,
+                   lockmgr::LockedTableDescriptors& locks);
   // query, render
   void sql_execute(TQueryResult& _return,
                    const TSessionId& session,
@@ -729,7 +730,8 @@ class DBHandler : public OmniSciIf {
                         const ExecutorDeviceType executor_device_type,
                         const int32_t first_n,
                         const int32_t at_most_n,
-                        const bool use_calcite);
+                        const bool use_calcite,
+                        lockmgr::LockedTableDescriptors& locks);
 
   bool user_can_access_table(const Catalog_Namespace::SessionInfo&,
                              const TableDescriptor* td,

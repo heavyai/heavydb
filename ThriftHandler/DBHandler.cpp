@@ -1191,6 +1191,7 @@ void DBHandler::sql_execute_local(
   }
 
   ExecutionResult result;
+  lockmgr::LockedTableDescriptors locks;
   _return.total_time_ms += measure<>::execution([&]() {
     DBHandler::sql_execute_impl(result,
                                 query_state_proxy,
@@ -1198,7 +1199,8 @@ void DBHandler::sql_execute_local(
                                 session_ptr->get_executor_device_type(),
                                 first_n,
                                 at_most_n,
-                                use_calcite);
+                                use_calcite,
+                                locks);
     DBHandler::convertData(
         _return, result, query_state_proxy, query_str, column_format, first_n, at_most_n);
   });
@@ -1327,7 +1329,8 @@ void DBHandler::sql_execute(ExecutionResult& _return,
                             const std::string& query_str,
                             const bool column_format,
                             const int32_t first_n,
-                            const int32_t at_most_n) {
+                            const int32_t at_most_n,
+                            lockmgr::LockedTableDescriptors& locks) {
   const std::string exec_ra_prefix = "execute relalg";
   const bool use_calcite = !boost::starts_with(query_str, exec_ra_prefix);
   auto actual_query =
@@ -1355,7 +1358,8 @@ void DBHandler::sql_execute(ExecutionResult& _return,
                                   session_ptr->get_executor_device_type(),
                                   first_n,
                                   at_most_n,
-                                  use_calcite);
+                                  use_calcite,
+                                  locks);
     });
 
     _return.setExecutionTime(total_time_ms + process_deferred_copy_from(session));
@@ -1448,13 +1452,15 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
   }
 
   ExecutionResult execution_result;
+  lockmgr::LockedTableDescriptors locks;
   sql_execute_impl(execution_result,
                    query_state->createQueryStateProxy(),
                    true, /* column_format - does this do anything? */
                    executor_device_type,
                    first_n,
                    -1, /* at_most_n */
-                   true);
+                   true,
+                   locks);
 
   const auto result_set = execution_result.getRows();
   const auto executor_results_device_type = results_device_type == TDeviceType::CPU
@@ -6192,7 +6198,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                                  const ExecutorDeviceType executor_device_type,
                                  const int32_t first_n,
                                  const int32_t at_most_n,
-                                 const bool use_calcite) {
+                                 const bool use_calcite,
+                                 lockmgr::LockedTableDescriptors& locks) {
   if (leaf_handler_) {
     leaf_handler_->flush_queue();
   }
@@ -6204,7 +6211,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
   mapd_shared_lock<mapd_shared_mutex> executeReadLock;
 
-  lockmgr::LockedTableDescriptors locks;
   ParserWrapper pw{query_str};
   if (!pw.isCalcitePathPermissable(true)) {
     check_not_info_schema_db(cat.name());
@@ -6649,11 +6655,13 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
       CHECK(td);
       if (td->is_system_table) {
         if (g_enable_system_tables) {
-          // Reset system tables fragmenters in order to force chunk metadata fetch on
-          // next query
-          auto table_write_lock =
+          // Reset system table fragmenter in order to force chunk metadata refetch.
+          auto table_schema_lock =
               lockmgr::TableSchemaLockMgr::getWriteLockForTable(*cat, td->tableName);
+          auto table_data_lock =
+              lockmgr::TableDataLockMgr::getWriteLockForTable(*cat, td->tableName);
           cat->removeFragmenterForTable(td->tableId);
+          cat->getMetadataForTable(td->tableId, true);
         } else {
           throw std::runtime_error(
               "Query cannot be executed because use of system tables is currently "

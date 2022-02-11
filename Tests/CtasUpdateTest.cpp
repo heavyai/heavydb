@@ -17,7 +17,9 @@
 #include <gtest/gtest.h>
 #include <ctime>
 #include <iostream>
+
 #include "DBHandlerTestHelpers.h"
+#include "LockMgr/LockMgr.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "TestHelpers.h"
 
@@ -2958,7 +2960,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
       try {
         auto query = "INSERT INTO t_ITAS SELECT x FROM t_very_large";
         ExecutionResult result;
-        db_handler->sql_execute(result, session_id, query, false, -1, -1);
+        lockmgr::LockedTableDescriptors locks;
+        db_handler->sql_execute(result, session_id, query, false, -1, -1, locks);
       } catch (const QueryExecutionError& e) {
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           catchInterruption.store(true);
@@ -3067,7 +3070,8 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
       try {
         auto query = "CREATE TABLE t_CTAS AS SELECT * FROM t_very_large WHERE x < 3;";
         ExecutionResult result;
-        db_handler->sql_execute(result, session_id, query, false, -1, -1);
+        lockmgr::LockedTableDescriptors locks;
+        db_handler->sql_execute(result, session_id, query, false, -1, -1, locks);
       } catch (const QueryExecutionError& e) {
         if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
           catchInterruption.store(true);

@@ -18,6 +18,7 @@ package com.mapd.tests;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
@@ -37,7 +38,7 @@ public class SystemTableConcurrencyTest {
   }
 
   private void runTest() throws Exception {
-    final List<ThreadDbQueries> queriesPerThread = Arrays.asList(
+    List<ThreadDbQueries> queriesPerThread = new ArrayList<ThreadDbQueries>(Arrays.asList(
             new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_1 (password = 'HyperInteractive');",
                             "ALTER USER user_1 (password = 'HyperInteractive2');",
@@ -82,27 +83,26 @@ public class SystemTableConcurrencyTest {
                             "DROP USER user_4;",
                             "DROP USER user_5;",
                             "DROP ROLE role_3;",
-                            "DROP ROLE role_4;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM users;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM permissions;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM databases;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM roles;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM tables;")),
-            new ThreadDbQueries("information_schema",
-                    Arrays.asList("SELECT * FROM role_assignments;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM dashboards;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM memory_summary;")),
-            new ThreadDbQueries(
-                    "information_schema", Arrays.asList("SELECT * FROM memory_details;")),
-            new ThreadDbQueries("information_schema",
-                    Arrays.asList("SELECT * FROM storage_details;")));
+                            "DROP ROLE role_4;"))));
+    final List<String> systemTableQueries = Arrays.asList("SELECT * FROM users;",
+            "SELECT * FROM permissions;",
+            "SELECT * FROM databases;",
+            "SELECT * FROM roles;",
+            "SELECT * FROM tables;",
+            "SELECT * FROM role_assignments;",
+            "SELECT * FROM dashboards;",
+            "SELECT * FROM memory_summary;",
+            "SELECT * FROM memory_details;",
+            "SELECT * FROM storage_details;");
+
+    for (int i = 0; i < systemTableQueries.size(); i++) {
+      // Run queries for the same system table in parallel.
+      final int parallelQueryCount = 5;
+      for (int j = 0; j < parallelQueryCount; j++) {
+        queriesPerThread.add(new ThreadDbQueries(
+                "information_schema", Arrays.asList(systemTableQueries.get(i))));
+      }
+    }
 
     final int num_threads = queriesPerThread.size()
             + 1; // +1 for dashboard creation/update thread, which is created separately.
