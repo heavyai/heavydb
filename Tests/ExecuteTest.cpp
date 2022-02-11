@@ -9857,6 +9857,8 @@ TEST(Select, ScalarSubquery) {
     c("SELECT SUM(x) + SUM(y) FROM test GROUP BY z HAVING (SELECT d FROM test "
       "GROUP BY d HAVING d > 2.4 LIMIT 1) > 2.4 ORDER BY z;",
       dt);
+    EXPECT_THROW(run_multiple_agg("SELECT 5 - (SELECT rowid FROM test);", dt),
+                 std::runtime_error);
     /* TODO(adb): triggers as assert when setting the result of the scalar subquery
     descriptor const auto save_watchdog = g_enable_watchdog; g_enable_watchdog = false;
     ScopeGuard reset_watchdog_state = [&save_watchdog] {
