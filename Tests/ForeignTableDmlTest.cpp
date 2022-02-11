@@ -1696,6 +1696,21 @@ TEST_P(DataWrapperSelectQueryTest, RecursiveDirectory) {
   // clang-format on
 }
 
+TEST_P(DataWrapperSelectQueryTest, FilePathWithLeadingSlash) {
+  if (is_odbc(GetParam())) {
+    GTEST_SKIP() << "Not a valid test case for ODBC wrappers";
+  }
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_" + wrapper_type_ +
+      " WITH (storage_type = 'LOCAL_FILE', base_path = '" + getDataFilesPath() + "');");
+  std::string options{"file_path = '/1" + wrapper_ext(wrapper_type_) + "'"};
+  if (wrapper_type_ == "regex_parser") {
+    options += ", line_regex = '(\\d+)'";
+  }
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (i INTEGER) SERVER test_server WITH (" + options + ");");
+  sqlAndCompareResult(default_select, {{i(1)}});
+}
+
 TEST_P(DataWrapperSelectQueryTest, NoMatchWildcard) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid testcase for ODBC wrappers";
