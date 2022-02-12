@@ -158,7 +158,21 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
 
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   auto timer = DEBUG_TIMER(__func__);
-  rows->moveToBegin();
+
+  ChunkMetadataMap metadata_map;
+
+  if (rows->definitelyHasNoRows()) {
+    // resultset has no valid storage, so we fill dummy metadata and return early
+    std::vector<std::unique_ptr<Encoder>> decoders;
+    for (size_t i = 0; i < rows->colCount(); ++i) {
+      decoders.emplace_back(Encoder::Create(nullptr, rows->getColType(i)));
+      const auto it_ok =
+          metadata_map.emplace(i, decoders.back()->getMetadata(rows->getColType(i)));
+      CHECK(it_ok.second);
+    }
+    return metadata_map;
+  }
+
   std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
   const size_t worker_count =
       result_set::use_parallel_algorithms(*rows) ? cpu_threads() : 1;
@@ -169,6 +183,8 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
       dummy_encoders.back().emplace_back(Encoder::Create(nullptr, col_ti));
     }
   }
+
+  rows->moveToBegin();
   const auto do_work = [rows](const std::vector<TargetValue>& crt_row,
                               std::vector<std::unique_ptr<Encoder>>& dummy_encoders) {
     for (size_t i = 0; i < rows->colCount(); ++i) {
@@ -244,9 +260,8 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
       }
       do_work(crt_row, dummy_encoders[0]);
     }
-    rows->moveToBegin();
   }
-  ChunkMetadataMap metadata_map;
+  rows->moveToBegin();
   for (size_t worker_idx = 1; worker_idx < worker_count; ++worker_idx) {
     CHECK_LT(worker_idx, dummy_encoders.size());
     const auto& worker_encoders = dummy_encoders[worker_idx];
