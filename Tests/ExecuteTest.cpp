@@ -8309,6 +8309,9 @@ TEST(Select, SkipFragments) {
       true,
       num_cols,
       0);
+  c("select f, avg(ff) from (select x, f, ff from test where rowid > 100) group by x,f "
+    "having (x < -1000);",
+    ExecutorDeviceType::CPU);
 }
 
 TEST(Select, UnsupportedNodes) {
