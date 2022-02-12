@@ -29,6 +29,7 @@
 #include <boost/functional/hash.hpp>
 
 #include <algorithm>
+#include <ostream>
 #include <unordered_map>
 
 struct EMPTY_META_INFO {};
@@ -41,13 +42,29 @@ enum CacheItemType {
   HT_HASHING_SCHEME,          // Hashtable layout
   BASELINE_HT_APPROX_CARD,    // Approximated cardinality for baseline hashtable
   OVERLAPS_AUTO_TUNER_PARAM,  // Hashtable auto tuner's params for overlaps join
+  QUERY_RESULTSET,            // query resultset
+  CHUNK_METADATA,             // query resultset's chunk metadata
   // TODO (yoonmin): support the following items for recycling
-  // ROW_RS,             Row-wise resultset
   // COUNTALL_CARD_EST,  Cardinality of query result
   // NDV_CARD_EST,       # Non-distinct value
   // FILTER_SEL          Selectivity of (push-downed) filter node
   NUM_CACHE_ITEM_TYPE
 };
+
+inline std::ostream& operator<<(std::ostream& os, CacheItemType const item_type) {
+  constexpr char const* cache_item_type_str[]{
+      "Perfect Join Hashtable",
+      "Baseline Join Hashtable",
+      "Overlaps Join Hashtable",
+      "Hashing Scheme for Join Hashtable",
+      "Baseline Join Hashtable's Approximated Cardinality",
+      "Overlaps Join Hashtable's Auto Tuner's Parameters",
+      "Query ResultSet",
+      "Chunk Metadata"};
+  static_assert(sizeof(cache_item_type_str) / sizeof(*cache_item_type_str) ==
+                NUM_CACHE_ITEM_TYPE);
+  return os << cache_item_type_str[item_type];
+}
 
 // given item to be cached, it represents whether the item can be cached when considering
 // various size limitation
@@ -116,20 +133,6 @@ using CacheMetricInfoMap =
 
 class DataRecyclerUtil {
  public:
-  // need to add more constants if necessary: ROW_RS, COUNTALL_CARD_EST, NDV_CARD_EST,
-  // FILTER_SEL, ...
-  static constexpr auto cache_item_type_str =
-      shared::string_view_array("Perfect Join Hashtable",
-                                "Baseline Join Hashtable",
-                                "Overlaps Join Hashtable",
-                                "Hashing Scheme for Join Hashtable",
-                                "Baseline Join Hashtable's Approximated Cardinality",
-                                "Overlaps Join Hashtable's Auto Tuner's Parameters");
-  static std::string_view toStringCacheItemType(CacheItemType item_type) {
-    static_assert(cache_item_type_str.size() == NUM_CACHE_ITEM_TYPE);
-    return cache_item_type_str[item_type];
-  }
-
   static constexpr DeviceIdentifier CPU_DEVICE_IDENTIFIER = 0;
 
   static std::string getDeviceIdentifierString(DeviceIdentifier device_identifier) {
@@ -165,20 +168,17 @@ class CacheMetricTracker {
     current_cache_size_in_bytes_.emplace(DataRecyclerUtil::CPU_DEVICE_IDENTIFIER, 0);
 
     if (total_cache_size_ < 1024 * 1024 * 256) {
-      LOG(INFO) << "The total cache size of "
-                << DataRecyclerUtil::toStringCacheItemType(cache_item_type)
+      LOG(INFO) << "The total cache size of " << cache_item_type
                 << " is set too low, so we suggest raising it larger than 256MB";
     }
 
     if (max_cache_item_size < 1024 * 1024 * 10) {
       LOG(INFO)
-          << "The maximum item size of "
-          << DataRecyclerUtil::toStringCacheItemType(cache_item_type)
+          << "The maximum item size of " << cache_item_type
           << " that can be cached is set too low, we suggest raising it larger than 10MB";
     }
     if (max_cache_item_size > total_cache_size_) {
-      LOG(INFO) << "The maximum item size of "
-                << DataRecyclerUtil::toStringCacheItemType(cache_item_type)
+      LOG(INFO) << "The maximum item size of " << cache_item_type
                 << " is set larger than its total cache size, so we force to set the "
                    "maximum item size as equal to the total cache size";
       max_cache_item_size = total_cache_size_;
@@ -240,9 +240,17 @@ class CacheMetricTracker {
     auto itr = cache_metrics_.find(device_identifier);
     CHECK(itr != cache_metrics_.end());
     if (auto cached_metric = getCacheItemMetricImpl(key, itr->second)) {
-      return cached_metric;
+      if (cached_metric->getMemSize() != mem_size) {
+        updateCurrentCacheSize(
+            device_identifier, CacheUpdateAction::REMOVE, cached_metric->getMemSize());
+        removeCacheItemMetric(key, device_identifier);
+      } else {
+        cached_metric->incRefCount();
+        return cached_metric;
+      }
     }
     auto cache_metric = std::make_shared<CacheItemMetric>(key, compute_time, mem_size);
+    updateCurrentCacheSize(device_identifier, CacheUpdateAction::ADD, mem_size);
     // we add the item to cache after we create it during query runtime
     // so it is used at least once
     cache_metric->incRefCount();
@@ -274,8 +282,7 @@ class CacheMetricTracker {
   void clearCacheMetricTracker() {
     for (auto& kv : current_cache_size_in_bytes_) {
       auto cache_item_metrics = getCacheItemMetrics(kv.first);
-      VLOG(1) << "Clear cache of " << DataRecyclerUtil::toStringCacheItemType(item_type_)
-              << " from device [" << kv.first
+      VLOG(1) << "Clear cache of " << item_type_ << " from device [" << kv.first
               << "] (# cached items: " << cache_item_metrics.size() << ", " << kv.second
               << " bytes)";
       updateCurrentCacheSize(kv.first, CacheUpdateAction::REMOVE, kv.second);

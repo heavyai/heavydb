@@ -23,6 +23,9 @@
 #include <tbb/task_arena.h>
 #include <future>
 
+extern bool g_enable_data_recycler;
+extern bool g_use_chunk_metadata_cache;
+
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 
 namespace {
@@ -440,7 +443,32 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
 
 const ChunkMetadataMap& Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const {
   if (resultSet && !synthesizedMetadataIsValid) {
-    chunkMetadataMap = synthesize_metadata(resultSet);
+    bool need_to_compute_metadata = true;
+    // we disable chunk metadata recycler when filter pushdown is enabled
+    // since re-executing the query invalidates the cached metdata
+    // todo(yoonmin): relax this
+    bool enable_chunk_metadata_cache = g_enable_data_recycler &&
+                                       g_use_chunk_metadata_cache &&
+                                       !g_enable_filter_push_down;
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    if (enable_chunk_metadata_cache) {
+      std::optional<ChunkMetadataMap> cached =
+          executor->getRecultSetRecyclerHolder().getCachedChunkMetadata(
+              resultSet->getQueryPlanHash());
+      if (cached) {
+        chunkMetadataMap = *cached;
+        need_to_compute_metadata = false;
+      }
+    }
+    if (need_to_compute_metadata) {
+      chunkMetadataMap = synthesize_metadata(resultSet);
+      if (enable_chunk_metadata_cache && !chunkMetadataMap.empty()) {
+        executor->getRecultSetRecyclerHolder().putChunkMetadataToCache(
+            resultSet->getQueryPlanHash(),
+            resultSet->getInputTableKeys(),
+            chunkMetadataMap);
+      }
+    }
     synthesizedMetadataIsValid = true;
   }
   return chunkMetadataMap;

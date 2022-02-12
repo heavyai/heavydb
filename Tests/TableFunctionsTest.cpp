@@ -1954,6 +1954,105 @@ TEST_F(TableFunctions, FilterTransposeRuleMisc) {
   }
 }
 
+TEST_F(TableFunctions, ResultsetRecycling) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto clearCache = [&executor] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+  clearCache();
+
+  ScopeGuard reset_global_flag_state =
+      [orig_resulset_recycler = g_use_query_resultset_cache,
+       orig_data_recycler = g_enable_data_recycler,
+       orig_chunk_metadata_recycler = g_use_chunk_metadata_cache] {
+        g_use_query_resultset_cache = orig_resulset_recycler;
+        g_enable_data_recycler = orig_data_recycler;
+        g_use_chunk_metadata_cache = orig_chunk_metadata_recycler;
+      };
+  g_enable_data_recycler = true;
+  g_use_query_resultset_cache = true;
+  g_use_chunk_metadata_cache = true;
+
+  // put resultset to cache in advance
+  auto q1 =
+      "SELECT /*+ keep_table_function_result */ out0 FROM TABLE(row_copier(cursor(SELECT "
+      "d FROM tf_test), 1)) ORDER BY out0;";
+  auto q2 =
+      "SELECT /*+ keep_table_function_result */ out0 FROM "
+      "TABLE(sort_column_limit(CURSOR(SELECT x FROM tf_test), 3, false, true)) ORDER by "
+      "out0 DESC;";
+  auto q3 =
+      "SELECT /*+ keep_table_function_result */ out0 FROM "
+      "TABLE(ct_binding_column2(cursor(SELECT d FROM tf_test), cursor(SELECT x from "
+      "tf_test)));";
+  auto q4 =
+      "SELECT /*+ keep_table_function_result */ total FROM "
+      "TABLE(ct_named_rowmul_output(cursor(SELECT x FROM tf_test), 2));";
+  auto q5 =
+      "SELECT /*+ keep_table_function_result */ answer FROM "
+      "TABLE(ct_no_arg_constant_sizing()) ORDER BY answer;";
+  auto q6 =
+      "SELECT /*+ keep_table_function_result */ output FROM "
+      "TABLE(ct_templated_no_cursor_user_constant_sizer(7, 4));";
+  run_multiple_agg(q1, ExecutorDeviceType::CPU);
+  run_multiple_agg(q2, ExecutorDeviceType::CPU);
+  run_multiple_agg(q3, ExecutorDeviceType::CPU);
+  run_multiple_agg(q4, ExecutorDeviceType::CPU);
+  run_multiple_agg(q5, ExecutorDeviceType::CPU);
+  run_multiple_agg(q6, ExecutorDeviceType::CPU);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(q1, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+
+    {
+      const auto rows = run_multiple_agg(q2, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(3));
+      std::vector<int64_t> expected_result_set{4, 3, 2};
+      for (size_t i = 0; i < 3; i++) {
+        auto row = rows->getNextRow(true, false);
+        auto v = TestHelpers::v<int64_t>(row[0]);
+        ASSERT_EQ(v, expected_result_set[i]);
+      }
+    }
+
+    {
+      const auto rows = run_multiple_agg(q3, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(1));
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(40));
+    }
+
+    {
+      const auto rows = run_multiple_agg(q4, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(10));
+    }
+
+    {
+      const auto rows = run_multiple_agg(q5, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(42));
+      for (size_t i = 0; i < 42; i++) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(42 * i));
+      }
+    }
+
+    {
+      const auto rows = run_multiple_agg(q6, dt);
+      ASSERT_EQ(rows->rowCount(), size_t(4));
+
+      for (size_t r = 0; r < 4; ++r) {
+        auto crt_row = rows->getNextRow(false, false);
+        ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(7));
+      }
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

@@ -185,6 +185,9 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   g_enable_fsi = true;
 
+  g_enable_data_recycler = false;
+  g_use_query_resultset_cache = false;
+
   // get dirname of test binary
   test_binary_file_path = bf::canonical(argv[0]).parent_path().string();
 

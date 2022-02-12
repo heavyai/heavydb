@@ -161,6 +161,16 @@ void CommandLineOptions::fillOptions() {
                               ->default_value(use_hashtable_cache)
                               ->implicit_value(true),
                           "Use hashtable cache.");
+  help_desc.add_options()("use-query-resultset-cache",
+                          po::value<bool>(&g_use_query_resultset_cache)
+                              ->default_value(g_use_query_resultset_cache)
+                              ->implicit_value(true),
+                          "Use query resultset cache.");
+  help_desc.add_options()("use-chunk-metadata-cache",
+                          po::value<bool>(&g_use_chunk_metadata_cache)
+                              ->default_value(g_use_chunk_metadata_cache)
+                              ->implicit_value(true),
+                          "Use chunk metadata cache.");
   help_desc.add_options()(
       "hashtable-cache-total-bytes",
       po::value<size_t>(&hashtable_cache_total_bytes)
@@ -173,6 +183,38 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(2147483648),
                           "The maximum size of hashtable that is available to cache, in "
                           "bytes (default: 2GB).");
+  help_desc.add_options()(
+      "query-resultset-cache-total-bytes",
+      po::value<size_t>(&g_query_resultset_cache_total_bytes)
+          ->default_value(g_query_resultset_cache_total_bytes),
+      "Size of total memory space for query resultset cache, in bytes (default: 4GB).");
+  help_desc.add_options()(
+      "max-query-resultset-size-bytes",
+      po::value<size_t>(&g_max_cacheable_query_resultset_size_bytes)
+          ->default_value(g_max_cacheable_query_resultset_size_bytes),
+      "The maximum size of query resultset that is available to cache, in "
+      "bytes (default: 2GB).");
+  help_desc.add_options()("allow-auto-query-resultset-caching",
+                          po::value<bool>(&g_allow_auto_resultset_caching)
+                              ->default_value(g_allow_auto_resultset_caching)
+                              ->implicit_value(true),
+                          "Allow automatic query resultset caching when the size of "
+                          "query resultset is smaller or equal to the threshold defined "
+                          "by `auto-resultset-caching-threshold-bytes`, in bytes (to "
+                          "enable this, query resultset recycler "
+                          "should be enabled, default: 1048576 bytes (or 1MB)).");
+  help_desc.add_options()(
+      "auto-resultset-caching-threshold-bytes",
+      po::value<size_t>(&g_auto_resultset_caching_threshold)
+          ->default_value(g_auto_resultset_caching_threshold),
+      "A threshold that allows caching query resultset automatically if the size of "
+      "resultset is less than it, in bytes (default: 1MB).");
+  help_desc.add_options()("allow-query-step-skipping",
+                          po::value<bool>(&g_allow_query_step_skipping)
+                              ->default_value(g_allow_query_step_skipping)
+                              ->implicit_value(true),
+                          "Allow query step skipping when multi-step query has at least "
+                          "one cached query resultset.");
   help_desc.add_options()("enable-debug-timer",
                           po::value<bool>(&g_enable_debug_timer)
                               ->default_value(g_enable_debug_timer)
@@ -1355,6 +1397,25 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       LOG(INFO) << " \t\t Per-hashtable size limit: "
                 << g_max_cacheable_hashtable_size_bytes / (1024 * 1024) << " MB.";
     }
+    LOG(INFO) << " \t Use query resultset cache: "
+              << (g_use_query_resultset_cache ? "enabled" : "disabled");
+    if (g_use_query_resultset_cache) {
+      LOG(INFO) << " \t\t Total amount of bytes that query resultset cache keeps: "
+                << g_query_resultset_cache_total_bytes / (1024 * 1024) << " MB.";
+      LOG(INFO) << " \t\t Per-query resultset size limit: "
+                << g_max_cacheable_query_resultset_size_bytes / (1024 * 1024) << " MB.";
+    }
+    LOG(INFO) << " \t\t Use auto query resultset caching: "
+              << (g_allow_auto_resultset_caching ? "enabled" : "disabled");
+    if (g_allow_auto_resultset_caching) {
+      LOG(INFO) << " \t\t\t The maximum bytes of a query resultset which is "
+                   "automatically cached: "
+                << g_auto_resultset_caching_threshold << " Bytes.";
+    }
+    LOG(INFO) << " \t\t Use query step skipping: "
+              << (g_allow_query_step_skipping ? "enabled" : "disabled");
+    LOG(INFO) << " \t Use chunk metadata cache: "
+              << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
   }
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));

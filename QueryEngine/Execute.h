@@ -48,6 +48,7 @@
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/ExecutionKernel.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/GpuSharedMemoryContext.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
@@ -57,6 +58,7 @@
 #include "QueryEngine/QueryPlanDagCache.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
+#include "QueryEngine/ResultSetRecyclerHolder.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableGenerations.h"
 #include "QueryEngine/TargetMetaInfo.h"
@@ -383,6 +385,33 @@ class Executor {
 
   void clearCaches(bool runtime_only = false);
   void reset(bool runtime_only = false);
+
+  static void clearExternalCaches(bool for_update,
+                                  const TableDescriptor* td,
+                                  const int current_db_id) {
+    bool clearEntireCache = true;
+    if (td) {
+      const auto& table_chunk_key_prefix = td->getTableChunkKey(current_db_id);
+      if (!table_chunk_key_prefix.empty()) {
+        auto table_key = boost::hash_value(table_chunk_key_prefix);
+        ResultSetCacheInvalidator::invalidateCachesByTable(table_key);
+        if (for_update) {
+          UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+        } else {
+          DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
+        }
+        clearEntireCache = false;
+      }
+    }
+    if (clearEntireCache) {
+      ResultSetCacheInvalidator::invalidateCaches();
+      if (for_update) {
+        UpdateTriggeredCacheInvalidator::invalidateCaches();
+      } else {
+        DeleteTriggeredCacheInvalidator::invalidateCaches();
+      }
+    }
+  }
 
   static void resetAllExecutors(bool runtime_only = false) {
     mapd_unique_lock<mapd_shared_mutex> flush_lock(
@@ -1109,6 +1138,7 @@ class Executor {
 
   mapd_shared_mutex& getDataRecyclerLock();
   QueryPlanDagCache& getQueryPlanDagCache();
+  ResultSetRecyclerHolder& getRecultSetRecyclerHolder();
 
   CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
   llvm::LLVMContext& getContext() { return *context_.get(); }
@@ -1269,9 +1299,9 @@ class Executor {
   static mapd_shared_mutex executors_cache_mutex_;
 
   static QueryPlanDagCache query_plan_dag_cache_;
-  const QueryPlanHash INVALID_QUERY_PLAN_HASH{std::hash<std::string>{}(EMPTY_QUERY_PLAN)};
   static mapd_shared_mutex recycler_mutex_;
   static std::unordered_map<std::string, size_t> cardinality_cache_;
+  static ResultSetRecyclerHolder resultset_recycler_holder_;
 
   // a variable used for testing query plan DAG extractor when a query has a table
   // function

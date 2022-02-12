@@ -120,6 +120,7 @@ struct SortInfo {
   const SortAlgorithm algorithm;
   const size_t limit;
   const size_t offset;
+  bool limit_delivered{false};
 };
 
 struct JoinCondition {
@@ -166,6 +167,7 @@ struct TableFunctionExecutionUnit {
   std::vector<Analyzer::Expr*> target_exprs;
   mutable size_t output_buffer_size_param;
   const table_functions::TableFunction table_func;
+  QueryPlanHash query_plan_dag_hash;
 
  public:
   std::string toString() const {
@@ -173,7 +175,8 @@ struct TableFunctionExecutionUnit {
            ", table_func_inputs=" + ::toString(table_func_inputs) +
            ", target_exprs=" + ::toString(target_exprs) +
            ", output_buffer_size_param=" + ::toString(output_buffer_size_param) +
-           ", table_func=" + ::toString(table_func) + ")";
+           ", table_func=" + ::toString(table_func) +
+           ", query_plan_dag=" + ::toString(query_plan_dag_hash) + ")";
   }
 };
 

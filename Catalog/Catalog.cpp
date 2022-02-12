@@ -3092,6 +3092,10 @@ void Catalog::setUncappedTableEpoch(const std::string& table_name) {
   auto td_entry = tableDescriptorMap_.find(to_upper(table_name));
   CHECK(td_entry != tableDescriptorMap_.end());
   auto td = td_entry->second;
+
+  std::vector<int> table_key{getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+
   TableDescriptorUpdateParams table_update_params(td);
   table_update_params.max_rollback_epochs = -1;
   write_lock.unlock();

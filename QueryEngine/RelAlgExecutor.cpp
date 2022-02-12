@@ -211,8 +211,38 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
   }
 }
 
-bool is_extracted_dag_valid(const RelAlgNode* node) {
+bool has_valid_query_plan_dag(const RelAlgNode* node) {
   return node->getQueryPlanDagHash() != EMPTY_HASHED_PLAN_DAG_KEY;
+}
+
+// TODO(alex): Once we're fully migrated to the relational algebra model, change
+// the executor interface to use the collation directly and remove this conversion.
+std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
+  std::list<Analyzer::OrderEntry> result;
+  for (size_t i = 0; i < sort->collationCount(); ++i) {
+    const auto sort_field = sort->getCollation(i);
+    result.emplace_back(sort_field.getField() + 1,
+                        sort_field.getSortDir() == SortDirection::Descending,
+                        sort_field.getNullsPosition() == NullSortedPosition::First);
+  }
+  return result;
+}
+
+void build_render_targets(RenderInfo& render_info,
+                          const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
+                          const std::vector<TargetMetaInfo>& targets_meta) {
+  CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
+  render_info.targets.clear();
+  for (size_t i = 0; i < targets_meta.size(); ++i) {
+    render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
+        targets_meta[i].get_resname(),
+        work_unit_target_exprs[i]->get_shared_ptr(),
+        false));
+  }
+}
+
+bool is_validate_or_explain_query(const ExecutionOptions& eo) {
+  return eo.just_validate || eo.just_explain || eo.just_calcite_explain;
 }
 
 class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> {
@@ -233,6 +263,16 @@ class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> 
 };
 
 }  // namespace
+
+bool RelAlgExecutor::canUseResultsetCache(const ExecutionOptions& eo,
+                                          RenderInfo* render_info) const {
+  auto validate_or_explain_query = is_validate_or_explain_query(eo);
+  auto query_for_partial_outer_frag = !eo.outer_fragment_indices.empty();
+  return g_enable_data_recycler && g_use_query_resultset_cache && !g_cluster &&
+         !validate_or_explain_query && !hasStepForUnion() &&
+         !query_for_partial_outer_frag &&
+         (!render_info || (render_info && !render_info->isPotentialInSituRender()));
+}
 
 size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
                                              const ExecutionOptions& eo) {
@@ -579,7 +619,8 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
 
   if (sort) {
     check_sort_node_source_constraint(sort);
-    const auto source_work_unit = createSortInputWorkUnit(sort, eo);
+    auto order_entries = get_order_entries(sort);
+    const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
     shard_count = GroupByAndAggregate::shard_count_for_top_groups(
         source_work_unit.exe_unit, *executor_->getCatalog());
     if (!shard_count) {
@@ -591,6 +632,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
         CHECK_EQ(temp_seq.size(), size_t(1));
         ExecutionOptions eo_copy = {
             eo.output_columnar_hint,
+            eo.keep_result,
             eo.allow_multifrag,
             eo.just_explain,
             eo.allow_loop_joins,
@@ -685,14 +727,32 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   };
 
   const auto exec_desc_count = get_descriptor_count();
-  // this join info needs to be maintained throughout an entire query runtime
+  auto eo_copied = eo;
+  if (seq.hasQueryStepForUnion()) {
+    // we currently do not support resultset recycling when an input query
+    // contains union (all) operation
+    eo_copied.keep_result = false;
+  }
+
+  // we have to register resultset(s) of the skipped query step(s) as temporary table
+  // before executing the remaining query steps
+  // since they may be required during the query processing
+  // i.e., get metadata of the target expression from the skipped query step
+  if (g_allow_query_step_skipping) {
+    for (const auto& kv : seq.getSkippedQueryStepCacheKeys()) {
+      const auto cached_res =
+          executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(kv.second);
+      CHECK(cached_res);
+      addTemporaryTable(kv.first, cached_res);
+    }
+  }
+
   const auto num_steps = exec_desc_count - 1;
   for (size_t i = 0; i < exec_desc_count; i++) {
     VLOG(1) << "Executing query step " << i << " / " << num_steps;
-    // only render on the last step
     try {
       executeRelAlgStep(
-          seq, i, co, eo, (i == num_steps) ? render_info : nullptr, queue_time_ms);
+          seq, i, co, eo_copied, (i == num_steps) ? render_info : nullptr, queue_time_ms);
     } catch (const QueryMustRunOnCpu&) {
       // Do not allow per-step retry if flag is off or in distributed mode
       // TODO(todd): Determine if and when we can relax this restriction
@@ -704,15 +764,20 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
       LOG(INFO) << "Retrying current query step " << i << " / " << num_steps << " on CPU";
       const auto co_cpu = CompilationOptions::makeCpuOnly(co);
       if (render_info && i == num_steps) {
+        // only render on the last step
         render_info->setForceNonInSituData();
       }
-      executeRelAlgStep(
-          seq, i, co_cpu, eo, (i == num_steps) ? render_info : nullptr, queue_time_ms);
+      executeRelAlgStep(seq,
+                        i,
+                        co_cpu,
+                        eo_copied,
+                        (i == num_steps) ? render_info : nullptr,
+                        queue_time_ms);
     } catch (const NativeExecutionError&) {
       if (!g_enable_interop) {
         throw;
       }
-      auto eo_extern = eo;
+      auto eo_extern = eo_copied;
       eo_extern.executor_type = ::ExecutorType::Extern;
       auto exec_desc_ptr = seq.getDescriptor(i);
       const auto body = exec_desc_ptr->getBody();
@@ -795,6 +860,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
 
   const ExecutionOptions eo_work_unit{
       eo.output_columnar_hint,
+      eo.keep_result,
       eo.allow_multifrag,
       eo.just_explain,
       eo.allow_loop_joins,
@@ -830,6 +896,33 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
         VLOG(1) << "A user forces to run the query on the CPU execution mode";
         co_hint_applied.device_type = ExecutorDeviceType::CPU;
       }
+      if (query_hints->isHintRegistered(QueryHint::kKeepResult)) {
+        if (!g_enable_data_recycler) {
+          VLOG(1) << "A user enables keeping query resultset but is skipped since data "
+                     "recycler is disabled";
+        }
+        if (!g_use_query_resultset_cache) {
+          VLOG(1) << "A user enables keeping query resultset but is skipped since query "
+                     "resultset recycler is disabled";
+        } else {
+          VLOG(1) << "A user enables keeping query resultset";
+          eo_hint_applied.keep_result = true;
+        }
+      }
+      if (query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult)) {
+        // we use this hint within the function 'executeTableFunction`
+        if (!g_enable_data_recycler) {
+          VLOG(1) << "A user enables keeping table function's resultset but is skipped "
+                     "since data recycler is disabled";
+        }
+        if (!g_use_query_resultset_cache) {
+          VLOG(1) << "A user enables keeping table function's resultset but is skipped "
+                     "since query resultset recycler is disabled";
+        } else {
+          VLOG(1) << "A user enables keeping table function's resultset";
+          eo_hint_applied.keep_result = true;
+        }
+      }
       if (query_hints->isHintRegistered(QueryHint::kColumnarOutput)) {
         VLOG(1) << "A user forces the query to run with columnar output";
         columnar_output_hint_enabled = true;
@@ -852,6 +945,32 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   // Notify foreign tables to load prior to execution
   prepare_foreign_table_for_execution(*body, cat_);
   auto hint_applied = handle_hint();
+  setHasStepForUnion(seq.hasQueryStepForUnion());
+
+  if (canUseResultsetCache(eo, render_info) && has_valid_query_plan_dag(body)) {
+    if (auto cached_resultset =
+            executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(
+                body->getQueryPlanDagHash())) {
+      VLOG(1) << "recycle resultset of the root node " << body->getRelNodeDagId()
+              << " from resultset cache";
+      body->setOutputMetainfo(cached_resultset->getTargetMetaInfo());
+      if (render_info) {
+        std::vector<std::shared_ptr<Analyzer::Expr>>& cached_target_exprs =
+            executor_->getRecultSetRecyclerHolder().getTargetExprs(
+                body->getQueryPlanDagHash());
+        std::vector<Analyzer::Expr*> copied_target_exprs;
+        for (const auto& expr : cached_target_exprs) {
+          copied_target_exprs.push_back(expr.get());
+        }
+        build_render_targets(
+            *render_info, copied_target_exprs, cached_resultset->getTargetMetaInfo());
+      }
+      exec_desc.setResult({cached_resultset, cached_resultset->getTargetMetaInfo()});
+      addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr());
+      return;
+    }
+  }
+
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     if (compound->isDeleteViaSelect()) {
@@ -1669,13 +1788,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
           "with the vacuum attribute set to 'delayed'");
     }
 
-    if (table_descriptor->fragmenter) {
-      auto table_key = boost::hash_value(
-          table_descriptor->fragmenter->getFragmentsForQuery().chunkKeyPrefix);
-      UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-    } else {
-      UpdateTriggeredCacheInvalidator::invalidateCaches();
-    }
+    Executor::clearExternalCaches(true, table_descriptor, cat_.getDatabaseId());
 
     auto updated_table_desc = node->getModifiedTableDescriptor();
     dml_transaction_parameters_ =
@@ -1802,13 +1915,7 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
           "'delayed'");
     }
 
-    if (table_descriptor->fragmenter) {
-      auto table_key = boost::hash_value(
-          table_descriptor->fragmenter->getFragmentsForQuery().chunkKeyPrefix);
-      DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-    } else {
-      DeleteTriggeredCacheInvalidator::invalidateCaches();
-    }
+    Executor::clearExternalCaches(false, table_descriptor, cat_.getDatabaseId());
 
     const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
@@ -2005,6 +2112,22 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                                      executor_->gridSize()),
                          {}};
 
+  auto global_hint = getGlobalQueryHint();
+  auto use_resultset_recycler = canUseResultsetCache(eo, nullptr);
+  if (use_resultset_recycler && has_valid_query_plan_dag(table_func)) {
+    auto cached_resultset =
+        executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(
+            table_func->getQueryPlanDagHash());
+    if (cached_resultset) {
+      VLOG(1) << "recycle table function's resultset of the root node "
+              << table_func->getRelNodeDagId() << " from resultset cache";
+      result = {cached_resultset, cached_resultset->getTargetMetaInfo()};
+      addTemporaryTable(-body->getId(), result.getDataPtr());
+      return result;
+    }
+  }
+
+  auto query_exec_time_begin = timer_start();
   try {
     result = {executor_->executeTableFunction(
                   table_func_work_unit.exe_unit, table_infos, co, eo, cat_),
@@ -2014,7 +2137,47 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
     CHECK(e.getErrorCode() == Executor::ERR_OUT_OF_GPU_MEM);
     throw std::runtime_error("Table function ran out of memory during execution");
   }
+  auto query_exec_time = timer_stop(query_exec_time_begin);
   result.setQueueTime(queue_time_ms);
+  auto resultset_ptr = result.getDataPtr();
+  auto allow_auto_caching_resultset = resultset_ptr && resultset_ptr->hasValidBuffer() &&
+                                      g_allow_auto_resultset_caching &&
+                                      resultset_ptr->getBufferSizeBytes(co.device_type) <=
+                                          g_auto_resultset_caching_threshold;
+  bool keep_result = global_hint->isHintRegistered(QueryHint::kKeepTableFuncResult);
+  if (use_resultset_recycler && (keep_result || allow_auto_caching_resultset) &&
+      !hasStepForUnion()) {
+    resultset_ptr->setExecTime(query_exec_time);
+    resultset_ptr->setQueryPlanHash(table_func_work_unit.exe_unit.query_plan_dag_hash);
+    resultset_ptr->setTargetMetaInfo(body->getOutputMetainfo());
+    auto input_table_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(body);
+    resultset_ptr->setInputTableKeys(std::move(input_table_keys));
+    if (allow_auto_caching_resultset) {
+      VLOG(1) << "Automatically keep table function's query resultset to recycler";
+    }
+    executor_->getRecultSetRecyclerHolder().putQueryResultSetToCache(
+        table_func_work_unit.exe_unit.query_plan_dag_hash,
+        resultset_ptr->getInputTableKeys(),
+        resultset_ptr,
+        resultset_ptr->getBufferSizeBytes(co.device_type),
+        target_exprs_owned_);
+  } else {
+    if (eo.keep_result) {
+      if (g_cluster) {
+        VLOG(1) << "Query hint \'keep_table_function_result\' is ignored since we do not "
+                   "support resultset recycling on distributed mode";
+      } else if (hasStepForUnion()) {
+        VLOG(1) << "Query hint \'keep_table_function_result\' is ignored since a query "
+                   "has union-(all) operator";
+      } else if (is_validate_or_explain_query(eo)) {
+        VLOG(1) << "Query hint \'keep_table_function_result\' is ignored since a query "
+                   "is either validate or explain query";
+      } else {
+        VLOG(1) << "Query hint \'keep_table_function_result\' is ignored";
+      }
+    }
+  }
+
   return result;
 }
 
@@ -2461,6 +2624,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   // mark the target table's cached item as dirty
   std::vector<int> table_chunk_key_prefix{insert_data.databaseId, insert_data.tableId};
   auto table_key = boost::hash_value(table_chunk_key_prefix);
+  ResultSetCacheInvalidator::invalidateCachesByTable(table_key);
   UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
 
   for (auto target_entry : targets) {
@@ -2688,19 +2852,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
 
 namespace {
 
-// TODO(alex): Once we're fully migrated to the relational algebra model, change
-// the executor interface to use the collation directly and remove this conversion.
-std::list<Analyzer::OrderEntry> get_order_entries(const RelSort* sort) {
-  std::list<Analyzer::OrderEntry> result;
-  for (size_t i = 0; i < sort->collationCount(); ++i) {
-    const auto sort_field = sort->getCollation(i);
-    result.emplace_back(sort_field.getField() + 1,
-                        sort_field.getSortDir() == SortDirection::Descending,
-                        sort_field.getNullsPosition() == NullSortedPosition::First);
-  }
-  return result;
-}
-
 size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
   const auto aggregate = dynamic_cast<const RelAggregate*>(ra);
   if (aggregate) {
@@ -2712,19 +2863,6 @@ size_t get_scan_limit(const RelAlgNode* ra, const size_t limit) {
 
 bool first_oe_is_desc(const std::list<Analyzer::OrderEntry>& order_entries) {
   return !order_entries.empty() && order_entries.front().is_desc;
-}
-
-void build_render_targets(RenderInfo& render_info,
-                          const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
-                          const std::vector<TargetMetaInfo>& targets_meta) {
-  CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
-  render_info.targets.clear();
-  for (size_t i = 0; i < targets_meta.size(); ++i) {
-    render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
-        targets_meta[i].get_resname(),
-        work_unit_target_exprs[i]->get_shared_ptr(),
-        false));
-  }
 }
 
 }  // namespace
@@ -2739,9 +2877,10 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   const auto source = sort->getInput(0);
   const bool is_aggregate = node_is_aggregate(source);
   auto it = leaf_results_.find(sort->getId());
+  auto order_entries = get_order_entries(sort);
   if (it != leaf_results_.end()) {
     // Add any transient string literals to the sdp on the agg
-    const auto source_work_unit = createSortInputWorkUnit(sort, eo);
+    const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
     executor_->addTransientStringLiterals(source_work_unit.exe_unit,
                                           executor_->row_set_mem_owner_);
     // Handle push-down for LIMIT for multi-node
@@ -2749,7 +2888,6 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     auto& result_rows = aggregated_result.rs;
     const size_t limit = sort->getLimit();
     const size_t offset = sort->getOffset();
-    const auto order_entries = get_order_entries(sort);
     if (limit || offset) {
       if (!order_entries.empty()) {
         result_rows->sort(order_entries, limit + offset, executor_);
@@ -2778,6 +2916,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
 
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   bool is_desc{false};
+  bool use_speculative_top_n_sort{false};
 
   auto execute_sort_query = [this,
                              sort,
@@ -2788,36 +2927,72 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                              render_info,
                              queue_time_ms,
                              &groupby_exprs,
-                             &is_desc]() -> ExecutionResult {
-    const auto source_work_unit = createSortInputWorkUnit(sort, eo);
-    is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
-    ExecutionOptions eo_copy = {
-        eo.output_columnar_hint,
-        eo.allow_multifrag,
-        eo.just_explain,
-        eo.allow_loop_joins,
-        eo.with_watchdog,
-        eo.jit_debug,
-        eo.just_validate || sort->isEmptyResult(),
-        eo.with_dynamic_watchdog,
-        eo.dynamic_watchdog_time_limit,
-        eo.find_push_down_candidates,
-        eo.just_calcite_explain,
-        eo.gpu_input_mem_limit_percent,
-        eo.allow_runtime_query_interrupt,
-        eo.running_query_interrupt_freq,
-        eo.pending_query_interrupt_freq,
-        eo.executor_type,
-    };
+                             &is_desc,
+                             &order_entries,
+                             &use_speculative_top_n_sort]() -> ExecutionResult {
+    const size_t limit = sort->getLimit();
+    const size_t offset = sort->getOffset();
+    // check whether sort's input is cached
+    auto source_node = sort->getInput(0);
+    CHECK(source_node);
+    ExecutionResult source_result{nullptr, {}};
+    auto source_query_plan_dag = source_node->getQueryPlanDagHash();
+    bool enable_resultset_recycler = canUseResultsetCache(eo, render_info);
+    if (enable_resultset_recycler && has_valid_query_plan_dag(source_node) &&
+        !sort->isEmptyResult()) {
+      if (auto cached_resultset =
+              executor_->getRecultSetRecyclerHolder().getCachedQueryResultSet(
+                  source_query_plan_dag)) {
+        CHECK(cached_resultset->canUseSpeculativeTopNSort());
+        VLOG(1) << "recycle resultset of the root node " << source_node->getRelNodeDagId()
+                << " from resultset cache";
+        source_result =
+            ExecutionResult{cached_resultset, cached_resultset->getTargetMetaInfo()};
+        if (temporary_tables_.find(-source_node->getId()) == temporary_tables_.end()) {
+          addTemporaryTable(-source_node->getId(), cached_resultset);
+        }
+        use_speculative_top_n_sort = *cached_resultset->canUseSpeculativeTopNSort() &&
+                                     co.device_type == ExecutorDeviceType::GPU;
+        source_node->setOutputMetainfo(cached_resultset->getTargetMetaInfo());
+        sort->setOutputMetainfo(source_node->getOutputMetainfo());
+      }
+    }
+    if (!source_result.getDataPtr()) {
+      const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
+      is_desc = first_oe_is_desc(order_entries);
+      ExecutionOptions eo_copy = {
+          eo.output_columnar_hint,
+          eo.keep_result,
+          eo.allow_multifrag,
+          eo.just_explain,
+          eo.allow_loop_joins,
+          eo.with_watchdog,
+          eo.jit_debug,
+          eo.just_validate || sort->isEmptyResult(),
+          eo.with_dynamic_watchdog,
+          eo.dynamic_watchdog_time_limit,
+          eo.find_push_down_candidates,
+          eo.just_calcite_explain,
+          eo.gpu_input_mem_limit_percent,
+          eo.allow_runtime_query_interrupt,
+          eo.running_query_interrupt_freq,
+          eo.pending_query_interrupt_freq,
+          eo.executor_type,
+      };
 
-    groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
-    auto source_result = executeWorkUnit(source_work_unit,
-                                         source->getOutputMetainfo(),
-                                         is_aggregate,
-                                         co,
-                                         eo_copy,
-                                         render_info,
-                                         queue_time_ms);
+      groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
+      source_result = executeWorkUnit(source_work_unit,
+                                      source->getOutputMetainfo(),
+                                      is_aggregate,
+                                      co,
+                                      eo_copy,
+                                      render_info,
+                                      queue_time_ms);
+      use_speculative_top_n_sort =
+          source_result.getDataPtr() && source_result.getRows()->hasValidBuffer() &&
+          use_speculative_top_n(source_work_unit.exe_unit,
+                                source_result.getRows()->getQueryMemDesc());
+    }
     if (render_info && render_info->isPotentialInSituRender()) {
       return source_result;
     }
@@ -2828,14 +3003,10 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     if (eo.just_explain) {
       return {rows_to_sort, {}};
     }
-    const size_t limit = sort->getLimit();
-    const size_t offset = sort->getOffset();
     if (sort->collationCount() != 0 && !rows_to_sort->definitelyHasNoRows() &&
-        !use_speculative_top_n(source_work_unit.exe_unit,
-                               rows_to_sort->getQueryMemDesc())) {
+        !use_speculative_top_n_sort) {
       const size_t top_n = limit == 0 ? 0 : limit + offset;
-      rows_to_sort->sort(
-          source_work_unit.exe_unit.sort_info.order_entries, top_n, executor_);
+      rows_to_sort->sort(order_entries, top_n, executor_);
     }
     if (limit || offset) {
       if (g_cluster && sort->collationCount() == 0) {
@@ -2866,6 +3037,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
     const RelSort* sort,
+    std::list<Analyzer::OrderEntry>& order_entries,
     const ExecutionOptions& eo) {
   const auto source = sort->getInput(0);
   const size_t limit = sort->getLimit();
@@ -2876,8 +3048,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   size_t max_groups_buffer_entry_guess{
       scan_total_limit ? scan_total_limit : g_default_max_groups_buffer_entry_guess};
   SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
-  const auto order_entries = get_order_entries(sort);
-  SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
+  SortInfo sort_info{
+      order_entries, sort_algorithm, limit, offset, sort->isLimitDelivered()};
   auto source_work_unit = createWorkUnit(source, sort_info, eo);
   const auto& source_exe_unit = source_work_unit.exe_unit;
 
@@ -2914,7 +3086,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
                               source_exe_unit.groupby_exprs,
                               source_exe_unit.target_exprs,
                               nullptr,
-                              {sort_info.order_entries, sort_algorithm, limit, offset},
+                              {sort_info.order_entries,
+                               sort_algorithm,
+                               limit,
+                               offset,
+                               sort_info.limit_delivered},
                               scan_total_limit,
                               source_exe_unit.query_hint,
                               source_exe_unit.query_plan_dag_hash,
@@ -3094,6 +3270,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const std::optional<size_t> previous_count) {
   INJECT_TIMER(executeWorkUnit);
   auto timer = DEBUG_TIMER(__func__);
+  auto query_exec_time_begin = timer_start();
 
   auto co = co_in;
   auto eo = eo_in;
@@ -3231,6 +3408,18 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
   };
 
+  auto use_resultset_cache = canUseResultsetCache(eo, render_info);
+  for (const auto& table_info : table_infos) {
+    const auto td = cat_.getMetadataForTable(table_info.table_id);
+    if (td && (td->isTemporaryTable() || td->isView)) {
+      use_resultset_cache = false;
+      if (eo.keep_result) {
+        VLOG(1) << "Query hint \'keep_result\' is ignored since a query has either "
+                   "temporary table or view";
+      }
+    }
+  }
+
   auto cache_key = ra_exec_unit_desc_for_caching(ra_exe_unit);
   try {
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
@@ -3280,6 +3469,62 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
               {}};
     }
   }
+
+  for (auto& target_info : result.getTargetsMeta()) {
+    if (target_info.get_type_info().is_string() &&
+        !target_info.get_type_info().is_dict_encoded_string()) {
+      // currently, we do not support resultset caching if non-encoded string is projected
+      use_resultset_cache = false;
+      if (eo.keep_result) {
+        VLOG(1) << "Query hint \'keep_result\' is ignored since a query has non-encoded "
+                   "string column projection";
+      }
+    }
+  }
+
+  const auto res = result.getDataPtr();
+  auto allow_auto_caching_resultset =
+      res && res->hasValidBuffer() && g_allow_auto_resultset_caching &&
+      res->getBufferSizeBytes(co.device_type) <= g_auto_resultset_caching_threshold;
+  if (use_resultset_cache && (eo.keep_result || allow_auto_caching_resultset) &&
+      !work_unit.exe_unit.sort_info.limit_delivered) {
+    auto query_exec_time = timer_stop(query_exec_time_begin);
+    res->setExecTime(query_exec_time);
+    res->setQueryPlanHash(ra_exe_unit.query_plan_dag_hash);
+    res->setTargetMetaInfo(body->getOutputMetainfo());
+    auto input_table_keys = ScanNodeTableKeyCollector::getScanNodeTableKey(body);
+    res->setInputTableKeys(std::move(input_table_keys));
+    if (allow_auto_caching_resultset) {
+      VLOG(1) << "Automatically keep query resultset to recycler";
+    }
+    res->setUseSpeculativeTopNSort(
+        use_speculative_top_n(ra_exe_unit, res->getQueryMemDesc()));
+    executor_->getRecultSetRecyclerHolder().putQueryResultSetToCache(
+        ra_exe_unit.query_plan_dag_hash,
+        res->getInputTableKeys(),
+        res,
+        res->getBufferSizeBytes(co.device_type),
+        target_exprs_owned_);
+  } else {
+    if (eo.keep_result) {
+      if (g_cluster) {
+        VLOG(1) << "Query hint \'keep_result\' is ignored since we do not support "
+                   "resultset recycling on distributed mode";
+      } else if (hasStepForUnion()) {
+        VLOG(1) << "Query hint \'keep_result\' is ignored since a query has union-(all) "
+                   "operator";
+      } else if (render_info && render_info->isPotentialInSituRender()) {
+        VLOG(1) << "Query hint \'keep_result\' is ignored since a query is classified as "
+                   "a in-situ rendering query";
+      } else if (is_validate_or_explain_query(eo)) {
+        VLOG(1) << "Query hint \'keep_result\' is ignored since a query is either "
+                   "validate or explain query";
+      } else {
+        VLOG(1) << "Query hint \'keep_result\' is ignored";
+      }
+    }
+  }
+
   return result;
 }
 
@@ -3394,6 +3639,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{eo.output_columnar_hint,
+                                   eo.keep_result,
                                    false,
                                    false,
                                    eo.allow_loop_joins,
@@ -3861,7 +4107,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     left_deep_trees_info.emplace(left_deep_tree_id.value(),
                                  rewritten_exe_unit.join_quals);
   }
-  if (is_extracted_dag_valid(compound)) {
+  if (has_valid_query_plan_dag(compound)) {
     auto join_info = QueryPlanDagExtractor::extractJoinInfo(
         compound, left_deep_tree_id, left_deep_trees_info, executor_);
     rewritten_exe_unit.hash_table_build_plan_dag = join_info.hash_table_plan_dag;
@@ -4233,7 +4479,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
     left_deep_trees_info.emplace(left_deep_tree_id.value(),
                                  rewritten_exe_unit.join_quals);
   }
-  if (is_extracted_dag_valid(project)) {
+  if (has_valid_query_plan_dag(project)) {
     auto join_info = QueryPlanDagExtractor::extractJoinInfo(
         project, left_deep_tree_id, left_deep_trees_info, executor_);
     rewritten_exe_unit.hash_table_build_plan_dag = join_info.hash_table_plan_dag;

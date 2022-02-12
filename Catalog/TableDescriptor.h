@@ -99,6 +99,17 @@ struct TableDescriptor {
   inline bool isTemporaryTable() const {
     return persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   }
+
+  std::vector<int> getTableChunkKey(const int getCurrentDBId) const {
+    std::vector<int> table_chunk_key_prefix;
+    if (fragmenter) {
+      table_chunk_key_prefix = fragmenter->getFragmentsForQuery().chunkKeyPrefix;
+    } else {
+      table_chunk_key_prefix.push_back(getCurrentDBId);
+      table_chunk_key_prefix.push_back(tableId);
+    }
+    return table_chunk_key_prefix;
+  }
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {

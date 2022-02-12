@@ -66,6 +66,7 @@ enum class ExecutorType { Native, Extern, TableFunctions };
 
 struct ExecutionOptions {
   bool output_columnar_hint;
+  bool keep_result;
   bool allow_multifrag;
   bool just_explain;  // return the generated IR for the first step
   bool allow_loop_joins;
@@ -85,6 +86,7 @@ struct ExecutionOptions {
 
   static ExecutionOptions defaults() {
     return ExecutionOptions{/*output_columnar_hint=*/false,
+                            /*keep_result=*/false,
                             /*allow_multifrag=*/true,
                             /*just_explain=*/false,
                             /*allow_loop_joins=*/false,

@@ -157,6 +157,27 @@ class RaExecutionSequence {
 
   bool executionFinished() const;
 
+  /**
+   * Extracts a topological information of the query plan DAG
+   * about the relationship among query steps where
+   * a parent step and its child steps can be skipped
+   * if we have a cached resultset of the parent step
+   */
+  void extractQueryStepSkippingInfo();
+
+  /**
+   * Optimizes the query execution step based on the information
+   * extracted from the `extractQueryStepSkippingInfo` function
+   */
+  void skipQuerySteps();
+
+  std::vector<Vertex> mergeSortWithInput(const std::vector<Vertex>& vertices,
+                                         const DAG& graph);
+
+  const std::unordered_map<int, QueryPlanHash> getSkippedQueryStepCacheKeys() const {
+    return cached_resultset_keys_;
+  }
+
   RaExecutionDesc* getDescriptor(size_t idx) const {
     CHECK_LT(idx, descs_.size());
     return descs_[idx].get();
@@ -170,6 +191,8 @@ class RaExecutionSequence {
 
   size_t totalDescriptorsCount() const;
 
+  const bool hasQueryStepForUnion() const { return has_step_for_union_; }
+
  private:
   DAG graph_;
   Executor* executor_;
@@ -178,6 +201,14 @@ class RaExecutionSequence {
   std::vector<Vertex> ordering_;  // reverse order topological sort of graph_
   size_t current_vertex_ = 0;
   size_t scan_count_ = 0;
+
+  std::unordered_map<const RelAlgNode*, int> node_ptr_to_vert_idx_;
+  std::unordered_map<int, std::unordered_set<int>> skippable_steps_;
+  // a set of query steps that their result sets are cached
+  std::unordered_set<int> cached_query_steps_;
+  std::unordered_map<int, QueryPlanHash> cached_resultset_keys_;
+  bool has_step_for_union_{false};
+  bool has_limit_clause_{false};
 
   /**
    * Starting from the current vertex, iterate the graph counting the number of execution

@@ -140,8 +140,15 @@ size_t g_enable_parallel_linearization{
     10000};  // # rows that we are trying to linearize varlen col in parallel
 bool g_enable_data_recycler{true};
 bool g_use_hashtable_cache{true};
+bool g_use_query_resultset_cache{true};
+bool g_use_chunk_metadata_cache{true};
+bool g_allow_auto_resultset_caching{false};
+bool g_allow_query_step_skipping{true};
 size_t g_hashtable_cache_total_bytes{size_t(1) << 32};
 size_t g_max_cacheable_hashtable_size_bytes{size_t(1) << 31};
+size_t g_query_resultset_cache_total_bytes{size_t(1) << 32};
+size_t g_max_cacheable_query_resultset_size_bytes{size_t(1) << 31};
+size_t g_auto_resultset_caching_threshold{size_t(1) << 20};
 
 size_t g_approx_quantile_buffer{1000};
 size_t g_approx_quantile_centroids{300};
@@ -424,7 +431,6 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
       mapd_unique_lock<mapd_shared_mutex> flush_lock(
           execute_mutex_);  // Don't flush memory while queries are running
 
-      Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
       if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
         // The hash table cache uses CPU memory not managed by the buffer manager. In the
         // future, we should manage these allocations with the buffer manager directly.
@@ -432,6 +438,8 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
         // CPU memory (currently used in ExecuteTest to lower memory pressure)
         JoinHashTableCacheInvalidator::invalidateCaches();
       }
+      ResultSetCacheInvalidator::invalidateCaches();
+      Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
       break;
     }
     default: {
@@ -4327,6 +4335,10 @@ QueryPlanDagCache& Executor::getQueryPlanDagCache() {
   return query_plan_dag_cache_;
 }
 
+ResultSetRecyclerHolder& Executor::getRecultSetRecyclerHolder() {
+  return resultset_recycler_holder_;
+}
+
 mapd_shared_mutex& Executor::getSessionLock() {
   return executor_session_mutex_;
 }
@@ -4731,4 +4743,7 @@ std::mutex Executor::kernel_mutex_;
 QueryPlanDagCache Executor::query_plan_dag_cache_;
 mapd_shared_mutex Executor::recycler_mutex_;
 std::unordered_map<std::string, size_t> Executor::cardinality_cache_;
+// Executor has a single global result set recycler holder
+// which contains two recyclers related to query resultset
+ResultSetRecyclerHolder Executor::resultset_recycler_holder_;
 QueryPlanDAG Executor::latest_query_plan_extracted_{EMPTY_QUERY_PLAN};

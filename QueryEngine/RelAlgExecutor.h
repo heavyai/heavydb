@@ -174,6 +174,14 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void executePostExecutionCallback();
 
+  // used for testing
+  RaExecutionSequence getRaExecutionSequence(const RelAlgNode* root_node,
+                                             Executor* executor) {
+    CHECK(executor);
+    CHECK(root_node);
+    return RaExecutionSequence(root_node, executor);
+  }
+
  private:
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                             const ExecutionOptions& eo,
@@ -277,7 +285,9 @@ class RelAlgExecutor : private StorageIOFacility {
     const RelAlgNode* body;
   };
 
-  WorkUnit createSortInputWorkUnit(const RelSort*, const ExecutionOptions& eo);
+  WorkUnit createSortInputWorkUnit(const RelSort*,
+                                   std::list<Analyzer::OrderEntry>& order_entries,
+                                   const ExecutionOptions& eo);
 
   ExecutionResult executeWorkUnit(
       const WorkUnit& work_unit,
@@ -356,7 +366,7 @@ class RelAlgExecutor : private StorageIOFacility {
   void addTemporaryTable(const int table_id, const ResultSetPtr& result) {
     CHECK_LT(size_t(0), result->colCount());
     CHECK_LT(table_id, 0);
-    const auto it_ok = temporary_tables_.emplace(table_id, result);
+    auto it_ok = temporary_tables_.emplace(table_id, result);
     CHECK(it_ok.second);
   }
 
@@ -382,6 +392,12 @@ class RelAlgExecutor : private StorageIOFacility {
       const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level,
       const bool just_explain) const;
 
+  void setHasStepForUnion(bool flag) { has_step_for_union_ = flag; }
+
+  bool hasStepForUnion() const { return has_step_for_union_; }
+
+  bool canUseResultsetCache(const ExecutionOptions& eo, RenderInfo* render_info) const;
+
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
   std::unique_ptr<RelAlgDagBuilder> query_dag_;
@@ -392,6 +408,7 @@ class RelAlgExecutor : private StorageIOFacility {
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
   std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
+  bool has_step_for_union_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
 
   std::unique_ptr<TransactionParameters> dml_transaction_parameters_;

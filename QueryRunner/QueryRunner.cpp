@@ -424,6 +424,28 @@ std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
   return ra_executor.getGlobalQueryHint();
 }
 
+RaExecutionSequence QueryRunner::getRaExecutionSequence(const std::string& query_str) {
+  CHECK(session_info_);
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  const auto& cat = session_info_->getCatalog();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      calciteQueryParsingOption,
+                                      calciteOptimizationOption)
+                            .plan_result;
+  auto ra_executor = RelAlgExecutor(executor.get(), cat, query_ra, query_state);
+  return ra_executor.getRaExecutionSequence(ra_executor.getRootRelAlgNodeShPtr().get(),
+                                            executor.get());
+}
+
 // used to validate calcite ddl statements
 void QueryRunner::validateDDLStatement(const std::string& stmt_str_in) {
   CHECK(session_info_);
@@ -638,6 +660,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
 ExecutionOptions QueryRunner::defaultExecutionOptionsForRunSQL(bool allow_loop_joins,
                                                                bool just_explain) {
   return {g_enable_columnar_output,
+          false,
           true,
           just_explain,
           allow_loop_joins,
@@ -691,6 +714,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         CompilationOptions co = CompilationOptions::defaults(device_type);
 
         ExecutionOptions eo = {g_enable_columnar_output,
+                               false,
                                true,
                                false,
                                true,
@@ -849,6 +873,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                             calciteOptimizationOption)
                                   .plan_result;
     const ExecutionOptions eo_modified{eo.output_columnar_hint,
+                                       eo.keep_result,
                                        eo.allow_multifrag,
                                        eo.just_explain,
                                        eo.allow_loop_joins,

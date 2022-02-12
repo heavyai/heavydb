@@ -81,9 +81,9 @@ std::shared_ptr<HashTable> HashtableRecycler::getItemFromCache(
     if (can_return_cached_item) {
       CHECK(!candidate_ht->isDirty());
       candidate_ht->item_metric->incRefCount();
-      VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
+      VLOG(1) << "[" << item_type << ", "
               << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-              << "] Recycle item in a cache";
+              << "] Recycle item in a cache (key: " << key << ")";
       return candidate_ht->cached_item;
     }
   }
@@ -153,12 +153,10 @@ void HashtableRecycler::putItemToCache(QueryPlanHash key,
     auto new_cache_metric_ptr = metric_tracker.putNewCacheItemMetric(
         key, device_identifier, item_size, compute_time);
     CHECK_EQ(item_size, new_cache_metric_ptr->getMemSize());
-    metric_tracker.updateCurrentCacheSize(
-        device_identifier, CacheUpdateAction::ADD, item_size);
     // put hashtable to cache
-    VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
+    VLOG(1) << "[" << item_type << ", "
             << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-            << "] Put item to cache";
+            << "] Put item to cache (key: " << key << ")";
     auto hashtable_cache = getCachedItemContainer(item_type, device_identifier);
     hashtable_cache->emplace_back(key, item_ptr, new_cache_metric_ptr, meta_info);
   }
@@ -188,6 +186,9 @@ void HashtableRecycler::removeItemFromCache(
   if (itr == hashtable_container->cend()) {
     return;
   } else {
+    VLOG(1) << "[" << item_type << ", "
+            << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
+            << "] remove cached item from cache (key: " << key << ")";
     hashtable_container->erase(itr);
   }
   // remove cache metric
@@ -245,6 +246,10 @@ void HashtableRecycler::clearCache() {
     getMetricTracker(item_type).clearCacheMetricTracker();
     auto item_cache = getItemCache().find(item_type)->second;
     for (auto& kv : *item_cache) {
+      VLOG(1) << "[" << item_type << ", "
+              << DataRecyclerUtil::getDeviceIdentifierString(
+                     DataRecyclerUtil::CPU_DEVICE_IDENTIFIER)
+              << "] clear cache (# items: " << kv.second->size() << ")";
       kv.second->clear();
     }
   }
@@ -273,7 +278,7 @@ std::string HashtableRecycler::toString() const {
   std::ostringstream oss;
   oss << "A current status of the Hashtable Recycler:\n";
   for (auto& item_type : getCacheItemType()) {
-    oss << "\t" << DataRecyclerUtil::toStringCacheItemType(item_type);
+    oss << "\t" << item_type;
     auto& metric_tracker = getMetricTracker(item_type);
     oss << "\n\t# cached hashtables:\n";
     auto item_cache = getItemCache().find(item_type)->second;
@@ -435,13 +440,8 @@ void HashtableRecycler::addQueryPlanDagForTableKeys(
     const std::unordered_set<size_t>& table_keys) {
   std::lock_guard<std::mutex> lock(getCacheLock());
   for (auto table_key : table_keys) {
-    auto it = table_key_to_query_plan_dag_map_.find(table_key);
-    if (it != table_key_to_query_plan_dag_map_.end()) {
-      it->second.insert(hashed_query_plan_dag);
-    } else {
-      std::unordered_set<size_t> query_plan_dags{hashed_query_plan_dag};
-      table_key_to_query_plan_dag_map_.emplace(table_key, query_plan_dags);
-    }
+    auto itr = table_key_to_query_plan_dag_map_.try_emplace(table_key).first;
+    itr->second.insert(hashed_query_plan_dag);
   }
 }
 

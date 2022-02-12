@@ -157,11 +157,11 @@ TEST(kCpuMode, ForceToCPUMode) {
 }
 
 TEST(QueryHint, QueryHintForOverlapsJoin) {
-  const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
-  g_enable_overlaps_hashjoin = true;
-  ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup] {
-    g_enable_overlaps_hashjoin = overlaps_join_status_backup;
+  ScopeGuard reset_loop_join_state = [orig_overlaps_hash_join =
+                                          g_enable_overlaps_hashjoin] {
+    g_enable_overlaps_hashjoin = orig_overlaps_hash_join;
   };
+  g_enable_overlaps_hashjoin = true;
 
   {
     const auto q1 =
@@ -284,11 +284,10 @@ TEST(QueryHint, QueryHintForOverlapsJoin) {
 }
 
 TEST(QueryHint, QueryLayoutHintWithEnablingColumnarOutput) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = true;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = true;
 
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
   const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
@@ -343,11 +342,11 @@ TEST(QueryHint, QueryLayoutHintWithEnablingColumnarOutput) {
 }
 
 TEST(QueryHint, QueryLayoutHintWithoutEnablingColumnarOutput) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
+
   const auto q1 = "SELECT /*+ columnar_output */ * FROM SQL_HINT_DUMMY";
   const auto q2 = "SELECT /*+ rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q3 = "SELECT /*+ columnar_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
@@ -401,11 +400,10 @@ TEST(QueryHint, QueryLayoutHintWithoutEnablingColumnarOutput) {
 }
 
 TEST(QueryHint, UDF) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   const auto q1 =
       "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ columnar_output "
@@ -432,11 +430,10 @@ TEST(QueryHint, UDF) {
 }
 
 TEST(QueryHint, PerQueryBlockHint) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   const auto q1 =
       "SELECT /*+ cpu_mode */ T2.k FROM SQL_HINT_DUMMY T1, (SELECT /*+ columnar_output "
@@ -484,11 +481,10 @@ TEST(QueryHint, PerQueryBlockHint) {
 }
 
 TEST(QueryHint, WindowFunction) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   const auto q1 =
       "SELECT /*+ columnar_output */ str1, timestampdiff(minute, lag(ts1) over "
@@ -546,19 +542,11 @@ TEST(QueryHint, WindowFunction) {
 }
 
 TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
-  const auto overlaps_join_status_backup = g_enable_overlaps_hashjoin;
-  const auto data_recycler_flag_backup = g_enable_data_recycler;
-  const auto hashtable_cache_flag_backup = g_use_hashtable_cache;
-  g_enable_overlaps_hashjoin = true;
-  g_enable_data_recycler = true;
-  g_use_hashtable_cache = true;
-  ScopeGuard reset_loop_join_state = [&overlaps_join_status_backup,
-                                      &data_recycler_flag_backup,
-                                      &hashtable_cache_flag_backup] {
-    g_enable_overlaps_hashjoin = overlaps_join_status_backup;
-    g_enable_data_recycler = data_recycler_flag_backup;
-    g_use_hashtable_cache = hashtable_cache_flag_backup;
+  ScopeGuard reset_loop_join_state = [orig_overlaps_hash_join =
+                                          g_enable_overlaps_hashjoin] {
+    g_enable_overlaps_hashjoin = orig_overlaps_hash_join;
   };
+  g_enable_overlaps_hashjoin = true;
 
   // testing global query hint for overlaps join is tricky since we apply all registered
   // hint during hashtable building time, so it's hard to get the result at that time
@@ -703,11 +691,10 @@ TEST(QueryHint, GlobalHint_OverlapsJoinHashtable) {
 }
 
 TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
-  const auto enable_columnar_output = g_enable_columnar_output;
-  g_enable_columnar_output = false;
-  ScopeGuard reset_columnar_output = [&enable_columnar_output] {
-    g_enable_columnar_output = enable_columnar_output;
+  ScopeGuard reset_columnar_output = [orig_columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = orig_columnar_output;
   };
+  g_enable_columnar_output = false;
 
   // check whether we can see the enabled global hint in the outer query block
   const auto q1 =
@@ -807,6 +794,35 @@ TEST(QueryHint, GlobalHint_ResultsetLayoutAndCPUMode) {
     EXPECT_TRUE(global_query_hints);
     EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kColumnarOutput));
     EXPECT_FALSE(global_query_hints->isHintRegistered(QueryHint::kRowwiseOutput));
+  }
+
+  ScopeGuard reset_resultset_recycler_state =
+      [orig_data_recycler = g_enable_data_recycler,
+       orig_resultset_recycler = g_use_query_resultset_cache] {
+        g_enable_data_recycler = orig_data_recycler,
+        g_use_query_resultset_cache = orig_resultset_recycler;
+      };
+  g_enable_data_recycler = true;
+  g_use_query_resultset_cache = true;
+
+  // check the resultset hint for table function
+  const auto q6 =
+      "SELECT /*+ keep_table_function_result */ out0 FROM "
+      "TABLE(get_max_with_row_offset(cursor(SELECT key FROM SQL_HINT_DUMMY)));";
+  {
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q6);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult));
+  }
+
+  // check the resultset hint for table function
+  const auto q7 =
+      "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ "
+      "keep_table_function_result */ key FROM SQL_HINT_DUMMY)));";
+  {
+    auto global_query_hints = QR::get()->getParsedGlobalQueryHints(q7);
+    EXPECT_TRUE(global_query_hints);
+    EXPECT_TRUE(global_query_hints->isHintRegistered(QueryHint::kKeepTableFuncResult));
   }
 }
 

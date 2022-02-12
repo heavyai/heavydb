@@ -442,6 +442,77 @@ class ResultSet {
 
   size_t getLimit() const;
 
+  // APIs for data recycler
+  ResultSetPtr copy();
+
+  void clearPermutation() {
+    if (!permutation_.empty()) {
+      permutation_.clear();
+    }
+  }
+
+  void initStatus() {
+    // todo(yoonmin): what else we additionally need to consider
+    // to make completely clear status of the resultset for reuse?
+    crt_row_buff_idx_ = 0;
+    fetched_so_far_ = 0;
+    clearPermutation();
+    setGeoReturnType(ResultSet::GeoReturnType::WktString);
+    invalidateCachedRowCount();
+    drop_first_ = 0;
+    keep_first_ = 0;
+  }
+
+  void invalidateResultSetChunks() {
+    if (!chunks_.empty()) {
+      chunks_.clear();
+    }
+    if (!chunk_iters_.empty()) {
+      chunk_iters_.clear();
+    }
+  };
+
+  const bool isEstimator() const { return !estimator_; }
+
+  void setCached(bool val) { cached_ = val; }
+
+  const bool isCached() const { return cached_; }
+
+  void setExecTime(const long exec_time) { query_exec_time_ = exec_time; }
+
+  const long getExecTime() const { return query_exec_time_; }
+
+  void setQueryPlanHash(const QueryPlanHash query_plan) { query_plan_ = query_plan; }
+
+  const QueryPlanHash getQueryPlanHash() { return query_plan_; }
+
+  std::unordered_set<size_t> getInputTableKeys() const { return input_table_keys_; }
+
+  void setInputTableKeys(std::unordered_set<size_t>&& intput_table_keys) {
+    input_table_keys_ = std::move(intput_table_keys);
+  }
+
+  void setTargetMetaInfo(const std::vector<TargetMetaInfo>& target_meta_info) {
+    std::copy(target_meta_info.begin(),
+              target_meta_info.end(),
+              std::back_inserter(target_meta_info_));
+  }
+
+  std::vector<TargetMetaInfo> getTargetMetaInfo() { return target_meta_info_; }
+
+  std::optional<bool> canUseSpeculativeTopNSort() const {
+    return can_use_speculative_top_n_sort;
+  }
+
+  void setUseSpeculativeTopNSort(bool value) { can_use_speculative_top_n_sort = value; }
+
+  const bool hasValidBuffer() const {
+    if (storage_) {
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Geo return type options when accessing geo columns from a result set.
    */
@@ -850,7 +921,7 @@ class ResultSet {
   // TODO(miyu): refine by using one buffer and
   //   setting offset instead of ptr in group by buffer.
   std::vector<std::vector<int8_t>> literal_buffers_;
-  const std::vector<ColumnLazyFetchInfo> lazy_fetch_info_;
+  std::vector<ColumnLazyFetchInfo> lazy_fetch_info_;
   std::vector<std::vector<std::vector<const int8_t*>>> col_buffers_;
   std::vector<std::vector<std::vector<int64_t>>> frag_offsets_;
   std::vector<std::vector<int64_t>> consistent_frag_sizes_;
@@ -873,6 +944,19 @@ class ResultSet {
 
   // only used by geo
   mutable GeoReturnType geo_return_type_;
+
+  // only used by data recycler
+  bool cached_;  // indicator that this resultset is cached
+  size_t
+      query_exec_time_;  // an elapsed time to process the query for this resultset (ms)
+  QueryPlanHash query_plan_;  // a hashed query plan DAG of this resultset
+  std::unordered_set<size_t> input_table_keys_;  // input table signatures
+  std::vector<TargetMetaInfo> target_meta_info_;
+  // if we recycle the resultset, we do not create work_unit of the query step
+  // because we may skip its child query step(s)
+  // so we try to keep whether this resultset is available to use speculative top n sort
+  // when it is inserted to the recycler, and reuse this info when recycled
+  std::optional<bool> can_use_speculative_top_n_sort;
 
   friend class ResultSetManager;
   friend class ResultSetRowIterator;

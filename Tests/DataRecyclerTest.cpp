@@ -83,7 +83,9 @@ void drop_tables_for_overlaps_hashjoin() {
   const auto cleanup_stmts = {R"(drop table if exists overlaps_t11;)",
                               R"(drop table if exists overlaps_t12;)",
                               R"(drop table if exists overlaps_t13;)",
-                              R"(drop table if exists overlaps_t2;)"};
+                              R"(drop table if exists overlaps_t2;)",
+                              R"(drop table if exists overlaps_t3;)",
+                              R"(drop table if exists overlaps_t4;)"};
 
   for (const auto& stmt : cleanup_stmts) {
     QR::get()->runDDLStatement(stmt);
@@ -488,20 +490,20 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
 }
 
 TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
-
+  ScopeGuard reset_overlaps_state =
+      [orig_overlaps_hashjoin_state = g_enable_overlaps_hashjoin,
+       orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
+       orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold] {
+        g_enable_overlaps_hashjoin = orig_overlaps_hashjoin_state;
+        g_enable_overlaps_hashjoin = orig_hashjoin_many_to_many_state;
+        g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
+      };
   g_enable_overlaps_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
+
   std::set<QueryPlanHash> visited_hashtable_key;
 
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
-                                     &enable_hashjoin_many_to_many_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
-    g_trivial_loop_join_threshold = 1000;
-  };
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto clearCaches = [&executor, &visited_hashtable_key] {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);
@@ -786,20 +788,19 @@ TEST(DataRecycler, Overlaps_Hashtable_Cache_Maintanence) {
 }
 
 TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
-  const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
-  const auto enable_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many;
-
+  ScopeGuard reset_overlaps_state =
+      [orig_overlaps_hashjoin_state = g_enable_overlaps_hashjoin,
+       orig_hashjoin_many_to_many_state = g_enable_hashjoin_many_to_many,
+       orig_trivial_loop_join_threshold = g_trivial_loop_join_threshold] {
+        g_enable_overlaps_hashjoin = orig_overlaps_hashjoin_state;
+        g_enable_overlaps_hashjoin = orig_hashjoin_many_to_many_state;
+        g_trivial_loop_join_threshold = orig_trivial_loop_join_threshold;
+      };
   g_enable_overlaps_hashjoin = true;
   g_enable_hashjoin_many_to_many = true;
   g_trivial_loop_join_threshold = 1;
   std::set<QueryPlanHash> visited_hashtable_key;
 
-  ScopeGuard reset_overlaps_state = [&enable_overlaps_hashjoin_state,
-                                     &enable_hashjoin_many_to_many_state] {
-    g_enable_overlaps_hashjoin = enable_overlaps_hashjoin_state;
-    g_enable_overlaps_hashjoin = enable_hashjoin_many_to_many_state;
-    g_trivial_loop_join_threshold = 1000;
-  };
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   auto clearCaches = [&executor, &visited_hashtable_key] {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);
@@ -2394,13 +2395,22 @@ int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
 
-  g_is_test_env = true;
+  ScopeGuard reset_flag_state = [orig_table_function = g_enable_table_functions,
+                                 orig_dev_table_function = g_enable_dev_table_functions,
+                                 orig_test_env = g_is_test_env] {
+    g_enable_table_functions = orig_table_function;
+    g_enable_dev_table_functions = orig_dev_table_function;
+    g_is_test_env = orig_test_env;
+  };
   g_enable_table_functions = true;
   g_enable_dev_table_functions = true;
+  g_is_test_env = true;
+
   QR::init(BASE_PATH);
 
   int err{0};
   try {
+    err = drop_table();
     err = create_and_populate_table();
     err = RUN_ALL_TESTS();
     err = drop_table();

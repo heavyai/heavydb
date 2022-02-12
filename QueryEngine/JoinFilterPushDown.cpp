@@ -91,7 +91,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   {},
                                   {count_expr.get()},
                                   nullptr,
-                                  {{}, SortAlgorithm::Default, 0, 0},
+                                  {{}, SortAlgorithm::Default, 0, 0, false},
                                   0};
   size_t one{1};
   ResultSetPtr filtered_result;
@@ -158,6 +158,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
                              eo.find_push_down_candidates);
     }
     const ExecutionOptions eo_modified{eo.output_columnar_hint,
+                                       eo.keep_result,
                                        eo.allow_multifrag,
                                        eo.just_explain,
                                        eo.allow_loop_joins,

@@ -6065,6 +6065,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
   auto validate_or_explain_query =
       explain_info.justExplain() || explain_info.justCalciteExplain() || just_validate;
   ExecutionOptions eo = {g_enable_columnar_output,
+                         false,
                          allow_multifrag_,
                          explain_info.justExplain(),
                          allow_loop_joins_ || just_validate,
@@ -6619,6 +6620,20 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         }
         if (td->isView) {
           throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
+        }
+
+        // invalidate cached item
+        bool clearEntireCache = true;
+        if (td) {
+          const auto& table_chunk_key_prefix = td->getTableChunkKey(cat.getDatabaseId());
+          if (!table_chunk_key_prefix.empty()) {
+            auto table_key = boost::hash_value(table_chunk_key_prefix);
+            ResultSetCacheInvalidator::invalidateCachesByTable(table_key);
+            clearEntireCache = false;
+          }
+        }
+        if (clearEntireCache) {
+          ResultSetCacheInvalidator::invalidateCaches();
         }
 
         auto executor = Executor::getExecutor(
@@ -7386,6 +7401,7 @@ void DBHandler::set_table_epochs(const TSessionId& session,
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
   ChunkKey table_key{db_id, logical_table_id};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
   auto table_write_lock = lockmgr::TableSchemaLockMgr::getWriteLockForTable(table_key);
   auto table_data_write_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(table_key);
   if (leaf_aggregator_.leafCount() > 0) {

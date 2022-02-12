@@ -18,6 +18,8 @@
 #include "Catalog/Catalog.h"
 #include "LockMgr/LockMgr.h"
 
+#include "QueryEngine/ExternalCacheInvalidators.h"
+
 namespace foreign_storage {
 void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
                            const std::string& table_name,
@@ -35,8 +37,10 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
         " is not a foreign table. Refreshes are applicable to only foreign tables."};
   }
 
-  catalog.removeFragmenterForTable(td->tableId);
   ChunkKey table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
+
+  catalog.removeFragmenterForTable(td->tableId);
 
   if (catalog.getForeignTable(td->tableId)->isAppendMode() && !evict_cached_entries) {
     ChunkMetadataVector metadata_vec;

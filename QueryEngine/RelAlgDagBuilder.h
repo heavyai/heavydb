@@ -1655,14 +1655,19 @@ class RelSort : public RelAlgNode {
   RelSort(const std::vector<SortField>& collation,
           const size_t limit,
           const size_t offset,
-          std::shared_ptr<const RelAlgNode> input)
-      : collation_(collation), limit_(limit), offset_(offset) {
+          std::shared_ptr<const RelAlgNode> input,
+          bool limit_delivered)
+      : collation_(collation)
+      , limit_(limit)
+      , offset_(offset)
+      , limit_delivered_(limit_delivered) {
     inputs_.push_back(input);
   }
 
   bool operator==(const RelSort& that) const {
     return limit_ == that.limit_ && offset_ == that.offset_ &&
-           empty_result_ == that.empty_result_ && hasEquivCollationOf(that);
+           empty_result_ == that.empty_result_ &&
+           limit_delivered_ == that.limit_delivered_ && hasEquivCollationOf(that);
   }
 
   size_t collationCount() const { return collation_.size(); }
@@ -1680,11 +1685,14 @@ class RelSort : public RelAlgNode {
 
   bool isEmptyResult() const { return empty_result_; }
 
+  bool isLimitDelivered() const { return limit_delivered_; }
+
   size_t getLimit() const { return limit_; }
 
   size_t getOffset() const { return offset_; }
 
   std::string toString() const override {
+    const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
     return cat(::typeName(this),
                "(",
                "empty_result: ",
@@ -1692,7 +1700,7 @@ class RelSort : public RelAlgNode {
                ", collation=",
                ::toString(collation_),
                ", limit=",
-               std::to_string(limit_),
+               limit_info,
                ", offset",
                std::to_string(offset_),
                ", inputs=",
@@ -1707,7 +1715,10 @@ class RelSort : public RelAlgNode {
         boost::hash_combine(*hash_, collation.toHash());
       }
       boost::hash_combine(*hash_, empty_result_);
-      boost::hash_combine(*hash_, limit_);
+      boost::hash_combine(*hash_, limit_delivered_);
+      if (limit_delivered_) {
+        boost::hash_combine(*hash_, limit_);
+      }
       boost::hash_combine(*hash_, offset_);
       for (auto& node : inputs_) {
         boost::hash_combine(*hash_, node->toHash());
@@ -1727,6 +1738,7 @@ class RelSort : public RelAlgNode {
   const size_t limit_;
   const size_t offset_;
   bool empty_result_;
+  bool limit_delivered_;
 
   bool hasEquivCollationOf(const RelSort& that) const;
 };
@@ -2182,6 +2194,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
     return subqueries_;
   }
 
+  // todo(yoonmin): simplify and improve query register logic
   void registerQueryHints(std::shared_ptr<RelAlgNode> node,
                           Hints* hints_delivered,
                           RegisteredQueryHint& global_query_hint) {
@@ -2280,6 +2293,31 @@ class RelAlgDagBuilder : public boost::noncopyable {
                     << ") : the hint value should be larger than zero";
           }
           break;
+        }
+        case QueryHint::kKeepResult: {
+          if (!g_enable_data_recycler || !g_use_query_resultset_cache) {
+            VLOG(1) << "Skip query hint \'keep_result\' because neither data recycler "
+                       "nor query resultset recycler is enabled";
+          } else {
+            query_hint.registerHint(QueryHint::kKeepResult);
+            query_hint.keep_result = true;
+            if (target.isGlobalHint()) {
+              global_query_hint.registerHint(QueryHint::kKeepResult);
+              global_query_hint.keep_result = true;
+            }
+          }
+          break;
+        }
+        case QueryHint::kKeepTableFuncResult: {
+          if (!g_enable_data_recycler || !g_use_query_resultset_cache) {
+            VLOG(1) << "Skip query hint \'keep_table_function_result\' because neither "
+                       "data recycler "
+                       "nor query resultset recycler is enabled";
+          } else {
+            // we assume table function's hint is handled as global hint by default
+            global_query_hint.registerHint(QueryHint::kKeepTableFuncResult);
+            global_query_hint.keep_table_function_result = true;
+          }
         }
         default:
           break;

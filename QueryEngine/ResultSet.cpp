@@ -27,6 +27,7 @@
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
 #include "OutputBufferInitialization.h"
+#include "RelAlgExecutionUnit.h"
 #include "RuntimeFunctions.h"
 #include "Shared/Intervals.h"
 #include "Shared/SqlTypesLayout.h"
@@ -81,7 +82,11 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , just_explain_(false)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -116,7 +121,11 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , just_explain_(false)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
@@ -132,7 +141,11 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , just_explain_(false)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {
   if (device_type == ExecutorDeviceType::GPU) {
     device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
         data_mgr_, estimator_->getBufferSize(), device_id_);
@@ -154,7 +167,11 @@ ResultSet::ResultSet(const std::string& explanation)
     , just_explain_(true)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::ResultSet(int64_t queue_time_ms,
                      int64_t render_time_ms,
@@ -168,7 +185,11 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , just_explain_(true)
     , for_validation_only_(false)
     , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString){};
+    , geo_return_type_(GeoReturnType::WktString)
+    , cached_(false)
+    , query_exec_time_(0)
+    , query_plan_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , can_use_speculative_top_n_sort(std::nullopt) {}
 
 ResultSet::~ResultSet() {
   if (storage_) {
@@ -301,6 +322,86 @@ void ResultSet::append(ResultSet& that) {
   for (auto& buff : that.literal_buffers_) {
     literal_buffers_.push_back(std::move(buff));
   }
+}
+
+ResultSetPtr ResultSet::copy() {
+  auto timer = DEBUG_TIMER(__func__);
+  if (!storage_) {
+    return nullptr;
+  }
+
+  auto executor = getExecutor();
+  CHECK(executor);
+  ResultSetPtr copied_rs = std::make_shared<ResultSet>(targets_,
+                                                       device_type_,
+                                                       query_mem_desc_,
+                                                       row_set_mem_owner_,
+                                                       executor->getCatalog(),
+                                                       executor->blockSize(),
+                                                       executor->gridSize());
+
+  auto allocate_and_copy_storage =
+      [&](const ResultSetStorage* prev_storage) -> std::unique_ptr<ResultSetStorage> {
+    const auto& prev_qmd = prev_storage->query_mem_desc_;
+    const auto storage_size = prev_qmd.getBufferSizeBytes(device_type_);
+    auto buff = row_set_mem_owner_->allocate(storage_size, /*thread_idx=*/0);
+    std::unique_ptr<ResultSetStorage> new_storage;
+    new_storage.reset(new ResultSetStorage(
+        prev_storage->targets_, prev_qmd, buff, /*buff_is_provided=*/true));
+    new_storage->target_init_vals_ = prev_storage->target_init_vals_;
+    if (prev_storage->varlen_output_info_) {
+      new_storage->varlen_output_info_ = prev_storage->varlen_output_info_;
+    }
+    memcpy(new_storage->buff_, prev_storage->buff_, storage_size);
+    new_storage->query_mem_desc_ = prev_qmd;
+    return new_storage;
+  };
+
+  copied_rs->storage_ = allocate_and_copy_storage(storage_.get());
+  if (!appended_storage_.empty()) {
+    for (const auto& storage : appended_storage_) {
+      copied_rs->appended_storage_.push_back(allocate_and_copy_storage(storage.get()));
+    }
+  }
+  std::copy(chunks_.begin(), chunks_.end(), std::back_inserter(copied_rs->chunks_));
+  std::copy(chunk_iters_.begin(),
+            chunk_iters_.end(),
+            std::back_inserter(copied_rs->chunk_iters_));
+  std::copy(col_buffers_.begin(),
+            col_buffers_.end(),
+            std::back_inserter(copied_rs->col_buffers_));
+  std::copy(frag_offsets_.begin(),
+            frag_offsets_.end(),
+            std::back_inserter(copied_rs->frag_offsets_));
+  std::copy(consistent_frag_sizes_.begin(),
+            consistent_frag_sizes_.end(),
+            std::back_inserter(copied_rs->consistent_frag_sizes_));
+  if (separate_varlen_storage_valid_) {
+    std::copy(serialized_varlen_buffer_.begin(),
+              serialized_varlen_buffer_.end(),
+              std::back_inserter(copied_rs->serialized_varlen_buffer_));
+  }
+  std::copy(literal_buffers_.begin(),
+            literal_buffers_.end(),
+            std::back_inserter(copied_rs->literal_buffers_));
+  std::copy(lazy_fetch_info_.begin(),
+            lazy_fetch_info_.end(),
+            std::back_inserter(copied_rs->lazy_fetch_info_));
+
+  copied_rs->permutation_ = permutation_;
+  copied_rs->drop_first_ = drop_first_;
+  copied_rs->keep_first_ = keep_first_;
+  copied_rs->separate_varlen_storage_valid_ = separate_varlen_storage_valid_;
+  copied_rs->query_exec_time_ = query_exec_time_;
+  copied_rs->input_table_keys_ = input_table_keys_;
+  copied_rs->target_meta_info_ = target_meta_info_;
+  copied_rs->geo_return_type_ = geo_return_type_;
+  copied_rs->query_plan_ = query_plan_;
+  if (can_use_speculative_top_n_sort) {
+    copied_rs->can_use_speculative_top_n_sort = can_use_speculative_top_n_sort;
+  }
+
+  return copied_rs;
 }
 
 const ResultSetStorage* ResultSet::getStorage() const {

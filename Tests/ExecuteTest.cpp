@@ -22322,6 +22322,353 @@ TEST(Select, ParseIntegerExceptions) {
   }
 }
 
+TEST(Select, ResultsetAndChunkMetadataRecycling) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto clearCache = [&executor] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+  clearCache();
+
+  ScopeGuard reset_global_flag_state =
+      [orig_resulset_recycler = g_use_query_resultset_cache,
+       orig_data_recycler = g_enable_data_recycler,
+       orig_chunk_metadata_recycler = g_use_chunk_metadata_cache,
+       orig_auto_resultset_caching = g_allow_auto_resultset_caching,
+       orig_query_step_skipping = g_allow_query_step_skipping] {
+        g_use_query_resultset_cache = orig_resulset_recycler;
+        g_enable_data_recycler = orig_data_recycler;
+        g_use_chunk_metadata_cache = orig_chunk_metadata_recycler;
+        g_allow_auto_resultset_caching = orig_auto_resultset_caching;
+        g_allow_query_step_skipping = orig_query_step_skipping;
+      };
+  g_enable_data_recycler = true;
+  g_use_query_resultset_cache = true;
+  g_use_chunk_metadata_cache = true;
+  g_allow_query_step_skipping = true;
+  g_allow_auto_resultset_caching = false;
+
+  auto CPU_DT = ExecutorDeviceType::CPU;
+  auto& recycler_holder = executor->getRecultSetRecyclerHolder();
+  auto resultset_recycler = recycler_holder.getResultSetRecycler();
+  auto chunk_metadata_recycler = recycler_holder.getChunkMetadataRecycler();
+  CHECK(resultset_recycler);
+  CHECK(chunk_metadata_recycler);
+  std::set<QueryPlanHash> visited_hashtable_key;
+  std::vector<QueryPlanHash> cache_keys;
+  std::vector<int> num_resultset_ref;
+  std::vector<int> num_chunk_metadata_ref;
+
+  EXPECT_EQ(resultset_recycler->getCurrentNumCachedItems(
+                CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+            static_cast<size_t>(0));
+  EXPECT_EQ(chunk_metadata_recycler->getCurrentNumCachedItems(
+                CacheItemType::CHUNK_METADATA, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+            static_cast<size_t>(0));
+
+  auto collect_ref_count = [&num_resultset_ref,
+                            &num_chunk_metadata_ref,
+                            &resultset_recycler,
+                            &chunk_metadata_recycler](const QueryPlanHash key,
+                                                      int index = -1) {
+    auto resultset_metric = resultset_recycler->getCachedItemMetric(
+        CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER, key);
+    auto chunk_metadata_metric = chunk_metadata_recycler->getCachedItemMetric(
+        CacheItemType::CHUNK_METADATA, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER, key);
+    if (resultset_metric) {
+      if (index > -1) {
+        num_resultset_ref[index] = resultset_metric->getRefCount();
+      } else {
+        num_resultset_ref.push_back(resultset_metric->getRefCount());
+      }
+    } else {
+      if (index > -1) {
+        num_resultset_ref[index] = -1;
+      } else {
+        num_resultset_ref.push_back(-1);
+      }
+    }
+
+    if (chunk_metadata_metric) {
+      if (index > -1) {
+        num_chunk_metadata_ref[index] = chunk_metadata_metric->getRefCount();
+      } else {
+        num_chunk_metadata_ref.push_back(chunk_metadata_metric->getRefCount());
+      }
+    } else {
+      if (index > -1) {
+        num_chunk_metadata_ref[index] = -1;
+      } else {
+        num_chunk_metadata_ref.push_back(-1);
+      }
+    }
+  };
+
+  auto collect_cache_key_and_ref_cnt =
+      [&visited_hashtable_key, &resultset_recycler, &cache_keys, collect_ref_count]() {
+        auto cached_resultset_info =
+            resultset_recycler->getCachedResultSetWithoutCacheKey(
+                visited_hashtable_key, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+        auto resultset = std::get<1>(cached_resultset_info);
+        CHECK(resultset);
+        auto cache_key = std::get<0>(cached_resultset_info);
+        cache_keys.push_back(cache_key);
+        visited_hashtable_key.insert(cache_key);
+        collect_ref_count(cache_key);
+      };
+  // first run the query and then see whether we can exploit the resultset recycler
+
+  // projection
+  auto q1 = "SELECT /*+ keep_result */ SUM(x), AVG(y) FROM test;";
+  c(q1, CPU_DT);
+  EXPECT_EQ(resultset_recycler->getCurrentNumCachedItems(
+                CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+            static_cast<size_t>(1));
+  collect_cache_key_and_ref_cnt();
+
+  // group by
+  auto q2 = "SELECT /*+ keep_result */ x, SUM(y) FROM test GROUP BY x;";
+  c(q2, CPU_DT);
+  EXPECT_EQ(resultset_recycler->getCurrentNumCachedItems(
+                CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+            static_cast<size_t>(2));
+  collect_cache_key_and_ref_cnt();
+
+  // join
+  auto q3 =
+      "SELECT /*+ keep_result */ R.x, S.x FROM test R, test_inner S WHERE R.x = S.x;";
+  c(q3, CPU_DT);
+  EXPECT_EQ(resultset_recycler->getCurrentNumCachedItems(
+                CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+            static_cast<size_t>(3));
+  collect_cache_key_and_ref_cnt();
+
+  // order by
+  auto q4 =
+      "SELECT /*+ keep_result */ AVG(f), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z "
+      "HAVING AVG(y) > 42.0 ORDER BY n;";
+  c(q4, CPU_DT);
+  const auto num_cached_res1 = resultset_recycler->getCurrentNumCachedItems(
+      CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  collect_cache_key_and_ref_cnt();
+
+  // we do not support resultset cache if a query has LIMIT clause
+  auto q5 =
+      "SELECT /*+ keep_result */ count(*) FROM (SELECT /*+ keep_result */ x FROM test "
+      "GROUP BY x LIMIT 2);";
+  EXPECT_EQ(int64_t(2), v<int64_t>(run_simple_agg(q5, CPU_DT)));
+  const auto num_cached_res2 = resultset_recycler->getCurrentNumCachedItems(
+      CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  // q5 has two SELECT queries, but we only keep the outer SELECT query
+  EXPECT_EQ(num_cached_res2 - num_cached_res1, static_cast<size_t>(1));
+
+  // subquery - group by
+  auto q6 =
+      "SELECT /*+ keep_result */ COUNT(*) FROM subquery_test WHERE x NOT IN (SELECT /*+ "
+      "keep_result */ x + 1 FROM subquery_test GROUP BY x);";
+  c(q6, CPU_DT);
+  collect_cache_key_and_ref_cnt();
+
+  // subquery - join
+  auto q7 =
+      "SELECT /*+ keep_result */ COUNT(*) FROM subquery_test WHERE x IN (SELECT /*+ "
+      "keep_result */ x AS foobar FROM subquery_test GROUP BY foobar);";
+  c(q7, CPU_DT);
+  collect_cache_key_and_ref_cnt();
+
+  auto q8 =
+      "SELECT /*+ keep_result */ COUNT(*) FROM test, (SELECT /*+ keep_result */ x FROM "
+      "test_inner) AS inner_x WHERE test.x = inner_x.x;";
+  c(q8, CPU_DT);
+  collect_cache_key_and_ref_cnt();
+
+  // subquery - order by
+  auto q9 =
+      "SELECT /*+ keep_result */ x, SUM(y) AS n, SUM(z) as n2 FROM (SELECT /*+ "
+      "keep_result */ x, SUM(y) as y, AVG(z) as z FROM test GROUP BY x ORDER BY x) GROUP "
+      "BY x ORDER BY n;";
+  c(q9, CPU_DT);
+  collect_cache_key_and_ref_cnt();
+
+  // we do not support resultset cache if a query has LIMIT clause
+  const auto num_cached_res3 = resultset_recycler->getCurrentNumCachedItems(
+      CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  auto q10 =
+      "SELECT /*+ keep_result */ SUM(X), AVG(y) FROM (SELECT /*+ keep_result */ x, y "
+      "FROM test ORDER BY x,y LIMIT 5);";
+  c(q10, CPU_DT);
+  const auto num_cached_res4 = resultset_recycler->getCurrentNumCachedItems(
+      CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  // q10 has two SELECT queries, but we only keep the outer SELECT query
+  EXPECT_EQ(num_cached_res4 - num_cached_res3, static_cast<size_t>(1));
+
+  EXPECT_EQ(cache_keys.size(), static_cast<size_t>(8));
+
+  std::vector<int> prev_num_resultset_ref;
+  std::vector<int> prev_num_chunk_metadata_ref;
+
+  std::copy(num_resultset_ref.begin(),
+            num_resultset_ref.end(),
+            std::back_inserter(prev_num_resultset_ref));
+  std::copy(num_chunk_metadata_ref.begin(),
+            num_chunk_metadata_ref.end(),
+            std::back_inserter(prev_num_chunk_metadata_ref));
+
+  for (int i = 0; i < 3; ++i) {
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      c(q1, dt);
+      collect_ref_count(cache_keys[0], 0);
+      c(q2, dt);
+      collect_ref_count(cache_keys[1], 1);
+      c(q3, dt);
+      collect_ref_count(cache_keys[2], 2);
+      c(q4, dt);
+      collect_ref_count(cache_keys[3], 3);
+      EXPECT_EQ(int64_t(2), v<int64_t>(run_simple_agg(q5, dt)));
+      c(q6, dt);
+      collect_ref_count(cache_keys[4], 4);
+      c(q7, dt);
+      collect_ref_count(cache_keys[5], 5);
+      c(q8, dt);
+      collect_ref_count(cache_keys[6], 6);
+      c(q9, dt);
+      collect_ref_count(cache_keys[7], 7);
+      c(q10, dt);
+    }
+  }
+
+  for (size_t i = 0; i < num_resultset_ref.size(); ++i) {
+    EXPECT_GT(num_resultset_ref[i], prev_num_resultset_ref[i]);
+    EXPECT_GE(num_chunk_metadata_ref[i], prev_num_chunk_metadata_ref[i]);
+  }
+
+  clearCache();
+}
+
+TEST(Select, QueryStepSkipping) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto clearCache = [&executor] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+  clearCache();
+
+  ScopeGuard reset_global_flag_state =
+      [orig_resulset_recycler = g_use_query_resultset_cache,
+       orig_data_recycler = g_enable_data_recycler,
+       orig_query_skipping = g_allow_query_step_skipping,
+       orig_auto_caching = g_allow_auto_resultset_caching] {
+        g_use_query_resultset_cache = orig_resulset_recycler;
+        g_enable_data_recycler = orig_data_recycler;
+        g_allow_query_step_skipping = orig_query_skipping;
+        g_allow_auto_resultset_caching = orig_auto_caching;
+      };
+  g_enable_data_recycler = true;
+  g_use_query_resultset_cache = true;
+  g_allow_query_step_skipping = true;
+  g_allow_auto_resultset_caching = false;
+
+  auto query_11_steps =
+      "select avg(v10+1) as v11 from (select avg(v9+1) as v10 from (select avg(v8+1) as "
+      "v9 from (select avg(v7+1) as v8 from (select avg(v6+1) as v7 from (select "
+      "avg(v5+1) as v6 from (select avg(v4+1) as v5 from (select avg(v3+1) as v4 from "
+      "(select avg(v2+1) as v3 from (select avg(v1+1) as v2 from (select avg(x+1) as v1 "
+      "from test group by x) t1) t2) t3) t4) t5) t6) t7) t8) t9);";
+  auto ra_desc_1 = QR::get()->getRaExecutionSequence(query_11_steps);
+  EXPECT_EQ(ra_desc_1.size(), static_cast<size_t>(11));
+
+  std::vector<std::string> test_queries = {"select avg(v10+1) as v11 from ",
+                                           "avg(v9+1) as v10 from ",
+                                           "avg(v8+1) as v9 from ",
+                                           "avg(v7+1) as v8 from ",
+                                           "avg(v6+1) as v7 from ",
+                                           "avg(v5+1) as v6 from ",
+                                           "avg(v4+1) as v5 from ",
+                                           "avg(v3+1) as v4 from ",
+                                           "avg(v2+1) as v3 from ",
+                                           "avg(v1+1) as v2 from ",
+                                           "avg(x+1) as v1 from "};
+  const std::string last_part{"test group by x) t1) t2) t3) t4) t5) t6) t7) t8) t9);"};
+  const std::string query_hint{"(select /*+ keep_result */ "};
+  const std::string no_query_hint{"(select "};
+  std::set<size_t> num_steps;
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (int i = 1; i <= 10; ++i) {
+      clearCache();
+      std::stringstream oss;
+      oss << test_queries[0];
+      for (int j = 1; j < i; ++j) {
+        oss << no_query_hint << test_queries[j];
+      }
+      oss << query_hint << test_queries[i];
+      for (int k = i + 1; k <= 10; ++k) {
+        oss << no_query_hint << test_queries[k];
+      }
+      oss << last_part;
+      const auto test_query = oss.str();
+      c(test_query, dt);
+      auto skipped_ra_desc = QR::get()->getRaExecutionSequence(query_11_steps);
+      EXPECT_LT(skipped_ra_desc.size(), ra_desc_1.size());
+      num_steps.insert(skipped_ra_desc.size());
+      c(query_11_steps, dt);
+    }
+    // check min / max query steps after skipping
+    EXPECT_EQ(*num_steps.rbegin(), static_cast<size_t>(10));
+    EXPECT_EQ(*num_steps.begin(), static_cast<size_t>(2));
+  }
+}
+
+TEST(Select, AutoQueryCaching) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  ScopeGuard reset_global_flag_state =
+      [orig_resulset_recycler = g_use_query_resultset_cache,
+       orig_data_recycler = g_enable_data_recycler,
+       orig_auto_caching_treshold = g_auto_resultset_caching_threshold,
+       orig_allow_auto_resultset_caching = g_allow_auto_resultset_caching,
+       orig_allow_query_step_skipping = g_allow_query_step_skipping] {
+        g_use_query_resultset_cache = orig_resulset_recycler;
+        g_enable_data_recycler = orig_data_recycler;
+        g_allow_auto_resultset_caching = orig_allow_auto_resultset_caching,
+        g_auto_resultset_caching_threshold = orig_auto_caching_treshold;
+        g_allow_query_step_skipping = orig_allow_query_step_skipping;
+      };
+  g_enable_data_recycler = true;
+  g_use_query_resultset_cache = true;
+  g_allow_query_step_skipping = false;
+  g_allow_auto_resultset_caching = true;
+
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto clearCache = [&executor] {
+    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+    executor->getQueryPlanDagCache().clearQueryPlanCache();
+  };
+  auto resultset_recycler = executor->getRecultSetRecyclerHolder().getResultSetRecycler();
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    using Param = std::pair<size_t, int>;
+    for (auto& params : {Param{0, 0}, Param{2, INT32_MAX}}) {
+      clearCache();
+      g_auto_resultset_caching_threshold = params.second;
+      c("SELECT SUM(x), AVG(y) FROM test;", dt);
+      c("SELECT R.x, S.x FROM test R, test_inner S WHERE R.x = S.x;", dt);
+      EXPECT_EQ(
+          resultset_recycler->getCurrentNumCachedItems(
+              CacheItemType::QUERY_RESULTSET, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER),
+          params.first);
+    }
+  }
+}
+
 class SubqueryTestEnv : public ::testing::Test {
  protected:
   void SetUp() override {

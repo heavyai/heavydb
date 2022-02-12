@@ -26,7 +26,9 @@ void ForeignTableRefreshScheduler::invalidateQueryEngineCaches() {
   auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
       *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
           legacylockmgr::ExecutorOuterLock, true));
+  // todo (yoonmin): support per-table invalidation
   UpdateTriggeredCacheInvalidator::invalidateCaches();
+  ResultSetCacheInvalidator::invalidateCaches();
 }
 
 void ForeignTableRefreshScheduler::start(std::atomic<bool>& is_program_running) {

@@ -102,7 +102,7 @@ RelAlgExecutionUnit build_ra_exe_unit(
                              {},
                              target_exprs,
                              nullptr,
-                             SortInfo{{}, SortAlgorithm::Default, 0, 0},
+                             SortInfo{{}, SortAlgorithm::Default, 0, 0, false},
                              0};
 }
 
@@ -111,8 +111,20 @@ inline CompilationOptions get_compilation_options(const ExecutorDeviceType& devi
 }
 
 inline ExecutionOptions get_execution_options() {
-  return ExecutionOptions{
-      false, false, false, false, false, false, false, false, 0, false, false, 0, false};
+  return ExecutionOptions{false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          false,
+                          0,
+                          false,
+                          false,
+                          0,
+                          false};
 }
 
 }  // namespace

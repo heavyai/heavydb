@@ -35,6 +35,8 @@ enum QueryHint {
   kOverlapsAllowGpuBuild,
   kOverlapsNoCache,
   kOverlapsKeysPerBin,
+  kKeepResult,
+  kKeepTableFuncResult,
   kHintCount,   // should be at the last elem before INVALID enum value to count #
                 // supported hints correctly
   kInvalidHint  // this should be the last elem of this enum
@@ -48,7 +50,9 @@ static const std::unordered_map<std::string, QueryHint> SupportedQueryHints = {
     {"overlaps_max_size", QueryHint::kOverlapsMaxSize},
     {"overlaps_allow_gpu_build", QueryHint::kOverlapsAllowGpuBuild},
     {"overlaps_no_cache", QueryHint::kOverlapsNoCache},
-    {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin}};
+    {"overlaps_keys_per_bin", QueryHint::kOverlapsKeysPerBin},
+    {"keep_result", QueryHint::kKeepResult},
+    {"keep_table_function_result", QueryHint::kKeepTableFuncResult}};
 
 struct HintIdentifier {
   bool global_hint;
@@ -199,6 +203,15 @@ struct RegisteredQueryHint {
                 global_hints.overlaps_keys_per_bin;
             break;
           }
+          case static_cast<int>(QueryHint::kKeepResult): {
+            updated_query_hints.keep_result = global_hints.keep_result;
+            break;
+          }
+          case static_cast<int>(QueryHint::kKeepTableFuncResult): {
+            updated_query_hints.keep_table_function_result =
+                global_hints.keep_table_function_result;
+            break;
+          }
         }
       }
     }
@@ -209,6 +222,8 @@ struct RegisteredQueryHint {
   bool cpu_mode;
   bool columnar_output;
   bool rowwise_output;
+  bool keep_result;
+  bool keep_table_function_result;
 
   // overlaps hash join
   double overlaps_bucket_threshold;  // defined in "OverlapsJoinHashTable.h"

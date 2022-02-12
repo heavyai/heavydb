@@ -33,10 +33,11 @@ std::optional<HashType> HashingSchemeRecycler::getItemFromCache(
       key, item_type, device_identifier, *layout_cache, lock);
   if (candidate_layout) {
     CHECK(!candidate_layout->isDirty());
-    VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
+    VLOG(1) << "[" << item_type << ", "
             << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
             << "] Recycle hashtable layout in cache: "
-            << HashJoin::getHashTypeString(*candidate_layout->cached_item);
+            << HashJoin::getHashTypeString(*candidate_layout->cached_item)
+            << "(key: " << key << ")";
     return candidate_layout->cached_item;
   }
   return std::nullopt;
@@ -62,9 +63,9 @@ void HashingSchemeRecycler::putItemToCache(QueryPlanHash key,
     return;
   }
   layout_cache->emplace_back(key, item, nullptr, meta_info);
-  VLOG(1) << "[" << DataRecyclerUtil::toStringCacheItemType(item_type) << ", "
+  VLOG(1) << "[" << item_type << ", "
           << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-          << "] Put hashtable layout to cache";
+          << "] Put hashtable layout to cache (key: " << key << ")";
   return;
 }
 
@@ -80,6 +81,9 @@ void HashingSchemeRecycler::removeItemFromCache(
   if (itr == layout_cache->cend()) {
     return;
   } else {
+    VLOG(1) << "[" << item_type << ", "
+            << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
+            << "] remove cached item from cache (key: " << key << ")";
     layout_cache->erase(itr);
   }
 }
@@ -88,6 +92,9 @@ void HashingSchemeRecycler::clearCache() {
   std::lock_guard<std::mutex> lock(getCacheLock());
   auto layout_cache_container = getCachedItemContainer(CacheItemType::HT_HASHING_SCHEME,
                                                        LAYOUT_CACHE_DEVICE_IDENTIFIER);
+  VLOG(1) << "[" << CacheItemType::HT_HASHING_SCHEME << ", "
+          << DataRecyclerUtil::getDeviceIdentifierString(LAYOUT_CACHE_DEVICE_IDENTIFIER)
+          << "] clear cache (# items: " << layout_cache_container->size() << ")";
   layout_cache_container->clear();
 }
 

@@ -68,6 +68,44 @@ struct QueryPlanDagInfo {
   std::shared_ptr<RelAlgTranslator> rel_alg_translator;
 };
 
+// Keep original values of data recycler related flags
+// and restore them when QR instance is destructed
+// Our test environment checks various bare-metal components of the system
+// including computing various relational operations and expressions,
+// building hash table, and so on
+// Thus, unless we explicitly test those cases, we must disable all of them
+// in the test framework by default
+// Since we enable data recycler and hash table recycler by default,
+// we keep them as is, but disable resultset recycler and its relevant
+// stuffs to keep our testing environment as is
+class DataRecyclerFlagsDisabler {
+ public:
+  DataRecyclerFlagsDisabler()
+      : orig_chunk_metadata_cache_(g_use_chunk_metadata_cache)
+      , orig_resultset_cache_(g_use_query_resultset_cache)
+      , orig_allow_query_step_skipping_(g_allow_query_step_skipping)
+      , orig_allow_auto_resultset_caching_(g_allow_auto_resultset_caching) {
+    g_use_chunk_metadata_cache = false;
+    g_use_query_resultset_cache = false;
+    g_allow_query_step_skipping = false;
+    g_allow_auto_resultset_caching = false;
+  }
+
+  ~DataRecyclerFlagsDisabler() {
+    // restore the flag values
+    g_use_chunk_metadata_cache = orig_chunk_metadata_cache_;
+    g_use_query_resultset_cache = orig_resultset_cache_;
+    g_allow_query_step_skipping = orig_allow_query_step_skipping_;
+    g_allow_auto_resultset_caching = orig_allow_auto_resultset_caching_;
+  }
+
+ private:
+  bool orig_chunk_metadata_cache_;
+  bool orig_resultset_cache_;
+  bool orig_allow_query_step_skipping_;
+  bool orig_allow_auto_resultset_caching_;
+};
+
 enum CacheItemStatus {
   CLEAN_ONLY,
   DIRTY_ONLY,
@@ -225,6 +263,7 @@ class QueryRunner {
       const std::string& query_str);
   std::optional<RegisteredQueryHint> getParsedGlobalQueryHints(
       const std::string& query_str);
+  RaExecutionSequence getRaExecutionSequence(const std::string& query_str);
 
   std::tuple<QueryPlanHash,
              std::shared_ptr<HashTable>,

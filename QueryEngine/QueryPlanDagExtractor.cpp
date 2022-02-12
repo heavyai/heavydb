@@ -103,8 +103,6 @@ ExtractedQueryPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
     auto child_dag = dag_extractor.getExtractedQueryPlanDagStr(1);
     sort_node->getInput(0)->setQueryPlanDag(child_dag);
   }
-  VLOG(1) << "Extracted query plan DAG: " << extracted_query_plan_dag
-          << ", current DAG cache size: " << cached_dag.getCurrentNodeMapSize();
   return {extracted_query_plan_dag, dag_extractor.isDagExtractionAvailable()};
 }
 

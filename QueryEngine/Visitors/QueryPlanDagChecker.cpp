@@ -85,9 +85,16 @@ void QueryPlanDagChecker::visit(const RelLogicalUnion* rel_alg_node) {
 }
 
 void QueryPlanDagChecker::visit(const RelScan* rel_alg_node) {
-  if (rel_alg_node->getTableDescriptor()->storageType == StorageType::FOREIGN_TABLE) {
-    detectNonSupportedNode("Detect ForeignTableScan node");
+  if (rel_alg_node->getTableDescriptor()->isForeignTable()) {
+    detectNonSupportedNode("Detect foreign table");
     return;
+  }
+  if (rel_alg_node->getTableDescriptor()->isTemporaryTable()) {
+    detectNonSupportedNode("Detect temporary table");
+  }
+
+  if (rel_alg_node->getTableDescriptor()->is_system_table) {
+    detectNonSupportedNode("Detect system table");
   }
   RelRexDagVisitor::visit(rel_alg_node);
 }

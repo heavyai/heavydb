@@ -3362,6 +3362,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
+                         false,
                          true,
                          false,
                          true,
@@ -3423,6 +3424,7 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,
+                         false,
                          true,
                          false,
                          true,
@@ -4152,6 +4154,9 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
   auto locks = acquire_query_table_locks(
       catalog, select_query_, query_state->createQueryStateProxy(), table_name_);
   const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
+
+  Executor::clearExternalCaches(true, td, catalog.getCurrentDB().dbId);
+
   try {
     populateData(query_state->createQueryStateProxy(), td, true, false);
   } catch (...) {
@@ -4365,20 +4370,15 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   ddl_utils::validate_table_type(td, ddl_utils::TableType::TABLE, "DROP");
 
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+  {
+    auto table_data_read_lock =
+        lockmgr::TableDataLockMgr::getReadLockForTable(catalog, *table_);
+    Executor::clearExternalCaches(false, td, catalog.getCurrentDB().dbId);
+  }
 
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.dropTable(td);
-
-  // invalidate cached item
-  if (!table_chunk_key_prefix.empty()) {
-    // todo (yoonmin): need to remove cached item for dropped table immediately?
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
-  }
 }
 
 void AlterTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {}
@@ -4522,19 +4522,16 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   foreign_storage::validate_non_foreign_table_write(td);
 
-  // invalidate cached items
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
+  // invalidate cached item
+  {
+    auto table_data_read_lock =
+        lockmgr::TableDataLockMgr::getReadLockForTable(catalog, *table_);
+    Executor::clearExternalCaches(false, td, catalog.getCurrentDB().dbId);
+  }
 
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table_);
   catalog.truncateTable(td);
-
-  if (!table_chunk_key_prefix.empty()) {
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
-  }
 }
 
 OptimizeTableStmt::OptimizeTableStmt(const rapidjson::Value& payload) {
@@ -4578,6 +4575,10 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView) {
     throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
   }
+
+  // invalidate cached item
+  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   const TableOptimizer optimizer(td, executor, catalog);
@@ -4827,7 +4828,7 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       const TableDescriptor* td = catalog.getMetadataForTable(altCurTableName);
       if (td) {
         // Tables *and* views may be renamed here, foreign tables not
-        //    -> just block just foreign tables
+        //    -> just block foreign tables
         disable_foreign_tables(td);
         check_alter_table_privilege(session, td);
       }
@@ -4909,7 +4910,7 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
       throw std::runtime_error(
           "Adding columns to temporary tables is not yet supported.");
     }
-  };
+  }
 
   check_alter_table_privilege(session, td);
 
@@ -4945,6 +4946,10 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         "Adding columns to a table is not supported when using the \"sort_column\" "
         "option.");
   }
+
+  // invalidate cached item
+  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
 
   // Do not take a data write lock, as the fragmenter may call `deleteFragments`
   // during a cap operation. Note that the schema write lock will prevent concurrent
@@ -5102,6 +5107,9 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Table " + *table_ + " has only one column.");
   }
 
+  // invalidate cached item
+  Executor::clearExternalCaches(false, td, catalog.getCurrentDB().dbId);
+
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {
     std::vector<int> columnIds;
@@ -5139,16 +5147,6 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     catalog.roll(false);
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
-  }
-
-  // invalidate cached items
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
-
-  if (!table_chunk_key_prefix.empty()) {
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    DeleteTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
   }
 }
 
@@ -5202,6 +5200,10 @@ void AlterTableParamStmt::execute(const Catalog_Namespace::SessionInfo& session)
         "Setting parameters for a temporary table is not yet supported.");
   }
   check_alter_table_privilege(session, td);
+
+  // invalidate cached item
+  std::vector<int> table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
 
   std::string param_name(*param_->get_name());
   boost::algorithm::to_lower(param_name);
@@ -5338,6 +5340,9 @@ void CopyTableStmt::execute(
                                session.get_currentUser().userLoggable() +
                                " has no insert privileges for table " + *table_ + ".");
     }
+
+    // invalidate cached item
+    Executor::clearExternalCaches(true, td, catalog.getCurrentDB().dbId);
   }
 
   import_export::CopyParams copy_params;
@@ -5439,18 +5444,6 @@ void CopyTableStmt::execute(
       throw std::runtime_error("Table '" + *table_ + "' must exist before COPY FROM");
     }
   }
-
-  // invalidate cached items
-  std::vector<int> table_chunk_key_prefix = getTableChunkKey(td, catalog);
-
-  // invalidate cached item
-  if (!table_chunk_key_prefix.empty()) {
-    auto table_key = boost::hash_value(table_chunk_key_prefix);
-    UpdateTriggeredCacheInvalidator::invalidateCachesByTable(table_key);
-  } else {
-    UpdateTriggeredCacheInvalidator::invalidateCaches();
-  }
-
   return_message.reset(new std::string(tr));
   LOG(INFO) << tr;
 }  // namespace Parser
@@ -6744,6 +6737,8 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
     // Will add a REPLACE TABLE to explictly replace target table.
     // catalog.restoreTable(session, td, *path, compression_);
+    // TODO (yoonmin): if the above feature is delivered, we have to invalidate cached
+    // items for the table
     throw std::runtime_error("Table " + *table_ + " exists.");
   } else {
     // check access privileges

@@ -28,6 +28,7 @@
 #include "JoinHashTable/BaselineJoinHashTable.h"
 #include "JoinHashTable/OverlapsJoinHashTable.h"
 #include "JoinHashTable/PerfectJoinHashTable.h"
+#include "ResultSetRecyclerHolder.h"
 
 using UpdateTriggeredCacheInvalidator =
     CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
@@ -39,5 +40,6 @@ using DeleteTriggeredCacheInvalidator = UpdateTriggeredCacheInvalidator;
 // will likely be extended in the future.
 using JoinHashTableCacheInvalidator =
     CacheInvalidator<OverlapsJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
+using ResultSetCacheInvalidator = CacheInvalidator<ResultSetRecyclerHolder>;
 
 #endif
