@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev b9c95f1
+                6.0.0dev 1e1c98d
               </div>
             
           
@@ -709,6 +709,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_render_query_options.html">Class RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_1_1_cell_callback.html">Class ResultSet::CellCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_builder.html">Class ResultSetBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
@@ -1154,12 +1155,12 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_row_group_interval_tracker.html">Class foreign_storage::AbstractRowGroupIntervalTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_text_file_data_wrapper.html">Class foreign_storage::AbstractTextFileDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_base_date_bounds_validator.html">Class foreign_storage::BaseDateBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_chunk_size_validator.html">Class foreign_storage::ChunkSizeValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_file_buffer_parser.html">Class foreign_storage::CsvFileBufferParser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_order_s3.html">Class foreign_storage::FileOrderS3</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader.html">Class foreign_storage::FileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
@@ -1187,7 +1188,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_import_encoder.html">Class foreign_storage::ParquetArrayImportEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_days_from_timestamp_encoder.html">Class foreign_storage::ParquetDateInDaysFromTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_seconds_encoder.html">Class foreign_storage::ParquetDateInSecondsEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
@@ -1701,6 +1702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html">Struct Catalog_Namespace::DBMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_summary.html">Struct Catalog_Namespace::DBSummary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_table_epoch_info.html">Struct Catalog_Namespace::TableEpochInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html">Struct Catalog_Namespace::UserAlterations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html">Struct Catalog_Namespace::UserMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state.html">Struct CgenState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state_1_1_function_oper_value.html">Struct CgenState::FunctionOperValue</a></li>
@@ -1715,9 +1717,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_3_01_text_encoding_dict_01_4.html">Struct Column&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list_3_01_text_encoding_dict_01_4.html">Struct ColumnList&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1801,6 +1805,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_boundary.html">Struct GeoBoundary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory_3_01_c_o_n_v_e_r_t_e_r_00_01typename_01std_1_1enable__if__t_3_01std4cb957e560a6fe6d43b7431fc4a942d7.html">Struct GeoConverterFactory&lt; CONVERTER, typename std::enable_if_t&lt; std::is_same_v&lt; GeoPolygonValueConverter, CONVERTER &gt;||std::is_same_v&lt; GeoMultiPolygonValueConverter, CONVERTER &gt; &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_coord.html">Struct GeoCoord</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
@@ -1817,6 +1822,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value.html">Struct GeoPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value_ptr.html">Struct GeoPolyTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon.html">Struct GeoPolygon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_render_group_manager.html">Struct GeoPolygonRenderGroupManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_value_converter.html">Struct GeoPolygonValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_raster.html">Struct GeoRaster</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_return_type_traits.html">Struct GeoReturnTypeTraits</a></li>
@@ -1968,6 +1974,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_encoding_none.html">Struct TextEncodingNone</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_info.html">Struct ThreadInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
@@ -2237,8 +2244,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb"></span><span id="Catalog_Namespace::SysCatalog::createUser__ssCR.ssCR.b.ssCR.b.b"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a756be1920c01951d06f88cc6053bb9af"></span>void <code class="sig-name descname">createUser</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>name</em>, <em class="property">const</em> std::string &amp;<em>passwd</em>, bool <em>is_super</em>, <em class="property">const</em> std::string &amp;<em>dbname</em>, bool <em>can_login</em>, bool <em>is_temporary</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringERKNSt6stringEbRKNSt6stringEbb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringE15UserAlterationsb">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringE15UserAlterationsb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringE15UserAlterationsb"></span><span id="Catalog_Namespace::SysCatalog::createUser__ssCR.UserAlterations.b"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a991fb99fada00d4a9d8dca9008d35b4f"></span><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a> <code class="sig-name descname">createUser</code><span class="sig-paren">(</span>std::string <em class="property">const</em> &amp;<em>name</em>, <a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html#_CPPv4N17Catalog_Namespace15UserAlterationsE" title="Catalog_Namespace::UserAlterations">UserAlterations</a> <em>alts</em>, bool <em>is_temporary</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog10createUserERKNSt6stringE15UserAlterationsb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2247,8 +2254,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb"></span><span id="Catalog_Namespace::SysCatalog::alterUser__ssCR.ssCP.bP.ssCP.bP"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a6439d1838eb6aa3e4de437b97d0018c8"></span>void <code class="sig-name descname">alterUser</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>name</em>, <em class="property">const</em> std::string *<em>passwd</em>, bool *<em>issuper</em>, <em class="property">const</em> std::string *<em>dbname</em>, bool *<em>can_login</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringEPKNSt6stringEPbPKNSt6stringEPb" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringE15UserAlterations">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringE15UserAlterations"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringE15UserAlterations"></span><span id="Catalog_Namespace::SysCatalog::alterUser__ssCR.UserAlterations"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a4a6fc5485d1b9ddd74860decf2328bb4"></span><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a> <code class="sig-name descname">alterUser</code><span class="sig-paren">(</span>std::string <em class="property">const</em> &amp;<em>name</em>, <a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html#_CPPv4N17Catalog_Namespace15UserAlterationsE" title="Catalog_Namespace::UserAlterations">UserAlterations</a> <em>alts</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog9alterUserERKNSt6stringE15UserAlterations" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2269,6 +2276,26 @@
 <dl class="function">
 <dt id="_CPPv4N17Catalog_Namespace10SysCatalog12dropDatabaseERK10DBMetadata">
 <span id="_CPPv3N17Catalog_Namespace10SysCatalog12dropDatabaseERK10DBMetadata"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog12dropDatabaseERK10DBMetadata"></span><span id="Catalog_Namespace::SysCatalog::dropDatabase__DBMetadataCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a4212355fb9fe3f340d1725fc0fb7b012"></span>void <code class="sig-name descname">dropDatabase</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html#_CPPv4N17Catalog_Namespace10DBMetadataE" title="Catalog_Namespace::DBMetadata">DBMetadata</a> &amp;<em>db</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog12dropDatabaseERK10DBMetadata" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog7getUserERKNSt6stringE">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog7getUserERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog7getUserERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::getUser__ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a4ab520b113d90daa60cc1906da8f6a2d"></span>std::optional&lt;<a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a>&gt; <code class="sig-name descname">getUser</code><span class="sig-paren">(</span>std::string <em class="property">const</em> &amp;<em>uname</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog7getUserERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog7getUserEK7int32_t">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog7getUserEK7int32_t"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog7getUserEK7int32_t"></span><span id="Catalog_Namespace::SysCatalog::getUser__int32_tC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1ade5ed5e50fd886961215bcfcc639c348"></span>std::optional&lt;<a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html#_CPPv4N17Catalog_Namespace12UserMetadataE" title="Catalog_Namespace::UserMetadata">UserMetadata</a>&gt; <code class="sig-name descname">getUser</code><span class="sig-paren">(</span>int32_t <em class="property">const</em> <em>uid</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog7getUserEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog5getDBERKNSt6stringE">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog5getDBERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog5getDBERKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::getDB__ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1a406671d77e3142153b0298dd1a8062f1"></span>std::optional&lt;<a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html#_CPPv4N17Catalog_Namespace10DBMetadataE" title="Catalog_Namespace::DBMetadata">DBMetadata</a>&gt; <code class="sig-name descname">getDB</code><span class="sig-paren">(</span>std::string <em class="property">const</em> &amp;<em>dbname</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog5getDBERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog5getDBEK7int32_t">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog5getDBEK7int32_t"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog5getDBEK7int32_t"></span><span id="Catalog_Namespace::SysCatalog::getDB__int32_tC"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1af1007ee235589fb85b30f4d3414af6d0"></span>std::optional&lt;<a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html#_CPPv4N17Catalog_Namespace10DBMetadataE" title="Catalog_Namespace::DBMetadata">DBMetadata</a>&gt; <code class="sig-name descname">getDB</code><span class="sig-paren">(</span>int32_t <em class="property">const</em> <em>dbid</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog5getDBEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2542,8 +2569,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEEPbRKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEEPbRKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEEPbRKNSt6stringE"></span><span id="Catalog_Namespace::SysCatalog::syncUserWithRemoteProvider__ssCR.std::vector:ss:.bP.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1aecf313d2db586180de13efc5f55ec4ad"></span>void <code class="sig-name descname">syncUserWithRemoteProvider</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>user_name</em>, std::vector&lt;std::string&gt; <em>idp_roles</em>, bool *<em>issuper</em>, <em class="property">const</em> std::string &amp;<em>default_db</em> = {}<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEEPbRKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEE15UserAlterations">
+<span id="_CPPv3N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEE15UserAlterations"></span><span id="_CPPv2N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEE15UserAlterations"></span><span id="Catalog_Namespace::SysCatalog::syncUserWithRemoteProvider__ssCR.std::vector:ss:.UserAlterations"></span><span class="target" id="class_catalog___namespace_1_1_sys_catalog_1af9dc77cacebed7fa1fb952a653df64ce"></span>void <code class="sig-name descname">syncUserWithRemoteProvider</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>user_name</em>, std::vector&lt;std::string&gt; <em>idp_roles</em>, <a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html#_CPPv4N17Catalog_Namespace15UserAlterationsE" title="Catalog_Namespace::UserAlterations">UserAlterations</a> <em>alts</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace10SysCatalog26syncUserWithRemoteProviderERKNSt6stringENSt6vectorINSt6stringEEE15UserAlterations" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

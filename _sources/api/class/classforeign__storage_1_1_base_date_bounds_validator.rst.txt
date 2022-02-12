@@ -1,0 +1,9 @@
+Class foreign_storage::BaseDateBoundsValidator
+==============================================
+
+.. doxygenclass:: foreign_storage::BaseDateBoundsValidator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

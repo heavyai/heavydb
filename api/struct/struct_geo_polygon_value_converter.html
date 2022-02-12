@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Struct GeoRaster" href="struct_geo_raster.html" />
-    <link rel="prev" title="Struct GeoPolygon" href="struct_geo_polygon.html" /> 
+    <link rel="prev" title="Struct GeoPolygonRenderGroupManager" href="struct_geo_polygon_render_group_manager.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev b9c95f1
+                6.0.0dev 1e1c98d
               </div>
             
           
@@ -709,6 +709,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_render_query_options.html">Class RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_result_set_1_1_cell_callback.html">Class ResultSet::CellCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_result_set_builder.html">Class ResultSetBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
@@ -1154,12 +1155,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_abstract_row_group_interval_tracker.html">Class foreign_storage::AbstractRowGroupIntervalTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_abstract_text_file_data_wrapper.html">Class foreign_storage::AbstractTextFileDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_base_date_bounds_validator.html">Class foreign_storage::BaseDateBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_chunk_size_validator.html">Class foreign_storage::ChunkSizeValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_csv_file_buffer_parser.html">Class foreign_storage::CsvFileBufferParser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_file_order_s3.html">Class foreign_storage::FileOrderS3</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_file_reader.html">Class foreign_storage::FileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
@@ -1187,7 +1188,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_array_import_encoder.html">Class foreign_storage::ParquetArrayImportEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_date_in_days_from_timestamp_encoder.html">Class foreign_storage::ParquetDateInDaysFromTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_date_in_seconds_encoder.html">Class foreign_storage::ParquetDateInSecondsEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
@@ -1701,6 +1702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_catalog___namespace_1_1_d_b_metadata.html">Struct Catalog_Namespace::DBMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_catalog___namespace_1_1_d_b_summary.html">Struct Catalog_Namespace::DBSummary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_catalog___namespace_1_1_table_epoch_info.html">Struct Catalog_Namespace::TableEpochInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_catalog___namespace_1_1_user_alterations.html">Struct Catalog_Namespace::UserAlterations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_catalog___namespace_1_1_user_metadata.html">Struct Catalog_Namespace::UserMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_cgen_state.html">Struct CgenState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_cgen_state_1_1_function_oper_value.html">Struct CgenState::FunctionOperValue</a></li>
@@ -1715,9 +1717,11 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_col_range_info.html">Struct ColRangeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column.html">Struct Column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_column_3_01_text_encoding_dict_01_4.html">Struct Column&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_column_list.html">Struct ColumnList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_column_list_3_01_text_encoding_dict_01_4.html">Struct ColumnList&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1801,6 +1805,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_boundary.html">Struct GeoBoundary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_geo_converter_factory_3_01_c_o_n_v_e_r_t_e_r_00_01typename_01std_1_1enable__if__t_3_01std4cb957e560a6fe6d43b7431fc4a942d7.html">Struct GeoConverterFactory&lt; CONVERTER, typename std::enable_if_t&lt; std::is_same_v&lt; GeoPolygonValueConverter, CONVERTER &gt;||std::is_same_v&lt; GeoMultiPolygonValueConverter, CONVERTER &gt; &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_coord.html">Struct GeoCoord</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
@@ -1817,6 +1822,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_poly_target_value.html">Struct GeoPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_poly_target_value_ptr.html">Struct GeoPolyTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_polygon.html">Struct GeoPolygon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_geo_polygon_render_group_manager.html">Struct GeoPolygonRenderGroupManager</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct GeoPolygonValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_raster.html">Struct GeoRaster</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_geo_return_type_traits.html">Struct GeoReturnTypeTraits</a></li>
@@ -1968,6 +1974,7 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_text_encoding_none.html">Struct TextEncodingNone</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_thread_info.html">Struct ThreadInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_varlen_datum.html">Struct VarlenDatum</a></li>
@@ -2216,12 +2223,12 @@
 <h1>Struct GeoPolygonValueConverter<a class="headerlink" href="#struct-geopolygonvalueconverter" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv424GeoPolygonValueConverter">
-<span id="_CPPv324GeoPolygonValueConverter"></span><span id="_CPPv224GeoPolygonValueConverter"></span><span id="GeoPolygonValueConverter"></span><span class="target" id="struct_geo_polygon_value_converter"></span><em class="property">struct </em><code class="sig-name descname">GeoPolygonValueConverter</code> : <em class="property">public</em> <a class="reference internal" href="struct_geo_point_value_converter.html#_CPPv422GeoPointValueConverter" title="GeoPointValueConverter">GeoPointValueConverter</a><a class="headerlink" href="#_CPPv424GeoPolygonValueConverter" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv324GeoPolygonValueConverter"></span><span id="_CPPv224GeoPolygonValueConverter"></span><span id="GeoPolygonValueConverter"></span><span class="target" id="struct_geo_polygon_value_converter"></span><em class="property">struct </em><code class="sig-name descname">GeoPolygonValueConverter</code> : <em class="property">public</em> <a class="reference internal" href="struct_geo_point_value_converter.html#_CPPv422GeoPointValueConverter" title="GeoPointValueConverter">GeoPointValueConverter</a>, <em class="property">public</em> <a class="reference internal" href="struct_geo_polygon_render_group_manager.html#_CPPv428GeoPolygonRenderGroupManager" title="GeoPolygonRenderGroupManager">GeoPolygonRenderGroupManager</a><a class="headerlink" href="#_CPPv424GeoPolygonValueConverter" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptor">
-<span id="_CPPv3N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptor"></span><span id="_CPPv2N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptor"></span><span id="GeoPolygonValueConverter::GeoPolygonValueConverter__Catalog_Namespace::CatalogCR.s.ColumnDescriptorCP"></span><span class="target" id="struct_geo_polygon_value_converter_1a203fc4ebb999e745b3a1c63587bf3e7e"></span><code class="sig-name descname">GeoPolygonValueConverter</code><span class="sig-paren">(</span><em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="../class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a> &amp;<em>cat</em>, size_t <em>num_rows</em>, <em class="property">const</em> <a class="reference internal" href="struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<em>logicalColumnDescriptor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptor" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptorP22RenderGroupAnalyzerMap">
+<span id="_CPPv3N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptorP22RenderGroupAnalyzerMap"></span><span id="_CPPv2N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptorP22RenderGroupAnalyzerMap"></span><span id="GeoPolygonValueConverter::GeoPolygonValueConverter__Catalog_Namespace::CatalogCR.s.ColumnDescriptorCP.RenderGroupAnalyzerMapP"></span><span class="target" id="struct_geo_polygon_value_converter_1a08aa06575f0e0763dd92e77b01991374"></span><code class="sig-name descname">GeoPolygonValueConverter</code><span class="sig-paren">(</span><em class="property">const</em> Catalog_Namespace::<a class="reference internal" href="../class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog">Catalog</a> &amp;<em>cat</em>, size_t <em>num_rows</em>, <em class="property">const</em> <a class="reference internal" href="struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *<em>logicalColumnDescriptor</em>, RenderGroupAnalyzerMap *<em>render_group_analyzer_map</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N24GeoPolygonValueConverter24GeoPolygonValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptorP22RenderGroupAnalyzerMap" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2263,11 +2270,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N24GeoPolygonValueConverter22render_group_analyzer_E">
-<span id="_CPPv3N24GeoPolygonValueConverter22render_group_analyzer_E"></span><span id="_CPPv2N24GeoPolygonValueConverter22render_group_analyzer_E"></span><span id="GeoPolygonValueConverter::render_group_analyzer___std::unique_ptr:import_export::RenderGroupAnalyzer:"></span><span class="target" id="struct_geo_polygon_value_converter_1a03dd11eeb0d5b5b9aa8376b31f195a6d"></span>std::unique_ptr&lt;import_export::<a class="reference internal" href="../class/classimport__export_1_1_render_group_analyzer.html#_CPPv4N13import_export19RenderGroupAnalyzerE" title="import_export::RenderGroupAnalyzer">RenderGroupAnalyzer</a>&gt; <code class="sig-name descname">render_group_analyzer_</code><a class="headerlink" href="#_CPPv4N24GeoPolygonValueConverter22render_group_analyzer_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N24GeoPolygonValueConverter16ring_sizes_data_E">
 <span id="_CPPv3N24GeoPolygonValueConverter16ring_sizes_data_E"></span><span id="_CPPv2N24GeoPolygonValueConverter16ring_sizes_data_E"></span><span id="GeoPolygonValueConverter::ring_sizes_data___std::unique_ptr:std::vector:ArrayDatum::"></span><span class="target" id="struct_geo_polygon_value_converter_1a993e2be99007b5dc296b06dff84d9d65"></span>std::unique_ptr&lt;std::vector&lt;ArrayDatum&gt;&gt; <code class="sig-name descname">ring_sizes_data_</code><a class="headerlink" href="#_CPPv4N24GeoPolygonValueConverter16ring_sizes_data_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2303,7 +2305,7 @@
         <a href="struct_geo_raster.html" class="btn btn-neutral float-right" title="Struct GeoRaster" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="struct_geo_polygon.html" class="btn btn-neutral float-left" title="Struct GeoPolygon" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="struct_geo_polygon_render_group_manager.html" class="btn btn-neutral float-left" title="Struct GeoPolygonRenderGroupManager" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

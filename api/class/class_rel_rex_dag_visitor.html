@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev b9c95f1
+                6.0.0dev 1e1c98d
               </div>
             
           
@@ -709,6 +709,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_render_query_options.html">Class RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_1_1_cell_callback.html">Class ResultSet::CellCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_builder.html">Class ResultSetBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
@@ -1154,12 +1155,12 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_row_group_interval_tracker.html">Class foreign_storage::AbstractRowGroupIntervalTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_text_file_data_wrapper.html">Class foreign_storage::AbstractTextFileDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_base_date_bounds_validator.html">Class foreign_storage::BaseDateBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_chunk_size_validator.html">Class foreign_storage::ChunkSizeValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_file_buffer_parser.html">Class foreign_storage::CsvFileBufferParser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_order_s3.html">Class foreign_storage::FileOrderS3</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader.html">Class foreign_storage::FileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
@@ -1187,7 +1188,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_import_encoder.html">Class foreign_storage::ParquetArrayImportEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_days_from_timestamp_encoder.html">Class foreign_storage::ParquetDateInDaysFromTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_seconds_encoder.html">Class foreign_storage::ParquetDateInSecondsEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
@@ -1701,6 +1702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html">Struct Catalog_Namespace::DBMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_summary.html">Struct Catalog_Namespace::DBSummary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_table_epoch_info.html">Struct Catalog_Namespace::TableEpochInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html">Struct Catalog_Namespace::UserAlterations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html">Struct Catalog_Namespace::UserMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state.html">Struct CgenState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state_1_1_function_oper_value.html">Struct CgenState::FunctionOperValue</a></li>
@@ -1715,9 +1717,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_3_01_text_encoding_dict_01_4.html">Struct Column&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list_3_01_text_encoding_dict_01_4.html">Struct ColumnList&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1801,6 +1805,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_boundary.html">Struct GeoBoundary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory_3_01_c_o_n_v_e_r_t_e_r_00_01typename_01std_1_1enable__if__t_3_01std4cb957e560a6fe6d43b7431fc4a942d7.html">Struct GeoConverterFactory&lt; CONVERTER, typename std::enable_if_t&lt; std::is_same_v&lt; GeoPolygonValueConverter, CONVERTER &gt;||std::is_same_v&lt; GeoMultiPolygonValueConverter, CONVERTER &gt; &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_coord.html">Struct GeoCoord</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
@@ -1817,6 +1822,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value.html">Struct GeoPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value_ptr.html">Struct GeoPolyTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon.html">Struct GeoPolygon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_render_group_manager.html">Struct GeoPolygonRenderGroupManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_value_converter.html">Struct GeoPolygonValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_raster.html">Struct GeoRaster</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_return_type_traits.html">Struct GeoReturnTypeTraits</a></li>
@@ -1968,6 +1974,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_encoding_none.html">Struct TextEncodingNone</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_info.html">Struct ThreadInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
@@ -2217,7 +2224,7 @@
 <dl class="class">
 <dt id="_CPPv416RelRexDagVisitor">
 <span id="_CPPv316RelRexDagVisitor"></span><span id="_CPPv216RelRexDagVisitor"></span><span id="RelRexDagVisitor"></span><span class="target" id="class_rel_rex_dag_visitor"></span><em class="property">class </em><code class="sig-name descname">RelRexDagVisitor</code><a class="headerlink" href="#_CPPv416RelRexDagVisitor" title="Permalink to this definition">¶</a><br /></dt>
-<dd><p>Subclassed by <a class="reference internal" href="class_query_plan_dag_checker.html#class_query_plan_dag_checker"><span class="std std-ref">QueryPlanDagChecker</span></a>, <a class="reference internal" href="class_rex_sub_query_id_collector.html#class_rex_sub_query_id_collector"><span class="std std-ref">RexSubQueryIdCollector</span></a>, <a class="reference internal" href="class_scan_node_table_key_collector.html#class_scan_node_table_key_collector"><span class="std std-ref">ScanNodeTableKeyCollector</span></a>, <a class="reference internal" href="class_s_q_l_operator_detector.html#class_s_q_l_operator_detector"><span class="std std-ref">SQLOperatorDetector</span></a></p>
+<dd><p>Subclassed by <a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor.html#classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor"><span class="std std-ref">anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalTableInputsVisitor</span></a>, <a class="reference internal" href="class_query_plan_dag_checker.html#class_query_plan_dag_checker"><span class="std std-ref">QueryPlanDagChecker</span></a>, <a class="reference internal" href="class_rex_sub_query_id_collector.html#class_rex_sub_query_id_collector"><span class="std std-ref">RexSubQueryIdCollector</span></a>, <a class="reference internal" href="class_scan_node_table_key_collector.html#class_scan_node_table_key_collector"><span class="std std-ref">ScanNodeTableKeyCollector</span></a>, <a class="reference internal" href="class_s_q_l_operator_detector.html#class_s_q_l_operator_detector"><span class="std std-ref">SQLOperatorDetector</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -2346,6 +2353,11 @@
 <dl class="function">
 <dt id="_CPPv4N16RelRexDagVisitor5visitEPK25RexWindowFunctionOperator">
 <span id="_CPPv3N16RelRexDagVisitor5visitEPK25RexWindowFunctionOperator"></span><span id="_CPPv2N16RelRexDagVisitor5visitEPK25RexWindowFunctionOperator"></span><span id="RelRexDagVisitor::visit__RexWindowFunctionOperatorCP"></span><span class="target" id="class_rel_rex_dag_visitor_1ad573352f6bd0e4121d7a295661708c5c"></span>void <code class="sig-name descname">visit</code><span class="sig-paren">(</span><a class="reference internal" href="class_rex_window_function_operator.html#_CPPv425RexWindowFunctionOperator" title="RexWindowFunctionOperator">RexWindowFunctionOperator</a> <em class="property">const</em> *<em>rex_window_function_operator</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelRexDagVisitor5visitEPK25RexWindowFunctionOperator" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N16RelRexDagVisitor12castAndVisitEPK10RelAlgNode">
+<span id="_CPPv3N16RelRexDagVisitor12castAndVisitEPK10RelAlgNode"></span><span id="_CPPv2N16RelRexDagVisitor12castAndVisitEPK10RelAlgNode"></span><span id="RelRexDagVisitor::castAndVisit__RelAlgNodeCP"></span><span class="target" id="class_rel_rex_dag_visitor_1ad88e71844e70960af0d0b115aa2b859c"></span>void <code class="sig-name descname">castAndVisit</code><span class="sig-paren">(</span><a class="reference internal" href="class_rel_alg_node.html#_CPPv410RelAlgNode" title="RelAlgNode">RelAlgNode</a> <em class="property">const</em> *<em>rel_alg_node</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N16RelRexDagVisitor12castAndVisitEPK10RelAlgNode" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

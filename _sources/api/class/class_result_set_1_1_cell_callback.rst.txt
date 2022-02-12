@@ -1,0 +1,9 @@
+Class ResultSet::CellCallback
+=============================
+
+.. doxygenclass:: ResultSet::CellCallback
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

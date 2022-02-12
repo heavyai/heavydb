@@ -1,0 +1,9 @@
+Struct GeoConverterFactory< CONVERTER, typename std::enable_if_t< std::is_same_v< GeoPolygonValueConverter, CONVERTER >||std::is_same_v< GeoMultiPolygonValueConverter, CONVERTER > > >
+=======================================================================================================================================================================================
+
+.. doxygenstruct:: GeoConverterFactory< CONVERTER, typename std::enable_if_t< std::is_same_v< GeoPolygonValueConverter, CONVERTER >||std::is_same_v< GeoMultiPolygonValueConverter, CONVERTER > > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

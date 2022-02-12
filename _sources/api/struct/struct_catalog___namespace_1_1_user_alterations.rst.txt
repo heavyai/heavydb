@@ -1,0 +1,9 @@
+Struct Catalog_Namespace::UserAlterations
+=========================================
+
+.. doxygenstruct:: Catalog_Namespace::UserAlterations
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

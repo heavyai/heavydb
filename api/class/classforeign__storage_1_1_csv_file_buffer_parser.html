@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class foreign_storage::DateInSecondsBoundsValidator" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html" />
+    <link rel="next" title="Class foreign_storage::FileOrderS3" href="classforeign__storage_1_1_file_order_s3.html" />
     <link rel="prev" title="Class foreign_storage::CsvDataWrapper" href="classforeign__storage_1_1_csv_data_wrapper.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev b9c95f1
+                6.0.0dev 1e1c98d
               </div>
             
           
@@ -709,6 +709,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_render_query_options.html">Class RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_1_1_cell_callback.html">Class ResultSet::CellCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_builder.html">Class ResultSetBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
@@ -1154,12 +1155,12 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_row_group_interval_tracker.html">Class foreign_storage::AbstractRowGroupIntervalTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_text_file_data_wrapper.html">Class foreign_storage::AbstractTextFileDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_base_date_bounds_validator.html">Class foreign_storage::BaseDateBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_chunk_size_validator.html">Class foreign_storage::ChunkSizeValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class foreign_storage::CsvFileBufferParser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_order_s3.html">Class foreign_storage::FileOrderS3</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader.html">Class foreign_storage::FileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
@@ -1187,7 +1188,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_import_encoder.html">Class foreign_storage::ParquetArrayImportEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_days_from_timestamp_encoder.html">Class foreign_storage::ParquetDateInDaysFromTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_seconds_encoder.html">Class foreign_storage::ParquetDateInSecondsEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
@@ -1701,6 +1702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html">Struct Catalog_Namespace::DBMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_summary.html">Struct Catalog_Namespace::DBSummary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_table_epoch_info.html">Struct Catalog_Namespace::TableEpochInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html">Struct Catalog_Namespace::UserAlterations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html">Struct Catalog_Namespace::UserMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state.html">Struct CgenState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state_1_1_function_oper_value.html">Struct CgenState::FunctionOperValue</a></li>
@@ -1715,9 +1717,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_3_01_text_encoding_dict_01_4.html">Struct Column&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list_3_01_text_encoding_dict_01_4.html">Struct ColumnList&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1801,6 +1805,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_boundary.html">Struct GeoBoundary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory_3_01_c_o_n_v_e_r_t_e_r_00_01typename_01std_1_1enable__if__t_3_01std4cb957e560a6fe6d43b7431fc4a942d7.html">Struct GeoConverterFactory&lt; CONVERTER, typename std::enable_if_t&lt; std::is_same_v&lt; GeoPolygonValueConverter, CONVERTER &gt;||std::is_same_v&lt; GeoMultiPolygonValueConverter, CONVERTER &gt; &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_coord.html">Struct GeoCoord</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
@@ -1817,6 +1822,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value.html">Struct GeoPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value_ptr.html">Struct GeoPolyTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon.html">Struct GeoPolygon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_render_group_manager.html">Struct GeoPolygonRenderGroupManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_value_converter.html">Struct GeoPolygonValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_raster.html">Struct GeoRaster</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_return_type_traits.html">Struct GeoReturnTypeTraits</a></li>
@@ -1968,6 +1974,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_encoding_none.html">Struct TextEncodingNone</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_info.html">Struct ThreadInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
@@ -2250,6 +2257,74 @@
 </dd></dl>
 
 </div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Static Attributes</p>
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser13DELIMITER_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser13DELIMITER_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser13DELIMITER_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::DELIMITER_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a329a4f798bfd349502095b135df60c2c"></span><em class="property">const</em> std::string <code class="sig-name descname">DELIMITER_KEY</code> = &quot;DELIMITER&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser13DELIMITER_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser9NULLS_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser9NULLS_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser9NULLS_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::NULLS_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a4b7fa9624e4f97cfe20e5547972d1470"></span><em class="property">const</em> std::string <code class="sig-name descname">NULLS_KEY</code> = &quot;NULLS&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser9NULLS_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser10HEADER_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser10HEADER_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser10HEADER_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::HEADER_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1acfa1f5d0d101228028a74ad6e0ee5783"></span><em class="property">const</em> std::string <code class="sig-name descname">HEADER_KEY</code> = &quot;HEADER&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser10HEADER_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser10QUOTED_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser10QUOTED_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser10QUOTED_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::QUOTED_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a12b689e06eb944a10a5dfa04dd276b50"></span><em class="property">const</em> std::string <code class="sig-name descname">QUOTED_KEY</code> = &quot;QUOTED&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser10QUOTED_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser9QUOTE_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser9QUOTE_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser9QUOTE_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::QUOTE_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1aee2ef5bf0457dbc1963c33e4700972dd"></span><em class="property">const</em> std::string <code class="sig-name descname">QUOTE_KEY</code> = &quot;QUOTE&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser9QUOTE_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser10ESCAPE_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser10ESCAPE_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser10ESCAPE_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::ESCAPE_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1aab4d586fd83911748f90a51bb2a45758"></span><em class="property">const</em> std::string <code class="sig-name descname">ESCAPE_KEY</code> = &quot;ESCAPE&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser10ESCAPE_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser18LINE_DELIMITER_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser18LINE_DELIMITER_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser18LINE_DELIMITER_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::LINE_DELIMITER_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a94c0ab4ec56ef5045cea6ba8f2c962f3"></span><em class="property">const</em> std::string <code class="sig-name descname">LINE_DELIMITER_KEY</code> = &quot;LINE_DELIMITER&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser18LINE_DELIMITER_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser19ARRAY_DELIMITER_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser19ARRAY_DELIMITER_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser19ARRAY_DELIMITER_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::ARRAY_DELIMITER_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1aab7c4c4bf48c0ab6094708404e3a8e3e"></span><em class="property">const</em> std::string <code class="sig-name descname">ARRAY_DELIMITER_KEY</code> = &quot;ARRAY_DELIMITER&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser19ARRAY_DELIMITER_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser16ARRAY_MARKER_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser16ARRAY_MARKER_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser16ARRAY_MARKER_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::ARRAY_MARKER_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a49f8a6c29ce8590ebcd51da891840b48"></span><em class="property">const</em> std::string <code class="sig-name descname">ARRAY_MARKER_KEY</code> = &quot;ARRAY_MARKER&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser16ARRAY_MARKER_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser10LONLAT_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser10LONLAT_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser10LONLAT_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::LONLAT_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1ad528d2a02caff3db353e7084b7e6a241"></span><em class="property">const</em> std::string <code class="sig-name descname">LONLAT_KEY</code> = &quot;LONLAT&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser10LONLAT_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser28GEO_ASSIGN_RENDER_GROUPS_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser28GEO_ASSIGN_RENDER_GROUPS_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser28GEO_ASSIGN_RENDER_GROUPS_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::GEO_ASSIGN_RENDER_GROUPS_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a97f2aff38806a41a5b6f14815f112a1c"></span><em class="property">const</em> std::string <code class="sig-name descname">GEO_ASSIGN_RENDER_GROUPS_KEY</code> = &quot;GEO_ASSIGN_RENDER_GROUPS&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser28GEO_ASSIGN_RENDER_GROUPS_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser27GEO_EXPLODE_COLLECTIONS_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser27GEO_EXPLODE_COLLECTIONS_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser27GEO_EXPLODE_COLLECTIONS_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::GEO_EXPLODE_COLLECTIONS_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a4f09899941c35d8985160f5863853bdc"></span><em class="property">const</em> std::string <code class="sig-name descname">GEO_EXPLODE_COLLECTIONS_KEY</code> = &quot;GEO_EXPLODE_COLLECTIONS&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser27GEO_EXPLODE_COLLECTIONS_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N15foreign_storage19CsvFileBufferParser15BUFFER_SIZE_KEYE">
+<span id="_CPPv3N15foreign_storage19CsvFileBufferParser15BUFFER_SIZE_KEYE"></span><span id="_CPPv2N15foreign_storage19CsvFileBufferParser15BUFFER_SIZE_KEYE"></span><span id="foreign_storage::CsvFileBufferParser::BUFFER_SIZE_KEY__ssC"></span><span class="target" id="classforeign__storage_1_1_csv_file_buffer_parser_1a9d0ecb03d53d75eb76b028faf30c7aee"></span><em class="property">const</em> std::string <code class="sig-name descname">BUFFER_SIZE_KEY</code> = &quot;BUFFER_SIZE&quot;<a class="headerlink" href="#_CPPv4N15foreign_storage19CsvFileBufferParser15BUFFER_SIZE_KEYE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
 </dd></dl>
 
 </div>
@@ -2262,7 +2337,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html" class="btn btn-neutral float-right" title="Class foreign_storage::DateInSecondsBoundsValidator" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="classforeign__storage_1_1_file_order_s3.html" class="btn btn-neutral float-right" title="Class foreign_storage::FileOrderS3" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="classforeign__storage_1_1_csv_data_wrapper.html" class="btn btn-neutral float-left" title="Class foreign_storage::CsvDataWrapper" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

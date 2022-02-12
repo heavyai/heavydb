@@ -1,0 +1,9 @@
+Struct Column< TextEncodingDict >
+=================================
+
+.. doxygenstruct:: Column< TextEncodingDict >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

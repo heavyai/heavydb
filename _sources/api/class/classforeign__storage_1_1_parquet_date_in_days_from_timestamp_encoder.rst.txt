@@ -1,0 +1,9 @@
+Class foreign_storage::ParquetDateInDaysFromTimestampEncoder
+============================================================
+
+.. doxygenclass:: foreign_storage::ParquetDateInDaysFromTimestampEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev b9c95f1
+                6.0.0dev 1e1c98d
               </div>
             
           
@@ -709,6 +709,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_render_query_options.html">Class RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_1_1_cell_callback.html">Class ResultSet::CellCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_builder.html">Class ResultSetBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
@@ -1154,12 +1155,12 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_row_group_interval_tracker.html">Class foreign_storage::AbstractRowGroupIntervalTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_text_file_data_wrapper.html">Class foreign_storage::AbstractTextFileDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_base_date_bounds_validator.html">Class foreign_storage::BaseDateBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_chunk_size_validator.html">Class foreign_storage::ChunkSizeValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_file_buffer_parser.html">Class foreign_storage::CsvFileBufferParser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_order_s3.html">Class foreign_storage::FileOrderS3</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader.html">Class foreign_storage::FileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
@@ -1187,7 +1188,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_import_encoder.html">Class foreign_storage::ParquetArrayImportEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_days_from_timestamp_encoder.html">Class foreign_storage::ParquetDateInDaysFromTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_seconds_encoder.html">Class foreign_storage::ParquetDateInSecondsEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
@@ -1701,6 +1702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html">Struct Catalog_Namespace::DBMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_summary.html">Struct Catalog_Namespace::DBSummary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_table_epoch_info.html">Struct Catalog_Namespace::TableEpochInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html">Struct Catalog_Namespace::UserAlterations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html">Struct Catalog_Namespace::UserMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state.html">Struct CgenState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state_1_1_function_oper_value.html">Struct CgenState::FunctionOperValue</a></li>
@@ -1715,9 +1717,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_3_01_text_encoding_dict_01_4.html">Struct Column&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list_3_01_text_encoding_dict_01_4.html">Struct ColumnList&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1801,6 +1805,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_boundary.html">Struct GeoBoundary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory_3_01_c_o_n_v_e_r_t_e_r_00_01typename_01std_1_1enable__if__t_3_01std4cb957e560a6fe6d43b7431fc4a942d7.html">Struct GeoConverterFactory&lt; CONVERTER, typename std::enable_if_t&lt; std::is_same_v&lt; GeoPolygonValueConverter, CONVERTER &gt;||std::is_same_v&lt; GeoMultiPolygonValueConverter, CONVERTER &gt; &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_coord.html">Struct GeoCoord</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
@@ -1817,6 +1822,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value.html">Struct GeoPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value_ptr.html">Struct GeoPolyTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon.html">Struct GeoPolygon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_render_group_manager.html">Struct GeoPolygonRenderGroupManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_value_converter.html">Struct GeoPolygonValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_raster.html">Struct GeoRaster</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_return_type_traits.html">Struct GeoReturnTypeTraits</a></li>
@@ -1968,6 +1974,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_encoding_none.html">Struct TextEncodingNone</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_info.html">Struct ThreadInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
@@ -2329,8 +2336,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK21StringDictionaryProxy31buildTranslationMapToOtherProxyEPK21StringDictionaryProxy">
-<span id="_CPPv3NK21StringDictionaryProxy31buildTranslationMapToOtherProxyEPK21StringDictionaryProxy"></span><span id="_CPPv2NK21StringDictionaryProxy31buildTranslationMapToOtherProxyEPK21StringDictionaryProxy"></span><span id="StringDictionaryProxy::buildTranslationMapToOtherProxy__StringDictionaryProxyCPC"></span><span class="target" id="class_string_dictionary_proxy_1a983732d4759f7c9c793632b3ea9c793b"></span><a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a>::<a class="reference internal" href="#_CPPv4N21StringDictionaryProxy5IdMapE" title="StringDictionaryProxy::IdMap">IdMap</a> <code class="sig-name descname">buildTranslationMapToOtherProxy</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> *<em>dest_proxy</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy31buildTranslationMapToOtherProxyEPK21StringDictionaryProxy" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK21StringDictionaryProxy43buildIntersectionTranslationMapToOtherProxyEPK21StringDictionaryProxy">
+<span id="_CPPv3NK21StringDictionaryProxy43buildIntersectionTranslationMapToOtherProxyEPK21StringDictionaryProxy"></span><span id="_CPPv2NK21StringDictionaryProxy43buildIntersectionTranslationMapToOtherProxyEPK21StringDictionaryProxy"></span><span id="StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy__StringDictionaryProxyCPC"></span><span class="target" id="class_string_dictionary_proxy_1a5f0a76b2f181b5356008e5ff9746f87f"></span><a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a>::<a class="reference internal" href="#_CPPv4N21StringDictionaryProxy5IdMapE" title="StringDictionaryProxy::IdMap">IdMap</a> <code class="sig-name descname">buildIntersectionTranslationMapToOtherProxy</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> *<em>dest_proxy</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy43buildIntersectionTranslationMapToOtherProxyEPK21StringDictionaryProxy" title="Permalink to this definition">¶</a><br /></dt>
 <dd><p>Builds a vectorized string_id translation map from this proxy to dest_proxy. </p>
 <p><dl class="simple">
 <dt><strong>Return</strong></dt><dd><p>An <a class="reference internal" href="class_string_dictionary_proxy_1_1_id_map.html#class_string_dictionary_proxy_1_1_id_map"><span class="std std-ref">IdMap</span></a> which encapsulates a std::vector&lt;int32_t&gt; of string ids for both transient and non-transient strings, mapping to their translated string_ids. offset_ is defined to be the number of transient entries + 1. The ordering of values in the vector_map_ is:<ul class="simple">
@@ -2347,6 +2354,11 @@
 </dl>
 </p>
 </dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy36buildUnionTranslationMapToOtherProxyEP21StringDictionaryProxy">
+<span id="_CPPv3NK21StringDictionaryProxy36buildUnionTranslationMapToOtherProxyEP21StringDictionaryProxy"></span><span id="_CPPv2NK21StringDictionaryProxy36buildUnionTranslationMapToOtherProxyEP21StringDictionaryProxy"></span><span id="StringDictionaryProxy::buildUnionTranslationMapToOtherProxy__StringDictionaryProxyPC"></span><span class="target" id="class_string_dictionary_proxy_1a3157c361eec95eb63337220d958e7d1d"></span><a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a>::<a class="reference internal" href="#_CPPv4N21StringDictionaryProxy5IdMapE" title="StringDictionaryProxy::IdMap">IdMap</a> <code class="sig-name descname">buildUnionTranslationMapToOtherProxy</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> *<em>dest_proxy</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy36buildUnionTranslationMapToOtherProxyEP21StringDictionaryProxy" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy17storageEntryCountEv">
@@ -2433,6 +2445,11 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
 <dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy17getStringUnlockedEK7int32_t">
+<span id="_CPPv3NK21StringDictionaryProxy17getStringUnlockedEK7int32_t"></span><span id="_CPPv2NK21StringDictionaryProxy17getStringUnlockedEK7int32_t"></span><span id="StringDictionaryProxy::getStringUnlocked__int32_tCC"></span><span class="target" id="class_string_dictionary_proxy_1aa4a6245b0909da2a5f76cb63e63a3dcf"></span>std::string <code class="sig-name descname">getStringUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>string_id</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy17getStringUnlockedEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy27transientEntryCountUnlockedEv">
 <span id="_CPPv3NK21StringDictionaryProxy27transientEntryCountUnlockedEv"></span><span id="_CPPv2NK21StringDictionaryProxy27transientEntryCountUnlockedEv"></span><span id="StringDictionaryProxy::transientEntryCountUnlockedC"></span><span class="target" id="class_string_dictionary_proxy_1ad165f549808f2fe29c7ced5c55a98f2d"></span>size_t <code class="sig-name descname">transientEntryCountUnlocked</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy27transientEntryCountUnlockedEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2448,18 +2465,28 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4I0ENK21StringDictionaryProxy19transientLookupBulkEvRKNSt6vectorI6StringEEP7int32_t">
-<span id="_CPPv3I0ENK21StringDictionaryProxy19transientLookupBulkERKNSt6vectorI6StringEEP7int32_t"></span><span id="_CPPv2I0ENK21StringDictionaryProxy19transientLookupBulkERKNSt6vectorI6StringEEP7int32_t"></span><span class="target" id="class_string_dictionary_proxy_1a5d22e6ded90a3608a5c588f61aa9abfa"></span>template&lt;typename <code class="sig-name descname">String</code>&gt;<br />void <code class="sig-name descname">transientLookupBulk</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I0ENK21StringDictionaryProxy19transientLookupBulkEvRKNSt6vectorI6StringEEP7int32_t" title="StringDictionaryProxy::transientLookupBulk::String">String</a>&gt; &amp;<em>lookup_strings</em>, int32_t *<em>string_ids</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0ENK21StringDictionaryProxy19transientLookupBulkEvRKNSt6vectorI6StringEEP7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK21StringDictionaryProxy20getTransientBulkImplERKNSt6vectorINSt6stringEEEP7int32_tKb">
+<span id="_CPPv3NK21StringDictionaryProxy20getTransientBulkImplERKNSt6vectorINSt6stringEEEP7int32_tKb"></span><span id="_CPPv2NK21StringDictionaryProxy20getTransientBulkImplERKNSt6vectorINSt6stringEEEP7int32_tKb"></span><span id="StringDictionaryProxy::getTransientBulkImpl__std::vector:ss:CR.int32_tP.bCC"></span><span class="target" id="class_string_dictionary_proxy_1a42fa2afe7b4d6f84fcada21112baa709"></span>size_t <code class="sig-name descname">getTransientBulkImpl</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>strings</em>, int32_t *<em>string_ids</em>, <em class="property">const</em> bool <em>take_read_lock</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy20getTransientBulkImplERKNSt6vectorINSt6stringEEEP7int32_tKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedEvRKNSt6vectorI6StringEEP7int32_t">
-<span id="_CPPv3I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span id="_CPPv2I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span class="target" id="class_string_dictionary_proxy_1a2400d4e5f298f3e896698ee03741b678"></span>template&lt;typename <code class="sig-name descname">String</code>&gt;<br />void <code class="sig-name descname">transientLookupBulkUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedEvRKNSt6vectorI6StringEEP7int32_t" title="StringDictionaryProxy::transientLookupBulkUnlocked::String">String</a>&gt; &amp;<em>lookup_strings</em>, int32_t *<em>string_ids</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedEvRKNSt6vectorI6StringEEP7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0ENK21StringDictionaryProxy19transientLookupBulkE6size_tRKNSt6vectorI6StringEEP7int32_tKb">
+<span id="_CPPv3I0ENK21StringDictionaryProxy19transientLookupBulkERKNSt6vectorI6StringEEP7int32_tKb"></span><span id="_CPPv2I0ENK21StringDictionaryProxy19transientLookupBulkERKNSt6vectorI6StringEEP7int32_tKb"></span><span class="target" id="class_string_dictionary_proxy_1a1fe238b9c781b68f6968241abbe9c474"></span>template&lt;typename <code class="sig-name descname">String</code>&gt;<br />size_t <code class="sig-name descname">transientLookupBulk</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I0ENK21StringDictionaryProxy19transientLookupBulkE6size_tRKNSt6vectorI6StringEEP7int32_tKb" title="StringDictionaryProxy::transientLookupBulk::String">String</a>&gt; &amp;<em>lookup_strings</em>, int32_t *<em>string_ids</em>, <em class="property">const</em> bool <em>take_read_lock</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0ENK21StringDictionaryProxy19transientLookupBulkE6size_tRKNSt6vectorI6StringEEP7int32_tKb" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedEvRKNSt6vectorI6StringEEP7int32_t">
-<span id="_CPPv3I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span id="_CPPv2I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span class="target" id="class_string_dictionary_proxy_1aee7ec2503fd3f8dbb0ab1bf2f82804a7"></span>template&lt;typename <code class="sig-name descname">String</code>&gt;<br />void <code class="sig-name descname">transientLookupBulkParallelUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedEvRKNSt6vectorI6StringEEP7int32_t" title="StringDictionaryProxy::transientLookupBulkParallelUnlocked::String">String</a>&gt; &amp;<em>lookup_strings</em>, int32_t *<em>string_ids</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedEvRKNSt6vectorI6StringEEP7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedE6size_tRKNSt6vectorI6StringEEP7int32_t">
+<span id="_CPPv3I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span id="_CPPv2I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span class="target" id="class_string_dictionary_proxy_1a2bb0a843cacab69a7c675becbf6c6145"></span>template&lt;typename <code class="sig-name descname">String</code>&gt;<br />size_t <code class="sig-name descname">transientLookupBulkUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedE6size_tRKNSt6vectorI6StringEEP7int32_t" title="StringDictionaryProxy::transientLookupBulkUnlocked::String">String</a>&gt; &amp;<em>lookup_strings</em>, int32_t *<em>string_ids</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0ENK21StringDictionaryProxy27transientLookupBulkUnlockedE6size_tRKNSt6vectorI6StringEEP7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedE6size_tRKNSt6vectorI6StringEEP7int32_t">
+<span id="_CPPv3I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span id="_CPPv2I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedERKNSt6vectorI6StringEEP7int32_t"></span><span class="target" id="class_string_dictionary_proxy_1a6520421dec4d638e04e234e23cb954a6"></span>template&lt;typename <code class="sig-name descname">String</code>&gt;<br />size_t <code class="sig-name descname">transientLookupBulkParallelUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="#_CPPv4I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedE6size_tRKNSt6vectorI6StringEEP7int32_t" title="StringDictionaryProxy::transientLookupBulkParallelUnlocked::String">String</a>&gt; &amp;<em>lookup_strings</em>, int32_t *<em>string_ids</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I0ENK21StringDictionaryProxy35transientLookupBulkParallelUnlockedE6size_tRKNSt6vectorI6StringEEP7int32_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy51buildIntersectionTranslationMapToOtherProxyUnlockedEPK21StringDictionaryProxy">
+<span id="_CPPv3NK21StringDictionaryProxy51buildIntersectionTranslationMapToOtherProxyUnlockedEPK21StringDictionaryProxy"></span><span id="_CPPv2NK21StringDictionaryProxy51buildIntersectionTranslationMapToOtherProxyUnlockedEPK21StringDictionaryProxy"></span><span id="StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxyUnlocked__StringDictionaryProxyCPC"></span><span class="target" id="class_string_dictionary_proxy_1ad6dda5fe125148305ac847cba7467422"></span><a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a>::<a class="reference internal" href="#_CPPv4N21StringDictionaryProxy5IdMapE" title="StringDictionaryProxy::IdMap">IdMap</a> <code class="sig-name descname">buildIntersectionTranslationMapToOtherProxyUnlocked</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv421StringDictionaryProxy" title="StringDictionaryProxy">StringDictionaryProxy</a> *<em>dest_proxy</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy51buildIntersectionTranslationMapToOtherProxyUnlockedEPK21StringDictionaryProxy" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2502,7 +2529,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N21StringDictionaryProxy9rw_mutex_E">
-<span id="_CPPv3N21StringDictionaryProxy9rw_mutex_E"></span><span id="_CPPv2N21StringDictionaryProxy9rw_mutex_E"></span><span id="StringDictionaryProxy::rw_mutex___mapd_shared_mutex"></span><span class="target" id="class_string_dictionary_proxy_1a30b1219fc52712b745faab696191cb3c"></span>mapd_shared_mutex <code class="sig-name descname">rw_mutex_</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy9rw_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21StringDictionaryProxy9rw_mutex_E"></span><span id="_CPPv2N21StringDictionaryProxy9rw_mutex_E"></span><span id="StringDictionaryProxy::rw_mutex___std::shared_mutex"></span><span class="target" id="class_string_dictionary_proxy_1a61d744b296c7b12f02c52e13d8409e4b"></span>std::shared_mutex <code class="sig-name descname">rw_mutex_</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy9rw_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2530,6 +2557,16 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap5IdMapERK5IdMap">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap5IdMapERK5IdMap"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap5IdMapERK5IdMap"></span><span id="StringDictionaryProxy::IdMap::IdMap__IdMapCR"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1ada2f6b1109149d17d5d93ade65cd6b13"></span><code class="sig-name descname">IdMap</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N21StringDictionaryProxy5IdMap5IdMapEK8uint32_tK8uint32_t" title="StringDictionaryProxy::IdMap::IdMap">IdMap</a> <em class="property">const</em>&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy5IdMap5IdMapERK5IdMap" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap5IdMapERR5IdMap">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap5IdMapERR5IdMap"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap5IdMapERR5IdMap"></span><span id="StringDictionaryProxy::IdMap::IdMap__IdMapRR"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1acf0e6207f14f1a4aa71f6595aae4eaa2"></span><code class="sig-name descname">IdMap</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N21StringDictionaryProxy5IdMap5IdMapEK8uint32_tK8uint32_t" title="StringDictionaryProxy::IdMap::IdMap">IdMap</a>&amp;&amp;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy5IdMap5IdMapERR5IdMap" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy5IdMap5emptyEv">
 <span id="_CPPv3NK21StringDictionaryProxy5IdMap5emptyEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap5emptyEv"></span><span id="StringDictionaryProxy::IdMap::emptyC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a8e1c3200c60ad632416f1870aad3052d"></span>bool <code class="sig-name descname">empty</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy5IdMap5emptyEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2542,6 +2579,11 @@
 <dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy5IdMap12getVectorMapEv">
 <span id="_CPPv3NK21StringDictionaryProxy5IdMap12getVectorMapEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap12getVectorMapEv"></span><span id="StringDictionaryProxy::IdMap::getVectorMapC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a43f6c8451ab869b9ad3e17ea1681c5e8"></span>std::vector&lt;int32_t&gt; <em class="property">const</em> &amp;<code class="sig-name descname">getVectorMap</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy5IdMap12getVectorMapEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy5IdMap4sizeEv">
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap4sizeEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap4sizeEv"></span><span id="StringDictionaryProxy::IdMap::sizeC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a4f1ee5cb1385f44553d779f2a22d83bb"></span>size_t <code class="sig-name descname">size</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy5IdMap4sizeEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2566,7 +2608,22 @@
 
 <dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy5IdMap11domainStartEv">
-<span id="_CPPv3NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="StringDictionaryProxy::IdMap::domainStartC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1afa4abf443138740c49f5555e51bef03b"></span>int64_t <code class="sig-name descname">domainStart</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy5IdMap11domainStartEv" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="StringDictionaryProxy::IdMap::domainStartC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a1b86be13a42399d8e7807f01f4f2657f"></span>int32_t <code class="sig-name descname">domainStart</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy5IdMap11domainStartEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy5IdMap9domainEndEv">
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap9domainEndEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap9domainEndEv"></span><span id="StringDictionaryProxy::IdMap::domainEndC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1ae69b46a71e7588db961b06e661f29cb3"></span>int32_t <code class="sig-name descname">domainEnd</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy5IdMap9domainEndEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy5IdMap22numUntranslatedStringsEv">
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap22numUntranslatedStringsEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap22numUntranslatedStringsEv"></span><span id="StringDictionaryProxy::IdMap::numUntranslatedStringsC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a902c4f9fed8fc8216141303b3ab1c7d8"></span>size_t <code class="sig-name descname">numUntranslatedStrings</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy5IdMap22numUntranslatedStringsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap25setNumUntranslatedStringsEK6size_t">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap25setNumUntranslatedStringsEK6size_t"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap25setNumUntranslatedStringsEK6size_t"></span><span id="StringDictionaryProxy::IdMap::setNumUntranslatedStrings__sC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1afd62e7e07db6e9664267b6e5bfbf4796"></span>void <code class="sig-name descname">setNumUntranslatedStrings</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>num_untranslated_strings</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy5IdMap25setNumUntranslatedStringsEK6size_t" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2595,6 +2652,11 @@
 <dl class="member">
 <dt id="_CPPv4N21StringDictionaryProxy5IdMap11vector_map_E">
 <span id="_CPPv3N21StringDictionaryProxy5IdMap11vector_map_E"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap11vector_map_E"></span><span id="StringDictionaryProxy::IdMap::vector_map___std::vector:int32_t:"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1afe8bc9627b48f210f12e6af9397ba5bf"></span>std::vector&lt;int32_t&gt; <code class="sig-name descname">vector_map_</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy5IdMap11vector_map_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap25num_untranslated_strings_E">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap25num_untranslated_strings_E"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap25num_untranslated_strings_E"></span><span id="StringDictionaryProxy::IdMap::num_untranslated_strings___int64_t"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a4d30cbd8cb3bee04f259b16f830e350d"></span>int64_t <code class="sig-name descname">num_untranslated_strings_</code> = {-1}<a class="headerlink" href="#_CPPv4N21StringDictionaryProxy5IdMap25num_untranslated_strings_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

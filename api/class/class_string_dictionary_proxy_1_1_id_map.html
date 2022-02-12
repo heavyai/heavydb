@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev b9c95f1
+                6.0.0dev 1e1c98d
               </div>
             
           
@@ -709,6 +709,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_render_query_options.html">Class RenderQueryOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rest_server.html">Class RestServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set.html">Class ResultSet</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_result_set_1_1_cell_callback.html">Class ResultSet::CellCallback</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_builder.html">Class ResultSetBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_default_builder.html">Class ResultSetDefaultBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_result_set_logical_values_builder.html">Class ResultSetLogicalValuesBuilder</a></li>
@@ -1154,12 +1155,12 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_row_group_interval_tracker.html">Class foreign_storage::AbstractRowGroupIntervalTracker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_abstract_text_file_data_wrapper.html">Class foreign_storage::AbstractTextFileDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_archive_wrapper.html">Class foreign_storage::ArchiveWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_base_date_bounds_validator.html">Class foreign_storage::BaseDateBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_caching_foreign_storage_mgr.html">Class foreign_storage::CachingForeignStorageMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_chunk_size_validator.html">Class foreign_storage::ChunkSizeValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_compressed_file_reader.html">Class foreign_storage::CompressedFileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_data_wrapper.html">Class foreign_storage::CsvDataWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_csv_file_buffer_parser.html">Class foreign_storage::CsvFileBufferParser</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_date_in_seconds_bounds_validator.html">Class foreign_storage::DateInSecondsBoundsValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_order_s3.html">Class foreign_storage::FileOrderS3</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader.html">Class foreign_storage::FileReader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_file_reader_map.html">Class foreign_storage::FileReaderMap</a></li>
@@ -1187,7 +1188,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_encoder.html">Class foreign_storage::ParquetArrayEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_array_import_encoder.html">Class foreign_storage::ParquetArrayImportEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_data_wrapper.html">Class foreign_storage::ParquetDataWrapper</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_from_timestamp_encoder.html">Class foreign_storage::ParquetDateFromTimestampEncoder</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_days_from_timestamp_encoder.html">Class foreign_storage::ParquetDateInDaysFromTimestampEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_date_in_seconds_encoder.html">Class foreign_storage::ParquetDateInSecondsEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_decimal_encoder.html">Class foreign_storage::ParquetDecimalEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classforeign__storage_1_1_parquet_encoder.html">Class foreign_storage::ParquetEncoder</a></li>
@@ -1701,6 +1702,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_metadata.html">Struct Catalog_Namespace::DBMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_d_b_summary.html">Struct Catalog_Namespace::DBSummary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_table_epoch_info.html">Struct Catalog_Namespace::TableEpochInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_alterations.html">Struct Catalog_Namespace::UserAlterations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_catalog___namespace_1_1_user_metadata.html">Struct Catalog_Namespace::UserMetadata</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state.html">Struct CgenState</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_cgen_state_1_1_function_oper_value.html">Struct CgenState::FunctionOperValue</a></li>
@@ -1715,9 +1717,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_code_generator_1_1_null_check_codegen.html">Struct CodeGenerator::NullCheckCodegen</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_col_range_info.html">Struct ColRangeInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column.html">Struct Column</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_3_01_text_encoding_dict_01_4.html">Struct Column&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_descriptor.html">Struct ColumnDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_lazy_fetch_info.html">Struct ColumnLazyFetchInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list.html">Struct ColumnList</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_column_list_3_01_text_encoding_dict_01_4.html">Struct ColumnList&lt; TextEncodingDict &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_columns_for_device.html">Struct ColumnsForDevice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_options.html">Struct CompilationOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_compilation_result.html">Struct CompilationResult</a></li>
@@ -1801,6 +1805,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_boundary.html">Struct GeoBoundary</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_converter_factory_3_01_c_o_n_v_e_r_t_e_r_00_01typename_01std_1_1enable__if__t_3_01std4cb957e560a6fe6d43b7431fc4a942d7.html">Struct GeoConverterFactory&lt; CONVERTER, typename std::enable_if_t&lt; std::is_same_v&lt; GeoPolygonValueConverter, CONVERTER &gt;||std::is_same_v&lt; GeoMultiPolygonValueConverter, CONVERTER &gt; &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_coord.html">Struct GeoCoord</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
@@ -1817,6 +1822,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value.html">Struct GeoPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_poly_target_value_ptr.html">Struct GeoPolyTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon.html">Struct GeoPolygon</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_render_group_manager.html">Struct GeoPolygonRenderGroupManager</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_polygon_value_converter.html">Struct GeoPolygonValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_raster.html">Struct GeoRaster</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_geo_return_type_traits.html">Struct GeoReturnTypeTraits</a></li>
@@ -1968,6 +1974,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_text_encoding_none.html">Struct TextEncodingNone</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter.html">Struct ThreadController_NS::FutureGetter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_controller___n_s_1_1_future_getter_3_01void_01_4.html">Struct ThreadController_NS::FutureGetter&lt; void &gt;</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_thread_info.html">Struct ThreadInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_type_handler.html">Struct TypeHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_updel_roll.html">Struct UpdelRoll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_varlen_datum.html">Struct VarlenDatum</a></li>
@@ -2225,6 +2232,16 @@
 <dd></dd></dl>
 
 <dl class="function">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap5IdMapERK5IdMap">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap5IdMapERK5IdMap"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap5IdMapERK5IdMap"></span><span id="StringDictionaryProxy::IdMap::IdMap__IdMapCR"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1ada2f6b1109149d17d5d93ade65cd6b13"></span><code class="sig-name descname">IdMap</code><span class="sig-paren">(</span><a class="reference internal" href="class_string_dictionary_proxy.html#_CPPv4N21StringDictionaryProxy5IdMap5IdMapEK8uint32_tK8uint32_t" title="StringDictionaryProxy::IdMap::IdMap">IdMap</a> <em class="property">const</em>&amp;<span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap5IdMapERR5IdMap">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap5IdMapERR5IdMap"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap5IdMapERR5IdMap"></span><span id="StringDictionaryProxy::IdMap::IdMap__IdMapRR"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1acf0e6207f14f1a4aa71f6595aae4eaa2"></span><code class="sig-name descname">IdMap</code><span class="sig-paren">(</span><a class="reference internal" href="class_string_dictionary_proxy.html#_CPPv4N21StringDictionaryProxy5IdMap5IdMapEK8uint32_tK8uint32_t" title="StringDictionaryProxy::IdMap::IdMap">IdMap</a>&amp;&amp;<span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy5IdMap5emptyEv">
 <span id="_CPPv3NK21StringDictionaryProxy5IdMap5emptyEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap5emptyEv"></span><span id="StringDictionaryProxy::IdMap::emptyC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a8e1c3200c60ad632416f1870aad3052d"></span>bool <code class="sig-name descname">empty</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
 <dd></dd></dl>
@@ -2237,6 +2254,11 @@
 <dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy5IdMap12getVectorMapEv">
 <span id="_CPPv3NK21StringDictionaryProxy5IdMap12getVectorMapEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap12getVectorMapEv"></span><span id="StringDictionaryProxy::IdMap::getVectorMapC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a43f6c8451ab869b9ad3e17ea1681c5e8"></span>std::vector&lt;int32_t&gt; <em class="property">const</em> &amp;<code class="sig-name descname">getVectorMap</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy5IdMap4sizeEv">
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap4sizeEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap4sizeEv"></span><span id="StringDictionaryProxy::IdMap::sizeC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a4f1ee5cb1385f44553d779f2a22d83bb"></span>size_t <code class="sig-name descname">size</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2261,7 +2283,22 @@
 
 <dl class="function">
 <dt id="_CPPv4NK21StringDictionaryProxy5IdMap11domainStartEv">
-<span id="_CPPv3NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="StringDictionaryProxy::IdMap::domainStartC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1afa4abf443138740c49f5555e51bef03b"></span>int64_t <code class="sig-name descname">domainStart</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap11domainStartEv"></span><span id="StringDictionaryProxy::IdMap::domainStartC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a1b86be13a42399d8e7807f01f4f2657f"></span>int32_t <code class="sig-name descname">domainStart</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy5IdMap9domainEndEv">
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap9domainEndEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap9domainEndEv"></span><span id="StringDictionaryProxy::IdMap::domainEndC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1ae69b46a71e7588db961b06e661f29cb3"></span>int32_t <code class="sig-name descname">domainEnd</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy5IdMap22numUntranslatedStringsEv">
+<span id="_CPPv3NK21StringDictionaryProxy5IdMap22numUntranslatedStringsEv"></span><span id="_CPPv2NK21StringDictionaryProxy5IdMap22numUntranslatedStringsEv"></span><span id="StringDictionaryProxy::IdMap::numUntranslatedStringsC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a902c4f9fed8fc8216141303b3ab1c7d8"></span>size_t <code class="sig-name descname">numUntranslatedStrings</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap25setNumUntranslatedStringsEK6size_t">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap25setNumUntranslatedStringsEK6size_t"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap25setNumUntranslatedStringsEK6size_t"></span><span id="StringDictionaryProxy::IdMap::setNumUntranslatedStrings__sC"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1afd62e7e07db6e9664267b6e5bfbf4796"></span>void <code class="sig-name descname">setNumUntranslatedStrings</code><span class="sig-paren">(</span><em class="property">const</em> size_t <em>num_untranslated_strings</em><span class="sig-paren">)</span><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2290,6 +2327,11 @@
 <dl class="member">
 <dt id="_CPPv4N21StringDictionaryProxy5IdMap11vector_map_E">
 <span id="_CPPv3N21StringDictionaryProxy5IdMap11vector_map_E"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap11vector_map_E"></span><span id="StringDictionaryProxy::IdMap::vector_map___std::vector:int32_t:"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1afe8bc9627b48f210f12e6af9397ba5bf"></span>std::vector&lt;int32_t&gt; <code class="sig-name descname">vector_map_</code><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N21StringDictionaryProxy5IdMap25num_untranslated_strings_E">
+<span id="_CPPv3N21StringDictionaryProxy5IdMap25num_untranslated_strings_E"></span><span id="_CPPv2N21StringDictionaryProxy5IdMap25num_untranslated_strings_E"></span><span id="StringDictionaryProxy::IdMap::num_untranslated_strings___int64_t"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map_1a4d30cbd8cb3bee04f259b16f830e350d"></span>int64_t <code class="sig-name descname">num_untranslated_strings_</code> = {-1}<br /></dt>
 <dd></dd></dl>
 
 </div>
