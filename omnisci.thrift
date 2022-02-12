@@ -452,6 +452,19 @@ struct TInsertData {
   6: list<bool> is_default;
 }
 
+union TChunkData {
+  1: binary data_buffer;
+  2: binary index_buffer;
+}
+
+struct TInsertChunks {
+  1: i32 db_id;
+  2: i32 table_id;
+  3: list<TChunkData> data;
+  4: list<i64> valid_indices;
+  5: i64 num_rows;
+}
+
 struct TPendingRenderQuery {
   1: TQueryId id;
 }
@@ -726,6 +739,7 @@ service OmniSci {
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TOmniSciException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TOmniSciException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TOmniSciException e)
+  void insert_chunks(1: TSessionId session, 2: TInsertChunks insert_chunks) throws (1: TOmniSciException e)
   void checkpoint(1: TSessionId session, 2: i32 table_id) throws (1: TOmniSciException e)
   # object privileges
   list<string> get_roles(1: TSessionId session) throws (1: TOmniSciException e)

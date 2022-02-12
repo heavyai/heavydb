@@ -42,8 +42,9 @@ std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
 
 std::shared_ptr<Chunk> Chunk::getChunk(const ColumnDescriptor* cd,
                                        AbstractBuffer* data_buffer,
-                                       AbstractBuffer* index_buffer) {
-  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
+                                       AbstractBuffer* index_buffer,
+                                       const bool pinnable) {
+  std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd, pinnable));
   chunkp->setChunkBuffer(data_buffer, index_buffer);
   return chunkp;
 }

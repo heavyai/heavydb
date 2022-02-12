@@ -13,7 +13,6 @@ list(APPEND IMPORT_EXPORT_LIBRARIES muparserx)
 set(IMPORT_SOURCES
   Importer.cpp
   ForeignDataImporter.cpp
-  DistributedForeignDataImporter.cpp
   DelimitedParserUtils.cpp
   RasterImporter.cpp
   MetadataColumn.cpp

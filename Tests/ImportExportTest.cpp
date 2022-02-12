@@ -1027,10 +1027,6 @@ class ImportAndSelectTest
       return true;
 #endif
     }
-    if (isDistributedMode() &&
-        param_.code_path == "general_fsi") {  // currently unsupported
-      return true;
-    }
     return false;
   }
 

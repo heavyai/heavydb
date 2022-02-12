@@ -24,6 +24,7 @@ set(datamgr_source_files
     ForeignStorage/DummyForeignStorage.cpp
     ForeignStorage/ForeignStorageInterface.cpp
     ForeignStorage/ForeignStorageBuffer.cpp
+    ForeignStorage/PassThroughBuffer.cpp
     ForeignStorage/ForeignStorageMgr.cpp
     ForeignStorage/ForeignStorageCache.cpp
     ForeignStorage/ForeignTableSchema.cpp

@@ -125,6 +125,7 @@ class Chunk {
    * @param cd - the column descriptor for the chunk
    * @param data_buffer - the data buffer for the chunk
    * @param index_buffer - the (optional) index buffer for the chunk
+   * @param pinnable - sets the chunk as pinnable (or not)
    *
    * @return a chunk composed of supplied components
    *
@@ -134,7 +135,8 @@ class Chunk {
    */
   static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
                                          AbstractBuffer* data_buffer,
-                                         AbstractBuffer* index_buffer);
+                                         AbstractBuffer* index_buffer,
+                                         const bool pinnable = true);
 
   bool isChunkOnDevice(DataMgr* data_mgr,
                        const ChunkKey& key,

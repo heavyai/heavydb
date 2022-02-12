@@ -192,11 +192,11 @@ import_export::ImportStatus import_foreign_data(
           auto index_key = key;
           index_key[CHUNK_KEY_VARLEN_IDX] = 2;
           insert_chunks.chunks[col_id] = Chunk_NS::Chunk::getChunk(
-              col_desc, buffer, shared::get_from_map(fragment_buffers, index_key));
+              col_desc, buffer, shared::get_from_map(fragment_buffers, index_key), false);
         }
       } else {  // regular non-varlen case with no index buffer
         insert_chunks.chunks[col_id] =
-            Chunk_NS::Chunk::getChunk(col_desc, buffer, nullptr);
+            Chunk_NS::Chunk::getChunk(col_desc, buffer, nullptr, false);
       }
     }
 

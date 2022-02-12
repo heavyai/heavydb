@@ -715,11 +715,10 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
     auto buffer = chunk->getBuffer();
     CHECK(buffer);
     CHECK(buffer->hasEncoder());
-    CHECK(buffer->getEncoder()->getNumElems());
-    if (!num_rows) {
+    if (!num_rows.has_value()) {
       num_rows = buffer->getEncoder()->getNumElems();
     } else {
-      CHECK(num_rows == buffer->getEncoder()->getNumElems());
+      CHECK_EQ(num_rows.value(), buffer->getEncoder()->getNumElems());
     }
   }
 

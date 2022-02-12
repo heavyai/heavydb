@@ -22,6 +22,7 @@
  */
 
 #include "DBHandler.h"
+#include "DistributedForeignDataImporter.h"
 #include "DistributedLoader.h"
 #include "TokenCompletionHints.h"
 
@@ -41,13 +42,13 @@
 #include "Catalog/DdlCommandExecutor.h"
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/DummyForeignStorage.h"
+#include "DataMgr/ForeignStorage/PassThroughBuffer.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Compression.h"
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
-#include "ImportExport/DistributedForeignDataImporter.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "OSDependent/omnisci_hostname.h"
@@ -6985,6 +6986,63 @@ void DBHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows
   LOG(INFO) << "BROADCAST-SERIALIZED-ROWS COMPLETED " << time_ms << "ms";
 }
 
+void DBHandler::insert_chunks(const TSessionId& session,
+                              const TInsertChunks& thrift_insert_chunks) {
+  try {
+    auto stdlog = STDLOG(get_session_ptr(session));
+    auto session_ptr = stdlog.getConstSessionInfo();
+    auto const& cat = session_ptr->getCatalog();
+    Fragmenter_Namespace::InsertChunks insert_chunks{thrift_insert_chunks.table_id,
+                                                     thrift_insert_chunks.db_id};
+    insert_chunks.valid_row_indices.resize(thrift_insert_chunks.valid_indices.size());
+    std::copy(thrift_insert_chunks.valid_indices.begin(),
+              thrift_insert_chunks.valid_indices.end(),
+              insert_chunks.valid_row_indices.begin());
+
+    auto columns =
+        cat.getAllColumnMetadataForTable(insert_chunks.table_id, false, false, true);
+    CHECK_EQ(columns.size(), thrift_insert_chunks.data.size());
+
+    std::list<foreign_storage::PassThroughBuffer> pass_through_buffers;
+    auto thrift_data_it = thrift_insert_chunks.data.begin();
+    for (const auto col_desc : columns) {
+      AbstractBuffer* data_buffer = nullptr;
+      AbstractBuffer* index_buffer = nullptr;
+      data_buffer = &pass_through_buffers.emplace_back(
+          reinterpret_cast<const int8_t*>(thrift_data_it->data_buffer.data()),
+          thrift_data_it->data_buffer.size());
+      data_buffer->initEncoder(col_desc->columnType);
+      data_buffer->getEncoder()->setNumElems(thrift_insert_chunks.num_rows);
+      if (col_desc->columnType.is_varlen_indeed()) {
+        CHECK(thrift_insert_chunks.num_rows == 0 ||
+              thrift_data_it->index_buffer.size() > 0);
+        index_buffer = &pass_through_buffers.emplace_back(
+            reinterpret_cast<const int8_t*>(thrift_data_it->index_buffer.data()),
+            thrift_data_it->index_buffer.size());
+      }
+
+      insert_chunks.chunks[col_desc->columnId] =
+          Chunk_NS::Chunk::getChunk(col_desc, data_buffer, index_buffer, false);
+      thrift_data_it++;
+    }
+
+    const ChunkKey lock_chunk_key{cat.getDatabaseId(),
+                                  cat.getLogicalTableId(insert_chunks.table_id)};
+    auto table_read_lock =
+        lockmgr::TableSchemaLockMgr::getReadLockForTable(lock_chunk_key);
+    const auto td = cat.getMetadataForTable(insert_chunks.table_id);
+    CHECK(td);
+
+    // this should have the same lock sequence as COPY FROM
+    auto insert_data_lock =
+        lockmgr::InsertDataLockMgr::getWriteLockForTable(lock_chunk_key);
+    td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
+
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION(std::string(e.what()));
+  }
+}
+
 void DBHandler::insert_data(const TSessionId& session,
                             const TInsertData& thrift_insert_data) {
   try {
@@ -7084,8 +7142,8 @@ void DBHandler::insert_data(const TSessionId& session,
     CHECK(td);
 
     // this should have the same lock seq as COPY FROM
-    ChunkKey chunkKey = {insert_data.databaseId, insert_data.tableId};
-    auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(chunkKey);
+    auto insert_data_lock =
+        lockmgr::InsertDataLockMgr::getWriteLockForTable(lock_chunk_key);
     auto data_memory_holder = import_export::fill_missing_columns(&cat, insert_data);
     td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
