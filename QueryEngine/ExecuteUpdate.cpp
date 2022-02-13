@@ -116,10 +116,6 @@ TableUpdateMetadata Executor::executeUpdate(
   auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>();
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
   {
-    auto clock_begin = timer_start();
-    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-    compilation_queue_time_ms_ += timer_stop(clock_begin);
-
     query_mem_desc = query_comp_desc->compile(global_max_groups_buffer_entry_guess,
                                               8,
                                               /*has_cardinality_estimation=*/true,

@@ -26,7 +26,4 @@ using CodeCacheKey = std::vector<std::string>;
 template <typename CC>
 using CodeCacheVal = std::shared_ptr<CC>;
 template <typename CC>
-using CodeCacheValWithModule = std::pair<CodeCacheVal<CC>, llvm::Module*>;
-template <typename CC>
-using CodeCache =
-    LruCache<CodeCacheKey, CodeCacheValWithModule<CC>, boost::hash<CodeCacheKey>>;
+using CodeCache = LruCache<CodeCacheKey, CodeCacheVal<CC>, boost::hash<CodeCacheKey>>;

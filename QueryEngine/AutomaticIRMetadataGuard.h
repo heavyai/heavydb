@@ -39,9 +39,10 @@ class AutomaticIRMetadataGuard {
       , ppline_(ppline)
       , ppfunc_(ppfunc)
       , our_instructions_(nullptr)
-      , done_(false)
-      , this_is_root_(!instructions_.count(cgen_state_))
-      , enabled_(g_enable_automatic_ir_metadata) {
+      , done_(false) {
+    std::lock_guard<std::mutex> lock(instructions_mutex_);
+    this_is_root_ = !instructions_.count(cgen_state_);
+    enabled_ = g_enable_automatic_ir_metadata;
     if (enabled_) {
       CHECK(cgen_state_);
       CHECK(cgen_state_->module_);
@@ -54,6 +55,7 @@ class AutomaticIRMetadataGuard {
 
   void done() noexcept {
     if (enabled_ && !done_) {
+      std::lock_guard<std::mutex> lock(instructions_mutex_);
       rememberOurInstructions();
       if (this_is_root_) {
         markInstructions();
@@ -196,6 +198,8 @@ class AutomaticIRMetadataGuard {
   inline static std::unordered_map<CgenState*, OurInstructions> instructions_;
 
   inline static const std::string detailed_footnote_prefix_{"Omnisci Debugging Info: "};
+
+  inline static std::mutex instructions_mutex_;
 };
 
 #define AUTOMATIC_IR_METADATA(CGENSTATE)                \

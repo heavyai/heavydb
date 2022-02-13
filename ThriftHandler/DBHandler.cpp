@@ -7501,7 +7501,8 @@ void DBHandler::register_runtime_extension_functions(
   // registered globally, that means that all users can use as well as
   // overwrite UDFs that was created possibly by anoher user.
 
-  Executor::resetAllExecutors(/*runtime_only=*/true);  // includes execution lock
+  Executor::resetAllExecutors(
+      /*discard_runtime_modules_only=*/true);  // includes execution lock
 
   /* Parse LLVM/NVVM IR strings and store it as LLVM module. */
   auto it_cpu = device_ir_map.find(std::string{"cpu"});
@@ -7555,7 +7556,7 @@ void DBHandler::register_runtime_extension_functions(
   ExtensionFunctionsWhitelist::clearRTUdfs();
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 
-  Executor::update_after_registration(/*runtime_only=*/true);
+  Executor::update_after_registration(/*update_runtime_modules_only=*/true);
 }
 
 void DBHandler::convertResultSet(ExecutionResult& result,
