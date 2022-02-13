@@ -93,7 +93,7 @@ using std::runtime_error;
 using std::string;
 using std::vector;
 
-bool g_enable_fsi{false};
+bool g_enable_fsi{true};
 bool g_enable_s3_fsi{false};
 int32_t g_distributed_leaf_idx{-1};
 int32_t g_distributed_num_leaves{0};

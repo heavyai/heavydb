@@ -1173,6 +1173,7 @@ void CommandLineOptions::validate() {
       LOG(INFO) << "FSI has been enabled as a side effect of enabling system tables";
     }
   }
+  LOG(INFO) << "Enable FSI is set to " << g_enable_fsi;
 
 #ifdef ENABLE_MEMKIND
   if (g_enable_tiered_cpu_mem) {
