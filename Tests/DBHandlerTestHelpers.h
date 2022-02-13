@@ -494,6 +494,10 @@ class DBHandlerTestFixture : public testing::Test {
     ASSERT_EQ(error_message, e.what());
   }
 
+  void assertExceptionMessage(const std::exception& e, const std::string& error_message) {
+    ASSERT_EQ(error_message, e.what());
+  }
+
   // sometime error message have non deterministic portions
   // used to check a meaningful portion of an error message
   template <typename Lambda>

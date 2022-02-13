@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 OmniSci, Inc.
+f* Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,14 +82,30 @@ static const std::vector<WrapperType> s3_wrappers{"csv",
                                                   "csv_s3_select",
                                                   "regex_parser"};
 static const std::vector<WrapperType> csv_s3_wrappers{"csv", "csv_s3_select"};
-static const std::vector<WrapperType> odbc_wrappers{"sqlite", "postgres", "redshift"};
+static const std::vector<WrapperType> odbc_wrappers{"snowflake",
+                                                    "sqlite",
+                                                    "postgres",
+                                                    "redshift"};
+
 static const std::map<std::string, std::pair<std::string, std::string>>
     odbc_credentials_environment{
-        {"redshift", {"redshift_username", "redshift_password"}}};
+        {"redshift", {"redshift_username", "redshift_password"}},
+        {"snowflake", {"snowflake_username", "snowflake_password"}},
+    };
 
 static const std::string default_table_name = "test_foreign_table";
 static const std::string default_table_name_2 = "test_foreign_table_2";
 static const std::string default_file_name = "temp_file";
+
+std::string if_snowflake_add_qualifier(const std::string& table_name,
+                                       const std::string& odbc_wrapper) {
+  // Setting dn and schema in the odnc ini file for snowflake doesn't seem to work,
+  // Some traces on the internet indicate this is a snowflake bug.
+  // We should remove this function if/when the odbc ini file working
+  static const std::string default_snowflake_name_qualifier = "odbc_fsi_bench.public.";
+  return (odbc_wrapper == "snowflake") ? default_snowflake_name_qualifier + table_name
+                                       : table_name;
+}
 
 static const std::string default_select = "SELECT * FROM " + default_table_name + ";";
 
@@ -224,10 +240,9 @@ class TempDirManager {
 /**
  * Helper class for creating foreign tables
  */
+using NameTypePair = std::pair<std::string, std::string>;
 class ForeignTableTest : public DBHandlerTestFixture {
  protected:
-  using NameTypePair = std::pair<std::string, std::string>;
-
   inline static const std::string DEFAULT_ODBC_SERVER_NAME_ = "temp_odbc";
 
   std::string wrapper_type_ = "csv";
