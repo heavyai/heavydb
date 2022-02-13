@@ -73,6 +73,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 /**
  *
@@ -199,13 +200,18 @@ public final class MapDParser {
                   // Since we have interest in its subquery, so try to check whether
                   // the second operand, i.e., call.getOperandList().get(1)
                   // is a type of SqlSelect and also is correlated.
-                  // Note that the second operand of non-correlated IN clause
-                  // does not have SqlSelect as its second operand
                   if (call.getOperandList().get(1) instanceof SqlSelect) {
                     expression = call.getOperandList().get(1);
                     SqlSelect select_call = (SqlSelect) expression;
                     if (select_call.hasWhere()) {
-                      found_expression = true;
+                      // IN-clause may have correlated join within subquery's WHERE clause
+                      // i.e., f.val IN (SELECT r.val FROM R r WHERE f.val2 = r.val2)
+                      // then we have to deccorrelate the IN-clause
+                      JoinOperatorChecker joinOperatorChecker = new JoinOperatorChecker();
+                      if (joinOperatorChecker.containsExpression(
+                                  select_call.getWhere())) {
+                        found_expression = true;
+                      }
                     }
                   }
                 }
@@ -1449,6 +1455,48 @@ public final class MapDParser {
     }
 
     SqlNode targetExpression;
+  }
+
+  private static class JoinOperatorChecker extends SqlBasicVisitor<Void> {
+    Set<SqlBasicCall> targetCalls = new HashSet<>();
+
+    public boolean isEqualityJoinOperator(SqlBasicCall basicCall) {
+      if (null != basicCall) {
+        if (basicCall.operands.length == 2 && basicCall.getKind() == SqlKind.EQUALS
+                && basicCall.operand(0) instanceof SqlIdentifier
+                && basicCall.operand(1) instanceof SqlIdentifier) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    @Override
+    public Void visit(SqlCall call) {
+      if (call instanceof SqlBasicCall) {
+        targetCalls.add((SqlBasicCall) call);
+      }
+      for (SqlNode node : call.getOperandList()) {
+        if (!targetCalls.contains(node)) {
+          node.accept(this);
+        }
+      }
+      return super.visit(call);
+    }
+
+    boolean containsExpression(SqlNode node) {
+      try {
+        node.accept(this);
+        for (SqlBasicCall basicCall : targetCalls) {
+          if (isEqualityJoinOperator(basicCall)) {
+            throw Util.FoundOne.NULL;
+          }
+        }
+        return false;
+      } catch (Util.FoundOne e) {
+        return true;
+      }
+    }
   }
 
   // this visitor checks whether a parse tree contains at least one

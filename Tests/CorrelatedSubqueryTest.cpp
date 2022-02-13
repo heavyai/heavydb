@@ -875,16 +875,41 @@ TEST(Select, Disable_INExpr_Decorrelation_Under_Watchdog) {
     EXPECT_EQ(has_in_expr, expected);
   };
 
-  auto query =
+  auto q1 =
       "WITH TT1 AS (SELECT val AS key0 FROM test_facts) SELECT val FROM test_facts WHERE "
       "val IN (SELECT key0 FROM TT1);";
+  auto q2 =
+      "WITH TT1 AS (SELECT val AS key0 FROM test_facts) SELECT val FROM test_facts WHERE "
+      "val IN (SELECT key0 FROM TT1 WHERE key0 IS NOT NULL);";
+  auto q3 =
+      "WITH TT1 AS (SELECT val AS key0, id AS key1 FROM test_facts) SELECT val FROM "
+      "test_facts WHERE "
+      "val IN (SELECT key0 FROM TT1 WHERE key0 IS NOT NULL AND id = key1);";
+  auto q4 =
+      "WITH TT1 AS (SELECT val AS key0, id AS key1, rowid FROM test_facts) SELECT val "
+      "FROM "
+      "test_facts WHERE "
+      "val IN (SELECT key0 FROM TT1 WHERE TT1.key0 IS NOT NULL AND TT1.rowid > -1 AND "
+      "TT1.rowid < 100 AND TT1.rowid between 0 and 100 AND id = TT1.key1);";
 
   ScopeGuard reset = [orig = g_enable_watchdog] { g_enable_watchdog = orig; };
-  for (auto watchdog : {false, true}) {
-    g_enable_watchdog = watchdog;
+  for (auto flag : {false, true}) {
+    g_enable_watchdog = flag;
     // we do not decorrelate IN-expr if watchdog is enabled, so
     // we expect to see the existence of IN-expr in the query plan
-    check_query(query, watchdog);
+    for (auto& query : {q1, q2}) {
+      bool has_in_expr = flag;
+      // watchdog: false --> decorrelate the query -> has no in expr
+      // watchdog: true --> do not decorrelate the query -> has in expr
+      check_query(query, has_in_expr);
+    }
+    // if we have join operation within SELECT subquery of IN-clause, we have to
+    // decorrelate it regardless of the watchdog flag
+    // to avoid the creation of "correlation" variable in the query plan
+    // that our analyzer does not accept for the code generation
+    for (auto& query : {q3, q4}) {
+      check_query(query, false);
+    }
   }
 }
 
