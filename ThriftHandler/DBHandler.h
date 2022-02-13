@@ -449,7 +449,7 @@ class DBHandler : public OmniSciIf {
   void create_table(const TSessionId& session,
                     const std::string& table_name,
                     const TRowDescriptor& row_desc,
-                    const TFileType::type file_type,
+                    const TSourceType::type source_type,
                     const TCreateParams& create_params) override;
   void import_table(const TSessionId& session,
                     const std::string& table_name,

@@ -1457,19 +1457,18 @@ int main(int argc, char** argv) {
       char* token = strtok(line + 8, " ");
       char* file_path{nullptr};
       TCopyParams copy_params;
-      copy_params.use_source_type = true;
 #ifdef ENABLE_IMPORT_PARQUET
       // users may give only a directory name which has no obvious connection to parquet.
       // need users to explicitly specify that they want to detect cols in parquet files
       if (boost::iequals(token, "parquet")) {
-        copy_params.source_type = TSourceType::PARQUET;
+        copy_params.source_type = TSourceType::PARQUET_FILE;
       } else
 #endif
           // allow force interpretation as geo or raster file
           if (boost::iequals(token, "geo")) {
-        copy_params.source_type = TSourceType::GEO;
+        copy_params.source_type = TSourceType::GEO_FILE;
       } else if (boost::iequals(token, "raster")) {
-        copy_params.source_type = TSourceType::RASTER;
+        copy_params.source_type = TSourceType::RASTER_FILE;
       } else if (boost::iequals(token, "odbc")) {
         copy_params.source_type = TSourceType::ODBC;
       } else {

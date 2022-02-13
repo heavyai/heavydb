@@ -11,18 +11,11 @@ enum TExecuteMode {
   CPU
 }
 
-enum TFileType {
-  DELIMITED,
-  GEO,
-  PARQUET,
-  RASTER
-}
-
 enum TSourceType {
-  DELIMITED,
-  GEO,
-  PARQUET,
-  RASTER,
+  DELIMITED_FILE,
+  GEO_FILE,
+  PARQUET_FILE,
+  RASTER_FILE,
   ODBC
 }
 
@@ -227,7 +220,7 @@ struct TCopyParams {
   9: string array_begin;
   10: string array_end;
   11: i32 threads;
-  12: TFileType file_type=TFileType.DELIMITED;
+  12: TSourceType source_type=TSourceType.DELIMITED_FILE;
   13: string s3_access_key;
   14: string s3_secret_key;
   15: string s3_region;
@@ -248,15 +241,13 @@ struct TCopyParams {
   30: TRasterPointTransform raster_point_transform=TRasterPointTransform.AUTO;
   31: bool raster_point_compute_angle=false;
   32: string raster_import_dimensions;
-  33: bool use_source_type=false;
-  34: TSourceType source_type=TSourceType.DELIMITED;
-  35: string odbc_dsn;
-  36: string odbc_connection_string;
-  37: string odbc_sql_select;
-  38: string odbc_username;
-  39: string odbc_password;
-  40: string odbc_credential_string;
-  41: string add_metadata_columns;
+  33: string odbc_dsn;
+  34: string odbc_connection_string;
+  35: string odbc_sql_select;
+  36: string odbc_username;
+  37: string odbc_password;
+  38: string odbc_credential_string;
+  39: string add_metadata_columns;
 }
 
 struct TCreateParams {
@@ -729,7 +720,7 @@ service OmniSci {
   void load_table_binary_arrow(1: TSessionId session, 2: string table_name, 3: binary arrow_stream, 4: bool use_column_names = false) throws (1: TOmniSciException e)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows, 4: list<string> column_names = {}) throws (1: TOmniSciException e)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TOmniSciException e)
-  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TFileType file_type=TFileType.DELIMITED, 5: TCreateParams create_params) throws (1: TOmniSciException e)
+  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TSourceType file_type=TSourceType.DELIMITED_FILE, 5: TCreateParams create_params) throws (1: TOmniSciException e)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TOmniSciException e)
   void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc, 6: TCreateParams create_params) throws (1: TOmniSciException e)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TOmniSciException e)

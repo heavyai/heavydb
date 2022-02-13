@@ -3731,50 +3731,28 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
     copy_params.s3_session_token = server_credentials.GetSessionToken();
   }
 #endif
-  if (cp.use_source_type) {
-    switch (cp.source_type) {
-      case TSourceType::DELIMITED:
-        copy_params.source_type = import_export::SourceType::kDelimitedFile;
-        break;
-      case TSourceType::GEO:
-        copy_params.source_type = import_export::SourceType::kGeoFile;
-        break;
-      case TSourceType::PARQUET:
+
+  switch (cp.source_type) {
+    case TSourceType::DELIMITED_FILE:
+      copy_params.source_type = import_export::SourceType::kDelimitedFile;
+      break;
+    case TSourceType::GEO_FILE:
+      copy_params.source_type = import_export::SourceType::kGeoFile;
+      break;
+    case TSourceType::PARQUET_FILE:
 #ifdef ENABLE_IMPORT_PARQUET
-        copy_params.source_type = import_export::SourceType::kParquetFile;
-        break;
+      copy_params.source_type = import_export::SourceType::kParquetFile;
+      break;
 #else
-        THROW_MAPD_EXCEPTION("Parquet not supported");
+      THROW_MAPD_EXCEPTION("Parquet not supported");
 #endif
-      case TSourceType::ODBC:
-        THROW_MAPD_EXCEPTION("ODBC source not supported");
-      case TSourceType::RASTER:
-        copy_params.source_type = import_export::SourceType::kRasterFile;
-        break;
-      default:
-        CHECK(false);
-    }
-  } else {
-    switch (cp.file_type) {
-      case TFileType::DELIMITED:
-        copy_params.source_type = import_export::SourceType::kDelimitedFile;
-        break;
-      case TFileType::GEO:
-        copy_params.source_type = import_export::SourceType::kGeoFile;
-        break;
-      case TFileType::PARQUET:
-#ifdef ENABLE_IMPORT_PARQUET
-        copy_params.source_type = import_export::SourceType::kParquetFile;
-        break;
-#else
-        THROW_MAPD_EXCEPTION("Parquet not supported");
-#endif
-      case TFileType::RASTER:
-        copy_params.source_type = import_export::SourceType::kRasterFile;
-        break;
-      default:
-        CHECK(false);
-    }
+    case TSourceType::ODBC:
+      THROW_MAPD_EXCEPTION("ODBC source not supported");
+    case TSourceType::RASTER_FILE:
+      copy_params.source_type = import_export::SourceType::kRasterFile;
+      break;
+    default:
+      CHECK(false);
   }
 
   switch (cp.geo_coords_encoding) {
@@ -3902,20 +3880,16 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
   copy_params.s3_endpoint = cp.s3_endpoint;
   switch (cp.source_type) {
     case import_export::SourceType::kDelimitedFile:
-      copy_params.file_type = TFileType::DELIMITED;
-      copy_params.source_type = TSourceType::DELIMITED;
+      copy_params.source_type = TSourceType::DELIMITED_FILE;
       break;
     case import_export::SourceType::kGeoFile:
-      copy_params.file_type = TFileType::GEO;
-      copy_params.source_type = TSourceType::GEO;
+      copy_params.source_type = TSourceType::GEO_FILE;
       break;
     case import_export::SourceType::kParquetFile:
-      copy_params.file_type = TFileType::PARQUET;
-      copy_params.source_type = TSourceType::PARQUET;
+      copy_params.source_type = TSourceType::PARQUET_FILE;
       break;
     case import_export::SourceType::kRasterFile:
-      copy_params.file_type = TFileType::RASTER;
-      copy_params.source_type = TSourceType::RASTER;
+      copy_params.source_type = TSourceType::RASTER_FILE;
       break;
     case import_export::SourceType::kOdbc:
       copy_params.source_type = TSourceType::ODBC;
@@ -4956,7 +4930,7 @@ void DBHandler::check_geospatial_files(const boost::filesystem::path file_path,
 void DBHandler::create_table(const TSessionId& session,
                              const std::string& table_name,
                              const TRowDescriptor& rd,
-                             const TFileType::type file_type,
+                             const TSourceType::type source_type,
                              const TCreateParams& create_params) {
   // @TODO(se) remove file_type which is unused
   auto stdlog = STDLOG("table_name", table_name);
@@ -5448,7 +5422,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
       const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
       if (!td) {
         try {
-          create_table(session, this_table_name, rd, cp_copy.file_type, create_params);
+          create_table(session, this_table_name, rd, cp_copy.source_type, create_params);
         } catch (const std::exception& e) {
           // capture the error and abort this layer
           caught_exception_messages.emplace_back("Failed to create table for Layer '" +

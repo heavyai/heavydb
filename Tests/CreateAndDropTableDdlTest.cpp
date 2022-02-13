@@ -1478,7 +1478,7 @@ TEST_F(CreateTableInThrift, ThriftCreateTableWithDefaults) {
   TRowDescriptor row_desc = {c1, c2, c3};
   TCreateParams cp;
   cp.is_replicated = false;
-  handler->create_table(session, "test_table", row_desc, TFileType::DELIMITED, cp);
+  handler->create_table(session, "test_table", row_desc, TSourceType::DELIMITED_FILE, cp);
   TTableDetails details;
   handler->get_table_details(details, session, "test_table");
   auto created_row_desc = details.row_desc;

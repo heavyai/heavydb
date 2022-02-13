@@ -18,9 +18,9 @@ package com.mapd.tests;
 import com.omnisci.thrift.server.TColumnType;
 import com.omnisci.thrift.server.TCopyParams;
 import com.omnisci.thrift.server.TCreateParams;
-import com.omnisci.thrift.server.TFileType;
 import com.omnisci.thrift.server.TImportHeaderRow;
 import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TSourceType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,7 +122,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
           geo_copy_params.array_begin = "{";
           geo_copy_params.array_end = "}";
           geo_copy_params.threads = 0;
-          geo_copy_params.file_type = TFileType.GEO;
+          geo_copy_params.source_type = TSourceType.GEO_FILE;
 
           try {
             barrier.await();

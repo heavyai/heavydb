@@ -589,7 +589,7 @@ TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
 #endif  // HAVE_AWS_S3
 
   TCopyParams copy_params;
-  copy_params.file_type = TFileType::GEO;
+  copy_params.source_type = TSourceType::GEO_FILE;
 
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_geo_table(session_id,
@@ -624,7 +624,7 @@ TEST_P(DBHandlerFilePathTest, GetLayersInGeoFile) {
 #endif  // HAVE_AWS_S3
 
   TCopyParams copy_params;
-  copy_params.file_type = TFileType::GEO;
+  copy_params.source_type = TSourceType::GEO_FILE;
 
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   std::vector<TGeoFileLayerInfo> result;
