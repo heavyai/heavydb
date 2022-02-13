@@ -356,27 +356,6 @@ void verify_function_ir(const llvm::Function* func) {
   }
 }
 
-template <typename CC>
-std::shared_ptr<CC> Executor::getCodeFromCache(const CodeCacheKey& key,
-                                               const CodeCache<CC>& cache) {
-  auto it = cache.find(key);
-  if (it != cache.cend()) {
-    cgen_state_->module_ = it->second.second;
-    return it->second.first;
-  }
-  return {};
-}
-
-template <typename CC>
-void Executor::addCodeToCache(const CodeCacheKey& key,
-                              std::shared_ptr<CC> compilation_context,
-                              llvm::Module* module,
-                              CodeCache<CC>& cache) {
-  cache.put(key,
-            std::make_pair<std::shared_ptr<CC>, decltype(module)>(
-                std::move(compilation_context), std::move(module)));
-}
-
 namespace {
 
 std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
@@ -395,6 +374,27 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
 #endif
   pass_manager.run(*module);
   return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
+}
+
+ExecutionEngineWrapper create_execution_engine(llvm::Module* llvm_module,
+                                               llvm::EngineBuilder& eb,
+                                               const CompilationOptions& co) {
+  auto timer = DEBUG_TIMER(__func__);
+  // Avoids data race in
+  // llvm::sys::DynamicLibrary::getPermanentLibrary and
+  // GDBJITRegistrationListener::notifyObjectLoaded while creating a
+  // new ExecutionEngine instance. Unfortunately we have to use global
+  // mutex here.
+  std::lock_guard<llvm::sys::Mutex> lock(g_ee_create_mutex);
+  ExecutionEngineWrapper execution_engine(eb.create(), co);
+  CHECK(execution_engine.get());
+  // Force the module data layout to match the layout for the selected target
+  llvm_module->setDataLayout(execution_engine->getDataLayout());
+
+  LOG(ASM) << assemblyForCPU(execution_engine, llvm_module);
+
+  execution_engine->finalizeObject();
+  return execution_engine;
 }
 
 }  // namespace
@@ -431,22 +431,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     eb.setOptLevel(llvm::CodeGenOpt::None);
   }
 
-  // Avoids data race in
-  // llvm::sys::DynamicLibrary::getPermanentLibrary and
-  // GDBJITRegistrationListener::notifyObjectLoaded while creating a
-  // new ExecutionEngine instance. Unfortunately we have to use global
-  // mutex here.
-  std::lock_guard<llvm::sys::Mutex> lock(g_ee_create_mutex);
-
-  ExecutionEngineWrapper execution_engine(eb.create(), co);
-  CHECK(execution_engine.get());
-  // Force the module data layout to match the layout for the selected target
-  llvm_module->setDataLayout(execution_engine->getDataLayout());
-
-  LOG(ASM) << assemblyForCPU(execution_engine, llvm_module);
-
-  execution_engine->finalizeObject();
-  return execution_engine;
+  return create_execution_engine(llvm_module, eb, co);
 }
 
 std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
@@ -454,7 +439,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     llvm::Function* multifrag_query_func,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
-  auto module = multifrag_query_func->getParent();
   CodeCacheKey key{serialize_llvm_object(query_func),
                    serialize_llvm_object(cgen_state_->row_func_)};
   if (cgen_state_->filter_func_) {
@@ -463,7 +447,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   for (const auto helper : cgen_state_->helper_functions_) {
     key.push_back(serialize_llvm_object(helper));
   }
-  auto cached_code = getCodeFromCache(key, cpu_code_cache_);
+  auto cached_code = cpu_code_accessor.get_value(key);
   if (cached_code) {
     return cached_code;
   }
@@ -473,7 +457,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   auto cpu_compilation_context =
       std::make_shared<CpuCompilationContext>(std::move(execution_engine));
   cpu_compilation_context->setFunctionPointer(multifrag_query_func);
-  addCodeToCache(key, cpu_compilation_context, module, cpu_code_cache_);
+  cpu_code_accessor.put(key, cpu_compilation_context);
   return std::dynamic_pointer_cast<CompilationContext>(cpu_compilation_context);
 }
 
@@ -1282,7 +1266,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
   for (const auto helper : cgen_state_->helper_functions_) {
     key.push_back(serialize_llvm_object(helper));
   }
-  auto cached_code = getCodeFromCache(key, gpu_code_cache_);
+  auto cached_code = Executor::gpu_code_accessor.get_value(key);
   if (cached_code) {
     return cached_code;
   }
@@ -1328,7 +1312,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       LOG(WARNING) << "Failed to allocate GPU memory for generated code. Evicting "
                    << g_fraction_code_cache_to_evict * 100.
                    << "% of GPU code cache and re-trying.";
-      gpu_code_cache_.evictFractionEntries(g_fraction_code_cache_to_evict);
+      Executor::gpu_code_accessor.evictFractionEntries(g_fraction_code_cache_to_evict);
       compilation_context = CodeGenerator::generateNativeGPUCode(this,
                                                                  query_func,
                                                                  multifrag_query_func,
@@ -1340,7 +1324,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
       throw;
     }
   }
-  addCodeToCache(key, compilation_context, module, gpu_code_cache_);
+  Executor::gpu_code_accessor.put(key, compilation_context);
   return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
 #else
   return nullptr;
@@ -2469,7 +2453,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   // cgenstate_manager uses RAII pattern to manage the live time of
   // CgenState instances.
   Executor::CgenStateManager cgenstate_manager(
-      *this, allow_lazy_fetch, query_infos, &ra_exe_unit);
+      *this, allow_lazy_fetch, query_infos, &ra_exe_unit);  // locks compilation mutex
 
   addTransientStringLiterals(ra_exe_unit, row_set_mem_owner);
 

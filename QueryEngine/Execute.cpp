@@ -179,6 +179,19 @@ extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
     llvm::LLVMContext& ctx,
     bool is_gpu = false);
 
+CodeCacheAccessor<CpuCompilationContext> Executor::s_stubs_accessor(
+    Executor::code_cache_size,
+    "s_stubs_cache");
+CodeCacheAccessor<CpuCompilationContext> Executor::s_code_accessor(
+    Executor::code_cache_size,
+    "s_code_cache");
+CodeCacheAccessor<CpuCompilationContext> Executor::cpu_code_accessor(
+    Executor::code_cache_size,
+    "cpu_code_cache");
+CodeCacheAccessor<GpuCompilationContext> Executor::gpu_code_accessor(
+    Executor::code_cache_size,
+    "gpu_code_cache");
+
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
                    BufferProvider* buffer_provider,
@@ -190,10 +203,6 @@ Executor::Executor(const ExecutorId executor_id,
     : executor_id_(executor_id)
     , context_(new llvm::LLVMContext())
     , cgen_state_(new CgenState({}, false, this))
-    , s_stubs_cache(code_cache_size)
-    , s_code_cache(code_cache_size)
-    , cpu_code_cache_(code_cache_size)
-    , gpu_code_cache_(code_cache_size)
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
     , max_gpu_slab_size_(max_gpu_slab_size)
@@ -231,38 +240,28 @@ void Executor::initialize_extension_module_sources() {
   }
 }
 
-void Executor::clearCaches(bool runtime_only) {
-  if (runtime_only) {
+void Executor::reset(bool discard_runtime_modules_only) {
+  // TODO: keep cached results that do not depend on runtime UDF/UDTFs
+  s_code_accessor.clear();
+  s_stubs_accessor.clear();
+  cpu_code_accessor.clear();
+  gpu_code_accessor.clear();
+
+  if (discard_runtime_modules_only) {
     extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_cpu_module);
 #ifdef HAVE_CUDA
     extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_gpu_module);
 #endif
-    // TODO: keep cached results that do not depend on runtime UDF/UDTFs
-    s_code_cache.clear();
-    s_stubs_cache.clear();
-    cpu_code_cache_.clear();
-    gpu_code_cache_.clear();
-  } else {
-    extension_modules_.clear();
-    s_code_cache.clear();
-    s_stubs_cache.clear();
-    cpu_code_cache_.clear();
-    gpu_code_cache_.clear();
-  }
-}
-
-void Executor::reset(bool runtime_only) {
-  clearCaches(runtime_only);
-  if (runtime_only) {
     cgen_state_->module_ = nullptr;
   } else {
+    extension_modules_.clear();
     cgen_state_.reset();
     context_.reset(new llvm::LLVMContext());
     cgen_state_.reset(new CgenState({}, false, this));
   }
 }
 
-void Executor::update_extension_modules(bool runtime_only) {
+void Executor::update_extension_modules(bool update_runtime_modules_only) {
   auto read_module = [&](Executor::ExtModuleKinds module_kind,
                          const std::string& source) {
     /*
@@ -327,14 +326,14 @@ void Executor::update_extension_modules(bool runtime_only) {
     }
   };
 
-  if (!runtime_only) {
+  if (!update_runtime_modules_only) {
     // required compile-time modules, their requirements are enforced
     // by Executor::initialize_extension_module_sources():
     update_module(Executor::ExtModuleKinds::template_module);
     // load-time modules, these are optional:
-    update_module(Executor::ExtModuleKinds::udf_cpu_module);
+    update_module(Executor::ExtModuleKinds::udf_cpu_module, true);
 #ifdef HAVE_CUDA
-    update_module(Executor::ExtModuleKinds::udf_gpu_module);
+    update_module(Executor::ExtModuleKinds::udf_gpu_module, true);
     update_module(Executor::ExtModuleKinds::rt_libdevice_module);
 #endif
   }
@@ -351,9 +350,11 @@ Executor::CgenStateManager::CgenStateManager(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit* ra_exe_unit)
     : executor_(executor)
+    , lock_queue_clock_(timer_start())
+    , lock_(executor_.compilation_mutex_)
     , cgen_state_(std::move(executor_.cgen_state_))  // store old CgenState instance
-
 {
+  executor_.compilation_queue_time_ms_ += timer_stop(lock_queue_clock_);
   // nukeOldState creates new CgenState and PlanState instances for
   // the subsequent code generation.  It also resets
   // kernel_queue_time_ms_ and compilation_queue_time_ms_ that we do
@@ -1908,10 +1909,6 @@ TemporaryTable Executor::executeWorkUnitImpl(
       if (eo.executor_type == ExecutorType::Native) {
         try {
           INJECT_TIMER(query_step_compilation);
-          auto clock_begin = timer_start();
-          std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-          compilation_queue_time_ms_ += timer_stop(clock_begin);
-
           query_mem_desc_owned =
               query_comp_desc_owned->compile(max_groups_buffer_entry_guess,
                                              crt_min_byte_width,
@@ -2066,9 +2063,6 @@ void Executor::executeWorkUnitPerFragment(
   query_comp_desc_owned->setUseGroupByBufferDesc(co.use_groupby_buffer_desc);
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
   {
-    auto clock_begin = timer_start();
-    std::lock_guard<std::mutex> compilation_lock(compilation_mutex_);
-    compilation_queue_time_ms_ += timer_stop(clock_begin);
     query_mem_desc_owned =
         query_comp_desc_owned->compile(0,
                                        8,
@@ -2154,12 +2148,11 @@ ResultSetPtr Executor::executeTableFunction(
         this->gridSize());
   }
 
-  Executor::CgenStateManager cgenstate_manager(*this, false, table_infos, nullptr);
-
   ColumnCacheMap column_cache;  // Note: if we add retries to the table function
                                 // framework, we may want to move this up a level
 
   ColumnFetcher column_fetcher(this, data_provider, column_cache);
+  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
 
   std::shared_ptr<CompilationContext> compilation_context;
   {
@@ -2171,7 +2164,6 @@ ResultSetPtr Executor::executeTableFunction(
     compilation_context = tf_compilation_context.compile(exe_unit, co);
   }
 
-  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
   return exe_context.execute(exe_unit,
                              table_infos,
                              compilation_context,

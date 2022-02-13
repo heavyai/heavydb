@@ -587,11 +587,10 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   CHECK(executor) << executor_id_;
   CodeCacheKey key{cacheKey()};
   std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
-  auto& s_code_cache = executor->s_code_cache;
-  const auto compilation_context = s_code_cache.get(key);
+  const auto compilation_context = Executor::s_code_accessor.get(key);
   if (compilation_context) {
     reduction_code.func_ptr =
-        reinterpret_cast<ReductionCode::FuncPtr>(compilation_context->first->func());
+        reinterpret_cast<ReductionCode::FuncPtr>(compilation_context->get()->func());
     return reduction_code;
   }
   auto cgen_state_ = std::unique_ptr<CgenState>(new CgenState({}, false, executor.get()));
@@ -1240,7 +1239,6 @@ void ResultSetReductionJIT::finalizeReductionCode(
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
   auto executor = Executor::getExecutorFromMap(executor_id_);
   CHECK(executor) << executor_id_;
-  auto& s_code_cache = executor->s_code_cache;
 #ifdef NDEBUG
   LOG(IR) << "Reduction Loop:\n"
           << serialize_llvm_object(reduction_code.llvm_reduce_loop);
@@ -1251,7 +1249,6 @@ void ResultSetReductionJIT::finalizeReductionCode(
 #else
   LOG(IR) << serialize_llvm_object(reduction_code.module);
 #endif
-
   auto ee = CodeGenerator::generateNativeCPUCode(
       reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
   auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
@@ -1259,8 +1256,7 @@ void ResultSetReductionJIT::finalizeReductionCode(
   reduction_code.func_ptr =
       reinterpret_cast<ReductionCode::FuncPtr>(cpu_compilation_context->func());
   CHECK(reduction_code.llvm_reduce_loop->getParent() == reduction_code.module);
-  Executor::addCodeToCache(
-      key, cpu_compilation_context, reduction_code.module, s_code_cache);
+  Executor::s_code_accessor.put(key, std::move(cpu_compilation_context));
 }
 
 namespace {

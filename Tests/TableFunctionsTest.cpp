@@ -776,7 +776,7 @@ TEST_F(TableFunctions, TextEncodedNoneLiteralArgs) {
       }
     }
     // Following tests two text encoding none input, plus running on GPU + CPU
-    {
+    if (dt == ExecutorDeviceType::CPU) {
       const std::string test_string1{"theater"};
       const std::string test_string2{"theatre"};
       const std::string test_query(

@@ -44,6 +44,7 @@
 #include "QueryEngine/CartesianProduct.h"
 #include "QueryEngine/CgenState.h"
 #include "QueryEngine/CodeCache.h"
+#include "QueryEngine/CodeCacheAccessor.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/DateTimeUtils.h"
 #include "QueryEngine/Descriptors/QueryCompilationDescriptor.h"
@@ -355,14 +356,15 @@ class Executor {
            const std::string& debug_file);
 
   void clearCaches(bool runtime_only = false);
-  void reset(bool runtime_only = false);
 
-  static void resetAllExecutors(bool runtime_only = false) {
+  void reset(bool discard_runtime_modules_only = false);
+
+  static void resetAllExecutors(bool discard_runtime_modules_only = false) {
     mapd_unique_lock<mapd_shared_mutex> flush_lock(
         execute_mutex_);  // don't want native code to vanish while executing
     mapd_unique_lock<mapd_shared_mutex> lock(executors_cache_mutex_);
     for (auto& executor_item : Executor::executors_) {
-      executor_item.second->reset(runtime_only);
+      executor_item.second->reset(discard_runtime_modules_only);
     }
   }
 
@@ -795,12 +797,6 @@ class Executor {
                                                    const bool is_group_by,
                                                    const bool float_argument_input);
 
-  template <typename CC>
-  static void addCodeToCache(const CodeCacheKey&,
-                             std::shared_ptr<CC>,
-                             llvm::Module*,
-                             CodeCache<CC>&);
-
  private:
   TemporaryTable resultsUnion(SharedKernelContext& shared_context,
                               const RelAlgExecutionUnit& ra_exe_unit,
@@ -1104,18 +1100,15 @@ class Executor {
   PlanState* getPlanStatePtr() const { return plan_state_.get(); }
 
   llvm::LLVMContext& getContext() { return *context_.get(); }
-  void update_extension_modules(bool runtime_only = false);
+  void update_extension_modules(bool update_runtime_modules_only = false);
 
-  static void update_after_registration(bool runtime_only = false) {
+  static void update_after_registration(bool update_runtime_modules_only = false) {
     for (auto executor_item : Executor::executors_) {
-      executor_item.second->update_extension_modules(runtime_only);
+      executor_item.second->update_extension_modules(update_runtime_modules_only);
     }
   }
 
  private:
-  template <typename CC>
-  std::shared_ptr<CC> getCodeFromCache(const CodeCacheKey&, const CodeCache<CC>&);
-
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, CgenState::LiteralValues>& literals,
       const int device_id);
@@ -1145,6 +1138,8 @@ class Executor {
 
    private:
     Executor& executor_;
+    std::chrono::steady_clock::time_point lock_queue_clock_;
+    std::lock_guard<std::mutex> lock_;
     std::unique_ptr<CgenState> cgen_state_;
   };
 
@@ -1194,14 +1189,13 @@ class Executor {
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
- public:  // TODO: implement API for accessing these code caches
-  CodeCache<CpuCompilationContext> s_stubs_cache;
-  CodeCache<CpuCompilationContext> s_code_cache;
+ public:
+  static CodeCacheAccessor<CpuCompilationContext> s_stubs_accessor;
+  static CodeCacheAccessor<CpuCompilationContext> s_code_accessor;
+  static CodeCacheAccessor<CpuCompilationContext> cpu_code_accessor;
+  static CodeCacheAccessor<GpuCompilationContext> gpu_code_accessor;
 
  private:
-  CodeCache<CpuCompilationContext> cpu_code_cache_;
-  CodeCache<GpuCompilationContext> gpu_code_cache_;
-
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
   static const size_t code_cache_size{1000};
