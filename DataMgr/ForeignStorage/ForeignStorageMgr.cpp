@@ -18,12 +18,26 @@
 
 #include "AbstractFileStorageDataWrapper.h"
 #include "Catalog/Catalog.h"
+#include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "ForeignDataWrapperFactory.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
+#include "Shared/distributed.h"
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+
+namespace {
+void filter_metadata_by_leaf(ChunkMetadataVector& meta_vec, const ChunkKey& key_prefix) {
+  if (!foreign_storage::is_shardable_key(key_prefix)) {
+    return;
+  }
+  for (auto it = meta_vec.begin(); it != meta_vec.end();) {
+    it = foreign_storage::fragment_maps_to_leaf(it->first) ? std::next(it)
+                                                           : meta_vec.erase(it);
+  }
+}
+}  // namespace
 
 namespace foreign_storage {
 ForeignStorageMgr::ForeignStorageMgr() : AbstractBufferMgr(0), data_wrapper_map_({}) {}
@@ -216,12 +230,20 @@ void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
         "Query cannot be executed for foreign table because FSI is currently disabled."};
   }
   CHECK(is_table_key(key_prefix));
+
+  if (!is_table_enabled_on_node(key_prefix)) {
+    // If the table is not enabled for this node then the request should do nothing.
+    return;
+  }
+
   checkIfS3NeedsToBeEnabled(key_prefix);
   createDataWrapperIfNotExists(key_prefix);
+
   try {
     getDataWrapper(key_prefix)->populateChunkMetadata(chunk_metadata);
+    filter_metadata_by_leaf(chunk_metadata, key_prefix);
   } catch (...) {
-    clearDataWrapper(key_prefix);
+    eraseDataWrapper(key_prefix);
     throw;
   }
 }
@@ -243,7 +265,7 @@ std::string ForeignStorageMgr::getStringMgrType() {
   return ToString(FOREIGN_STORAGE_MGR);
 }
 
-bool ForeignStorageMgr::hasDataWrapperForChunk(const ChunkKey& chunk_key) {
+bool ForeignStorageMgr::hasDataWrapperForChunk(const ChunkKey& chunk_key) const {
   std::shared_lock data_wrapper_lock(data_wrapper_mutex_);
   CHECK(has_table_prefix(chunk_key));
   ChunkKey table_key{chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]};
@@ -251,7 +273,7 @@ bool ForeignStorageMgr::hasDataWrapperForChunk(const ChunkKey& chunk_key) {
 }
 
 std::shared_ptr<ForeignDataWrapper> ForeignStorageMgr::getDataWrapper(
-    const ChunkKey& chunk_key) {
+    const ChunkKey& chunk_key) const {
   std::shared_lock data_wrapper_lock(data_wrapper_mutex_);
   ChunkKey table_key{chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]};
   CHECK(data_wrapper_map_.find(table_key) != data_wrapper_map_.end());
@@ -296,11 +318,11 @@ void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   // Clear datawrapper unless table is non-append and evict is false
   if (evict_cached_entries ||
       !catalog->getForeignTable(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode()) {
-    clearDataWrapper(table_key);
+    eraseDataWrapper(table_key);
   }
 }
 
-void ForeignStorageMgr::clearDataWrapper(const ChunkKey& table_key) {
+void ForeignStorageMgr::eraseDataWrapper(const ChunkKey& table_key) {
   std::lock_guard data_wrapper_lock(data_wrapper_mutex_);
   // May not be created yet
   if (data_wrapper_map_.find(table_key) != data_wrapper_map_.end()) {
@@ -555,6 +577,8 @@ ForeignStorageMgr::getPrefetchSets(
       UNREACHABLE() << "Unknown parallelism level.";
     }
 
+    CHECK(!key_does_not_shard_to_leaf(optional_chunk_key));
+
     if (!contains_fragment_key(required_chunk_keys, optional_chunk_key)) {
       // Do not insert an optional key if it is already a required key.
       if (optional_chunk_key[CHUNK_KEY_FRAGMENT_IDX] ==
@@ -607,4 +631,19 @@ bool ForeignStorageMgr::hasMaxFetchSize() const {
   return false;
 }
 
+// Determine if a wrapper is enabled on the current distributed node.
+bool is_table_enabled_on_node(const ChunkKey& chunk_key) {
+  CHECK(is_table_key(chunk_key));
+
+  // Replicated tables, system tables, and non-distributed tables are on all nodes by
+  // default.  Leaf nodes are on, but will filter their results later by their node index.
+  if (!dist::is_distributed() || dist::is_leaf_node() ||
+      is_replicated_table_chunk_key(chunk_key) || is_system_table_chunk_key(chunk_key)) {
+    return true;
+  }
+
+  // If we aren't a leaf node then we are the aggregator, and the aggregator should not
+  // have sharded data.
+  return false;
+}
 }  // namespace foreign_storage

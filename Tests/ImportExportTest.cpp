@@ -970,9 +970,6 @@ class ImportAndSelectTest
     } else {
       UNREACHABLE();
     }
-    if (param_.import_type == "regex_parser") {
-      foreign_storage::RegexFileBufferParser::setSkipFirstLineForTesting(true);
-    }
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
   }
@@ -993,9 +990,6 @@ class ImportAndSelectTest
       g_enable_general_import_fsi = false;
     } else {
       UNREACHABLE();
-    }
-    if (param_.import_type == "regex_parser") {
-      foreign_storage::RegexFileBufferParser::setSkipFirstLineForTesting(false);
     }
   }
 
@@ -1180,6 +1174,7 @@ class ImportAndSelectTest
     if (import_type == "regex_parser") {
       options.emplace_back("source_type='regex_parsed_file'");
       options.emplace_back("line_regex='" + line_regex + "'");
+      options.emplace_back("header='true'");
     }
     if (import_type == "parquet") {
       options.emplace_back("source_type='parquet_file'");

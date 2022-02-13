@@ -18,8 +18,10 @@
 
 #include <map>
 
+#include "Catalog/CatalogFwd.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/ChunkMetadata.h"
+#include "Shared/distributed.h"
 
 namespace foreign_storage {
 void init_chunk_for_column(
@@ -69,4 +71,17 @@ auto partition_for_threads(const std::vector<T>& items, size_t max_threads) {
   return items_by_thread;
 }
 
+const foreign_storage::ForeignTable& get_foreign_table_for_key(const ChunkKey& key);
+
+bool is_system_table_chunk_key(const ChunkKey& chunk_key);
+
+bool is_replicated_table_chunk_key(const ChunkKey& chunk_key);
+
+bool is_append_table_chunk_key(const ChunkKey& chunk_key);
+
+bool is_shardable_key(const ChunkKey& key);
+
+bool fragment_maps_to_leaf(const ChunkKey& key);
+
+bool key_does_not_shard_to_leaf(const ChunkKey& key);
 }  // namespace foreign_storage

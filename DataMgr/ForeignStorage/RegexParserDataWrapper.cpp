@@ -94,5 +94,6 @@ const TextFileBufferParser& RegexParserDataWrapper::getFileBufferParser() const 
 const std::set<std::string_view> RegexParserDataWrapper::regex_table_options_{
     RegexFileBufferParser::LINE_REGEX_KEY,
     RegexFileBufferParser::LINE_START_REGEX_KEY,
-    RegexFileBufferParser::BUFFER_SIZE_KEY};
+    RegexFileBufferParser::BUFFER_SIZE_KEY,
+    RegexFileBufferParser::HEADER_KEY};
 }  // namespace foreign_storage

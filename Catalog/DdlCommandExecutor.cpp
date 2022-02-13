@@ -540,7 +540,11 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
       ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE" ||
       ddl_command_ == "REASSIGN_OWNED" || ddl_command_ == "CREATE_POLICY" ||
-      ddl_command_ == "DROP_POLICY") {
+      ddl_command_ == "DROP_POLICY" || ddl_command_ == "CREATE_SERVER" ||
+      ddl_command_ == "DROP_SERVER" || ddl_command_ == "CREATE_FOREIGN_TABLE" ||
+      ddl_command_ == "DROP_FOREIGN_TABLE" || ddl_command_ == "CREATE_USER_MAPPING" ||
+      ddl_command_ == "DROP_USER_MAPPING" || ddl_command_ == "ALTER_FOREIGN_TABLE" ||
+      ddl_command_ == "ALTER_SERVER" || ddl_command_ == "REFRESH_FOREIGN_TABLES") {
     // group user/role/db commands
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
@@ -1084,6 +1088,11 @@ void CreateForeignTableCommand::setTableDetails(
       it != foreign_table.options.end()) {
     foreign_table.maxChunkSize = std::stol(it->second);
   }
+
+  if (const auto it = foreign_table.options.find("PARTITIONS");
+      it != foreign_table.options.end()) {
+    foreign_table.partitions = it->second;
+  }
 }
 
 void CreateForeignTableCommand::setColumnDetails(std::list<ColumnDescriptor>& columns) {
@@ -1171,6 +1180,9 @@ ExecutionResult DropForeignTableCommand::execute() {
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, table_name);
   catalog.dropTable(td);
+
+  // TODO(Misiu): Implement per-table cache invalidation.
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 
   return ExecutionResult();
 }

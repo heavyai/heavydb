@@ -44,6 +44,7 @@ class PostEvictionRefreshException : public std::runtime_error {
 };
 
 namespace foreign_storage {
+bool is_append_table_chunk_key(const ChunkKey& chunk_key);
 
 class ChunkSizeValidator {
  public:
@@ -112,14 +113,14 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   std::string getStringMgrType() override;
   size_t getNumChunks() override;
   void removeTableRelatedDS(const int db_id, const int table_id) override;
-  bool hasDataWrapperForChunk(const ChunkKey& chunk_key);
+  bool hasDataWrapperForChunk(const ChunkKey& chunk_key) const;
   virtual bool createDataWrapperIfNotExists(const ChunkKey& chunk_key);
 
   // For testing, is datawrapper state recovered from disk
   bool isDatawrapperRestored(const ChunkKey& chunk_key);
   void setDataWrapper(const ChunkKey& table_key,
                       std::shared_ptr<MockForeignDataWrapper> data_wrapper);
-  std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key);
+  std::shared_ptr<ForeignDataWrapper> getDataWrapper(const ChunkKey& chunk_key) const;
 
   virtual void refreshTable(const ChunkKey& table_key, const bool evict_cached_entries);
 
@@ -130,9 +131,9 @@ class ForeignStorageMgr : public AbstractBufferMgr {
   virtual bool hasMaxFetchSize() const;
 
  protected:
+  virtual void eraseDataWrapper(const ChunkKey& table_key);
   void updateFragmenterMetadata(const ChunkToBufferMap&) const;
   void createDataWrapperUnlocked(int32_t db, int32_t tb);
-  void clearDataWrapper(const ChunkKey& table_key);
   bool fetchBufferIfTempBufferMapEntryExists(const ChunkKey& chunk_key,
                                              AbstractBuffer* destination_buffer,
                                              const size_t num_bytes);
@@ -174,4 +175,5 @@ std::vector<ChunkKey> get_column_key_vec(const ChunkKey& destination_chunk_key);
 std::set<ChunkKey> get_column_key_set(const ChunkKey& destination_chunk_key);
 size_t get_max_chunk_size(const ChunkKey& key);
 bool contains_fragment_key(const std::set<ChunkKey>& key_set, const ChunkKey& target_key);
+bool is_table_enabled_on_node(const ChunkKey& key);
 }  // namespace foreign_storage

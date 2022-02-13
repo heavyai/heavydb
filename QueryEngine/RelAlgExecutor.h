@@ -57,7 +57,9 @@ class RelAlgExecutor : private StorageIOFacility {
       , cat_(cat)
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {}
+      , queue_time_ms_(0) {
+    initializeParallelismHints();
+  }
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog& cat,
@@ -69,7 +71,9 @@ class RelAlgExecutor : private StorageIOFacility {
       , query_dag_(std::make_unique<RelAlgDagBuilder>(query_ra, cat_, nullptr))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {}
+      , queue_time_ms_(0) {
+    initializeParallelismHints();
+  }
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog& cat,
@@ -81,7 +85,9 @@ class RelAlgExecutor : private StorageIOFacility {
       , query_dag_(std::move(query_dag))
       , query_state_(std::move(query_state))
       , now_(0)
-      , queue_time_ms_(0) {}
+      , queue_time_ms_(0) {
+    initializeParallelismHints();
+  }
 
   size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
 
@@ -130,6 +136,8 @@ class RelAlgExecutor : private StorageIOFacility {
     CHECK(query_dag_);
     return query_dag_->getRootNode();
   }
+
+  void prepareForeignTables();
 
   std::shared_ptr<const RelAlgNode> getRootRelAlgNodeShPtr() const {
     CHECK(query_dag_);
@@ -182,7 +190,11 @@ class RelAlgExecutor : private StorageIOFacility {
     return RaExecutionSequence(root_node, executor);
   }
 
+  void prepareForeignTable();
+
  private:
+  void initializeParallelismHints();
+
   ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                             const ExecutionOptions& eo,
                                             const bool just_explain_plan,
@@ -397,6 +409,8 @@ class RelAlgExecutor : private StorageIOFacility {
   bool hasStepForUnion() const { return has_step_for_union_; }
 
   bool canUseResultsetCache(const ExecutionOptions& eo, RenderInfo* render_info) const;
+
+  void setupCaching(const RelAlgNode* ra);
 
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;

@@ -54,12 +54,12 @@ class RegexFileBufferParser : public TextFileBufferParser {
                      const ForeignTable* foreign_table) const override;
 
   // For testing purposes only
-  static void setSkipFirstLineForTesting(bool skip);
   static void setMaxBufferResize(size_t max_buffer_resize);
 
   inline static const std::string LINE_REGEX_KEY = "LINE_REGEX";
   inline static const std::string LINE_START_REGEX_KEY = "LINE_START_REGEX";
   inline static const std::string BUFFER_SIZE_KEY = "BUFFER_SIZE";
+  inline static const std::string HEADER_KEY = "HEADER";
 
  private:
   static size_t getMaxBufferResize();

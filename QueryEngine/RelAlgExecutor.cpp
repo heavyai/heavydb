@@ -16,6 +16,7 @@
 
 #include "RelAlgExecutor.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
+#include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
@@ -97,6 +98,13 @@ void set_parallelism_hints(const RelAlgNode& ra_node,
         Chunk_NS::Chunk chunk{col_desc};
         ChunkKey chunk_key = {
             catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
+
+        // Parallelism hints should not include fragments that are not mapped to the
+        // current node, otherwise we will try to prefetch them and run into trouble.
+        if (foreign_storage::key_does_not_shard_to_leaf(chunk_key)) {
+          continue;
+        }
+
         // do not include chunk hints that are in CPU memory
         if (!chunk.isChunkOnDevice(
                 &catalog.getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
@@ -115,46 +123,13 @@ void set_parallelism_hints(const RelAlgNode& ra_node,
   }
 }
 
-bool is_empty_table(Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
-  const auto& fragments = fragmenter->getFragmentsForQuery().fragments;
-  // The fragmenter always returns at least one fragment, even when the table is empty.
-  return (fragments.size() == 1 && fragments[0].getChunkMetadataMap().empty());
-}
-
 void prepare_string_dictionaries(const RelAlgNode& ra_node,
                                  const Catalog_Namespace::Catalog& catalog) {
-  for (const auto& physical_input : get_physical_inputs(&ra_node)) {
-    int table_id = physical_input.table_id;
+  for (const auto [col_id, table_id] : get_physical_inputs(&ra_node)) {
     auto table = catalog.getMetadataForTable(table_id, false);
     if (table && table->storageType == StorageType::FOREIGN_TABLE) {
-      int col_id = catalog.getColumnIdBySpi(table_id, physical_input.col_id);
-      const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
-      auto foreign_table = catalog.getForeignTable(table_id);
-      if (col_desc->columnType.is_dict_encoded_type()) {
-        CHECK(foreign_table->fragmenter != nullptr);
-        if (is_empty_table(foreign_table->fragmenter.get())) {
-          continue;
-        }
-        for (const auto& fragment :
-             foreign_table->fragmenter->getFragmentsForQuery().fragments) {
-          ChunkKey chunk_key = {
-              catalog.getDatabaseId(), table_id, col_id, fragment.fragmentId};
-          const ChunkMetadataMap& metadata_map = fragment.getChunkMetadataMap();
-          CHECK(metadata_map.find(col_id) != metadata_map.end());
-          if (foreign_storage::is_metadata_placeholder(*(metadata_map.at(col_id)))) {
-            // When this goes out of scope it will stay in CPU cache but become
-            // evictable
-            std::shared_ptr<Chunk_NS::Chunk> chunk =
-                Chunk_NS::Chunk::getChunk(col_desc,
-                                          &(catalog.getDataMgr()),
-                                          chunk_key,
-                                          Data_Namespace::CPU_LEVEL,
-                                          0,
-                                          0,
-                                          0);
-          }
-        }
-      }
+      auto spi_col_id = catalog.getColumnIdBySpi(table_id, col_id);
+      foreign_storage::populate_string_dictionary(table_id, spi_col_id, catalog);
     }
   }
 }
@@ -292,10 +267,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   auto lock = executor_->acquireExecuteMutex();
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
-  const auto phys_inputs = get_physical_inputs(cat_, &ra);
-  const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setCatalog(&cat_);
-  executor_->setupCaching(phys_inputs, phys_table_ids);
+  setupCaching(&ra);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_seq = RaExecutionSequence(&ra, executor_);
@@ -483,10 +455,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   prepare_foreign_table_for_execution(ra, cat_);
 
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
-  const auto phys_inputs = get_physical_inputs(cat_, &ra);
-  const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setCatalog(&cat_);
-  executor_->setupCaching(phys_inputs, phys_table_ids);
+  setupCaching(&ra);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_seq = RaExecutionSequence(&ra, executor_);
@@ -943,8 +912,6 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     return std::make_pair(co_hint_applied, eo_hint_applied);
   };
 
-  // Notify foreign tables to load prior to execution
-  prepare_foreign_table_for_execution(*body, cat_);
   auto hint_applied = handle_hint();
   setHasStepForUnion(seq.hasQueryStepForUnion());
 
@@ -4887,3 +4854,26 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
 }
 
 SpeculativeTopNBlacklist RelAlgExecutor::speculative_topn_blacklist_;
+
+void RelAlgExecutor::initializeParallelismHints() {
+  if (auto foreign_storage_mgr =
+          cat_.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr()) {
+    // Parallelism hints need to be reset to empty so that we don't accidentally re-use
+    // them.  This can cause attempts to fetch strings that do not shard to the correct
+    // node in distributed mode.
+    foreign_storage_mgr->setParallelismHints({});
+  }
+}
+
+void RelAlgExecutor::setupCaching(const RelAlgNode* ra) {
+  CHECK(executor_);
+  const auto phys_inputs = get_physical_inputs(cat_, ra);
+  const auto phys_table_ids = get_physical_table_inputs(ra);
+  executor_->setCatalog(&cat_);
+  executor_->setupCaching(phys_inputs, phys_table_ids);
+}
+
+void RelAlgExecutor::prepareForeignTables() {
+  const auto& ra = query_dag_->getRootNode();
+  prepare_foreign_table_for_execution(ra, cat_);
+}

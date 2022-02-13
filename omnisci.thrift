@@ -645,6 +645,11 @@ struct TQueryInfo {
   10: string exec_device_type;
 }
 
+struct TLeafInfo {
+  1: i32 leaf_id;
+  2: i32 num_leaves;
+}
+
 service OmniSci {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TOmniSciException e)
@@ -683,6 +688,7 @@ service OmniSci {
   void set_table_epochs(1: TSessionId session, 2: i32 db_id, 3: list<TTableEpochInfo> table_epochs)
   TSessionInfo get_session_info(1: TSessionId session) throws (1: TOmniSciException e)
   list<TQueryInfo> get_queries_info(1: TSessionId session) throws (1: TOmniSciException e)
+  void set_leaf_info(1: TSessionId session, 2: TLeafInfo leaf_info) throws (1: TOmniSciException e)
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query, 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TOmniSciException e)
   TDataFrame sql_execute_df(1: TSessionId session, 2: string query, 3: common.TDeviceType device_type, 4: i32 device_id = 0, 5: i32 first_n = -1, 6: TArrowTransport transport_method) throws (1: TOmniSciException e)

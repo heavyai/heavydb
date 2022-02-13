@@ -96,4 +96,42 @@ std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const ColumnDescriptor* 
   chunk_metadata->chunkStats.has_nulls = true;
   return chunk_metadata;
 }
+
+const foreign_storage::ForeignTable& get_foreign_table_for_key(const ChunkKey& key) {
+  auto [db_id, tb_id] = get_table_prefix(key);
+  auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id);
+  CHECK(catalog);
+  auto table = catalog->getForeignTable(tb_id);
+  CHECK(table);
+  return *table;
+}
+
+bool is_system_table_chunk_key(const ChunkKey& chunk_key) {
+  return get_foreign_table_for_key(chunk_key).is_system_table;
+}
+
+bool is_replicated_table_chunk_key(const ChunkKey& chunk_key) {
+  return table_is_replicated(&get_foreign_table_for_key(chunk_key));
+}
+
+bool is_append_table_chunk_key(const ChunkKey& chunk_key) {
+  return get_foreign_table_for_key(chunk_key).isAppendMode();
+}
+
+bool is_shardable_key(const ChunkKey& key) {
+  return (dist::is_distributed() && !dist::is_aggregator() &&
+          !is_replicated_table_chunk_key(key) && !is_system_table_chunk_key(key));
+}
+
+// If we want to change the way we shard foreign tables we can do it in this function.
+bool fragment_maps_to_leaf(const ChunkKey& key) {
+  CHECK(dist::is_distributed());
+  CHECK(g_distributed_num_leaves > 0);
+  CHECK(!dist::is_aggregator());
+  return (get_fragment(key) % g_distributed_num_leaves == g_distributed_leaf_idx);
+}
+
+bool key_does_not_shard_to_leaf(const ChunkKey& key) {
+  return (is_shardable_key(key) && !fragment_maps_to_leaf(key));
+}
 }  // namespace foreign_storage

@@ -294,6 +294,8 @@ class DBHandler : public OmniSciIf {
 
   void get_session_info(TSessionInfo& _return, const TSessionId& session) override;
 
+  void set_leaf_info(const TSessionId& session, const TLeafInfo& info) override;
+
   void sql_execute(ExecutionResult& _return,
                    const TSessionId& session,
                    const std::string& query,

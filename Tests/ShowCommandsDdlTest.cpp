@@ -37,7 +37,12 @@
 extern bool g_enable_fsi;
 extern bool g_enable_system_tables;
 
+std::string test_binary_file_path;
+std::string test_source_path;
 bool g_run_odbc{false};
+
+namespace bf = boost::filesystem;
+namespace po = boost::program_options;
 
 class ShowUserSessionsTest : public DBHandlerTestFixture {
  public:
@@ -1320,11 +1325,6 @@ class ShowCreateTableTest : public DBHandlerTestFixture {
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
     DBHandlerTestFixture::TearDown();
   }
-
-  std::string getTestFilePath() {
-    return boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.csv")
-        .string();
-  }
 };
 
 TEST_F(ShowCreateTableTest, Identity) {
@@ -1498,7 +1498,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
       "poly POLYGON, mpoly MULTIPOLYGON) "
       "SERVER omnisci_local_csv "
       "WITH (file_path = '" +
-      getTestFilePath() + "');");
+      test_source_path + "/example_1.csv" + "');");
   sqlAndCompareResult(
       "SHOW CREATE TABLE test_foreign_table;",
       {{"CREATE FOREIGN TABLE test_foreign_table (\n  b BOOLEAN,\n  bint BIGINT,\n  i "
@@ -1510,7 +1510,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
         "NONE,\n  mpoly GEOMETRY(MULTIPOLYGON) ENCODING NONE)"
         "\nSERVER omnisci_local_csv"
         "\nWITH (FILE_PATH='" +
-        getTestFilePath() +
+        test_source_path + "/example_1.csv" +
         "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
 }
 
@@ -1527,7 +1527,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
       "mpoly GEOMETRY(MULTIPOLYGON, 900913)) "
       "SERVER omnisci_local_csv "
       "WITH (file_path = '" +
-      getTestFilePath() + "');");
+      test_source_path + "/example_1.csv" + "');");
   sqlAndCompareResult(
       "SHOW CREATE TABLE test_foreign_table;",
       {{"CREATE FOREIGN TABLE test_foreign_table (\n  bint BIGINT ENCODING "
@@ -1541,7 +1541,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
         "4326) ENCODING NONE,\n  mpoly GEOMETRY(MULTIPOLYGON, 900913) ENCODING NONE)"
         "\nSERVER omnisci_local_csv"
         "\nWITH (FILE_PATH='" +
-        getTestFilePath() +
+        test_source_path + "/example_1.csv" +
         "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
 }
 
@@ -1556,7 +1556,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
   sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) "
       "SERVER omnisci_local_csv "
       "WITH (file_path = '" +
-      getTestFilePath() +
+      test_source_path + "/example_1.csv" +
       "', fragment_size = 50, refresh_update_type = 'append', refresh_timing_type = "
       "'scheduled', refresh_start_date_time = '" +
       start_date_time +
@@ -1570,7 +1570,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
                         "\nWITH (ARRAY_DELIMITER='_', ARRAY_MARKER='[]', "
                         "BUFFER_SIZE='100', DELIMITER='|', ESCAPE='\\', "
                         "FILE_PATH='" +
-                        getTestFilePath() +
+                        test_source_path + "/example_1.csv" +
                         "', FRAGMENT_SIZE='50', HEADER='false', LINE_DELIMITER='.', "
                         "LONLAT='false', NULLS='NIL', QUOTE='`', QUOTED='false', "
                         "REFRESH_INTERVAL='5H', "
@@ -1787,8 +1787,7 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
     sql("CREATE FOREIGN TABLE " + table_name +
         " (i INTEGER) SERVER omnisci_local_parquet WITH "
         "(file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.parquet").string() +
-        "');");
+        test_source_path + "/0.parquet" + "');");
   }
 
   uint64_t getWrapperSizeForTable(const std::string& table_name) {
@@ -1920,9 +1919,7 @@ TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
   sql("CREATE FOREIGN TABLE " + foreign_table1 +
       " (t TEXT, i INTEGER[]) SERVER omnisci_local_parquet WITH "
       "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/example_1.parquet")
-          .string() +
-      "');");
+      test_source_path + "/example_1.parquet" + "');");
   sql("SELECT * FROM " + foreign_table1 + ";");
   sqlAndCompareResult("SHOW DISK CACHE USAGE;",
                       {{foreign_table1,
@@ -2473,15 +2470,14 @@ TEST_F(ShowTableDetailsTest, NonExistentTable) {
 TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create temporary table test_temp_table (c1 int, c2 text);");
-  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
+  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" + test_source_path +
+      "/0.csv';");
   sql("create view test_view as select * from test_table_1;");
 
   if (!isDistributedMode()) {
     sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
-        "WITH "
-        "(file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+        "WITH (file_path = '" +
+        test_source_path + "/0.csv');");
   }
 
   TQueryResult result;
@@ -2517,7 +2513,7 @@ TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
   sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
       "WITH "
       "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+      test_source_path + "/0.csv');");
 
   queryAndAssertException("show table details test_foreign_table;",
                           "SHOW TABLE DETAILS is not supported for foreign "
@@ -2533,8 +2529,8 @@ TEST_F(ShowTableDetailsTest, TemporaryTableSpecified) {
 }
 
 TEST_F(ShowTableDetailsTest, ArrowFsiTableSpecified) {
-  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
+  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" + test_source_path +
+      "/0.csv';");
 
   queryAndAssertException("show table details test_arrow_table;",
                           "SHOW TABLE DETAILS is not supported for temporary "
@@ -3437,7 +3433,7 @@ TEST_F(StorageDetailsSystemTableTest, NonLocalTables) {
 
   sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER omnisci_local_csv WITH "
       "(file_path = '" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
+      test_source_path + "/0.csv');");
   sql("CREATE VIEW test_view AS SELECT * FROM test_foreign_table;");
   sqlAndCompareResult({});
 }
@@ -3544,7 +3540,8 @@ class GetTableDetailsTest : public DBHandlerTestFixture {
     sql("CREATE TABLE test_table_1 (i INTEGER);");
     sql("CREATE TEMPORARY TABLE test_table_2 (i INTEGER);");
     sql("CREATE FOREIGN TABLE test_table_3 (i INTEGER) SERVER omnisci_local_csv WITH "
-        "(file_path = '../../Tests/FsiDataFiles/1.csv');");
+        "(file_path = '" +
+        test_source_path + "/1.csv');");
     sql("CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;");
   }
 
@@ -3617,7 +3614,9 @@ TEST_F(GetTableDetailsTest, DefaultRefreshOptions) {
 TEST_F(GetTableDetailsTest, ScheduledAppendRefresh) {
   auto [start_date_time, start_date_time_str] = getHourFromNow();
   sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER omnisci_local_csv WITH "
-      "(file_path = '../../Tests/FsiDataFiles/1.csv', refresh_update_type = 'append', "
+      "(file_path = '" +
+      test_source_path +
+      "/1.csv', refresh_update_type = 'append', "
       "refresh_timing_type = 'scheduled', refresh_start_date_time = '" +
       start_date_time_str + "', refresh_interval = '5H');");
 
@@ -3655,19 +3654,15 @@ int main(int argc, char** argv) {
   g_enable_system_tables = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  DBHandlerTestFixture::initTestArgs(argc, argv);
+
+  test_binary_file_path = bf::canonical(argv[0]).parent_path().string();
+  test_source_path =
+      bf::canonical(test_binary_file_path + "/../../Tests/FsiDataFiles").string();
 
   po::options_description desc("Options");
   desc.add_options()("run-odbc-tests", "Run ODBC related tests.");
-
-  po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(),
-            vm);
-  po::notify(vm);
-
-  if (vm.count("run-odbc-tests")) {
-    g_run_odbc = true;
-  }
+  po::variables_map vm = DBHandlerTestFixture::initTestArgs(argc, argv, desc);
+  g_run_odbc = (vm.count("run-odbc-tests"));
 
   int err{0};
   try {

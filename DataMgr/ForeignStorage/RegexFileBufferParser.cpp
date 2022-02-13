@@ -85,7 +85,9 @@ std::string get_next_row(const char* curr,
       } else if (line_start_regex.has_value()) {
         // When a LINE_START_REGEX option is present, concatenate the following lines
         // until a line that starts with the specified regex is found.
-        CHECK(line_starts_with_regex(curr, 0, row_end - curr, line_start_regex.value()));
+        CHECK(line_starts_with_regex(curr, 0, row_end - curr, line_start_regex.value()))
+            << "'" << line_start_regex.value() << "' not found in: '"
+            << std::string{curr, row_end - curr + 1ULL} << "'";
         auto row_str = get_next_row(row_end + 1, buffer_end, line_delim, {});
         while (!line_starts_with_regex(
             row_str.c_str(), 0, row_str.length() - 1, line_start_regex.value())) {
@@ -149,6 +151,23 @@ bool regex_match_columns(const std::string& row_str,
     set_all_nulls = true;
   }
   return set_all_nulls;
+}
+
+std::optional<bool> validate_and_get_bool_value(const ForeignTable* foreign_table,
+                                                const std::string& option_name) {
+  if (auto it = foreign_table->options.find(option_name);
+      it != foreign_table->options.end()) {
+    if (boost::iequals(it->second, "TRUE")) {
+      return true;
+    } else if (boost::iequals(it->second, "FALSE")) {
+      return false;
+    } else {
+      throw std::runtime_error{"Invalid boolean value specified for \"" + option_name +
+                               "\" foreign table option. "
+                               "Value must be either 'true' or 'false'."};
+    }
+  }
+  return std::nullopt;
 }
 }  // namespace
 
@@ -311,11 +330,13 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
     const ForeignTable* foreign_table) const {
   import_export::CopyParams copy_params{};
   copy_params.plain_text = true;
-  if (skip_first_line_) {
-    // This branch should only be executed in tests
-    copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
-  } else {
-    copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
+  auto has_header = validate_and_get_bool_value(foreign_table, HEADER_KEY);
+  if (has_header.has_value()) {
+    if (has_header.value()) {
+      copy_params.has_header = import_export::ImportHeaderRow::kHasHeader;
+    } else {
+      copy_params.has_header = import_export::ImportHeaderRow::kNoHeader;
+    }
   }
   if (auto it = foreign_table->options.find(BUFFER_SIZE_KEY);
       it != foreign_table->options.end()) {
@@ -411,9 +432,5 @@ void RegexFileBufferParser::setMaxBufferResize(size_t max_buffer_resize) {
 
 size_t RegexFileBufferParser::getMaxBufferResize() {
   return max_buffer_resize_;
-}
-
-void RegexFileBufferParser::setSkipFirstLineForTesting(bool skip) {
-  skip_first_line_ = skip;
 }
 }  // namespace foreign_storage

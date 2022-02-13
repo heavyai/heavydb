@@ -385,6 +385,7 @@ class Executor {
 
   void clearCaches(bool runtime_only = false);
   void reset(bool runtime_only = false);
+  std::string dumpCache() const;
 
   static void clearExternalCaches(bool for_update,
                                   const TableDescriptor* td,
@@ -1438,6 +1439,12 @@ inline std::string toString(const Executor::ExtModuleKinds& kind) {
   }
   LOG(FATAL) << "Invalid LLVM module kind.";
   return "";
+}
+
+namespace foreign_storage {
+void populate_string_dictionary(const int32_t table_id,
+                                const int32_t col_id,
+                                const Catalog_Namespace::Catalog& cat);
 }
 
 #endif  // QUERYENGINE_EXECUTE_H

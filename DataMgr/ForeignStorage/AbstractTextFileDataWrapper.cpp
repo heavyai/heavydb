@@ -505,6 +505,13 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
   CHECK(catalog);
   auto cache = get_cache_if_enabled(catalog, disable_cache);
   if (cache) {
+    // This extra filter needs to be here because this wrapper is the only one that
+    // accesses the cache directly and it should not be inserting chunks which are not
+    // mapped to the current leaf (in distributed mode).
+    if (key_does_not_shard_to_leaf(chunk_key)) {
+      return;
+    }
+
     ChunkKey index_key = {chunk_key[CHUNK_KEY_DB_IDX],
                           chunk_key[CHUNK_KEY_TABLE_IDX],
                           chunk_key[CHUNK_KEY_COLUMN_IDX],

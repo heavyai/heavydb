@@ -108,6 +108,7 @@
 #include <arrow/ipc/api.h>
 
 #include "Shared/ArrowUtil.h"
+#include "Shared/distributed.h"
 #include "Shared/enable_assign_render_groups.h"
 
 #define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
@@ -947,6 +948,11 @@ void DBHandler::get_session_info(TSessionInfo& _return, const TSessionId& sessio
   _return.database = session_ptr->getCatalog().getCurrentDB().dbName;
   _return.start_time = session_ptr->get_start_time();
   _return.is_super = user_metadata.isSuper;
+}
+
+void DBHandler::set_leaf_info(const TSessionId& session, const TLeafInfo& info) {
+  g_distributed_leaf_idx = info.leaf_id;
+  g_distributed_num_leaves = info.num_leaves;
 }
 
 void DBHandler::value_to_thrift_column(const TargetValue& tv,

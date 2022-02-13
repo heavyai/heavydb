@@ -24,6 +24,7 @@
 #include <boost/algorithm/string/regex.hpp>
 #include <boost/format.hpp>
 #include <boost/optional.hpp>
+#include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 
 #include "Catalog/Catalog.h"
@@ -36,6 +37,7 @@ constexpr void* Null = nullptr;
 constexpr int64_t Null_i = NULL_INT;
 
 using NullableTargetValue = boost::variant<TargetValue, void*>;
+namespace po = boost::program_options;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -244,10 +246,10 @@ class AssertValueEqualsOrIsNullVisitor : public boost::static_visitor<> {
  */
 class DBHandlerTestFixture : public testing::Test {
  public:
-  static void initTestArgs(int argc, char** argv) {
-    namespace po = boost::program_options;
-
-    po::options_description desc("Options");
+  static po::variables_map initTestArgs(int argc,
+                                        char** argv,
+                                        po::options_description& desc) {
+    // Default options.  Addional options can be passed in as parameter.
     desc.add_options()("cluster",
                        po::value<std::string>(&cluster_config_file_path_),
                        "Path to data leaves list JSON file.");
@@ -256,8 +258,12 @@ class DBHandlerTestFixture : public testing::Test {
     po::store(
         po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
     po::notify(vm);
+    return vm;
+  }
 
-    use_disk_cache_ = (vm.count("use-disk-cache"));
+  static po::variables_map initTestArgs(int argc, char** argv) {
+    po::options_description desc("Options");
+    return initTestArgs(argc, argv, desc);
   }
 
   static void initTestArgs(const std::vector<LeafHostInfo>& string_servers,
@@ -473,6 +479,10 @@ class DBHandlerTestFixture : public testing::Test {
     if (isDistributedMode()) {
       // In distributed mode, exception messages may be wrapped within
       // another thrift exception. In this case, do a substring check.
+      if (e.error_msg.find(error_message) == std::string::npos) {
+        std::cerr << "recieved message: " << e.error_msg << "\n";
+        std::cerr << "expected message: " << error_message << "\n";
+      }
       ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
     } else {
       ASSERT_EQ(error_message, e.error_msg);

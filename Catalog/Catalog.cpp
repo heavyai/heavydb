@@ -60,6 +60,7 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+#include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
@@ -80,6 +81,8 @@
 #include "RWLocks.h"
 #include "SharedDictionaryValidator.h"
 
+#include "Shared/distributed.h"
+
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
 using Fragmenter_Namespace::SortedOrderFragmenter;
@@ -92,6 +95,8 @@ using std::vector;
 
 bool g_enable_fsi{false};
 bool g_enable_s3_fsi{false};
+int32_t g_distributed_leaf_idx{-1};
+int32_t g_distributed_num_leaves{0};
 extern bool g_cache_string_hash;
 extern bool g_enable_system_tables;
 
@@ -1657,7 +1662,8 @@ const int Catalog::getColumnIdBySpiUnlocked(const int table_id, const size_t spi
     spx = (spx - SPIMAP_MAGIC1) / SPIMAP_MAGIC2;
   }
 
-  CHECK(0 < spx && spx <= columnIdBySpi.size());
+  CHECK(0 < spx && spx <= columnIdBySpi.size())
+      << "spx = " << spx << ", size = " << columnIdBySpi.size();
   return columnIdBySpi[spx - 1] + phi;
 }
 

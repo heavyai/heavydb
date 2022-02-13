@@ -176,7 +176,6 @@ void register_signal_handlers() {
   register_signal_handler(SIGPIPE, SIG_IGN);
 #endif
 }
-
 }  // anonymous namespace
 
 void start_server(std::shared_ptr<TThreadedServer> server, const int port) {

@@ -36,6 +36,8 @@
 #include "Catalog/Catalog.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
+#include "DataMgr/ForeignStorage/FsiChunkUtils.h"
+#include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
 #include "OSDependent/omnisci_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/AggregateUtils.h"
@@ -176,6 +178,65 @@ extern std::unique_ptr<llvm::Module> read_llvm_module_from_ir_string(
     const std::string& udf_ir_string,
     llvm::LLVMContext& ctx,
     bool is_gpu = false);
+
+namespace {
+// This function is notably different from that in RelAlgExecutor because it already
+// expects SPI values and therefore needs to avoid that transformation.
+void prepare_string_dictionaries(const std::unordered_set<PhysicalInput>& phys_inputs,
+                                 const Catalog_Namespace::Catalog& catalog) {
+  for (const auto [col_id, table_id] : phys_inputs) {
+    foreign_storage::populate_string_dictionary(table_id, col_id, catalog);
+  }
+}
+
+bool is_empty_table(Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
+  const auto& fragments = fragmenter->getFragmentsForQuery().fragments;
+  // The fragmenter always returns at least one fragment, even when the table is empty.
+  return (fragments.size() == 1 && fragments[0].getChunkMetadataMap().empty());
+}
+}  // namespace
+
+namespace foreign_storage {
+// Foreign tables skip the population of dictionaries during metadata scan.  This function
+// will populate a dictionary's missing entries by fetching any unpopulated chunks.
+void populate_string_dictionary(const int32_t table_id,
+                                const int32_t col_id,
+                                const Catalog_Namespace::Catalog& catalog) {
+  if (const auto foreign_table = dynamic_cast<const ForeignTable*>(
+          catalog.getMetadataForTable(table_id, false))) {
+    const auto col_desc = catalog.getMetadataForColumn(table_id, col_id);
+    if (col_desc->columnType.is_dict_encoded_type()) {
+      auto& fragmenter = foreign_table->fragmenter;
+      CHECK(fragmenter != nullptr);
+      if (is_empty_table(fragmenter.get())) {
+        return;
+      }
+      for (const auto& frag : fragmenter->getFragmentsForQuery().fragments) {
+        ChunkKey chunk_key = {catalog.getDatabaseId(), table_id, col_id, frag.fragmentId};
+        // If the key is sharded across leaves, only populate fragments that are sharded
+        // to this leaf.
+        if (key_does_not_shard_to_leaf(chunk_key)) {
+          continue;
+        }
+
+        const ChunkMetadataMap& metadata_map = frag.getChunkMetadataMap();
+        CHECK(metadata_map.find(col_id) != metadata_map.end());
+        if (is_metadata_placeholder(*(metadata_map.at(col_id)))) {
+          // When this goes out of scope it will stay in CPU cache but become
+          // evictable
+          auto chunk = Chunk_NS::Chunk::getChunk(col_desc,
+                                                 &(catalog.getDataMgr()),
+                                                 chunk_key,
+                                                 Data_Namespace::CPU_LEVEL,
+                                                 0,
+                                                 0,
+                                                 0);
+        }
+      }
+    }
+  }
+}
+}  // namespace foreign_storage
 
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
@@ -4287,6 +4348,10 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
     const std::unordered_set<PhysicalInput>& phys_inputs) {
   StringDictionaryGenerations string_dictionary_generations;
   CHECK(catalog_);
+  // Foreign tables may have not populated dictionaries for encoded columns.  If this is
+  // the case then we need to populate them here to make sure that the generations are set
+  // correctly.
+  prepare_string_dictionaries(phys_inputs, *catalog_);
   for (const auto& phys_input : phys_inputs) {
     const auto cd =
         catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
@@ -4747,3 +4812,23 @@ std::unordered_map<std::string, size_t> Executor::cardinality_cache_;
 // which contains two recyclers related to query resultset
 ResultSetRecyclerHolder Executor::resultset_recycler_holder_;
 QueryPlanDAG Executor::latest_query_plan_extracted_{EMPTY_QUERY_PLAN};
+
+// Useful for debugging.
+std::string Executor::dumpCache() const {
+  std::stringstream ss;
+  ss << "colRangeCache: ";
+  for (auto& [phys_input, exp_range] : agg_col_range_cache_.asMap()) {
+    ss << "{" << phys_input.col_id << ", " << phys_input.table_id
+       << "} = " << exp_range.toString() << ", ";
+  }
+  ss << "stringDictGenerations: ";
+  for (auto& [key, val] : row_set_mem_owner_->getStringDictionaryGenerations().asMap()) {
+    ss << "{" << key << "} = " << val << ", ";
+  }
+  ss << "tableGenerations: ";
+  for (auto& [key, val] : table_generations_.asMap()) {
+    ss << "{" << key << "} = {" << val.tuple_count << ", " << val.start_rowid << "}, ";
+  }
+  ss << "\n";
+  return ss.str();
+}
