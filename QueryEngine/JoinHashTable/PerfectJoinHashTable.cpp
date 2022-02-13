@@ -167,26 +167,28 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(
         "Could not compute range for the expressions involved in the equijoin");
   }
+  const auto rhs_source_col_range =
+      ti.is_string() ? getExpressionRange(inner_col, query_infos, executor) : col_range;
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
-    const auto source_col_range = getExpressionRange(inner_col, query_infos, executor);
-    if (source_col_range.getType() == ExpressionRangeType::Invalid) {
+    if (rhs_source_col_range.getType() == ExpressionRangeType::Invalid) {
       throw HashJoinFail(
           "Could not compute range for the expressions involved in the equijoin");
     }
-    if (source_col_range.getIntMin() > source_col_range.getIntMax()) {
+    if (rhs_source_col_range.getIntMin() > rhs_source_col_range.getIntMax()) {
       // If the inner column expression range is empty, use the inner col range
-      CHECK_EQ(source_col_range.getIntMin(), int64_t(0));
-      CHECK_EQ(source_col_range.getIntMax(), int64_t(-1));
-      col_range = source_col_range;
+      CHECK_EQ(rhs_source_col_range.getIntMin(), int64_t(0));
+      CHECK_EQ(rhs_source_col_range.getIntMax(), int64_t(-1));
+      col_range = rhs_source_col_range;
     } else {
       col_range = ExpressionRange::makeIntRange(
-          std::min(source_col_range.getIntMin(), col_range.getIntMin()),
-          std::max(source_col_range.getIntMax(), col_range.getIntMax()),
+          std::min(rhs_source_col_range.getIntMin(), col_range.getIntMin()),
+          std::max(rhs_source_col_range.getIntMax(), col_range.getIntMax()),
           0,
-          source_col_range.hasNulls());
+          rhs_source_col_range.hasNulls());
     }
   }
+
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
   const auto max_hash_entry_count =
       memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
@@ -225,6 +227,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                join_type,
                                preferred_hash_type,
                                col_range,
+                               rhs_source_col_range,
                                column_cache,
                                executor,
                                device_count,
@@ -321,6 +324,29 @@ std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   return shards_for_device;
 }
 
+bool PerfectJoinHashTable::isOneToOneHashPossible(
+    const std::vector<ColumnsForDevice>& columns_per_device) const {
+  CHECK(!inner_outer_pairs_.empty());
+  const auto& rhs_col_ti = inner_outer_pairs_.front().first->get_type_info();
+  const auto max_unique_hash_input_entries =
+      get_bucketized_hash_entry_info(
+          rhs_col_ti, rhs_source_col_range_, qual_bin_oper_->get_optype() == kBW_EQ)
+          .getNormalizedHashEntryCount() +
+      rhs_source_col_range_.hasNulls();
+  for (const auto& device_columns : columns_per_device) {
+    CHECK(!device_columns.join_columns.empty());
+    const auto rhs_join_col_num_entries = device_columns.join_columns.front().num_elems;
+    if (rhs_join_col_num_entries > max_unique_hash_input_entries) {
+      VLOG(1) << "Skipping attempt to build perfect hash one-to-one table as number of "
+                 "rhs column entries ("
+              << rhs_join_col_num_entries << ") exceeds range for rhs join column ("
+              << max_unique_hash_input_entries << ").";
+      return false;
+    }
+  }
+  return true;
+}
+
 void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
@@ -346,32 +372,41 @@ void PerfectJoinHashTable::reify() {
   inner_outer_pairs_.push_back(cols);
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
 
+  std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>> fragments_per_device;
   std::vector<ColumnsForDevice> columns_per_device;
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
 
-  try {
-    auto data_mgr = executor_->getDataMgr();
-    if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      for (int device_id = 0; device_id < device_count_; ++device_id) {
-        dev_buff_owners.emplace_back(
-            std::make_unique<CudaAllocator>(data_mgr, device_id));
-      }
-    }
+  auto data_mgr = executor_->getDataMgr();
+  if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments =
-          shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-              : query_info.fragments;
-      const auto columns_for_device =
-          fetchColumnsForDevice(fragments,
-                                device_id,
-                                memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
-                                    ? dev_buff_owners[device_id].get()
-                                    : nullptr,
-                                *catalog);
-      columns_per_device.push_back(columns_for_device);
-      const auto chunk_key = genChunkKey(
-          fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
+    }
+  }
+
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
+    fragments_per_device.emplace_back(
+        shard_count
+            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
+            : query_info.fragments);
+    columns_per_device.emplace_back(
+        fetchColumnsForDevice(fragments_per_device.back(),
+                              device_id,
+                              memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                  ? dev_buff_owners[device_id].get()
+                                  : nullptr,
+                              *catalog));
+  }
+  // Now check if on the number of entries per column exceeds the rhs join hash table
+  // range, and skip trying to build a One-to-One hash table if so
+  if (!isOneToOneHashPossible(columns_per_device)) {
+    hash_type_ = HashType::OneToMany;
+  }
+
+  try {
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      const auto chunk_key = genChunkKey(fragments_per_device[device_id],
+                                         inner_outer_pairs_.front().second,
+                                         inner_outer_pairs_.front().first);
       auto table_keys = table_keys_;
       if (device_id == 0 && hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
           getInnerTableId() > 0) {
@@ -411,6 +446,9 @@ void PerfectJoinHashTable::reify() {
       init_thread.get();
     }
   } catch (const NeedsOneToManyHash& e) {
+    VLOG(1) << "RHS/Inner hash join values detected to not be unique, falling back to "
+               "One-to-Many hash layout.";
+    CHECK(hash_type_ == HashType::OneToOne);
     hash_type_ = HashType::OneToMany;
     freeHashBufferMemory();
     init_threads.clear();
@@ -419,12 +457,9 @@ void PerfectJoinHashTable::reify() {
     }
     CHECK_EQ(columns_per_device.size(), size_t(device_count_));
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments =
-          shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
-              : query_info.fragments;
-      const auto chunk_key = genChunkKey(
-          fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
+      const auto chunk_key = genChunkKey(fragments_per_device[device_id],
+                                         inner_outer_pairs_.front().second,
+                                         inner_outer_pairs_.front().first);
       init_threads.push_back(std::async(std::launch::async,
                                         &PerfectJoinHashTable::reifyForDevice,
                                         this,
