@@ -109,26 +109,28 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(
         "Could not compute range for the expressions involved in the equijoin");
   }
+  const auto rhs_source_col_range =
+      ti.is_string() ? getExpressionRange(inner_col, query_infos, executor) : col_range;
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
-    const auto source_col_range = getExpressionRange(inner_col, query_infos, executor);
-    if (source_col_range.getType() == ExpressionRangeType::Invalid) {
+    if (rhs_source_col_range.getType() == ExpressionRangeType::Invalid) {
       throw HashJoinFail(
           "Could not compute range for the expressions involved in the equijoin");
     }
-    if (source_col_range.getIntMin() > source_col_range.getIntMax()) {
+    if (rhs_source_col_range.getIntMin() > rhs_source_col_range.getIntMax()) {
       // If the inner column expression range is empty, use the inner col range
-      CHECK_EQ(source_col_range.getIntMin(), int64_t(0));
-      CHECK_EQ(source_col_range.getIntMax(), int64_t(-1));
-      col_range = source_col_range;
+      CHECK_EQ(rhs_source_col_range.getIntMin(), int64_t(0));
+      CHECK_EQ(rhs_source_col_range.getIntMax(), int64_t(-1));
+      col_range = rhs_source_col_range;
     } else {
       col_range = ExpressionRange::makeIntRange(
-          std::min(source_col_range.getIntMin(), col_range.getIntMin()),
-          std::max(source_col_range.getIntMax(), col_range.getIntMax()),
+          std::min(rhs_source_col_range.getIntMin(), col_range.getIntMin()),
+          std::max(rhs_source_col_range.getIntMax(), col_range.getIntMax()),
           0,
-          source_col_range.hasNulls());
+          rhs_source_col_range.hasNulls());
     }
   }
+
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
   const auto max_hash_entry_count =
       memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
@@ -179,6 +181,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                join_type,
                                preferred_hash_type,
                                col_range,
+                               rhs_source_col_range,
                                data_provider,
                                column_cache,
                                executor,
@@ -263,6 +266,29 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
   return *inner_str_dict_proxy != *outer_str_dict_proxy;
 }
 
+bool PerfectJoinHashTable::isOneToOneHashPossible(
+    const std::vector<ColumnsForDevice>& columns_per_device) const {
+  CHECK(!inner_outer_pairs_.empty());
+  const auto& rhs_col_ti = inner_outer_pairs_.front().first->get_type_info();
+  const auto max_unique_hash_input_entries =
+      get_bucketized_hash_entry_info(
+          rhs_col_ti, rhs_source_col_range_, qual_bin_oper_->get_optype() == kBW_EQ)
+          .getNormalizedHashEntryCount() +
+      rhs_source_col_range_.hasNulls();
+  for (const auto& device_columns : columns_per_device) {
+    CHECK(!device_columns.join_columns.empty());
+    const auto rhs_join_col_num_entries = device_columns.join_columns.front().num_elems;
+    if (rhs_join_col_num_entries > max_unique_hash_input_entries) {
+      VLOG(1) << "Skipping attempt to build perfect hash one-to-one table as number of "
+                 "rhs column entries ("
+              << rhs_join_col_num_entries << ") exceeds range for rhs join column ("
+              << max_unique_hash_input_entries << ").";
+      return false;
+    }
+  }
+  return true;
+}
+
 void PerfectJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count_);
@@ -282,27 +308,37 @@ void PerfectJoinHashTable::reify() {
   inner_outer_pairs_.push_back(cols);
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
 
+  std::vector<std::vector<FragmentInfo>> fragments_per_device;
   std::vector<ColumnsForDevice> columns_per_device;
   std::vector<std::unique_ptr<GpuAllocator>> dev_buff_owners;
-  try {
-    auto buffer_provider = executor_->getBufferProvider();
-    if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      for (int device_id = 0; device_id < device_count_; ++device_id) {
-        dev_buff_owners.emplace_back(
-            std::make_unique<GpuAllocator>(buffer_provider, device_id));
-      }
-    }
+  auto buffer_provider = executor_->getBufferProvider();
+  if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments = query_info.fragments;
-      const auto columns_for_device =
-          fetchColumnsForDevice(fragments,
-                                device_id,
-                                memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
-                                    ? dev_buff_owners[device_id].get()
-                                    : nullptr);
-      columns_per_device.push_back(columns_for_device);
-      const auto chunk_key = genChunkKey(
-          fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
+      dev_buff_owners.emplace_back(
+          std::make_unique<GpuAllocator>(buffer_provider, device_id));
+    }
+  }
+
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
+    fragments_per_device.emplace_back(query_info.fragments);
+    columns_per_device.emplace_back(
+        fetchColumnsForDevice(fragments_per_device.back(),
+                              device_id,
+                              memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                  ? dev_buff_owners[device_id].get()
+                                  : nullptr));
+  }
+  // Now check if on the number of entries per column exceeds the rhs join hash table
+  // range, and skip trying to build a One-to-One hash table if so
+  if (!isOneToOneHashPossible(columns_per_device)) {
+    hash_type_ = HashType::OneToMany;
+  }
+
+  try {
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      const auto chunk_key = genChunkKey(fragments_per_device[device_id],
+                                         inner_outer_pairs_.front().second,
+                                         inner_outer_pairs_.front().first);
       if (device_id == 0 && hashtable_cache_key_ == EMPTY_HASHED_PLAN_DAG_KEY &&
           getInnerTableId() > 0) {
         // sometimes we cannot retrieve query plan dag, so try to recycler cache
@@ -338,6 +374,9 @@ void PerfectJoinHashTable::reify() {
       init_thread.get();
     }
   } catch (const NeedsOneToManyHash& e) {
+    VLOG(1) << "RHS/Inner hash join values detected to not be unique, falling back to "
+               "One-to-Many hash layout.";
+    CHECK(hash_type_ == HashType::OneToOne);
     hash_type_ = HashType::OneToMany;
     freeHashBufferMemory();
     init_threads.clear();
@@ -346,9 +385,9 @@ void PerfectJoinHashTable::reify() {
     }
     CHECK_EQ(columns_per_device.size(), size_t(device_count_));
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      const auto fragments = query_info.fragments;
-      const auto chunk_key = genChunkKey(
-          fragments, inner_outer_pairs_.front().second, inner_outer_pairs_.front().first);
+      const auto chunk_key = genChunkKey(fragments_per_device[device_id],
+                                         inner_outer_pairs_.front().second,
+                                         inner_outer_pairs_.front().first);
       init_threads.push_back(std::async(std::launch::async,
                                         &PerfectJoinHashTable::reifyForDevice,
                                         this,
@@ -500,13 +539,13 @@ int PerfectJoinHashTable::initHashTableForDevice(
       std::unique_lock<std::mutex> str_proxy_translation_lock(
           str_proxy_translation_mutex_);
       // It's not ideal to populate the str dict proxy translation map at the per device
-      // init func, but currently with the hash table cache lookup (above) at this level,
-      // if we do the translation in PerfectJoinHashTable::reify, we don't know if the
-      // hash table is cached and so needlessly compute a potentially expensive proxy
-      // translation even if we have the hash table already cached. Todo(todd/yoonmin):
-      // Hoist cache lookup to PerfectJoinHashTable::reify and then move this proxy
-      // translation to that level as well, conditioned on the hash table not being
-      // cached.
+      // init func, but currently with the hash table cache lookup (above) at this
+      // level, if we do the translation in PerfectJoinHashTable::reify, we don't know
+      // if the hash table is cached and so needlessly compute a potentially expensive
+      // proxy translation even if we have the hash table already cached.
+      // Todo(todd/yoonmin): Hoist cache lookup to PerfectJoinHashTable::reify and then
+      // move this proxy translation to that level as well, conditioned on the hash
+      // table not being cached.
       if (needs_dict_translation_ && !str_proxy_translation_map_) {
         CHECK_GE(inner_outer_pairs_.size(), 1UL);
         str_proxy_translation_map_ = HashJoin::translateInnerToOuterStrDictProxies(
