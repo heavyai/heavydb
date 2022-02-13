@@ -1327,8 +1327,7 @@ const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
 const std::pair<std::vector<int32_t>, std::vector<std::string>>
 ResultSet::getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const {
   const auto col_type_info = getColType(col_idx);
-  CHECK(col_type_info.get_type() == kTEXT);
-  CHECK(col_type_info.get_compression() == kENCODING_DICT);
+  CHECK(col_type_info.is_dict_encoded_string());
   std::unordered_set<int32_t> unique_string_ids_set;
   const size_t num_entries = entryCount();
   std::vector<bool> targets_to_skip(colCount(), true);

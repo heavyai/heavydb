@@ -11249,6 +11249,10 @@ TEST_F(Select, ArrowOutput) {
     c_arrow("SELECT m,m_3,m_6,m_9 from test", dt);
     c_arrow("SELECT o, o1, o2 from test", dt);
     c_arrow("SELECT n from test", dt);
+    c_arrow(
+        "SELECT x, CASE WHEN x = 7 THEN 'foo' ELSE 'bar' END AS case_x FROM test "
+        "WHERE str IN ('bar', 'baz') ORDER BY x ASC;",
+        dt);
   }
 }
 
