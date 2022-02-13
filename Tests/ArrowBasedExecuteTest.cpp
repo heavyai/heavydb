@@ -4661,6 +4661,9 @@ TEST_F(Select, Case) {
       "((fixed_str IN (SELECT fixed_str FROM test GROUP BY fixed_str))) GROUP BY key0, "
       "key1 ORDER BY val desc;",
       dt);
+    c("SELECT CASE str WHEN 'foo' THEN 'truncated' ELSE 'bar' END trunc"
+      " FROM test ORDER BY trunc;",
+      dt);
   }
 }
 

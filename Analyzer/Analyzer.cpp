@@ -3616,7 +3616,7 @@ std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
   // types are either dictionary encoded or none-encoded
   // literals, or kept as none-encoded if all sub-expression
   // types are none-encoded (column or literal)
-  Analyzer::Expr* none_encoded_literal_expr = nullptr;
+  SQLTypeInfo none_encoded_literal_ti;
 
   for (auto& p : expr_pair_list) {
     auto e1 = p.first;
@@ -3629,7 +3629,10 @@ std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
     if (e2_ti.is_string() && !e2_ti.is_dict_encoded_string() &&
         !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(e2)) {
       CHECK(e2_ti.is_none_encoded_string());
-      none_encoded_literal_expr = e2.get();
+      none_encoded_literal_ti =
+          none_encoded_literal_ti.get_type() == kNULLT
+              ? e2_ti
+              : common_string_type(none_encoded_literal_ti, e2_ti, executor);
       continue;
     }
 
@@ -3662,7 +3665,10 @@ std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
     if (else_ti.is_string() && !else_ti.is_dict_encoded_string() &&
         !std::dynamic_pointer_cast<const Analyzer::ColumnVar>(else_e)) {
       CHECK(else_ti.is_none_encoded_string());
-      none_encoded_literal_expr = else_e.get();
+      none_encoded_literal_ti =
+          none_encoded_literal_ti.get_type() == kNULLT
+              ? else_ti
+              : common_string_type(none_encoded_literal_ti, else_ti, executor);
     } else {
       if (ti.get_type() == kNULLT) {
         ti = else_ti;
@@ -3683,18 +3689,17 @@ std::shared_ptr<Analyzer::Expr> normalizeCaseExpr(
           throw std::runtime_error(
               // types differing by encoding will be resolved at decode
               "Expressions in ELSE clause must be of the same or compatible types as "
-              "those "
-              "in the THEN clauses.");
+              "those in the THEN clauses.");
         }
       }
     }
   }
 
-  if (ti.get_type() == kNULLT && none_encoded_literal_expr) {
+  if (ti.get_type() == kNULLT && none_encoded_literal_ti.get_type() != kNULLT) {
     // If we haven't set a type so far it's because
     // every case sub-expression has a none-encoded
     // literal output. Make this our output type
-    ti = none_encoded_literal_expr->get_type_info();
+    ti = none_encoded_literal_ti;
   }
 
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
