@@ -3470,9 +3470,9 @@ SQLTypeInfo const& get_str_dict_cast_type(const SQLTypeInfo& lhs_type_info,
   return lhs_sdp->entryCount() >= rhs_sdp->entryCount() ? lhs_type_info : rhs_type_info;
 }
 
-SQLTypeInfo const& common_string_type(const SQLTypeInfo& lhs_type_info,
-                                      const SQLTypeInfo& rhs_type_info,
-                                      const Executor* executor) {
+SQLTypeInfo common_string_type(const SQLTypeInfo& lhs_type_info,
+                               const SQLTypeInfo& rhs_type_info,
+                               const Executor* executor) {
   CHECK(lhs_type_info.is_string());
   CHECK(rhs_type_info.is_string());
   const auto lhs_comp_param = lhs_type_info.get_comp_param();
@@ -3485,10 +3485,11 @@ SQLTypeInfo const& common_string_type(const SQLTypeInfo& lhs_type_info,
     return get_str_dict_cast_type(lhs_type_info, rhs_type_info, executor);
   }
   CHECK(lhs_type_info.is_none_encoded_string() || rhs_type_info.is_none_encoded_string());
-  if (lhs_type_info.is_none_encoded_string()) {
-    return lhs_type_info;
-  }
-  return rhs_type_info;
+  SQLTypeInfo ret_ti =
+      lhs_type_info.is_none_encoded_string() ? lhs_type_info : rhs_type_info;
+  ret_ti.set_dimension(
+      std::max(lhs_type_info.get_dimension(), rhs_type_info.get_dimension()));
+  return ret_ti;
 }
 
 std::shared_ptr<Analyzer::Expr> normalizeOperExpr(
