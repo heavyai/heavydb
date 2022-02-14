@@ -117,8 +117,11 @@ namespace {
   }
 
 bool is_odbc(const std::string& wrapper_type) {
-  return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), wrapper_type) !=
-         odbc_wrappers.end();
+  // TODO(andrew) : remove snowflake clause once it's been properly added to all odbc
+  // tests
+  return (std::find(odbc_wrappers.begin(), odbc_wrappers.end(), wrapper_type) !=
+              odbc_wrappers.end() ||
+          wrapper_type == "snowflake");
 }
 
 bool is_regex(const std::string& wrapper_type) {
@@ -384,7 +387,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
     return credential_string;
   }
 
-  static void createODBCSourceTable(const std::string table_name,
+  static void createODBCSourceTable(const std::string& table_name,
                                     const std::string& table_schema,
                                     const std::string& src_file,
                                     const std::string& data_wrapper_type,
