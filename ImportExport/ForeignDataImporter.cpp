@@ -25,10 +25,11 @@
 #include "Shared/misc.h"
 #include "UserMapping.h"
 
+extern bool g_enable_legacy_delimited_import;
 #ifdef ENABLE_IMPORT_PARQUET
-extern bool g_enable_parquet_import_fsi;
+extern bool g_enable_legacy_parquet_import;
 #endif
-extern bool g_enable_general_import_fsi;
+extern bool g_enable_fsi_regex_import;
 
 namespace {
 
@@ -465,16 +466,7 @@ ImportStatus ForeignDataImporter::importParquet(
 
 ImportStatus ForeignDataImporter::import(
     const Catalog_Namespace::SessionInfo* session_info) {
-  if (g_enable_general_import_fsi) {
-    return importGeneral(session_info);
-#ifdef ENABLE_IMPORT_PARQUET
-  } else if (g_enable_parquet_import_fsi) {
-    return importParquet(session_info);
-#endif
-  } else {
-    UNREACHABLE();
-  }
-  return {};
+  return importGeneral(session_info);
 }
 
 }  // namespace import_export

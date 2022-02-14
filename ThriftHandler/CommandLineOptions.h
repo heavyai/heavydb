@@ -203,10 +203,11 @@ extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+extern bool g_enable_legacy_delimited_import;
 #ifdef ENABLE_IMPORT_PARQUET
-extern bool g_enable_parquet_import_fsi;
+extern bool g_enable_legacy_parquet_import;
 #endif
-extern bool g_enable_general_import_fsi;
+extern bool g_enable_fsi_regex_import;
 extern bool g_enable_add_metadata_columns;
 extern bool g_enable_interop;
 extern bool g_enable_union;

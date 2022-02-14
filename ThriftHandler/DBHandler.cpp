@@ -22,7 +22,6 @@
  */
 
 #include "DBHandler.h"
-#include "DistributedForeignDataImporter.h"
 #include "DistributedLoader.h"
 #include "TokenCompletionHints.h"
 

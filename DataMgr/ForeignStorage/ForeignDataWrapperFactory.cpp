@@ -171,6 +171,24 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
   CHECK(server);
   foreign_table->foreign_server = server;
 
+  // populate options for regex filtering of file-paths in supported data types
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile ||
+      copy_params.source_type == import_export::SourceType::kDelimitedFile ||
+      copy_params.source_type == import_export::SourceType::kParquetFile) {
+    if (copy_params.regex_path_filter.has_value()) {
+      foreign_table->options[AbstractFileStorageDataWrapper::REGEX_PATH_FILTER_KEY] =
+          copy_params.regex_path_filter.value();
+    }
+    if (copy_params.file_sort_order_by.has_value()) {
+      foreign_table->options[AbstractFileStorageDataWrapper::FILE_SORT_ORDER_BY_KEY] =
+          copy_params.file_sort_order_by.value();
+    }
+    if (copy_params.file_sort_regex.has_value()) {
+      foreign_table->options[AbstractFileStorageDataWrapper::FILE_SORT_REGEX_KEY] =
+          copy_params.file_sort_regex.value();
+    }
+  }
+
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
     CHECK(!copy_params.line_regex.empty());
     foreign_table->options[RegexFileBufferParser::LINE_REGEX_KEY] =

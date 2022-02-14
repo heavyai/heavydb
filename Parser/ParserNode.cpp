@@ -82,11 +82,11 @@ bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_fsi;
 
+bool g_enable_legacy_delimited_import{true};
 #ifdef ENABLE_IMPORT_PARQUET
-bool g_enable_parquet_import_fsi{false};
+bool g_enable_legacy_parquet_import{false};
 #endif
-
-bool g_enable_general_import_fsi{false};
+bool g_enable_fsi_regex_import{true};
 
 bool g_enable_add_metadata_columns{false};
 
@@ -5275,19 +5275,9 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              const std::string& copy_from_source,
                              const import_export::CopyParams& copy_params)
       -> std::unique_ptr<import_export::AbstractImporter> {
-    // NOTE: if both g_enable_general_import_fsi and g_enable_parquet_import_fsi
-    // are enabled, the first takes precedence
-    if (copy_params.source_type == import_export::SourceType::kParquetFile ||
-        copy_params.source_type == import_export::SourceType::kDelimitedFile ||
-        copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
-      if (g_enable_general_import_fsi) {
-        return std::make_unique<import_export::ForeignDataImporter>(
-            copy_from_source, copy_params, td);
-      }
-    }
     if (copy_params.source_type == import_export::SourceType::kParquetFile) {
 #ifdef ENABLE_IMPORT_PARQUET
-      if (g_enable_parquet_import_fsi) {
+      if (!g_enable_legacy_parquet_import) {
         return std::make_unique<import_export::ForeignDataImporter>(
             copy_from_source, copy_params, td);
       }
@@ -5295,6 +5285,23 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("Parquet not supported!");
 #endif
     }
+
+    if (copy_params.source_type == import_export::SourceType::kDelimitedFile &&
+        !g_enable_legacy_delimited_import) {
+      return std::make_unique<import_export::ForeignDataImporter>(
+          copy_from_source, copy_params, td);
+    }
+
+    if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+      if (g_enable_fsi_regex_import) {
+        return std::make_unique<import_export::ForeignDataImporter>(
+            copy_from_source, copy_params, td);
+      } else {
+        throw std::runtime_error(
+            "Regex parsed import only supported using 'fsi-regex-import' flag");
+      }
+    }
+
     return std::make_unique<import_export::Importer>(
         catalog, td, copy_from_source, copy_params);
   };

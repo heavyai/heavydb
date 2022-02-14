@@ -442,18 +442,23 @@ void CommandLineOptions::fillOptions() {
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
 
-  help_desc.add_options()("enable-general-import-fsi",
-                          po::value<bool>(&g_enable_general_import_fsi)
-                              ->default_value(g_enable_general_import_fsi)
+  help_desc.add_options()("enable-legacy-delimited-import",
+                          po::value<bool>(&g_enable_legacy_delimited_import)
+                              ->default_value(g_enable_legacy_delimited_import)
                               ->implicit_value(true),
-                          "Enable foreign storage interface based import.");
+                          "Use legacy importer for delimited sources.");
 #ifdef ENABLE_IMPORT_PARQUET
-  help_desc.add_options()("enable-parquet-import-fsi",
-                          po::value<bool>(&g_enable_parquet_import_fsi)
-                              ->default_value(g_enable_parquet_import_fsi)
+  help_desc.add_options()("enable-legacy-parquet-import",
+                          po::value<bool>(&g_enable_legacy_parquet_import)
+                              ->default_value(g_enable_legacy_parquet_import)
                               ->implicit_value(true),
-                          "Enable foreign storage interface based parquet import.");
+                          "Use legacy importer for parquet sources.");
 #endif
+  help_desc.add_options()("enable-fsi-regex-import",
+                          po::value<bool>(&g_enable_fsi_regex_import)
+                              ->default_value(g_enable_fsi_regex_import)
+                              ->implicit_value(true),
+                          "Use FSI importer for regex parsed sources.");
 
   help_desc.add_options()("enable-add-metadata-columns",
                           po::value<bool>(&g_enable_add_metadata_columns)
@@ -1091,6 +1096,10 @@ void CommandLineOptions::validate() {
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
   LOG(INFO) << " Maximum number of sessions " << system_parameters.num_sessions;
 
+  LOG(INFO) << "Legacy delimited import is set to " << g_enable_legacy_delimited_import;
+  LOG(INFO) << "Legacy parquet import is set to " << g_enable_legacy_parquet_import;
+  LOG(INFO) << "FSI regex parsed import is set to " << g_enable_fsi_regex_import;
+
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
   LOG(INFO) << "Allowed export paths is set to " << allowed_export_paths;
   ddl_utils::FilePathWhitelist::initialize(
@@ -1102,15 +1111,14 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
   g_enable_s3_fsi = false;
 
-  if (g_enable_general_import_fsi) {
-    g_enable_fsi = true;  // a requirement for general FSI import is for FSI to be enabled
-  }
-
+  if (!g_enable_legacy_delimited_import ||
 #ifdef ENABLE_IMPORT_PARQUET
-  if (g_enable_parquet_import_fsi) {
-    g_enable_fsi = true;  // a requirement for FSI parquet import is for FSI to be enabled
-  }
+      !g_enable_legacy_parquet_import ||
 #endif
+      g_enable_fsi_regex_import) {
+    g_enable_fsi =
+        true;  // a requirement for FSI import code-paths is for FSI to be enabled
+  }
 
   if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {
