@@ -1097,7 +1097,9 @@ void CommandLineOptions::validate() {
   LOG(INFO) << " Maximum number of sessions " << system_parameters.num_sessions;
 
   LOG(INFO) << "Legacy delimited import is set to " << g_enable_legacy_delimited_import;
+#ifdef ENABLE_IMPORT_PARQUET
   LOG(INFO) << "Legacy parquet import is set to " << g_enable_legacy_parquet_import;
+#endif
   LOG(INFO) << "FSI regex parsed import is set to " << g_enable_fsi_regex_import;
 
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
