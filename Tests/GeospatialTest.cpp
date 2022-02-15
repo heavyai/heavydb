@@ -993,6 +993,12 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     EXPECT_ANY_THROW(run_multiple_agg("SELECT p FROM geospatial_test ORDER BY p;", dt));
     EXPECT_ANY_THROW(run_multiple_agg(
         "SELECT poly, l, id FROM geospatial_test ORDER BY id, poly;", dt));
+
+    // geo operator with non-geo column
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT ST_OVERLAPS(l, id) FROM geospatial_test", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("SELECT ST_OVERLAPS(id, l) FROM geospatial_test", dt));
   }
 }
 

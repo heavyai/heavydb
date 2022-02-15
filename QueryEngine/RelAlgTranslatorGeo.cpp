@@ -72,7 +72,12 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
           "Geospatial columns not yet supported in this temporary table context.");
     }
   }
-  CHECK(IS_GEO(ti.get_type()));
+
+  if (!IS_GEO(ti.get_type())) {
+    throw QueryNotSupported(
+        "Geospatial expression and operator require geospatial column as their input "
+        "argument(s)");
+  }
 
   // Return geo column reference. The geo column may be expanded if required for extension
   // function arguments. Otherwise, the geo column reference will be translated into
