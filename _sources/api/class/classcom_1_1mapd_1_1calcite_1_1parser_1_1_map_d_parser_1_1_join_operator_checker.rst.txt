@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDParser::JoinOperatorChecker
+=================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDParser::JoinOperatorChecker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class bench_system_tables::OmniSciCon
+=====================================
+
+.. doxygenclass:: bench_system_tables::OmniSciCon
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

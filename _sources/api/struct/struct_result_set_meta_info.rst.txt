@@ -1,0 +1,9 @@
+Struct ResultSetMetaInfo
+========================
+
+.. doxygenstruct:: ResultSetMetaInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
