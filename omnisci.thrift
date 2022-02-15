@@ -720,7 +720,7 @@ service OmniSci {
   void load_table_binary_arrow(1: TSessionId session, 2: string table_name, 3: binary arrow_stream, 4: bool use_column_names = false) throws (1: TOmniSciException e)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows, 4: list<string> column_names = {}) throws (1: TOmniSciException e)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TOmniSciException e)
-  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TSourceType file_type=TSourceType.DELIMITED_FILE, 5: TCreateParams create_params) throws (1: TOmniSciException e)
+  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TCreateParams create_params) throws (1: TOmniSciException e)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TOmniSciException e)
   void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc, 6: TCreateParams create_params) throws (1: TOmniSciException e)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TOmniSciException e)

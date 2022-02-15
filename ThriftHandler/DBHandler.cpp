@@ -4930,7 +4930,6 @@ void DBHandler::check_geospatial_files(const boost::filesystem::path file_path,
 void DBHandler::create_table(const TSessionId& session,
                              const std::string& table_name,
                              const TRowDescriptor& rd,
-                             const TSourceType::type source_type,
                              const TCreateParams& create_params) {
   // @TODO(se) remove file_type which is unused
   auto stdlog = STDLOG("table_name", table_name);
@@ -5422,7 +5421,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
       const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
       if (!td) {
         try {
-          create_table(session, this_table_name, rd, cp_copy.source_type, create_params);
+          create_table(session, this_table_name, rd, create_params);
         } catch (const std::exception& e) {
           // capture the error and abort this layer
           caught_exception_messages.emplace_back("Failed to create table for Layer '" +

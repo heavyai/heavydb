@@ -765,11 +765,8 @@ TEST_F(ImportGeoTableTest, ImportGeoTableExplicit) {
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
                                 getPolyColumnType(Geospatial::kGeoColumnName)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TSourceType::type::GEO_FILE,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
                                             getGeoFileName(),
@@ -788,11 +785,8 @@ TEST_F(ImportGeoTableTest, ImportGeoTableOverride) {
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::INT),
                                 getPolyColumnType(Geospatial::kGeoColumnName)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TSourceType::type::GEO_FILE,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
                                             getGeoFileName(),
@@ -813,11 +807,8 @@ TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
   TRowDescriptor row_descriptor{
       getPolyColumnType("trip"),
       getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TSourceType::type::GEO_FILE,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
@@ -838,11 +829,8 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
   TRowDescriptor row_descriptor{
       getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT),
       getPolyColumnType("trip")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TSourceType::type::GEO_FILE,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
@@ -861,11 +849,8 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailNoGeoColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TSourceType::type::GEO_FILE,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
@@ -886,11 +871,8 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
                                 getPolyColumnType("geo1"),
                                 getPolyColumnType("geo2")};
-  EXPECT_NO_THROW(handler->create_table(session,
-                                        "import_geo_table_test",
-                                        row_descriptor,
-                                        TSourceType::type::GEO_FILE,
-                                        getCreateParams()));
+  EXPECT_NO_THROW(handler->create_table(
+      session, "import_geo_table_test", row_descriptor, getCreateParams()));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
