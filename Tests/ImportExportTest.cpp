@@ -1407,8 +1407,8 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
-    GTEST_SKIP()
-        << "only CSV & regex_parser currently supported for error handling tests";
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
   }
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
@@ -1451,8 +1451,8 @@ TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
-    GTEST_SKIP()
-        << "only CSV & regex_parser currently supported for error handling tests";
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
   }
   auto query = createTableCopyFromAndSelect(
       "index INT, b BOOLEAN[], t TINYINT[], s SMALLINT[], i INTEGER[], bi BIGINT[] NOT "
@@ -1492,8 +1492,8 @@ TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
-    GTEST_SKIP()
-        << "only CSV & regex_parser currently supported for error handling tests";
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
   }
   auto query = createTableCopyFromAndSelect(
       "index INT, b BOOLEAN[2], t TINYINT[2], s SMALLINT[2], i INTEGER[2], bi BIGINT[2] "
@@ -1530,8 +1530,8 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
-    GTEST_SKIP()
-        << "only CSV & regex_parser currently supported for error handling tests";
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
   }
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
@@ -1561,9 +1561,10 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
-    GTEST_SKIP()
-        << "only CSV & regex_parser currently supported for error handling tests";
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
   }
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
@@ -1594,9 +1595,10 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
   }
-  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser")) {
-    GTEST_SKIP()
-        << "only CSV & regex_parser currently supported for error handling tests";
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
   }
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
