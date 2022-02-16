@@ -44,9 +44,9 @@
 #include "DataMgr/ForeignStorage/PassThroughBuffer.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Geospatial/ColumnNames.h"
 #include "Geospatial/Compression.h"
 #include "Geospatial/GDAL.h"
-#include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
@@ -4286,12 +4286,9 @@ void DBHandler::detect_column_types(TDetectResult& _return,
       }
     } else if (copy_params.source_type == import_export::SourceType::kGeoFile ||
                copy_params.source_type == import_export::SourceType::kRasterFile) {
-      // @TODO simon.eves get this from somewhere!
-      const std::string geoColumnName(OMNISCI_GEO_PREFIX);
-
       check_geospatial_files(file_path, copy_params);
       std::list<ColumnDescriptor> cds = import_export::Importer::gdalToColumnDescriptors(
-          file_path.string(), is_raster, geoColumnName, copy_params);
+          file_path.string(), is_raster, Geospatial::kGeoColumnName, copy_params);
       for (auto cd : cds) {
         if (copy_params.sanitize_column_names) {
           cd.columnName = ImportHelpers::sanitize_name(cd.columnName);
@@ -4303,7 +4300,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         std::map<std::string, std::vector<std::string>> sample_data;
         import_export::Importer::readMetadataSampleGDAL(
             file_path.string(),
-            geoColumnName,
+            Geospatial::kGeoColumnName,
             sample_data,
             import_export::Detector::kDefaultSampleRowsCount,
             copy_params);
@@ -5547,8 +5544,10 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
         TTypeInfo eti = cd_col_type.col_type;  // expecting
         // check for name match
         if (gname != ename) {
-          if (TTypeInfo_IsGeo(eti.type) && ename == LEGACY_GEO_PREFIX &&
-              gname == OMNISCI_GEO_PREFIX) {
+          if (TTypeInfo_IsGeo(eti.type) &&
+              (ename == Geospatial::kLegacyGeoColumnName1 ||
+               ename == Geospatial::kLegacyGeoColumnName2) &&
+              gname == Geospatial::kGeoColumnName) {
             // rename incoming geo column to match existing legacy default geo column
             rd[rd_index].col_name = gname;
             LOG(INFO)

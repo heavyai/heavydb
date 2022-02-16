@@ -318,7 +318,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
                                         "ST_Union"sv,
                                         "ST_Buffer"sv)) {
         // TODO: the design of geo operators currently doesn't allow input srid overrides.
-        // For example, in case of ST_Area(ST_Transform(ST_Buffer(omnisci_geo,0), 900913))
+        // For example, in case of ST_Area(ST_Transform(ST_Buffer(geo_column,0), 900913))
         // we can ask geos runtime to transform ST_Buffer's output from 4326 to 900913,
         // however, ST_Area geo operator would still rely on the first arg's typeinfo
         // to codegen srid arg values in the ST_Area_ extension function call. And it will

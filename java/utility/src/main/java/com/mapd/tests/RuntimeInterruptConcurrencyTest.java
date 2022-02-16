@@ -102,7 +102,7 @@ public class RuntimeInterruptConcurrencyTest {
       dba.runSql("CREATE TABLE " + large_table + "(x int not null);");
       dba.runSql("CREATE TABLE " + small_table + "(x int not null);");
       dba.runSql("CREATE TABLE " + geo_table
-              + "(trip DOUBLE, omnisci_geo GEOMETRY(POINT, 4326) ENCODING NONE);");
+              + "(trip DOUBLE, pt GEOMETRY(POINT, 4326) ENCODING NONE);");
 
       File large_data = new File(large_table_path.toString());
       try (BufferedWriter writer = new BufferedWriter(new FileWriter(large_data))) {

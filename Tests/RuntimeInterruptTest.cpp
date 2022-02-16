@@ -23,6 +23,7 @@
 #include <stdexcept>
 
 #include "Catalog/Catalog.h"
+#include "Geospatial/ColumnNames.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/ErrorHandling.h"
@@ -114,9 +115,9 @@ int create_and_populate_table() {
     run_ddl_statement("CREATE TABLE t_small (x int not null);");
     const char* create_table_geo = "CREATE TABLE t_geo (p1 POINT);";
     run_ddl_statement(create_table_geo);
-    run_ddl_statement(
-        "CREATE TABLE t_gdal (trip DOUBLE, omnisci_geo GEOMETRY(POINT, 4326) ENCODING "
-        "NONE);");
+    run_ddl_statement("CREATE TABLE t_gdal (trip DOUBLE, " + Geospatial::kGeoColumnName +
+                      " GEOMETRY(POINT, 4326) ENCODING "
+                      "NONE);");
 
     // write a temporary datafile used in the test
     // because "INSERT INTO ..." stmt for this takes too much time

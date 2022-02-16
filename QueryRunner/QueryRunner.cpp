@@ -20,7 +20,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
 #include "DistributedLoader.h"
-#include "Geospatial/Transforms.h"
+#include "Geospatial/ColumnNames.h"
 #include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
 #include "Parser/ParserWrapper.h"
@@ -1167,7 +1167,6 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   static constexpr bool kIsGeoRaster{false};
 
   CHECK(session_info_);
-  const std::string geo_column_name(OMNISCI_GEO_PREFIX);
 
   CopyParams copy_params;
   copy_params.source_type = import_export::SourceType::kGeoFile;
@@ -1184,7 +1183,7 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   std::map<std::string, std::string> colname_to_src;
   auto& cat = session_info_->getCatalog();
   auto cds = Importer::gdalToColumnDescriptors(
-      file_path, kIsGeoRaster, geo_column_name, copy_params);
+      file_path, kIsGeoRaster, Geospatial::kGeoColumnName, copy_params);
 
   for (auto& cd : cds) {
     const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);

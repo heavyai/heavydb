@@ -26,6 +26,7 @@
 #include "DataMgr/OmniSciAwsSdk.h"
 #include "Shared/ThriftTypesConvert.h"
 #endif  // HAVE_AWS_S3
+#include "Geospatial/ColumnNames.h"
 #include "Shared/ArrowUtil.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
@@ -763,7 +764,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableExplicit) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
-                                getPolyColumnType("omnisci_geo")};
+                                getPolyColumnType(Geospatial::kGeoColumnName)};
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
@@ -786,7 +787,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableOverride) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::INT),
-                                getPolyColumnType("omnisci_geo")};
+                                getPolyColumnType(Geospatial::kGeoColumnName)};
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
@@ -811,7 +812,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{
       getPolyColumnType("trip"),
-      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT)};
+      getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT)};
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,
@@ -835,7 +836,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{
-      getScalarColumnType("omnisci_geo", TDatumType::type::FLOAT),
+      getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT),
       getPolyColumnType("trip")};
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
@@ -883,8 +884,8 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
-                                getPolyColumnType("omnisci_geo1"),
-                                getPolyColumnType("omnisci_geo2")};
+                                getPolyColumnType("geo1"),
+                                getPolyColumnType("geo2")};
   EXPECT_NO_THROW(handler->create_table(session,
                                         "import_geo_table_test",
                                         row_descriptor,

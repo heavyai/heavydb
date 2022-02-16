@@ -74,7 +74,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
                   + fragment_size + ")");
 
           dba.runSql("CREATE TABLE " + geoTableName
-                  + "( trip INT, omnisci_geo MULTIPOLYGON ) WITH(FRAGMENT_SIZE = "
+                  + "( trip INT, mpoly MULTIPOLYGON ) WITH(FRAGMENT_SIZE = "
                   + fragment_size + ")");
 
         } catch (Exception e) {

@@ -27,6 +27,7 @@
 #ifdef HAVE_AWS_S3
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif  // HAVE_AWS_S3
+#include "Geospatial/ColumnNames.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
 #include "Utils/DdlUtils.h"
@@ -495,7 +496,8 @@ class DBHandlerFilePathTest
 
     createDBHandler();
     sql("CREATE TABLE IF NOT EXISTS test_table (col1 TEXT);");
-    sql("CREATE TABLE IF NOT EXISTS test_table_2 (omnisci_geo POINT);");
+    sql("CREATE TABLE IF NOT EXISTS test_table_2 (" + Geospatial::kGeoColumnName +
+        " POINT);");
     boost::filesystem::create_directory(getImportPath());
     ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "", "");
   }
