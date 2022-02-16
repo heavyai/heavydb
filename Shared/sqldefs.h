@@ -133,7 +133,7 @@ enum ViewRefreshOption { kMANUAL = 0, kAUTO = 1, kIMMEDIATE = 2 };
 
 enum class JoinType { INNER, LEFT, SEMI, ANTI, INVALID };
 
-#ifndef __CUDACC__
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 #include <string>
 #include "Logger/Logger.h"
@@ -389,6 +389,6 @@ inline std::string toString(const SqlWindowFunctionKind& kind) {
   return "";
 }
 
-#endif
+#endif  // #if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 #endif  // SQLDEFS_H

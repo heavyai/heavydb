@@ -69,7 +69,7 @@ enum SQLTypes {
   kSQLTYPE_LAST = 30
 };
 
-#ifndef __CUDACC__
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 inline std::string toString(const SQLTypes& type) {
   switch (type) {
@@ -145,7 +145,7 @@ inline std::ostream& operator<<(std::ostream& os, SQLTypes const sql_type) {
   return os;
 }
 
-#endif
+#endif  // #if !(defined(__CUDACC__) || defined(NO_BOOST))
 
 struct VarlenDatum {
   size_t length;
@@ -1073,7 +1073,9 @@ inline SQLTypes get_int_type_by_size(size_t const nbytes) {
     case 8:
       return kBIGINT;
     default:
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
       UNREACHABLE() << "Invalid number of bytes=" << nbytes;
+#endif
       return {};
   }
 }
