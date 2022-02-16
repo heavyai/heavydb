@@ -852,7 +852,6 @@ ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner) {
-  const auto& catalog = *executor_->getCatalog();
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 
   std::vector<JoinColumn> join_columns;
@@ -1407,18 +1406,20 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
     if (const auto outer_geo_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_geo)) {
       const auto outer_geo_col_lvs = code_generator.codegen(outer_geo_col, true, co);
       CHECK_EQ(outer_geo_col_lvs.size(), size_t(1));
-      const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
-          outer_geo_col->get_table_id(), outer_geo_col->get_column_id() + 1);
-      CHECK(coords_cd);
+      const auto coords_info = executor_->getSchemaProvider()->getColumnInfo(
+          executor_->getDatabaseId(),
+          outer_geo_col->get_table_id(),
+          outer_geo_col->get_column_id() + 1);
+      CHECK(coords_info);
 
       const auto array_ptr = executor_->cgen_state_->emitExternalCall(
           "array_buff",
           llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
           {outer_geo_col_lvs.front(), code_generator.posArg(outer_geo_col)});
-      CHECK(coords_cd->columnType.get_elem_type().get_type() == kTINYINT)
+      CHECK(coords_info->type.get_elem_type().get_type() == kTINYINT)
           << "Only TINYINT coordinates columns are supported in geo overlaps hash join.";
-      arr_ptr = code_generator.castArrayPointer(array_ptr,
-                                                coords_cd->columnType.get_elem_type());
+      arr_ptr =
+          code_generator.castArrayPointer(array_ptr, coords_info->type.get_elem_type());
     } else if (const auto outer_geo_function_operator =
                    dynamic_cast<const Analyzer::GeoOperator*>(outer_geo)) {
       // Process points dynamically constructed by geo function operators
@@ -1496,19 +1497,11 @@ std::vector<llvm::Value*> OverlapsJoinHashTable::codegenManyKey(
 
   const auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
   CHECK(outer_col_var);
-  const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
-      outer_col_var->get_table_id(), outer_col_var->get_column_id());
-  CHECK(coords_cd);
 
   const auto array_ptr = executor_->cgen_state_->emitExternalCall(
       "array_buff",
       llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
       {col_lvs.front(), code_generator.posArg(outer_col)});
-
-  // TODO(jclay): this seems to cast to double, and causes the GPU build to fail.
-  // const auto arr_ptr =
-  //     code_generator.castArrayPointer(array_ptr,
-  //     coords_cd->columnType.get_elem_type());
   array_ptr->setName("array_ptr");
 
   auto num_keys_lv = executor_->cgen_state_->emitExternalCall(

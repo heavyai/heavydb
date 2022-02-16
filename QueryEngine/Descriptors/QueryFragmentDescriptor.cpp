@@ -208,21 +208,20 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
     Executor* executor) {
-  const auto& catalog = executor->getCatalog();
+  const auto& schema_provider = executor->getSchemaProvider();
 
   for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
     auto const& table_desc = ra_exe_unit.input_descs[j];
     int const table_id = table_desc.getTableId();
     TableFragments const* fragments = selected_tables_fragments_.at(table_id);
 
-    auto data_mgr = executor->getDataMgr();
-
     bool is_temporary_table = false;
     if (table_id > 0) {
       // Temporary tables will not have a table descriptor and not have deleted rows.
-      const auto td = catalog->getMetadataForTable(table_id);
-      CHECK(td);
-      if (table_is_temporary(td)) {
+      const auto table_info =
+          schema_provider->getTableInfo(executor->getDatabaseId(), table_id);
+      CHECK(table_info);
+      if (table_info->isTemporary()) {
         // for temporary tables, we won't have delete column metadata available. However,
         // we know the table fits in memory as it is a temporary table, so signal to the
         // lower layers that we can disregard the early out select * optimization

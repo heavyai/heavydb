@@ -24,14 +24,6 @@ class QueryRewriter {
       : query_infos_(query_infos), executor_(executor) {}
   RelAlgExecutionUnit rewrite(const RelAlgExecutionUnit& ra_exe_unit_in) const;
 
-  RelAlgExecutionUnit rewriteColumnarUpdate(
-      const RelAlgExecutionUnit& ra_exe_unit_in,
-      std::shared_ptr<Analyzer::Expr> column_to_update) const;
-
-  RelAlgExecutionUnit rewriteColumnarDelete(
-      const RelAlgExecutionUnit& ra_exe_unit_in,
-      std::shared_ptr<Analyzer::ColumnVar> delete_column) const;
-
   RelAlgExecutionUnit rewriteAggregateOnGroupByColumn(
       const RelAlgExecutionUnit& ra_exe_unit_in) const;
 

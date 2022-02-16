@@ -303,14 +303,14 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     CHECK(lhs_col);
 
     // Get the actual point data column descriptor
-    const auto coords_cd = executor()->getCatalog()->getMetadataForColumn(
-        lhs_col->get_table_id(), lhs_col->get_column_id() + 1);
-    CHECK(coords_cd);
+    const auto& schema_provider = executor()->getSchemaProvider();
+    const auto coords_info = schema_provider->getColumnInfo(executor()->getDatabaseId(),
+                                                            lhs_col->get_table_id(),
+                                                            lhs_col->get_column_id() + 1);
+    CHECK(coords_info);
 
     std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
-    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(
-        coords_cd->makeInfo(executor()->getCatalog()->getDatabaseId()),
-        lhs_col->get_rte_idx()));
+    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(coords_info, lhs_col->get_rte_idx()));
 
     Datum input_compression;
     input_compression.intval =
@@ -335,14 +335,13 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     const auto rhs_col = dynamic_cast<Analyzer::ColumnVar*>(rhs.get());
     CHECK(rhs_col);
 
-    const auto poly_bounds_cd = executor()->getCatalog()->getMetadataForColumn(
+    const auto poly_bounds_info = schema_provider->getColumnInfo(
+        executor()->getDatabaseId(),
         rhs_col->get_table_id(),
         rhs_col->get_column_id() + rhs_ti.get_physical_coord_cols() + 1);
-    CHECK(poly_bounds_cd);
 
-    auto bbox_col_var = makeExpr<Analyzer::ColumnVar>(
-        poly_bounds_cd->makeInfo(executor()->getCatalog()->getDatabaseId()),
-        rhs_col->get_rte_idx());
+    auto bbox_col_var =
+        makeExpr<Analyzer::ColumnVar>(poly_bounds_info, rhs_col->get_rte_idx());
 
     const auto bbox_contains_func_oper =
         makeExpr<Analyzer::FunctionOper>(SQLTypeInfo(kBOOLEAN, false),

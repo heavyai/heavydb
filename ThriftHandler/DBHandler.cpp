@@ -6197,7 +6197,9 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
 
         auto executor = Executor::getExecutor(
             Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
-        const TableOptimizer optimizer(td, executor.get(), cat);
+        auto schema_provider =
+            std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat);
+        const TableOptimizer optimizer(td, executor.get(), schema_provider, cat);
         optimizer.recomputeMetadata();
       }));
       return;

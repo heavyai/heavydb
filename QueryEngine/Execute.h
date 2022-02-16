@@ -61,7 +61,6 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/WindowContext.h"
 
-#include "Catalog/Catalog.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "Logger/Logger.h"
 #include "SchemaMgr/SchemaProvider.h"
@@ -187,16 +186,6 @@ inline uint32_t log2_bytes(const uint32_t bytes) {
   }
 }
 
-inline const ColumnDescriptor* get_column_descriptor(
-    const int col_id,
-    const int table_id,
-    const Catalog_Namespace::Catalog& cat) {
-  CHECK_GT(table_id, 0);
-  const auto col_desc = cat.getMetadataForColumn(table_id, col_id);
-  CHECK(col_desc);
-  return col_desc;
-}
-
 inline const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
   const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
   if (!cast_expr || cast_expr->get_optype() != kCAST) {
@@ -314,50 +303,12 @@ class StringConstInResultSet : public std::runtime_error {
 
 class ExtensionFunction;
 
-using RowDataProvider = Fragmenter_Namespace::RowDataProvider;
 using ColumnToFragmentsMap = std::map<const ColumnDescriptor*, std::set<int32_t>>;
 using TableToFragmentIds = std::map<int32_t, std::set<int32_t>>;
 
 struct TableUpdateMetadata {
   ColumnToFragmentsMap columns_for_metadata_update;
   TableToFragmentIds fragments_with_deleted_rows;
-};
-
-class UpdateLogForFragment : public RowDataProvider {
- public:
-  using FragmentInfoType = Fragmenter_Namespace::FragmentInfo;
-
-  UpdateLogForFragment(FragmentInfoType const& fragment_info,
-                       size_t const,
-                       const std::shared_ptr<ResultSet>& rs);
-
-  std::vector<TargetValue> getEntryAt(const size_t index) const override;
-  std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const override;
-
-  size_t const getRowCount() const override;
-  StringDictionaryProxy* getLiteralDictionary() const override {
-    return rs_->getRowSetMemOwner()->getLiteralStringDictProxy();
-  }
-  size_t const getEntryCount() const override;
-  size_t const getFragmentIndex() const;
-  FragmentInfoType const& getFragmentInfo() const;
-  decltype(FragmentInfoType::physicalTableId) const getPhysicalTableId() const {
-    return fragment_info_.physicalTableId;
-  }
-  decltype(FragmentInfoType::fragmentId) const getFragmentId() const {
-    return fragment_info_.fragmentId;
-  }
-
-  SQLTypeInfo getColumnType(const size_t col_idx) const;
-
-  using Callback = std::function<void(const UpdateLogForFragment&, TableUpdateMetadata&)>;
-
-  auto getResultSet() const { return rs_; }
-
- private:
-  FragmentInfoType const& fragment_info_;
-  size_t fragment_index_;
-  std::shared_ptr<ResultSet> rs_;
 };
 
 using LLVMValueVector = std::vector<llvm::Value*>;
@@ -430,11 +381,10 @@ class Executor {
     return cgen_state_->contains_left_deep_outer_join_;
   }
 
-  const Catalog_Namespace::Catalog* getCatalog() const;
-  void setCatalog(const Catalog_Namespace::Catalog* catalog);
-
   SchemaProviderPtr getSchemaProvider() const { return schema_provider_; }
-  void setSchemaProvider(SchemaProviderPtr provider) { schema_provider_ = provider; }
+  void setSchemaProvider(SchemaProviderPtr provider) {
+    schema_provider_ = provider;
+  }
 
   int getDatabaseId() const { return db_id_; }
   void setDatabaseId(int db_id) { db_id_ = db_id; }
@@ -1059,7 +1009,6 @@ class Executor {
   const std::string debug_file_;
 
   const ExecutorId executor_id_;
-  const Catalog_Namespace::Catalog* catalog_;
   SchemaProviderPtr schema_provider_;
   int db_id_ = -1;
   Data_Namespace::DataMgr* data_mgr_;
@@ -1195,7 +1144,7 @@ inline bool is_constructed_point(const Analyzer::Expr* expr) {
 bool is_trivial_loop_join(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit);
 
-std::unordered_set<int> get_available_gpus(const Catalog_Namespace::Catalog& cat);
+std::unordered_set<int> get_available_gpus(const Data_Namespace::DataMgr* data_mgr);
 
 size_t get_context_count(const ExecutorDeviceType device_type,
                          const size_t cpu_count,

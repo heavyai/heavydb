@@ -25,8 +25,9 @@
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
+                               SchemaProviderPtr schema_provider,
                                const Catalog_Namespace::Catalog& cat)
-    : td_(td), executor_(executor), cat_(cat) {
+    : td_(td), executor_(executor), schema_provider_(schema_provider), cat_(cat) {
   CHECK(td);
 }
 namespace {
@@ -134,7 +135,8 @@ void TableOptimizer::recomputeMetadata() const {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
     executor_->row_set_mem_owner_ =
         std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
-    executor_->setCatalog(&cat_);
+    executor_->setSchemaProvider(schema_provider_);
+
     const auto table_id = td->tableId;
 
     // TODO(adb): Support geo
@@ -185,7 +187,6 @@ void TableOptimizer::recomputeColumnMetadata(
   }
 
   CHECK(!cd->isVirtualCol);
-  const auto column_id = cd->columnId;
   auto column_info = cd->makeInfo(cat_.getDatabaseId());
   const auto input_col_desc = std::make_shared<const InputColDescriptor>(column_info, 0);
   const auto col_expr = makeExpr<Analyzer::ColumnVar>(column_info, 0);

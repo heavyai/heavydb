@@ -170,7 +170,6 @@ Executor::Executor(const ExecutorId executor_id,
     , debug_dir_(debug_dir)
     , debug_file_(debug_file)
     , executor_id_(executor_id)
-    , catalog_(nullptr)
     , data_mgr_(data_mgr)
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {}
@@ -275,17 +274,6 @@ quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {
 bool Executor::isCPUOnly() const {
   CHECK(data_mgr_);
   return !data_mgr_->getCudaMgr();
-}
-
-const Catalog_Namespace::Catalog* Executor::getCatalog() const {
-  return catalog_;
-}
-
-void Executor::setCatalog(const Catalog_Namespace::Catalog* catalog) {
-  catalog_ = catalog;
-  if (catalog) {
-    db_id_ = catalog->getDatabaseId();
-  }
 }
 
 const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {

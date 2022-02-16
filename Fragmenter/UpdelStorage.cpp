@@ -81,7 +81,7 @@ static int get_chunks(const Catalog_Namespace::Catalog* catalog,
         auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(cid);
         CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
         ChunkKey chunk_key{
-            catalog->getCurrentDB().dbId, td->tableId, cid, fragment.fragmentId};
+            catalog->getDatabaseId(), td->tableId, cid, fragment.fragmentId};
         auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog->getDatabaseId()),
                                                &catalog->getDataMgr(),
                                                chunk_key,
@@ -520,7 +520,7 @@ void InsertOrderFragmenter::updateColumns(
   }
 
   Fragmenter_Namespace::InsertData insert_data;
-  insert_data.databaseId = catalog->getCurrentDB().dbId;
+  insert_data.databaseId = catalog->getDatabaseId();
   insert_data.tableId = td->tableId;
 
   for (size_t i = 0; i < chunkConverters.size(); i++) {
@@ -649,7 +649,7 @@ std::optional<ChunkUpdateStats> InsertOrderFragmenter::updateColumn(
   auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(cd->columnId);
   CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
   ChunkKey chunk_key{
-      catalog->getCurrentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
+      catalog->getDatabaseId(), td->tableId, cd->columnId, fragment.fragmentId};
   auto chunk = Chunk_NS::Chunk::getChunk(cd->makeInfo(catalog->getDatabaseId()),
                                          &catalog->getDataMgr(),
                                          chunk_key,

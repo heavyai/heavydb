@@ -76,9 +76,9 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  executor->setCatalog(cat);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
+  executor->setDatabaseId(cat->getDatabaseId());
 
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
@@ -176,7 +176,9 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  executor->setCatalog(cat);
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
+  executor->setDatabaseId(cat->getDatabaseId());
 
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
@@ -263,7 +265,9 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
       Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  executor->setCatalog(cat);
+  executor->setSchemaProvider(
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
+  executor->setDatabaseId(cat->getDatabaseId());
 
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);

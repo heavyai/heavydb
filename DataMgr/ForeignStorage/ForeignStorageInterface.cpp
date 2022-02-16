@@ -208,7 +208,7 @@ void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
     throw std::runtime_error("storage type " + type.first + " not supported");
   }
 
-  auto db_id = catalog->getCurrentDB().dbId;
+  auto db_id = catalog->getDatabaseId();
   const auto it_ok = table_persistent_storage_interface_map_.emplace(
       std::make_pair(db_id, table_id), it->second.get());
   // this check fails if we create table, drop it and create again

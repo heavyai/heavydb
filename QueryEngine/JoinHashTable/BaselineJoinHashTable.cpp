@@ -130,7 +130,6 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , executor_(executor)
     , column_cache_(column_cache)
     , inner_outer_pairs_(inner_outer_pairs)
-    , catalog_(executor->getCatalog())
     , device_count_(device_count)
     , needs_dict_translation_(false)
     , table_id_to_node_map_(table_id_to_node_map)

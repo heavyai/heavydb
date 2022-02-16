@@ -3568,10 +3568,11 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
   }
 
+  auto schema_provider =
+      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog));
-  const TableOptimizer optimizer(td, executor, catalog);
+  executor->setSchemaProvider(schema_provider);
+  const TableOptimizer optimizer(td, executor, schema_provider, catalog);
   optimizer.recomputeMetadata();
 }
 

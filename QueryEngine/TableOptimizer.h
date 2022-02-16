@@ -18,6 +18,8 @@
 
 #include "Catalog/Catalog.h"
 
+#include "SchemaMgr/SchemaProvider.h"
+
 class Executor;
 struct TableUpdateMetadata;
 
@@ -33,6 +35,7 @@ class TableOptimizer {
  public:
   TableOptimizer(const TableDescriptor* td,
                  Executor* executor,
+                 SchemaProviderPtr schema_provider,
                  const Catalog_Namespace::Catalog& cat);
 
   /**
@@ -61,6 +64,7 @@ class TableOptimizer {
 
   const TableDescriptor* td_;
   Executor* executor_;
+  SchemaProviderPtr schema_provider_;
   const Catalog_Namespace::Catalog& cat_;
 
   // We can use a smaller block size here, since we won't be running projection queries

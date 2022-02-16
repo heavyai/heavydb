@@ -26,10 +26,12 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
     return false;
   }
   if (do_not_fetch_column->get_table_id() > 0) {
-    auto cd = get_column_descriptor(do_not_fetch_column->get_column_id(),
-                                    do_not_fetch_column->get_table_id(),
-                                    *executor_->getCatalog());
-    if (cd->isVirtualCol) {
+    auto col_info = executor_->getSchemaProvider()->getColumnInfo(
+        executor_->getDatabaseId(),
+        do_not_fetch_column->get_table_id(),
+        do_not_fetch_column->get_column_id());
+    CHECK(col_info);
+    if (col_info->is_rowid) {
       return false;
     }
   }

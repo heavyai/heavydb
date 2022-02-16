@@ -465,7 +465,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                     ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
                     row_set_mem_owner_,
                     executor->getDataMgr(),
-                    executor->getCatalog()->getDatabaseId(),
+                    executor->getDatabaseId(),
                     executor->blockSize(),
                     executor->gridSize()));
   result_sets_.back()->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),

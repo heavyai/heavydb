@@ -100,7 +100,7 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
                                   deinterleaved_query_mem_desc,
                                   row_set_mem_owner_,
                                   executor_->getDataMgr(),
-                                  executor_->getCatalog()->getDatabaseId(),
+                                  executor_->getDatabaseId(),
                                   executor_->blockSize(),
                                   executor_->gridSize());
   auto deinterleaved_storage =

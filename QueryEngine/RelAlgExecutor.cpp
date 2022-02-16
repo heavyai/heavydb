@@ -117,7 +117,6 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setCatalog(cat_);
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(col_descs, phys_table_ids);
@@ -136,7 +135,6 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
   decltype(temporary_tables_)().swap(temporary_tables_);
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
-  executor_->setCatalog(cat_);
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
@@ -295,7 +293,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto col_descs = get_physical_inputs(&ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
-  executor_->setCatalog(cat_);
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->setupCaching(col_descs, phys_table_ids);
@@ -526,7 +523,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   }
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
-  executor_->setCatalog(cat_);
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
@@ -610,7 +606,6 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     RenderInfo* render_info,
     const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgSubSeq);
-  executor_->setCatalog(cat_);
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
   executor_->temporary_tables_ = &temporary_tables_;
@@ -1558,7 +1553,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                   QueryMemoryDescriptor(),
                                   nullptr,
                                   executor_->getDataMgr(),
-                                  executor_->getCatalog()->getDatabaseId(),
+                                  executor_->getDatabaseId(),
                                   executor_->blockSize(),
                                   executor_->gridSize()),
       {}};
@@ -1898,7 +1893,8 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
 
   for (const int col_id : col_id_list) {
-    const auto cd = get_column_descriptor(col_id, table_id, *cat_);
+    const auto cd = cat_->getMetadataForColumn(table_id, col_id);
+    CHECK(cd);
     const auto col_enc = cd->columnType.get_compression();
     if (cd->columnType.is_string()) {
       switch (col_enc) {
@@ -2792,7 +2788,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                   QueryMemoryDescriptor(),
                                   nullptr,
                                   executor_->getDataMgr(),
-                                  executor_->getCatalog()->getDatabaseId(),
+                                  executor_->getDatabaseId(),
                                   executor_->blockSize(),
                                   executor_->gridSize()),
       {}};

@@ -228,7 +228,6 @@ class BaselineJoinHashTable : public HashJoin {
   std::mutex cpu_hash_table_buff_mutex_;
 
   std::vector<InnerOuter> inner_outer_pairs_;
-  const Catalog_Namespace::Catalog* catalog_;
   const int device_count_;
   mutable bool needs_dict_translation_;
   std::optional<HashType>
