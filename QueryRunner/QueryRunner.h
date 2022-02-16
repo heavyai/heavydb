@@ -288,12 +288,6 @@ class ImportDriver : public QueryRunner {
                const Catalog_Namespace::UserMetadata& user,
                const ExecutorDeviceType dt = ExecutorDeviceType::GPU,
                const std::string session_id = "");
-
-  void importGeoTable(const std::string& file_path,
-                      const std::string& table_name,
-                      const bool compression,
-                      const bool create_table,
-                      const bool explode_collections);
 };
 
 }  // namespace QueryRunner

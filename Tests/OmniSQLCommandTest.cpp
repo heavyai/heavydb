@@ -43,7 +43,6 @@ class CoreMockClient {
   MockMethod(clear_gpu_memory)
   MockMethod(clear_cpu_memory)
   MockMethod(get_hardware_info)
-  MockMethod(import_geo_table)
   MockMethod(set_table_epoch)
   MockMethod(set_table_epoch_by_name)
   RetValMockMethod(get_table_epoch, int32_t)

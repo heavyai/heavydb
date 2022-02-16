@@ -737,8 +737,6 @@ class Importer : public DataStreamSink, public AbstractImporter {
       const std::string& file_path,
       const bool decompressed,
       const Catalog_Namespace::SessionInfo* session_info) override;
-  ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src,
-                          const Catalog_Namespace::SessionInfo* session_info);
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return loader->get_column_descs();
@@ -759,19 +757,6 @@ class Importer : public DataStreamSink, public AbstractImporter {
 #endif
   static ImportStatus get_import_status(const std::string& id);
   static void set_import_status(const std::string& id, const ImportStatus is);
-  static const std::list<ColumnDescriptor> gdalToColumnDescriptors(
-      const std::string& fileName,
-      const std::string& geoColumnName,
-      const CopyParams& copy_params);
-  static void readMetadataSampleGDAL(
-      const std::string& fileName,
-      const std::string& geoColumnName,
-      std::map<std::string, std::vector<std::string>>& metadata,
-      int rowLimit,
-      const CopyParams& copy_params);
-  static bool gdalFileExists(const std::string& path, const CopyParams& copy_params);
-  static bool gdalFileOrDirectoryExists(const std::string& path,
-                                        const CopyParams& copy_params);
   static std::vector<std::string> gdalGetAllFilesInArchive(
       const std::string& archive_path,
       const CopyParams& copy_params);
@@ -782,9 +767,6 @@ class Importer : public DataStreamSink, public AbstractImporter {
     std::string name;
     GeoFileLayerContents contents;
   };
-  static std::vector<GeoFileLayerInfo> gdalGetLayersInGeoFile(
-      const std::string& file_name,
-      const CopyParams& copy_params);
   Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }
   static void set_geo_physical_import_buffer(
       const Catalog_Namespace::Catalog& catalog,
@@ -810,11 +792,6 @@ class Importer : public DataStreamSink, public AbstractImporter {
   auto getLoader() const { return loader.get(); }
 
  private:
-  static bool gdalStatInternal(const std::string& path,
-                               const CopyParams& copy_params,
-                               bool also_dir);
-  static OGRDataSource* openGDALDataset(const std::string& fileName,
-                                        const CopyParams& copy_params);
   static void setGDALAuthorizationTokens(const CopyParams& copy_params);
   std::string import_id;
   size_t file_size;

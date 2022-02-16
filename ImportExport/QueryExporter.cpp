@@ -19,7 +19,6 @@
 #include <boost/algorithm/string.hpp>
 
 #include <ImportExport/QueryExporterCSV.h>
-#include <ImportExport/QueryExporterGDAL.h>
 
 namespace import_export {
 
@@ -33,7 +32,7 @@ std::unique_ptr<QueryExporter> QueryExporter::create(FileType file_type) {
     case FileType::kGeoJSONL:
     case FileType::kShapefile:
     case FileType::kFlatGeobuf:
-      return std::make_unique<QueryExporterGDAL>(file_type);
+      UNREACHABLE() << "QueryExporter::create GDAL files unsupported";
   }
   CHECK(false);
   return nullptr;

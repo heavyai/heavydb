@@ -37,7 +37,6 @@
 #include "AwsHelpers.h"
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif  // HAVE_AWS_S3
-#include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"

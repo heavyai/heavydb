@@ -59,7 +59,6 @@ add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
 add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
-add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
 add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
 add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
@@ -139,8 +138,6 @@ if(ENABLE_FOLLY)
 else()
   target_link_libraries(StringDictionaryTest gtest mapd_thrift StringDictionary Logger Utils ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 endif()
-
-target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${CMAKE_DL_LIBS})
 
 target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
@@ -233,7 +230,6 @@ add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
 add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
 add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
-add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
 add_test(OverlapsJoinTest OverlapsJoinTest ${TEST_ARGS})
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
 add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
@@ -324,7 +320,6 @@ set(TEST_PROGRAMS
   OmniSQLCommandTest
   OmniSQLUtilitiesTest
   DBObjectPrivilegesTest
-  GeoTypesTest
   CtasUpdateTest
   CorrelatedSubqueryTest
   DateTimeUtilsTest

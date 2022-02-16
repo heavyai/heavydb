@@ -467,18 +467,10 @@ class DBHandler : public OmniSciIf {
   void import_table_status(TImportStatus& _return,
                            const TSessionId& session,
                            const std::string& import_id) override;
-  void get_first_geo_file_in_archive(std::string& _return,
-                                     const TSessionId& session,
-                                     const std::string& archive_path,
-                                     const TCopyParams& copy_params) override;
   void get_all_files_in_archive(std::vector<std::string>& _return,
                                 const TSessionId& session,
                                 const std::string& archive_path,
                                 const TCopyParams& copy_params) override;
-  void get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
-                              const TSessionId& session,
-                              const std::string& file_name,
-                              const TCopyParams& copy_params) override;
   // distributed
   int64_t query_get_outer_fragment_count(const TSessionId& session,
                                          const std::string& select_query) override;
@@ -789,19 +781,12 @@ class DBHandler : public OmniSciIf {
   char unescape_char(std::string str);
   import_export::CopyParams thrift_to_copyparams(const TCopyParams& cp);
   TCopyParams copyparams_to_thrift(const import_export::CopyParams& cp);
-  void check_geospatial_files(const boost::filesystem::path file_path,
-                              const import_export::CopyParams& copy_params);
   void render_rel_alg(TRenderResult& _return,
                       const std::string& query_ra,
                       const std::string& query_str,
                       const Catalog_Namespace::SessionInfo& session_info,
                       const std::string& render_type,
                       const bool is_projection_query);
-
-  TColumnType create_geo_column(const TDatumType::type type,
-                                const std::string& name,
-                                const bool is_array);
-
   static void convertExplain(TQueryResult& _return,
                              const ResultSet& results,
                              const bool column_format);
@@ -885,17 +870,6 @@ class DBHandler : public OmniSciIf {
       std::vector<std::unique_ptr<import_export::TypedImportBuffer>>* import_buffers,
       const std::vector<std::string>& column_names,
       std::string load_type);
-
-  void fillGeoColumns(
-      const TSessionId& session,
-      const Catalog_Namespace::Catalog& catalog,
-      std::vector<std::unique_ptr<import_export::TypedImportBuffer>>& import_buffers,
-      const ColumnDescriptor* cd,
-      size_t& col_idx,
-      size_t num_rows,
-      const std::string& table_name,
-      bool assign_render_groups);
-
   void fillMissingBuffers(
       const TSessionId& session,
       const Catalog_Namespace::Catalog& catalog,

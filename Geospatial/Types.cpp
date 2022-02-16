@@ -23,7 +23,6 @@
 #include <ogr_geometry.h>
 #include <ogrsf_frmts.h>
 
-#include "Geospatial/GDAL.h"
 #include "Logger/Logger.h"
 #include "Shared/sqltypes.h"
 
@@ -358,9 +357,6 @@ std::shared_ptr<OGRCoordinateTransformation> GeoBase::getTransformation(int32_t 
 #endif
     return (status == OGRERR_NONE);
   };
-
-  // lazy init GDAL
-  GDAL::init();
 
   OGRSpatialReference sr0;
   if (!setSpatialReference(&sr0, srid0)) {

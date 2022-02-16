@@ -615,9 +615,7 @@ service OmniSci {
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TOmniSciException e)
   void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc, 6: TCreateParams create_params) throws (1: TOmniSciException e)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TOmniSciException e)
-  string get_first_geo_file_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TOmniSciException e)
   list<string> get_all_files_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TOmniSciException e)
-  list<TGeoFileLayerInfo> get_layers_in_geo_file(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TOmniSciException e)
   # distributed
   i64 query_get_outer_fragment_count(1: TSessionId session, 2: string query) throws(1: TOmniSciException e)
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TOmniSciException e)

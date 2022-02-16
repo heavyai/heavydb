@@ -440,14 +440,12 @@ class DBHandlerFilePathTest
 
     createDBHandler();
     sql("CREATE TABLE IF NOT EXISTS test_table (col1 TEXT);");
-    sql("CREATE TABLE IF NOT EXISTS test_table_2 (omnisci_geo POINT);");
     boost::filesystem::create_directory(getImportPath());
     ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "", "");
   }
 
   static void TearDownTestSuite() {
     sql("DROP TABLE IF EXISTS test_table;");
-    sql("DROP TABLE IF EXISTS test_table_2;");
     boost::filesystem::remove_all(getImportPath());
 
 #ifdef HAVE_AWS_S3
@@ -513,13 +511,6 @@ TEST_P(DBHandlerFilePathTest, ImportTable) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_table(
       session_id, "test_table", getFilePath("example.csv"), TCopyParams{});
-}
-
-TEST_P(DBHandlerFilePathTest, GetAllFilesInArchive) {
-  auto [db_handler, session_id] = getDbHandlerAndSessionId();
-  std::vector<std::string> result;
-  db_handler->get_all_files_in_archive(
-      result, session_id, getFilePath("example.geojson"), TCopyParams());
 }
 
 INSTANTIATE_TEST_SUITE_P(

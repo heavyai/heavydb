@@ -14,13 +14,12 @@ set(IMPORT_SOURCES
 
 set(EXPORT_SOURCES
   QueryExporter.cpp
-  QueryExporterCSV.cpp
-  QueryExporterGDAL.cpp)
+  QueryExporterCSV.cpp)
 
 add_library(RenderGroupAnalyzer RenderGroupAnalyzer.cpp)
 add_library(ImportExport ${IMPORT_SOURCES} ${EXPORT_SOURCES} ${S3Archive})
 
-target_link_libraries(ImportExport RenderGroupAnalyzer mapd_thrift Logger Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(ImportExport RenderGroupAnalyzer mapd_thrift Logger Shared Catalog DataMgr StringDictionary ${CMAKE_DL_LIBS}
  ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})
 
 add_library(RowToColumn RowToColumnLoader.cpp RowToColumnLoader.h DelimitedParserUtils.cpp DelimitedParserUtils.h)
