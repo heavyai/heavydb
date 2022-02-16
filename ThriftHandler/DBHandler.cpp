@@ -3268,12 +3268,11 @@ void DBHandler::load_table(const TSessionId& session,
       try {
         size_t import_idx = 0;
         size_t skip_physical_cols = 0;
-        for (auto cd : col_descs) {
+        for (size_t i = 0; i < col_descs.size(); ++i) {
           if (skip_physical_cols > 0) {
             skip_physical_cols--;
             continue;
           }
-          auto mapped_idx = desc_id_to_column_id[import_idx];
           col_idx++;
           import_idx++;
         }
