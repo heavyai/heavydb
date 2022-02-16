@@ -90,9 +90,9 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesImpl(
   auto resultData = reinterpret_cast<T*>(resultBuf->mutable_data());
 
   tbb::parallel_for(
-      tbb::blocked_range<size_t>(0, arr->num_chunks()),
-      [&](const tbb::blocked_range<size_t>& r) {
-        for (size_t c = r.begin(); c != r.end(); ++c) {
+      tbb::blocked_range<int>(0, arr->num_chunks()),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int c = r.begin(); c != r.end(); ++c) {
           size_t offset = 0;
           for (int i = 0; i < c; i++) {
             offset += arr->chunk(i)->length();

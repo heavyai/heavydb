@@ -56,9 +56,9 @@ class TestTableData {
   }
 
   template <typename T>
-  void addColFragment(size_t col_id, std::vector<T> vals) {
-    CHECK_LE(col_id, data_.size());
-    CHECK_EQ(col_types_.count(col_id), 1);
+  void addColFragment(int col_id, std::vector<T> vals) {
+    CHECK_LE(static_cast<size_t>(col_id), data_.size());
+    CHECK_EQ(col_types_.count(col_id), (size_t)1);
     auto& frag_data = data_[col_id - 1].emplace_back();
     frag_data.resize(vals.size() * sizeof(T));
     memcpy(frag_data.data(), vals.data(), frag_data.size());
@@ -90,8 +90,8 @@ class TestTableData {
   }
 
   void fetchData(int col_id, int frag_id, int8_t* dst, size_t size) {
-    CHECK_LE(col_id, data_.size());
-    CHECK_LE(frag_id, data_[col_id - 1].size());
+    CHECK_LE(static_cast<size_t>(col_id), data_.size());
+    CHECK_LE(static_cast<size_t>(frag_id), data_[col_id - 1].size());
     auto& chunk = data_[col_id - 1][frag_id - 1];
     CHECK_LE(chunk.size(), size);
     memcpy(dst, data_[col_id - 1][frag_id - 1].data(), size);
@@ -115,7 +115,7 @@ class TestDataProvider : public AbstractDataProvider {
                    AbstractBuffer* destBuffer,
                    const size_t numBytes = 0) override {
     CHECK_EQ(key[CHUNK_KEY_DB_IDX], db_id_);
-    CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), 1);
+    CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), (size_t)1);
     auto& data = tables_.at(key[CHUNK_KEY_TABLE_IDX]);
     data.fetchData(key[CHUNK_KEY_COLUMN_IDX],
                    key[CHUNK_KEY_FRAGMENT_IDX],
@@ -126,7 +126,7 @@ class TestDataProvider : public AbstractDataProvider {
   Fragmenter_Namespace::TableInfo getTableMetadata(int db_id,
                                                    int table_id) const override {
     CHECK_EQ(db_id, db_id_);
-    CHECK_EQ(tables_.count(table_id), 1);
+    CHECK_EQ(tables_.count(table_id), (size_t)1);
     return tables_.at(table_id).getTableInfo();
   }
 

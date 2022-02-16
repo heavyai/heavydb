@@ -181,6 +181,6 @@ foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const
 void PersistentStorageMgr::registerDataProvider(
     int schema_id,
     std::shared_ptr<AbstractBufferMgr> provider) {
-  CHECK_EQ(mgr_by_schema_id_.count(schema_id), 0);
+  CHECK_EQ(mgr_by_schema_id_.count(schema_id), (size_t)0);
   mgr_by_schema_id_[schema_id] = provider;
 }

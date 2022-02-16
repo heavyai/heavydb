@@ -19,7 +19,7 @@ SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx)
   switch (geo_ti.get_type()) {
     case kPOINT: {
       // coords
-      CHECK_EQ(col_idx, 0);
+      CHECK_EQ(col_idx, (size_t)0);
       SQLTypeInfo res = SQLTypeInfo(kARRAY, geo_ti.get_notnull());
       // Raw data: compressed/uncompressed coords
       res.set_subtype(kTINYINT);
@@ -41,7 +41,7 @@ SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx)
         return res;
       } else {
         // bounds
-        CHECK_EQ(col_idx, 1);
+        CHECK_EQ(col_idx, (size_t)1);
         SQLTypeInfo res = SQLTypeInfo(kARRAY, geo_ti.get_notnull());
         res.set_subtype(kDOUBLE);
         res.set_size(4 * sizeof(double));
@@ -67,7 +67,7 @@ SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx)
         return res;
       } else {
         // render_group
-        CHECK_EQ(col_idx, 3);
+        CHECK_EQ(col_idx, (size_t)3);
         SQLTypeInfo res = SQLTypeInfo(kINT, geo_ti.get_notnull());
         return res;
       }
@@ -96,7 +96,7 @@ SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx)
         return res;
       } else {
         // render_group
-        CHECK_EQ(col_idx, 4);
+        CHECK_EQ(col_idx, (size_t)4);
         SQLTypeInfo res = SQLTypeInfo(kINT, geo_ti.get_notnull());
         return res;
       }
@@ -112,14 +112,14 @@ std::string get_geo_physical_col_name(const std::string& name,
   CHECK(geo_ti.is_geometry());
   switch (geo_ti.get_type()) {
     case kPOINT: {
-      CHECK_EQ(col_idx, 0);
+      CHECK_EQ(col_idx, (size_t)0);
       return name + "_coords";
     }
     case kLINESTRING: {
       if (col_idx == 0) {
         return name + "_coords";
       } else {
-        CHECK_EQ(col_idx, 1);
+        CHECK_EQ(col_idx, (size_t)1);
         return name + "_bounds";
       }
     }
@@ -131,7 +131,7 @@ std::string get_geo_physical_col_name(const std::string& name,
       } else if (col_idx == 2) {
         return name + "_bounds";
       } else {
-        CHECK_EQ(col_idx, 3);
+        CHECK_EQ(col_idx, (size_t)3);
         return name + "_render_group";
       }
     }
@@ -145,7 +145,7 @@ std::string get_geo_physical_col_name(const std::string& name,
       } else if (col_idx == 3) {
         return name + "_bounds";
       } else {
-        CHECK_EQ(col_idx, 4);
+        CHECK_EQ(col_idx, (size_t)4);
         return name + "_render_group";
       }
     }

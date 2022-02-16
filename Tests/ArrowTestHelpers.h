@@ -94,7 +94,7 @@ void compare_arrow_table_impl(std::shared_ptr<arrow::Table> at,
                               int col_idx,
                               const std::vector<T>& expected,
                               const std::vector<Ts>... expected_rem) {
-  ASSERT_LT(col_idx, at->columns().size());
+  ASSERT_LT(static_cast<size_t>(col_idx), at->columns().size());
   auto col = at->column(col_idx);
   compare_arrow_array(expected, at->column(col_idx));
   compare_arrow_table_impl(at, col_idx + 1, expected_rem...);

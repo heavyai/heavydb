@@ -32,7 +32,7 @@ size_t computeTotalStringsLength(std::shared_ptr<arrow::ChunkedArray> arr,
                                  size_t rows) {
   size_t start_offset = offset;
   size_t chunk_no = 0;
-  while (arr->chunk(chunk_no)->length() <= start_offset) {
+  while (static_cast<size_t>(arr->chunk(chunk_no)->length()) <= start_offset) {
     start_offset -= arr->chunk(chunk_no)->length();
     ++chunk_no;
   }
@@ -58,7 +58,7 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
                                Data_Namespace::AbstractBuffer* dest,
                                const size_t num_bytes) {
   CHECK_EQ(key[CHUNK_KEY_DB_IDX], db_id_);
-  CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), 1);
+  CHECK_EQ(tables_.count(key[CHUNK_KEY_TABLE_IDX]), (size_t)1);
   auto& table = *tables_.at(key[CHUNK_KEY_TABLE_IDX]);
 
   size_t col_idx = static_cast<size_t>(key[CHUNK_KEY_COLUMN_IDX] - 1);
@@ -69,11 +69,11 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
   const auto* fixed_type =
       dynamic_cast<const arrow::FixedWidthType*>(table.col_data[col_idx]->type().get());
   if (fixed_type) {
-    CHECK_EQ(key.size(), 4);
+    CHECK_EQ(key.size(), (size_t)4);
     size_t elem_size = fixed_type->bit_width() / CHAR_BIT;
     fetchFixedLenData(table, frag_idx, col_idx, dest, num_bytes, elem_size);
   } else {
-    CHECK_EQ(key.size(), 5);
+    CHECK_EQ(key.size(), (size_t)5);
     if (key[CHUNK_KEY_VARLEN_IDX] == 1) {
       if (!dest->hasEncoder()) {
         dest->initEncoder(getColumnInfo(key[CHUNK_KEY_DB_IDX],
@@ -161,7 +161,7 @@ void ArrowStorage::fetchVarLenData(const TableData& table,
 Fragmenter_Namespace::TableInfo ArrowStorage::getTableMetadata(int db_id,
                                                                int table_id) const {
   CHECK_EQ(db_id, db_id_);
-  CHECK_EQ(tables_.count(table_id), 1);
+  CHECK_EQ(tables_.count(table_id), (size_t)1);
   auto& table = *tables_.at(table_id);
 
   Fragmenter_Namespace::TableInfo res;
@@ -186,7 +186,7 @@ const DictDescriptor* ArrowStorage::getDictMetadata(int db_id,
                                                     int dict_id,
                                                     bool /*load_dict*/) {
   CHECK_EQ(db_id, db_id_);
-  CHECK_EQ(dicts_.count(dict_id), 1);
+  CHECK_EQ(dicts_.count(dict_id), (size_t)1);
   return dicts_.at(dict_id).get();
 }
 
@@ -439,7 +439,7 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
 
     table.row_count += at->num_rows();
   } else {
-    CHECK_EQ(table.row_count, 0);
+    CHECK_EQ(table.row_count, (size_t)0);
     table.col_data = std::move(col_data);
     table.fragments = std::move(fragments);
     table.row_count = at->num_rows();

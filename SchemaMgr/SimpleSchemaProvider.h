@@ -47,7 +47,7 @@ class SimpleSchemaProvider : public SchemaProvider {
   }
 
   ColumnInfoList listColumns(int db_id, int table_id) const override {
-    CHECK_EQ(column_index_by_name_.count({db_id, table_id}), 1);
+    CHECK_EQ(column_index_by_name_.count({db_id, table_id}), (size_t)1);
     auto& table_cols = column_index_by_name_.at({db_id, table_id});
     ColumnInfoList res;
     res.reserve(table_cols.size());
@@ -131,7 +131,7 @@ class SimpleSchemaProvider : public SchemaProvider {
   }
 
   ColumnInfoPtr addRowidColumn(int db_id, int table_id) {
-    CHECK_EQ(column_index_by_name_.count({db_id, table_id}), 1);
+    CHECK_EQ(column_index_by_name_.count({db_id, table_id}), (size_t)1);
     int col_id = static_cast<int>(column_index_by_name_[{db_id, table_id}].size() + 1);
     return addColumnInfo(
         db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), true);

@@ -25,7 +25,7 @@ std::string schema_to_json(SchemaProviderPtr schema_provider) {
     return "{}";
   }
   // Current JSON format supports a single database only.
-  CHECK_EQ(dbs.size(), 1);
+  CHECK_EQ(dbs.size(), (size_t)1);
   auto tables = schema_provider->listTables(dbs.front());
 
   rapidjson::Document doc(rapidjson::kObjectType);

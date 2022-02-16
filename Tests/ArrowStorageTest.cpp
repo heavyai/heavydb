@@ -25,7 +25,7 @@ using namespace std::string_literals;
 
 namespace {
 
-void dumpTableMeta(ArrowStorage& storage, int table_id) {
+[[maybe_unused]] void dumpTableMeta(ArrowStorage& storage, int table_id) {
   std::cout << "Table #" << table_id << std::endl;
 
   std::cout << "  Schema:";
@@ -299,7 +299,7 @@ void checkStringDictColumnData(ArrowStorage& storage,
   auto& dict =
       *storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param())->stringDict;
 
-  std::vector<uint32_t> expected_ids(frag_rows);
+  std::vector<int32_t> expected_ids(frag_rows);
   for (size_t i = start_row; i < end_row; ++i) {
     expected_ids[i - start_row] = dict.getIdOfString(expected[i]);
   }
@@ -399,7 +399,7 @@ void checkData(ArrowStorage& storage,
     size_t start_row = frag_idx * fragment_size;
     size_t end_row = std::min(row_count, start_row + fragment_size);
     size_t frag_rows = end_row - start_row;
-    CHECK_EQ(meta.fragments[frag_idx].fragmentId, frag_idx + 1);
+    CHECK_EQ(meta.fragments[frag_idx].fragmentId, static_cast<int>(frag_idx + 1));
     CHECK_EQ(meta.fragments[frag_idx].physicalTableId, table_id);
     CHECK_EQ(meta.fragments[frag_idx].getNumTuples(), frag_rows);
     CHECK_EQ(meta.fragments[frag_idx].getPhysicalNumTuples(), frag_rows);
@@ -407,7 +407,7 @@ void checkData(ArrowStorage& storage,
     auto chunk_meta_map = meta.fragments[frag_idx].getChunkMetadataMap();
     CHECK_EQ(chunk_meta_map.size(), sizeof...(Ts));
     for (int i = 0; i < static_cast<int>(chunk_meta_map.size()); ++i) {
-      CHECK_EQ(chunk_meta_map.count(i + 1), 1);
+      CHECK_EQ(chunk_meta_map.count(i + 1), (size_t)1);
     }
     checkColumnData(storage,
                     chunk_meta_map,
@@ -760,16 +760,16 @@ void Test_ImportCsv_Dict(bool shared_dict,
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
     auto dict1 =
         storage.getDictMetadata(TEST_DB_ID, col1_info->type.get_comp_param())->stringDict;
-    CHECK_EQ(dict1->storageEntryCount(), 10);
+    CHECK_EQ(dict1->storageEntryCount(), (size_t)10);
   } else {
     auto col1_info = storage.getColumnInfo(*tinfo, "col1");
     auto dict1 =
         storage.getDictMetadata(TEST_DB_ID, col1_info->type.get_comp_param())->stringDict;
-    CHECK_EQ(dict1->storageEntryCount(), 5);
+    CHECK_EQ(dict1->storageEntryCount(), (size_t)5);
     auto col2_info = storage.getColumnInfo(*tinfo, "col2");
     auto dict2 =
         storage.getDictMetadata(TEST_DB_ID, col2_info->type.get_comp_param())->stringDict;
-    CHECK_EQ(dict2->storageEntryCount(), 5);
+    CHECK_EQ(dict2->storageEntryCount(), (size_t)5);
   }
 
   std::vector<std::string> col1_expected = {"s1"s, "ss2"s, "sss3"s, "ssss4"s, "sssss5"s};

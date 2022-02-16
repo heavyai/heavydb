@@ -861,7 +861,7 @@ class RelScan : public RelAlgNode {
       return false;
     }
 
-    CHECK_LE(spi, column_infos_.size());
+    CHECK_LE(static_cast<size_t>(spi), column_infos_.size());
     return column_infos_[spi - 1]->is_rowid;
   }
 
@@ -875,7 +875,7 @@ class RelScan : public RelAlgNode {
       col_idx = spi - 1;
     }
 
-    CHECK_LT(col_idx, column_infos_.size());
+    CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->column_id + geo_idx;
   }
 
@@ -896,7 +896,7 @@ class RelScan : public RelAlgNode {
           column_infos_[col_idx]->name, column_infos_[col_idx]->type, geo_idx - 1);
     }
 
-    CHECK_LT(col_idx, column_infos_.size());
+    CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->name;
   }
 
@@ -916,7 +916,7 @@ class RelScan : public RelAlgNode {
       return get_geo_physical_col_type(column_infos_[col_idx]->type, geo_idx - 1);
     }
 
-    CHECK_LT(col_idx, column_infos_.size());
+    CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->type;
   }
 
