@@ -3458,37 +3458,6 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
 }
 
 namespace {
-void add_vsi_network_prefix(std::string& path) {
-  // do we support network file access?
-  bool gdal_network = false;
-
-  // modify head of filename based on source location
-  if (boost::istarts_with(path, "http://") || boost::istarts_with(path, "https://")) {
-    if (!gdal_network) {
-      THROW_MAPD_EXCEPTION("HTTP geo file import not supported!");
-    }
-    // invoke GDAL CURL virtual file reader
-    path = "/vsicurl/" + path;
-  } else if (boost::istarts_with(path, "s3://")) {
-    if (!gdal_network) {
-      THROW_MAPD_EXCEPTION("S3 geo file import not supported!");
-    }
-    // invoke GDAL S3 virtual file reader
-    boost::replace_first(path, "s3://", "/vsis3/");
-  }
-}
-
-void add_vsi_archive_prefix(std::string& path) {
-  // check for compressed file or file bundle
-  if (boost::iends_with(path, ".zip")) {
-    // zip archive
-    path = "/vsizip/" + path;
-  } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") ||
-             boost::iends_with(path, ".tar.gz")) {
-    // tar archive (compressed or uncompressed)
-    path = "/vsitar/" + path;
-  }
-}
 
 bool path_is_relative(const std::string& path) {
   if (boost::istarts_with(path, "s3://") || boost::istarts_with(path, "http://") ||

@@ -82,15 +82,6 @@ HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
           bucket_normalization};
 }
 
-size_t get_hash_entry_count(const ExpressionRange& col_range, const bool is_bw_eq) {
-  if (col_range.getIntMin() > col_range.getIntMax()) {
-    CHECK_EQ(col_range.getIntMin(), int64_t(0));
-    CHECK_EQ(col_range.getIntMax(), int64_t(-1));
-    return is_bw_eq ? 1 : 0;
-  }
-  return col_range.getIntMax() - col_range.getIntMin() + 1 + (is_bw_eq ? 1 : 0);
-}
-
 }  // namespace
 
 //! Make hash table from an in-flight SQL query's parse tree etc.
