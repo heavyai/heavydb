@@ -96,6 +96,9 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                      int table_id,
                      const CsvParseOptions parse_options = CsvParseOptions());
 
+  void dropTable(const std::string& table_name, bool throw_if_not_exist = false);
+  void dropTable(int table_id, bool throw_if_not_exist = false);
+
  private:
   struct DataFragment {
     size_t offset = 0;
@@ -124,8 +127,8 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                                              const CsvParseOptions parse_options,
                                              const ColumnInfoList& col_infos = {});
   std::shared_ptr<arrow::Table> parseCsvData(const std::string& csv_data,
-                                              const CsvParseOptions parse_options,
-                                              const ColumnInfoList& col_infos = {});
+                                             const CsvParseOptions parse_options,
+                                             const ColumnInfoList& col_infos = {});
   std::shared_ptr<arrow::Table> parseCsv(std::shared_ptr<arrow::io::InputStream> input,
                                          const CsvParseOptions parse_options,
                                          const ColumnInfoList& col_infos = {});

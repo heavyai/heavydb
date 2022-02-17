@@ -517,6 +517,51 @@ TEST_F(ArrowStorageTest, CreateTable_WrongDictId) {
   ASSERT_THROW(storage.createTable("table1", {{"col1", type}}), std::runtime_error);
 }
 
+TEST_F(ArrowStorageTest, DropTable) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  auto tinfo = storage.createTable("table1",
+                                   {{"col1", SQLTypeInfo(kINT)},
+                                    {"col2", SQLTypeInfo(kFLOAT)},
+                                    {"col3", SQLTypeInfo(kTEXT, false, kENCODING_DICT)}});
+  auto col_infos = storage.listColumns(*tinfo);
+  storage.dropTable("table1");
+  ASSERT_EQ(storage.getTableInfo(*tinfo), nullptr);
+  for (auto& col_info : col_infos) {
+    ASSERT_EQ(storage.getColumnInfo(*col_info), nullptr);
+    if (col_info->type.is_dict_encoded_string()) {
+      ASSERT_EQ(storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param()),
+                nullptr);
+    }
+  }
+}
+
+TEST_F(ArrowStorageTest, DropTable_SharedDicts) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  auto tinfo1 = storage.createTable(
+      "table1", {{"col1", SQLTypeInfo(kTEXT, false, kENCODING_DICT)}});
+  auto col1_info = storage.getColumnInfo(*tinfo1, "col1");
+
+  SQLTypeInfo type_dict1(kTEXT, false, kENCODING_DICT);
+  type_dict1.set_comp_param(col1_info->type.get_comp_param());
+  SQLTypeInfo type_dict2(kTEXT, false, kENCODING_DICT);
+  type_dict2.set_comp_param(-1);
+  auto tinfo2 = storage.createTable(
+      "table2", {{"col1", type_dict1}, {"col2", type_dict2}, {"col3", type_dict2}});
+  auto col2_info = storage.getColumnInfo(*tinfo2, "col2");
+
+  auto col_infos = storage.listColumns(*tinfo2);
+  storage.dropTable("table2");
+  ASSERT_EQ(storage.getTableInfo(*tinfo2), nullptr);
+  for (auto& col_info : col_infos) {
+    ASSERT_EQ(storage.getColumnInfo(*col_info), nullptr);
+  }
+
+  ASSERT_NE(storage.getDictMetadata(TEST_DB_ID, col1_info->type.get_comp_param()),
+            nullptr);
+  ASSERT_EQ(storage.getDictMetadata(TEST_DB_ID, col2_info->type.get_comp_param()),
+            nullptr);
+}
+
 void Test_ImportCsv_Numbers(const std::string& file_name,
                             const ArrowStorage::CsvParseOptions parse_options,
                             bool pass_schema,

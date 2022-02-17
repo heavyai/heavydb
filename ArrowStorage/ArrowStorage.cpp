@@ -186,8 +186,10 @@ const DictDescriptor* ArrowStorage::getDictMetadata(int db_id,
                                                     int dict_id,
                                                     bool /*load_dict*/) {
   CHECK_EQ(db_id, db_id_);
-  CHECK_EQ(dicts_.count(dict_id), (size_t)1);
-  return dicts_.at(dict_id).get();
+  if (dicts_.count(dict_id)) {
+    return dicts_.at(dict_id).get();
+  }
+  return nullptr;
 }
 
 TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
@@ -508,6 +510,53 @@ void ArrowStorage::appendCsvData(const std::string& csv_data,
   auto col_infos = listColumns(db_id_, table_id);
   auto at = parseCsvData(csv_data, parse_options, col_infos);
   appendArrowTable(at, table_id);
+}
+
+void ArrowStorage::dropTable(const std::string& table_name, bool throw_if_not_exist) {
+  auto tinfo = getTableInfo(db_id_, table_name);
+  if (!tinfo) {
+    if (throw_if_not_exist) {
+      throw std::runtime_error("Cannot srop unknown table: "s + table_name);
+    }
+    return;
+  }
+  dropTable(tinfo->table_id);
+}
+
+void ArrowStorage::dropTable(int table_id, bool throw_if_not_exist) {
+  if (!tables_.count(table_id)) {
+    if (throw_if_not_exist) {
+      throw std::runtime_error("Cannot drop table with invalid id: "s +
+                               std::to_string(table_id));
+    }
+  }
+
+  mapd_unique_lock<mapd_shared_mutex> lock1(data_mutex_);
+  mapd_unique_lock<mapd_shared_mutex> lock2(schema_mutex_);
+  std::unique_ptr<TableData> table = std::move(tables_.at(table_id));
+  mapd_unique_lock<mapd_shared_mutex> lock3(table->mutex);
+  tables_.erase(table_id);
+
+  std::unordered_set<int> dicts_to_remove;
+  auto col_infos = listColumns(db_id_, table_id);
+  for (auto& col_info : col_infos) {
+    if (col_info->type.is_dict_encoded_string()) {
+      dicts_to_remove.insert(col_info->type.get_comp_param());
+    }
+  }
+
+  SimpleSchemaProvider::dropTable(db_id_, table_id);
+  // TODO: clean-up shared dictionaries without a full scan of
+  // existing columns.
+  for (auto& pr : column_infos_) {
+    if (pr.second->type.is_dict_encoded_string()) {
+      dicts_to_remove.erase(pr.second->type.get_comp_param());
+    }
+  }
+
+  for (auto dict_id : dicts_to_remove) {
+    dicts_.erase(dict_id);
+  }
 }
 
 void ArrowStorage::checkNewTableParams(const std::string& table_name,

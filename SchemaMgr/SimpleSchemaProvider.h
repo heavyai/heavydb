@@ -137,6 +137,18 @@ class SimpleSchemaProvider : public SchemaProvider {
         db_id, table_id, col_id, "rowid", SQLTypeInfo(SQLTypes::kBIGINT), true);
   }
 
+  void dropTable(int db_id, int table_id) {
+    auto tinfo = getTableInfo(db_id, table_id);
+    CHECK(tinfo);
+    auto col_infos = listColumns(*tinfo);
+    table_infos_.erase(*tinfo);
+    table_index_by_name_.at(db_id).erase(tinfo->name);
+    for (auto& col_info : col_infos) {
+      column_infos_.erase(*col_info);
+      column_index_by_name_.at(*tinfo).erase(col_info->name);
+    }
+  }
+
   using TableByNameMap = std::unordered_map<std::string, TableInfoPtr>;
   using ColumnByNameMap = std::unordered_map<std::string, ColumnInfoPtr>;
 
