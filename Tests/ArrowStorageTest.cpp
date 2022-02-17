@@ -595,6 +595,17 @@ TEST_F(ArrowStorageTest, ImportCsv_UnknownSchema_Numbers_NoHeader) {
   Test_ImportCsv_Numbers("numbers_noheader.csv", parse_options, false);
 }
 
+TEST_F(ArrowStorageTest, AppendCsvData) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  TableInfoPtr tinfo = storage.createTable(
+      "table1", {{"col1", SQLTypeInfo(kINT)}, {"col2", SQLTypeInfo(kFLOAT)}});
+  ArrowStorage::CsvParseOptions parse_options;
+  parse_options.header = false;
+  storage.appendCsvData("1,10.0\n2,20.0\n3,30.0\n", tinfo->table_id, parse_options);
+  checkData(
+      storage, tinfo->table_id, 3, 32'000'000, range(3, (int32_t)1), range(3, 10.0f));
+}
+
 void Test_AppendCsv_Numbers(size_t fragment_size) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   ArrowStorage::TableOptions table_options;

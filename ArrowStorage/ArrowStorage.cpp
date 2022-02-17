@@ -20,7 +20,7 @@
 #include "Shared/threading.h"
 
 #include <arrow/csv/reader.h>
-#include <arrow/io/file.h>
+#include <arrow/io/api.h>
 #include <arrow/util/decimal.h>
 
 using namespace std::string_literals;
@@ -462,7 +462,7 @@ TableInfoPtr ArrowStorage::importCsvFile(const std::string& file_name,
                                          const std::string& table_name,
                                          const TableOptions& options,
                                          const CsvParseOptions parse_options) {
-  auto at = readCsvFile(file_name, parse_options);
+  auto at = parseCsvFile(file_name, parse_options);
   return importArrowTable(at, table_name, options);
 }
 
@@ -484,7 +484,29 @@ void ArrowStorage::appendCsvFile(const std::string& file_name,
   }
 
   auto col_infos = listColumns(db_id_, table_id);
-  auto at = readCsvFile(file_name, parse_options, col_infos);
+  auto at = parseCsvFile(file_name, parse_options, col_infos);
+  appendArrowTable(at, table_id);
+}
+
+void ArrowStorage::appendCsvData(const std::string& csv_data,
+                                 const std::string& table_name,
+                                 const CsvParseOptions parse_options) {
+  auto tinfo = getTableInfo(db_id_, table_name);
+  if (!tinfo) {
+    throw std::runtime_error("Unknown table: "s + table_name);
+  }
+  appendCsvData(csv_data, tinfo->table_id, parse_options);
+}
+
+void ArrowStorage::appendCsvData(const std::string& csv_data,
+                                 int table_id,
+                                 const CsvParseOptions parse_options) {
+  if (!tables_.count(table_id)) {
+    throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
+  }
+
+  auto col_infos = listColumns(db_id_, table_id);
+  auto at = parseCsvData(csv_data, parse_options, col_infos);
   appendArrowTable(at, table_id);
 }
 
@@ -600,8 +622,26 @@ void ArrowStorage::computeStats(std::shared_ptr<arrow::ChunkedArray> arr,
   encoder->fillChunkStats(stats, type);
 }
 
-std::shared_ptr<arrow::Table> ArrowStorage::readCsvFile(
+std::shared_ptr<arrow::Table> ArrowStorage::parseCsvFile(
     const std::string& file_name,
+    const CsvParseOptions parse_options,
+    const ColumnInfoList& col_infos) {
+  std::shared_ptr<arrow::io::ReadableFile> inp;
+  auto file_result = arrow::io::ReadableFile::Open(file_name.c_str());
+  ARROW_THROW_NOT_OK(file_result.status());
+  return parseCsv(file_result.ValueOrDie(), parse_options, col_infos);
+}
+
+std::shared_ptr<arrow::Table> ArrowStorage::parseCsvData(
+    const std::string& csv_data,
+    const CsvParseOptions parse_options,
+    const ColumnInfoList& col_infos) {
+  auto input = std::make_shared<arrow::io::BufferReader>(csv_data);
+  return parseCsv(input, parse_options, col_infos);
+}
+
+std::shared_ptr<arrow::Table> ArrowStorage::parseCsv(
+    std::shared_ptr<arrow::io::InputStream> input,
     const CsvParseOptions parse_options,
     const ColumnInfoList& col_infos) {
 #ifdef ENABLE_ARROW_4
@@ -638,13 +678,8 @@ std::shared_ptr<arrow::Table> ArrowStorage::readCsvFile(
     }
   }
 
-  std::shared_ptr<arrow::io::ReadableFile> inp;
-  auto file_result = arrow::io::ReadableFile::Open(file_name.c_str());
-  ARROW_THROW_NOT_OK(file_result.status());
-  inp = file_result.ValueOrDie();
-
   auto table_reader_result = arrow::csv::TableReader::Make(
-      io_context, inp, arrow_read_options, arrow_parse_options, arrow_convert_options);
+      io_context, input, arrow_read_options, arrow_parse_options, arrow_convert_options);
   ARROW_THROW_NOT_OK(table_reader_result.status());
   auto table_reader = table_reader_result.ValueOrDie();
 
@@ -655,7 +690,7 @@ std::shared_ptr<arrow::Table> ArrowStorage::readCsvFile(
     at = arrow_table_result.ValueOrDie();
   });
 
-  VLOG(1) << "Read Arrow CSV file " << file_name << " in " << time << "ms";
+  VLOG(1) << "Read Arrow CSV in " << time << "ms";
 
   return at;
 }

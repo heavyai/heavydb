@@ -89,6 +89,13 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                      int table_id,
                      const CsvParseOptions parse_options = CsvParseOptions());
 
+  void appendCsvData(const std::string& csv_data,
+                     const std::string& table_name,
+                     const CsvParseOptions parse_options = CsvParseOptions());
+  void appendCsvData(const std::string& csv_data,
+                     int table_id,
+                     const CsvParseOptions parse_options = CsvParseOptions());
+
  private:
   struct DataFragment {
     size_t offset = 0;
@@ -113,9 +120,15 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
   void computeStats(std::shared_ptr<arrow::ChunkedArray> arr,
                     SQLTypeInfo type,
                     ChunkStats& stats);
-  std::shared_ptr<arrow::Table> readCsvFile(const std::string& file_name,
-                                            const CsvParseOptions parse_options,
-                                            const ColumnInfoList& col_infos = {});
+  std::shared_ptr<arrow::Table> parseCsvFile(const std::string& file_name,
+                                             const CsvParseOptions parse_options,
+                                             const ColumnInfoList& col_infos = {});
+  std::shared_ptr<arrow::Table> parseCsvData(const std::string& csv_data,
+                                              const CsvParseOptions parse_options,
+                                              const ColumnInfoList& col_infos = {});
+  std::shared_ptr<arrow::Table> parseCsv(std::shared_ptr<arrow::io::InputStream> input,
+                                         const CsvParseOptions parse_options,
+                                         const ColumnInfoList& col_infos = {});
   void fetchFixedLenData(const TableData& table,
                          size_t frag_idx,
                          size_t col_idx,
