@@ -397,6 +397,8 @@ class ExecuteTestBase {
     calcite_.reset();
   }
 
+  static bool gpusPresent() { return data_mgr_->gpusPresent(); }
+
  protected:
   void createTable(
       const std::string& table_name,
@@ -506,6 +508,21 @@ std::shared_ptr<Executor> ExecuteTestBase::executor_;
 std::shared_ptr<Calcite> ExecuteTestBase::calcite_;
 SQLiteComparator ExecuteTestBase::sqlite_comparator_;
 
+bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  return device_type == ExecutorDeviceType::GPU && !(ExecuteTestBase::gpusPresent());
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
+}
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
+
 class Distributed50 : public ExecuteTestBase, public ::testing::Test {};
 
 TEST_F(Distributed50, FailOver) {
@@ -523,6 +540,17 @@ TEST_F(Distributed50, FailOver) {
   ASSERT_EQ(3, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
 
   dropTable("dist5");
+}
+
+class Errors : public ExecuteTestBase, public ::testing::Test {};
+
+TEST_F(Errors, InvalidQueries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT * FROM test WHERE 1 = 2 AND ( 1 = 2 and 3 = 4 limit 100);", dt));
+    EXPECT_ANY_THROW(run_multiple_agg("SET x = y;", dt));
+  }
 }
 
 int main(int argc, char** argv) {
