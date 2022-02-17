@@ -6343,7 +6343,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     auto stmt = Parser::InsertIntoTableAsSelectStmt(ddl_query["payload"].GetObject());
     _return.addExecutionTime(measure<>::execution([&]() { stmt.execute(*session_ptr); }));
     return;
-
   } else if (pw.is_ctas) {
     // ctas can attempt to execute here
     check_read_only("create_table_as");
@@ -6365,7 +6364,22 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           measure<>::execution([&]() { stmt.execute(*session_ptr); }));
     }
     return;
-
+  } else if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+    check_read_only("insert_into_table");
+    std::string query_ra;
+    _return.addExecutionTime(measure<>::execution([&]() {
+      TPlanResult result;
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
+      query_ra = result.plan_result;
+    }));
+    rapidjson::Document ddl_query;
+    ddl_query.Parse(query_ra);
+    CHECK(ddl_query.HasMember("payload"));
+    CHECK(ddl_query["payload"].IsObject());
+    auto stmt = Parser::InsertValuesStmt(ddl_query["payload"].GetObject());
+    _return.addExecutionTime(measure<>::execution([&]() { stmt.execute(*session_ptr); }));
+    return;
   } else if (pw.is_validate) {
     // check user is superuser
     if (!session_ptr->get_currentUser().isSuper) {

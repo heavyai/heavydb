@@ -2071,8 +2071,10 @@ class InsertStmt : public DMLStmt {
  */
 class InsertValuesStmt : public InsertStmt {
  public:
+  InsertValuesStmt(const rapidjson::Value& payload);
   InsertValuesStmt(std::string* t, std::list<std::string*>* c, std::list<Expr*>* v)
       : InsertStmt(t, c) {
+    UNREACHABLE() << "Legacy inserts should not be called anymore";
     CHECK(v);
     for (const auto e : *v) {
       value_list_.emplace_back(e);

@@ -2313,6 +2313,83 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   query.set_result_col_list(result_col_list);
 }
 
+namespace {
+Literal* parse_insert_literal(const rapidjson::Value& literal) {
+  CHECK(literal.IsObject());
+  CHECK(literal.HasMember("literal"));
+  CHECK(literal.HasMember("type"));
+  auto type = json_str(literal["type"]);
+  if (type == "NULL") {
+    return new NullLiteral();
+  } else if (type == "CHAR" || type == "BOOLEAN") {
+    auto* val = new std::string(json_str(literal["literal"]));
+    return new StringLiteral(val);
+  } else if (type == "DECIMAL") {
+    CHECK(literal.HasMember("scale"));
+    CHECK(literal.HasMember("precision"));
+    auto scale = json_i64(literal["scale"]);
+    auto precision = json_i64(literal["precision"]);
+    auto* val = new std::string(json_str(literal["literal"]));
+    if (scale == 0) {
+      auto int_val = std::stol(*val);
+      delete val;
+      return new IntLiteral(int_val);
+    } else if (precision > 18) {
+      auto dbl_val = std::stod(*val);
+      delete val;
+      return new DoubleLiteral(dbl_val);
+    } else {
+      return new FixedPtLiteral(val);
+    }
+  } else {
+    CHECK(false) << "Unexpected calcite data type: " << type;
+  }
+  return nullptr;
+}
+
+ArrayLiteral* parse_insert_array_literal(const rapidjson::Value& array) {
+  CHECK(array.IsArray());
+  auto json_elements = array.GetArray();
+  auto* elements = new std::list<Expr*>();
+  for (const auto& e : json_elements) {
+    elements->push_back(parse_insert_literal(e));
+  }
+  return new ArrayLiteral(elements);
+}
+}  // namespace
+
+InsertValuesStmt::InsertValuesStmt(const rapidjson::Value& payload)
+    : InsertStmt(nullptr, nullptr) {
+  CHECK(payload.HasMember("name"));
+  table_ = std::make_unique<std::string>(json_str(payload["name"]));
+
+  if (payload.HasMember("columns")) {
+    CHECK(payload["columns"].IsArray());
+    for (auto& column : payload["columns"].GetArray()) {
+      std::string s = json_str(column);
+      column_list_.emplace_back(std::make_unique<std::string>(s));
+    }
+  }
+
+  CHECK(payload.HasMember("values") && payload["values"].IsArray());
+  auto tuples = payload["values"].GetArray();
+  if (tuples.Empty()) {
+    throw std::runtime_error("Values statement cannot be empty");
+  } else if (tuples.Size() > 1) {
+    throw std::runtime_error("Batch inserts are not supported yet");
+  }
+  CHECK(tuples[0].IsArray());
+  auto tuple = tuples[0].GetArray();
+  for (const auto& value : tuple) {
+    CHECK(value.IsObject());
+    if (value.HasMember("array")) {
+      value_list_.emplace_back(parse_insert_array_literal(value["array"]));
+    } else {
+      value_list_.emplace_back(parse_insert_literal(value));
+    }
+  }
+}
+
 size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& catalog,
                                             size_t num_leafs) {
   const TableDescriptor* td = catalog.getMetadataForTable(*table_);

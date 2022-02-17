@@ -716,46 +716,35 @@ SqlDdl SqlAlterTable(Span s) :
     }
 }
 
-SqlNode WrappedOrderedQueryOrExpr(ExprContext exprContext) :
-{
-    final SqlNode query;
-}
-{
-        <LPAREN>
-        query = OrderedQueryOrExpr(exprContext)
-        <RPAREN>
-        { return query; }
-    |
-        query = OrderedQueryOrExpr(exprContext)
-        { return query; }
-}
-
-/* 
- * Insert into table(s) using the following syntax:
+/*
+ * Insert into table(s) using one of the following forms:
  *
- * INSERT INTO <table_name> [columns] <select>
+ * 1) INSERT INTO <table_name> [columns] <values>
+ * 2) INSERT INTO <table_name> [columns] <select>
  */
-SqlInsertIntoTable SqlInsertIntoTable(Span s) :
+SqlNode SqlInsertIntoTable(Span s) :
 {
-    final SqlIdentifier table;
-    final SqlNode query;
+    final List<SqlLiteral> keywords = new ArrayList<SqlLiteral>();
+    final SqlNodeList keywordList = new SqlNodeList(SqlParserPos.ZERO);
+    SqlNode table;
+    SqlNode source;
     SqlNodeList columnList = null;
 }
 {
-    <INSERT>
-    <INTO>
-    table = CompoundIdentifier()
-    (
+    <INSERT> <INTO> table = CompoundIdentifier()
+    [
         LOOKAHEAD(3)
-        columnList = ParenthesizedSimpleIdentifierList() 
-        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+        columnList = ParenthesizedSimpleIdentifierList()
+    ]
+    (
+        source = TableConstructor() {
+             return new SqlInsertValues(s.end(this), table, source, columnList);
+        }
     |
-        query = WrappedOrderedQueryOrExpr(ExprContext.ACCEPT_QUERY)
+        source = OrderedQueryOrExpr(ExprContext.ACCEPT_QUERY) {
+            return new SqlInsertIntoTable(s.end(this), table, source, columnList);
+        }
     )
-
-    {
-        return new SqlInsertIntoTable(s.end(this), table, query, columnList);
-    }
 }
 
 /*
@@ -1442,5 +1431,26 @@ SqlDdl SqlCopyTable(Span s) :
         } else {
             return new SqlExportQuery(s.end(this), query, filePath.toString(), copyOptions);
         }
+    }
+}
+
+/** Parses an ARRAY constructor */
+SqlNode CurlyArrayConstructor() :
+{
+    SqlNodeList args;
+    SqlNode e;
+    final Span s;
+}
+{
+    <LBRACE> { s = span(); }
+    (
+        args = ExpressionCommaList(s, ExprContext.ACCEPT_NON_QUERY)
+    |
+        { args = SqlNodeList.EMPTY; }
+    )
+    <RBRACE>
+    {
+        return SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR.createCall(
+            s.end(this), args.getList());
     }
 }

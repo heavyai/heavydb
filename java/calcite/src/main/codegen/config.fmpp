@@ -40,6 +40,7 @@ data: {
         "com.mapd.parser.extension.ddl.SqlDropTable"
         "com.mapd.parser.extension.ddl.SqlRenameTable"
         "com.mapd.parser.extension.ddl.SqlInsertIntoTable"
+        "com.mapd.parser.extension.ddl.SqlInsertValues"
         "com.mapd.parser.extension.ddl.SqlDumpTable"
         "com.mapd.parser.extension.ddl.SqlRestoreTable"
         "com.mapd.parser.extension.ddl.SqlTruncateTable"
@@ -569,6 +570,7 @@ data: {
       # Return type of method implementation should be "SqlNode".
       # Example: DateFunctionCall().
       builtinFunctionCallMethods: [
+        "CurlyArrayConstructor()"
       ]
 
       # List of methods for parsing extensions to "ALTER <scope>" calls.

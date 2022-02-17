@@ -577,7 +577,7 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  if (pw.isCalciteDdl()) {
+  if (pw.isCalciteDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
     const auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
@@ -590,6 +590,15 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
                                         calciteQueryParsingOption,
                                         calciteOptimizationOption)
                               .plan_result;
+    if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+      rapidjson::Document ddl_query;
+      ddl_query.Parse(query_ra);
+      CHECK(ddl_query.HasMember("payload"));
+      CHECK(ddl_query["payload"].IsObject());
+      auto stmt = Parser::InsertValuesStmt(ddl_query["payload"].GetObject());
+      stmt.execute(*session_info_);
+      return;
+    }
     DdlCommandExecutor executor = DdlCommandExecutor(query_ra, session_info_);
     executor.execute();
     return;
@@ -614,6 +623,10 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
 
   ParserWrapper pw{query_str};
   if (pw.isCalcitePathPermissable()) {
+    if (pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+      runDDLStatement(query_str);
+      return nullptr;
+    }
     const auto execution_result = runSelectQuery(query_str, std::move(co), std::move(eo));
     VLOG(1) << session_info_->getCatalog().getDataMgr().getSystemMemoryUsage();
     return execution_result->getRows();
@@ -778,7 +791,7 @@ std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
     }
 
     ParserWrapper pw{text};
-    if (pw.isCalciteDdl()) {
+    if (pw.isCalciteDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
       runDDLStatement(text);
       results.push_back(nullptr);
     } else {

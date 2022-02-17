@@ -115,7 +115,8 @@ class ParserWrapper {
       return !is_update_dml;  // If we're read-only, no update/delete DML is permissable
     }
     return !is_update_dml || (getDMLType() == ParserWrapper::DMLType::Delete) ||
-           (getDMLType() == ParserWrapper::DMLType::Update);
+           (getDMLType() == ParserWrapper::DMLType::Update ||
+            (getDMLType() == ParserWrapper::DMLType::Insert));
   }
 
   bool isCalcitePermissableDdl(bool read_only_mode) {
