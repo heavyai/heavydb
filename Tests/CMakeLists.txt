@@ -8,6 +8,7 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Udf/udf_sample.cpp DESTINATION ${CMAKE_BIN
 
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
+add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp SchemaJson.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
@@ -115,6 +116,7 @@ target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd
 target_link_libraries(DumpRestoreTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(AlterTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -207,6 +209,8 @@ add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
 add_test(NAME ExecuteTestTemporaryTables COMMAND ExecuteTest ${TEST_ARGS} "--use-temporary-tables")
 add_test(NAME ExecuteTestColumnarOutput COMMAND ExecuteTest ${TEST_ARGS} "--enable-columnar-output")
+add_test(ArrowBasedExecuteTest ArrowBasedExecuteTest ${TEST_ARGS})
+add_test(NAME ArrowBasedExecuteTestColumnarOutput COMMAND ArrowBasedExecuteTest ${TEST_ARGS} "--enable-columnar-output")
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
@@ -304,6 +308,7 @@ endif()
 set(TEST_PROGRAMS 
   DumpRestoreTest
   ExecuteTest
+  ArrowBasedExecuteTest
   CodeGeneratorTest
   ResultSetTest
   ColumnarResultsTest
@@ -378,6 +383,7 @@ endif()
 
 set(SANITY_TESTS ${TEST_PROGRAMS})
 list(APPEND SANITY_TESTS ExecuteTestTemporaryTables)
+list(APPEND SANITY_TESTS ArrowBasedExecuteTestColumnarOutput)
 list(APPEND SANITY_TESTS StringDictionaryHashTest)
 list(APPEND SANITY_TESTS ExecuteTestColumnarOutput)
 
