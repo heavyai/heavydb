@@ -365,7 +365,7 @@ const size_t g_num_rows{10};
 }  // namespace
 
 class ExecuteTestBase {
- protected:
+ public:
   static constexpr int TEST_SCHEMA_ID = 1;
   static constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 
@@ -395,6 +395,22 @@ class ExecuteTestBase {
     storage_.reset();
     executor_.reset();
     calcite_.reset();
+  }
+
+ protected:
+  void createTable(
+      const std::string& table_name,
+      const std::vector<ArrowStorage::ColumnDescription>& columns,
+      const ArrowStorage::TableOptions& options = ArrowStorage::TableOptions()) {
+    storage_->createTable(table_name, columns, options);
+  }
+
+  void dropTable(const std::string& table_name) { storage_->dropTable(table_name); }
+
+  void insertValues(const std::string& table_name, const std::string& values) {
+    ArrowStorage::CsvParseOptions parse_options;
+    parse_options.header = false;
+    storage_->appendCsvData(values, table_name, parse_options);
   }
 
   ExecutionResult runSqlQuery(const std::string& sql,
@@ -490,6 +506,25 @@ std::shared_ptr<Executor> ExecuteTestBase::executor_;
 std::shared_ptr<Calcite> ExecuteTestBase::calcite_;
 SQLiteComparator ExecuteTestBase::sqlite_comparator_;
 
+class Distributed50 : public ExecuteTestBase, public ::testing::Test {};
+
+TEST_F(Distributed50, FailOver) {
+  createTable("dist5", {{"col1", SQLTypeInfo(kTEXT, false, kENCODING_DICT)}});
+
+  auto dt = ExecutorDeviceType::CPU;
+
+  EXPECT_NO_THROW(insertValues("dist5", "t1"));
+  ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
+
+  EXPECT_NO_THROW(insertValues("dist5", "t2"));
+  ASSERT_EQ(2, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
+
+  EXPECT_NO_THROW(insertValues("dist5", "t3"));
+  ASSERT_EQ(3, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
+
+  dropTable("dist5");
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
@@ -578,6 +613,8 @@ int main(int argc, char** argv) {
         File_Namespace::DiskCacheLevel::all};
   }
 
+  ExecuteTestBase::init();
+
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -587,5 +624,7 @@ int main(int argc, char** argv) {
 
   Executor::nukeCacheOfExecutors();
   ResultSetReductionJIT::clearCache();
+  ExecuteTestBase::reset();
+
   return err;
 }
