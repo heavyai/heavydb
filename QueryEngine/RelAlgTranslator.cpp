@@ -30,6 +30,7 @@
 #include <future>
 
 #include "Analyzer/Analyzer.h"
+#include "Catalog/SessionInfo.h"
 #include "Parser/ParserNode.h"
 #include "Shared/likely.h"
 #include "Shared/thread_count.h"

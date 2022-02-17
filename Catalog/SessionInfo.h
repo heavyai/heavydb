@@ -29,7 +29,8 @@
 #include <utility>
 #include <vector>
 
-#include "Catalog/SysCatalog.h"
+#include "Catalog/DBObject.h"
+#include "Catalog/UserMetadata.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "Shared/Restriction.h"
 #include "SqliteConnector/SqliteConnector.h"

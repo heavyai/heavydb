@@ -12,7 +12,8 @@
  * limitations under the License.
  */
 
-#include "CatalogSchemaProvider.h"
+#include "Catalog/CatalogSchemaProvider.h"
+#include "Catalog/Catalog.h"
 
 namespace Catalog_Namespace {
 

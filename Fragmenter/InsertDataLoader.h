@@ -17,8 +17,11 @@
 #ifndef INSERT_DATA_LOADER_H_
 #define INSERT_DATA_LOADER_H_
 
-#include "../Catalog/Catalog.h"
 #include "Fragmenter.h"
+
+namespace Catalog_Namespace {
+class SessionInfo;
+}
 
 namespace Fragmenter_Namespace {
 

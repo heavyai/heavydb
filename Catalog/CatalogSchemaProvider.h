@@ -14,10 +14,11 @@
 
 #pragma once
 
-#include "Catalog.h"
 #include "SchemaMgr/SchemaProvider.h"
 
 namespace Catalog_Namespace {
+
+class Catalog;
 
 class CatalogSchemaProvider : public SchemaProvider {
  public:

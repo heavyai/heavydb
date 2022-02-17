@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,25 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef OMNISCI_IMPORTUTILS_H
+#define OMNISCI_IMPORTUTILS_H
+
+#include <memory>
+#include <vector>
+
+#include "Fragmenter/Fragmenter.h"
+#include "ImportExport/TypedImportBuffer.h"
 
 namespace Catalog_Namespace {
-class SessionInfo;
+class Catalog;
 }
 
 namespace import_export {
 
-struct ImportStatus;
+std::vector<std::unique_ptr<TypedImportBuffer>> fill_missing_columns(
+    const Catalog_Namespace::Catalog* cat,
+    Fragmenter_Namespace::InsertData& insert_data);
 
-class AbstractImporter {
- public:
-  virtual ~AbstractImporter() = default;
-
-  /*
-   * Import data returning the status of the import.
-   */
-  virtual ImportStatus import(const Catalog_Namespace::SessionInfo* session_info) = 0;
-};
 }  // namespace import_export
+
+#endif  // OMNISCI_IMPORTUTILS_H

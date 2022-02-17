@@ -34,17 +34,16 @@
 #include <boost/process/search_path.hpp>
 
 #include "../Analyzer/Analyzer.h"
-#include "../Catalog/Catalog.h"
 #include "../Distributed/AggregatedResult.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
-#include "ThriftHandler/QueryState.h"
 #include "Utils/DdlUtils.h"
 
 #include "../Fragmenter/InsertDataLoader.h"
 
-#include <ImportExport/Importer.h>
-#include <ImportExport/QueryExporter.h>
+#include "ImportExport/AbstractImporter.h"
+#include "ImportExport/CopyParams.h"
+#include "ImportExport/QueryExporter.h"
 
 #include <functional>
 

@@ -52,61 +52,23 @@ class RelAlgExecutor {
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
                  SchemaProviderPtr schema_provider,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : executor_(executor)
-      , cat_(cat)
-      , db_id_(cat->getDatabaseId())
-      , schema_provider_(schema_provider)
-      , query_state_(std::move(query_state))
-      , now_(0)
-      , queue_time_ms_(0) {}
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
                  const std::string& query_ra,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : executor_(executor)
-      , cat_(cat)
-      , db_id_(cat->getDatabaseId())
-      , query_dag_(std::make_unique<RelAlgDagBuilder>(
-            query_ra,
-            cat_->getDatabaseId(),
-            std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat),
-            nullptr))
-      , schema_provider_(
-            std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
-      , query_state_(std::move(query_state))
-      , now_(0)
-      , queue_time_ms_(0) {}
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
                  std::unique_ptr<RelAlgDag> query_dag,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : executor_(executor)
-      , cat_(cat)
-      , db_id_(cat->getDatabaseId())
-      , query_dag_(std::move(query_dag))
-      , schema_provider_(
-            std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
-      , query_state_(std::move(query_state))
-      , now_(0)
-      , queue_time_ms_(0) {}
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
                  int db_id,
                  SchemaProviderPtr schema_provider,
                  std::unique_ptr<RelAlgDag> query_dag,
-                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
-      : executor_(executor)
-      , cat_(nullptr)
-      , db_id_(db_id)
-      , query_dag_(std::move(query_dag))
-      , schema_provider_(
-            std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
-      , query_state_(std::move(query_state))
-      , now_(0)
-      , queue_time_ms_(0) {}
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
 
@@ -260,7 +222,7 @@ class RelAlgExecutor {
                               const int64_t queue_time_ms);
 
   ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
-  
+
   ExecutionResult executeUnion(const RelLogicalUnion*,
                                const RaExecutionSequence&,
                                const CompilationOptions&,

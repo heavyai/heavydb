@@ -51,6 +51,7 @@
 #include "Fragmenter/TargetValueConvertersFactories.h"
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
+#include "ImportExport/ImportUtils.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/CalciteAdapter.h"

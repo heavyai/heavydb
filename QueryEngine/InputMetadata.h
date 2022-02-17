@@ -19,6 +19,7 @@
 
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
+#include "Fragmenter/Fragmenter.h"
 
 #include <unordered_map>
 

@@ -39,7 +39,6 @@
 #include <utility>
 #include <vector>
 
-#include "Calcite/Calcite.h"
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/CustomExpression.h"
 #include "Catalog/DashboardDescriptor.h"

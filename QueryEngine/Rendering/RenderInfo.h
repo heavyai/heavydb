@@ -17,13 +17,16 @@
 #pragma once
 
 #include "Analyzer/Analyzer.h"
-#include "Catalog/Catalog.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Rendering/RenderAllocator.h"
 #include "Shared/Rendering/RenderQueryOptions.h"
 
 namespace QueryRenderer {
 struct RenderSessionKey;
+}
+
+namespace Catalog_Namespace {
+class SessionInfo;
 }
 
 class RenderInfo {

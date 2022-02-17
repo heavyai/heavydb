@@ -17,6 +17,8 @@
 #include "QueryEngine/Rendering/RenderInfo.h"
 #include "Shared/Rendering/RenderQueryOptions.h"
 
+#include "Catalog/SessionInfo.h"
+
 RenderInfo::RenderInfo(const ::QueryRenderer::RenderSessionKey& in_render_session_key,
                        const RenderQueryOptions& in_render_query_opts,
                        const bool force_non_in_situ_data)

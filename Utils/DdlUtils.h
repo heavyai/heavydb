@@ -16,7 +16,8 @@
 
 #pragma once
 
-#include "Catalog/Catalog.h"
+#include "Catalog/ColumnDescriptor.h"
+#include "Catalog/TableDescriptor.h"
 #include "Shared/sqltypes.h"
 
 namespace ddl_utils {

@@ -18,6 +18,7 @@
 
 #include <memory>
 
+#include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
 
 const Parser::SharedDictionaryDef compress_reference_path(

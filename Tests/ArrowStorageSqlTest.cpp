@@ -16,6 +16,8 @@
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "Calcite/Calcite.h"
+
 
 #include "gen-cpp/CalciteServer.h"
 

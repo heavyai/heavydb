@@ -20,6 +20,7 @@
 
 #include <iostream>
 
+#include "Catalog/SysCatalog.h"
 #include "CommandLineOptions.h"
 #include "LeafHostInfo.h"
 #include "MapDRelease.h"
