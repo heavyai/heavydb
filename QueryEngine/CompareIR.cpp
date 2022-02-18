@@ -292,65 +292,6 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     VLOG(1) << "Failed to build overlaps hash table, short circuiting overlaps operator.";
     return llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), true);
   }
-  // TODO(adb): we should never get here, but going to leave this in place for now since
-  // it will likely be useful in factoring the bounds check out of ST_Contains
-  CHECK(lhs_ti.is_geometry());
-
-  if (lhs_ti.is_geometry()) {
-    // only point in linestring/poly/mpoly is currently supported
-    CHECK(lhs_ti.get_type() == kPOINT);
-    const auto lhs_col = dynamic_cast<Analyzer::ColumnVar*>(lhs.get());
-    CHECK(lhs_col);
-
-    // Get the actual point data column descriptor
-    const auto& schema_provider = executor()->getSchemaProvider();
-    const auto coords_info = schema_provider->getColumnInfo(executor()->getDatabaseId(),
-                                                            lhs_col->get_table_id(),
-                                                            lhs_col->get_column_id() + 1);
-    CHECK(coords_info);
-
-    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
-    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(coords_info, lhs_col->get_rte_idx()));
-
-    Datum input_compression;
-    input_compression.intval =
-        (lhs_ti.get_compression() == kENCODING_GEOINT && lhs_ti.get_comp_param() == 32)
-            ? 1
-            : 0;
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
-    Datum input_srid;
-    input_srid.intval = lhs_ti.get_input_srid();
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
-    Datum output_srid;
-    output_srid.intval = lhs_ti.get_output_srid();
-    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
-
-    const auto x_ptr_oper = makeExpr<Analyzer::FunctionOper>(
-        SQLTypeInfo(kDOUBLE, true), "ST_X_Point", geoargs);
-    const auto y_ptr_oper = makeExpr<Analyzer::FunctionOper>(
-        SQLTypeInfo(kDOUBLE, true), "ST_Y_Point", geoargs);
-
-    const auto rhs_ti = rhs->get_type_info();
-    CHECK(IS_GEO_POLY(rhs_ti.get_type()));
-    const auto rhs_col = dynamic_cast<Analyzer::ColumnVar*>(rhs.get());
-    CHECK(rhs_col);
-
-    const auto poly_bounds_info = schema_provider->getColumnInfo(
-        executor()->getDatabaseId(),
-        rhs_col->get_table_id(),
-        rhs_col->get_column_id() + rhs_ti.get_physical_coord_cols() + 1);
-
-    auto bbox_col_var =
-        makeExpr<Analyzer::ColumnVar>(poly_bounds_info, rhs_col->get_rte_idx());
-
-    const auto bbox_contains_func_oper =
-        makeExpr<Analyzer::FunctionOper>(SQLTypeInfo(kBOOLEAN, false),
-                                         "Point_Overlaps_Box",
-                                         std::vector<std::shared_ptr<Analyzer::Expr>>{
-                                             bbox_col_var, x_ptr_oper, y_ptr_oper});
-
-    return codegenFunctionOper(bbox_contains_func_oper.get(), co);
-  }
 
   CHECK(false) << "Unsupported type for overlaps operator: " << lhs_ti.get_type_name();
   return nullptr;

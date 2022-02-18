@@ -204,9 +204,8 @@ void SortedOrderFragmenter::sortData(InsertData& insertDataStruct) {
   const auto logical_cd =
       catalog_->getMetadataForColumn(table_desc->tableId, table_desc->sortedColumnId);
   CHECK(logical_cd);
-  const auto physical_cd = catalog_->getMetadataForColumn(
-      table_desc->tableId,
-      table_desc->sortedColumnId + (logical_cd->columnType.is_geometry() ? 1 : 0));
+  const auto physical_cd =
+      catalog_->getMetadataForColumn(table_desc->tableId, table_desc->sortedColumnId);
   const auto it = std::find(insertDataStruct.columnIds.begin(),
                             insertDataStruct.columnIds.end(),
                             physical_cd->columnId);

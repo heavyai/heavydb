@@ -15,7 +15,7 @@
 #include "sqltypes_geo.h"
 
 SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx) {
-  CHECK(geo_ti.is_geometry());
+  CHECK(false);
   switch (geo_ti.get_type()) {
     case kPOINT: {
       // coords
@@ -109,7 +109,7 @@ SQLTypeInfo get_geo_physical_col_type(const SQLTypeInfo& geo_ti, size_t col_idx)
 std::string get_geo_physical_col_name(const std::string& name,
                                       const SQLTypeInfo& geo_ti,
                                       size_t col_idx) {
-  CHECK(geo_ti.is_geometry());
+  CHECK(false);
   switch (geo_ti.get_type()) {
     case kPOINT: {
       CHECK_EQ(col_idx, (size_t)0);

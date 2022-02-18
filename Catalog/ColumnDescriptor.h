@@ -70,7 +70,7 @@ struct ColumnDescriptor {
   std::string getDefaultValueLiteral() const {
     // some preprocessing of strings, arrays and especially arrays of strings
     CHECK(default_value.has_value());
-    if (columnType.is_string() || columnType.is_geometry() || columnType.is_time()) {
+    if (columnType.is_string() || columnType.is_time()) {
       return "\'" + default_value.value() + "\'";
     } else if (columnType.is_array()) {
       auto value = default_value.value();

@@ -329,27 +329,6 @@ void InsertOrderFragmenter::updateColumns(
               : nullptr};
       auto converter = factory.create(param);
       sourceDataConverters[indexOfTargetColumn] = std::move(converter);
-
-      if (targetDescriptor->columnType.is_geometry()) {
-        // geometry columns are composites
-        // need to skip chunks, depending on geo type
-        switch (targetDescriptor->columnType.get_type()) {
-          case kMULTIPOLYGON:
-            indexOfChunk += 5;
-            break;
-          case kPOLYGON:
-            indexOfChunk += 4;
-            break;
-          case kLINESTRING:
-            indexOfChunk += 2;
-            break;
-          case kPOINT:
-            indexOfChunk += 1;
-            break;
-          default:
-            CHECK(false);  // not supported
-        }
-      }
     } else {
       if (chunk_info->type.is_varlen() || chunk_info->type.is_fixlen_array()) {
         std::unique_ptr<ChunkToInsertDataConverter> converter;
@@ -358,9 +337,6 @@ void InsertOrderFragmenter::updateColumns(
           converter =
               std::make_unique<FixedLenArrayChunkConverter>(num_rows, chunk.get());
         } else if (chunk_info->type.is_string()) {
-          converter = std::make_unique<StringChunkConverter>(num_rows, chunk.get());
-        } else if (chunk_info->type.is_geometry()) {
-          // the logical geo column is a string column
           converter = std::make_unique<StringChunkConverter>(num_rows, chunk.get());
         } else {
           converter = std::make_unique<ArrayChunkConverter>(num_rows, chunk.get());
@@ -932,7 +908,7 @@ void InsertOrderFragmenter::updateColumnMetadata(
     update_stats((int64_t)(new_values_stats.min_double * pow(10, lhs_type.get_scale())),
                  (int64_t)(new_values_stats.max_double * pow(10, lhs_type.get_scale())),
                  new_values_stats.has_null);
-  } else if (!lhs_type.is_array() && !lhs_type.is_geometry() &&
+  } else if (!lhs_type.is_array() &&
              !(lhs_type.is_string() && kENCODING_DICT != lhs_type.get_compression())) {
     update_stats(new_values_stats.min_int64t,
                  new_values_stats.max_int64t,

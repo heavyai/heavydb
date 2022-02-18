@@ -47,15 +47,10 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
                                            const bool is_varlen_projection) {
   const auto& chosen_type = get_compact_type(target_info);
   if (is_varlen_projection) {
-    // TODO: support other types here
-    CHECK(chosen_type.is_geometry());
+    UNREACHABLE();
     return {"agg_id_varlen"};
   }
   if (!target_info.is_agg || target_info.agg_kind == kSAMPLE) {
-    if (chosen_type.is_geometry()) {
-      return std::vector<std::string>(2 * chosen_type.get_physical_coord_cols(),
-                                      "agg_id");
-    }
     if (chosen_type.is_varlen()) {
       // not a varlen projection (not creating new varlen outputs). Just store the pointer
       // and offset into the input buffer in the output slots.
@@ -98,8 +93,7 @@ bool is_simple_count(const TargetInfo& target_info) {
 }
 
 bool target_has_geo(const TargetInfo& target_info) {
-  return target_info.is_agg ? target_info.agg_arg_type.is_geometry()
-                            : target_info.sql_type.is_geometry();
+  return false;
 }
 
 }  // namespace
@@ -151,21 +145,6 @@ void TargetExprCodegen::codegen(
     // two components (pointer and length) for the purpose of projection
     str_target_lv = target_lvs.front();
     target_lvs.erase(target_lvs.begin());
-  }
-  if (target_info.sql_type.is_geometry() && !varlen_projection) {
-    // Geo cols are expanded to the physical coord cols. Each physical coord col is an
-    // array. Ensure that the target values generated match the number of agg
-    // functions before continuing
-    if (target_lvs.size() < agg_fn_names.size()) {
-      CHECK_EQ(target_lvs.size(), agg_fn_names.size() / 2);
-      std::vector<llvm::Value*> new_target_lvs;
-      new_target_lvs.reserve(agg_fn_names.size());
-      for (const auto& target_lv : target_lvs) {
-        new_target_lvs.push_back(target_lv);
-        new_target_lvs.push_back(target_lv);
-      }
-      target_lvs = new_target_lvs;
-    }
   }
   if (target_lvs.size() < agg_fn_names.size()) {
     CHECK_EQ(size_t(1), target_lvs.size());
@@ -528,12 +507,11 @@ void TargetExprCodegen::codegenAggregate(
           target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
       const auto& arg_ti = target_info.agg_arg_type;
-      if (need_skip_null && !arg_ti.is_geometry()) {
+      if (need_skip_null) {
         agg_fname += "_skip_val";
       }
 
-      if (target_info.agg_kind == kSINGLE_VALUE ||
-          (need_skip_null && !arg_ti.is_geometry())) {
+      if (target_info.agg_kind == kSINGLE_VALUE || need_skip_null) {
         llvm::Value* null_in_lv{nullptr};
         if (arg_ti.is_fp()) {
           null_in_lv =

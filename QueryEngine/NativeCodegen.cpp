@@ -1678,12 +1678,6 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
       if (is_varlen) {
         result.emplace_back("agg_id");
       }
-      if (target_type_info.is_geometry()) {
-        result.emplace_back("agg_id");
-        for (auto i = 2; i < 2 * target_type_info.get_physical_coord_cols(); ++i) {
-          result.emplace_back("agg_id");
-        }
-      }
       continue;
     }
     const auto agg_type = agg_expr->get_aggtype();
@@ -1704,10 +1698,8 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
         break;
       }
       case kMIN: {
-        if (agg_type_info.is_string() || agg_type_info.is_array() ||
-            agg_type_info.is_geometry()) {
-          throw std::runtime_error(
-              "MIN on strings, arrays or geospatial types not supported yet");
+        if (agg_type_info.is_string() || agg_type_info.is_array()) {
+          throw std::runtime_error("MIN on strings or arrays types not supported yet");
         }
         result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
                                 ? "agg_min"
@@ -1715,10 +1707,8 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
         break;
       }
       case kMAX: {
-        if (agg_type_info.is_string() || agg_type_info.is_array() ||
-            agg_type_info.is_geometry()) {
-          throw std::runtime_error(
-              "MAX on strings, arrays or geospatial types not supported yet");
+        if (agg_type_info.is_string() || agg_type_info.is_array()) {
+          throw std::runtime_error("MAX on strings or arrays types not supported yet");
         }
         result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
                                 ? "agg_max"

@@ -349,22 +349,9 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
       CHECK(col_var);
       auto col_id = col_var->get_column_id();
       auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
-      if (col_var->get_type_info().is_geometry()) {
-        // Geo coords cols will be processed in sequence. So we only need to track the
-        // first coords col in lazy fetch info.
-        {
-          auto col0_ti = get_geo_physical_col_type(col_var->get_type_info(), 0);
-          auto col0_var = makeExpr<Analyzer::ColumnVar>(
-              col0_ti, col_var->get_table_id(), col_id + 1, rte_idx);
-          auto local_col0_id = plan_state_->getLocalColumnId(col0_var.get(), false);
-          col_lazy_fetch_info.emplace_back(
-              ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
-        }
-      } else {
-        auto local_col_id = plan_state_->getLocalColumnId(col_var, false);
-        const auto& col_ti = col_var->get_type_info();
-        col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
-      }
+      auto local_col_id = plan_state_->getLocalColumnId(col_var, false);
+      const auto& col_ti = col_var->get_type_info();
+      col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
     }
   }
   return col_lazy_fetch_info;
@@ -1868,11 +1855,7 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
       entry.push_back(0);
       entry.push_back(0);
     } else if (agg_info.agg_kind == kSINGLE_VALUE || agg_info.agg_kind == kSAMPLE) {
-      if (agg_info.sql_type.is_geometry() && !agg_info.is_varlen_projection) {
-        for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
-          entry.push_back(0);
-        }
-      } else if (agg_info.sql_type.is_varlen()) {
+      if (agg_info.sql_type.is_varlen()) {
         entry.push_back(0);
         entry.push_back(0);
       } else {
@@ -2989,58 +2972,49 @@ int32_t Executor::executePlanWithoutGroupBy(
       CHECK(agg_info.is_agg || dynamic_cast<Analyzer::Constant*>(target_expr))
           << target_expr->toString();
 
-      const int num_iterations = agg_info.sql_type.is_geometry()
-                                     ? agg_info.sql_type.get_physical_coord_cols()
-                                     : 1;
-
-      for (int i = 0; i < num_iterations; i++) {
-        int64_t val1;
-        const bool float_argument_input = takes_float_argument(agg_info);
-        if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_QUANTILE) {
-          CHECK(agg_info.agg_kind == kCOUNT ||
-                agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
-                agg_info.agg_kind == kAPPROX_QUANTILE);
-          val1 = out_vec[out_vec_idx][0];
-          error_code = 0;
-        } else {
-          const auto chosen_bytes = static_cast<size_t>(
-              query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx));
-          std::tie(val1, error_code) = Executor::reduceResults(
-              agg_info.agg_kind,
-              agg_info.sql_type,
-              query_exe_context->getAggInitValForIndex(out_vec_idx),
-              float_argument_input ? sizeof(int32_t) : chosen_bytes,
-              out_vec[out_vec_idx],
-              entry_count,
-              false,
-              float_argument_input);
-        }
+      int64_t val1;
+      const bool float_argument_input = takes_float_argument(agg_info);
+      if (is_distinct_target(agg_info) || agg_info.agg_kind == kAPPROX_QUANTILE) {
+        CHECK(agg_info.agg_kind == kCOUNT ||
+              agg_info.agg_kind == kAPPROX_COUNT_DISTINCT ||
+              agg_info.agg_kind == kAPPROX_QUANTILE);
+        val1 = out_vec[out_vec_idx][0];
+        error_code = 0;
+      } else {
+        const auto chosen_bytes = static_cast<size_t>(
+            query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx));
+        std::tie(val1, error_code) =
+            Executor::reduceResults(agg_info.agg_kind,
+                                    agg_info.sql_type,
+                                    query_exe_context->getAggInitValForIndex(out_vec_idx),
+                                    float_argument_input ? sizeof(int32_t) : chosen_bytes,
+                                    out_vec[out_vec_idx],
+                                    entry_count,
+                                    false,
+                                    float_argument_input);
+      }
+      if (error_code) {
+        break;
+      }
+      reduced_outs.push_back(val1);
+      if (agg_info.agg_kind == kAVG ||
+          (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen())) {
+        const auto chosen_bytes = static_cast<size_t>(
+            query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx + 1));
+        int64_t val2;
+        std::tie(val2, error_code) = Executor::reduceResults(
+            agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
+            agg_info.sql_type,
+            query_exe_context->getAggInitValForIndex(out_vec_idx + 1),
+            float_argument_input ? sizeof(int32_t) : chosen_bytes,
+            out_vec[out_vec_idx + 1],
+            entry_count,
+            false,
+            false);
         if (error_code) {
           break;
         }
-        reduced_outs.push_back(val1);
-        if (agg_info.agg_kind == kAVG ||
-            (agg_info.agg_kind == kSAMPLE &&
-             (agg_info.sql_type.is_varlen() || agg_info.sql_type.is_geometry()))) {
-          const auto chosen_bytes = static_cast<size_t>(
-              query_exe_context->query_mem_desc_.getPaddedSlotWidthBytes(out_vec_idx +
-                                                                         1));
-          int64_t val2;
-          std::tie(val2, error_code) = Executor::reduceResults(
-              agg_info.agg_kind == kAVG ? kCOUNT : agg_info.agg_kind,
-              agg_info.sql_type,
-              query_exe_context->getAggInitValForIndex(out_vec_idx + 1),
-              float_argument_input ? sizeof(int32_t) : chosen_bytes,
-              out_vec[out_vec_idx + 1],
-              entry_count,
-              false,
-              false);
-          if (error_code) {
-            break;
-          }
-          reduced_outs.push_back(val2);
-          ++out_vec_idx;
-        }
+        reduced_outs.push_back(val2);
         ++out_vec_idx;
       }
     }

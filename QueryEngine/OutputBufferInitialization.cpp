@@ -53,13 +53,6 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
           (agg_ti.is_string() && agg_ti.get_compression() == kENCODING_NONE)) {
         agg_init_vals.push_back(0);
       }
-      if (agg_ti.is_geometry()) {
-        agg_init_vals.push_back(0);
-        for (auto i = 1; i < agg_ti.get_physical_coord_cols(); ++i) {
-          agg_init_vals.push_back(0);
-          agg_init_vals.push_back(0);
-        }
-      }
       continue;
     }
     CHECK_GT(query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx), 0);

@@ -49,7 +49,7 @@ void init_chunk_for_column(
     CHECK_EQ(index_buffer->size(), static_cast<size_t>(0));
 
     size_t index_offset_size{0};
-    if (column->columnType.is_string() || column->columnType.is_geometry()) {
+    if (column->columnType.is_string()) {
       index_offset_size = sizeof(StringOffsetT);
     } else if (column->columnType.is_array()) {
       index_offset_size = sizeof(ArrayOffsetT);

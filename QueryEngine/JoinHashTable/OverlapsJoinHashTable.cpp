@@ -1398,40 +1398,7 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
   CodeGenerator code_generator(executor_);
   CHECK_EQ(inverse_bucket_sizes_for_dimension_.size(), static_cast<size_t>(2));
 
-  if (outer_geo_ti.is_geometry()) {
-    // TODO(adb): for points we will use the coords array, but for other geometries we
-    // will need to use the bounding box. For now only support points.
-    CHECK_EQ(outer_geo_ti.get_type(), kPOINT);
-
-    if (const auto outer_geo_col = dynamic_cast<const Analyzer::ColumnVar*>(outer_geo)) {
-      const auto outer_geo_col_lvs = code_generator.codegen(outer_geo_col, true, co);
-      CHECK_EQ(outer_geo_col_lvs.size(), size_t(1));
-      const auto coords_info = executor_->getSchemaProvider()->getColumnInfo(
-          executor_->getDatabaseId(),
-          outer_geo_col->get_table_id(),
-          outer_geo_col->get_column_id() + 1);
-      CHECK(coords_info);
-
-      const auto array_ptr = executor_->cgen_state_->emitExternalCall(
-          "array_buff",
-          llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
-          {outer_geo_col_lvs.front(), code_generator.posArg(outer_geo_col)});
-      CHECK(coords_info->type.get_elem_type().get_type() == kTINYINT)
-          << "Only TINYINT coordinates columns are supported in geo overlaps hash join.";
-      arr_ptr =
-          code_generator.castArrayPointer(array_ptr, coords_info->type.get_elem_type());
-    } else if (const auto outer_geo_function_operator =
-                   dynamic_cast<const Analyzer::GeoOperator*>(outer_geo)) {
-      // Process points dynamically constructed by geo function operators
-      const auto outer_geo_function_operator_lvs =
-          code_generator.codegen(outer_geo_function_operator, true, co);
-      CHECK_EQ(outer_geo_function_operator_lvs.size(), size_t(2));
-      arr_ptr = outer_geo_function_operator_lvs.front();
-    } else if (const auto outer_geo_expr =
-                   dynamic_cast<const Analyzer::GeoExpr*>(outer_geo)) {
-      UNREACHABLE() << outer_geo_expr->toString();
-    }
-  } else if (outer_geo_ti.is_fixlen_array()) {
+  if (outer_geo_ti.is_fixlen_array()) {
     // Process dynamically constructed points
     const auto outer_geo_cast_coord_array =
         dynamic_cast<const Analyzer::UOper*>(outer_geo);

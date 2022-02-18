@@ -100,10 +100,6 @@ std::vector<int64_t> result_set::initialize_target_values_for_storage(
     }
     if (target_info.agg_kind == kAVG) {
       target_init_vals.push_back(0);
-    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_geometry()) {
-      for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
-        target_init_vals.push_back(0);
-      }
     } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
       target_init_vals.push_back(0);
     }

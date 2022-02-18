@@ -125,34 +125,8 @@ class PointN : public Codegen {
                                     CodeGenerator::NullCheckCodegen* nullcheck_codegen,
                                     CgenState* cgen_state,
                                     const CompilationOptions& co) final {
-    CHECK_EQ(args.size(), size_t(3));  // ptr, size, index
-    const auto& geo_ti = getOperand(0)->get_type_info();
-    CHECK(geo_ti.is_geometry());
-
-    llvm::Value* array_buff_cast{nullptr};
-
-    auto& builder = cgen_state->ir_builder_;
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      array_buff_cast = builder.CreateBitCast(
-          args.front(), llvm::Type::getInt32PtrTy(cgen_state->context_));
-    } else {
-      array_buff_cast = builder.CreateBitCast(
-          args.front(), llvm::Type::getDoublePtrTy(cgen_state->context_));
-    }
-
-    const auto index_lv = args.back();
-    auto array_offset_lv =
-        builder.CreateGEP(array_buff_cast, index_lv, operator_->getName() + "_Offset");
-    CHECK(nullcheck_codegen);
-    auto ret_lv = nullcheck_codegen->finalize(
-        llvm::ConstantPointerNull::get(
-            geo_ti.get_compression() == kENCODING_GEOINT
-                ? llvm::PointerType::get(llvm::Type::getInt32Ty(cgen_state->context_), 0)
-                : llvm::PointerType::get(llvm::Type::getDoubleTy(cgen_state->context_),
-                                         0)),
-        array_offset_lv);
-    const auto geo_size_lv = args[1];
-    return {ret_lv, geo_size_lv};
+    UNREACHABLE();
+    return {nullptr, nullptr};
   }
 };
 

@@ -30,26 +30,8 @@ class NRings : public Codegen {
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kINT); }
 
   const Analyzer::Expr* getOperand(const size_t index) final {
-    CHECK_EQ(index, size_t(0));
-    if (operand_owned_) {
-      return operand_owned_.get();
-    }
-
-    const auto operand = operator_->getOperand(0);
-    auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(operand);
-    CHECK(col_var);
-
-    const auto& geo_ti = col_var->get_type_info();
-    CHECK(geo_ti.is_geometry());
-    is_nullable_ = !geo_ti.get_notnull();
-
-    // create a new operand which is just the ring sizes and codegen it
-    const auto ring_sizes_column_id = col_var->get_column_id() + 2;  // + 2 for ring sizes
-    auto ti = get_geo_physical_col_type(col_var->get_type_info(), 1);
-
-    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
-        ti, col_var->get_table_id(), ring_sizes_column_id, col_var->get_rte_idx());
-    return operand_owned_.get();
+    UNREACHABLE();
+    return nullptr;
   }
 
   // returns arguments lvs and null lv

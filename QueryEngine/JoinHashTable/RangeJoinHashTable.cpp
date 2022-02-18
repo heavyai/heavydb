@@ -81,77 +81,8 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint,
     const TableIdToNodeMap& table_id_to_node_map) {
-  // the hash table is built over the LHS of the range oper. we then use the lhs
-  // of the bin oper + the rhs of the range oper for the probe
-  auto range_expr_col_var =
-      dynamic_cast<const Analyzer::ColumnVar*>(range_expr->get_left_operand());
-  if (!range_expr_col_var || !range_expr_col_var->get_type_info().is_geometry()) {
-    throw HashJoinFail("Could not build hash tables for range join | " +
-                       range_expr->toString());
-  }
-  const auto& schema_provider = executor->getSchemaProvider();
-  CHECK(range_expr_col_var->get_type_info().is_geometry());
-
-  auto coords_info =
-      schema_provider->getColumnInfo(executor->getDatabaseId(),
-                                     range_expr_col_var->get_table_id(),
-                                     range_expr_col_var->get_column_id() + 1);
-  CHECK(coords_info);
-
-  auto range_join_inner_col_expr =
-      makeExpr<Analyzer::ColumnVar>(coords_info, range_expr_col_var->get_rte_idx());
-
-  std::vector<InnerOuter> inner_outer_pairs;
-  inner_outer_pairs.emplace_back(
-      InnerOuter{dynamic_cast<Analyzer::ColumnVar*>(range_join_inner_col_expr.get()),
-                 condition->get_left_operand()});
-
-  const auto& query_info =
-      get_inner_query_info(HashJoin::getInnerTableId(inner_outer_pairs), query_infos)
-          .info;
-
-  const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
-    throw TooManyHashEntries();
-  }
-
-  auto hashtable_cache_key_string =
-      HashtableRecycler::getHashtableKeyString(inner_outer_pairs,
-                                               condition->get_optype(),
-                                               join_type,
-                                               hashtable_build_dag_map,
-                                               executor);
-
-  auto join_hash_table =
-      std::make_shared<RangeJoinHashTable>(condition,
-                                           join_type,
-                                           range_expr,
-                                           range_join_inner_col_expr,
-                                           query_infos,
-                                           memory_level,
-                                           column_cache,
-                                           executor,
-                                           inner_outer_pairs,
-                                           device_count,
-                                           hashtable_cache_key_string.first,
-                                           hashtable_cache_key_string.second,
-                                           hashtable_build_dag_map,
-                                           table_id_to_node_map);
-  try {
-    join_hash_table->reifyWithLayout(HashType::OneToMany);
-  } catch (const HashJoinFail& e) {
-    throw HashJoinFail(std::string("Could not build a 1-to-1 correspondence for columns "
-                                   "involved in equijoin | ") +
-                       e.what());
-  } catch (const ColumnarConversionNotSupported& e) {
-    throw HashJoinFail(std::string("Could not build hash tables for equijoin | ") +
-                       e.what());
-  } catch (const std::exception& e) {
-    LOG(FATAL) << "Fatal error while attempting to build hash tables for join: "
-               << e.what();
-  }
-
-  return join_hash_table;
+  UNREACHABLE();
+  return nullptr;
 }
 
 void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
@@ -652,76 +583,7 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
   const auto outer_col = inner_outer_pair.second;
   const auto outer_col_ti = outer_col->get_type_info();
 
-  if (outer_col_ti.is_geometry()) {
-    CodeGenerator code_generator(executor_);
-    // TODO(adb): for points we will use the coords array, but for other
-    // geometries we will need to use the bounding box. For now only support
-    // points.
-    CHECK_EQ(outer_col_ti.get_type(), kPOINT);
-    CHECK_EQ(inverse_bucket_sizes_for_dimension_.size(), static_cast<size_t>(2));
-
-    const auto col_lvs = code_generator.codegen(outer_col, true, co);
-    CHECK_EQ(col_lvs.size(), size_t(1));
-
-    const auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
-    CHECK(outer_col_var);
-
-    const auto coords_info = executor_->getSchemaProvider()->getColumnInfo(
-        executor_->getDatabaseId(),
-        outer_col_var->get_table_id(),
-        outer_col_var->get_column_id() + 1);
-    CHECK(coords_info);
-
-    const auto array_ptr = executor_->cgen_state_->emitExternalCall(
-        "array_buff",
-        llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
-        {col_lvs.front(), code_generator.posArg(outer_col)});
-    CHECK(coords_info->type.get_elem_type().get_type() == kTINYINT)
-        << "Only TINYINT coordinates columns are supported in geo overlaps "
-           "hash join.";
-
-    const auto arr_ptr =
-        code_generator.castArrayPointer(array_ptr, coords_info->type.get_elem_type());
-
-    // load and unpack offsets
-    const auto offset = LL_BUILDER.CreateLoad(offset_ptr, "packed_bucket_offset");
-    const auto x_offset =
-        LL_BUILDER.CreateTrunc(offset, llvm::Type::getInt32Ty(LL_CONTEXT));
-
-    const auto y_offset_shifted =
-        LL_BUILDER.CreateLShr(offset, LL_INT(static_cast<int64_t>(32)));
-    const auto y_offset =
-        LL_BUILDER.CreateTrunc(y_offset_shifted, llvm::Type::getInt32Ty(LL_CONTEXT));
-
-    const auto x_bucket_offset =
-        LL_BUILDER.CreateSExt(x_offset, llvm::Type::getInt64Ty(LL_CONTEXT));
-    const auto y_bucket_offset =
-        LL_BUILDER.CreateSExt(y_offset, llvm::Type::getInt64Ty(LL_CONTEXT));
-
-    for (size_t i = 0; i < 2; i++) {
-      const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
-
-      const auto funcName = isProbeCompressed() ? "get_bucket_key_for_range_compressed"
-                                                : "get_bucket_key_for_range_double";
-
-      // Note that get_bucket_key_for_range_compressed will need to be
-      // specialized for future compression schemes
-      auto bucket_key = executor_->cgen_state_->emitExternalCall(
-          funcName,
-          get_int_type(64, LL_CONTEXT),
-          {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])});
-
-      auto bucket_key_shifted = i == 0
-                                    ? LL_BUILDER.CreateAdd(x_bucket_offset, bucket_key)
-                                    : LL_BUILDER.CreateAdd(y_bucket_offset, bucket_key);
-
-      const auto col_lv = LL_BUILDER.CreateSExt(
-          bucket_key_shifted, get_int_type(key_component_width * 8, LL_CONTEXT));
-      LL_BUILDER.CreateStore(col_lv, key_comp_dest_lv);
-    }
-  } else {
-    LOG(FATAL) << "Range join key currently only supported for geospatial types.";
-  }
+  LOG(FATAL) << "Range join key currently only supported for geospatial types.";
   return key_buff_lv;
 }
 

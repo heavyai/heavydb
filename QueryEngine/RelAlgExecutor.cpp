@@ -1607,16 +1607,15 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   const auto table_infos =
       get_table_infos(table_func_work_unit.exe_unit.input_descs, executor_);
 
-  ExecutionResult result{
-      std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                  co.device_type,
-                                  QueryMemoryDescriptor(),
-                                  nullptr,
-                                  executor_->getDataMgr(),
-                                  executor_->getDatabaseId(),
-                                  executor_->blockSize(),
-                                  executor_->gridSize()),
-      {}};
+  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                     co.device_type,
+                                                     QueryMemoryDescriptor(),
+                                                     nullptr,
+                                                     executor_->getDataMgr(),
+                                                     executor_->getDatabaseId(),
+                                                     executor_->blockSize(),
+                                                     executor_->gridSize()),
+                         {}};
 
   try {
     result = {executor_->executeTableFunction(
@@ -1801,7 +1800,7 @@ bool sameTypeInfo(std::vector<TargetMetaInfo> const& lhs,
 }
 
 bool isGeometry(TargetMetaInfo const& target_meta_info) {
-  return target_meta_info.get_type_info().is_geometry();
+  return false;
 }
 
 ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_union,
@@ -1975,10 +1974,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         default:
           CHECK(false);
       }
-    } else if (cd->columnType.is_geometry()) {
-      auto it_ok =
-          str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string>{}));
-      CHECK(it_ok.second);
     } else if (cd->columnType.is_array()) {
       auto it_ok =
           arr_col_buffers.insert(std::make_pair(col_id, std::vector<ArrayDatum>{}));
@@ -2011,7 +2006,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
     auto col_datum = col_cv->get_constval();
     auto col_type = cd->columnType.get_type();
     uint8_t* col_data_bytes{nullptr};
-    if (!cd->columnType.is_array() && !cd->columnType.is_geometry() &&
+    if (!cd->columnType.is_array() &&
         (!cd->columnType.is_string() ||
          cd->columnType.get_compression() == kENCODING_DICT)) {
       const auto col_data_bytes_it = col_buffers.find(col_ids[col_idx]);
@@ -2385,9 +2380,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
     CHECK_GT(order_entry.tle_no, 0);  // tle_no is a 1-base index
     const auto& te = source_exe_unit.target_exprs[order_entry.tle_no - 1];
     const auto& ti = get_target_info(te, false);
-    if (ti.sql_type.is_geometry() || ti.sql_type.is_array()) {
+    if (ti.sql_type.is_array()) {
       throw std::runtime_error(
-          "Columns with geometry or array types cannot be used in an ORDER BY clause.");
+          "Columns with array types cannot be used in an ORDER BY clause.");
     }
   }
 
@@ -2842,16 +2837,15 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   auto ra_exe_unit_in = work_unit.exe_unit;
   ra_exe_unit_in.use_bump_allocator = false;
 
-  auto result = ExecutionResult{
-      std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                  co.device_type,
-                                  QueryMemoryDescriptor(),
-                                  nullptr,
-                                  executor_->getDataMgr(),
-                                  executor_->getDatabaseId(),
-                                  executor_->blockSize(),
-                                  executor_->gridSize()),
-      {}};
+  auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                            co.device_type,
+                                                            QueryMemoryDescriptor(),
+                                                            nullptr,
+                                                            executor_->getDataMgr(),
+                                                            executor_->getDatabaseId(),
+                                                            executor_->blockSize(),
+                                                            executor_->gridSize()),
+                                {}};
 
   const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;

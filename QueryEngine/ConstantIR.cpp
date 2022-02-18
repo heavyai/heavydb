@@ -126,7 +126,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
   auto lit_buff_query_func_lv = get_arg_by_name(cgen_state_->query_func_, "literals");
   const auto lit_buf_start = cgen_state_->query_func_entry_ir_builder_.CreateGEP(
       lit_buff_query_func_lv, cgen_state_->llInt(lit_off));
-  CHECK(!type_info.is_geometry());
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
     CHECK_EQ(size_t(4),
@@ -213,7 +212,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
     const std::vector<llvm::Value*>& literal_loads) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   std::string literal_name = "literal_" + std::to_string(lit_off);
-  CHECK(!type_info.is_geometry());
 
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(literal_loads.size(), 3u);

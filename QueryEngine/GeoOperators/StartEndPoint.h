@@ -75,32 +75,8 @@ class StartEndPoint : public Codegen {
                                     CodeGenerator::NullCheckCodegen* nullcheck_codegen,
                                     CgenState* cgen_state,
                                     const CompilationOptions& co) final {
-    CHECK_EQ(args.size(), size_t(2));  // ptr, size
-    const auto& geo_ti = getOperand(0)->get_type_info();
-    CHECK(geo_ti.is_geometry());
-
-    auto& builder = cgen_state->ir_builder_;
-    llvm::Value* array_buff_cast{nullptr};
-    int32_t elem_size_bytes = 0;
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      array_buff_cast = builder.CreateBitCast(
-          args.front(), llvm::Type::getInt32PtrTy(cgen_state->context_));
-      elem_size_bytes = 4;  // 4-byte ints
-    } else {
-      array_buff_cast = builder.CreateBitCast(
-          args.front(), llvm::Type::getDoublePtrTy(cgen_state->context_));
-      elem_size_bytes = 8;  // doubles
-    }
-    CHECK_GT(elem_size_bytes, 0);
-    const bool is_end_point = getName() == "ST_EndPoint";
-    const auto num_elements_lv =
-        builder.CreateSDiv(args.back(), cgen_state->llInt(elem_size_bytes));
-    const auto index_lv =
-        is_end_point ? builder.CreateSub(num_elements_lv, cgen_state->llInt(int32_t(2)))
-                     : cgen_state->llInt(int32_t(0));
-    auto array_offset_lv =
-        builder.CreateGEP(array_buff_cast, index_lv, operator_->getName() + "_Offset");
-    return {array_offset_lv, args.back()};
+    UNREACHABLE();
+    return {nullptr, nullptr};
   }
 };
 

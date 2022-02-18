@@ -515,7 +515,6 @@ class SQLTypeInfo {
   inline bool is_varlen_array() const { return type == kARRAY && size <= 0; }
   inline bool is_fixlen_array() const { return type == kARRAY && size > 0; }
   inline bool is_timeinterval() const { return IS_INTERVAL(type); }
-  inline bool is_geometry() const { return IS_GEO(type); }
   inline bool is_column() const { return type == kCOLUMN; }            // rbc Column
   inline bool is_column_list() const { return type == kCOLUMN_LIST; }  // rbc ColumnList
   inline bool is_bytes() const {

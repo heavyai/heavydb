@@ -272,17 +272,17 @@ class AlterColumnTest4 : public ::testing::Test {
     EXPECT_NO_THROW(run_ddl_statement("drop view if exists v;"););
     EXPECT_NO_THROW(run_ddl_statement("drop table if exists t;"););
     EXPECT_NO_THROW(
-        run_ddl_statement("create table t(a text, t text, b int, c point, shared "
+        run_ddl_statement("create table t(a text, t text, b int, c int, shared "
                           "dictionary(t) references t(a)) with (fragment_size=1);"););
-    EXPECT_NO_THROW(run_ddl_statement("alter table t add d point;"););
+    EXPECT_NO_THROW(run_ddl_statement("alter table t add d int;"););
     EXPECT_NO_THROW(run_ddl_statement("alter table t add e int;"););
     EXPECT_NO_THROW(run_ddl_statement("alter table t add f float;"););
     EXPECT_NO_THROW(
         run_query(
-            "insert into t values ('0', '0', 0, 'point(0 0)', 'point(0 0)', 0, 0);"););
+            "insert into t values ('0', '0', 0, '0', '0', 0, 0);"););
     EXPECT_NO_THROW(
         run_query(
-            "insert into t values ('1', '1', 1, 'point(1 1)', 'point(1 1)', 1, 1);"););
+            "insert into t values ('1', '1', 1, '1', '1', 1, 1);"););
     g_test_drop_column_rollback = false;
   }
   void TearDown() override { EXPECT_NO_THROW(run_ddl_statement("drop table t;");); }

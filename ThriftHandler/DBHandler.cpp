@@ -953,38 +953,6 @@ void DBHandler::value_to_thrift_column(const TargetValue& tv,
     }
     column.data.arr_col.push_back(tColumn);
     column.nulls.push_back(is_null && !ti.get_notnull());
-  } else if (ti.is_geometry()) {
-    const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-    if (scalar_tv) {
-      auto s_n = boost::get<NullableString>(scalar_tv);
-      auto s = boost::get<std::string>(s_n);
-      if (s) {
-        column.data.str_col.push_back(*s);
-      } else {
-        column.data.str_col.emplace_back("");  // null string
-        auto null_p = boost::get<void*>(s_n);
-        CHECK(null_p && !*null_p);
-      }
-      column.nulls.push_back(!s && !ti.get_notnull());
-    } else {
-      const auto array_tv = boost::get<ArrayTargetValue>(&tv);
-      CHECK(array_tv);
-      bool is_null = !array_tv->is_initialized();
-      if (!is_null) {
-        auto elem_type = SQLTypeInfo(kDOUBLE, false);
-        TColumn tColumn;
-        const auto& vec = array_tv->get();
-        for (const auto& elem_tv : vec) {
-          value_to_thrift_column(elem_tv, elem_type, tColumn);
-        }
-        column.data.arr_col.push_back(tColumn);
-        column.nulls.push_back(false);
-      } else {
-        TColumn tColumn;
-        column.data.arr_col.push_back(tColumn);
-        column.nulls.push_back(is_null && !ti.get_notnull());
-      }
-    }
   } else {
     CHECK(!ti.is_column());
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
@@ -2816,8 +2784,6 @@ void DBHandler::fillMissingBuffers(
       CHECK(cd->isGeoPhyCol);
       skip_physical_cols--;
       continue;
-    } else if (cd->columnType.is_geometry()) {
-      skip_physical_cols = cd->columnType.get_physical_cols();
     }
     if (desc_id_to_column_id[import_idx] == -1) {
       import_buffers[col_idx]->addDefaultValues(cd, num_rows);
@@ -3060,10 +3026,6 @@ void DBHandler::load_table_binary_columnar_internal(
         col_idx++;
       } else {
         col_idx++;
-        if (cd->columnType.is_geometry()) {
-          skip_physical_cols = cd->columnType.get_physical_cols();
-          col_idx += skip_physical_cols;
-        }
       }
       // Advance to the next column of values being loaded
       import_idx++;
@@ -3246,11 +3208,6 @@ void DBHandler::load_table(const TSessionId& session,
                                                copy_params);
           }
           col_idx++;
-          if (cd->columnType.is_geometry()) {
-            // physical geo columns will be filled separately lately
-            skip_physical_cols = cd->columnType.get_physical_cols();
-            col_idx += skip_physical_cols;
-          }
           // Advance to the next field within the row
           import_idx++;
         }
@@ -5577,19 +5534,6 @@ void DBHandler::insert_data(const TSessionId& session,
           }
           p.stringsPtr = none_encoded_strings.get();
         }
-      } else if (ti.is_geometry()) {
-        none_encoded_string_columns.emplace_back(new std::vector<std::string>());
-        auto& none_encoded_strings = none_encoded_string_columns.back();
-        CHECK_EQ(rows_expected, thrift_insert_data.data[col_idx].var_len_data.size());
-        for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
-          none_encoded_strings->push_back(varlen_str.payload);
-        }
-        p.stringsPtr = none_encoded_strings.get();
-
-        // point geo type needs to mark null sentinel in its physical coord column
-        // To recognize null sentinel for point, therefore, we keep the actual geo type
-        // and needs to use it when constructing geo null point
-        geo_ti = ti;
       } else {
         CHECK(ti.is_array());
         array_columns.emplace_back(new std::vector<ArrayDatum>());

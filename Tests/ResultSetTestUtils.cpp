@@ -506,11 +506,7 @@ QueryMemoryDescriptor perfect_hash_one_col_desc(
       slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
     slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
-    if (target_info.sql_type.is_geometry()) {
-      for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
-        slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
-      }
-    } else if (target_info.sql_type.is_varlen()) {
+    if (target_info.sql_type.is_varlen()) {
       slots_for_target.emplace_back(std::make_tuple(slot_bytes, slot_bytes));
     }
     query_mem_desc.addColSlotInfo(slots_for_target);

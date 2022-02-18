@@ -358,29 +358,6 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
   auto col_info = schema_provider->getColumnInfo(*table_info, std::string(column));
   CHECK(col_info);
 
-  auto ti = col_info->type;
-  if (ti.is_geometry() && ti.get_type() != kPOINT) {
-    int geoColumnId{0};
-    switch (ti.get_type()) {
-      case kLINESTRING: {
-        geoColumnId = col_info->column_id + 2;
-        break;
-      }
-      case kPOLYGON: {
-        geoColumnId = col_info->column_id + 3;
-        break;
-      }
-      case kMULTIPOLYGON: {
-        geoColumnId = col_info->column_id + 4;
-        break;
-      }
-      default:
-        CHECK(false);
-    }
-    col_info = schema_provider->getColumnInfo(*table_info, geoColumnId);
-    CHECK(col_info);
-  }
-
   auto cv = std::make_shared<Analyzer::ColumnVar>(col_info, rte_idx);
   return cv;
 }

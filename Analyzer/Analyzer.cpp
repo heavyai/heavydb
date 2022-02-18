@@ -38,7 +38,7 @@
 namespace Analyzer {
 
 Constant::~Constant() {
-  if ((type_info.is_string() || type_info.is_geometry()) && !is_null) {
+  if (type_info.is_string() && !is_null) {
     delete constval.stringval;
   }
 }
@@ -79,7 +79,7 @@ std::shared_ptr<Analyzer::Expr> Var::deep_copy() const {
 
 std::shared_ptr<Analyzer::Expr> Constant::deep_copy() const {
   Datum d = constval;
-  if ((type_info.is_string() || type_info.is_geometry()) && !is_null) {
+  if (type_info.is_string() && !is_null) {
     d.stringval = new std::string(*constval.stringval);
   }
   if (type_info.get_type() == kARRAY) {
@@ -1193,11 +1193,6 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
       (type_info.is_number() || type_info.get_type() == kTIMESTAMP ||
        type_info.get_type() == kBOOLEAN)) {
     cast_number(new_type_info);
-  } else if (new_type_info.is_geometry() && type_info.is_string()) {
-    type_info = new_type_info;
-  } else if (new_type_info.is_geometry() &&
-             type_info.get_type() == new_type_info.get_type()) {
-    type_info = new_type_info;
   } else if (new_type_info.is_boolean() && type_info.is_boolean()) {
     type_info = new_type_info;
   } else if (new_type_info.is_string() && type_info.is_string()) {
@@ -3493,7 +3488,7 @@ bool GeoConstant::operator==(const Expr& rhs) const {
 }
 
 size_t GeoConstant::physicalCols() const {
-  CHECK(type_info.is_geometry());
+  UNREACHABLE();
   return type_info.get_physical_coord_cols();
 }
 
@@ -3615,17 +3610,8 @@ Analyzer::Expr* GeoOperator::getOperand(const size_t index) const {
 }
 
 std::shared_ptr<Analyzer::Expr> GeoOperator::add_cast(const SQLTypeInfo& new_type_info) {
-  if (get_type_info().is_geometry()) {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args;
-    for (size_t i = 0; i < args_.size(); i++) {
-      args.push_back(args_[i]->deep_copy());
-    }
-    CHECK(new_type_info.is_geometry());
-    return makeExpr<GeoOperator>(new_type_info, name_, args, output_srid_override_);
-  } else {
-    auto new_expr = deep_copy();
-    return makeExpr<UOper>(new_type_info, /*contains_agg=*/false, kCAST, new_expr);
-  }
+  UNREACHABLE();
+  return nullptr;
 }
 
 std::shared_ptr<Analyzer::Expr> GeoTransformOperator::deep_copy() const {

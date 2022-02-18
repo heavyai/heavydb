@@ -38,8 +38,7 @@ size_t indexOf(std::vector<T>& vec, T val) {
 }
 
 bool isStringVectorData(const ColumnDescriptor* cd) {
-  return (cd->columnType.is_geometry()) ||
-         (cd->columnType.is_string() &&
+  return (cd->columnType.is_string() &&
           cd->columnType.get_compression() == kENCODING_NONE);
 }
 

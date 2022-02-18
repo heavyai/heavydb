@@ -1113,13 +1113,8 @@ void ResultSetReductionJIT::reduceOneSlot(Value* this_ptr1,
     if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
       CHECK(this_ptr2 && that_ptr2);
       size_t length_to_elems{0};
-      if (target_info.sql_type.is_geometry()) {
-        // TODO: Assumes hard-coded sizes for geometry targets
-        length_to_elems = target_slot_idx == first_slot_idx_for_target ? 1 : 4;
-      } else {
-        const auto& elem_ti = target_info.sql_type.get_elem_type();
-        length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
-      }
+      const auto& elem_ti = target_info.sql_type.get_elem_type();
+      length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
       const auto serialized_varlen_buffer_arg = ir_reduce_one_entry->arg(4);
       ir_reduce_one_entry->add<ExternalCall>(
           "serialized_varlen_buffer_sample",

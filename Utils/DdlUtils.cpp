@@ -222,10 +222,6 @@ void set_default_encoding(ColumnDescriptor& cd) {
     cd.columnType.set_comp_param(32);
   } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() > 18) {
     throw std::runtime_error(cd.columnName + ": Precision too high, max 18.");
-  } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
-    // default to GEOINT 32-bits
-    cd.columnType.set_compression(kENCODING_GEOINT);
-    cd.columnType.set_comp_param(32);
   } else if (cd.columnType.get_type() == kDATE && g_use_date_in_days_default_encoding) {
     // Days encoding for DATE
     cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
@@ -361,8 +357,7 @@ void validate_and_set_dictionary_encoding(ColumnDescriptor& cd, int encoding_siz
 }
 
 void validate_and_set_none_encoding(ColumnDescriptor& cd) {
-  if (!cd.columnType.is_string() && !cd.columnType.is_string_array() &&
-      !cd.columnType.is_geometry()) {
+  if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
     throw std::runtime_error(
         cd.columnName +
         ": None encoding is only supported on string, string array, or geo columns.");
@@ -389,23 +384,8 @@ void validate_and_set_sparse_encoding(ColumnDescriptor& cd, int encoding_size) {
 }
 
 void validate_and_set_compressed_encoding(ColumnDescriptor& cd, int encoding_size) {
-  if (!cd.columnType.is_geometry() || cd.columnType.get_output_srid() != 4326) {
-    throw std::runtime_error(
-        cd.columnName + ": COMPRESSED encoding is only supported on WGS84 geo columns.");
-  }
-  int comp_param;
-  if (encoding_size == 0) {
-    comp_param = 32;  // default to 32-bits
-  } else {
-    comp_param = encoding_size;
-  }
-  if (comp_param != 32) {
-    throw std::runtime_error(cd.columnName +
-                             ": only 32-bit COMPRESSED geo encoding is supported");
-  }
-  // encoding longitude/latitude as integers
-  cd.columnType.set_compression(kENCODING_GEOINT);
-  cd.columnType.set_comp_param(comp_param);
+  throw std::runtime_error(
+      cd.columnName + ": COMPRESSED encoding is only supported on WGS84 geo columns.");
 }
 
 void validate_and_set_date_encoding(ColumnDescriptor& cd, int encoding_size) {
@@ -586,9 +566,7 @@ void validate_literal(const std::string& val,
 void validate_and_set_default_value(ColumnDescriptor& cd,
                                     const std::string* default_value,
                                     bool not_null) {
-  bool is_null_literal =
-      default_value && ((to_upper(*default_value) == "NULL") ||
-                        (cd.columnType.is_geometry() && default_value->empty()));
+  bool is_null_literal = default_value && (to_upper(*default_value) == "NULL");
   if (not_null && (is_null_literal)) {
     throw std::runtime_error(cd.columnName +
                              ": cannot set default value to NULL for "

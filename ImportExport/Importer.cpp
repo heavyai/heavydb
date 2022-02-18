@@ -815,57 +815,6 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
       std::make_unique<DataBuffer<DATA_TYPE>>(cd, array, buffer, bad_rows_tracker);
   auto f_value_getter = value_getter(array, cd, bad_rows_tracker);
   std::function<void(const int64_t)> f_add_geo_phy_cols = [&](const int64_t row) {};
-  if (bad_rows_tracker && cd->columnType.is_geometry()) {
-    f_add_geo_phy_cols = [&](const int64_t row) {
-      // Populate physical columns (ref. DBHandler::load_table)
-      std::vector<double> coords, bounds;
-      std::vector<int> ring_sizes, poly_rings;
-      int render_group = 0;
-      SQLTypeInfo ti;
-      // replace any unexpected exception from getGeoColumns or other
-      // on this path with a GeoImportException so that we wont over
-      // push a null to the logical column...
-      try {
-        SQLTypeInfo import_ti{ti};
-        if (array.IsNull(row)) {
-          Geospatial::GeoTypesFactory::getNullGeoColumns(
-              import_ti, coords, bounds, ring_sizes, poly_rings, false);
-        } else {
-          arrow_throw_if<GeoImportException>(
-              !Geospatial::GeoTypesFactory::getGeoColumns(geo_string_buffer_->back(),
-                                                          ti,
-                                                          coords,
-                                                          bounds,
-                                                          ring_sizes,
-                                                          poly_rings,
-                                                          false),
-              error_context(cd, bad_rows_tracker) + "Invalid geometry");
-          arrow_throw_if<GeoImportException>(
-              cd->columnType.get_type() != ti.get_type(),
-              error_context(cd, bad_rows_tracker) + "Geometry type mismatch");
-        }
-        auto col_idx_workpad = col_idx;  // what a pitfall!!
-        import_export::Importer::set_geo_physical_import_buffer(
-            bad_rows_tracker->importer->getCatalog(),
-            cd,
-            *import_buffers,
-            col_idx_workpad,
-            coords,
-            bounds,
-            ring_sizes,
-            poly_rings,
-            render_group);
-      } catch (GeoImportException&) {
-        throw;
-      } catch (std::runtime_error& e) {
-        throw GeoImportException(e.what());
-      } catch (const std::exception& e) {
-        throw GeoImportException(e.what());
-      } catch (...) {
-        throw GeoImportException("unknown exception");
-      }
-    };
-  }
   auto f_mark_a_bad_row = [&](const auto row) {
     std::unique_lock<std::mutex> lck(bad_rows_tracker->mutex);
     bad_rows_tracker->rows.insert(row - slice_range.first);
@@ -2558,9 +2507,6 @@ std::vector<DataBlockPtr> TypedImportBuffer::get_data_block_pointers(
         // iteration and continue.
         continue;
       }
-    } else if (import_buffers[buf_idx]->getTypeInfo().is_geometry()) {
-      auto geo_payload_ptr = import_buffers[buf_idx]->getGeoStringBuffer();
-      p.stringsPtr = geo_payload_ptr;
     } else {
       CHECK(import_buffers[buf_idx]->getTypeInfo().get_type() == kARRAY);
       if (IS_STRING(import_buffers[buf_idx]->getTypeInfo().get_subtype())) {
@@ -4272,27 +4218,6 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
     std::string default_value = cd->default_value.value_or("NULL");
     defaults_buffers[i]->add_value(
         cd, default_value, !cd->default_value.has_value(), import_export::CopyParams());
-    if (cd->columnType.is_geometry()) {
-      std::vector<double> coords, bounds;
-      std::vector<int> ring_sizes, poly_rings;
-      int render_group = 0;
-      SQLTypeInfo tinfo{cd->columnType};
-      CHECK(Geospatial::GeoTypesFactory::getGeoColumns(
-          default_value, tinfo, coords, bounds, ring_sizes, poly_rings, false));
-      // set physical columns starting with the following ID
-      auto next_col = i + 1;
-      import_export::Importer::set_geo_physical_import_buffer(*cat,
-                                                              cd,
-                                                              defaults_buffers,
-                                                              next_col,
-                                                              coords,
-                                                              bounds,
-                                                              ring_sizes,
-                                                              poly_rings,
-                                                              render_group);
-      // skip physical columns filled with the call above
-      i += cd->columnType.get_physical_cols();
-    }
   }
   auto data = import_export::TypedImportBuffer::get_data_block_pointers(defaults_buffers);
   CHECK(data.size() == defaults_buffers.size());

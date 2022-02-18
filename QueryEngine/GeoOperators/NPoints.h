@@ -23,34 +23,15 @@ namespace spatial_type {
 
 class NPoints : public Codegen {
  public:
-  NPoints(const Analyzer::GeoOperator* geo_operator)
-      : Codegen(geo_operator) {}
+  NPoints(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {}
 
   size_t size() const final { return 1; }
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kINT); }
 
   const Analyzer::Expr* getOperand(const size_t index) final {
-    CHECK_EQ(index, size_t(0));
-    if (operand_owned_) {
-      return operand_owned_.get();
-    }
-
-    const auto operand = operator_->getOperand(0);
-    auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(operand);
-    CHECK(col_var);
-
-    geo_ti_ = col_var->get_type_info();
-    CHECK(geo_ti_.is_geometry());
-    is_nullable_ = !geo_ti_.get_notnull();
-
-    // create a new operand which is just the coords and codegen it
-    const auto coords_column_id = col_var->get_column_id() + 1;  // + 1 for coords
-    auto ti = get_geo_physical_col_type(col_var->get_type_info(), 0);
-
-    operand_owned_ = std::make_unique<Analyzer::ColumnVar>(
-        ti, col_var->get_table_id(), coords_column_id, col_var->get_rte_idx());
-    return operand_owned_.get();
+    UNREACHABLE();
+    return nullptr;
   }
 
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(

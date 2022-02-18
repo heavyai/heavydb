@@ -929,12 +929,12 @@ TEST(Other, Regression) {
       CREATE TABLE table_a (
         Small_int SMALLINT,
         dest_state TEXT ENCODING DICT,
-        omnisci_geo_linestring geometry(linestring, 4326)
+        str VARCHAR(4326)
       );
       CREATE TABLE table_b (
         Small_int SMALLINT,
         dest_state TEXT ENCODING DICT,
-        omnisci_geo_linestring geometry(linestring, 4326)
+        str VARCHAR(4326)
       );
       INSERT INTO table_a VALUES (1, 'testa_1', 'LINESTRING (30 10, 10 30, 40 40)');
       INSERT INTO table_a VALUES (1, 'testa_2', 'LINESTRING (30 10, 10 30, 40 40)');

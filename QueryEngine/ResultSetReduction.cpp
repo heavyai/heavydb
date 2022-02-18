@@ -537,37 +537,15 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
 
         const auto& elem_ti = target_info.sql_type.get_elem_type();
         size_t length_to_elems =
-            target_info.sql_type.is_string() || target_info.sql_type.is_geometry()
-                ? 1
-                : elem_ti.get_size();
-        if (target_info.sql_type.is_geometry()) {
-          for (int j = 0; j < target_info.sql_type.get_physical_coord_cols(); j++) {
-            if (j > 0) {
-              ptr1 = ptr2 + query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 1);
-              ptr2 = ptr1 + query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 2);
-              slot_idx += 2;
-              length_to_elems = 4;
-            }
-            CHECK_LT(static_cast<size_t>(offset), serialized_varlen_buffer.size());
-            const auto& varlen_bytes_str = serialized_varlen_buffer[offset++];
-            const auto str_ptr =
-                reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
-            CHECK(ptr1);
-            *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
-            CHECK(ptr2);
-            *reinterpret_cast<int64_t*>(ptr2) =
-                static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
-          }
-        } else {
-          CHECK_LT(static_cast<size_t>(offset), serialized_varlen_buffer.size());
-          const auto& varlen_bytes_str = serialized_varlen_buffer[offset];
-          const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
-          CHECK(ptr1);
-          *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
-          CHECK(ptr2);
-          *reinterpret_cast<int64_t*>(ptr2) =
-              static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
-        }
+            target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
+        CHECK_LT(static_cast<size_t>(offset), serialized_varlen_buffer.size());
+        const auto& varlen_bytes_str = serialized_varlen_buffer[offset];
+        const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+        CHECK(ptr1);
+        *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
+        CHECK(ptr2);
+        *reinterpret_cast<int64_t*>(ptr2) =
+            static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
       }
 
       rowwise_targets_ptr = advance_target_ptr_row_wise(
@@ -1528,13 +1506,8 @@ void ResultSetStorage::reduceOneSlot(
         if ((target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) &&
             !serialized_varlen_buffer.empty()) {
           size_t length_to_elems{0};
-          if (target_info.sql_type.is_geometry()) {
-            // TODO: Assumes hard-coded sizes for geometry targets
-            length_to_elems = target_slot_idx == first_slot_idx_for_target ? 1 : 4;
-          } else {
-            const auto& elem_ti = target_info.sql_type.get_elem_type();
-            length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
-          }
+          const auto& elem_ti = target_info.sql_type.get_elem_type();
+          length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
 
           CHECK_LT(static_cast<size_t>(rhs_proj_col), serialized_varlen_buffer.size());
           const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];

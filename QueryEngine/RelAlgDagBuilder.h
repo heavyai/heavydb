@@ -891,7 +891,7 @@ class RelScan : public RelAlgNode {
 
     // Physical geo column case.
     if (geo_idx > 0) {
-      CHECK(column_infos_[col_idx]->type.is_geometry());
+      CHECK(false);
       return get_geo_physical_col_name(
           column_infos_[col_idx]->name, column_infos_[col_idx]->type, geo_idx - 1);
     }
@@ -912,7 +912,7 @@ class RelScan : public RelAlgNode {
 
     // Physical geo column case.
     if (geo_idx > 0) {
-      CHECK(column_infos_[col_idx]->type.is_geometry());
+      CHECK(false);
       return get_geo_physical_col_type(column_infos_[col_idx]->type, geo_idx - 1);
     }
 

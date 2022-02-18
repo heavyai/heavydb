@@ -333,11 +333,6 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
   }
 
   if (IS_COMPARISON(optype)) {
-    if (new_left_type.is_geometry() && new_right_type.is_geometry()) {
-      throw std::runtime_error(
-          "Comparison operators are not yet supported for geospatial types.");
-    }
-
     if (new_left_type.get_compression() == kENCODING_DICT &&
         new_right_type.get_compression() == kENCODING_DICT &&
         new_left_type.get_comp_param() == new_right_type.get_comp_param()) {
@@ -1403,17 +1398,7 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       }
       result_col_list.push_back(cd->columnId);
       const auto& col_ti = cd->columnType;
-      if (col_ti.get_physical_cols() > 0) {
-        CHECK(cd->columnType.is_geometry());
-        for (auto i = 1; i <= col_ti.get_physical_cols(); i++) {
-          const ColumnDescriptor* pcd =
-              catalog.getMetadataForColumn(td->tableId, cd->columnId + i);
-          if (pcd == nullptr) {
-            throw std::runtime_error("Column " + *c + "'s metadata is incomplete.");
-          }
-          result_col_list.push_back(pcd->columnId);
-        }
-      }
+      CHECK_EQ(col_ti.get_physical_cols(), 0);
     }
   }
   query.set_result_col_list(result_col_list);
@@ -1474,183 +1459,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
     ++it;
 
     const auto& col_ti = cd->columnType;
-    if (col_ti.get_physical_cols() > 0) {
-      CHECK(cd->columnType.is_geometry());
-      auto c = dynamic_cast<const Analyzer::Constant*>(e.get());
-      if (!c) {
-        auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);
-        if (uoper && uoper->get_optype() == kCAST) {
-          c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
-        }
-      }
-      bool is_null = false;
-      std::string* geo_string{nullptr};
-      if (c) {
-        is_null = c->get_is_null();
-        if (!is_null) {
-          geo_string = c->get_constval().stringval;
-        }
-      }
-      if (!is_null && !geo_string) {
-        throw std::runtime_error("Expecting a WKT or WKB hex string for column " +
-                                 cd->columnName);
-      }
-      std::vector<double> coords;
-      std::vector<double> bounds;
-      std::vector<int> ring_sizes;
-      std::vector<int> poly_rings;
-      int render_group =
-          0;  // @TODO simon.eves where to get render_group from in this context?!
-      SQLTypeInfo import_ti{cd->columnType};
-      if (!is_null) {
-        if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                *geo_string, import_ti, coords, bounds, ring_sizes, poly_rings)) {
-          throw std::runtime_error("Cannot read geometry to insert into column " +
-                                   cd->columnName);
-        }
-        if (coords.empty()) {
-          // Importing from geo_string WKT resulted in empty coords: dealing with a NULL
-          is_null = true;
-        }
-        if (cd->columnType.get_type() != import_ti.get_type()) {
-          // allow POLYGON to be inserted into MULTIPOLYGON column
-          if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
-            throw std::runtime_error(
-                "Imported geometry doesn't match the type of column " + cd->columnName);
-          }
-        }
-      } else {
-        // Special case for NULL POINT, push NULL representation to coords
-        if (cd->columnType.get_type() == kPOINT) {
-          if (!coords.empty()) {
-            throw std::runtime_error("NULL POINT with unexpected coordinates in column " +
-                                     cd->columnName);
-          }
-          coords.push_back(NULL_ARRAY_DOUBLE);
-          coords.push_back(NULL_DOUBLE);
-        }
-      }
-
-      // TODO: check if import SRID matches columns SRID, may need to transform before
-      // inserting
-
-      int nextColumnOffset = 1;
-
-      const ColumnDescriptor* cd_coords = catalog.getMetadataForColumn(
-          query.get_result_table_id(), cd->columnId + nextColumnOffset);
-      CHECK(cd_coords);
-      CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
-      CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
-      std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-      if (!is_null || cd->columnType.get_type() == kPOINT) {
-        auto compressed_coords = Geospatial::compress_coords(coords, col_ti);
-        for (auto cc : compressed_coords) {
-          Datum d;
-          d.tinyintval = cc;
-          auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
-          value_exprs.push_back(e);
-        }
-      }
-      tlist.emplace_back(new Analyzer::TargetEntry(
-          "",
-          makeExpr<Analyzer::Constant>(cd_coords->columnType, is_null, value_exprs),
-          false));
-      ++it;
-      nextColumnOffset++;
-
-      if (cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        // Put ring sizes array into separate physical column
-        const ColumnDescriptor* cd_ring_sizes = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_ring_sizes);
-        CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
-        CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
-        std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        if (!is_null) {
-          for (auto c : ring_sizes) {
-            Datum d;
-            d.intval = c;
-            auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
-            value_exprs.push_back(e);
-          }
-        }
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "",
-            makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, is_null, value_exprs),
-            false));
-        ++it;
-        nextColumnOffset++;
-
-        if (cd->columnType.get_type() == kMULTIPOLYGON) {
-          // Put poly_rings array into separate physical column
-          const ColumnDescriptor* cd_poly_rings = catalog.getMetadataForColumn(
-              query.get_result_table_id(), cd->columnId + nextColumnOffset);
-          CHECK(cd_poly_rings);
-          CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
-          CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
-          std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-          if (!is_null) {
-            for (auto c : poly_rings) {
-              Datum d;
-              d.intval = c;
-              auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
-              value_exprs.push_back(e);
-            }
-          }
-          tlist.emplace_back(new Analyzer::TargetEntry(
-              "",
-              makeExpr<Analyzer::Constant>(
-                  cd_poly_rings->columnType, is_null, value_exprs),
-              false));
-          ++it;
-          nextColumnOffset++;
-        }
-      }
-
-      if (cd->columnType.get_type() == kLINESTRING ||
-          cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        const ColumnDescriptor* cd_bounds = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_bounds);
-        CHECK_EQ(cd_bounds->columnType.get_type(), kARRAY);
-        CHECK_EQ(cd_bounds->columnType.get_subtype(), kDOUBLE);
-        std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        if (!is_null) {
-          for (auto b : bounds) {
-            Datum d;
-            d.doubleval = b;
-            auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
-            value_exprs.push_back(e);
-          }
-        }
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "",
-            makeExpr<Analyzer::Constant>(cd_bounds->columnType, is_null, value_exprs),
-            false));
-        ++it;
-        nextColumnOffset++;
-      }
-
-      if (cd->columnType.get_type() == kPOLYGON ||
-          cd->columnType.get_type() == kMULTIPOLYGON) {
-        // Put render group into separate physical column
-        const ColumnDescriptor* cd_render_group = catalog.getMetadataForColumn(
-            query.get_result_table_id(), cd->columnId + nextColumnOffset);
-        CHECK(cd_render_group);
-        CHECK_EQ(cd_render_group->columnType.get_type(), kINT);
-        Datum d;
-        d.intval = render_group;
-        tlist.emplace_back(new Analyzer::TargetEntry(
-            "",
-            makeExpr<Analyzer::Constant>(cd_render_group->columnType, is_null, d),
-            false));
-        ++it;
-        nextColumnOffset++;
-      }
-    }
+    CHECK_EQ(col_ti.get_physical_cols(), 0);
   }
 }
 
@@ -1730,9 +1539,6 @@ size_t shard_column_index(const std::string& name,
       return index;
     }
     ++index;
-    if (cd.columnType.is_geometry()) {
-      index += cd.columnType.get_physical_cols();
-    }
   }
   // Not found, return 0
   return 0;
@@ -1746,9 +1552,6 @@ size_t sort_column_index(const std::string& name,
       return index;
     }
     ++index;
-    if (cd.columnType.is_geometry()) {
-      index += cd.columnType.get_physical_cols();
-    }
   }
   // Not found, return 0
   return 0;
@@ -2614,8 +2417,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
       if (source_cd->columnType.get_type() != target_cd->columnType.get_type()) {
         auto type_cannot_be_cast = [](const auto& col_type) {
-          return (col_type.is_time() || col_type.is_geometry() || col_type.is_array() ||
-                  col_type.is_boolean());
+          return (col_type.is_time() || col_type.is_array() || col_type.is_boolean());
         };
 
         if (type_cannot_be_cast(source_cd->columnType) ||
@@ -2685,10 +2487,9 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         }
       }
 
-      if (!source_cd->columnType.is_string() && !source_cd->columnType.is_geometry() &&
-          !source_cd->columnType.is_integer() && !source_cd->columnType.is_decimal() &&
-          !source_cd->columnType.is_date() && !source_cd->columnType.is_time() &&
-          !source_cd->columnType.is_timestamp() &&
+      if (!source_cd->columnType.is_string() && !source_cd->columnType.is_integer() &&
+          !source_cd->columnType.is_decimal() && !source_cd->columnType.is_date() &&
+          !source_cd->columnType.is_time() && !source_cd->columnType.is_timestamp() &&
           source_cd->columnType.get_size() > target_cd->columnType.get_size()) {
         throw std::runtime_error("Source '" + source_cd->columnName + " " +
                                  source_cd->columnType.get_type_name() +
@@ -3942,17 +3743,6 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       catalog.addColumn(*td, cd);
       cds.emplace(*coldef->get_column_name(), cd);
       cid_coldefs.emplace(cd.columnId, coldef.get());
-
-      // expand geo column to phy columns
-      if (cd.columnType.is_geometry()) {
-        std::list<ColumnDescriptor> phy_geo_columns;
-        catalog.expandGeoColumn(cd, phy_geo_columns);
-        for (auto& cd : phy_geo_columns) {
-          catalog.addColumn(*td, cd);
-          cds.emplace(cd.columnName, cd);
-          cid_coldefs.emplace(cd.columnId, nullptr);
-        }
-      }
     }
 
     std::unique_ptr<import_export::Loader> loader(new import_export::Loader(catalog, td));
@@ -3992,35 +3782,6 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                        cd->default_value.value_or("NULL"),
                                        is_null,
                                        import_export::CopyParams());
-              if (cd->columnType.is_geometry()) {
-                std::vector<double> coords, bounds;
-                std::vector<int> ring_sizes, poly_rings;
-                int render_group = 0;
-                SQLTypeInfo tinfo{cd->columnType};
-                if (!Geospatial::GeoTypesFactory::getGeoColumns(
-                        cd->default_value.value_or("NULL"),
-                        tinfo,
-                        coords,
-                        bounds,
-                        ring_sizes,
-                        poly_rings,
-                        false)) {
-                  throw std::runtime_error("Bad geometry data: '" +
-                                           cd->default_value.value_or("NULL") + "'");
-                }
-                size_t col_idx = 1 + std::distance(import_buffers.begin(), it);
-                import_export::Importer::set_geo_physical_import_buffer(catalog,
-                                                                        cd,
-                                                                        import_buffers,
-                                                                        col_idx,
-                                                                        coords,
-                                                                        bounds,
-                                                                        ring_sizes,
-                                                                        poly_rings,
-                                                                        render_group);
-                // skip following phy cols
-                skip_physical_cols = cd->columnType.get_physical_cols();
-              }
             }
             break;
           }

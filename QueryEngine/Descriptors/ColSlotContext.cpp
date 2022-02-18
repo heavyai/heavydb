@@ -64,25 +64,6 @@ ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list
         ++col_expr_idx;
         continue;
       }
-      if (chosen_type.is_geometry()) {
-        if (dynamic_cast<const Analyzer::GeoExpr*>(col_expr)) {
-          CHECK_EQ(chosen_type.get_type(), kPOINT);
-          // Pointer/offset into varlen buffer
-          addSlotForColumn(sizeof(int64_t), col_expr_idx);
-          const int64_t arr_size =
-              chosen_type.get_compression() == kENCODING_GEOINT ? 8 : 16;
-          CHECK(varlen_output_slot_map_
-                    .insert(std::make_pair(slot_sizes_.size() - 1, arr_size))
-                    .second);
-        } else {
-          for (auto i = 0; i < chosen_type.get_physical_coord_cols(); ++i) {
-            addSlotForColumn(sizeof(int64_t), col_expr_idx);
-            addSlotForColumn(sizeof(int64_t), col_expr_idx);
-          }
-        }
-        ++col_expr_idx;
-        continue;
-      }
 
       const auto col_expr_bitwidth = get_bit_width(chosen_type);
 

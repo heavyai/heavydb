@@ -325,10 +325,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoArgs(
       argument_list.emplace_back(arg_lvs.front());
       continue;
     }
-    if (arg_ti.is_geometry()) {
-      argument_list.insert(argument_list.end(), arg_lvs.begin(), arg_lvs.end());
-      continue;
-    }
     CHECK(arg_ti.is_array());
     if (arg_lvs.size() > 1) {
       CHECK_EQ(size_t(2), arg_lvs.size());

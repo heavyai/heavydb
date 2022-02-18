@@ -48,40 +48,6 @@ class Transform : public Codegen {
       const std::vector<llvm::Value*>& arg_lvs,
       const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) override {
-    CHECK_EQ(pos_lvs.size(), size());
-    const auto geo_operand = getOperand(0);
-    const auto& operand_ti = geo_operand->get_type_info();
-    CHECK(operand_ti.is_geometry() && operand_ti.get_type() == kPOINT);
-
-    if (dynamic_cast<const Analyzer::ColumnVar*>(geo_operand)) {
-      CHECK_EQ(arg_lvs.size(), size_t(1));  // col_byte_stream
-      auto arr_load_lvs = CodeGenerator::codegenGeoArrayLoadAndNullcheck(
-          arg_lvs.front(), pos_lvs.front(), operand_ti, cgen_state);
-      return std::make_tuple(std::vector<llvm::Value*>{arr_load_lvs.buffer},
-                             arr_load_lvs.is_null);
-    } else if (dynamic_cast<const Analyzer::GeoConstant*>(geo_operand)) {
-      CHECK_EQ(arg_lvs.size(), size_t(2));  // ptr, size
-
-      // nulls not supported, and likely compressed, so require a new buffer for the
-      // transformation
-      CHECK(!is_nullable_);
-      return std::make_tuple(std::vector<llvm::Value*>{arg_lvs.front()}, nullptr);
-    } else {
-      CHECK(arg_lvs.size() == size_t(1) ||
-            arg_lvs.size() == size_t(2));  // ptr or ptr, size
-      // coming from a temporary, can modify the memory pointer directly
-      can_transform_in_place_ = true;
-      auto& builder = cgen_state->ir_builder_;
-
-      const auto is_null = builder.CreateICmp(
-          llvm::CmpInst::ICMP_EQ,
-          arg_lvs.front(),
-          llvm::ConstantPointerNull::get(  // TODO: check ptr address space
-              operand_ti.get_compression() == kENCODING_GEOINT
-                  ? llvm::Type::getInt32PtrTy(cgen_state->context_)
-                  : llvm::Type::getDoublePtrTy(cgen_state->context_)));
-      return std::make_tuple(std::vector<llvm::Value*>{arg_lvs.front()}, is_null);
-    }
     UNREACHABLE();
     return std::make_tuple(std::vector<llvm::Value*>{}, nullptr);
   }

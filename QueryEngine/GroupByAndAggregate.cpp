@@ -66,8 +66,6 @@ int32_t get_agg_count(const std::vector<Analyzer::Expr*>& target_exprs) {
       const auto& ti = target_expr->get_type_info();
       if (ti.is_buffer()) {
         agg_count += 2;
-      } else if (ti.is_geometry()) {
-        agg_count += ti.get_physical_coord_cols() * 2;
       } else {
         ++agg_count;
       }
@@ -332,9 +330,6 @@ GroupByAndAggregate::GroupByAndAggregate(
     if (groupby_ti.is_buffer()) {
       throw std::runtime_error("Group by buffer not supported");
     }
-    if (groupby_ti.is_geometry()) {
-      throw std::runtime_error("Group by geometry not supported");
-    }
   }
 }
 
@@ -573,13 +568,6 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_buffer()) {
         throw std::runtime_error("APPROX_COUNT_DISTINCT on arrays not supported yet");
       }
-      if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT && arg_ti.is_geometry()) {
-        throw std::runtime_error(
-            "APPROX_COUNT_DISTINCT on geometry columns not supported");
-      }
-      if (agg_info.is_distinct && arg_ti.is_geometry()) {
-        throw std::runtime_error("COUNT DISTINCT on geometry columns not supported");
-      }
       ColRangeInfo no_range_info{QueryDescriptionType::Projection, 0, 0, 0, false};
       auto arg_range_info =
           arg_ti.is_fp() ? no_range_info
@@ -608,8 +596,8 @@ CountDistinctDescriptors init_count_distinct_descriptors(
         continue;
       }
       if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
-          !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
-                                                            // implementation for arrays
+          !arg_ti.is_buffer()) {  // TODO(alex): allow bitmap
+                                  // implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (agg_info.agg_kind == kCOUNT) {
           bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
@@ -631,7 +619,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       }
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT &&
           count_distinct_impl_type == CountDistinctImplType::HashSet &&
-          !(arg_ti.is_array() || arg_ti.is_geometry())) {
+          !arg_ti.is_array()) {
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
       }
 
@@ -1845,82 +1833,6 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
         }
         CHECK_EQ(size_t(2), target_lvs.size());
         return {target_lvs[0], target_lvs[1]};
-      }
-    }
-    if (target_ti.is_geometry() &&
-        !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
-      auto generate_coord_lvs =
-          [&](auto* selected_target_expr,
-              bool const fetch_columns) -> std::vector<llvm::Value*> {
-        const auto target_lvs =
-            code_generator.codegen(selected_target_expr, fetch_columns, co);
-        if (dynamic_cast<const Analyzer::GeoOperator*>(target_expr) &&
-            target_expr->get_type_info().is_geometry()) {
-          // return a pointer to the temporary alloca
-          return target_lvs;
-        }
-        const auto geo_uoper = dynamic_cast<const Analyzer::GeoUOper*>(target_expr);
-        const auto geo_binoper = dynamic_cast<const Analyzer::GeoBinOper*>(target_expr);
-        if (geo_uoper || geo_binoper) {
-          CHECK(target_expr->get_type_info().is_geometry());
-          CHECK_EQ(2 * static_cast<size_t>(target_ti.get_physical_coord_cols()),
-                   target_lvs.size());
-          return target_lvs;
-        }
-        CHECK_EQ(static_cast<size_t>(target_ti.get_physical_coord_cols()),
-                 target_lvs.size());
-
-        const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
-        const auto i8p_ty =
-            llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
-        std::vector<llvm::Value*> coords;
-        size_t ctr = 0;
-        for (const auto& target_lv : target_lvs) {
-          // TODO(adb): consider adding a utility to sqltypes so we can get the types of
-          // the physical coords cols based on the sqltype (e.g. TINYINT for col 0, INT
-          // for col 1 for pols / mpolys, etc). Hardcoding for now. first array is the
-          // coords array (TINYINT). Subsequent arrays are regular INT.
-
-          const size_t elem_sz = ctr == 0 ? 1 : 4;
-          ctr++;
-          int32_t fixlen = -1;
-          if (target_ti.get_type() == kPOINT) {
-            const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-            if (col_var && col_var->get_table_id() > 0) {
-              CHECK_GE(col_var->get_type_info().get_physical_cols(), 1);
-              auto coords_type = get_geo_physical_col_type(col_var->get_type_info(), 0);
-              if (coords_type.get_type() == kARRAY) {
-                fixlen = coords_type.get_size();
-              }
-            }
-          }
-          if (fixlen > 0) {
-            coords.push_back(executor_->cgen_state_->emitExternalCall(
-                "fast_fixlen_array_buff",
-                i8p_ty,
-                {target_lv, code_generator.posArg(selected_target_expr)}));
-            coords.push_back(executor_->cgen_state_->llInt(int64_t(fixlen)));
-            continue;
-          }
-          coords.push_back(executor_->cgen_state_->emitExternalCall(
-              "array_buff",
-              i8p_ty,
-              {target_lv, code_generator.posArg(selected_target_expr)}));
-          coords.push_back(executor_->cgen_state_->emitExternalCall(
-              "array_size",
-              i32_ty,
-              {target_lv,
-               code_generator.posArg(selected_target_expr),
-               executor_->cgen_state_->llInt(log2_bytes(elem_sz))}));
-        }
-        return coords;
-      };
-
-      if (agg_expr) {
-        return generate_coord_lvs(agg_expr->get_arg(), true);
-      } else {
-        return generate_coord_lvs(target_expr,
-                                  !executor_->plan_state_->allow_lazy_fetch_);
       }
     }
   }

@@ -136,11 +136,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
       }
       return cols;
     }
-  } else {
-    if (col_var->get_type_info().is_geometry()) {
-      throw std::runtime_error(
-          "Geospatial columns not supported in temporary tables yet");
-    }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
   if (grouped_col_lv) {
@@ -437,7 +432,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
   if ((null_ti.is_string() && null_ti.get_compression() == kENCODING_NONE) ||
-      null_ti.is_array() || null_ti.is_geometry()) {
+      null_ti.is_array()) {
     throw std::runtime_error("Projection type " + null_ti.get_type_name() +
                              " not supported for outer joins yet");
   }
@@ -561,11 +556,6 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
         }
         if (!eq_left_op) {
           eq_left_op = tautological_eq->get_left_operand();
-        }
-        if (eq_left_op->get_type_info().is_geometry()) {
-          // skip cast for a geospatial lhs, since the rhs is likely to be a geospatial
-          // physical col without geospatial type info
-          return nullptr;
         }
         if (is_constructed_point(eq_left_op)) {
           // skip cast for a constructed point lhs
