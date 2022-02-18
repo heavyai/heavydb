@@ -6631,7 +6631,7 @@ std::pair<TPlanResult, lockmgr::LockedTableDescriptors> DBHandler::parse_to_ra(
     bool check_privileges) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   ParserWrapper pw{query_str};
-  const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
+  const std::string actual_query{pw.isSelectExplain() ? pw.ActualQuery() : query_str};
   TPlanResult result;
   if (pw.isCalcitePathPermissable(read_only_)) {
     auto cat = query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr();

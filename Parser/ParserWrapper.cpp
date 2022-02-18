@@ -54,16 +54,8 @@ const std::vector<std::string> ParserWrapper::update_dml_cmd = {
     "UPSERT",
 };
 
-const std::string ParserWrapper::explain_str = {"explain"};
-const std::string ParserWrapper::calcite_explain_str = {"explain calcite"};
-const std::string ParserWrapper::optimized_explain_str = {"explain optimized"};
-const std::string ParserWrapper::plan_explain_str = {"explain plan"};
-const std::string ParserWrapper::optimize_str = {"optimize"};
-const std::string ParserWrapper::validate_str = {"validate"};
-
-extern bool g_enable_fsi;
-
 namespace {
+
 void validate_no_leading_comments(const std::string& query_str) {
   if (boost::starts_with(query_str, "--") || boost::starts_with(query_str, "//") ||
       boost::starts_with(query_str, "/*")) {
@@ -71,57 +63,21 @@ void validate_no_leading_comments(const std::string& query_str) {
         "SQL statements starting with comments are currently not allowed.");
   }
 }
+
+const std::string explain_str = {"explain"};
+const std::string calcite_explain_str = {"explain calcite"};
+const std::string optimized_explain_str = {"explain optimized"};
+const std::string plan_explain_str = {"explain plan"};
+const std::string optimize_str = {"optimize"};
+const std::string validate_str = {"validate"};
+
 }  // namespace
+
 ParserWrapper::ParserWrapper(std::string query_string) {
   validate_no_leading_comments(query_string);
-  query_type_ = QueryType::SchemaRead;
-  if (boost::istarts_with(query_string, calcite_explain_str)) {
-    actual_query = boost::trim_copy(query_string.substr(calcite_explain_str.size()));
-    ParserWrapper inner{actual_query};
-    if (inner.isDdl() || inner.is_update_dml) {
-      explain_type_ = ExplainType::Other;
-      return;
-    } else {
-      explain_type_ = ExplainType::Calcite;
-      return;
-    }
-  }
 
-  if (boost::istarts_with(query_string, optimized_explain_str)) {
-    actual_query = boost::trim_copy(query_string.substr(optimized_explain_str.size()));
-    ParserWrapper inner{actual_query};
-    if (inner.isDdl() || inner.is_update_dml) {
-      explain_type_ = ExplainType::Other;
-      return;
-    } else {
-      explain_type_ = ExplainType::OptimizedIR;
-      return;
-    }
-  }
-
-  if (boost::istarts_with(query_string, plan_explain_str)) {
-    actual_query = boost::trim_copy(query_string.substr(plan_explain_str.size()));
-    ParserWrapper inner{actual_query};
-    if (inner.isDdl() || inner.is_update_dml) {
-      explain_type_ = ExplainType::Other;
-      return;
-    } else {
-      explain_type_ = ExplainType::ExecutionPlan;
-      return;
-    }
-  }
-
-  if (boost::istarts_with(query_string, explain_str)) {
-    actual_query = boost::trim_copy(query_string.substr(explain_str.size()));
-    ParserWrapper inner{actual_query};
-    if (inner.isDdl() || inner.is_update_dml) {
-      explain_type_ = ExplainType::Other;
-      return;
-    } else {
-      explain_type_ = ExplainType::IR;
-      return;
-    }
-  }
+  // init explain_type_ and actual_info_
+  initExplainType(query_string);
 
   query_type_ = QueryType::Read;
   for (std::string ddl : ddl_cmd) {
@@ -189,6 +145,48 @@ ParserWrapper::ParserWrapper(std::string query_string) {
 }
 
 ParserWrapper::~ParserWrapper() {}
+
+void ParserWrapper::initExplainType(std::string query_string) {
+  // sets explain_type_ and caches a trimmed actual_query_
+  if (boost::istarts_with(query_string, calcite_explain_str)) {
+    actual_query_ = boost::trim_copy(query_string.substr(calcite_explain_str.size()));
+    ParserWrapper inner{actual_query_};
+    if (inner.isDdl() || inner.is_update_dml) {
+      explain_type_ = ExplainType::Other;
+    } else {
+      explain_type_ = ExplainType::Calcite;
+    }
+
+  } else if (boost::istarts_with(query_string, optimized_explain_str)) {
+    actual_query_ = boost::trim_copy(query_string.substr(optimized_explain_str.size()));
+    ParserWrapper inner{actual_query_};
+    if (inner.isDdl() || inner.is_update_dml) {
+      explain_type_ = ExplainType::Other;
+    } else {
+      explain_type_ = ExplainType::OptimizedIR;
+    }
+
+  } else if (boost::istarts_with(query_string, plan_explain_str)) {
+    actual_query_ = boost::trim_copy(query_string.substr(plan_explain_str.size()));
+    ParserWrapper inner{actual_query_};
+    if (inner.isDdl() || inner.is_update_dml) {
+      explain_type_ = ExplainType::Other;
+    } else {
+      explain_type_ = ExplainType::ExecutionPlan;
+    }
+
+  } else if (boost::istarts_with(query_string, explain_str)) {
+    actual_query_ = boost::trim_copy(query_string.substr(explain_str.size()));
+    ParserWrapper inner{actual_query_};
+    if (inner.isDdl() || inner.is_update_dml) {
+      explain_type_ = ExplainType::Other;
+    } else {
+      explain_type_ = ExplainType::IR;
+    }
+  }
+
+  explain_type_ = ParserWrapper::ExplainType::None;
+}
 
 ExplainInfo ParserWrapper::getExplainInfo() const {
   return {explain_type_ == ExplainType::IR,

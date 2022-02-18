@@ -68,7 +68,6 @@ class ParserWrapper {
   bool is_copy_to = false;
   bool is_optimize = false;
   bool is_validate = false;
-  std::string actual_query;
 
   DMLType getDMLType() const { return dml_type_; }
 
@@ -128,19 +127,18 @@ class ParserWrapper {
 
   bool isDdl() const { return is_ddl_; }
 
+  std::string ActualQuery() { return actual_query_; }
+
  private:
+  void initExplainType(std::string query_string);
+  std::string actual_query_;
+
   DMLType dml_type_ = DMLType::NotDML;
   ExplainType explain_type_ = ExplainType::None;
   QueryType query_type_ = QueryType::Unknown;
 
   static const std::vector<std::string> ddl_cmd;
   static const std::vector<std::string> update_dml_cmd;
-  static const std::string explain_str;
-  static const std::string calcite_explain_str;
-  static const std::string optimized_explain_str;
-  static const std::string plan_explain_str;
-  static const std::string optimize_str;
-  static const std::string validate_str;
 
   bool is_legacy_ddl_ = false;
   bool is_calcite_ddl_ = false;
