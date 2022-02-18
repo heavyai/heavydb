@@ -44,7 +44,6 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"

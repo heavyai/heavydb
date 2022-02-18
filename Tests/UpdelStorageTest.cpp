@@ -27,7 +27,7 @@
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "ImportExport/Importer.h"
-#include "Parser/parser.h"
+#include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -366,7 +366,7 @@ void import_table_file(const std::string& table, const std::string& file) {
                           "../../Tests/Import/datafiles/" + file +
                           "' WITH (header='true');";
 
-  auto stmt = QR::get()->createDDLStatement(query_str);
+  auto stmt = QR::get()->createStatement(query_str);
 
   auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
   if (!copy_stmt) {

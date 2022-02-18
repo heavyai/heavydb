@@ -25,7 +25,6 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/UpdelRoll.h"
@@ -143,7 +142,7 @@ void import_table_file(const std::string& table, const std::string& file) {
                          "../../Tests/Import/datafiles/" + file +
                          "' WITH (header='true');";
 
-  auto stmt = QR::get()->createDDLStatement(query_str);
+  auto stmt = QR::get()->createStatement(query_str);
 
   auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
   if (!copy_stmt) {

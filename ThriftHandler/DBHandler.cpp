@@ -53,7 +53,6 @@
 #include "OSDependent/omnisci_hostname.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
@@ -498,22 +497,6 @@ DBHandler::~DBHandler() {
   shutdown();
 }
 
-void DBHandler::parser_with_error_handler(
-    const std::string& query_str,
-    std::list<std::unique_ptr<Parser::Stmt>>& parse_trees) {
-  int num_parse_errors = 0;
-  std::string last_parsed;
-  SQLParser parser;
-  num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
-  if (num_parse_errors > 0) {
-    throw std::runtime_error("Syntax error at: " + last_parsed);
-  }
-  if (parse_trees.size() > 1) {
-    throw std::runtime_error("multiple SQL statements not allowed");
-  } else if (parse_trees.size() != 1) {
-    throw std::runtime_error("empty SQL statment not allowed");
-  }
-}
 void DBHandler::check_read_only(const std::string& str) {
   if (DBHandler::read_only_) {
     THROW_MAPD_EXCEPTION(str + " disabled: server running in read-only mode.");
@@ -1559,7 +1542,7 @@ void DBHandler::sql_validate(TRowDescriptor& _return,
     stdlog.setQueryState(query_state);
 
     ParserWrapper pw{query_str};
-    if ((pw.getExplainType() != ParserWrapper::ExplainType::None) || pw.is_ddl ||
+    if ((pw.getExplainType() != ParserWrapper::ExplainType::None) || pw.isDdl() ||
         pw.is_update_dml) {
       throw std::runtime_error("Can only validate SELECT statements.");
     }
@@ -6234,7 +6217,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
   auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
 
   mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
   mapd_shared_lock<mapd_shared_mutex> executeReadLock;
@@ -6354,14 +6336,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     return;
 
   } else if (pw.is_copy && !pw.is_copy_to) {
-    std::string query_ra;
-    _return.addExecutionTime(measure<>::execution([&]() {
-      TPlanResult result;
-      std::tie(result, locks) =
-          parse_to_ra(query_state_proxy, query_str, {}, false, system_parameters_);
-      query_ra = result.plan_result;
-    }));
-    std::unique_ptr<Parser::DDLStmt> stmt = create_ddl_from_calcite(query_ra);
+    std::unique_ptr<Parser::Stmt> stmt =
+        Parser::create_stmt_for_query(query_str, *session_ptr);
     const auto import_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
     if (import_stmt) {
       if (g_cluster && !leaf_aggregator_.leafCount()) {
@@ -6395,7 +6371,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     }
   } else if (pw.isCalcitePathPermissable(read_only_)) {
     // run DDL before the locks as DDL statements should handle their own locking
-    if (pw.isCalciteDdl()) {
+    if (pw.isDdl()) {
       std::string query_ra;
       _return.addExecutionTime(measure<>::execution([&]() {
         TPlanResult result;
@@ -6538,110 +6514,43 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     return;
   } else if (pw.is_optimize) {
     // Get the Stmt object
-    DBHandler::parser_with_error_handler(query_str, parse_trees);
+    std::unique_ptr<Parser::Stmt> stmt =
+        Parser::create_stmt_for_query(query_str, *session_ptr);
+    const auto optimize_stmt = dynamic_cast<Parser::OptimizeTableStmt*>(stmt.get());
+    CHECK(optimize_stmt);
 
-    if (pw.is_optimize) {
-      const auto optimize_stmt =
-          dynamic_cast<Parser::OptimizeTableStmt*>(parse_trees.front().get());
-      CHECK(optimize_stmt);
+    _return.addExecutionTime(measure<>::execution([&]() {
+      const auto td_with_lock =
+          lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+              cat, optimize_stmt->getTableName());
+      const auto td = td_with_lock();
 
-      _return.addExecutionTime(measure<>::execution([&]() {
-        const auto td_with_lock =
-            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-                cat, optimize_stmt->getTableName());
-        const auto td = td_with_lock();
+      if (!td ||
+          !user_can_access_table(*session_ptr, td, AccessPrivileges::DELETE_FROM_TABLE)) {
+        throw std::runtime_error("Table " + optimize_stmt->getTableName() +
+                                 " does not exist.");
+      }
+      if (td->isView) {
+        throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
+      }
 
-        if (!td || !user_can_access_table(
-                       *session_ptr, td, AccessPrivileges::DELETE_FROM_TABLE)) {
-          throw std::runtime_error("Table " + optimize_stmt->getTableName() +
-                                   " does not exist.");
-        }
-        if (td->isView) {
-          throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
-        }
-
-        // invalidate cached item
-        bool clearEntireCache = true;
-        if (td) {
-          const auto& table_chunk_key_prefix = td->getTableChunkKey(cat.getDatabaseId());
-          if (!table_chunk_key_prefix.empty()) {
-            auto table_key = boost::hash_value(table_chunk_key_prefix);
-            ResultSetCacheInvalidator::invalidateCachesByTable(table_key);
-            clearEntireCache = false;
-          }
-        }
-        if (clearEntireCache) {
-          ResultSetCacheInvalidator::invalidateCaches();
-        }
-
-        auto executor = Executor::getExecutor(
-            Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
-        const TableOptimizer optimizer(td, executor.get(), cat);
-        if (optimize_stmt->shouldVacuumDeletedRows()) {
-          optimizer.vacuumDeletedRows();
-        }
-        optimizer.recomputeMetadata();
-      }));
-      return;
-    }
+      auto executor = Executor::getExecutor(
+          Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
+      const TableOptimizer optimizer(td, executor.get(), cat);
+      if (optimize_stmt->shouldVacuumDeletedRows()) {
+        optimizer.vacuumDeletedRows();
+      }
+      optimizer.recomputeMetadata();
+    }));
+    return;
   }
 
-  LOG(INFO) << "passing query to legacy processor";
-  auto result = query_str;
-
-  DBHandler::parser_with_error_handler(result, parse_trees);
-  auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
-                        Parser::DDLStmt* ddl) -> bool {
-    if (!ddl) {
-      return false;
-    }
-    const auto show_create_stmt = dynamic_cast<Parser::ShowCreateTableStmt*>(ddl);
-    if (show_create_stmt) {
-      _return.addExecutionTime(
-          measure<>::execution([&]() { ddl->execute(*session_ptr); }));
-      const auto create_string = show_create_stmt->getCreateStmt();
-      _return.updateResultSet(create_string, ExecutionResult::SimpleResult);
-      return true;
-    }
-
-    // Check for DDL statements requiring locking and get locks
-    auto export_stmt = dynamic_cast<Parser::ExportQueryStmt*>(ddl);
-    if (export_stmt) {
-      const auto query_string = export_stmt->get_select_stmt();
-      TPlanResult result;
-      CHECK(locks.empty());
-      std::tie(result, locks) =
-          parse_to_ra(query_state_proxy, query_string, {}, true, system_parameters_);
-    }
-    _return.addExecutionTime(measure<>::execution([&]() {
-      ddl->execute(*session_ptr);
-      check_and_invalidate_sessions(ddl);
-    }));
-    _return.setResultType(ExecutionResult::CalciteDdl);
-    return true;
-  };
-
-  for (const auto& stmt : parse_trees) {
-    if (DBHandler::read_only_) {
-      // a limited set of commands are available in read-only mode
-      auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt.get());
-      auto show_create_stmt = dynamic_cast<Parser::ShowCreateTableStmt*>(stmt.get());
-      auto copy_to_stmt = dynamic_cast<Parser::ExportQueryStmt*>(stmt.get());
-      if (!select_stmt && !show_create_stmt && !copy_to_stmt) {
-        THROW_MAPD_EXCEPTION("This SQL command is not supported in read-only mode.");
-      }
-    }
-
-    auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-    if (!handle_ddl(ddl)) {
-      auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get());
-      CHECK(stmtp);  // no other statements supported
-      if (parse_trees.size() != 1) {
-        throw std::runtime_error("Can only run one INSERT INTO query at a time.");
-      }
-      _return.addExecutionTime(
-          measure<>::execution([&]() { stmtp->execute(*session_ptr); }));
-    }
+  // TODO: is this following check even necessary any more ?
+  //        -> specifically here ... at this point in the execution ?
+  boost::regex is_select{R"((\(*|\s*))SELECT.*)",
+                         boost::regex::extended | boost::regex::icase};
+  if (DBHandler::read_only_ && !boost::regex_match(query_str, is_select)) {
+    THROW_MAPD_EXCEPTION("This SQL command is not supported in read-only mode.");
   }
 }
 

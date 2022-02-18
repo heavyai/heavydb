@@ -48,7 +48,6 @@ extern bool g_enable_left_join_filter_hoisting;
 extern int64_t g_large_ndv_threshold;
 extern size_t g_large_ndv_multiplier;
 extern int64_t g_bitmap_memory_limit;
-extern bool g_enable_calcite_ddl_parser;
 extern bool g_enable_seconds_refresh;
 extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
@@ -871,12 +870,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Enable temporary users for SAML and LDAP logins on read-only servers. "
       "Normally should be on but techs might want to disable for troubleshooting.");
-  developer_desc.add_options()(
-      "enable-calcite-ddl",
-      po::value<bool>(&g_enable_calcite_ddl_parser)
-          ->default_value(g_enable_calcite_ddl_parser)
-          ->implicit_value(true),
-      "Enable using Calcite for supported DDL parsing when available.");
   developer_desc.add_options()(
       "enable-seconds-refresh-interval",
       po::value<bool>(&g_enable_seconds_refresh)

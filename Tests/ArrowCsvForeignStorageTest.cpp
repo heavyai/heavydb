@@ -29,7 +29,6 @@
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/scope.h"

@@ -17,7 +17,7 @@
 #include "TestHelpers.h"
 
 #include "../ImportExport/Importer.h"
-#include "../Parser/parser.h"
+#include "../Parser/ParserNode.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/CgenState.h"
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
@@ -584,7 +584,7 @@ void c_arrow_dict_check(
   }
 
 bool validate_statement_syntax(const std::string& statement) {
-  auto stmt = QR::get()->createDDLStatement(statement);
+  auto stmt = QR::get()->createStatement(statement);
   return (stmt.get() != nullptr);
 }
 

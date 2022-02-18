@@ -597,6 +597,9 @@ CreateForeignServerCommand::CreateForeignServerCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: CREATE FOREIGN SERVER");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
@@ -656,6 +659,9 @@ AlterForeignServerCommand::AlterForeignServerCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: ALTER FOREIGN SERVER");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
@@ -807,6 +813,9 @@ DropForeignServerCommand::DropForeignServerCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: DROP FOREIGN SERVER");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
@@ -991,6 +1000,9 @@ CreateForeignTableCommand::CreateForeignTableCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: CREATE FOREIGN TABLE");
+  }
   auto& ddl_payload = extractPayload(ddl_data);
   CHECK(ddl_payload.HasMember("serverName"));
   CHECK(ddl_payload["serverName"].IsString());
@@ -1135,6 +1147,9 @@ DropForeignTableCommand::DropForeignTableCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: DROP FOREIGN TABLE");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("tableName"));
   CHECK(ddl_payload["tableName"].IsString());
@@ -1428,6 +1443,9 @@ RefreshForeignTablesCommand::RefreshForeignTablesCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: REFRESH FOREIGN TABLE");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("tableNames"));
   CHECK(ddl_payload["tableNames"].IsArray());
@@ -1495,6 +1513,9 @@ AlterForeignTableCommand::AlterForeignTableCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
     : DdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: ALTER FOREIGN TABLE");
+  }
   auto& ddl_payload = extractPayload(ddl_data_);
   CHECK(ddl_payload.HasMember("tableName"));
   CHECK(ddl_payload["tableName"].IsString());

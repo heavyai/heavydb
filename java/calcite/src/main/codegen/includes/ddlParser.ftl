@@ -553,12 +553,9 @@ SqlCreate SqlCreateTable(Span s, boolean replace) :
  *  necessary to use LOOKAHEAD(2) for the USER commands in order for them 
  *  to parse correctly.
  *
- *   "replace" was never used, but appeared in SqlDrop's original signature
- *
  */
 SqlDdl SqlCustomDrop(Span s) :
 {
-    boolean replace = false;  
     final SqlDdl drop;
 }
 {

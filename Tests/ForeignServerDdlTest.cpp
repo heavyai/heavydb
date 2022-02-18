@@ -171,7 +171,7 @@ TEST_F(CreateForeignServerTest, FsiDisabled) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   g_enable_fsi = false;
-  queryAndAssertException(query, "Syntax error at: SERVER");
+  queryAndAssertException(query, "Unsupported command: CREATE FOREIGN SERVER");
 }
 
 TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
@@ -261,7 +261,8 @@ TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
 
 TEST_F(DropForeignServerTest, FsiDisabled) {
   g_enable_fsi = false;
-  queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
+  queryAndAssertException("DROP SERVER test_server;",
+                          "Unsupported command: DROP FOREIGN SERVER");
 }
 
 class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
@@ -1064,7 +1065,7 @@ TEST_F(AlterForeignServerTest, UserCreateServerAttemptChangeOwner) {
                           " \"test_server\" will not have owner changed.");
 }
 
-TEST_F(AlterForeignServerTest, ChangeOwnerSwicthUserDropServer) {
+TEST_F(AlterForeignServerTest, ChangeOwnerSwitchUserDropServer) {
   createTestServer();
   sql("ALTER SERVER test_server OWNER TO test_user;");
   login("test_user", "test_pass");
@@ -1129,7 +1130,7 @@ TEST_F(AlterForeignServerTest, FsiDisabled) {
   createTestServer();
   g_enable_fsi = false;
   queryAndAssertException("ALTER SERVER test_server OWNER TO test_user;",
-                          "Syntax error at: SERVER");
+                          "Unsupported command: ALTER FOREIGN SERVER");
 }
 
 TEST_F(AlterForeignServerTest, OmniSciPrefix) {
