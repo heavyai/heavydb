@@ -1091,7 +1091,7 @@ TEST_F(ShowCreateTableTest, DefaultColumnValues) {
         "BIGINT DEFAULT 314958734,\n  null_i INTEGER,\n  int_a INTEGER[] DEFAULT "
         "ARRAY[1, 2, 3],\n  text_a TEXT[] DEFAULT ARRAY['a', 'b'] ENCODING DICT(32),\n  "
         "dt TEXT DEFAULT 'World' ENCODING DICT(32),\n  "
-	"d DATE DEFAULT '2011-10-23' ENCODING DAYS(32),\n  ta "
+        "d DATE DEFAULT '2011-10-23' ENCODING DAYS(32),\n  ta "
         "TIMESTAMP(0)[] DEFAULT ARRAY['2011-10-23 07:15:01', '2012-09-17 11:59:11'],\n  "
         "f "
         "FLOAT DEFAULT 1.15,\n  n DECIMAL(3,2) DEFAULT 1.25 ENCODING FIXED(16));"}});
@@ -1628,7 +1628,8 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   TSessionId show_queries_cmd_session;
 
   login("u1", "u1", "omnisci", query_session);
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &getCatalog().getDataMgr());
   // mock the running query by just enrolling the meaningless query
   executor->enrollQuerySession(
       query_session, "MOCK_QUERY", "0", 0, QuerySessionStatus::RUNNING_QUERY_KERNEL);

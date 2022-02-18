@@ -96,13 +96,6 @@ inline auto get_filesize(const std::string& file_path) {
 }
 
 namespace {
-bool check_session_interrupted(const QuerySessionId& query_session, Executor* executor) {
-  if (g_enable_non_kernel_time_query_interrupt && !query_session.empty()) {
-    mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
-    return executor->checkIsQuerySessionInterrupted(query_session, session_read_lock);
-  }
-  return false;
-}
 
 struct OGRDataSourceDeleter {
   void operator()(OGRDataSource* datasource) {
@@ -1961,8 +1954,7 @@ static ImportStatus import_thread_delimited(
     size_t total_size,
     const ColumnIdToRenderGroupAnalyzerMapType& columnIdToRenderGroupAnalyzerMap,
     size_t first_row_index_this_buffer,
-    const Catalog_Namespace::SessionInfo* session_info,
-    Executor* executor) {
+    const Catalog_Namespace::SessionInfo* session_info) {
   ImportStatus thread_import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
@@ -2240,13 +2232,6 @@ static ImportStatus import_thread_delimited(
                 ++cd_it;
               }
             }
-          }
-          if (UNLIKELY((thread_import_status.rows_completed & 0xFFFF) == 0 &&
-                       check_session_interrupted(query_session, executor))) {
-            thread_import_status.load_failed = true;
-            thread_import_status.load_msg =
-                "Table load was cancelled via Query Interrupt";
-            return;
           }
           thread_import_status.rows_completed++;
         } catch (const std::exception& e) {
@@ -3247,7 +3232,6 @@ void Importer::import_local_parquet(const std::string& file_path,
   const auto& column_list = get_column_descs();
   // for now geo columns expect a wkt or wkb hex string
   std::vector<const ColumnDescriptor*> cds;
-  Executor* executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   int num_physical_cols = 0;
   for (auto& cd : column_list) {
     cds.push_back(cd);
@@ -3288,11 +3272,6 @@ void Importer::import_local_parquet(const std::string& file_path,
       }
       // a sliced row group will be handled like a (logic) parquet file, with
       // a entirely clean set of bad_rows_tracker, import_buffers_vec, ... etc
-      if (UNLIKELY(check_session_interrupted(query_session, executor))) {
-        mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
-        import_status_.load_failed = true;
-        import_status_.load_msg = "Table load was cancelled via Query Interrupt";
-      }
       import_buffers_vec.resize(num_slices);
       for (int slice = 0; slice < num_slices; slice++) {
         import_buffers_vec[slice].clear();
@@ -3328,11 +3307,6 @@ void Importer::import_local_parquet(const std::string& file_path,
         const size_t slice_size = (array_size + num_slices - 1) / num_slices;
         ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);
         for (int slice = 0; slice < num_slices; ++slice) {
-          if (UNLIKELY(check_session_interrupted(query_session, executor))) {
-            mapd_lock_guard<mapd_shared_mutex> write_lock(import_mutex_);
-            import_status_.load_failed = true;
-            import_status_.load_msg = "Table load was cancelled via Query Interrupt";
-          }
           thread_controller.startThread([&, slice] {
             const auto slice_offset = slice % num_slices;
             ArraySliceRange slice_range(
@@ -3837,7 +3811,6 @@ ImportStatus Importer::importDelimited(
   ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->getTableDesc()->tableId};
   auto table_epochs = loader->getTableEpochs();
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   {
     std::list<std::future<ImportStatus>> threads;
 
@@ -3884,8 +3857,7 @@ ImportStatus Importer::importDelimited(
                                    end_pos,
                                    columnIdToRenderGroupAnalyzerMap,
                                    first_row_index_this_buffer,
-                                   session_info,
-                                   executor));
+                                   session_info));
 
       first_row_index_this_buffer += num_rows_this_buffer;
 

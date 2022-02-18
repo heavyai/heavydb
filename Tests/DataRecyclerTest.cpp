@@ -139,29 +139,12 @@ struct OverlapsCachedHTAndMetaInfo {
   std::optional<AutoTunerMetaInfo> cached_tuning_info;
 };
 
-OverlapsCachedHTAndMetaInfo getCachedOverlapsHashTableWithItsTuningParam(
-    std::set<QueryPlanHash>& already_visited) {
-  auto cached_ht = QR::get()->getCachedHashtableWithoutCacheKey(
-      already_visited,
-      CacheItemType::OVERLAPS_HT,
-      DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto cache_key = std::get<0>(cached_ht);
-  already_visited.insert(cache_key);
-  auto ht_metric = QR::get()->getCacheItemMetric(
-      cache_key, CacheItemType::OVERLAPS_HT, DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  auto tuning_param_cache = OverlapsJoinHashTable::getOverlapsTuningParamCache();
-  auto tuning_param =
-      tuning_param_cache->getItemFromCache(cache_key,
-                                           CacheItemType::OVERLAPS_AUTO_TUNER_PARAM,
-                                           DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-  return {
-      cache_key, std::get<1>(cached_ht), std::get<2>(cached_ht), ht_metric, tuning_param};
-}
-
 }  // namespace
 
 TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr())
+                      .get();
   auto q1_str = "SELECT x FROM T1 ORDER BY x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
   ASSERT_TRUE(q1_query_info.left_deep_trees_id.empty());
@@ -250,7 +233,9 @@ TEST(DataRecycler, QueryPlanDagExtractor_Simple_Project_Query) {
 TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
   // we do not extract query plan dag where at least one rel node
   // containing a heavy IN-expr w.r.t its value list, i.e., |value list| > 20
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr())
+                      .get();
 
   auto create_query_having_IN_expr = [](const std::string tbl_name,
                                         const std::string agg_col_name,
@@ -297,7 +282,9 @@ TEST(DataRecycler, QueryPlanDagExtractor_Heavy_IN_clause) {
 }
 
 TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr())
+                      .get();
 
   auto q1_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x;";
   auto q1_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q1_str);
@@ -372,7 +359,9 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
 
 TEST(DataRecycler, DAG_Cache_Size_Management) {
   // test if DAG cache becomes full
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr())
+                      .get();
   // get query info for DAG cache test in advance
   auto& DAG_CACHE = executor->getQueryPlanDagCache();
 
@@ -463,7 +452,9 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
 }
 
 TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr())
+                      .get();
   std::set<QueryPlanHash> visited_hashtable_key;
   auto clearCaches = [&executor, &visited_hashtable_key] {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);
@@ -693,7 +684,9 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
 }
 
 TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr())
+                      .get();
   std::set<QueryPlanHash> visited_hashtable_key;
   auto clearCaches = [&executor, &visited_hashtable_key] {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);
@@ -923,7 +916,9 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
 TEST(DataRecycler, Hashtable_From_Subqueries) {
   // todo (yoonmin): revisit here if we support skipping hashtable building based on
   // consideration of filter quals
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr())
+                      .get();
   std::set<QueryPlanHash> visited_hashtable_key;
   auto clearCaches = [&executor, &visited_hashtable_key] {
     executor->clearMemory(MemoryLevel::CPU_LEVEL);

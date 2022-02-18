@@ -33,8 +33,8 @@ inline const ColumnarResults* columnarize_result(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const ResultSetPtr& result,
     const size_t thread_idx,
-    const size_t executor_id,
-    const int frag_id) {
+    const int frag_id,
+    Executor* executor) {
   INJECT_TIMER(columnarize_result);
   CHECK_EQ(0, frag_id);
 
@@ -43,7 +43,7 @@ inline const ColumnarResults* columnarize_result(
     col_types.push_back(get_logical_type_info(result->getColType(i)));
   }
   return new ColumnarResults(
-      row_set_mem_owner, *result, result->colCount(), col_types, executor_id, thread_idx);
+      row_set_mem_owner, *result, result->colCount(), col_types, thread_idx, executor);
 }
 
 std::string getMemoryLevelString(Data_Namespace::MemoryLevel memoryLevel) {
@@ -128,9 +128,9 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
                            std::shared_ptr<const ColumnarResults>(
                                columnarize_result(executor->row_set_mem_owner_,
                                                   tmp_table.getResultSet(frag_id),
-                                                  executor->executor_id_,
                                                   thread_idx,
-                                                  frag_id))));
+                                                  frag_id,
+                                                  executor))));
       }
       col_frag = column_cache[table_id][frag_id].get();
     }
@@ -332,8 +332,8 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
                                               col_buffer,
                                               fragment.getNumTuples(),
                                               chunk_meta_it->second->sqlType,
-                                              executor_->executor_id_,
-                                              thread_idx));
+                                              thread_idx,
+                                              executor_));
       }
       auto merged_results =
           ColumnarResults::mergeResults(executor_->row_set_mem_owner_, column_frags);
@@ -1126,14 +1126,10 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     }
     auto& frag_id_to_result = columnarized_table_cache_[table_id];
     if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-      frag_id_to_result.insert(
-          std::make_pair(frag_id,
-                         std::shared_ptr<const ColumnarResults>(
-                             columnarize_result(executor_->row_set_mem_owner_,
-                                                buffer,
-                                                executor_->executor_id_,
-                                                thread_idx,
-                                                frag_id))));
+      frag_id_to_result.insert(std::make_pair(
+          frag_id,
+          std::shared_ptr<const ColumnarResults>(columnarize_result(
+              executor_->row_set_mem_owner_, buffer, thread_idx, frag_id, executor_))));
     }
     CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
     result = columnarized_table_cache_[table_id][frag_id].get();

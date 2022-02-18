@@ -337,6 +337,7 @@ class Executor {
 
   static std::shared_ptr<Executor> getExecutor(
       const ExecutorId id,
+      Data_Namespace::DataMgr* data_mgr,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
       const SystemParameters& system_parameters = SystemParameters());

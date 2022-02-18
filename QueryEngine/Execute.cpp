@@ -176,6 +176,7 @@ Executor::Executor(const ExecutorId executor_id,
 
 std::shared_ptr<Executor> Executor::getExecutor(
     const ExecutorId executor_id,
+    Data_Namespace::DataMgr* data_mgr,
     const std::string& debug_dir,
     const std::string& debug_file,
     const SystemParameters& system_parameters) {
@@ -187,9 +188,8 @@ std::shared_ptr<Executor> Executor::getExecutor(
     return it->second;
   }
 
-  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
   auto executor = std::make_shared<Executor>(executor_id,
-                                             &data_mgr,
+                                             data_mgr,
                                              system_parameters.cuda_block_size,
                                              system_parameters.cuda_grid_size,
                                              system_parameters.max_gpu_slab_size,

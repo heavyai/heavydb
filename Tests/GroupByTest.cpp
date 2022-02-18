@@ -72,10 +72,10 @@ class HighCardinalityStringEnv : public ::testing::Test {
 
 TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   // make our own executor with a custom col ranges cache
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat->getDataMgr());
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());
@@ -172,10 +172,10 @@ std::unordered_set<InputColDescriptor> setup_str_col_caching(
 
 TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   // make our own executor with a custom col ranges cache
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat->getDataMgr());
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());
@@ -261,10 +261,10 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
 
 TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   // make our own executor with a custom col ranges cache
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, "", "", SystemParameters());
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat->getDataMgr());
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());

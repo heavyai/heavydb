@@ -45,6 +45,7 @@
 #include "Geospatial/Compression.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
+#include "ImportExport/ImportUtils.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
 #include "OSDependent/omnisci_hostname.h"
@@ -65,7 +66,6 @@
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/ArrowUtil.h"
 #include "Shared/StringTransform.h"
-#include "ImportExport/ImportUtils.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -790,6 +790,7 @@ void DBHandler::interrupt(const TSessionId& query_session,
     auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
     auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                          &cat.getDataMgr(),
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
                                           system_parameters_);
@@ -815,7 +816,7 @@ void DBHandler::interrupt(const TSessionId& query_session,
                 << "Session " << *session_it->second << ", Executor " << executor_id
                 << ", User " << session_it->second->get_currentUser().userLoggable()
                 << ", Database " << dbname << std::endl;
-        auto target_executor = Executor::getExecutor(executor_id);
+        auto target_executor = Executor::getExecutor(executor_id, &cat.getDataMgr());
         target_executor->interrupt(query_session, interrupt_session);
       }
     }
@@ -1410,7 +1411,9 @@ void DBHandler::sql_execute_df(TDataFrame& _return,
         throw std::runtime_error("explain is not unsupported by current thrift API");
       }
       if (g_enable_runtime_query_interrupt) {
-        auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+        const auto& cat = session_ptr->getCatalog();
+        auto executor =
+            Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
         executor->enrollQuerySession(session_ptr->get_session_id(),
                                      query_str,
                                      query_state->getQuerySubmittedTime(),
@@ -2598,7 +2601,9 @@ void DBHandler::set_cur_session(const TSessionId& parent_session,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
 
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &session_ptr->getCatalog().getDataMgr())
+                      .get();
   executor->enrollQuerySession(parent_session,
                                label,
                                start_time_str,
@@ -2615,8 +2620,12 @@ void DBHandler::invalidate_cur_session(const TSessionId& parent_session,
                                        bool for_running_query_kernel) {
   // internal API to manage query interruption in distributed mode
   auto stdlog = STDLOG(get_session_ptr(leaf_session));
+  auto session_ptr = stdlog.getConstSessionInfo();
+
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &session_ptr->getCatalog().getDataMgr())
+                      .get();
   executor->clearQuerySessionStatus(parent_session, start_time_str);
 }
 
@@ -4241,7 +4250,8 @@ void DBHandler::import_table(const TSessionId& session,
     LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
 
     auto& cat = session_ptr->getCatalog();
-    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    auto executor =
+        Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
     auto start_time = ::toString(std::chrono::system_clock::now());
     if (g_enable_non_kernel_time_query_interrupt) {
       executor->enrollQuerySession(session,
@@ -4516,6 +4526,7 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
   const auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(
       executor_index ? *executor_index : Executor::UNITARY_EXECUTOR_ID,
+      &cat.getDataMgr(),
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
       system_parameters_);
@@ -4587,6 +4598,7 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                    const TArrowTransport::type transport_method) const {
   const auto& cat = session_info.getCatalog();
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         system_parameters_);
@@ -5102,7 +5114,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           }
         });
     CHECK(dispatch_queue_);
-    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
     if (g_enable_runtime_query_interrupt && !query_session.empty()) {
       executor->enrollQuerySession(query_session,
                                    query_str,
@@ -5154,7 +5166,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         }
 
         auto executor = Executor::getExecutor(
-            Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
+            Executor::UNITARY_EXECUTOR_ID,  &cat.getDataMgr(), "", "", system_parameters_);
         auto schema_provider =
             std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat);
         const TableOptimizer optimizer(td, executor.get(), schema_provider, cat);
@@ -6015,6 +6027,7 @@ ExecutionResult DBHandler::getQueries(
         continue;
       }
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                            &session_ptr->getCatalog().getDataMgr(),
                                             jit_debug_ ? "/tmp" : "",
                                             jit_debug_ ? "mapdquery" : "",
                                             system_parameters_);
@@ -6117,6 +6130,7 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
     if (kv.second->get_public_session_id().compare(target_session) == 0) {
       auto target_query_session = kv.second->get_session_id();
       auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                            &session_info.getCatalog().getDataMgr(),
                                             jit_debug_ ? "/tmp" : "",
                                             jit_debug_ ? "mapdquery" : "",
                                             system_parameters_);
@@ -6156,7 +6170,7 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
                   << ", leafCount " << leaf_aggregator_.leafCount() << ", User "
                   << session_info.get_currentUser().userLoggable() << ", Database "
                   << session_info.getCatalog().getCurrentDB().dbName << std::endl;
-          auto target_executor = Executor::getExecutor(executor_id);
+          auto target_executor = Executor::getExecutor(executor_id, &session_info.getCatalog().getDataMgr());
           target_executor->interrupt(target_query_session, session_info.get_session_id());
           found_valid_session = true;
         }

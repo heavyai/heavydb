@@ -1495,7 +1495,8 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Singleton inserts on views is not supported.");
   }
 
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr());
   RelAlgExecutor ra_executor(
       executor.get(),
       &catalog,
@@ -2121,7 +2122,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr());
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
@@ -2181,7 +2183,8 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr());
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
@@ -2226,17 +2229,11 @@ AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
 
   std::vector<TargetMetaInfo> target_metainfos;
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto query_session = session ? session->get_session_id() : "";
   auto query_submitted_time = query_state_proxy.getQueryState().getQuerySubmittedTime();
-  if (allow_interrupt && !validate_only && !query_session.empty()) {
-    executor->enrollQuerySession(query_session,
-                                 sql_query_string,
-                                 query_submitted_time,
-                                 Executor::UNITARY_EXECUTOR_ID,
-                                 QuerySessionStatus::QueryStatus::PENDING_EXECUTOR);
-  }
+
   auto result_rows = getResultSet(query_state_proxy,
                                   sql_query_string,
                                   target_metainfos,
@@ -2516,7 +2513,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
   size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
   auto query_session = session ? session->get_session_id() : "";
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
   std::string work_type_str = for_CTAS ? "CTAS" : "ITAS";
   try {
     for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
@@ -3372,7 +3370,8 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   auto schema_provider =
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog);
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
   executor->setSchemaProvider(schema_provider);
   const TableOptimizer optimizer(td, executor, schema_provider, catalog);
   optimizer.recomputeMetadata();
@@ -4384,7 +4383,7 @@ void CopyTableStmt::execute(
       // regular import
       auto importer = importer_factory(catalog, td, file_path, copy_params);
       auto start_time = ::toString(std::chrono::system_clock::now());
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
       auto query_session = session.get_session_id();
       auto query_str = "COPYING " + td->tableName;
       if (g_enable_non_kernel_time_query_interrupt) {

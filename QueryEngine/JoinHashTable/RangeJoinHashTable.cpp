@@ -579,10 +579,6 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
       CHECK(false);
   }
 
-  const auto& inner_outer_pair = inner_outer_pairs_[0];
-  const auto outer_col = inner_outer_pair.second;
-  const auto outer_col_ti = outer_col->get_type_info();
-
   LOG(FATAL) << "Range join key currently only supported for geospatial types.";
   return key_buff_lv;
 }

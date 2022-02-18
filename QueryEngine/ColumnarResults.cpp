@@ -48,8 +48,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const ResultSet& rows,
                                  const size_t num_columns,
                                  const std::vector<SQLTypeInfo>& target_types,
-                                 const size_t executor_id,
                                  const size_t thread_idx,
+                                 Executor* executor,
                                  const bool is_parallel_execution_enforced)
     : column_buffers_(num_columns)
     , num_rows_(result_set::use_parallel_algorithms(rows) ||
@@ -61,11 +61,10 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                ? true
                                : result_set::use_parallel_algorithms(rows))
     , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
-    , thread_idx_(thread_idx) {
+    , thread_idx_(thread_idx)
+    , executor_(executor) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
-  executor_ = Executor::getExecutor(executor_id);
-  CHECK(executor_);
   for (size_t i = 0; i < num_columns; ++i) {
     const bool is_varlen = target_types[i].is_array() ||
                            (target_types[i].is_string() &&
@@ -91,23 +90,23 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const int8_t* one_col_buffer,
                                  const size_t num_rows,
                                  const SQLTypeInfo& target_type,
-                                 const size_t executor_id,
-                                 const size_t thread_idx)
+                                 const size_t thread_idx,
+                                 Executor* executor)
     : column_buffers_(1)
     , num_rows_(num_rows)
     , target_types_{target_type}
     , parallel_conversion_(false)
     , direct_columnar_conversion_(false)
-    , thread_idx_(thread_idx) {
+    , thread_idx_(thread_idx)
+    , executor_(executor) {
   auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
       target_type.is_array() ||
       (target_type.is_string() && target_type.get_compression() == kENCODING_NONE);
+
   if (is_varlen) {
     throw ColumnarConversionNotSupported();
   }
-  executor_ = Executor::getExecutor(executor_id);
-  CHECK(executor_);
   const auto buf_size = num_rows * target_type.get_size();
   column_buffers_[0] =
       reinterpret_cast<int8_t*>(row_set_mem_owner->allocate(buf_size, thread_idx_));
@@ -180,7 +179,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
             if (g_enable_non_kernel_time_query_interrupt) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {
-                if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
                              executor_->checkNonKernelTimeInterrupted())) {
                   throw QueryExecutionError(Executor::ERR_INTERRUPTED);
                 }
@@ -227,7 +226,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
   };
   if (g_enable_non_kernel_time_query_interrupt) {
     while (!done) {
-      if (UNLIKELY((row_idx & 0xFFFF) == 0 &&
+      if (UNLIKELY((row_idx & 0xFFFF) == 0 && executor_ &&
                    executor_->checkNonKernelTimeInterrupted())) {
         throw QueryExecutionError(Executor::ERR_INTERRUPTED);
       }
@@ -492,7 +491,7 @@ void ColumnarResults::materializeAllLazyColumns(
             if (g_enable_non_kernel_time_query_interrupt) {
               size_t local_idx = 0;
               for (size_t i = start; i < end; ++i, ++local_idx) {
-                if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+                if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
                              executor_->checkNonKernelTimeInterrupted())) {
                   throw QueryExecutionError(Executor::ERR_INTERRUPTED);
                 }
@@ -591,7 +590,7 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
         if (g_enable_non_kernel_time_query_interrupt) {
           for (size_t entry_idx = start_index; entry_idx < end_index;
                entry_idx++, local_idx++) {
-            if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+            if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
                          executor_->checkNonKernelTimeInterrupted())) {
               throw QueryExecutionError(Executor::ERR_INTERRUPTED);
             }
@@ -765,7 +764,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
     if (g_enable_non_kernel_time_query_interrupt) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
-        if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+        if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
                      executor_->checkNonKernelTimeInterrupted())) {
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }
@@ -867,7 +866,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
     if (g_enable_non_kernel_time_query_interrupt) {
       for (size_t entry_idx = start_index; entry_idx < end_index;
            entry_idx++, local_idx++) {
-        if (UNLIKELY((local_idx & 0xFFFF) == 0 &&
+        if (UNLIKELY((local_idx & 0xFFFF) == 0 && executor_ &&
                      executor_->checkNonKernelTimeInterrupted())) {
           throw QueryExecutionError(Executor::ERR_INTERRUPTED);
         }

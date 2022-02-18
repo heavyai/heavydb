@@ -89,7 +89,8 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor =
+      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog->getDataMgr());
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
@@ -118,7 +119,7 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getDatabaseId());
+  auto executor = Executor::getExecutor(catalog->getDatabaseId(), &catalog->getDataMgr());
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
@@ -141,7 +142,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getDatabaseId());
+  auto executor = Executor::getExecutor(catalog->getDatabaseId(), &catalog->getDataMgr());
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
@@ -367,7 +368,8 @@ TEST(Build, detectProperJoinQual) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getDatabaseId()).get();
+  auto executor =
+      Executor::getExecutor(catalog->getDatabaseId(), &catalog->getDataMgr()).get();
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
@@ -471,7 +473,7 @@ TEST(Build, KeyedOneToOne) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getDatabaseId());
+  auto executor = Executor::getExecutor(catalog->getDatabaseId(), &catalog->getDataMgr());
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
@@ -532,7 +534,7 @@ TEST(Build, KeyedOneToMany) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getDatabaseId());
+  auto executor = Executor::getExecutor(catalog->getDatabaseId(), &catalog->getDataMgr());
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
@@ -740,7 +742,7 @@ TEST(MultiFragment, KeyedOneToOne) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getDatabaseId());
+  auto executor = Executor::getExecutor(catalog->getDatabaseId(), &catalog->getDataMgr());
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
@@ -832,7 +834,7 @@ TEST(MultiFragment, KeyedOneToMany) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
-  auto executor = Executor::getExecutor(catalog->getDatabaseId());
+  auto executor = Executor::getExecutor(catalog->getDatabaseId(), &catalog->getDataMgr());
   CHECK(executor);
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));

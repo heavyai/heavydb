@@ -39,7 +39,8 @@ class ColumnarResultsTester : public ColumnarResults {
                         rows,
                         num_columns,
                         target_types,
-                        Executor::UNITARY_EXECUTOR_ID,
+                        0,
+                        /*executor=*/nullptr,
                         is_parallel_execution_enforced) {}
 
   template <typename ENTRY_TYPE>

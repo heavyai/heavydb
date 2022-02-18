@@ -242,7 +242,8 @@ T v(const TargetValue& r) {
 TEST(Interrupt, Kill_RunningQuery) {
   auto dt = ExecutorDeviceType::CPU;
   // assume a single executor is allowed for this test
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr());
   bool startQueryExec = false;
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
@@ -271,7 +272,8 @@ TEST(Interrupt, Kill_RunningQuery) {
     // wait until our server starts to process the first query
     std::string curRunningSession = "";
     size_t assigned_executor_id = *assigned_executor_ids.begin();
-    auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
+    auto assigned_executor_ptr = Executor::getExecutor(
+        assigned_executor_id, &QR::get()->getCatalog()->getDataMgr());
     CHECK(assigned_executor_ptr);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -310,7 +312,8 @@ TEST(Interrupt, Check_Query_Runs_After_Interruption) {
   // so as to run the next query without any issue (that is issued due to the previous
   // interruption status)
   auto dt = ExecutorDeviceType::CPU;
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr());
   bool startQueryExec = false;
   std::vector<size_t> assigned_executor_ids;
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
@@ -341,7 +344,8 @@ TEST(Interrupt, Check_Query_Runs_After_Interruption) {
     // wait until our server starts to process the first query
     std::string curRunningSession = "";
     size_t assigned_executor_id = *assigned_executor_ids.begin();
-    auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
+    auto assigned_executor_ptr = Executor::getExecutor(
+        assigned_executor_id, &QR::get()->getCatalog()->getDataMgr());
     CHECK(assigned_executor_ptr);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -394,7 +398,8 @@ TEST(Interrupt, Kill_PendingQuery) {
   QR::get()->resizeDispatchQueue(2);
   std::vector<size_t> assigned_executor_ids_for_session1;
   std::vector<size_t> assigned_executor_ids_for_session2;
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr());
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   bool startQueryExec = false;
@@ -426,8 +431,10 @@ TEST(Interrupt, Kill_PendingQuery) {
     std::string curRunningSession = "";
     size_t assigned_executor_id_for_session1 =
         *assigned_executor_ids_for_session1.begin();
-    auto assigned_executor_ptr_for_session1 =
-        Executor::getExecutor(assigned_executor_id_for_session1);
+    auto assigned_executor_ptr_for_session1 = Executor::getExecutor(
+        assigned_executor_id_for_session1, &QR::get()->getCatalog()->getDataMgr()
+
+    );
     CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -455,8 +462,8 @@ TEST(Interrupt, Kill_PendingQuery) {
     CHECK_EQ(assigned_executor_ids_for_session2.size(), static_cast<size_t>(1));
     size_t assigned_executor_id_for_session2 =
         *assigned_executor_ids_for_session2.begin();
-    auto assigned_executor_ptr_for_session2 =
-        Executor::getExecutor(assigned_executor_id_for_session2);
+    auto assigned_executor_ptr_for_session2 = Executor::getExecutor(
+        assigned_executor_id_for_session2, &QR::get()->getCatalog()->getDataMgr());
     CHECK(assigned_executor_ptr_for_session2);
     while (!s2_enrolled) {
       {
@@ -505,7 +512,8 @@ TEST(Interrupt, Make_PendingQuery_Run) {
   std::future<std::shared_ptr<ResultSet>> query_thread2;
   QR::get()->resizeDispatchQueue(1);
   std::vector<size_t> assigned_executor_ids_for_session1;
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &QR::get()->getCatalog()->getDataMgr());
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   bool startQueryExec = false;
@@ -538,7 +546,7 @@ TEST(Interrupt, Make_PendingQuery_Run) {
     size_t assigned_executor_id_for_session1 =
         *assigned_executor_ids_for_session1.begin();
     auto assigned_executor_ptr_for_session1 =
-        Executor::getExecutor(assigned_executor_id_for_session1);
+        Executor::getExecutor(assigned_executor_id_for_session1, &QR::get()->getCatalog()->getDataMgr());
     CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -605,7 +613,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
   std::future<std::shared_ptr<ResultSet>> query_thread5;
   QR::get()->resizeDispatchQueue(4);
   std::vector<size_t> assigned_executor_ids_for_session1;
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &QR::get()->getCatalog()->getDataMgr());
   executor->enableRuntimeQueryInterrupt(RUNNING_QUERY_INTERRUPT_CHECK_FREQ,
                                         PENDING_QUERY_INTERRUPT_CHECK_FREQ);
   bool startQueryExec = false;
@@ -650,7 +658,7 @@ TEST(Interrupt, Interrupt_Session_Running_Multiple_Queries) {
     size_t assigned_executor_id_for_session1 =
         *assigned_executor_ids_for_session1.begin();
     auto assigned_executor_ptr_for_session1 =
-        Executor::getExecutor(assigned_executor_id_for_session1);
+        Executor::getExecutor(assigned_executor_id_for_session1, &QR::get()->getCatalog()->getDataMgr());
     CHECK(assigned_executor_ptr_for_session1);
     while (!startQueryExec) {
       mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -849,7 +857,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_CSV) {
       // make sure our server recognizes a session for running query correctly
       QuerySessionStatus::QueryStatus curRunningSessionStatus;
       bool startQueryExec = false;
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &QR::get()->getCatalog()->getDataMgr());
       int cnt = 0;
       while (cnt < 6000) {
         {
@@ -933,7 +941,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_COPY_statement_Parquet) {
       // make sure our server recognizes a session for running query correctly
       QuerySessionStatus::QueryStatus curRunningSessionStatus;
       bool startQueryExec = false;
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &QR::get()->getCatalog()->getDataMgr());
       int cnt = 0;
       while (cnt < 6000) {
         {
@@ -1000,7 +1008,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
   std::atomic<bool> catchInterruption(false);
   std::atomic<bool> detect_time_out(false);
   std::vector<size_t> assigned_executor_ids;
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &QR::get()->getCatalog()->getDataMgr());
   bool keep_global_columnar_flag = g_enable_columnar_output;
   g_enable_columnar_output = true;
   ScopeGuard reset_flag = [keep_global_columnar_flag] {
@@ -1031,7 +1039,7 @@ TEST(Non_Kernel_Time_Interrupt, Interrupt_During_Reduction) {
       bool startReduction = false;
       QuerySessionStatus::QueryStatus qss = QuerySessionStatus::QueryStatus::UNDEFINED;
       size_t assigned_executor_id = *assigned_executor_ids.begin();
-      auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id);
+      auto assigned_executor_ptr = Executor::getExecutor(assigned_executor_id, &QR::get()->getCatalog()->getDataMgr());
       CHECK(assigned_executor_ptr);
       int cnt = 0;
       while (cnt < 6000) {

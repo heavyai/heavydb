@@ -155,7 +155,7 @@ class ResultSetStorage {
       const size_t start_index,
       const size_t end_index,
       const std::vector<std::string>& serialized_varlen_buffer,
-      const size_t executor_id) const;
+      const Executor* executor) const;
 
   void copyKeyColWise(const size_t entry_idx,
                       int8_t* this_buff,
