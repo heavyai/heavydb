@@ -718,7 +718,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
       BaselineJoinHashTableBuilder builder;
 
-      builder.allocateDeviceMemory(layout,
+      builder.allocateDeviceMemory(hashtable_layout,
                                    getKeyComponentWidth(),
                                    getKeyComponentCount(),
                                    entry_count,
