@@ -204,6 +204,35 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
     if (ti.get_comp_param() == operand_ti.get_comp_param()) {
       return operand_lv;
     }
+    if (operand_ti.get_comp_param() == DictRef::literalsDictId) {
+      // Anything being casted from a literal dictionary is not materialized at this point
+      // Should already have been kicked to CPU if it was originally a GPU query
+
+      CHECK(co.device_type == ExecutorDeviceType::CPU);
+      const int64_t source_string_proxy_handle =
+          reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
+              operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+
+      const int64_t dest_string_proxy_handle =
+          reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
+              ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
+
+      auto source_string_proxy_handle_lv = cgen_state_->llInt(source_string_proxy_handle);
+      auto dest_string_proxy_handle_lv = cgen_state_->llInt(dest_string_proxy_handle);
+
+      std::vector<llvm::Value*> string_cast_lvs{
+          operand_lv, source_string_proxy_handle_lv, dest_string_proxy_handle_lv};
+      if (ti.is_dict_intersection()) {
+        return cgen_state_->emitExternalCall(
+            "intersect_translate_string_id_to_other_dict",
+            get_int_type(32, cgen_state_->context_),
+            string_cast_lvs);
+      } else {
+        return cgen_state_->emitExternalCall("union_translate_string_id_to_other_dict",
+                                             get_int_type(32, cgen_state_->context_),
+                                             string_cast_lvs);
+      }
+    }
 
     const std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
     auto string_dictionary_translation_mgr =
@@ -230,10 +259,6 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
           "Cast from none-encoded string to dictionary-encoded not supported for "
           "distributed queries");
     }
-    if (g_enable_watchdog) {
-      throw WatchdogException(
-          "Cast from none-encoded string to dictionary-encoded would be slow");
-    }
     CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     CHECK(operand_lv->getType()->isIntegerTy(64));
@@ -254,10 +279,8 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
           "Cast from dictionary-encoded string to none-encoded not supported for "
           "distributed queries");
     }
-    if (g_enable_watchdog) {
-      throw WatchdogException(
-          "Cast from dictionary-encoded string to none-encoded would be slow");
-    }
+    // Removed watchdog check here in exchange for row cardinality based check in
+    // RelAlgExecutor
     CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
     if (co.device_type == ExecutorDeviceType::GPU) {
       throw QueryMustRunOnCpu();

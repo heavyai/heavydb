@@ -637,15 +637,6 @@ int PerfectJoinHashTable::initHashTableForDevice(
       hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
                                                CacheItemType::PERFECT_HT,
                                                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      if (device_id == 0) {
-        if (hash_table && device_id == 0) {
-          std::cout << "Found perfect hash table in cache for key: "
-                    << hashtable_cache_key_ << std::endl;
-        } else {
-          std::cout << "Did not find perfect hash table in cache for key: "
-                    << hashtable_cache_key_ << std::endl;
-        }
-      }
     }
     if (!hash_table && needs_dict_translation_) {
       std::unique_lock<std::mutex> str_proxy_translation_lock(

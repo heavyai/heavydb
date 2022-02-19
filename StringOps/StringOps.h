@@ -78,8 +78,6 @@ struct StringOp {
 
   bool hasVarStringLiteral() const { return has_var_str_literal_; }
 
-  virtual ~StringOp() = default;
-
  protected:
   static std::regex generateRegex(const std::string& op_name,
                                   const std::string& regex_pattern,

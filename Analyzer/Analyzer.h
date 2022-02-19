@@ -1464,41 +1464,34 @@ class StringOper : public Expr {
 
   StringOper(const SqlStringOpKind kind,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
-      : Expr(args.size() ? args[0]->get_type_info() : SQLTypeInfo(kNULLT))
-      , kind_(kind)
-      , args_(args) {}
+      : Expr(StringOper::get_return_type(args)), kind_(kind), args_(args) {}
 
   StringOper(const SqlStringOpKind kind,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
              const size_t min_args,
              const std::vector<OperandTypeFamily>& expected_type_families,
              const std::vector<std::string>& arg_names)
-      : Expr(args.size() ? args[0]->get_type_info() : SQLTypeInfo(kNULLT))
-      , kind_(kind)
-      , args_(args) {
+      : Expr(StringOper::get_return_type(args)), kind_(kind), args_(args) {
     check_operand_types(min_args, expected_type_families, arg_names);
   }
 
   StringOper(const SqlStringOpKind kind,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& chained_string_op_exprs)
-      : Expr(args.size() ? args[0]->get_type_info() : SQLTypeInfo(kNULLT))
+      : Expr(StringOper::get_return_type(args))
       , kind_(kind)
       , args_(args)
       , chained_string_op_exprs_(chained_string_op_exprs) {}
 
   StringOper(const StringOper& other_string_oper)
-      : Expr(other_string_oper.args_.size() ? other_string_oper.args_[0]->get_type_info()
-                                            : SQLTypeInfo(kNULLT)) {
+      : Expr(other_string_oper.get_type_info()) {
     kind_ = other_string_oper.kind_;
     args_ = other_string_oper.args_;
     chained_string_op_exprs_ = other_string_oper.chained_string_op_exprs_;
   }
 
   StringOper(const std::shared_ptr<StringOper>& other_string_oper)
-      : Expr(other_string_oper->getArity()
-                 ? other_string_oper->getOwnArg(0)->get_type_info()
-                 : SQLTypeInfo(kNULLT)) {
+      : Expr(other_string_oper->get_type_info()) {
     kind_ = other_string_oper->kind_;
     args_ = other_string_oper->args_;
     chained_string_op_exprs_ = other_string_oper->chained_string_op_exprs_;
@@ -1542,6 +1535,10 @@ class StringOper : public Expr {
       std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
           colvar_set,
       bool include_agg) const override;
+
+  bool hasNoneEncodedTextArg() const {
+    return args_.size() && args_[0]->get_type_info().is_none_encoded_string();
+  }
 
   /**
    * @brief returns whether we have one and only one column involved
@@ -1594,10 +1591,13 @@ class StringOper : public Expr {
   }
 
  private:
+  static SQLTypeInfo get_return_type(
+      const std::vector<std::shared_ptr<Analyzer::Expr>> args);
+
   void check_operand_types(const size_t min_args,
                            const std::vector<OperandTypeFamily>& expected_type_families,
                            const std::vector<std::string>& arg_names,
-                           const bool dict_encoded_cols_only = true,
+                           const bool dict_encoded_cols_only = false,
                            const bool cols_first_arg_only = true) const;
 
   SqlStringOpKind kind_;

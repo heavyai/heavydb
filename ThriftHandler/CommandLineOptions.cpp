@@ -297,6 +297,12 @@ void CommandLineOptions::fillOptions() {
                               ->implicit_value(true),
                           "Enable watchdog.");
   help_desc.add_options()(
+      "watchdog-none-encoded-string-translation-limit",
+      po::value<size_t>(&watchdog_none_encoded_string_translation_limit)
+          ->default_value(watchdog_none_encoded_string_translation_limit),
+      "Max number of none-encoded strings allowed to be translated "
+      "to dictionary-encoded with watchdog enabled");
+  help_desc.add_options()(
       "filter-push-down-low-frac",
       po::value<float>(&g_filter_push_down_low_frac)
           ->default_value(g_filter_push_down_low_frac)
@@ -1287,6 +1293,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     }
 
     g_enable_watchdog = enable_watchdog;
+    g_watchdog_none_encoded_string_translation_limit =
+        watchdog_none_encoded_string_translation_limit;
     g_enable_dynamic_watchdog = enable_dynamic_watchdog;
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
     g_enable_runtime_query_interrupt = enable_runtime_query_interrupt;

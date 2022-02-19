@@ -32,7 +32,7 @@
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
-#include "StringOps/StringOpInfo.h"
+#include "StringOps/StringOps.h"
 
 namespace Catalog_Namespace {
 class Catalog;
@@ -189,6 +189,20 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return &it->second;
   }
 
+  const StringOps_Namespace::StringOps* getStringOps(
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    const auto map_key = generate_translation_map_key(0, 0, string_op_infos);
+    auto it = string_ops_owned_.find(map_key);
+    if (it == string_ops_owned_.end()) {
+      it = string_ops_owned_
+               .emplace(map_key,
+                        std::make_shared<StringOps_Namespace::StringOps>(string_op_infos))
+               .first;
+    }
+    return it->second.get();
+  }
+
   StringDictionaryProxy* getStringDictProxy(const int dict_id) const {
     std::lock_guard<std::mutex> lock(state_mutex_);
     auto it = str_dict_proxy_owned_.find(dict_id);
@@ -275,10 +289,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
-  // std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
   std::map<std::string, StringDictionaryProxy::IdMap>
       str_proxy_intersection_translation_maps_owned_;
-  // std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
   std::map<std::string, StringDictionaryProxy::IdMap>
       str_proxy_union_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
@@ -286,6 +298,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::vector<void*> col_buffers_;
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
   std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
+  std::map<std::string, std::shared_ptr<StringOps_Namespace::StringOps>>
+      string_ops_owned_;
 
   size_t arena_block_size_;  // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;

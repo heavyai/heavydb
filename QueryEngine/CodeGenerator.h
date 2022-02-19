@@ -39,6 +39,9 @@ class CodeGenerator {
                                     const bool fetch_columns,
                                     const CompilationOptions&);
 
+  llvm::Value* codegenPerRowStringOper(const Analyzer::StringOper* string_oper,
+                                       const CompilationOptions& co);
+
   llvm::Value* codegenPseudoStringOper(
       const Analyzer::ColumnVar*,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,

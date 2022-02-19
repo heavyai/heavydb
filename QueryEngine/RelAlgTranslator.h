@@ -72,6 +72,8 @@ class RelAlgTranslator {
 
   bool generated_geos_ops() { return generated_geos_ops_; }
 
+  bool hasNoneEncodedStringCast() { return has_none_encoded_string_cast_; }
+
  private:
   std::shared_ptr<Analyzer::Expr> translateScalarSubquery(const RexSubQuery*) const;
 
@@ -214,6 +216,7 @@ class RelAlgTranslator {
   time_t now_;
   mutable bool generated_geos_ops_;
   const bool just_explain_;
+  mutable bool has_none_encoded_string_cast_{false};
 };
 
 struct QualsConjunctiveForm {

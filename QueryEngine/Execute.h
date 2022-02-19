@@ -610,10 +610,11 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner);
 
+  int deviceCount(const ExecutorDeviceType) const;
+
  private:
   void clearMetaInfoCache();
 
-  int deviceCount(const ExecutorDeviceType) const;
   int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
 
   // Generate code for a window function target.

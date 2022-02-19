@@ -28,13 +28,18 @@
 #include <gtest/gtest.h>
 #include <boost/format.hpp>
 #include <boost/locale/generator.hpp>
+#include <sstream>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
+using namespace TestHelpers;
+
 extern bool g_enable_string_functions;
 extern unsigned g_trivial_loop_join_threshold;
+extern bool g_enable_watchdog;
+extern size_t g_watchdog_none_encoded_string_translation_limit;
 
 namespace {
 
@@ -55,6 +60,8 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
+static const bool reuse_test_data = true;
+
 inline auto sql(const std::string& sql_stmt,
                 const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
                 const bool enable_loop_joins = false) {
@@ -67,10 +74,23 @@ inline auto sql(const std::string& sql_stmt,
       sql_stmt, device_type, true, enable_loop_joins);
 }
 
+inline TargetValue run_simple_agg(const std::string& query_str,
+                                  const ExecutorDeviceType device_type,
+                                  const bool allow_loop_joins = true) {
+  auto rows = QR::get()->runSQL(query_str, device_type, allow_loop_joins);
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size()) << query_str;
+  return crt_row[0];
+}
+
 inline auto multi_sql(const std::string& sql_stmts) {
   return QueryRunner::QueryRunner::get()
       ->runMultipleStatements(sql_stmts, ExecutorDeviceType::CPU)
       .back();
+}
+
+inline void run_ddl_statement(const std::string& create_table_stmt) {
+  QR::get()->runDDLStatement(create_table_stmt);
 }
 
 class AssertValueEqualsVisitor : public boost::static_visitor<> {
@@ -144,38 +164,46 @@ void compare_result_set(
 }
 }  // namespace
 
-// begin LOWER function tests
+// begin string function tests
 
 /**
  * @brief Class used for setting up and tearing down tables and records that are required
- * by the LOWER function test cases
+ * by the string function test cases
  */
 class StringFunctionTest : public testing::Test {
- public:
+ protected:
   void SetUp() override {
-    ASSERT_NO_THROW(multi_sql(R"(
-        drop table if exists string_function_test_people;
-        create table string_function_test_people(id int, first_name text, last_name text encoding none, full_name text, age integer, country_code text, us_phone_number text, zip_plus_4 text, personal_motto text, raw_email text);
-        insert into string_function_test_people values(1, 'JOHN', 'SMITH', 'John SMITH', 25, 'us', '555-803-2144', '90210-7743', 'All for one and one for all.', 'Shoot me a note at therealjohnsmith@omnisci.com');
-        insert into string_function_test_people values(2, 'John', 'Banks', 'John BANKS', 30, 'Us', '555-803-8244', '94104-8123', 'One plus one does not equal two.', 'Email: john_banks@mapd.com');
-        insert into string_function_test_people values(3, 'JOHN', 'Wilson', 'John WILSON', 20, 'cA', '555-614-9814', null, 'What is the sound of one hand clapping?', 'JOHN.WILSON@geops.net');
-        insert into string_function_test_people values(4, 'Sue', 'Smith', 'Sue SMITH', 25, 'CA', '555-614-2282', null, 'Nothing exists entirely alone. Everything is always in relation to everything else.', 'Find me at sue4tw@example.com, or reach me at sue.smith@example.com. I''d love to hear from you!'); 
-        drop table if exists string_function_test_countries;
-        create table string_function_test_countries(id int, code text, arrow_code text, name text, capital text encoding none);
-        insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', 'Washington');
-        insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Ottawa');
-        insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'London');
-        insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Berlin')
-      )"));
+    if (!reuse_test_data || !StringFunctionTest::test_data_loaded) {
+      ASSERT_NO_THROW(multi_sql(R"(
+          drop table if exists string_function_test_people;
+          create table string_function_test_people(id int, first_name text, last_name text encoding none, full_name text, age integer, country_code text, us_phone_number text, zip_plus_4 text, personal_motto text, raw_email text);
+          insert into string_function_test_people values(1, 'JOHN', 'SMITH', 'John SMITH', 25, 'us', '555-803-2144', '90210-7743', 'All for one and one for all.', 'Shoot me a note at therealjohnsmith@omnisci.com');
+          insert into string_function_test_people values(2, 'John', 'Banks', 'John BANKS', 30, 'Us', '555-803-8244', '94104-8123', 'One plus one does not equal two.', 'Email: john_banks@mapd.com');
+          insert into string_function_test_people values(3, 'JOHN', 'Wilson', 'John WILSON', 20, 'cA', '555-614-9814', null, 'What is the sound of one hand clapping?', 'JOHN.WILSON@geops.net');
+          insert into string_function_test_people values(4, 'Sue', 'Smith', 'Sue SMITH', 25, 'CA', '555-614-2282', null, 'Nothing exists entirely alone. Everything is always in relation to everything else.', 'Find me at sue4tw@example.com, or reach me at sue.smith@example.com. I''d love to hear from you!'); 
+          drop table if exists string_function_test_countries;
+          create table string_function_test_countries(id int, code text, arrow_code text, name text, short_name text encoding none, capital text, largest_city text encoding none, lang text encoding none);
+          insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', null, 'Washington', 'New York City', 'en');
+          insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'TORONTO', 'EN');
+          insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'LONDON', 'en');
+          insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'de');
+        )"));
+      StringFunctionTest::test_data_loaded = true;
+    }
   }
 
   void TearDown() override {
-    ASSERT_NO_THROW(multi_sql(R"(
-        drop table string_function_test_people;
-        drop table string_function_test_countries;
-      )"););
+    if (!reuse_test_data) {
+      ASSERT_NO_THROW(multi_sql(R"(
+          drop table string_function_test_people;
+          drop table string_function_test_countries;
+        )"););
+    }
   }
+  static bool test_data_loaded;
 };
+
+bool StringFunctionTest::test_data_loaded = false;
 
 TEST_F(StringFunctionTest, Lowercase) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1473,18 +1501,285 @@ TEST_F(StringFunctionTest, DISABLED_LowercaseNonAscii) {
   }
 }
 
-TEST_F(StringFunctionTest, LowercaseNonEncodedTextColumn) {
+TEST_F(StringFunctionTest, LowercaseNoneEncodedTextColumn) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    try {
-      sql("select lower(last_name) from string_function_test_people;", dt);
-      FAIL() << "An exception should have been thrown for this test case";
-    } catch (const std::exception& e) {
-      ASSERT_STREQ(
-          "Error instantiating LOWER operator. Currently only text-encoded "
-          "dictionary-encoded column inputs are allowed, but a none-encoded text column "
-          "argument was received.",
-          e.what());
+    auto result_set = sql(
+        "select lower(last_name) from string_function_test_people order by id asc;", dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {"smith"}, {"banks"}, {"wilson"}, {"smith"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, ChainNoneEncodedTextColumn) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto result_set =
+        sql("select reverse(initcap(last_name)) from string_function_test_people order "
+            "by id asc;",
+            dt);
+    std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+        {"htimS"}, {"sknaB"}, {"nosliW"}, {"htimS"}};
+    compare_result_set(expected_result_set, result_set);
+  }
+}
+
+TEST_F(StringFunctionTest, NoneEncodedGroupByNoStringOps) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // No string ops
+    {
+      auto result_set =
+          sql("select lang as g, count(*) as n from "
+              "string_function_test_countries group by g order by g asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"de", int64_t(1)}, {"en", int64_t(2)}, {"EN", int64_t(1)}};
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, NoneEncodedGroupByNullsNoStringOps) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // No string ops
+    {
+      auto result_set =
+          sql("select short_name as g, count(*) as n from "
+              "string_function_test_countries group by g order by g asc nulls last;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Canada", int64_t(1)},
+          {"Germany", int64_t(1)},
+          {"UK", int64_t(1)},
+          {"", int64_t(1)}};
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, NoneEncodedGroupByStringOps) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // String ops
+    {
+      auto result_set =
+          sql("select lower(lang) as g, count(*) as n from "
+              "string_function_test_countries group by g order by n desc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"en", int64_t(3)},
+                                                                      {"de", int64_t(1)}};
+    }
+
+    {
+      auto result_set =
+          sql("select initcap(last_name) as g, count(*) as n from "
+              "string_function_test_people group by g order by g asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Banks", int64_t(1)}, {"Smith", int64_t(2)}, {"Wilson", int64_t(1)}};
+    }
+
+    // String ops with filter
+    {
+      auto result_set =
+          sql("select initcap(last_name) as g, count(*) as n from "
+              "string_function_test_people where last_name <> upper(last_name) "
+              "group by g order by g asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Banks", int64_t(1)}, {"Smith", int64_t(1)}, {"Wilson", int64_t(1)}};
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, NoneEncodedGroupByNullsStringOps) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // String ops
+    {
+      auto result_set =
+          sql("select substring(short_name from 4 for 5) as g, count(*) as n from "
+              "string_function_test_countries group by g order by g asc nulls last;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"ada", int64_t(1)}, {"many", int64_t(1)}, {"", int64_t(2)}};
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, NoneEncodedEncodedEquality) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // None encoded = encoded, no string ops
+    {
+      auto result_set =
+          sql("select short_name from string_function_test_countries where "
+              "name = short_name order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"Canada"},
+                                                                      {"Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // Encoded = none-encoded, no string ops
+    {
+      auto result_set =
+          sql("select UPPER(short_name) from string_function_test_countries where "
+              "short_name = name order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"CANADA"},
+                                                                      {"GERMANY"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // None encoded = encoded, string ops both sides
+    {
+      auto result_set = sql(
+          "select upper(last_name) from string_function_test_people where "
+          "initcap(last_name) = split_part(initcap(full_name), ' ', 2) order by id asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"SMITH"}, {"BANKS"}, {"WILSON"}, {"SMITH"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // Encoded = none encoded, string ops both sides
+    {
+      auto result_set = sql(
+          "select upper(last_name) from string_function_test_people where "
+          "split_part(initcap(full_name), ' ', 2) = initcap(last_name) order by id asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"SMITH"}, {"BANKS"}, {"WILSON"}, {"SMITH"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // None encoded = encoded, string ops one side
+    {
+      auto result_set =
+          sql("select repeat(largest_city, 2) from string_function_test_countries where "
+              "initcap(largest_city) = capital order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"LONDONLONDON"},
+                                                                      {"BerlinBerlin"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // Encoded = none encoded, string ops one side
+    {
+      auto result_set =
+          sql("select substring(capital from 0 for 3) from "
+              "string_function_test_countries where "
+              "capital = initcap(largest_city) order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"Lon"}, {"Ber"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, NoneEncodedCaseStatementsNoStringOps) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // None-encoded + none-encoded, no string ops
+    {
+      auto result_set =
+          sql("select case when id <= 2 then short_name else lang end from "
+              "string_function_test_countries order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {"Canada"}, {"en"}, {"de"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // None-encoded + none-encoded + literal
+    {
+      auto result_set =
+          sql("select case when id = 1 then 'USA' when id <= 3 then short_name else lang "
+              "end from string_function_test_countries order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"USA"}, {"Canada"}, {"UK"}, {"de"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // Dict-encoded + none-encoded + literal
+    {
+      auto result_set =
+          sql("select case when id <= 2 then name when id <= 3 then short_name else 'DE' "
+              "end from string_function_test_countries order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"United States"}, {"Canada"}, {"UK"}, {"DE"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // Group by
+    // Dict-encoded + none-encoded + literal
+    {
+      auto result_set =
+          sql("select case when lang = 'en' then lang when code = 'ca' then 'en' else "
+              "code end "
+              "as g, count(*) as n from string_function_test_countries group by g order "
+              "by g asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"dE", int64_t(1)},
+                                                                      {"en", int64_t(3)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, NoneEncodedCaseStatementsStringOps) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // None-encoded + none-encoded, no string ops
+    {
+      auto result_set =
+          sql("select case when id <= 2 then lower(short_name) else upper(lang) end from "
+              "string_function_test_countries order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {""}, {"canada"}, {"EN"}, {"DE"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // None-encoded + none-encoded + literal
+    {
+      auto result_set = sql(
+          "select case when id = 1 then initcap('USA') when id <= 3 then "
+          "upper(short_name) "
+          "else reverse(lang) end from string_function_test_countries order by id asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Usa"}, {"CANADA"}, {"UK"}, {"ed"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // Dict-encoded + none-encoded + literal
+    {
+      auto result_set =
+          sql("select case when id <= 2 then initcap(repeat(name, 2)) when id <= 3 then "
+              "substring(short_name from 2 for 1) else 'DE' "
+              "end from string_function_test_countries order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"United Statesunited States"}, {"Canadacanada"}, {"K"}, {"DE"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    // Group by
+    // Dict-encoded + none-encoded + literal
+    {
+      auto result_set = sql(
+          "select case when lang = 'en' then upper(lang) when code = 'ca' then 'en' else "
+          "'Z' || trim(leading 'd' from repeat(code, 2)) end "
+          "as g, count(*) as n from string_function_test_countries group by g order "
+          "by g asc;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"EN", int64_t(2)}, {"ZEdE", int64_t(1)}, {"en", int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
     }
   }
 }
@@ -1519,26 +1814,61 @@ TEST_F(StringFunctionTest, LowercaseNullColumn) {
 }
 
 TEST_F(StringFunctionTest, SelectLowercase_StringFunctionsDisabled) {
+  const auto previous_string_function_state = g_enable_string_functions;
+  ScopeGuard reset_string_function_state = [&previous_string_function_state] {
+    g_enable_string_functions = previous_string_function_state;
+  };
+  g_enable_string_functions = false;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    g_enable_string_functions = false;
     try {
       sql("select lower(first_name) from string_function_test_people;", dt);
       FAIL() << "An exception should have been thrown for this test case";
     } catch (const std::exception& e) {
       ASSERT_STREQ("Function LOWER not supported.", e.what());
-      g_enable_string_functions = true;
     }
   }
 }
 
-// end LOWER function tests
+TEST_F(StringFunctionTest, SelectLowercaseNoneEncoded_MoreRowsThanWatchdogLimit) {
+  const auto previous_watchdog_state = g_enable_watchdog;
+  const auto previous_none_encoded_translation_limit =
+      g_watchdog_none_encoded_string_translation_limit;
+  ScopeGuard reset_watchdog_state = [&previous_watchdog_state,
+                                     &previous_none_encoded_translation_limit] {
+    g_enable_watchdog = previous_watchdog_state;
+    g_watchdog_none_encoded_string_translation_limit =
+        previous_none_encoded_translation_limit;
+  };
+  g_enable_watchdog = true;
+  g_watchdog_none_encoded_string_translation_limit = 3;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    try {
+      sql("select lower(last_name) from string_function_test_people;", dt);
+      FAIL() << "An exception should have been thrown for this test case";
+    } catch (const std::exception& e) {
+      std::ostringstream expected_error;
+      expected_error
+          << "Query requires one or more casts between none-encoded and "
+             "dictionary-encoded "
+          << "strings, and the estimated table size (5 rows) "
+          << "exceeds the configured watchdog none-encoded string translation limit of "
+          << g_watchdog_none_encoded_string_translation_limit << " rows.";
+      const auto expected_error_str = expected_error.str();
+      ASSERT_STREQ(expected_error_str.c_str(), e.what());
+    }
+  }
+}
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   QueryRunner::QueryRunner::init(BASE_PATH);
   g_enable_string_functions = true;
+  g_enable_watchdog = true;
+  g_watchdog_none_encoded_string_translation_limit = 1000000UL;
 
   // Use system locale setting by default (as done in the server).
   boost::locale::generator generator;

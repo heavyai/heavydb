@@ -360,9 +360,11 @@ SQLTypeInfo common_string_type(const SQLTypeInfo& lhs_type_info,
   }
   CHECK(lhs_type_info.is_none_encoded_string() || rhs_type_info.is_none_encoded_string());
   SQLTypeInfo ret_ti =
-      lhs_type_info.is_none_encoded_string() ? lhs_type_info : rhs_type_info;
-  ret_ti.set_dimension(
-      std::max(lhs_type_info.get_dimension(), rhs_type_info.get_dimension()));
+      rhs_type_info.is_none_encoded_string() ? lhs_type_info : rhs_type_info;
+  if (ret_ti.is_none_encoded_string()) {
+    ret_ti.set_dimension(
+        std::max(lhs_type_info.get_dimension(), rhs_type_info.get_dimension()));
+  }
   return ret_ti;
 }
 
@@ -420,22 +422,25 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
     if (new_left_type.get_compression() == kENCODING_DICT &&
         new_right_type.get_compression() == kENCODING_DICT) {
       if (new_left_type.get_comp_param() != new_right_type.get_comp_param()) {
-        // Join framework does its own string dictionary translation
-        // (at least partly since the rhs table projection does not use
-        // the normal runtime execution framework), so if we detect
-        // that the rte idxs of the two tables are different, bail
-        // on translating
-        const bool should_translate_strings =
-            exprs_share_one_and_same_rte_idx(left_expr, right_expr);
-        if (should_translate_strings && (optype == kEQ || optype == kNE)) {
-          CHECK(executor);
-          // Make the type we're casting to the transient dictionary, if it exists,
-          // otherwise the largest dictionary in terms of number of entries
-          SQLTypeInfo ti(get_str_dict_cast_type(new_left_type, new_right_type, executor));
-          auto& expr_to_cast = ti == new_left_type ? right_expr : left_expr;
-          ti.set_fixed_size();
-          ti.set_dict_intersection();
-          expr_to_cast = expr_to_cast->add_cast(ti);
+        if (optype == kEQ || optype == kNE) {
+          // Join framework does its own string dictionary translation
+          // (at least partly since the rhs table projection does not use
+          // the normal runtime execution framework), so if we detect
+          // that the rte idxs of the two tables are different, bail
+          // on translating
+          const bool should_translate_strings =
+              exprs_share_one_and_same_rte_idx(left_expr, right_expr);
+          if (should_translate_strings) {
+            CHECK(executor);
+            // Make the type we're casting to the transient dictionary, if it exists,
+            // otherwise the largest dictionary in terms of number of entries
+            SQLTypeInfo ti(
+                get_str_dict_cast_type(new_left_type, new_right_type, executor));
+            auto& expr_to_cast = ti == new_left_type ? right_expr : left_expr;
+            ti.set_fixed_size();
+            ti.set_dict_intersection();
+            expr_to_cast = expr_to_cast->add_cast(ti);
+          }
         } else {  // Ordered comparison operator
           // We do not currently support ordered (i.e. >, <=) comparisons between
           // dictionary-encoded columns, and need to decompress when translation

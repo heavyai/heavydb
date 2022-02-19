@@ -15,7 +15,6 @@
  */
 
 #include "StringOps.h"
-
 namespace StringOps_Namespace {
 
 std::regex StringOp::generateRegex(const std::string& op_name,
@@ -418,7 +417,6 @@ std::pair<bool, int64_t> RegexpSubstr::set_sub_match_info(
 }
 
 std::string StringOps::operator()(const std::string& str) const {
-  // std::string modified_str(str);
   NullableStrType modified_str(str);
   for (const auto& string_op : string_ops_) {
     modified_str = string_op->operator()(modified_str.str);

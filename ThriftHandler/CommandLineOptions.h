@@ -77,6 +77,7 @@ class CommandLineOptions {
 
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
+  size_t watchdog_none_encoded_string_translation_limit = 1000000;
   bool enable_runtime_query_interrupt = true;
   bool enable_non_kernel_time_query_interrupt = true;
   bool use_estimator_result_cache = true;
@@ -156,6 +157,7 @@ extern bool g_enable_watchdog;
 extern bool g_enable_dynamic_watchdog;
 extern unsigned g_dynamic_watchdog_time_limit;
 extern unsigned g_trivial_loop_join_threshold;
+extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern bool g_from_table_reordering;
 extern bool g_enable_filter_push_down;
 extern bool g_allow_cpu_retry;

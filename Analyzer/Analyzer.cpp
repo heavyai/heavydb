@@ -715,8 +715,7 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
       new_type_info.get_compression() == kENCODING_DICT &&
       new_type_info.get_comp_param() <= TRANSIENT_DICT_ID) {
     if (type_info.is_string() && type_info.get_compression() != kENCODING_DICT) {
-      throw std::runtime_error(
-          "Cannot group by string columns which are not dictionary encoded.");
+      return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
     }
     throw std::runtime_error(
         "Internal error: Cannot apply transient dictionary encoding to non-literal "
@@ -3384,7 +3383,8 @@ std::shared_ptr<Analyzer::Expr> StringOper::deep_copy() const {
   for (const auto& chained_string_op_expr : chained_string_op_exprs_) {
     chained_string_op_exprs_copy.emplace_back(chained_string_op_expr->deep_copy());
   }
-  return makeExpr<Analyzer::StringOper>(kind_, args_copy, chained_string_op_exprs_);
+  return makeExpr<Analyzer::StringOper>(
+      kind_, std::move(args_copy), std::move(chained_string_op_exprs_copy));
 }
 
 std::shared_ptr<Analyzer::Expr> LowerStringOper::deep_copy() const {
@@ -3466,13 +3466,9 @@ std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
 }
 
 bool StringOper::operator==(const Expr& rhs) const {
-  if (typeid(rhs) != typeid(StringOper)) {
-    return false;
-  }
   const auto rhs_string_oper = dynamic_cast<const StringOper*>(&rhs);
 
   if (!rhs_string_oper) {
-    // CHECK here instead?
     return false;
   }
 
@@ -3907,6 +3903,28 @@ LiteralArgMap StringOper::getLiteralArgs() const {
   return literal_arg_map;
 }
 
+SQLTypeInfo StringOper::get_return_type(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> args) {
+  if (args.empty()) {
+    return SQLTypeInfo(kNULLT);
+  }
+  // Constant literal first argument
+  if (dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
+    return args[0]->get_type_info();
+  }
+  // None-encoded text column argument
+  // Note that whether or not this is allowed is decided separately
+  // in check_operand_types
+  if (args[0]->get_type_info().is_none_encoded_string()) {
+    return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
+  }
+  // If here, we have a dict-encoded column arg
+  SQLTypeInfo ret_ti(args[0]->get_type_info());
+  // Set return as nullable as string op can create nulls
+  ret_ti.set_notnull(false);
+  return ret_ti;
+}
+
 void StringOper::check_operand_types(
     const size_t min_args,
     const std::vector<OperandTypeFamily>& expected_type_families,
@@ -3948,7 +3966,7 @@ void StringOper::check_operand_types(
     if (cols_first_arg_only && !is_arg_constant && arg_idx >= 1UL) {
       oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
           << "Currently only column inputs allowed for the primary argument, "
-          << "but a column input was received for argument " << arg_idx << ".";
+          << "but a column input was received for argument " << arg_idx + 1 << ".";
       throw std::runtime_error(oss.str());
     }
     switch (expected_type_family) {
@@ -3978,7 +3996,7 @@ void StringOper::check_operand_types(
           throw std::runtime_error(oss.str());
           break;
         }
-        if (dict_encoded_cols_only && !is_arg_constant) {
+        if (!is_arg_constant) {
           oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
               << "Currently only text-encoded dictionary column inputs are "
               << "allowed, but an integer-type column was provided.";

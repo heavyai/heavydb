@@ -73,6 +73,7 @@ extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
 extern bool g_enable_union;
+extern size_t g_watchdog_none_encoded_string_translation_limit;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -2962,9 +2963,8 @@ TEST(Select, CountDistinct) {
         c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
           dt));  // Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt),
-                 std::runtime_error);  // Strings must be dictionary-encoded
-                                       // for COUNT(DISTINCT).
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct real_str) FROM test;", dt));
   }
 }
 
@@ -3071,11 +3071,11 @@ TEST(Select, ApproxCountDistinct) {
       "'real_foo' GROUP BY str, real_str;",
       dt);
 
-    EXPECT_NO_THROW(run_multiple_agg(
-        "SELECT APPROX_COUNT_DISTINCT(x), SAMPLE(real_str) FROM test GROUP BY x;", dt));
-    EXPECT_THROW(
-        run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(real_str) FROM test;", dt),
-        std::runtime_error);
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(c("SELECT APPROX_COUNT_DISTINCT(distinct real_str) FROM test;",
+                         "SELECT COUNT(DISTINCT real_str) FROM test;",
+                         dt));
+
     EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(x, 0) FROM test;", dt),
                  std::runtime_error);
   }
@@ -3790,7 +3790,6 @@ TEST(Select, Case) {
 
     {
       const auto watchdog_state = g_enable_watchdog;
-      g_enable_watchdog = true;
       ScopeGuard reset_Watchdog_state = [&watchdog_state] {
         g_enable_watchdog = watchdog_state;
       };
@@ -3798,12 +3797,16 @@ TEST(Select, Case) {
       // casts not yet supported in distributed mode
       g_enable_watchdog = false;
       SKIP_ON_AGGREGATOR(c(
-          R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str END FROM test ORDER BY 1)",
+          R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str END FROM test ORDER BY 1 ASC NULLS FIRST;)",
           dt));
-      EXPECT_ANY_THROW(run_multiple_agg(
-          R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str END case_col, sum(x) FROM test GROUP BY case_col;)",
-          dt));  // cannot group by none encoded string columns
     }
+
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(c(
+        R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str 
+      END case_col, SUM(x) AS sum_x FROM test GROUP BY case_col ORDER BY case_col ASC NULLS FIRST,
+      sum_x ASC NULLS FIRST;)",
+        dt));
 
     c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test "
       "GROUP BY key0 ORDER BY key0;",
@@ -3984,6 +3987,19 @@ TEST(Select, CaseSubQuery) {
 }
 
 TEST(Select, Strings) {
+  const auto watchdog_state = g_enable_watchdog;
+  const auto watchdog_none_encoded_translation_limit_state =
+      g_watchdog_none_encoded_string_translation_limit;
+  ScopeGuard reset_Watchdog_state = [&watchdog_state,
+                                     &watchdog_none_encoded_translation_limit_state] {
+    g_enable_watchdog = watchdog_state;
+    g_watchdog_none_encoded_string_translation_limit =
+        watchdog_none_encoded_translation_limit_state;
+  };
+
+  g_enable_watchdog = true;
+  g_watchdog_none_encoded_string_translation_limit = 1000UL;
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -4054,6 +4070,21 @@ TEST(Select, Strings) {
                   v<int64_t>(run_simple_agg(
                       "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;", dt))));
 
+    ASSERT_EQ(static_cast<int64_t>(2 * g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(real_str) = 8;", dt)));
+
+    // Test CHAR_LENGTH and string ops
+
+    // This query would run on distributed if we kept the result of initcap
+    // un-encoded, but will solve for in follow-up PR to broaden the StringOps
+    // class to allow for non-string generating operations (and chaining them
+    // with the existing string-generating ones).
+    THROW_ON_AGGREGATOR(ASSERT_EQ(
+        static_cast<int64_t>(2 * g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(initcap(real_str)) = 8;", dt))));
+
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
@@ -4066,6 +4097,32 @@ TEST(Select, Strings) {
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str ILIKE 'McDonald''s';", dt)));
+
+    // LIKE/ILIKE on none-encoded text column
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE real_str ILIKE '%baz%';", dt)));
+
+    // Ensure LIKE/ILIKE composes with string functions on dict-encoded strings
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE reverse(str) LIKE '%zab%';", dt)));
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test WHERE reverse(str) ILIKE '%zab%';", dt)));
+
+    // Ensure LIKE/ILIKE composes with string functions on none-encoded strings
+
+    THROW_ON_AGGREGATOR(ASSERT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE reverse(real_str) LIKE '%zab%';", dt))));
+
+    THROW_ON_AGGREGATOR(ASSERT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE reverse(real_str) ILIKE '%zab%';", dt))));
+
     ASSERT_EQ("foo",
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT str FROM test WHERE REGEXP_LIKE(str, '^f.?.+');", dt))));
@@ -4119,6 +4176,20 @@ TEST(Select, Strings) {
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';",
                   dt)));
+
+    // None-encoded text type
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE REGEXP_LIKE(real_str, '.*ba.*');", dt)));
+
+    // String op on none-encoded text type
+    THROW_ON_AGGREGATOR(ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE "
+                                  "REGEXP_LIKE(repeat(upper(real_str), 2), '.*BA.*');",
+                                  dt))));
+
     EXPECT_ANY_THROW(run_simple_agg("SELECT LENGTH(NULL) FROM test;", dt));
   }
 }
@@ -10334,8 +10405,9 @@ TEST(Select, Subqueries) {
       "((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
       dt);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt),
-                 std::runtime_error);
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(c("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt));
+
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt),
                  std::runtime_error);
     EXPECT_THROW(
@@ -12728,10 +12800,13 @@ TEST(Select, RuntimeFunctions) {
 TEST(Select, TextGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_THROW(run_multiple_agg(" select count(*) from (SELECT tnone, count(*) cc from "
-                                  "text_group_by_test group by tnone);",
-                                  dt),
-                 std::runtime_error);
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(static_cast<int64_t>(1),
+                  v<int64_t>(run_simple_agg("select count(*) from "
+                                            "(SELECT tnone, count(*) cc from "
+                                            "text_group_by_test group by tnone);",
+                                            dt))));
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg("select count(*) from (SELECT tdict, count(*) cc "
                                         "from text_group_by_test group by tdict)",
@@ -12755,8 +12830,8 @@ TEST(Select, UnsupportedExtensions) {
 TEST(Select, UnsupportedSortOfIntermediateResult) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test ORDER BY x;", dt),
-                 std::runtime_error);
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(c(R"(SELECT real_str FROM test ORDER BY x, real_str;)", dt));
   }
 }
 
@@ -21982,17 +22057,16 @@ TEST(Select, UnionAll) {
                                   " FROM test GROUP BY y;",
                                   dt),
                  std::runtime_error);
-    // The goal is that these should work.
-    // Exception: Subqueries of a UNION must have exact same data types.
-    EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
-                                  "SELECT real_str FROM test ORDER BY str;",
-                                  dt),
-                 std::runtime_error);
-    // Exception: Columnar conversion not supported for variable length types
-    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test UNION ALL "
-                                  "SELECT real_str FROM test ORDER BY real_str;",
-                                  dt),
-                 std::runtime_error);
+
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(
+        c("SELECT str FROM test UNION ALL SELECT real_str FROM test ORDER BY str;", dt));
+
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(
+        c("SELECT real_str FROM test UNION ALL SELECT real_str FROM test ORDER BY "
+          "real_str;",
+          dt));
   }
   g_enable_union = enable_union;
 }
@@ -24718,6 +24792,7 @@ int main(int argc, char** argv) {
     g_hoist_literals = false;
   }
 
+  g_watchdog_none_encoded_string_translation_limit = 1000000UL;  // default
   g_enable_window_functions = true;
   g_enable_interop = false;
 

@@ -57,6 +57,8 @@ size_t g_estimator_failure_max_groupby_size{256000000};
 bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
 
+extern bool g_enable_watchdog;
+extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern bool g_enable_bump_allocator;
 extern size_t g_default_max_groups_buffer_entry_guess;
 extern bool g_enable_system_tables;
@@ -219,6 +221,28 @@ void build_render_targets(RenderInfo& render_info,
 
 bool is_validate_or_explain_query(const ExecutionOptions& eo) {
   return eo.just_validate || eo.just_explain || eo.just_calcite_explain;
+}
+
+void check_none_encoded_string_cast_tuple_limit(
+    const std::vector<InputTableInfo>& query_infos) {
+  if (!g_enable_watchdog) {
+    return;
+  }
+  auto const tuples_upper_bound =
+      std::accumulate(query_infos.cbegin(),
+                      query_infos.cend(),
+                      size_t(0),
+                      [](auto max, auto const& query_info) {
+                        return std::max(max, query_info.info.getNumTuples());
+                      });
+  if (tuples_upper_bound > g_watchdog_none_encoded_string_translation_limit) {
+    std::ostringstream oss;
+    oss << "Query requires one or more casts between none-encoded and dictionary-encoded "
+        << "strings, and the estimated table size (" << tuples_upper_bound << " rows) "
+        << "exceeds the configured watchdog none-encoded string translation limit of "
+        << g_watchdog_none_encoded_string_translation_limit << " rows.";
+    throw std::runtime_error(oss.str());
+  }
 }
 
 class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> {
@@ -4041,6 +4065,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                               compound,
                                               translator,
                                               eo.executor_type);
+
+  if (translator.hasNoneEncodedStringCast()) {
+    check_none_encoded_string_cast_tuple_limit(query_infos);
+  }
+
   auto query_hint = RegisteredQueryHint::defaults();
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(compound);
@@ -4219,6 +4248,13 @@ std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
     append_folded_cf_quals(join_condition_cf.quals);
     append_folded_cf_quals(join_condition_cf.simple_quals);
   }
+  if (g_enable_watchdog && translator.hasNoneEncodedStringCast()) {
+    std::ostringstream oss;
+    oss << "Join predicate requires one or more casts between none-encoded "
+        << "and dictionary-encoded strings, which is disallowed when query watchdog "
+        << "is enabled.";
+    throw std::runtime_error(oss.str());
+  }
   return combine_equi_join_conditions(join_condition_quals);
 }
 
@@ -4331,6 +4367,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
   const auto target_exprs = translate_targets(
       target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
+
+  const auto query_infos = get_table_infos(input_descs, executor_);
+  if (translator.hasNoneEncodedStringCast()) {
+    check_none_encoded_string_cast_tuple_limit(query_infos);
+  }
+
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
   auto query_hint = RegisteredQueryHint::defaults();
@@ -4414,6 +4456,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                               eo.just_explain);
   const auto target_exprs_owned =
       translate_scalar_sources(project, translator, eo.executor_type);
+  if (translator.hasNoneEncodedStringCast()) {
+    check_none_encoded_string_cast_tuple_limit(query_infos);
+  }
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_raw_pointers(target_exprs_owned);
@@ -4822,6 +4867,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   std::tie(in_metainfo, target_exprs_owned) =
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto filter_expr = translator.translateScalarRex(filter->getCondition());
+  const auto query_infos = get_table_infos(input_descs, executor_);
+  if (translator.hasNoneEncodedStringCast()) {
+    check_none_encoded_string_cast_tuple_limit(query_infos);
+  }
+
   const auto qual = fold_expr(filter_expr.get());
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());

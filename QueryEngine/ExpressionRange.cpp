@@ -685,14 +685,24 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
                                                      chained_string_op->getLiteralArgs());
     string_op_infos.emplace_back(string_op_info);
   }
+
   const auto string_oper_col_var_expr = string_oper_expr->getArg(0);
   CHECK(string_oper_col_var_expr);
   const auto string_oper_col_var =
       dynamic_cast<const Analyzer::ColumnVar*>(string_oper_col_var_expr);
   CHECK(string_oper_col_var);
   const auto string_oper_col_var_ti = string_oper_col_var->get_type_info();
+  if (string_oper_col_var_ti.is_none_encoded_string()) {
+    // If here the translation is done on the fly so unless this
+    // was the result of a previous step, we won't have the translated
+    // dictionary yet. Just throw an invalid range.
+    return ExpressionRange::makeInvalidRange();
+  }
   CHECK(string_oper_col_var_ti.is_dict_encoded_string());
-  const auto dict_id = string_oper_col_var_ti.get_comp_param();
+
+  const auto expr_ti = string_oper_expr->get_type_info();
+  CHECK(expr_ti.is_string());
+  const auto dict_id = expr_ti.get_comp_param();
 
   const auto translation_map = executor->getStringProxyTranslationMap(
       dict_id,

@@ -702,6 +702,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       in_string_op_chain_ = false;
     }
     const auto kind = string_oper->get_kind();
+
     if (string_oper->getArity() == rewritten_arg_literal_arity) {
       Analyzer::StringOper literal_string_oper(kind, rewritten_args);
       const auto literal_args = literal_string_oper.getLiteralArgs();
@@ -715,7 +716,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         makeExpr<Analyzer::StringOper>(kind, rewritten_args));
     if (parent_in_string_op_chain) {
       CHECK(in_string_op_chain_);
-      CHECK(rewritten_args[0]->get_type_info().is_dict_encoded_string());
+      CHECK(rewritten_args[0]->get_type_info().is_string());
       CHECK(dynamic_cast<Analyzer::ColumnVar*>(rewritten_args[0].get()));
       return rewritten_args[0]->deep_copy();
     } else {
