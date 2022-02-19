@@ -110,8 +110,6 @@
 #include "Shared/distributed.h"
 #include "Shared/enable_assign_render_groups.h"
 
-#define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
-
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_parquet_import_fsi;
 #endif
@@ -5131,37 +5129,11 @@ bool TTypeInfo_IsGeo(const TDatumType::type& t) {
           t == TDatumType::LINESTRING || t == TDatumType::POINT);
 }
 
-#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
-
 std::string TTypeInfo_TypeToString(const TDatumType::type& t) {
   std::stringstream ss;
   ss << t;
   return ss.str();
 }
-
-std::string TTypeInfo_GeoSubTypeToString(const int32_t p) {
-  std::string result;
-  switch (p) {
-    case SQLTypes::kGEOGRAPHY:
-      result = "GEOGRAPHY";
-      break;
-    case SQLTypes::kGEOMETRY:
-      result = "GEOMETRY";
-      break;
-    default:
-      result = "INVALID";
-      break;
-  }
-  return result;
-}
-
-std::string TTypeInfo_EncodingToString(const TEncodingType::type& t) {
-  std::stringstream ss;
-  ss << t;
-  return ss.str();
-}
-
-#endif
 
 }  // namespace
 
@@ -5532,93 +5504,41 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
     }
 
     try {
-      // then the names and types
+      // validate column type match
+      // also handle geo column name changes
       int rd_index = 0;
-      for (auto cd : col_descriptors) {
-        TColumnType cd_col_type = populateThriftColumnType(&cat, cd);
-        std::string gname = rd[rd_index].col_name;  // got
-        std::string ename = cd->columnName;         // expecting
-#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
-        TTypeInfo gti = rd[rd_index].col_type;  // got
-#endif
-        TTypeInfo eti = cd_col_type.col_type;  // expecting
-        // check for name match
+      for (auto const* cd : col_descriptors) {
+        auto const cd_col_type = populateThriftColumnType(&cat, cd);
+
+        // for types, all we care about is that the got and expected types are either both
+        // geo or both non-geo, and if they're geo that the exact geo type matches
+        auto const gtype = rd[rd_index].col_type.type;  // importer type
+        auto const etype = cd_col_type.col_type.type;   // existing table type
+        if (TTypeInfo_IsGeo(gtype) && TTypeInfo_IsGeo(etype)) {
+          if (gtype != etype) {
+            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+                "type", TTypeInfo_TypeToString(gtype), TTypeInfo_TypeToString(etype));
+          }
+        } else if (TTypeInfo_IsGeo(gtype) != TTypeInfo_IsGeo(etype)) {
+          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
+              "type", TTypeInfo_TypeToString(gtype), TTypeInfo_TypeToString(etype));
+        }
+
+        // for names, we keep the existing table geo column name (for example, to handle
+        // the case where an existing table has a geo column with a legacy name), but all
+        // other column names must match, otherwise the import will fail
+        auto const gname = rd[rd_index].col_name;  // importer name
+        auto const ename = cd->columnName;         // existing table name
         if (gname != ename) {
-          if (TTypeInfo_IsGeo(eti.type) &&
-              (ename == Geospatial::kLegacyGeoColumnName1 ||
-               ename == Geospatial::kLegacyGeoColumnName2) &&
-              gname == Geospatial::kGeoColumnName) {
-            // rename incoming geo column to match existing legacy default geo column
-            rd[rd_index].col_name = gname;
-            LOG(INFO)
-                << "import_geo_table: Renaming incoming geo column to match existing "
-                   "legacy default geo column";
+          if (TTypeInfo_IsGeo(gtype)) {
+            LOG(INFO) << "import_geo_table: Renaming incoming geo column to match "
+                         "existing table column name '"
+                      << ename << "'";
+            rd[rd_index].col_name = ename;
           } else {
             THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("name", gname, ename);
           }
         }
-#if ENABLE_GEO_IMPORT_COLUMN_MATCHING
-        // check for type attributes match
-        // these attrs must always match regardless of type
-        if (gti.type != eti.type) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-              "type", TTypeInfo_TypeToString(gti.type), TTypeInfo_TypeToString(eti.type));
-        }
-        if (gti.is_array != eti.is_array) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-              "array-ness", std::to_string(gti.is_array), std::to_string(eti.is_array));
-        }
-        if (gti.nullable != eti.nullable) {
-          THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-              "nullability", std::to_string(gti.nullable), std::to_string(eti.nullable));
-        }
-        if (TTypeInfo_IsGeo(eti.type)) {
-          // for geo, only these other attrs must also match
-          // encoding and comp_param are allowed to differ
-          // this allows appending to existing geo table
-          // without needing to know the existing encoding
-          if (gti.precision != eti.precision) {
-            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-                "geo sub-type",
-                TTypeInfo_GeoSubTypeToString(gti.precision),
-                TTypeInfo_GeoSubTypeToString(eti.precision));
-          }
-          if (gti.scale != eti.scale) {
-            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-                "SRID", std::to_string(gti.scale), std::to_string(eti.scale));
-          }
-          if (gti.encoding != eti.encoding) {
-            LOG(INFO) << "import_geo_table: Ignoring geo encoding mismatch";
-          }
-          if (gti.comp_param != eti.comp_param) {
-            LOG(INFO) << "import_geo_table: Ignoring geo comp_param mismatch";
-          }
-        } else {
-          // non-geo, all other attrs must also match
-          // @TODO consider relaxing some of these dependent on type
-          // e.g. DECIMAL precision/scale, TEXT dict or non-dict, INTEGER up-sizing
-          if (gti.precision != eti.precision) {
-            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("precision",
-                                                 std::to_string(gti.precision),
-                                                 std::to_string(eti.precision));
-          }
-          if (gti.scale != eti.scale) {
-            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-                "scale", std::to_string(gti.scale), std::to_string(eti.scale));
-          }
-          if (gti.encoding != eti.encoding) {
-            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION(
-                "encoding",
-                TTypeInfo_EncodingToString(gti.encoding),
-                TTypeInfo_EncodingToString(eti.encoding));
-          }
-          if (gti.comp_param != eti.comp_param) {
-            THROW_COLUMN_ATTR_MISMATCH_EXCEPTION("comp param",
-                                                 std::to_string(gti.comp_param),
-                                                 std::to_string(eti.comp_param));
-          }
-        }
-#endif
         rd_index++;
       }
     } catch (const std::exception& e) {

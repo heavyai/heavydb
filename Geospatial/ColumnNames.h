@@ -21,7 +21,5 @@
 namespace Geospatial {
 
 inline const std::string kGeoColumnName{"geom"};
-inline const std::string kLegacyGeoColumnName1{"mapd_geo"};
-inline const std::string kLegacyGeoColumnName2{"omnisci_geo"};
 
 }  // namespace Geospatial
