@@ -296,6 +296,18 @@ std::string build_create_table_statement(
          with_statement_assembly.str() + replicated_def + ");";
 }
 
+template <
+    typename V,
+    std::enable_if_t<!std::is_same_v<V, bool> && std::is_integral<V>::value, int> = 0>
+inline V inline_null_array_value() {
+  return inline_int_null_array_value<V>();
+}
+
+template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
+inline V inline_null_array_value() {
+  return inline_fp_null_array_value<V>();
+}
+
 }  // namespace TestHelpers
 
 #endif  // TEST_HELPERS_H_

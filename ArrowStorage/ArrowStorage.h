@@ -43,6 +43,13 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
     size_t block_size = 20 << 20;  // Default block size is 20MB
   };
 
+  struct JsonParseOptions {
+    JsonParseOptions(){};
+
+    size_t skip_rows = 0;
+    size_t block_size = 1 << 20;  // Default block size is 1MB
+  };
+
   ArrowStorage(int schema_id, const std::string& schema_name, int db_id)
       : SimpleSchemaProvider(schema_id, schema_name), db_id_(db_id) {}
 
@@ -96,6 +103,13 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                      int table_id,
                      const CsvParseOptions parse_options = CsvParseOptions());
 
+  void appendJsonData(const std::string& json_data,
+                      const std::string& table_name,
+                      const JsonParseOptions parse_options = JsonParseOptions());
+  void appendJsonData(const std::string& json_data,
+                      int table_id,
+                      const JsonParseOptions parse_options = JsonParseOptions());
+
   void dropTable(const std::string& table_name, bool throw_if_not_exist = false);
   void dropTable(int table_id, bool throw_if_not_exist = false);
 
@@ -132,6 +146,12 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
   std::shared_ptr<arrow::Table> parseCsv(std::shared_ptr<arrow::io::InputStream> input,
                                          const CsvParseOptions parse_options,
                                          const ColumnInfoList& col_infos = {});
+  std::shared_ptr<arrow::Table> parseJsonData(const std::string& json_data,
+                                              const JsonParseOptions parse_options,
+                                              const ColumnInfoList& col_infos = {});
+  std::shared_ptr<arrow::Table> parseJson(std::shared_ptr<arrow::io::InputStream> input,
+                                          const JsonParseOptions parse_options,
+                                          const ColumnInfoList& col_infos = {});
   void fetchFixedLenData(const TableData& table,
                          size_t frag_idx,
                          size_t col_idx,
@@ -148,6 +168,12 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                        size_t col_idx,
                        Data_Namespace::AbstractBuffer* dest,
                        size_t num_bytes) const;
+  void fetchVarLenArrayData(const TableData& table,
+                            size_t frag_idx,
+                            size_t col_idx,
+                            Data_Namespace::AbstractBuffer* dest,
+                            size_t elem_size,
+                            size_t num_bytes) const;
 
   int db_id_;
   int next_table_id_ = 1;

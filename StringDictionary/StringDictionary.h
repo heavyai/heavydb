@@ -51,7 +51,7 @@ class StringDictionary {
   StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
   ~StringDictionary() noexcept;
 
-  int32_t getOrAdd(const std::string& str) noexcept;
+  int32_t getOrAdd(const std::string_view& str) noexcept;
   template <class T, class String>
   void getOrAddBulk(const std::vector<String>& string_vec, T* encoded_vec);
   template <class T, class String>

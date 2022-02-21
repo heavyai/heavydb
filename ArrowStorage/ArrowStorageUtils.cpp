@@ -18,6 +18,10 @@
 #include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
 
+#include <iostream>
+
+using namespace std::string_literals;
+
 namespace {
 
 template <
@@ -37,43 +41,150 @@ inline V inline_null_value() {
   return inline_fp_null_value<V>();
 }
 
+template <
+    typename V,
+    std::enable_if_t<!std::is_same_v<V, bool> && std::is_integral<V>::value, int> = 0>
+inline V inline_null_array_value() {
+  return inline_int_null_array_value<V>();
+}
+
+template <typename V, std::enable_if_t<std::is_same_v<V, bool>, int> = 0>
+inline int8_t inline_null_array_value() {
+  return inline_int_null_array_value<int8_t>();
+}
+
+template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
+inline V inline_null_array_value() {
+  return inline_fp_null_array_value<V>();
+}
+
 void convertBoolBitmapBufferWithNulls(int8_t* dst,
                                       const uint8_t* src,
                                       const uint8_t* bitmap,
-                                      int64_t length,
+                                      size_t offs,
+                                      size_t length,
                                       int8_t null_value) {
-  for (int64_t bitmap_idx = 0; bitmap_idx < length / 8; ++bitmap_idx) {
+  size_t start_full_byte = (offs + 7) / 8;
+  size_t end_full_byte = (offs + length) / 8;
+  size_t head_bits = (offs % 8) ? std::min(8 - (offs % 8), length) : 0;
+  size_t tail_bits = head_bits == length ? 0 : (offs + length) % 8;
+  size_t dst_offs = 0;
+
+  for (size_t i = 0; i < head_bits; ++i) {
+    auto is_null = (~bitmap[offs / 8] >> (offs % 8 + i)) & 1;
+    auto val = (src[offs / 8] >> (offs % 8 + i)) & 1;
+    dst[dst_offs++] = is_null ? null_value : val;
+  }
+
+  for (size_t bitmap_idx = start_full_byte; bitmap_idx < end_full_byte; ++bitmap_idx) {
     auto source = src[bitmap_idx];
-    auto dest = dst + bitmap_idx * 8;
     auto inversed_bitmap = ~bitmap[bitmap_idx];
     for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
       auto is_null = (inversed_bitmap >> bitmap_offset) & 1;
       auto val = (source >> bitmap_offset) & 1;
-      dest[bitmap_offset] = is_null ? null_value : val;
+      dst[dst_offs++] = is_null ? null_value : val;
     }
   }
 
-  for (int64_t j = (length / 8) * 8; j < length; ++j) {
-    auto is_null = (~bitmap[length / 8] >> (j % 8)) & 1;
-    auto val = (src[length / 8] >> (j % 8)) & 1;
-    dst[j] = is_null ? null_value : val;
+  for (size_t i = 0; i < tail_bits; ++i) {
+    auto is_null = (~bitmap[end_full_byte] >> i) & 1;
+    auto val = (src[end_full_byte] >> i) & 1;
+    dst[dst_offs++] = is_null ? null_value : val;
   }
 }
 
+// offs - an offset is source buffer it bits
+// length - a number of bits to convert
 void convertBoolBitmapBufferWithoutNulls(int8_t* dst,
                                          const uint8_t* src,
-                                         int64_t length) {
-  for (int64_t bitmap_idx = 0; bitmap_idx < length / 8; ++bitmap_idx) {
+                                         size_t offs,
+                                         size_t length) {
+  size_t start_full_byte = (offs + 7) / 8;
+  size_t end_full_byte = (offs + length) / 8;
+  size_t head_bits = (offs % 8) ? std::min(8 - (offs % 8), length) : 0;
+  size_t tail_bits = head_bits == length ? 0 : (offs + length) % 8;
+  size_t dst_offs = 0;
+
+  for (size_t i = 0; i < head_bits; ++i) {
+    dst[dst_offs++] = (src[offs / 8] >> (offs % 8 + i)) & 1;
+  }
+
+  for (size_t bitmap_idx = start_full_byte; bitmap_idx < end_full_byte; ++bitmap_idx) {
     auto source = src[bitmap_idx];
-    auto dest = dst + bitmap_idx * 8;
     for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
-      dest[bitmap_offset] = (source >> bitmap_offset) & 1;
+      dst[dst_offs++] = (source >> bitmap_offset) & 1;
     }
   }
 
-  for (int64_t j = (length / 8) * 8; j < length; ++j) {
-    dst[j] = (src[length / 8] >> (j % 8)) & 1;
+  for (size_t i = 0; i < tail_bits; ++i) {
+    dst[dst_offs++] = (src[end_full_byte] >> i) & 1;
   }
+}
+
+template <typename T>
+void copyArrayDataReplacingNulls(T* dst,
+                                 std::shared_ptr<arrow::Array> arr,
+                                 size_t offs,
+                                 size_t length) {
+  auto src = reinterpret_cast<const T*>(arr->data()->buffers[1]->data());
+  auto null_value = inline_null_value<T>();
+
+  if (arr->null_count() == arr->length()) {
+    std::fill(dst, dst + length, null_value);
+  } else if (arr->null_count() == 0) {
+    if constexpr (std::is_same_v<T, bool>) {
+      convertBoolBitmapBufferWithoutNulls(reinterpret_cast<int8_t*>(dst),
+                                          reinterpret_cast<const uint8_t*>(src),
+                                          offs,
+                                          length);
+    } else {
+      std::copy(src + offs, src + offs + length, dst);
+    }
+  } else {
+    const uint8_t* bitmap_data = arr->null_bitmap_data();
+    if constexpr (std::is_same_v<T, bool>) {
+      convertBoolBitmapBufferWithNulls(reinterpret_cast<int8_t*>(dst),
+                                       reinterpret_cast<const uint8_t*>(src),
+                                       bitmap_data,
+                                       offs,
+                                       length,
+                                       null_value);
+    } else {
+      size_t start_full_byte = (offs + 7) / 8;
+      size_t end_full_byte = (offs + length) / 8;
+      size_t head_bits = (offs % 8) ? std::min(8 - (offs % 8), length) : 0;
+      size_t tail_bits = head_bits == length ? 0 : (offs + length) % 8;
+      size_t dst_offs = 0;
+      size_t src_offs = offs;
+
+      for (size_t i = 0; i < head_bits; ++i) {
+        auto is_null = (~bitmap_data[offs / 8] >> (offs % 8 + i)) & 1;
+        auto val = src[src_offs++];
+        dst[dst_offs++] = is_null ? null_value : val;
+      }
+
+      for (size_t bitmap_idx = start_full_byte; bitmap_idx < end_full_byte;
+           ++bitmap_idx) {
+        auto inversed_bitmap = ~bitmap_data[bitmap_idx];
+        for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
+          auto is_null = (inversed_bitmap >> bitmap_offset) & 1;
+          auto val = src[src_offs++];
+          dst[dst_offs++] = is_null ? null_value : val;
+        }
+      }
+
+      for (size_t i = 0; i < tail_bits; ++i) {
+        auto is_null = (~bitmap_data[end_full_byte] >> i) & 1;
+        auto val = src[src_offs++];
+        dst[dst_offs++] = is_null ? null_value : val;
+      }
+    }
+  }
+}
+
+template <typename T>
+void copyArrayDataReplacingNulls(T* dst, std::shared_ptr<arrow::Array> arr) {
+  copyArrayDataReplacingNulls(dst, arr, 0, arr->length());
 }
 
 template <typename T>
@@ -84,77 +195,318 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesImpl(
     return arr;
   }
 
-  auto null_value = inline_null_value<T>();
-
   auto resultBuf = arrow::AllocateBuffer(sizeof(T) * arr->length()).ValueOrDie();
   auto resultData = reinterpret_cast<T*>(resultBuf->mutable_data());
 
-  tbb::parallel_for(
-      tbb::blocked_range<int>(0, arr->num_chunks()),
-      [&](const tbb::blocked_range<int>& r) {
-        for (int c = r.begin(); c != r.end(); ++c) {
-          size_t offset = 0;
-          for (int i = 0; i < c; i++) {
-            offset += arr->chunk(i)->length();
-          }
-          auto resWithOffset = resultData + offset;
-
-          auto chunk = arr->chunk(c);
-
-          if (chunk->null_count() == chunk->length()) {
-            std::fill(resWithOffset, resWithOffset + chunk->length(), null_value);
-            continue;
-          }
-
-          auto chunkData = reinterpret_cast<const T*>(chunk->data()->buffers[1]->data());
-
-          const uint8_t* bitmap_data = chunk->null_bitmap_data();
-          const int64_t length = chunk->length();
-
-          if (chunk->null_count() == 0) {
-            if constexpr (std::is_same_v<T, bool>) {
-              convertBoolBitmapBufferWithoutNulls(
-                  reinterpret_cast<int8_t*>(resWithOffset),
-                  reinterpret_cast<const uint8_t*>(chunkData),
-                  length);
-            } else {
-              std::copy(chunkData, chunkData + chunk->length(), resWithOffset);
-            }
-            continue;
-          }
-
-          if constexpr (std::is_same_v<T, bool>) {
-            convertBoolBitmapBufferWithNulls(reinterpret_cast<int8_t*>(resWithOffset),
-                                             reinterpret_cast<const uint8_t*>(chunkData),
-                                             bitmap_data,
-                                             length,
-                                             null_value);
-          } else {
-            for (int64_t bitmap_idx = 0; bitmap_idx < length / 8; ++bitmap_idx) {
-              auto source = chunkData + bitmap_idx * 8;
-              auto dest = resWithOffset + bitmap_idx * 8;
-              auto inversed_bitmap = ~bitmap_data[bitmap_idx];
-              for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
-                auto is_null = (inversed_bitmap >> bitmap_offset) & 1;
-                auto val = is_null ? null_value : source[bitmap_offset];
-                dest[bitmap_offset] = val;
-              }
-            }
-
-            for (int64_t j = length / 8 * 8; j < length; ++j) {
-              auto is_null = (~bitmap_data[length / 8] >> (j % 8)) & 1;
-              auto val = is_null ? null_value : chunkData[j];
-              resWithOffset[j] = val;
-            }
-          }
-        }
-      });
+  tbb::parallel_for(tbb::blocked_range<int>(0, arr->num_chunks()),
+                    [&](const tbb::blocked_range<int>& r) {
+                      for (int c = r.begin(); c != r.end(); ++c) {
+                        size_t offset = 0;
+                        for (int i = 0; i < c; i++) {
+                          offset += arr->chunk(i)->length();
+                        }
+                        copyArrayDataReplacingNulls<T>(resultData + offset,
+                                                       arr->chunk(c));
+                      }
+                    });
 
   using ArrowType = typename arrow::CTypeTraits<T>::ArrowType;
   using ArrayType = typename arrow::TypeTraits<ArrowType>::ArrayType;
 
   auto array = std::make_shared<ArrayType>(arr->length(), std::move(resultBuf));
   return std::make_shared<arrow::ChunkedArray>(array);
+}
+
+template <typename T>
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArrayImpl(
+    std::shared_ptr<arrow::ChunkedArray> arr) {
+  int64_t null_elems = 0;
+  size_t elems_count = 0;
+  int32_t arrays_count = 0;
+  std::vector<int32_t> out_elem_offsets;
+  std::vector<int32_t> out_offset_offsets;
+  out_elem_offsets.reserve(arr->num_chunks());
+  out_offset_offsets.reserve(arr->num_chunks());
+
+  // In Arrow format NULL arrays have no elements but in OmniSci format we
+  // should have a single element holding a sentinel array NULL value.
+  // Here we compute a length of the resulting elments buffer and output
+  // offsets for chunks. Also check if there are any NULL elements in
+  // arrays requiring replacement.
+  for (auto& chunk : arr->chunks()) {
+    auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
+    CHECK(chunk_list);
+    auto elems_list = chunk_list->values();
+
+    out_offset_offsets.push_back(arrays_count);
+    out_elem_offsets.push_back(static_cast<int32_t>(elems_count));
+
+    auto offset_data = chunk_list->data()->GetValues<uint32_t>(1);
+    // There might be nulls out of offsets range represented by the chunk,
+    // but we still can avoid conversion if there are no NULLs at all.
+    null_elems += elems_list->null_count();
+    arrays_count += chunk->length();
+    elems_count += offset_data[chunk->length()] - offset_data[0];
+  }
+  if (elems_count > std::numeric_limits<int32_t>::max()) {
+    throw std::runtime_error("Input arrow array is too big for conversion.");
+  }
+
+  auto offset_buf =
+      arrow::AllocateBuffer(sizeof(int32_t) * arr->length() + 1).ValueOrDie();
+  auto offset_ptr = reinterpret_cast<int32_t*>(offset_buf->mutable_data());
+
+  auto elem_buf = arrow::AllocateBuffer(sizeof(T) * elems_count).ValueOrDie();
+  auto elem_ptr = reinterpret_cast<T*>(elem_buf->mutable_data());
+
+  tbb::parallel_for(
+      tbb::blocked_range<int>(0, arr->num_chunks()),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int c = r.begin(); c != r.end(); ++c) {
+          auto elem_offset = out_elem_offsets[c];
+          auto offset_offset = out_offset_offsets[c];
+          auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(arr->chunk(c));
+          auto elem_array = chunk_list->values();
+
+          auto offset_data = chunk_list->data()->GetValues<uint32_t>(1);
+          if (chunk_list->null_count() == 0) {
+            auto first_elem_offset = offset_data[0];
+            auto elems_to_copy = offset_data[chunk_list->length()] - first_elem_offset;
+            copyArrayDataReplacingNulls<T>(
+                elem_ptr + elem_offset, elem_array, first_elem_offset, elems_to_copy);
+            std::transform(offset_data,
+                           offset_data + chunk_list->length(),
+                           offset_ptr + offset_offset,
+                           [offs = elem_offset - first_elem_offset](uint32_t val) {
+                             return (val + offs) * sizeof(T);
+                           });
+          } else {
+            bool use_negative_offset = false;
+            for (int64_t i = 0; i < chunk_list->length(); ++i) {
+              offset_ptr[offset_offset++] = use_negative_offset ? -elem_offset * sizeof(T)
+                                                                : elem_offset * sizeof(T);
+              if (chunk_list->IsNull(i)) {
+                use_negative_offset = true;
+              } else {
+                use_negative_offset = false;
+                auto elems_to_copy = offset_data[i + 1] - offset_data[i];
+                copyArrayDataReplacingNulls<T>(
+                    elem_ptr + elem_offset, elem_array, offset_data[i], elems_to_copy);
+                elem_offset += elems_to_copy;
+              }
+            }
+          }
+        }
+      });
+  auto last_chunk = arr->chunk(arr->num_chunks() - 1);
+  offset_ptr[arr->length()] = static_cast<int32_t>(
+      last_chunk->IsNull(last_chunk->length() - 1) ? -elems_count * sizeof(T)
+                                                   : elems_count * sizeof(T));
+
+  using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
+  using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+
+  auto elem_array = std::make_shared<ElemsArrayType>(elems_count, std::move(elem_buf));
+  auto list_array = std::make_shared<arrow::ListArray>(
+      arr->type(), arr->length(), std::move(offset_buf), elem_array);
+  return std::make_shared<arrow::ChunkedArray>(list_array);
+}
+
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArray(
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    const SQLTypeInfo& type) {
+  auto list_type = std::dynamic_pointer_cast<arrow::ListType>(arr->type());
+  if (!list_type) {
+    throw std::runtime_error("Unsupported large Arrow list:: "s + list_type->ToString());
+  }
+
+  auto elem_type = type.get_elem_type();
+  if (elem_type.is_integer() || is_datetime(elem_type.get_type())) {
+    switch (elem_type.get_size()) {
+      case 1:
+        return replaceNullValuesVarlenArrayImpl<int8_t>(arr);
+      case 2:
+        return replaceNullValuesVarlenArrayImpl<int16_t>(arr);
+      case 4:
+        return replaceNullValuesVarlenArrayImpl<int32_t>(arr);
+      case 8:
+        return replaceNullValuesVarlenArrayImpl<int64_t>(arr);
+      default:
+        throw std::runtime_error("Unsupported integer or datetime array: "s +
+                                 type.toString());
+    }
+  } else if (elem_type.is_fp()) {
+    switch (elem_type.get_size()) {
+      case 4:
+        return replaceNullValuesVarlenArrayImpl<float>(arr);
+      case 8:
+        return replaceNullValuesVarlenArrayImpl<double>(arr);
+    }
+  } else if (elem_type.is_boolean()) {
+    return replaceNullValuesVarlenArrayImpl<bool>(arr);
+  }
+
+  throw std::runtime_error("Unsupported varlen array: "s + type.toString());
+  return nullptr;
+}
+
+template <typename T>
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArrayImpl(
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    int list_size) {
+  int64_t total_length = 0;
+  std::vector<size_t> out_elem_offsets;
+  out_elem_offsets.reserve(arr->num_chunks());
+  for (auto& chunk : arr->chunks()) {
+    out_elem_offsets.push_back(total_length);
+    total_length += chunk->length() * list_size;
+  }
+
+  auto elem_buf = arrow::AllocateBuffer(sizeof(T) * total_length).ValueOrDie();
+  auto elem_ptr = reinterpret_cast<T*>(elem_buf->mutable_data());
+
+  auto null_array_value = inline_null_array_value<T>();
+  auto null_value = inline_null_value<T>();
+
+  tbb::parallel_for(tbb::blocked_range<int>(0, arr->num_chunks()),
+                    [&](const tbb::blocked_range<int>& r) {
+                      for (int c = r.begin(); c != r.end(); ++c) {
+                        auto chunk_array =
+                            std::dynamic_pointer_cast<arrow::ListArray>(arr->chunk(c));
+                        auto elem_array = chunk_array->values();
+
+                        auto dst_ptr = elem_ptr + out_elem_offsets[c];
+                        for (int64_t i = 0; i < chunk_array->length(); ++i) {
+                          if (chunk_array->IsNull(i)) {
+                            dst_ptr[0] = null_array_value;
+                            for (int j = 1; j < list_size; ++j) {
+                              dst_ptr[j] = null_value;
+                            }
+                          } else {
+                            // We add NULL elements if input array is too short and cut
+                            // too long arrays.
+                            auto offs = chunk_array->value_offset(i);
+                            auto len = std::min(chunk_array->value_length(i), list_size);
+                            copyArrayDataReplacingNulls(dst_ptr, elem_array, offs, len);
+                            for (int j = len; j < list_size; ++j) {
+                              dst_ptr[j] = null_value;
+                            }
+                          }
+                          dst_ptr += list_size;
+                        }
+                      }
+                    });
+
+  using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
+  using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+
+  auto elem_array = std::make_shared<ElemsArrayType>(total_length, std::move(elem_buf));
+  return std::make_shared<arrow::ChunkedArray>(elem_array);
+}
+
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeStringArrayImpl(
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    int list_size,
+    StringDictionary* dict) {
+  int64_t total_length = 0;
+  std::vector<size_t> out_elem_offsets;
+  out_elem_offsets.reserve(arr->num_chunks());
+  for (auto& chunk : arr->chunks()) {
+    out_elem_offsets.push_back(total_length);
+    total_length += chunk->length() * list_size;
+  }
+
+  auto list_type = std::dynamic_pointer_cast<arrow::ListType>(arr->type());
+  CHECK(list_type);
+  auto elem_type = list_type->value_type();
+  if (elem_type->id() != arrow::Type::STRING) {
+    throw std::runtime_error(
+        "Dictionary encoded string arrays are not supported in Arrow import: "s +
+        list_type->ToString());
+  }
+
+  auto elem_buf = arrow::AllocateBuffer(sizeof(int32_t) * total_length).ValueOrDie();
+  auto elem_ptr = reinterpret_cast<int32_t*>(elem_buf->mutable_data());
+
+  auto null_array_value = inline_null_array_value<int32_t>();
+  auto null_value = inline_null_value<int32_t>();
+
+  tbb::parallel_for(
+      tbb::blocked_range<int>(0, arr->num_chunks()),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int c = r.begin(); c != r.end(); ++c) {
+          auto chunk_array = std::dynamic_pointer_cast<arrow::ListArray>(arr->chunk(c));
+          auto elem_array =
+              std::dynamic_pointer_cast<arrow::StringArray>(chunk_array->values());
+          CHECK(elem_array);
+
+          auto dst_ptr = elem_ptr + out_elem_offsets[c];
+          for (int64_t i = 0; i < chunk_array->length(); ++i) {
+            if (chunk_array->IsNull(i)) {
+              dst_ptr[0] = null_array_value;
+              for (int j = 1; j < list_size; ++j) {
+                dst_ptr[j] = null_value;
+              }
+            } else {
+              // We add NULL elements if input array is too short and cut
+              // too long arrays.
+              auto offs = chunk_array->value_offset(i);
+              auto len = std::min(chunk_array->value_length(i), list_size);
+              for (int j = 0; j < len; ++j) {
+                auto view = elem_array->GetView(offs + j);
+                dst_ptr[j] = dict->getOrAdd(std::string_view(view.data(), view.length()));
+              }
+              for (int j = len; j < list_size; ++j) {
+                dst_ptr[j] = null_value;
+              }
+            }
+            dst_ptr += list_size;
+          }
+        }
+      });
+
+  using ElemsArrowType = typename arrow::CTypeTraits<int32_t>::ArrowType;
+  using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+
+  auto elem_array = std::make_shared<ElemsArrayType>(total_length, std::move(elem_buf));
+  return std::make_shared<arrow::ChunkedArray>(elem_array);
+}
+
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArray(
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    const SQLTypeInfo& type,
+    StringDictionary* dict) {
+  auto elem_type = type.get_elem_type();
+  int list_size = type.get_size() / elem_type.get_size();
+  if (elem_type.is_integer() || is_datetime(elem_type.get_type())) {
+    switch (elem_type.get_size()) {
+      case 1:
+        return replaceNullValuesFixedSizeArrayImpl<int8_t>(arr, list_size);
+      case 2:
+        return replaceNullValuesFixedSizeArrayImpl<int16_t>(arr, list_size);
+      case 4:
+        return replaceNullValuesFixedSizeArrayImpl<int32_t>(arr, list_size);
+      case 8:
+        return replaceNullValuesFixedSizeArrayImpl<int64_t>(arr, list_size);
+      default:
+        throw std::runtime_error("Unsupported integer or datetime array: "s +
+                                 type.toString());
+    }
+  } else if (elem_type.is_fp()) {
+    switch (elem_type.get_size()) {
+      case 4:
+        return replaceNullValuesFixedSizeArrayImpl<float>(arr, list_size);
+      case 8:
+        return replaceNullValuesFixedSizeArrayImpl<double>(arr, list_size);
+    }
+  } else if (elem_type.is_boolean()) {
+    return replaceNullValuesFixedSizeArrayImpl<bool>(arr, list_size);
+  } else if (elem_type.is_dict_encoded_string()) {
+    return replaceNullValuesFixedSizeStringArrayImpl(arr, list_size, dict);
+  }
+
+  throw std::runtime_error("Unsupported fixed size array: "s + type.toString());
+  return nullptr;
 }
 
 template <typename IntType, typename ChunkType>
@@ -258,6 +610,16 @@ std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
                                    std::to_string(type.get_precision()));
       }
     case kARRAY:
+      if (type.is_string_array()) {
+        return list(utf8());
+      } else if (type.is_fixlen_array()) {
+        // Arraw JSON parser doesn't support conversion to fixed size lists.
+        // So we use variable length lists in Arrow and then do the conversion.
+        return list(getArrowImportType(type.get_elem_type()));
+      } else {
+        CHECK(type.is_varlen_array());
+        return list(getArrowImportType(type.get_elem_type()));
+      }
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
     default:
@@ -268,7 +630,8 @@ std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
 
 std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type) {
+    const SQLTypeInfo& type,
+    StringDictionary* dict) {
   if (type.is_integer() || is_datetime(type.get_type())) {
     switch (type.get_size()) {
       case 1:
@@ -292,6 +655,10 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
     }
   } else if (type.is_boolean()) {
     return replaceNullValuesImpl<bool>(arr);
+  } else if (type.is_fixlen_array()) {
+    return replaceNullValuesFixedSizeArray(arr, type, dict);
+  } else if (type.is_varlen_array()) {
+    return replaceNullValuesVarlenArray(arr, type);
   }
   CHECK(false) << "Unexpected type: " << type.toString();
   return nullptr;
@@ -336,8 +703,8 @@ SQLTypeInfo getOmnisciType(const arrow::DataType& type) {
       return SQLTypeInfo(kDATE, false);
     case Type::DOUBLE:
       return SQLTypeInfo(kDOUBLE, false);
-      // uncomment when arrow 2.0 will be released and modin support for dictionary types
-      // in read_csv would be implemented
+      // uncomment when arrow 2.0 will be released and modin support for dictionary
+      // types in read_csv would be implemented
 
       // case Type::DICTIONARY: {
       //   auto type = SQLTypeInfo(kTEXT, false, kENCODING_DICT);

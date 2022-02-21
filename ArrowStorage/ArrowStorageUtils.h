@@ -25,7 +25,8 @@ SQLTypeInfo getOmnisciType(const arrow::DataType& type);
 
 std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type);
+    const SQLTypeInfo& type,
+    StringDictionary* dict = nullptr);
 
 std::shared_ptr<arrow::ChunkedArray> convertDecimalToInteger(
     std::shared_ptr<arrow::ChunkedArray> arr,

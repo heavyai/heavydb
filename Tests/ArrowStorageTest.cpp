@@ -23,6 +23,9 @@ constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 
 using namespace std::string_literals;
 
+using TestHelpers::inline_null_array_value;
+using TestHelpers::inline_null_value;
+
 namespace {
 
 [[maybe_unused]] void dumpTableMeta(ArrowStorage& storage, int table_id) {
@@ -311,6 +314,147 @@ void checkStringDictColumnData(ArrowStorage& storage,
                  false,
                  *std::min_element(expected_ids.begin(), expected_ids.end()),
                  *std::max_element(expected_ids.begin(), expected_ids.end()));
+
+  checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_ids);
+}
+
+template <typename T>
+void checkChunkData(ArrowStorage& storage,
+                    const ChunkMetadataMap& chunk_meta_map,
+                    int table_id,
+                    size_t row_count,
+                    size_t fragment_size,
+                    size_t col_idx,
+                    size_t frag_idx,
+                    const std::vector<std::vector<T>>& expected) {
+  CHECK_EQ(row_count, expected.size());
+  auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
+
+  size_t start_row = frag_idx * fragment_size;
+  size_t end_row = std::min(row_count, start_row + fragment_size);
+  size_t frag_rows = end_row - start_row;
+  size_t chunk_elems = 0;
+  for (size_t i = start_row; i < end_row; ++i) {
+    if (expected[i].empty() || !col_info->type.is_varlen_array() ||
+        expected[i].front() != inline_null_array_value<T>()) {
+      chunk_elems += expected[i].size();
+    }
+  }
+  size_t chunk_size = chunk_elems * sizeof(T);
+  checkChunkMeta(chunk_meta_map.at(col_idx + 1),
+                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
+                 frag_rows,
+                 chunk_size,
+                 false);
+  std::vector<T> expected_data(chunk_elems);
+  std::vector<uint32_t> expected_offset(frag_rows + 1);
+  uint32_t data_offset = 0;
+  bool use_negative_offset = false;
+  for (size_t i = start_row; i < end_row; ++i) {
+    expected_offset[i - start_row] =
+        use_negative_offset ? -data_offset * sizeof(T) : data_offset * sizeof(T);
+    if (!expected[i].empty() && expected[i].front() == inline_null_array_value<T>() &&
+        col_info->type.is_varlen_array()) {
+      use_negative_offset = true;
+    } else {
+      use_negative_offset = false;
+      memcpy(expected_data.data() + data_offset,
+             expected[i].data(),
+             expected[i].size() * sizeof(T));
+      data_offset += expected[i].size();
+    }
+  }
+  expected_offset.back() =
+      use_negative_offset ? -data_offset * sizeof(T) : data_offset * sizeof(T);
+  if (col_info->type.is_varlen_array()) {
+    checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_offset, {2});
+    checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_data, {1});
+  } else {
+    checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_data);
+  }
+}
+/*
+void checkStringDictColumnData(ArrowStorage& storage,
+                               const ChunkMetadataMap& chunk_meta_map,
+                               int table_id,
+                               size_t row_count,
+                               size_t fragment_size,
+                               size_t col_idx,
+                               size_t frag_idx,
+                               const std::vector<std::string>& expected) {
+  size_t start_row = frag_idx * fragment_size;
+  size_t end_row = std::min(row_count, start_row + fragment_size);
+  size_t frag_rows = end_row - start_row;
+
+  auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
+  auto& dict =
+      *storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param())->stringDict;
+
+  std::vector<int32_t> expected_ids(frag_rows);
+  for (size_t i = start_row; i < end_row; ++i) {
+    expected_ids[i - start_row] = dict.getIdOfString(expected[i]);
+  }
+
+  checkChunkMeta(chunk_meta_map.at(col_idx + 1),
+                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
+                 frag_rows,
+                 frag_rows * sizeof(uint32_t),
+                 false,
+                 *std::min_element(expected_ids.begin(), expected_ids.end()),
+                 *std::max_element(expected_ids.begin(), expected_ids.end()));
+
+  checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_ids);
+}
+*/
+template <>
+void checkChunkData(ArrowStorage& storage,
+                    const ChunkMetadataMap& chunk_meta_map,
+                    int table_id,
+                    size_t row_count,
+                    size_t fragment_size,
+                    size_t col_idx,
+                    size_t frag_idx,
+                    const std::vector<std::vector<std::string>>& expected) {
+  CHECK_EQ(row_count, expected.size());
+  auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
+  auto& dict =
+      *storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param())->stringDict;
+
+  size_t start_row = frag_idx * fragment_size;
+  size_t end_row = std::min(row_count, start_row + fragment_size);
+  size_t frag_rows = end_row - start_row;
+  std::vector<int32_t> expected_ids;
+
+  // varlen string arrays are not yet supported.
+  CHECK(col_info->type.is_fixlen_array());
+  size_t list_size =
+      col_info->type.get_size() / col_info->type.get_elem_type().get_size();
+  size_t chunk_elems = frag_rows * list_size;
+  for (size_t i = start_row; i < end_row; ++i) {
+    if (expected[i].empty()) {
+      expected_ids.push_back(inline_int_null_array_value<int32_t>());
+      for (size_t j = 1; j < list_size; ++j) {
+        expected_ids.push_back(inline_int_null_value<int32_t>());
+      }
+    } else {
+      ASSERT_EQ(expected[i].size(), list_size);
+      for (auto& val : expected[i]) {
+        if (val == "<NULL>") {
+          expected_ids.push_back(inline_int_null_value<int32_t>());
+        } else {
+          expected_ids.push_back(dict.getIdOfString(val));
+        }
+      }
+    }
+  }
+  std::cout << ::toString(expected_ids) << std::endl;
+
+  size_t chunk_size = chunk_elems * sizeof(int32_t);
+  checkChunkMeta(chunk_meta_map.at(col_idx + 1),
+                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
+                 frag_rows,
+                 chunk_size,
+                 false);
 
   checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_ids);
 }
@@ -907,6 +1051,130 @@ TEST_F(ArrowStorageTest, AppendCsv_Dict_SmallBlock_Multifrag) {
 TEST_F(ArrowStorageTest, AppendCsv_SharedDict) {
   ArrowStorage::CsvParseOptions parse_options;
   Test_ImportCsv_Dict(true, true, parse_options);
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  TableInfoPtr tinfo = storage.createTable("table1",
+                                           {{"col1", SQLTypeInfo(kINT)},
+                                            {"col2", SQLTypeInfo(kFLOAT)},
+                                            {"col3", SQLTypeInfo(kTEXT)}});
+  storage.appendJsonData(R"___({"col1": 1, "col2": 10.0, "col3": "s1"}
+{"col1": 2, "col2": 20.0, "col3": "s2"}
+{"col1": 3, "col2": 30.0, "col3": "s3"})___",
+                         tinfo->table_id);
+  checkData(storage,
+            tinfo->table_id,
+            3,
+            32'000'000,
+            range(3, (int32_t)1),
+            range(3, 10.0f),
+            std::vector<std::string>({"s1"s, "s2"s, "s3"s}));
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData_Arrays) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  SQLTypeInfo int_array(kARRAY, false);
+  int_array.set_subtype(kINT);
+  SQLTypeInfo float_array(kARRAY, false);
+  float_array.set_subtype(kFLOAT);
+  TableInfoPtr tinfo =
+      storage.createTable("table1", {{"col1", int_array}, {"col2", float_array}});
+  storage.appendJsonData(R"___({"col1": [1, 2, 3], "col2": [10.0, 20.0, 30.0]}
+{"col1": [4, 5, 6], "col2": [40.0, 50.0, 60.0]}
+{"col1": [7, 8, 9], "col2": [70.0, 80.0, 90.0]})___",
+                         tinfo->table_id);
+  checkData(storage,
+            tinfo->table_id,
+            3,
+            32'000'000,
+            std::vector<std::vector<int>>({std::vector<int>({1, 2, 3}),
+                                           std::vector<int>({4, 5, 6}),
+                                           std::vector<int>({7, 8, 9})}),
+            std::vector<std::vector<float>>({std::vector<float>({10.0f, 20.0f, 30.0f}),
+                                             std::vector<float>({40.0f, 50.0f, 60.0f}),
+                                             std::vector<float>({70.0f, 80.0f, 90.0f})}));
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData_ArraysWithNulls) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  SQLTypeInfo int_array(kARRAY, false);
+  int_array.set_subtype(kINT);
+  SQLTypeInfo float_array(kARRAY, false);
+  float_array.set_subtype(kFLOAT);
+  TableInfoPtr tinfo =
+      storage.createTable("table1", {{"col1", int_array}, {"col2", float_array}});
+  storage.appendJsonData(R"___({"col1": [1, 2, 3], "col2": [null, 20.0, 30.0]}
+{"col1": null, "col2": [40.0, null, 60.0]}
+{"col1": [7, 8, 9], "col2": null})___",
+                         tinfo->table_id);
+  checkData(
+      storage,
+      tinfo->table_id,
+      3,
+      32'000'000,
+      std::vector<std::vector<int>>({std::vector<int>({1, 2, 3}),
+                                     std::vector<int>({inline_null_array_value<int>()}),
+                                     std::vector<int>({7, 8, 9})}),
+      std::vector<std::vector<float>>(
+          {std::vector<float>({inline_null_value<float>(), 20.0f, 30.0f}),
+           std::vector<float>({40.0f, inline_null_value<float>(), 60.0f}),
+           std::vector<float>({inline_null_array_value<float>()})}));
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData_FixedSizeArrays) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  SQLTypeInfo int3_array(kARRAY, false);
+  int3_array.set_subtype(kINT);
+  int3_array.set_size(3 * sizeof(int));
+  SQLTypeInfo float2_array(kARRAY, false);
+  float2_array.set_subtype(kFLOAT);
+  float2_array.set_size(2 * sizeof(float));
+  TableInfoPtr tinfo =
+      storage.createTable("table1", {{"col1", int3_array}, {"col2", float2_array}});
+  storage.appendJsonData(R"___({"col1": [1, 2], "col2": [null, 20.0]}
+{"col1": null, "col2": [40.0, null, 60.0, 70.0]}
+{"col1": [7, 8, 9, 10], "col2": null}
+{"col1": [11, 12, 13], "col2": [110.0]})___",
+                         tinfo->table_id);
+  checkData(
+      storage,
+      tinfo->table_id,
+      4,
+      32'000'000,
+      std::vector<std::vector<int>>({std::vector<int>({1, 2, inline_null_value<int>()}),
+                                     std::vector<int>({inline_null_array_value<int>(),
+                                                       inline_null_value<int>(),
+                                                       inline_null_value<int>()}),
+                                     std::vector<int>({7, 8, 9}),
+                                     std::vector<int>({11, 12, 13})}),
+      std::vector<std::vector<float>>(
+          {std::vector<float>({inline_null_value<float>(), 20.0f}),
+           std::vector<float>({40.0f, inline_null_value<float>()}),
+           std::vector<float>(
+               {inline_null_array_value<float>(), inline_null_value<float>()}),
+           std::vector<float>({110.f, inline_null_value<float>()})}));
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData_StringFixedSizeArrays) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  SQLTypeInfo string3_array_type(kARRAY, kENCODING_DICT, 0, kTEXT);
+  string3_array_type.set_size(3 * sizeof(int32_t));
+  TableInfoPtr tinfo = storage.createTable("table1", {{"col1", string3_array_type}});
+  storage.appendJsonData(R"___({"col1": ["str1", "str2"]}
+{"col1": null}
+{"col1": ["str2", "str8", "str3", "str10"]}
+{"col1": ["str1", null, "str3"]})___",
+                         tinfo->table_id);
+  checkData(storage,
+            tinfo->table_id,
+            4,
+            32'000'000,
+            std::vector<std::vector<std::string>>(
+                {std::vector<std::string>({"str1"s, "str2"s, "<NULL>"}),
+                 std::vector<std::string>({}),
+                 std::vector<std::string>({"str2"s, "str8"s, "str3"s}),
+                 std::vector<std::string>({"str1"s, "<NULL>", "str3"s})}));
 }
 
 int main(int argc, char** argv) {

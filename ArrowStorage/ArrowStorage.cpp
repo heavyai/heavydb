@@ -21,6 +21,7 @@
 
 #include <arrow/csv/reader.h>
 #include <arrow/io/api.h>
+#include <arrow/json/reader.h>
 #include <arrow/util/decimal.h>
 
 using namespace std::string_literals;
@@ -42,8 +43,9 @@ size_t computeTotalStringsLength(std::shared_ptr<arrow::ChunkedArray> arr,
   while (rows_remain) {
     auto chunk = arr->chunk(chunk_no);
     size_t rows_in_chunk = std::min(rows_remain, chunk->length() - start_offset);
-    const uint32_t* offsets = chunk->data()->GetValues<uint32_t>(1);
-    total_bytes += offsets[start_offset + rows_in_chunk] - offsets[start_offset];
+    const int32_t* offsets = chunk->data()->GetValues<int32_t>(1);
+    total_bytes +=
+        std::abs(offsets[start_offset + rows_in_chunk]) - std::abs(offsets[start_offset]);
     rows_remain -= rows_in_chunk;
     start_offset = 0;
     ++chunk_no;
@@ -75,13 +77,24 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
   } else {
     CHECK_EQ(key.size(), (size_t)5);
     if (key[CHUNK_KEY_VARLEN_IDX] == 1) {
+      auto col_type =
+          getColumnInfo(
+              key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
+              ->type;
       if (!dest->hasEncoder()) {
-        dest->initEncoder(getColumnInfo(key[CHUNK_KEY_DB_IDX],
-                                        key[CHUNK_KEY_TABLE_IDX],
-                                        key[CHUNK_KEY_COLUMN_IDX])
-                              ->type);
+        dest->initEncoder(col_type);
       }
-      fetchVarLenData(table, frag_idx, col_idx, dest, num_bytes);
+      if (col_type.is_string()) {
+        fetchVarLenData(table, frag_idx, col_idx, dest, num_bytes);
+      } else {
+        CHECK(col_type.is_varlen_array());
+        fetchVarLenArrayData(table,
+                             frag_idx,
+                             col_idx,
+                             dest,
+                             col_type.get_elem_type().get_size(),
+                             num_bytes);
+      }
     } else {
       CHECK_EQ(key[CHUNK_KEY_VARLEN_IDX], 2);
       fetchVarLenOffsets(table, frag_idx, col_idx, dest, num_bytes);
@@ -158,6 +171,35 @@ void ArrowStorage::fetchVarLenData(const TableData& table,
   }
 }
 
+void ArrowStorage::fetchVarLenArrayData(const TableData& table,
+                                        size_t frag_idx,
+                                        size_t col_idx,
+                                        Data_Namespace::AbstractBuffer* dest,
+                                        size_t elem_size,
+                                        size_t num_bytes) const {
+  auto& frag = table.fragments[frag_idx];
+  auto data_to_fetch =
+      table.col_data[col_idx]->Slice(static_cast<int64_t>(frag.offset), frag.row_count);
+  int8_t* dst_ptr = dest->getMemoryPtr();
+  size_t remained = num_bytes;
+  for (auto& chunk : data_to_fetch->chunks()) {
+    if (remained == 0) {
+      break;
+    }
+
+    const uint32_t* offsets = chunk->data()->GetValues<uint32_t>(1);
+    size_t chunk_size = (offsets[chunk->length()] - offsets[0]) * elem_size;
+    chunk_size = std::min(chunk_size, num_bytes);
+    auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
+    auto elem_array = chunk_list->values();
+    memcpy(dst_ptr,
+           elem_array->data()->GetValues<int8_t>(1, offsets[0] * elem_size),
+           chunk_size);
+    remained -= chunk_size;
+    dst_ptr += chunk_size;
+  }
+}
+
 Fragmenter_Namespace::TableInfo ArrowStorage::getTableMetadata(int db_id,
                                                                int table_id) const {
   CHECK_EQ(db_id, db_id_);
@@ -210,7 +252,7 @@ TableInfoPtr ArrowStorage::createTable(const std::string& table_name,
       // Positive dictionary id means we use existing dictionary. Other values
       // mean we have to create new dictionaries. Columns with equal negative
       // dict ids will share dictionaries.
-      if (type.is_dict_encoded_string() && type.get_comp_param() <= 0) {
+      if (type.is_dict_encoded_type() && type.get_comp_param() <= 0) {
         int sharing_id = type.get_comp_param();
         if (sharing_id < 0 && dict_ids.count(sharing_id)) {
           type.set_comp_param(dict_ids.at(sharing_id));
@@ -329,14 +371,15 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
         for (auto col_idx = range.begin(); col_idx != range.end(); col_idx++) {
           auto& col_type = getColumnInfo(db_id_, table_id, col_idx + 1)->type;
           auto col_arr = at->column(col_idx);
+          StringDictionary* dict = nullptr;
+          if (col_type.is_dict_encoded_string() || col_type.is_string_array()) {
+            dict = dicts_.at(col_type.get_comp_param())->stringDict.get();
+          }
 
           if (col_type.get_type() == kDECIMAL || col_type.get_type() == kNUMERIC) {
             col_arr = convertDecimalToInteger(col_arr, col_type);
           } else if (col_type.is_string()) {
             if (col_type.is_dict_encoded_string()) {
-              StringDictionary* dict =
-                  dicts_.at(col_type.get_comp_param())->stringDict.get();
-
               switch (col_arr->type()->id()) {
                 case arrow::Type::STRING:
                   col_arr = createDictionaryEncodedColumn(dict, col_arr);
@@ -349,12 +392,15 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
               }
             }
           } else {
-            col_arr = replaceNullValues(col_arr, col_type.get_type());
+            col_arr = replaceNullValues(col_arr, col_type, dict);
           }
 
           col_data[col_idx] = col_arr;
 
-          if (col_type.get_type() != kTEXT || col_type.is_dict_encoded_string()) {
+          bool compute_stats =
+              (col_type.get_type() != kTEXT && col_type.get_type() != kARRAY) ||
+              col_type.is_dict_encoded_string();
+          if (compute_stats) {
             // Compute stats for each fragment.
             threading::parallel_for(
                 threading::blocked_range(size_t(0), frag_count), [&](auto frag_range) {
@@ -394,8 +440,16 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
               auto meta = std::make_shared<ChunkMetadata>();
               meta->sqlType = col_type;
               meta->numElements = frag.row_count;
-              meta->numBytes =
-                  computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
+              if (col_type.is_fixlen_array()) {
+                meta->numBytes = frag.row_count * col_type.get_size();
+              } else if (col_type.is_varlen_array()) {
+                meta->numBytes =
+                    computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
+              } else {
+                CHECK_EQ(col_type.get_type(), kTEXT);
+                meta->numBytes =
+                    computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
+              }
               meta->chunkStats.has_nulls =
                   col_arr->Slice(frag.offset, frag.row_count)->null_count();
               frag.metadata[col_idx] = meta;
@@ -509,6 +563,28 @@ void ArrowStorage::appendCsvData(const std::string& csv_data,
 
   auto col_infos = listColumns(db_id_, table_id);
   auto at = parseCsvData(csv_data, parse_options, col_infos);
+  appendArrowTable(at, table_id);
+}
+
+void ArrowStorage::appendJsonData(const std::string& json_data,
+                                  const std::string& table_name,
+                                  const JsonParseOptions parse_options) {
+  auto tinfo = getTableInfo(db_id_, table_name);
+  if (!tinfo) {
+    throw std::runtime_error("Unknown table: "s + table_name);
+  }
+  appendJsonData(json_data, tinfo->table_id, parse_options);
+}
+
+void ArrowStorage::appendJsonData(const std::string& json_data,
+                                  int table_id,
+                                  const JsonParseOptions parse_options) {
+  if (!tables_.count(table_id)) {
+    throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
+  }
+
+  auto col_infos = listColumns(db_id_, table_id);
+  auto at = parseJsonData(json_data, parse_options, col_infos);
   appendArrowTable(at, table_id);
 }
 
@@ -629,6 +705,7 @@ void ArrowStorage::checkNewTableParams(const std::string& table_name,
         }
         break;
       case kARRAY:
+        break;
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:
       default:
@@ -740,6 +817,55 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseCsv(
   });
 
   VLOG(1) << "Read Arrow CSV in " << time << "ms";
+
+  return at;
+}
+
+std::shared_ptr<arrow::Table> ArrowStorage::parseJsonData(
+    const std::string& json_data,
+    const JsonParseOptions parse_options,
+    const ColumnInfoList& col_infos) {
+  auto input = std::make_shared<arrow::io::BufferReader>(json_data);
+  return parseJson(input, parse_options, col_infos);
+}
+
+std::shared_ptr<arrow::Table> ArrowStorage::parseJson(
+    std::shared_ptr<arrow::io::InputStream> input,
+    const JsonParseOptions parse_options,
+    const ColumnInfoList& col_infos) {
+  arrow::FieldVector fields;
+  fields.reserve(col_infos.size());
+  for (auto& col_info : col_infos) {
+    if (!col_info->is_rowid) {
+      fields.emplace_back(
+          std::make_shared<arrow::Field>(col_info->name,
+                                         getArrowImportType(col_info->type),
+                                         !col_info->type.get_notnull()));
+    }
+  }
+  auto schema = std::make_shared<arrow::Schema>(std::move(fields));
+
+  auto arrow_parse_options = arrow::json::ParseOptions::Defaults();
+  arrow_parse_options.newlines_in_values = false;
+  arrow_parse_options.explicit_schema = schema;
+
+  auto arrow_read_options = arrow::json::ReadOptions::Defaults();
+  arrow_read_options.use_threads = true;
+  arrow_read_options.block_size = parse_options.block_size;
+
+  auto table_reader_result = arrow::json::TableReader::Make(
+      arrow::default_memory_pool(), input, arrow_read_options, arrow_parse_options);
+  ARROW_THROW_NOT_OK(table_reader_result.status());
+  auto table_reader = table_reader_result.ValueOrDie();
+
+  std::shared_ptr<arrow::Table> at;
+  auto time = measure<>::execution([&]() {
+    auto arrow_table_result = table_reader->Read();
+    ARROW_THROW_NOT_OK(arrow_table_result.status());
+    at = arrow_table_result.ValueOrDie();
+  });
+
+  VLOG(1) << "Read Arrow JSON in " << time << "ms";
 
   return at;
 }
