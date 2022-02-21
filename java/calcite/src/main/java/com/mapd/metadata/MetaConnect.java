@@ -190,7 +190,7 @@ public class MetaConnect {
     List<String> dbTable =
             ImmutableList.of(default_db.toUpperCase(), tableName.toUpperCase());
     Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
-    if (cTable != null) {
+    if (cTable != null && (schemaJson == null || schemaJson.isEmpty())) {
       MAPDLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
               + " details " + cTable);
       return cTable;
@@ -217,7 +217,7 @@ public class MetaConnect {
 
   public Set<String> getTables() {
     Set<String> mSet = DATABASE_TO_TABLES.get(default_db.toUpperCase());
-    if (mSet != null && mSet.size() > 0) {
+    if (mSet != null && mSet.size() > 0 && (schemaJson == null || schemaJson.isEmpty())) {
       MAPDLOGGER.debug("Metaconnect DB getTables " + default_db + " tables " + mSet);
       return mSet;
     }
