@@ -37,7 +37,6 @@ constexpr int TEST_AGG_TABLE_ID = 3;
 constexpr int CALCITE_PORT = 3278;
 
 using ArrowTestHelpers::compare_res_data;
-//using TestHelpers::inline_null_value;
 
 class TestSchemaProvider : public SimpleSchemaProvider {
  public:

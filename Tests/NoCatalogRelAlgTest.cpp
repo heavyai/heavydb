@@ -29,7 +29,6 @@ constexpr int TEST2_TABLE_ID = 2;
 constexpr int TEST_AGG_TABLE_ID = 3;
 
 using ArrowTestHelpers::compare_res_data;
-//using TestHelpers::inline_null_value;
 
 class TestSchemaProvider : public SimpleSchemaProvider {
  public:

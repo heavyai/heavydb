@@ -20,8 +20,6 @@
 
 #include <gtest/gtest.h>
 
-//using TestHelpers::inline_null_value;
-
 namespace ArrowTestHelpers {
 
 template <typename TYPE>
