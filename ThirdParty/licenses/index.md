@@ -39,6 +39,9 @@ glslang | [BSD BSD-like MIT](https://github.com/KhronosGroup/glslang/blob/master
 spirv-tools | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Tools/blob/master/LICENSE) | Rendering support
 spirv-cross | [Apache-2.0](https://github.com/KhronosGroup/SPIRV-Cross/blob/master/LICENSE) | Rendering support
 Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/blob/master/LICENSE.txt) | Rendering support
+GLM | [MIT](https://github.com/g-truc/glm/blob/master/copying.txt) | Rendering support
+GLFW | [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md) | Rendering support
+STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Rendering support
 --- | --- | --- |
 gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
 libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GDAL, KML import |
@@ -153,4 +156,3 @@ geos | [LGPLv2.1](<https://github.com/libgeos/geos/blob/master/COPYING>) | Geo s
 Canonical Raft | [LGPLv3](<https://github.com/canonical/raft/blob/master/LICENSE>) | Distributed consensus |
 libuv | [MIT](<https://github.com/libuv/libuv/blob/v1.x/LICENSE>) | Distributed consensus |
 --- | --- | --- |
-stb_image | [MIT](<https://github.com/nothings/stb/blob/master/LICENSE>) | Image file utils

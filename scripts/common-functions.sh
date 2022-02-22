@@ -79,7 +79,7 @@ ARROW_VERSION=apache-arrow-5.0.0
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
-  
+
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
   cmake \
@@ -437,14 +437,14 @@ MEMKIND_VERSION=1.11.0
 
 function install_memkind() {
   download_make_install https://github.com/numactl/numactl/releases/download/v${LIBNUMA_VERSION}/numactl-${LIBNUMA_VERSION}.tar.gz
-  
+
   download https://github.com/memkind/memkind/archive/refs/tags/v${MEMKIND_VERSION}.tar.gz
   extract v${MEMKIND_VERSION}.tar.gz
   pushd memkind-${MEMKIND_VERSION}
   ./autogen.sh
   if [[ $(cat /etc/os-release) = *"fedora"* ]]; then
     memkind_dir=${PREFIX}/lib64
-  else 
+  else
     memkind_dir=${PREFIX}/lib
   fi
   ./configure --prefix=${PREFIX} --libdir=${memkind_dir}
@@ -456,4 +456,13 @@ function install_memkind() {
     || echo "${memkind_dir}/libmemkind.so was not found"
 
   popd
+}
+
+GLM_VERSION=0.9.9.8
+
+function install_glm() {
+  download https://github.com/g-truc/glm/archive/refs/tags/${GLM_VERSION}.tar.gz
+  extract ${GLM_VERSION}.tar.gz
+  mkdir -p $PREFIX/include
+  mv glm-${GLM_VERSION}/glm $PREFIX/include/
 }

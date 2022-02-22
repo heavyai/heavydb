@@ -328,6 +328,9 @@ popd # build
 popd # SPIRV-Cross-$VERS
 popd # spirv-cross
 
+# GLM (GL Mathematics)
+install_glm
+
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
 VERS=1.2.198.1 # stable 12/3/21

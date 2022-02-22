@@ -111,7 +111,11 @@ DEBIAN_FRONTEND=noninteractive sudo apt install -y \
     libxerces-c-dev \
     libxmlsec1-dev \
     libtool \
-    patchelf
+    patchelf \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libxi-dev
 
 # Set up gcc-8 as default gcc
 sudo update-alternatives \
@@ -264,6 +268,30 @@ make install
 popd # build
 popd # SPIRV-Cross-$VERS
 popd # spirv-cross
+
+# GLM (GL Mathematics)
+install_glm
+
+# GLFW
+VERS=3.3.6
+download https://github.com/glfw/glfw/archive/refs/tags/${VERS}.tar.gz
+extract ${VERS}.tar.gz
+pushd glfw-${VERS}
+mkdir -p build
+pushd build
+cmake \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DBUILD_SHARED_LIBS=ON \
+    -DGLFW_BUILD_EXAMPLES=OFF \
+    -DGLFW_BUILD_TESTS=OFF \
+    -DGLFW_BUILD_DOCS=OFF \
+    ..
+
+make -j $(nproc)
+make install
+popd #build
+popd #glfw
 
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
