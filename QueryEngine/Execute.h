@@ -1124,12 +1124,14 @@ class Executor {
   const ExecutorId executor_id_;
   std::unique_ptr<llvm::LLVMContext> context_;
 
+ public:
   // CgenStateManager uses RAII pattern to ensure that recursive code
   // generation (e.g. as in multi-step multi-subqueries) uses a new
   // CgenState instance for each recursion depth while restoring the
   // old CgenState instances when returning from recursion.
   class CgenStateManager {
    public:
+    CgenStateManager(Executor& executor);
     CgenStateManager(Executor& executor,
                      const bool allow_lazy_fetch,
                      const std::vector<InputTableInfo>& query_infos,
@@ -1143,6 +1145,7 @@ class Executor {
     std::unique_ptr<CgenState> cgen_state_;
   };
 
+ private:
   std::unique_ptr<CgenState> cgen_state_;
 
   const std::unique_ptr<llvm::Module>& get_extension_module(ExtModuleKinds kind) const {

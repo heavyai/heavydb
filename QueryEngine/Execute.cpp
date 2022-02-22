@@ -344,6 +344,17 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
 #endif
 }
 
+// Used by StubGenerator::generateStub
+Executor::CgenStateManager::CgenStateManager(Executor& executor)
+    : executor_(executor)
+    , lock_queue_clock_(timer_start())
+    , lock_(executor_.compilation_mutex_)
+    , cgen_state_(std::move(executor_.cgen_state_))  // store old CgenState instance
+{
+  executor_.compilation_queue_time_ms_ += timer_stop(lock_queue_clock_);
+  executor_.cgen_state_.reset(new CgenState(0, false, &executor));
+}
+
 Executor::CgenStateManager::CgenStateManager(
     Executor& executor,
     const bool allow_lazy_fetch,
