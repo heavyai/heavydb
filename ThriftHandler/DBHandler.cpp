@@ -73,6 +73,7 @@
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
+#include "Shared/misc.h"
 #include "Shared/scope.h"
 #include "UdfCompiler/UdfCompiler.h"
 
@@ -2388,7 +2389,6 @@ TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
   CHECK(timing_type.has_value());
   if (timing_type.value() == foreign_storage::ForeignTable::MANUAL_REFRESH_TIMING_TYPE) {
     refresh_info.timing_type = TTableRefreshTimingType::MANUAL;
-    refresh_info.start_date_time = -1;
     refresh_info.interval_count = -1;
   } else if (timing_type.value() ==
              foreign_storage::ForeignTable::SCHEDULE_REFRESH_TIMING_TYPE) {
@@ -2396,7 +2396,7 @@ TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
     const auto& start_date_time = foreign_table->getOption(
         foreign_storage::ForeignTable::REFRESH_START_DATE_TIME_KEY);
     CHECK(start_date_time.has_value());
-    refresh_info.start_date_time = dateTimeParse<kTIMESTAMP>(start_date_time.value(), 0);
+    refresh_info.start_date_time = start_date_time.value();
     const auto& interval =
         foreign_table->getOption(foreign_storage::ForeignTable::REFRESH_INTERVAL_KEY);
     CHECK(interval.has_value());
@@ -2417,8 +2417,16 @@ TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
   } else {
     UNREACHABLE() << "Unexpected refresh timing type: " << timing_type.value();
   }
-  refresh_info.last_refresh_time = foreign_table->last_refresh_time;
-  refresh_info.next_refresh_time = foreign_table->next_refresh_time;
+  if (foreign_table->last_refresh_time !=
+      foreign_storage::ForeignTable::NULL_REFRESH_TIME) {
+    refresh_info.last_refresh_time = shared::convert_temporal_to_iso_format(
+        {kTIMESTAMP}, foreign_table->last_refresh_time);
+  }
+  if (foreign_table->next_refresh_time !=
+      foreign_storage::ForeignTable::NULL_REFRESH_TIME) {
+    refresh_info.next_refresh_time = shared::convert_temporal_to_iso_format(
+        {kTIMESTAMP}, foreign_table->next_refresh_time);
+  }
   return refresh_info;
 }
 }  // namespace

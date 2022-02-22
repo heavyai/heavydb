@@ -365,11 +365,11 @@ struct TTableMeta {
 struct TTableRefreshInfo {
   1: TTableRefreshUpdateType update_type;
   2: TTableRefreshTimingType timing_type;
-  3: i64 start_date_time;
+  3: string start_date_time;
   4: TTableRefreshIntervalType interval_type;
   5: i64 interval_count;
-  6: i64 last_refresh_time;
-  7: i64 next_refresh_time;
+  6: string last_refresh_time;
+  7: string next_refresh_time;
 }
 
 struct TTableDetails {
