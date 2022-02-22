@@ -581,7 +581,7 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   auto executor = Executor::getExecutor(executor_id_);
   CodeCacheKey key{cacheKey()};
   std::lock_guard<std::mutex> compilation_lock(executor->compilation_mutex_);
-  const auto compilation_context = Executor::s_code_accessor.get(key);
+  const auto compilation_context = Executor::s_code_accessor.get_or_wait(key);
   if (compilation_context) {
     reduction_code.func_ptr =
         reinterpret_cast<ReductionCode::FuncPtr>(compilation_context->get()->func());
