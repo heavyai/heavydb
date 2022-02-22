@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 08cb505
+                6.0.0dev 2916aba
               </div>
             
           
@@ -996,6 +996,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_ddl_response.html">Class com::mapd::parser::extension::ddl::DdlResponse</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test.html">Class com::mapd::parser::extension::ddl::ForeignServerTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_insert_values_test.html">Class com::mapd::parser::extension::ddl::InsertValuesTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_reassign_owned_test.html">Class com::mapd::parser::extension::ddl::ReassignOwnedTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
@@ -1040,6 +1041,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_grant_privilege.html">Class com::mapd::parser::extension::ddl::SqlGrantPrivilege</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_grant_role.html">Class com::mapd::parser::extension::ddl::SqlGrantRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_into_table.html">Class com::mapd::parser::extension::ddl::SqlInsertIntoTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_values.html">Class com::mapd::parser::extension::ddl::SqlInsertValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_key_constraint.html">Class com::mapd::parser::extension::ddl::SqlKeyConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_optimize_table.html">Class com::mapd::parser::extension::ddl::SqlOptimizeTable</a></li>
@@ -1964,6 +1966,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_payload_string.html">Struct StringDictionary::PayloadString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_string_idx_entry.html">Struct StringDictionary::StringIdxEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1compare__cache__value__t.html">Struct StringDictionary::compare_cache_value_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_proxy_1_1_heterogeneous_string_equal.html">Struct StringDictionaryProxy::HeterogeneousStringEqual</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_proxy_1_1_heterogeneous_string_hash.html">Struct StringDictionaryProxy::HeterogeneousStringHash</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_value_converter.html">Struct StringValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_system_parameters.html">Struct SystemParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_descriptor.html">Struct TableDescriptor</a></li>
@@ -2247,13 +2251,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17CodeCacheAccessor3getERK12CodeCacheKey">
-<span id="_CPPv3N17CodeCacheAccessor3getERK12CodeCacheKey"></span><span id="_CPPv2N17CodeCacheAccessor3getERK12CodeCacheKey"></span><span id="CodeCacheAccessor::get__CodeCacheKeyCR"></span><span class="target" id="class_code_cache_accessor_1a4094b6f0a3a70e6306f03d7f21f29baf"></span>CodeCacheVal&lt;<a class="reference internal" href="class_compilation_context.html#_CPPv418CompilationContext" title="CompilationContext">CompilationContext</a>&gt; *<code class="sig-name descname">get</code><span class="sig-paren">(</span><em class="property">const</em> CodeCacheKey &amp;<em>key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor3getERK12CodeCacheKey" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE">
+<span id="_CPPv3N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE"></span><span id="_CPPv2N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE"></span><span id="CodeCacheAccessor::put__CodeCacheKeyCR.CodeCacheVal:CompilationContext:R"></span><span class="target" id="class_code_cache_accessor_1a40d1657fc63216117618029843f4a0fc"></span>void <code class="sig-name descname">put</code><span class="sig-paren">(</span><em class="property">const</em> CodeCacheKey &amp;<em>key</em>, CodeCacheVal&lt;<a class="reference internal" href="class_compilation_context.html#_CPPv418CompilationContext" title="CompilationContext">CompilationContext</a>&gt; &amp;<em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE">
-<span id="_CPPv3N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE"></span><span id="_CPPv2N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE"></span><span id="CodeCacheAccessor::put__CodeCacheKeyCR.CodeCacheVal:CompilationContext:R"></span><span class="target" id="class_code_cache_accessor_1a40d1657fc63216117618029843f4a0fc"></span>void <code class="sig-name descname">put</code><span class="sig-paren">(</span><em class="property">const</em> CodeCacheKey &amp;<em>key</em>, CodeCacheVal&lt;<a class="reference internal" href="class_compilation_context.html#_CPPv418CompilationContext" title="CompilationContext">CompilationContext</a>&gt; &amp;<em>value</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor3putERK12CodeCacheKeyR12CodeCacheValI18CompilationContextE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N17CodeCacheAccessor11get_or_waitERK12CodeCacheKey">
+<span id="_CPPv3N17CodeCacheAccessor11get_or_waitERK12CodeCacheKey"></span><span id="_CPPv2N17CodeCacheAccessor11get_or_waitERK12CodeCacheKey"></span><span id="CodeCacheAccessor::get_or_wait__CodeCacheKeyCR"></span><span class="target" id="class_code_cache_accessor_1abc6d085cca7dfdd2ef2d2ddb35f79c8d"></span>CodeCacheVal&lt;<a class="reference internal" href="class_compilation_context.html#_CPPv418CompilationContext" title="CompilationContext">CompilationContext</a>&gt; *<code class="sig-name descname">get_or_wait</code><span class="sig-paren">(</span><em class="property">const</em> CodeCacheKey &amp;<em>key</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor11get_or_waitERK12CodeCacheKey" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2269,6 +2273,11 @@
 <dl class="function">
 <dt id="_CPPv4N17CodeCacheAccessor20evictFractionEntriesEKf">
 <span id="_CPPv3N17CodeCacheAccessor20evictFractionEntriesEKf"></span><span id="_CPPv2N17CodeCacheAccessor20evictFractionEntriesEKf"></span><span id="CodeCacheAccessor::evictFractionEntries__floatC"></span><span class="target" id="class_code_cache_accessor_1a6db48c39d0bbcec8a84789a3263884ba"></span>void <code class="sig-name descname">evictFractionEntries</code><span class="sig-paren">(</span><em class="property">const</em> float <em>fraction</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor20evictFractionEntriesEKf" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK17CodeCacheAccessor9compilingERK12CodeCacheKey">
+<span id="_CPPv3NK17CodeCacheAccessor9compilingERK12CodeCacheKey"></span><span id="_CPPv2NK17CodeCacheAccessor9compilingERK12CodeCacheKey"></span><span id="CodeCacheAccessor::compiling__CodeCacheKeyCRC"></span><span class="target" id="class_code_cache_accessor_1ac8978c2ccf2779f405a43d9278f7a3a6"></span>bool <code class="sig-name descname">compiling</code><span class="sig-paren">(</span><em class="property">const</em> CodeCacheKey &amp;<em>key</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17CodeCacheAccessor9compilingERK12CodeCacheKey" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2317,6 +2326,16 @@
 <dl class="member">
 <dt id="_CPPv4N17CodeCacheAccessor17code_cache_mutex_E">
 <span id="_CPPv3N17CodeCacheAccessor17code_cache_mutex_E"></span><span id="_CPPv2N17CodeCacheAccessor17code_cache_mutex_E"></span><span id="CodeCacheAccessor::code_cache_mutex___std::mutex"></span><span class="target" id="class_code_cache_accessor_1a3d77a0e7731aa227b13a5c994d90e70c"></span>std::mutex <code class="sig-name descname">code_cache_mutex_</code><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor17code_cache_mutex_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N17CodeCacheAccessor15compilation_cv_E">
+<span id="_CPPv3N17CodeCacheAccessor15compilation_cv_E"></span><span id="_CPPv2N17CodeCacheAccessor15compilation_cv_E"></span><span id="CodeCacheAccessor::compilation_cv___std::condition_variable"></span><span class="target" id="class_code_cache_accessor_1a96ab633d47f0555258e36c417c846c68"></span>std::condition_variable <code class="sig-name descname">compilation_cv_</code><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor15compilation_cv_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N17CodeCacheAccessor14compiling_key_E">
+<span id="_CPPv3N17CodeCacheAccessor14compiling_key_E"></span><span id="_CPPv2N17CodeCacheAccessor14compiling_key_E"></span><span id="CodeCacheAccessor::compiling_key___CodeCacheKeyCP"></span><span class="target" id="class_code_cache_accessor_1ade1d2e62a7d8b48d7246f91e9745ed5c"></span><em class="property">const</em> CodeCacheKey *<code class="sig-name descname">compiling_key_</code><a class="headerlink" href="#_CPPv4N17CodeCacheAccessor14compiling_key_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

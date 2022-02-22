@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 08cb505
+                6.0.0dev 2916aba
               </div>
             
           
@@ -996,6 +996,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_ddl_response.html">Class com::mapd::parser::extension::ddl::DdlResponse</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test.html">Class com::mapd::parser::extension::ddl::ForeignServerTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_insert_values_test.html">Class com::mapd::parser::extension::ddl::InsertValuesTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_reassign_owned_test.html">Class com::mapd::parser::extension::ddl::ReassignOwnedTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
@@ -1040,6 +1041,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_grant_privilege.html">Class com::mapd::parser::extension::ddl::SqlGrantPrivilege</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_grant_role.html">Class com::mapd::parser::extension::ddl::SqlGrantRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_into_table.html">Class com::mapd::parser::extension::ddl::SqlInsertIntoTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_values.html">Class com::mapd::parser::extension::ddl::SqlInsertValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_key_constraint.html">Class com::mapd::parser::extension::ddl::SqlKeyConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_optimize_table.html">Class com::mapd::parser::extension::ddl::SqlOptimizeTable</a></li>
@@ -1964,6 +1966,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_payload_string.html">Struct StringDictionary::PayloadString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_string_idx_entry.html">Struct StringDictionary::StringIdxEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1compare__cache__value__t.html">Struct StringDictionary::compare_cache_value_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_proxy_1_1_heterogeneous_string_equal.html">Struct StringDictionaryProxy::HeterogeneousStringEqual</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_proxy_1_1_heterogeneous_string_hash.html">Struct StringDictionaryProxy::HeterogeneousStringHash</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_value_converter.html">Struct StringValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_system_parameters.html">Struct SystemParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_descriptor.html">Struct TableDescriptor</a></li>
@@ -2236,6 +2240,11 @@
 <span id="_CPPv3N6Parser16InsertValuesStmtE"></span><span id="_CPPv2N6Parser16InsertValuesStmtE"></span><span id="Parser::InsertValuesStmt"></span><span class="target" id="class_parser_1_1_insert_values_stmt"></span><em class="property">class </em><code class="sig-name descname">InsertValuesStmt</code> : <em class="property">public</em> Parser::<a class="reference internal" href="class_parser_1_1_insert_stmt.html#_CPPv4N6Parser10InsertStmtE" title="Parser::InsertStmt">InsertStmt</a><a class="headerlink" href="#_CPPv4N6Parser16InsertValuesStmtE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt id="_CPPv4N6Parser16InsertValuesStmt16InsertValuesStmtERKN9rapidjson5ValueE">
+<span id="_CPPv3N6Parser16InsertValuesStmt16InsertValuesStmtERKN9rapidjson5ValueE"></span><span id="_CPPv2N6Parser16InsertValuesStmt16InsertValuesStmtERKN9rapidjson5ValueE"></span><span id="Parser::InsertValuesStmt::InsertValuesStmt__rapidjson::ValueCR"></span><span class="target" id="class_parser_1_1_insert_values_stmt_1a04b0b4f40ed89baf3acdbe0fa83ce989"></span><code class="sig-name descname">InsertValuesStmt</code><span class="sig-paren">(</span><em class="property">const</em> rapidjson::Value &amp;<em>payload</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Parser16InsertValuesStmt16InsertValuesStmtERKN9rapidjson5ValueE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 <dl class="function">
 <dt id="_CPPv4N6Parser16InsertValuesStmt16InsertValuesStmtEPNSt6stringEPNSt4listIPNSt6stringEEEPNSt4listIP4ExprEE">
 <span id="_CPPv3N6Parser16InsertValuesStmt16InsertValuesStmtEPNSt6stringEPNSt4listIPNSt6stringEEEPNSt4listIP4ExprEE"></span><span id="_CPPv2N6Parser16InsertValuesStmt16InsertValuesStmtEPNSt6stringEPNSt4listIPNSt6stringEEEPNSt4listIP4ExprEE"></span><span id="Parser::InsertValuesStmt::InsertValuesStmt__ssP.std::list:ssP:P.std::list:ExprP:P"></span><span class="target" id="class_parser_1_1_insert_values_stmt_1aacd68dd04818cdca9a873852135bbede"></span><code class="sig-name descname">InsertValuesStmt</code><span class="sig-paren">(</span>std::string *<em>t</em>, std::list&lt;std::string *&gt; *<em>c</em>, std::list&lt;<a class="reference internal" href="class_parser_1_1_expr.html#_CPPv4N6Parser4ExprE" title="Parser::Expr">Expr</a> *&gt; *<em>v</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N6Parser16InsertValuesStmt16InsertValuesStmtEPNSt6stringEPNSt4listIPNSt6stringEEEPNSt4listIP4ExprEE" title="Permalink to this definition">¶</a><br /></dt>

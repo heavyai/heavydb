@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::SqlInsertValues
+========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::SqlInsertValues
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

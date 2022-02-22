@@ -1,0 +1,9 @@
+Struct StringDictionaryProxy::HeterogeneousStringEqual
+======================================================
+
+.. doxygenstruct:: StringDictionaryProxy::HeterogeneousStringEqual
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                6.0.0dev 08cb505
+                6.0.0dev 2916aba
               </div>
             
           
@@ -996,6 +996,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_ddl_response.html">Class com::mapd::parser::extension::ddl::DdlResponse</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_server_test.html">Class com::mapd::parser::extension::ddl::ForeignServerTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_foreign_table_test.html">Class com::mapd::parser::extension::ddl::ForeignTableTest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_insert_values_test.html">Class com::mapd::parser::extension::ddl::InsertValuesTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_interrupt_command_test.html">Class com::mapd::parser::extension::ddl::InterruptCommandTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_reassign_owned_test.html">Class com::mapd::parser::extension::ddl::ReassignOwnedTest</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_show_command_test.html">Class com::mapd::parser::extension::ddl::ShowCommandTest</a></li>
@@ -1040,6 +1041,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_grant_privilege.html">Class com::mapd::parser::extension::ddl::SqlGrantPrivilege</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_grant_role.html">Class com::mapd::parser::extension::ddl::SqlGrantRole</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_into_table.html">Class com::mapd::parser::extension::ddl::SqlInsertIntoTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_insert_values.html">Class com::mapd::parser::extension::ddl::SqlInsertValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_key_constraint.html">Class com::mapd::parser::extension::ddl::SqlKeyConstraint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_kill_query.html">Class com::mapd::parser::extension::ddl::SqlKillQuery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1mapd_1_1parser_1_1extension_1_1ddl_1_1_sql_optimize_table.html">Class com::mapd::parser::extension::ddl::SqlOptimizeTable</a></li>
@@ -1964,6 +1966,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_payload_string.html">Struct StringDictionary::PayloadString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1_string_idx_entry.html">Struct StringDictionary::StringIdxEntry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_1_1compare__cache__value__t.html">Struct StringDictionary::compare_cache_value_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_proxy_1_1_heterogeneous_string_equal.html">Struct StringDictionaryProxy::HeterogeneousStringEqual</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_dictionary_proxy_1_1_heterogeneous_string_hash.html">Struct StringDictionaryProxy::HeterogeneousStringHash</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_string_value_converter.html">Struct StringValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_system_parameters.html">Struct SystemParameters</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/struct_table_descriptor.html">Struct TableDescriptor</a></li>
@@ -2238,7 +2242,7 @@
 <p class="breathe-sectiondef-title rubric">Public Types</p>
 <dl class="type">
 <dt id="_CPPv4N21StringDictionaryProxy12TransientMapE">
-<span id="_CPPv3N21StringDictionaryProxy12TransientMapE"></span><span id="_CPPv2N21StringDictionaryProxy12TransientMapE"></span><span class="target" id="class_string_dictionary_proxy_1a26b8612eb446d97ce7102151fbb22fdd"></span><em class="property">using </em><code class="sig-name descname">TransientMap</code> = std::map&lt;std::string, int32_t, std::less&lt;&gt;&gt;<a class="headerlink" href="#_CPPv4N21StringDictionaryProxy12TransientMapE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N21StringDictionaryProxy12TransientMapE"></span><span id="_CPPv2N21StringDictionaryProxy12TransientMapE"></span><span class="target" id="class_string_dictionary_proxy_1a33219b18c3720d71edf31f9b47870b7a"></span><em class="property">using </em><code class="sig-name descname">TransientMap</code> = robin_hood::unordered_node_map&lt;std::string, int32_t, <a class="reference internal" href="#_CPPv4N21StringDictionaryProxy23HeterogeneousStringHashE" title="StringDictionaryProxy::HeterogeneousStringHash">HeterogeneousStringHash</a>, <a class="reference internal" href="#_CPPv4N21StringDictionaryProxy24HeterogeneousStringEqualE" title="StringDictionaryProxy::HeterogeneousStringEqual">HeterogeneousStringEqual</a>&gt;<a class="headerlink" href="#_CPPv4N21StringDictionaryProxy12TransientMapE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2556,6 +2560,48 @@
 <dd></dd></dl>
 
 </div>
+<dl class="class">
+<dt id="_CPPv4N21StringDictionaryProxy24HeterogeneousStringEqualE">
+<span id="_CPPv3N21StringDictionaryProxy24HeterogeneousStringEqualE"></span><span id="_CPPv2N21StringDictionaryProxy24HeterogeneousStringEqualE"></span><span id="StringDictionaryProxy::HeterogeneousStringEqual"></span><span class="target" id="struct_string_dictionary_proxy_1_1_heterogeneous_string_equal"></span><em class="property">struct </em><code class="sig-name descname">HeterogeneousStringEqual</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy24HeterogeneousStringEqualE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="type">
+<dt id="_CPPv4N21StringDictionaryProxy24HeterogeneousStringEqual14is_transparentE">
+<span id="_CPPv3N21StringDictionaryProxy24HeterogeneousStringEqual14is_transparentE"></span><span id="_CPPv2N21StringDictionaryProxy24HeterogeneousStringEqual14is_transparentE"></span><span class="target" id="struct_string_dictionary_proxy_1_1_heterogeneous_string_equal_1a6e0c0aabca33fffd1ec3b63b8f234a47"></span><em class="property">using </em><code class="sig-name descname">is_transparent</code> = void<a class="headerlink" href="#_CPPv4N21StringDictionaryProxy24HeterogeneousStringEqual14is_transparentE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy24HeterogeneousStringEqualclEKNSt11string_viewEKNSt11string_viewE">
+<span id="_CPPv3NK21StringDictionaryProxy24HeterogeneousStringEqualclEKNSt11string_viewEKNSt11string_viewE"></span><span id="_CPPv2NK21StringDictionaryProxy24HeterogeneousStringEqualclEKNSt11string_viewEKNSt11string_viewE"></span><span id="StringDictionaryProxy::HeterogeneousStringEqual::call-operator__std::string_viewC.std::string_viewCC"></span><span class="target" id="struct_string_dictionary_proxy_1_1_heterogeneous_string_equal_1af0101180bc46bb18aeff635a7fa01736"></span>bool <code class="sig-name descname">operator()</code><span class="sig-paren">(</span>std::string_view <em class="property">const</em> <em>lhs</em>, std::string_view <em class="property">const</em> <em>rhs</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy24HeterogeneousStringEqualclEKNSt11string_viewEKNSt11string_viewE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="_CPPv4N21StringDictionaryProxy23HeterogeneousStringHashE">
+<span id="_CPPv3N21StringDictionaryProxy23HeterogeneousStringHashE"></span><span id="_CPPv2N21StringDictionaryProxy23HeterogeneousStringHashE"></span><span id="StringDictionaryProxy::HeterogeneousStringHash"></span><span class="target" id="struct_string_dictionary_proxy_1_1_heterogeneous_string_hash"></span><em class="property">struct </em><code class="sig-name descname">HeterogeneousStringHash</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy23HeterogeneousStringHashE" title="Permalink to this definition">¶</a><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Types</p>
+<dl class="type">
+<dt id="_CPPv4N21StringDictionaryProxy23HeterogeneousStringHash14is_transparentE">
+<span id="_CPPv3N21StringDictionaryProxy23HeterogeneousStringHash14is_transparentE"></span><span id="_CPPv2N21StringDictionaryProxy23HeterogeneousStringHash14is_transparentE"></span><span class="target" id="struct_string_dictionary_proxy_1_1_heterogeneous_string_hash_1a52370f2aedc5806fd5b8ea8c73468ec3"></span><em class="property">using </em><code class="sig-name descname">is_transparent</code> = void<a class="headerlink" href="#_CPPv4N21StringDictionaryProxy23HeterogeneousStringHash14is_transparentE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Functions</p>
+<dl class="function">
+<dt id="_CPPv4NK21StringDictionaryProxy23HeterogeneousStringHashclEKNSt11string_viewE">
+<span id="_CPPv3NK21StringDictionaryProxy23HeterogeneousStringHashclEKNSt11string_viewE"></span><span id="_CPPv2NK21StringDictionaryProxy23HeterogeneousStringHashclEKNSt11string_viewE"></span><span id="StringDictionaryProxy::HeterogeneousStringHash::call-operator__std::string_viewCC"></span><span class="target" id="struct_string_dictionary_proxy_1_1_heterogeneous_string_hash_1af436e88f01cd8aa2a5e36c5fbfddfd88"></span>size_t <code class="sig-name descname">operator()</code><span class="sig-paren">(</span>std::string_view <em class="property">const</em> <em>key</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK21StringDictionaryProxy23HeterogeneousStringHashclEKNSt11string_viewE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
 <dl class="class">
 <dt id="_CPPv4N21StringDictionaryProxy5IdMapE">
 <span id="_CPPv3N21StringDictionaryProxy5IdMapE"></span><span id="_CPPv2N21StringDictionaryProxy5IdMapE"></span><span id="StringDictionaryProxy::IdMap"></span><span class="target" id="class_string_dictionary_proxy_1_1_id_map"></span><em class="property">class </em><code class="sig-name descname">IdMap</code><a class="headerlink" href="#_CPPv4N21StringDictionaryProxy5IdMapE" title="Permalink to this definition">¶</a><br /></dt>
