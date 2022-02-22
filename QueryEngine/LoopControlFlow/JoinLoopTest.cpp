@@ -55,14 +55,14 @@ void verify_function_ir(const llvm::Function* func) {
 llvm::Value* emit_external_call(const std::string& fname,
                                 llvm::Type* ret_type,
                                 const std::vector<llvm::Value*> args,
-                                llvm::Module* module,
+                                llvm::Module* llvm_module,
                                 llvm::IRBuilder<>& builder) {
   std::vector<llvm::Type*> arg_types;
   for (const auto arg : args) {
     arg_types.push_back(arg->getType());
   }
   auto func_ty = llvm::FunctionType::get(ret_type, arg_types, false);
-  auto func_p = module->getOrInsertFunction(fname, func_ty);
+  auto func_p = llvm_module->getOrInsertFunction(fname, func_ty);
   CHECK(func_p);
   llvm::Value* result = builder.CreateCall(func_p, args);
   // check the assumed type
@@ -71,13 +71,13 @@ llvm::Value* emit_external_call(const std::string& fname,
 }
 
 llvm::Function* create_loop_test_function(llvm::LLVMContext& context,
-                                          llvm::Module* module,
+                                          llvm::Module* llvm_module,
                                           const std::vector<JoinLoop>& join_loops) {
   std::vector<llvm::Type*> argument_types;
   const auto ft =
       llvm::FunctionType::get(llvm::Type::getVoidTy(context), argument_types, false);
   const auto func = llvm::Function::Create(
-      ft, llvm::Function::ExternalLinkage, "loop_test_func", module);
+      ft, llvm::Function::ExternalLinkage, "loop_test_func", llvm_module);
   const auto entry_bb = llvm::BasicBlock::Create(context, "entry", func);
   const auto exit_bb = llvm::BasicBlock::Create(context, "exit", func);
   llvm::IRBuilder<> builder(context);
@@ -85,7 +85,7 @@ llvm::Function* create_loop_test_function(llvm::LLVMContext& context,
   builder.CreateRetVoid();
   const auto loop_body_bb = JoinLoop::codegen(
       join_loops,
-      [&builder, module](const std::vector<llvm::Value*>& iterators) {
+      [&builder, llvm_module](const std::vector<llvm::Value*>& iterators) {
         const auto loop_body_bb = llvm::BasicBlock::Create(
             builder.getContext(), "loop_body", builder.GetInsertBlock()->getParent());
         builder.SetInsertPoint(loop_body_bb);
@@ -93,7 +93,7 @@ llvm::Function* create_loop_test_function(llvm::LLVMContext& context,
         emit_external_call("print_iterators",
                            llvm::Type::getVoidTy(builder.getContext()),
                            args,
-                           module,
+                           llvm_module,
                            builder);
         return loop_body_bb;
       },
@@ -111,7 +111,7 @@ std::unique_ptr<llvm::Module> create_loop_test_module() {
 }
 
 std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> native_codegen(
-    std::unique_ptr<llvm::Module>& module,
+    std::unique_ptr<llvm::Module>& llvm_module,
     llvm::Function* func) {
   llvm::ExecutionEngine* execution_engine{nullptr};
 
@@ -123,7 +123,7 @@ std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> native_codegen(
   llvm::InitializeNativeTargetAsmParser();
 
   std::string err_str;
-  llvm::EngineBuilder eb(std::move(module));
+  llvm::EngineBuilder eb(std::move(llvm_module));
   eb.setErrorStr(&err_str);
   eb.setEngineKind(llvm::EngineKind::JIT);
   llvm::TargetOptions to;
@@ -194,11 +194,11 @@ int main() {
     const unsigned mask_bitcount = __builtin_popcount(mask);
     for (unsigned cond_mask = 0; cond_mask < static_cast<unsigned>(1 << mask_bitcount);
          ++cond_mask) {
-      auto module = create_loop_test_module();
+      auto llvm_module = create_loop_test_module();
       const auto join_loops = generate_descriptors(mask, cond_mask, upper_bounds);
       const auto function =
-          create_loop_test_function(g_global_context, module.get(), join_loops);
-      const auto& func_and_ee = native_codegen(module, function);
+          create_loop_test_function(g_global_context, llvm_module.get(), join_loops);
+      const auto& func_and_ee = native_codegen(llvm_module, function);
       reinterpret_cast<int64_t (*)()>(func_and_ee.first)();
     }
   }

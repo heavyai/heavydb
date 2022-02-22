@@ -21,14 +21,14 @@
 #include "RuntimeFunctions.h"
 
 GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder(
-    llvm::Module* module,
+    llvm::Module* llvm_module,
     llvm::LLVMContext& context,
     const QueryMemoryDescriptor& qmd,
     const std::vector<TargetInfo>& targets,
     const std::vector<int64_t>& init_agg_values,
     const size_t executor_id)
     : executor_id_(executor_id)
-    , module_(module)
+    , module_(llvm_module)
     , context_(context)
     , reduction_func_(nullptr)
     , init_func_(nullptr)
