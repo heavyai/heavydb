@@ -21,29 +21,29 @@ extern bool g_enable_runtime_query_interrupt;
 extern bool g_enable_non_kernel_time_query_interrupt;
 extern bool g_enable_dynamic_watchdog;
 
-void Executor::registerActiveModule(void* module, const int device_id) const {
+void Executor::registerActiveModule(void* llvm_module, const int device_id) const {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
   CHECK_LT(device_id, max_gpu_count);
   gpu_active_modules_device_mask_ |= (1 << device_id);
-  gpu_active_modules_[device_id] = module;
+  gpu_active_modules_[device_id] = llvm_module;
   VLOG(1) << "Executor " << executor_id_ << ", mask 0x" << std::hex
-          << gpu_active_modules_device_mask_ << ": Registered module " << module
+          << gpu_active_modules_device_mask_ << ": Registered module " << llvm_module
           << " on device " << std::to_string(device_id);
 #endif
 }
 
-void Executor::unregisterActiveModule(void* module, const int device_id) const {
+void Executor::unregisterActiveModule(void* llvm_module, const int device_id) const {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
   CHECK_LT(device_id, max_gpu_count);
   if ((gpu_active_modules_device_mask_ & (1 << device_id)) == 0) {
     return;
   }
-  CHECK_EQ(gpu_active_modules_[device_id], module);
+  CHECK_EQ(gpu_active_modules_[device_id], llvm_module);
   gpu_active_modules_device_mask_ ^= (1 << device_id);
   VLOG(1) << "Executor " << executor_id_ << ", mask 0x" << std::hex
-          << gpu_active_modules_device_mask_ << ": Unregistered module " << module
+          << gpu_active_modules_device_mask_ << ": Unregistered module " << llvm_module
           << " on device " << std::to_string(device_id);
 #endif
 }
@@ -113,8 +113,8 @@ void Executor::interrupt(const std::string& query_session,
     checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
     for (int device_id = 0; device_id < max_gpu_count; device_id++) {
       if (gpu_active_modules_device_mask_ & (1 << device_id)) {
-        void* module = gpu_active_modules_[device_id];
-        auto cu_module = static_cast<CUmodule>(module);
+        void* llvm_module = gpu_active_modules_[device_id];
+        auto cu_module = static_cast<CUmodule>(llvm_module);
         if (!cu_module) {
           continue;
         } else {

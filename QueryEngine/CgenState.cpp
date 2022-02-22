@@ -259,7 +259,7 @@ struct GpuFunctionDefinition {
 
   virtual ~GpuFunctionDefinition() = default;
 
-  virtual llvm::FunctionCallee getFunction(llvm::Module* module,
+  virtual llvm::FunctionCallee getFunction(llvm::Module* llvm_module,
                                            llvm::LLVMContext& context) const = 0;
 };
 
@@ -268,9 +268,9 @@ template <typename... TYPES>
 struct GpuFunction final : public GpuFunctionDefinition {
   GpuFunction(char const* name) : GpuFunctionDefinition(name) {}
 
-  llvm::FunctionCallee getFunction(llvm::Module* module,
+  llvm::FunctionCallee getFunction(llvm::Module* llvm_module,
                                    llvm::LLVMContext& context) const {
-    return module->getOrInsertFunction(name_, getTy<TYPES>(context)...);
+    return llvm_module->getOrInsertFunction(name_, getTy<TYPES>(context)...);
   }
 };
 
@@ -368,10 +368,10 @@ llvm::LLVMContext& CgenState::getExecutorContext() const {
   return getExecutor()->getContext();
 }
 
-void CgenState::set_module_shallow_copy(const std::unique_ptr<llvm::Module>& module,
+void CgenState::set_module_shallow_copy(const std::unique_ptr<llvm::Module>& llvm_module,
                                         bool always_clone) {
   module_ =
-      llvm::CloneModule(*module, vmap_, [always_clone](const llvm::GlobalValue* gv) {
+      llvm::CloneModule(*llvm_module, vmap_, [always_clone](const llvm::GlobalValue* gv) {
         auto func = llvm::dyn_cast<llvm::Function>(gv);
         if (!func) {
           return true;
