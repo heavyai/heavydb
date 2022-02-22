@@ -683,6 +683,12 @@ void CommandLineOptions::fillAdvancedOptions() {
                                "Enable dev (test or alpha) table functions. Also "
                                "requires --enable-table-functions to be turned on");
   developer_desc.add_options()(
+      "enable-geo-ops-on-uncompressed-coords",
+      po::value<bool>(&g_enable_geo_ops_on_uncompressed_coords)
+          ->default_value(g_enable_geo_ops_on_uncompressed_coords)
+          ->implicit_value(true),
+      "Enable faster geo operations on uncompressed coords");
+  developer_desc.add_options()(
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
       "Enable runtime debugger support for the JIT. Note that this flag is "

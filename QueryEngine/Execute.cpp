@@ -111,6 +111,7 @@ size_t g_big_group_threshold{g_default_max_groups_buffer_entry_guess};
 bool g_enable_window_functions{true};
 bool g_enable_table_functions{true};
 bool g_enable_dev_table_functions{false};
+bool g_enable_geo_ops_on_uncompressed_coords{true};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer

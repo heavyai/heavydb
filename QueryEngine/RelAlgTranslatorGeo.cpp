@@ -23,6 +23,8 @@
 #include "QueryEngine/GeoOperators/Transform.h"
 #include "QueryEngine/RelAlgTranslator.h"
 
+extern bool g_enable_geo_ops_on_uncompressed_coords;
+
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(
     const RexInput* rex_input,
     SQLTypeInfo& ti,
@@ -1352,7 +1354,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
   SQLTypeInfo arg1_ti;
 
   // Proactively try to compress the first arg of ST_Intersects to preempt arg swap
-  bool try_to_compress_arg0 = func_resolve(function_name, "ST_Intersects"sv);
+  bool try_to_compress_arg0 = g_enable_geo_ops_on_uncompressed_coords &&
+                              func_resolve(function_name, "ST_Intersects"sv);
 
   auto geoargs0 = translateGeoFunctionArg(rex_function->getOperand(swap_args ? 1 : 0),
                                           arg0_ti,
@@ -1364,10 +1367,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
                                           try_to_compress_arg0);
   geoargs.insert(geoargs.end(), geoargs0.begin(), geoargs0.end());
 
-  // If first arg is compressed, try to compress the second one
-  // to be able to switch to faster compressed implementations
+  // If first arg is compressed, try to compress the second one to be able to
+  // switch to faster implementations working directly on uncompressed coords
   bool try_to_compress_arg1 =
-      (func_resolve(function_name, "ST_Contains"sv, "ST_Intersects"sv) &&
+      (g_enable_geo_ops_on_uncompressed_coords &&
+       func_resolve(function_name, "ST_Contains"sv, "ST_Intersects"sv) &&
        arg0_ti.get_compression() == kENCODING_GEOINT &&
        arg0_ti.get_output_srid() == 4326);
 
@@ -1438,18 +1442,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
             i0_ti.get_compression() == i1_ti.get_compression() &&
             i1_ti.get_input_srid() == i1_ti.get_output_srid());
   };
-  if (function_name == "ST_Contains"sv) {
+  if (g_enable_geo_ops_on_uncompressed_coords && function_name == "ST_Contains"sv) {
     if (can_use_compressed_coords(arg0_ti, geoargs0, arg1_ti, geoargs1)) {
-      // Switch to compressed implementation of ST_Contains
+      // Switch to Contains implementation working directly on uncompressed coords
       function_name = "ST_cContains";
     }
   }
-  if (function_name == "ST_Intersects"sv) {
+  if (g_enable_geo_ops_on_uncompressed_coords && function_name == "ST_Intersects"sv) {
     if (can_use_compressed_coords(arg0_ti, geoargs0, arg1_ti, geoargs1)) {
-      // Switch to compressed implementation of ST_Intersects
+      // Switch to Intersects implementation working directly on uncompressed coords
       function_name = "ST_cIntersects";
     } else if (can_use_compressed_coords(arg1_ti, geoargs1, arg0_ti, geoargs0)) {
-      // Switch to compressed implementation of ST_Intersects on swapped args
+      // Switch to Intersects implementation working on uncompressed coords, swapped args
       function_name = "ST_cIntersects";
       geoargs.clear();
       geoargs.insert(geoargs.end(), geoargs1.begin(), geoargs1.end());
