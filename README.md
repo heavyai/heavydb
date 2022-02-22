@@ -94,9 +94,13 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 `conda activate omnisci-dev`
 `bash scripts/conda/build-install-all.sh`
 
-By default, tests are not included in the build. To include tests use:
+By default, tests are not included in the build. To build (only) tests use:
 
 `RUN_TESTS=1 bash scripts/conda/build-install-all.sh`
+
+To build & run tests in a conda environment launch:
+
+`RUN_TESTS=2 bash scripts/conda/build-install-all.sh`
 
 For debug build use (default is Release):
 

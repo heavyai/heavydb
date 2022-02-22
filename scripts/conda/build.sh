@@ -40,7 +40,6 @@ if [[ "$RUN_TESTS" == "0" ]]
 then
    export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_TESTS=off"
 else
-   export RUN_TESTS=1
    export EXTRA_CMAKE_OPTIONS="$EXTRA_CMAKE_OPTIONS -DENABLE_TESTS=on"
 fi
 
