@@ -55,14 +55,38 @@ fi
 sudo chown -R ${vars['OMNISCI_USER']}:${vars['OMNISCI_GROUP']} "${vars['OMNISCI_DATA']}"
 sudo chown -R ${vars['OMNISCI_USER']}:${vars['OMNISCI_GROUP']} "${vars['OMNISCI_STORAGE']}"
 
+for i in "/etc/xdg" "/etc" "/usr/local/share" "/usr/share"; do
+  if [ -f "$i/vulkan/icd.d/nvidia_icd.json" ]; then
+    icd_path="$i/vulkan/icd.d/nvidia_icd.json"
+    break
+  fi
+done
+
+if [[ -z "$icd_path" ]]; then
+  YELLOW='\033[1;33m'
+  NORMAL='\033[0m'
+  LBLUE='\033[1;34m'
+  echo -e "${YELLOW}Warning: ${NORMAL}Cannot find the Nvidia Vulkan driver manifest file \"nvidia_icd.json\" in the expected system directories. As a result the backend renderer may not work. 
+  Please verify that the nvidia driver and vulkan loader are installed appropriately. 
+  See: ${LBLUE}https://docs.omnisci.com/troubleshooting/vulkan-graphics-api-beta#bare-metal-installs${NORMAL} for some installation and troubleshooting tips."
+fi
 
 for f in omnisci_server omnisci_server@ omnisci_sd_server omnisci_sd_server@ omnisci_web_server omnisci_web_server@ ; do
   if [ -f $f.service.in ]; then
+    if [[ "$f.service.in" == *"web_server"* ]]; then
+      unset vulkan_envinment
+    else
+      if [[ -n $icd_path ]]; then
+        vulkan_environment="\nEnvironment=\"VK_ICD_FILENAMES=$icd_path\""
+      fi
+    fi
+    
     sed -e "s#@OMNISCI_PATH@#${vars['OMNISCI_PATH']}#g" \
         -e "s#@OMNISCI_STORAGE@#${vars['OMNISCI_STORAGE']}#g" \
         -e "s#@OMNISCI_DATA@#${vars['OMNISCI_DATA']}#g" \
         -e "s#@OMNISCI_USER@#${vars['OMNISCI_USER']}#g" \
         -e "s#@OMNISCI_GROUP@#${vars['OMNISCI_GROUP']}#g" \
+        -e "s#\[Service\]#[Service]$vulkan_environment#" \
         $f.service.in > $OMNISCI_TMP/$f.service
     sudo cp $OMNISCI_TMP/$f.service /lib/systemd/system/
   fi
