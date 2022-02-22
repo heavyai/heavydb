@@ -409,10 +409,22 @@ class ExecuteTestBase {
 
   void dropTable(const std::string& table_name) { storage_->dropTable(table_name); }
 
-  void insertValues(const std::string& table_name, const std::string& values) {
+  void insertCsvValues(const std::string& table_name, const std::string& values) {
     ArrowStorage::CsvParseOptions parse_options;
     parse_options.header = false;
     storage_->appendCsvData(values, table_name, parse_options);
+  }
+
+  void insertJsonValues(const std::string& table_name, const std::string& values) {
+    storage_->appendJsonData(values, table_name);
+  }
+
+  SQLTypeInfo arrayType(SQLTypes st, int size = 0) {
+    SQLTypeInfo res(kARRAY, (st == kTEXT) ? kENCODING_DICT : kENCODING_NONE, 0, st);
+    if (size) {
+      res.set_size(size * res.get_elem_type().get_size());
+    }
+    return res;
   }
 
   ExecutionResult runSqlQuery(const std::string& sql,
@@ -530,13 +542,13 @@ TEST_F(Distributed50, FailOver) {
 
   auto dt = ExecutorDeviceType::CPU;
 
-  EXPECT_NO_THROW(insertValues("dist5", "t1"));
+  EXPECT_NO_THROW(insertCsvValues("dist5", "t1"));
   ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
 
-  EXPECT_NO_THROW(insertValues("dist5", "t2"));
+  EXPECT_NO_THROW(insertCsvValues("dist5", "t2"));
   ASSERT_EQ(2, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
 
-  EXPECT_NO_THROW(insertValues("dist5", "t3"));
+  EXPECT_NO_THROW(insertCsvValues("dist5", "t3"));
   ASSERT_EQ(3, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
 
   dropTable("dist5");
@@ -550,6 +562,178 @@ TEST_F(Errors, InvalidQueries) {
     EXPECT_ANY_THROW(run_multiple_agg(
         "SELECT * FROM test WHERE 1 = 2 AND ( 1 = 2 and 3 = 4 limit 100);", dt));
     EXPECT_ANY_THROW(run_multiple_agg("SET x = y;", dt));
+  }
+}
+
+class Insert : public ExecuteTestBase, public ::testing::Test {};
+
+TEST_F(Insert, NullArrayNullEmpty) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    createTable("table_array_empty", {{"val", arrayType(kINT)}});
+    EXPECT_NO_THROW(insertJsonValues("table_array_empty", "{\"val\": []}"));
+    EXPECT_NO_THROW(run_simple_agg("SELECT * from table_array_empty;", dt));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CARDINALITY(val) from table_array_empty limit 1;", dt)));
+    dropTable("table_array_empty");
+
+    createTable("table_array_fixlen_text", {{"strings", arrayType(kTEXT, 2)}});
+    EXPECT_NO_THROW(insertJsonValues("table_array_fixlen_text",
+                                     R"___({"strings": null}
+{"strings": []}
+{"strings": [null, null]}
+{"strings": ["a", "b"]})___"));
+    ASSERT_EQ(
+        4,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM table_array_fixlen_text;", dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_fixlen_text WHERE strings IS NULL;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_fixlen_text WHERE strings IS NOT NULL;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_fixlen_text WHERE strings[1] IS NOT NULL;",
+            dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_fixlen_text WHERE strings[2] IS NULL;",
+            dt)));
+    dropTable("table_array_fixlen_text");
+
+    createTable("table_array_with_nulls",
+                {{"i", SQLTypeInfo(kSMALLINT)},
+                 {"sia", arrayType(kSMALLINT)},
+                 {"fa2", arrayType(kFLOAT, 2)}});
+
+    EXPECT_NO_THROW(insertJsonValues("table_array_with_nulls",
+                                     R"___({"i": 1, "sia": [1, 1], "fa2": [1.0, 1.0]}
+{"i": 2, "sia": [null, 2], "fa2": [null, 2.0]}
+{"i": 3, "sia": [3, null], "fa2": [3.0, null]}
+{"i": 4, "sia": [null, null], "fa2": [null, null]}
+{"i": 5, "sia": null, "fa2": null}
+{"i": 6, "sia": [], "fa2": null}
+{"i": 7, "sia": [null, null], "fa2": [null, null]})___"));
+
+    ASSERT_EQ(1,
+              v<int64_t>(
+                  run_simple_agg("SELECT MIN(sia[1]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(
+                  run_simple_agg("SELECT MAX(sia[1]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_with_nulls WHERE sia[2] IS NULL;", dt)));
+    ASSERT_EQ(
+        3.0,
+        v<float>(run_simple_agg("SELECT MAX(fa2[1]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(
+        2.0,
+        v<float>(run_simple_agg("SELECT MAX(fa2[2]) FROM table_array_with_nulls;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE fa2[1] IS NOT NULL;",
+                  dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE sia IS NULL;", dt)));
+    ASSERT_EQ(
+        5,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_with_nulls WHERE fa2 IS NOT NULL;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE CARDINALITY(sia)=0;",
+                  dt)));
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_array_with_nulls WHERE CARDINALITY(sia)=2;",
+                  dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_with_nulls WHERE CARDINALITY(sia) IS NULL;",
+            dt)));
+
+    // Simple lazy projection
+    compare_array(
+        run_simple_agg("SELECT sia FROM table_array_with_nulls WHERE i = 5;", dt),
+        std::vector<int64_t>({}));
+
+    // Simple non-lazy projection
+    compare_array(
+        run_simple_agg("SELECT sia FROM table_array_with_nulls WHERE sia IS NULL;", dt),
+        std::vector<int64_t>({}));
+
+    dropTable("table_array_with_nulls");
+  }
+}
+
+TEST_F(Insert, IntArrayInsert) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    createTable("table_int_array", {{"bi", arrayType(kBIGINT)}});
+
+    vector<std::string> vals = {"1", "33000", "650000", "1", "-7", "null", "5000000000"};
+    string json;
+    for (size_t ol = 0; ol < vals.size(); ol++) {
+      string arr = "";
+      for (size_t il = 0; il < vals.size(); il++) {
+        size_t pos = (ol + il) % vals.size();
+        arr.append(vals[pos]);
+        if (il < (vals.size() - 1)) {
+          arr.append(",");
+        }
+      }
+      json += "{\"bi\": [" + arr + "]}\n";
+    }
+    EXPECT_NO_THROW(insertJsonValues("table_int_array", json));
+
+    EXPECT_ANY_THROW(insertJsonValues("table_int_array", "{\"bi:\": [1,34,\"roof\"]}"));
+
+    for (size_t ol = 0; ol < vals.size(); ol++) {
+      string selString =
+          "select sum(bi[" + std::to_string(ol + 1) + "]) from table_int_array;";
+      ASSERT_EQ(5000682995, v<int64_t>(run_simple_agg(selString, dt)));
+    }
+
+    dropTable("table_int_array");
+  }
+}
+
+TEST_F(Insert, DictBoundary) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SQLTypeInfo small_dict_type(kTEXT, false, kENCODING_DICT);
+    small_dict_type.set_size(1);
+    createTable("table_with_small_dict",
+                {{"i", SQLTypeInfo(kINT)}, {"t", small_dict_type}});
+
+    string csv;
+    for (int cVal = 0; cVal < 280; cVal++) {
+      csv += std::to_string(cVal) + ", \"" + std::to_string(cVal) + "\"\n";
+    }
+    EXPECT_NO_THROW(insertCsvValues("table_with_small_dict", csv));
+
+    ASSERT_EQ(
+        280,
+        v<int64_t>(run_simple_agg("SELECT count(*) FROM table_with_small_dict;", dt)));
+    ASSERT_EQ(255,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(distinct t) FROM table_with_small_dict;", dt)));
+    ASSERT_EQ(25,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_with_small_dict WHERE t IS NULL;", dt)));
+
+    dropTable("table_with_small_dict");
   }
 }
 
