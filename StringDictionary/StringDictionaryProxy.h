@@ -20,7 +20,8 @@
 #include "Logger/Logger.h"  // For CHECK macros
 #include "StringDictionary.h"
 
-#include <map>
+#include "ThirdParty/robin_hood/robin_hood.h"
+
 #include <optional>
 #include <ostream>
 #include <shared_mutex>
@@ -188,10 +189,29 @@ class StringDictionaryProxy {
 
   std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape) const;
 
+  struct HeterogeneousStringHash {
+    using is_transparent = void;  // Used by robin_hood to activate heterogenous hashing
+    // std::string and char const* are implicitly cast to std::string_view.
+    size_t operator()(std::string_view const key) const {
+      return robin_hood::hash_bytes(key.data(), key.size());
+    }
+  };
+  struct HeterogeneousStringEqual {
+    using is_transparent = void;  // Used by robin_hood to activate heterogenous equal
+    // std::string and char const* are implicitly cast to std::string_view.
+    bool operator()(std::string_view const lhs, std::string_view const rhs) const {
+      return lhs == rhs;
+    }
+  };
+
   // The std::string must live in the map, and std::string const* in the vector. As
   // desirable as it might be to have it the other way, string addresses won't change
-  // in the std::map when new strings are added, but will change in a std::vector.
-  using TransientMap = std::map<std::string, int32_t, std::less<>>;
+  // in the robin_hood::unordered_node_map when new strings are added, but may change
+  // in a std::vector (and robin_hood::unordered_flat_map).
+  using TransientMap = robin_hood::unordered_node_map<std::string,
+                                                      int32_t,
+                                                      HeterogeneousStringHash,
+                                                      HeterogeneousStringEqual>;
 
   const std::vector<std::string const*>& getTransientVector() const {
     return transient_string_vec_;

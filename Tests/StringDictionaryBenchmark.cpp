@@ -39,7 +39,7 @@ std::string generate_random_str(std::mt19937& generator, const int64_t str_len) 
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "abcdefghijklmnopqrstuvwxyz";
   constexpr size_t char_mod = sizeof(alphanum_lookup_table) - 1;
-  std::uniform_int_distribution<int32_t> rand_distribution(0, char_mod);
+  std::uniform_int_distribution<int32_t> rand_distribution(0, char_mod - 1);
 
   std::string tmp_s;
   tmp_s.reserve(str_len);
@@ -351,7 +351,7 @@ BENCHMARK_DEFINE_F(StringDictionaryProxyFixture, GetOrAddTransient_AllPersisted_
 }
 
 BENCHMARK_DEFINE_F(StringDictionaryProxyFixture,
-                   BuildIntersectionTranlsatationMapToOtherProxy_10M_Unique_Full_Overlap)
+                   BuildIntersectionTranslationMapToOtherProxy_10M_Unique_Full_Overlap)
 (benchmark::State& state) {
   const auto source_proxy = create_and_populate_str_proxy(
       1, BASE_PATH1, false, false, true, append_strings_10M_10M_10);
@@ -366,7 +366,7 @@ BENCHMARK_DEFINE_F(StringDictionaryProxyFixture,
 
 BENCHMARK_DEFINE_F(
     StringDictionaryProxyFixture,
-    BuildIntersectionTranlsatationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
+    BuildIntersectionTranslationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
 (benchmark::State& state) {
   const auto source_proxy = create_and_populate_str_proxy(
       1, BASE_PATH1, false, false, true, append_strings_10M_10M_10);
@@ -401,13 +401,15 @@ BENCHMARK_DEFINE_F(
 
 BENCHMARK_DEFINE_F(
     StringDictionaryProxyFixture,
-    BuildUnionTranlsatationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
+    BuildUnionTranslationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
 (benchmark::State& state) {
   const auto source_proxy = create_and_populate_str_proxy(
       1, BASE_PATH1, false, false, true, append_strings_10M_10M_10);
-  const size_t num_elems = 10000000UL;
-  const size_t first_n_elems = 8000000UL;
-  const size_t last_n_elems = 100;
+  constexpr size_t num_elems = 10000000UL;
+  constexpr size_t first_n_elems = 8000000UL;
+  constexpr size_t last_n_elems = 100;
+  constexpr size_t num_expected_untranslated_strings =
+      num_elems - first_n_elems - last_n_elems;
   std::vector<std::string> append_strings_10M_10M_10_randomized_truncated_8M(
       first_n_elems);
   std::vector<std::string> append_strings_10M_10M_10_randomized_truncated_100(100);
@@ -417,18 +419,30 @@ BENCHMARK_DEFINE_F(
   std::copy(append_strings_10M_10M_10_randomized.begin() + (num_elems - last_n_elems),
             append_strings_10M_10M_10_randomized.end(),
             append_strings_10M_10M_10_randomized_truncated_100.begin());
-  auto dest_proxy =
-      create_and_populate_str_proxy(2,
-                                    BASE_PATH2,
-                                    false,
-                                    false,
-                                    true,
-                                    append_strings_10M_10M_10_randomized_truncated_8M);
-  dest_proxy->getOrAddTransientBulk(append_strings_10M_10M_10_randomized_truncated_100);
+  constexpr size_t MAX_LOOPS = 3;
+  // Make MAX_LOOPS copies to isolate timing of buildUnionTranslationMapToOtherProxy().
+  // This is necessary since it modifies *dest_proxy.
+  std::array<std::shared_ptr<StringDictionaryProxy>, MAX_LOOPS> dest_proxies;
+  for (size_t i = 0; i < MAX_LOOPS; ++i) {
+    dest_proxies[i] =
+        create_and_populate_str_proxy(2,
+                                      BASE_PATH2,
+                                      false,
+                                      false,
+                                      true,
+                                      append_strings_10M_10M_10_randomized_truncated_8M);
+    dest_proxies[i]->getOrAddTransientBulk(
+        append_strings_10M_10M_10_randomized_truncated_100);
+  }
+  size_t i = 0;
   for (auto _ : state) {
-    auto id_map = source_proxy->buildUnionTranslationMapToOtherProxy(dest_proxy.get());
-    const size_t num_expected_untranslated_strings =
-        num_elems - first_n_elems - last_n_elems;
+    if (i == MAX_LOOPS) {
+      break;
+    }
+    auto id_map =
+        source_proxy->buildUnionTranslationMapToOtherProxy(dest_proxies[i++].get());
+    CHECK_EQ(0u, id_map.numTransients());
+    CHECK_EQ(num_elems, id_map.numNonTransients());
     CHECK_EQ(id_map.numUntranslatedStrings(), num_expected_untranslated_strings);
   }
 }
@@ -485,23 +499,22 @@ BENCHMARK_REGISTER_F(StringDictionaryProxyFixture,
     ->UseRealTime()
     ->Unit(benchmark::kMillisecond);
 
-BENCHMARK_REGISTER_F(
-    StringDictionaryProxyFixture,
-    BuildIntersectionTranlsatationMapToOtherProxy_10M_Unique_Full_Overlap)
+BENCHMARK_REGISTER_F(StringDictionaryProxyFixture,
+                     BuildIntersectionTranslationMapToOtherProxy_10M_Unique_Full_Overlap)
     ->MeasureProcessCPUTime()
     ->UseRealTime()
     ->Unit(benchmark::kMillisecond);
 
 BENCHMARK_REGISTER_F(
     StringDictionaryProxyFixture,
-    BuildIntersectionTranlsatationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
+    BuildIntersectionTranslationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
     ->MeasureProcessCPUTime()
     ->UseRealTime()
     ->Unit(benchmark::kMillisecond);
 
 BENCHMARK_REGISTER_F(
     StringDictionaryProxyFixture,
-    BuildUnionTranlsatationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
+    BuildUnionTranslationMapToOtherProxy_10M_Unique_8M_Overlap_100_Transients)
     ->MeasureProcessCPUTime()
     ->UseRealTime()
     ->Unit(benchmark::kMillisecond);
