@@ -24,7 +24,6 @@ constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 using namespace std::string_literals;
 
 using TestHelpers::inline_null_array_value;
-using TestHelpers::inline_null_value;
 
 namespace {
 
