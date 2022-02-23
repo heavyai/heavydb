@@ -382,10 +382,10 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
             if (col_type.is_dict_encoded_string()) {
               switch (col_arr->type()->id()) {
                 case arrow::Type::STRING:
-                  col_arr = createDictionaryEncodedColumn(dict, col_arr);
+                  col_arr = createDictionaryEncodedColumn(dict, col_arr, col_type);
                   break;
                 case arrow::Type::DICTIONARY:
-                  col_arr = convertArrowDictionary(dict, col_arr);
+                  col_arr = convertArrowDictionary(dict, col_arr, col_type);
                   break;
                 default:
                   CHECK(false);

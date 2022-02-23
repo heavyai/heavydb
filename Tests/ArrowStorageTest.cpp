@@ -285,6 +285,7 @@ void checkStringColumnData(ArrowStorage& storage,
   checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_data, {1});
 }
 
+template <typename IndexType>
 void checkStringDictColumnData(ArrowStorage& storage,
                                const ChunkMetadataMap& chunk_meta_map,
                                int table_id,
@@ -301,15 +302,15 @@ void checkStringDictColumnData(ArrowStorage& storage,
   auto& dict =
       *storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param())->stringDict;
 
-  std::vector<int32_t> expected_ids(frag_rows);
+  std::vector<IndexType> expected_ids(frag_rows);
   for (size_t i = start_row; i < end_row; ++i) {
-    expected_ids[i - start_row] = dict.getIdOfString(expected[i]);
+    expected_ids[i - start_row] = static_cast<IndexType>(dict.getIdOfString(expected[i]));
   }
 
   checkChunkMeta(chunk_meta_map.at(col_idx + 1),
                  storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
                  frag_rows,
-                 frag_rows * sizeof(uint32_t),
+                 frag_rows * sizeof(IndexType),
                  false,
                  *std::min_element(expected_ids.begin(), expected_ids.end()),
                  *std::max_element(expected_ids.begin(), expected_ids.end()));
@@ -372,39 +373,7 @@ void checkChunkData(ArrowStorage& storage,
     checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_data);
   }
 }
-/*
-void checkStringDictColumnData(ArrowStorage& storage,
-                               const ChunkMetadataMap& chunk_meta_map,
-                               int table_id,
-                               size_t row_count,
-                               size_t fragment_size,
-                               size_t col_idx,
-                               size_t frag_idx,
-                               const std::vector<std::string>& expected) {
-  size_t start_row = frag_idx * fragment_size;
-  size_t end_row = std::min(row_count, start_row + fragment_size);
-  size_t frag_rows = end_row - start_row;
 
-  auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
-  auto& dict =
-      *storage.getDictMetadata(TEST_DB_ID, col_info->type.get_comp_param())->stringDict;
-
-  std::vector<int32_t> expected_ids(frag_rows);
-  for (size_t i = start_row; i < end_row; ++i) {
-    expected_ids[i - start_row] = dict.getIdOfString(expected[i]);
-  }
-
-  checkChunkMeta(chunk_meta_map.at(col_idx + 1),
-                 storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
-                 frag_rows,
-                 frag_rows * sizeof(uint32_t),
-                 false,
-                 *std::min_element(expected_ids.begin(), expected_ids.end()),
-                 *std::max_element(expected_ids.begin(), expected_ids.end()));
-
-  checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_ids);
-}
-*/
 template <>
 void checkChunkData(ArrowStorage& storage,
                     const ChunkMetadataMap& chunk_meta_map,
@@ -446,7 +415,6 @@ void checkChunkData(ArrowStorage& storage,
       }
     }
   }
-  std::cout << ::toString(expected_ids) << std::endl;
 
   size_t chunk_size = chunk_elems * sizeof(int32_t);
   checkChunkMeta(chunk_meta_map.at(col_idx + 1),
@@ -470,14 +438,40 @@ void checkChunkData(ArrowStorage& storage,
   CHECK_EQ(row_count, expected.size());
   auto col_info = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1);
   if (col_info->type.is_dict_encoded_string()) {
-    checkStringDictColumnData(storage,
-                              chunk_meta_map,
-                              table_id,
-                              row_count,
-                              fragment_size,
-                              col_idx,
-                              frag_idx,
-                              expected);
+    switch (col_info->type.get_size()) {
+      case 1:
+        checkStringDictColumnData<int8_t>(storage,
+                                          chunk_meta_map,
+                                          table_id,
+                                          row_count,
+                                          fragment_size,
+                                          col_idx,
+                                          frag_idx,
+                                          expected);
+        break;
+      case 2:
+        checkStringDictColumnData<int16_t>(storage,
+                                           chunk_meta_map,
+                                           table_id,
+                                           row_count,
+                                           fragment_size,
+                                           col_idx,
+                                           frag_idx,
+                                           expected);
+        break;
+      case 4:
+        checkStringDictColumnData<int32_t>(storage,
+                                           chunk_meta_map,
+                                           table_id,
+                                           row_count,
+                                           fragment_size,
+                                           col_idx,
+                                           frag_idx,
+                                           expected);
+        break;
+      default:
+        GTEST_FAIL();
+    }
   } else {
     checkStringColumnData(storage,
                           chunk_meta_map,
@@ -935,7 +929,8 @@ TEST_F(ArrowStorageTest, AppendCsv_Strings_NoSchema) {
 void Test_ImportCsv_Dict(bool shared_dict,
                          bool read_twice,
                          const ArrowStorage::CsvParseOptions& parse_options,
-                         size_t fragment_size = 32'000'000) {
+                         size_t fragment_size = 32'000'000,
+                         int index_size = 4) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   ArrowStorage::TableOptions table_options;
   table_options.fragment_size = fragment_size;
@@ -946,6 +941,8 @@ void Test_ImportCsv_Dict(bool shared_dict,
     dict1_type.set_comp_param(-1);
     dict2_type.set_comp_param(-1);
   }
+  dict1_type.set_size(index_size);
+  dict2_type.set_size(index_size);
   tinfo = storage.importCsvFile(getFilePath("strings.csv"),
                                 "table1",
                                 {{"col1", dict1_type}, {"col2", dict1_type}},
@@ -1017,6 +1014,20 @@ TEST_F(ArrowStorageTest, ImportCsv_Dict_SmallBlock_Multifrag) {
 TEST_F(ArrowStorageTest, ImportCsv_SharedDict) {
   ArrowStorage::CsvParseOptions parse_options;
   Test_ImportCsv_Dict(true, false, parse_options);
+}
+
+TEST_F(ArrowStorageTest, ImportCsv_SmallDict) {
+  ArrowStorage::CsvParseOptions parse_options;
+  Test_ImportCsv_Dict(false, false, parse_options, 100, 2);
+  Test_ImportCsv_Dict(false, false, parse_options, 3, 2);
+  Test_ImportCsv_Dict(false, false, parse_options, 2, 1);
+}
+
+TEST_F(ArrowStorageTest, ImportCsv_SharedSmallDict) {
+  ArrowStorage::CsvParseOptions parse_options;
+  Test_ImportCsv_Dict(true, true, parse_options, 100, 2);
+  Test_ImportCsv_Dict(true, true, parse_options, 3, 2);
+  Test_ImportCsv_Dict(true, true, parse_options, 2, 1);
 }
 
 TEST_F(ArrowStorageTest, AppendCsv_Dict) {

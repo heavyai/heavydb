@@ -218,11 +218,11 @@ void ArrowForeignStorageBase::parseArrowTable(Catalog_Namespace::Catalog* catalo
             switch (arr_col_chunked_array->type()->id()) {
               case arrow::Type::STRING:
                 arr_col_chunked_array =
-                    createDictionaryEncodedColumn(dict, arr_col_chunked_array);
+                    createDictionaryEncodedColumn(dict, arr_col_chunked_array, c.columnType);
                 break;
               case arrow::Type::DICTIONARY:
                 arr_col_chunked_array =
-                    convertArrowDictionary(dict, arr_col_chunked_array);
+                    convertArrowDictionary(dict, arr_col_chunked_array, c.columnType);
                 break;
               default:
                 CHECK(false);

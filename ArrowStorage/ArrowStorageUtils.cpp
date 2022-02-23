@@ -502,6 +502,7 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArray(
   } else if (elem_type.is_boolean()) {
     return replaceNullValuesFixedSizeArrayImpl<bool>(arr, list_size);
   } else if (elem_type.is_dict_encoded_string()) {
+    CHECK_EQ(elem_type.get_size(), 4);
     return replaceNullValuesFixedSizeStringArrayImpl(arr, list_size, dict);
   }
 
@@ -745,6 +746,9 @@ SQLTypeInfo getOmnisciType(const arrow::DataType& type) {
   }
 }
 
+namespace {
+
+template <typename IndexType>
 std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
     StringDictionary* dict,
     std::shared_ptr<arrow::ChunkedArray> arr) {
@@ -777,13 +781,66 @@ std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
   indices_buf = std::move(res).ValueOrDie();
   auto raw_data = reinterpret_cast<int*>(indices_buf->mutable_data());
   dict->getOrAddBulk(bulk, raw_data);
-  auto array = std::make_shared<arrow::Int32Array>(bulk_size, indices_buf);
-  return std::make_shared<arrow::ChunkedArray>(array);
+
+  if constexpr (std::is_same_v<IndexType, uint32_t>) {
+    auto array = std::make_shared<arrow::Int32Array>(bulk_size, indices_buf);
+    return std::make_shared<arrow::ChunkedArray>(array);
+  } else {
+    // We have to convert to a narrower index type. Indexes which don't fit
+    // the type are replaced with invalid id.
+    static_assert(sizeof(IndexType) < sizeof(int32_t));
+    static_assert(std::is_unsigned_v<IndexType>);
+    auto converted_res = arrow::AllocateBuffer(bulk_size * sizeof(IndexType));
+    CHECK(converted_res.ok());
+    std::shared_ptr<arrow::Buffer> converted_indices_buf =
+        std::move(converted_res).ValueOrDie();
+    auto raw_converted_data =
+        reinterpret_cast<IndexType*>(converted_indices_buf->mutable_data());
+    for (size_t i = 0; i < bulk_size; ++i) {
+      if (raw_data[i] > static_cast<int32_t>(std::numeric_limits<IndexType>::max())) {
+        raw_converted_data[i] = static_cast<IndexType>(StringDictionary::INVALID_STR_ID);
+      } else {
+        raw_converted_data[i] = static_cast<IndexType>(raw_data[i]);
+      }
+    }
+
+    using IndexArrowType = typename arrow::CTypeTraits<IndexType>::ArrowType;
+    using ArrayType = typename arrow::TypeTraits<IndexArrowType>::ArrayType;
+
+    auto array = std::make_shared<ArrayType>(bulk_size, converted_indices_buf);
+    return std::make_shared<arrow::ChunkedArray>(array);
+  }
+}
+
+}  // anonymous namespace
+
+std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
+    StringDictionary* dict,
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    const SQLTypeInfo& type) {
+  switch (type.get_size()) {
+    case 4:
+      return createDictionaryEncodedColumn<uint32_t>(dict, arr);
+    case 2:
+      return createDictionaryEncodedColumn<uint16_t>(dict, arr);
+    case 1:
+      return createDictionaryEncodedColumn<uint8_t>(dict, arr);
+    default:
+      throw std::runtime_error(
+          "Unsupported OmniSci dictionary for Arrow strings import: "s + type.toString());
+  }
+  return nullptr;
 }
 
 std::shared_ptr<arrow::ChunkedArray> convertArrowDictionary(
     StringDictionary* dict,
-    std::shared_ptr<arrow::ChunkedArray> arr) {
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    const SQLTypeInfo& type) {
+  if (type.get_size() != 4) {
+    throw std::runtime_error(
+        "Unsupported OmniSci dictionary for Arrow dictionary import: "s +
+        type.toString());
+  }
   // TODO: allocate one big array and split it by fragments as it is done in
   // createDictionaryEncodedColumn
   std::vector<std::shared_ptr<arrow::Array>> converted_chunks;
