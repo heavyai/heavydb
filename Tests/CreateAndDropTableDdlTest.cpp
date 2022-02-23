@@ -82,7 +82,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     }
     query += table_name + columns;
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
-      query += " SERVER omnisci_local_csv";
+      query += " SERVER default_local_delimited";
       options["file_path"] = "'" + getTestFilePath() + "'";
     }
     if (!options.empty()) {
@@ -204,7 +204,7 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
       ASSERT_TRUE(foreign_table->options.find("FILE_PATH") !=
                   foreign_table->options.end());
       EXPECT_EQ(getTestFilePath(), foreign_table->options.find("FILE_PATH")->second);
-      EXPECT_EQ("omnisci_local_csv", foreign_table->foreign_server->name);
+      EXPECT_EQ("default_local_delimited", foreign_table->foreign_server->name);
     } else {
       EXPECT_EQ(column_count + 2, td->nColumns);  // +2 for rowid and $deleted$ columns
       EXPECT_TRUE(td->hasDeletedCol);
@@ -1232,14 +1232,14 @@ TEST_F(CreateForeignTableTest, NonExistentServer) {
 
 TEST_F(CreateForeignTableTest, DefaultCsvFileServerName) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '" +
+      "SERVER default_local_delimited WITH (file_path = '" +
       getTestFilePath() + "');");
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
 }
 
 TEST_F(CreateForeignTableTest, DefaultParquetFileServerName) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_parquet WITH (file_path = '" +
+      "SERVER default_local_parquet WITH (file_path = '" +
       getTestFilePath() + "');");
   ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
 }
@@ -1247,14 +1247,14 @@ TEST_F(CreateForeignTableTest, DefaultParquetFileServerName) {
 TEST_F(CreateForeignTableTest, InvalidTableOption) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (invalid_option = 'value');"};
+      "SERVER default_local_delimited WITH (invalid_option = 'value');"};
   queryAndAssertException(query, "Invalid foreign table option \"INVALID_OPTION\".");
 }
 
 TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (delimiter = ',,', file_path = '" +
+      "SERVER default_local_delimited WITH (delimiter = ',,', file_path = '" +
       getTestFilePath() + "');"};
   queryAndAssertException(query,
                           "Invalid value specified for option \"DELIMITER\". "
@@ -1264,7 +1264,7 @@ TEST_F(CreateForeignTableTest, WrongTableOptionCharacterSize) {
 TEST_F(CreateForeignTableTest, InvalidTableOptionBooleanValue) {
   std::string query{
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (header = 'value', file_path = '" +
+      "SERVER default_local_delimited WITH (header = 'value', file_path = '" +
       getTestFilePath() + "');"};
   queryAndAssertException(
       query,
@@ -1283,7 +1283,7 @@ TEST_F(CreateForeignTableTest, FsiDisabled) {
 TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv;",
+      "SERVER default_local_delimited;",
       "No file_path found for Foreign Table \"test_foreign_table\". "
       "Table must have either set a \"FILE_PATH\" "
       "option, or its parent server must have set a \"BASE_PATH\" option.");
@@ -1292,14 +1292,15 @@ TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingCsv) {
 TEST_F(CreateForeignTableTest, DefaultServerWrapperPathMissingParquet) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_parquet;",
+      "SERVER default_local_parquet;",
       "No file_path found for Foreign Table \"test_foreign_table\". "
       "Table must have either set a \"FILE_PATH\" "
       "option, or its parent server must have set a \"BASE_PATH\" option.");
 }
 
 TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathMissing) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH (storage_type "
+      "= "
       "'LOCAL_FILE', base_path = '" +
       bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1308,7 +1309,8 @@ TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathMissing) {
 }
 
 TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathEmpty) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH (storage_type "
+      "= "
       "'LOCAL_FILE', base_path = '" +
       bf::canonical("../../Tests/FsiDataFiles/example_1_dir").string() + "');");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1317,7 +1319,8 @@ TEST_F(CreateForeignTableTest, ServerPathPresentWrapperPathEmpty) {
 }
 
 TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH (storage_type "
+      "= "
       "'LOCAL_FILE');");
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1330,21 +1333,23 @@ TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathMissing) {
 TEST_F(CreateForeignTableTest, UnsupportedOption) {
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '" +
+      "SERVER default_local_delimited WITH (file_path = '" +
           getTestFilePath() + "', shard_count = 4);",
       "Invalid foreign table option \"SHARD_COUNT\".");
 }
 
 TEST_F(CreateForeignTableTest, ServerPathMissingWrapperPathRelative) {
   sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
-      "SERVER omnisci_local_csv WITH (file_path = '../../Tests/FsiDataFiles/0.csv');");
+      "SERVER default_local_delimited WITH (file_path = "
+      "'../../Tests/FsiDataFiles/0.csv');");
   sql("SELECT * FROM test_foreign_table;");
 }
 
 TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
-  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
-                      "SERVER omnisci_local_csv WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
-                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  std::string query =
+      "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+      "SERVER default_local_delimited WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+      "file_path = '../../Tests/FsiDataFiles/0.csv');";
   queryAndAssertException(
       query,
       "The \"S3_ACCESS_TYPE\" option is only valid for foreign tables using "
@@ -1352,7 +1357,7 @@ TEST_F(CreateForeignTableTest, S3SelectWrongServer) {
 }
 
 TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
@@ -1365,7 +1370,7 @@ TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
@@ -1378,7 +1383,7 @@ TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
@@ -1395,7 +1400,7 @@ TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
   sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server WITH (file_path = '" +
@@ -1404,7 +1409,7 @@ TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, RevokedServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
@@ -1419,7 +1424,7 @@ TEST_F(CreateForeignTableTest, RevokedServerUsage) {
 }
 
 TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
   sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");

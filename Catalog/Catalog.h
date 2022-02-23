@@ -766,9 +766,9 @@ class Catalog final {
                                       bool multiline_formatting,
                                       bool dump_defaults) const;
 
-  static constexpr const char* CATALOG_SERVER_NAME{"omnisci_catalog_server"};
-  static constexpr const char* MEMORY_STATS_SERVER_NAME{"omnisci_memory_stats_server"};
-  static constexpr const char* STORAGE_STATS_SERVER_NAME{"omnisci_storage_stats_server"};
+  static constexpr const char* CATALOG_SERVER_NAME{"system_catalog_server"};
+  static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};
+  static constexpr const char* STORAGE_STATS_SERVER_NAME{"system_storage_stats_server"};
   static constexpr std::array<const char*, 3> INTERNAL_SERVERS{CATALOG_SERVER_NAME,
                                                                MEMORY_STATS_SERVER_NAME,
                                                                STORAGE_STATS_SERVER_NAME};

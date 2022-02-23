@@ -4448,7 +4448,7 @@ void Catalog::createDefaultServersIfNotExists() {
       foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE;
 
   auto local_csv_server = std::make_unique<foreign_storage::ForeignServer>(
-      "omnisci_local_csv",
+      "default_local_delimited",
       foreign_storage::DataWrapperType::CSV,
       options,
       OMNISCI_ROOT_USER_ID);
@@ -4457,7 +4457,7 @@ void Catalog::createDefaultServersIfNotExists() {
 
 #ifdef ENABLE_IMPORT_PARQUET
   auto local_parquet_server = std::make_unique<foreign_storage::ForeignServer>(
-      "omnisci_local_parquet",
+      "default_local_parquet",
       foreign_storage::DataWrapperType::PARQUET,
       options,
       OMNISCI_ROOT_USER_ID);
@@ -4466,7 +4466,7 @@ void Catalog::createDefaultServersIfNotExists() {
 #endif
 
   auto local_regex_parser_server = std::make_unique<foreign_storage::ForeignServer>(
-      "omnisci_local_regex_parser",
+      "default_local_regex_parsed",
       foreign_storage::DataWrapperType::REGEX_PARSER,
       options,
       OMNISCI_ROOT_USER_ID);

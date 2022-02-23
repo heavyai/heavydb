@@ -16,6 +16,8 @@
 
 #include "DdlCommandExecutor.h"
 
+#include <algorithm>
+
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "rapidjson/document.h"
@@ -34,10 +36,6 @@
 #include "QueryEngine/ResultSetBuilder.h"
 
 extern bool g_enable_fsi;
-
-bool DdlCommand::isDefaultServer(const std::string& server_name) {
-  return boost::iequals(server_name.substr(0, 7), "omnisci");
-}
 
 namespace {
 template <class LockType>
@@ -593,6 +591,33 @@ const std::string DdlCommandExecutor::commandStr() {
   return ddl_command_;
 }
 
+namespace {
+const std::array<std::string, 3> kReservedServerPrefixes{"default", "system", "internal"};
+
+bool is_default_server(const std::string& server_name) {
+  return std::any_of(kReservedServerPrefixes.begin(),
+                     kReservedServerPrefixes.end(),
+                     [&server_name](const std::string& reserved_prefix) {
+                       return boost::istarts_with(server_name, reserved_prefix);
+                     });
+}
+
+void throw_reserved_server_prefix_exception() {
+  std::string error_message{"Foreign server names cannot start with "};
+  for (size_t i = 0; i < kReservedServerPrefixes.size(); i++) {
+    if (i > 0) {
+      error_message += ", ";
+    }
+    if (i == kReservedServerPrefixes.size() - 1) {
+      error_message += "or ";
+    }
+    error_message += "\"" + kReservedServerPrefixes[i] + "\"";
+  }
+  error_message += ".";
+  throw std::runtime_error{error_message};
+}
+}  // namespace
+
 CreateForeignServerCommand::CreateForeignServerCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
@@ -614,8 +639,8 @@ ExecutionResult CreateForeignServerCommand::execute() {
 
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
-  if (isDefaultServer(server_name)) {
-    throw std::runtime_error{"Server names cannot start with \"omnisci\"."};
+  if (is_default_server(server_name)) {
+    throw_reserved_server_prefix_exception();
   }
   bool if_not_exists = ddl_payload["ifNotExists"].GetBool();
   if (session_ptr_->getCatalog().getForeignServer(server_name)) {
@@ -681,8 +706,8 @@ AlterForeignServerCommand::AlterForeignServerCommand(
 ExecutionResult AlterForeignServerCommand::execute() {
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
-  if (isDefaultServer(server_name)) {
-    throw std::runtime_error{"OmniSci default servers cannot be altered."};
+  if (is_default_server(server_name)) {
+    throw std::runtime_error{"Default servers cannot be altered."};
   }
   if (!session_ptr_->getCatalog().getForeignServer(server_name)) {
     throw std::runtime_error{"Foreign server with name \"" + server_name +
@@ -746,8 +771,8 @@ void AlterForeignServerCommand::renameForeignServer() {
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
   std::string new_server_name = ddl_payload["newServerName"].GetString();
-  if (isDefaultServer(new_server_name)) {
-    throw std::runtime_error{"OmniSci prefix can not be used for new name of server."};
+  if (is_default_server(new_server_name)) {
+    throw_reserved_server_prefix_exception();
   }
   auto& cat = session_ptr_->getCatalog();
   // check for a conflicting server
@@ -817,8 +842,8 @@ DropForeignServerCommand::DropForeignServerCommand(
 ExecutionResult DropForeignServerCommand::execute() {
   auto& ddl_payload = extractPayload(ddl_data_);
   std::string server_name = ddl_payload["serverName"].GetString();
-  if (isDefaultServer(server_name)) {
-    throw std::runtime_error{"OmniSci default servers cannot be dropped."};
+  if (is_default_server(server_name)) {
+    throw std::runtime_error{"Default servers cannot be dropped."};
   }
   bool if_exists = ddl_payload["ifExists"].GetBool();
   if (!session_ptr_->getCatalog().getForeignServer(server_name)) {
@@ -1060,7 +1085,7 @@ void CreateForeignTableCommand::setTableDetails(
   }
 
   // check server usage privileges
-  if (!isDefaultServer(server_name) &&
+  if (!is_default_server(server_name) &&
       !session_ptr_->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,
                                              AccessPrivileges::SERVER_USAGE,
                                              server_name)) {

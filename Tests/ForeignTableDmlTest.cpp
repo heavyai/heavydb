@@ -220,6 +220,36 @@ std::string get_line_geo_regex(size_t column_count) {
   return repeat_regex(column_count,
                       "\"?((?:POINT|LINESTRING|POLYGON|MULTIPOLYGON)[^\"]+|\\\\N)\"?");
 }
+
+std::string get_default_server(const std::string& data_wrapper_type) {
+  std::string suffix;
+  if (data_wrapper_type == "parquet") {
+    suffix = "parquet";
+  } else if (data_wrapper_type == "csv") {
+    suffix = "delimited";
+  } else if (data_wrapper_type == "regex_parser") {
+    suffix = "regex_parsed";
+  } else {
+    UNREACHABLE() << "Unexpected default server data wrapper type: " << data_wrapper_type;
+  }
+  return "default_local_" + suffix;
+}
+
+std::string get_data_wrapper_name(const std::string& data_wrapper_type) {
+  std::string data_wrapper;
+  if (is_regex(data_wrapper_type)) {
+    data_wrapper = "regex_parsed_file";
+  } else if (data_wrapper_type == "csv" || data_wrapper_type == "csv_s3_select") {
+    data_wrapper = "delimited_file";
+  } else if (data_wrapper_type == "parquet") {
+    data_wrapper = "parquet_file";
+  } else if (is_odbc(data_wrapper_type)) {
+    data_wrapper = "odbc";
+  } else {
+    UNREACHABLE() << "Unexpected data wrapper type: " << data_wrapper_type;
+  }
+  return data_wrapper;
+}
 }  // namespace
 
 /**
@@ -302,7 +332,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
       filename += "." + extension;
     }
 
-    query += " " + columns + " SERVER omnisci_local_" + data_wrapper_type +
+    query += " " + columns + " SERVER " + get_default_server(data_wrapper_type) +
              " WITH (file_path = '" + source_dir + filename + "'";
     for (auto& [key, value] : options) {
       query += ", " + key + " = '" + value + "'";
@@ -412,8 +442,8 @@ class ForeignTableTest : public DBHandlerTestFixture {
     ss << schema;
 
     if (is_odbc(data_wrapper_type)) {
-      std::string db_specific_schema = DBHandlerTestFixture::createSchemaString(
-          column_pairs, data_wrapper_type);
+      std::string db_specific_schema =
+          DBHandlerTestFixture::createSchemaString(column_pairs, data_wrapper_type);
       ss << "SERVER temp_odbc WITH (sql_select = 'select ";
       size_t i = 0;
       for (auto [name, type] : column_pairs) {
@@ -421,7 +451,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
       }
       createODBCSourceTable(table_name, db_specific_schema, src_path, data_wrapper_type);
     } else {
-      ss << "SERVER omnisci_local_" + data_wrapper_type;
+      ss << "SERVER " + get_default_server(data_wrapper_type);
       ss << " WITH (file_path = '";
       ss << src_path << "'";
     }
@@ -833,9 +863,7 @@ class DataTypeFragmentSizeAndDataWrapperTest
     SelectQueryTest::SetUp();
   }
 
-  void TearDown() override {
-    SelectQueryTest::TearDown();
-  }
+  void TearDown() override { SelectQueryTest::TearDown(); }
 
   std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>>
   getExpectedScalarTypeMetadata(bool data_loaded) {
@@ -931,7 +959,7 @@ class RowGroupAndFragmentSizeSelectQueryTest
 };
 
 TEST_P(CacheControllingSelectQueryTest, CustomServer) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "s +
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "s +
       "WITH (storage_type = 'LOCAL_FILE', base_path = '" + getDataFilesPath() + "');");
   sql("CREATE FOREIGN TABLE " + default_table_name +
       " (t TEXT, i INTEGER[]) "
@@ -947,7 +975,7 @@ TEST_P(CacheControllingSelectQueryTest, CustomServer) {
 TEST_P(CacheControllingSelectQueryTest, DefaultLocalCsvServer) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER default_local_delimited WITH (file_path = '" +
                       getDataFilesPath() + "/example_1.csv');";
   sql(query);
   TQueryResult result;
@@ -961,7 +989,7 @@ TEST_P(CacheControllingSelectQueryTest, DefaultLocalCsvServer) {
 TEST_P(CacheControllingSelectQueryTest, DefaultLocalParquetServer) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i BIGINT, f DOUBLE) "s +
-                      "SERVER omnisci_local_parquet WITH (file_path = '" +
+                      "SERVER default_local_parquet WITH (file_path = '" +
                       getDataFilesPath() + "/example_2.parquet');";
   sql(query);
   queryAndAssertExample2Result();
@@ -1048,7 +1076,8 @@ TEST_P(CacheControllingSelectQueryTest, RefreshDisabledCache) {
   bf::copy_file(
       getDataFilesPath() + "0.csv", temp_file, bf::copy_option::overwrite_if_exists);
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" + temp_file + "');";
+                      "SERVER default_local_delimited WITH (file_path = '" + temp_file +
+                      "');";
   sql(query);
   TQueryResult pre_refresh_result;
   sql(pre_refresh_result, default_select);
@@ -1380,7 +1409,7 @@ TEST_F(SelectQueryTest, ParquetDateDays32Encoding) {
 
 TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_SameNumberOfColumns) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (t TIMESTAMP) "s +
-                      "SERVER omnisci_local_parquet WITH (file_path = '" +
+                      "SERVER default_local_parquet WITH (file_path = '" +
                       getDataFilesPath() + "/different_parquet_schemas_1');";
   sql(query);
   queryAndAssertException(default_select,
@@ -1398,7 +1427,7 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_SameNumberOfColumns) {
 
 TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i BIGINT) "s +
-                      "SERVER omnisci_local_parquet WITH (file_path = '" +
+                      "SERVER default_local_parquet WITH (file_path = '" +
                       getDataFilesPath() + "/different_parquet_schemas_2');";
   sql(query);
   queryAndAssertException(
@@ -1438,7 +1467,7 @@ TEST_F(SelectQueryTest, ParseError) {
 
 TEST_F(SelectQueryTest, ExistingTableWithFsiDisabled) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER default_local_delimited WITH (file_path = '" +
                       getDataFilesPath() + "/1.csv');";
   sql(query);
   g_enable_fsi = false;
@@ -1772,7 +1801,8 @@ TEST_P(DataWrapperSelectQueryTest, FilePathWithLeadingSlash) {
   if (is_odbc(GetParam())) {
     GTEST_SKIP() << "Not a valid test case for ODBC wrappers";
   }
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_" + wrapper_type_ +
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER " +
+      get_data_wrapper_name(wrapper_type_) +
       " WITH (storage_type = 'LOCAL_FILE', base_path = '" + getDataFilesPath() + "');");
   std::string options{"file_path = '/1" + wrapper_ext(wrapper_type_) + "'"};
   if (wrapper_type_ == "regex_parser") {
@@ -2067,7 +2097,7 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_P(CSVFileTypeTests, SelectCSV) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER default_local_delimited WITH (file_path = '" +
                       getDataFilesPath() + "/" + GetParam().first + "');";
   sql(query);
   TQueryResult result;
@@ -2146,7 +2176,7 @@ TEST_P(CacheControllingSelectQueryTest, CSV_CustomDelimiters) {
 TEST_P(CacheControllingSelectQueryTest, CsvEmptyArchive) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER default_local_delimited WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_empty.zip" + "');";
   sql(query);
   TQueryResult result;
@@ -2157,7 +2187,7 @@ TEST_P(CacheControllingSelectQueryTest, CsvEmptyArchive) {
 TEST_P(CacheControllingSelectQueryTest, CsvArchiveInvalidFile) {
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i INTEGER[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER default_local_delimited WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_invalid_file.zip" + "');";
   sql(query);
   queryAndAssertException("SELECT * FROM " + default_table_name + "  ORDER BY t;",
@@ -2793,7 +2823,7 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
 TEST_F(RefreshTests, InvalidRefreshMode) {
   std::string filename = "archive_delete_file.zip";
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER default_local_delimited WITH (file_path = '" +
                       getDataFilesPath() + "append_before/" + filename +
                       "', fragment_size = '1' " + ", REFRESH_UPDATE_TYPE = 'INVALID');";
   queryAndAssertException(query,
@@ -3312,8 +3342,9 @@ TEST_F(AppendRefreshTestCSV, MissingFileArchive) {
   std::string filename = "archive_delete_file.zip";
 
   std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (i INTEGER) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" + test_temp_dir +
-                      filename + "', fragment_size = '" + std::to_string(fragment_size) +
+                      "SERVER default_local_delimited WITH (file_path = '" +
+                      test_temp_dir + filename + "', fragment_size = '" +
+                      std::to_string(fragment_size) +
                       "', REFRESH_UPDATE_TYPE = 'APPEND');";
   sql(query);
 
@@ -3930,7 +3961,7 @@ TEST_F(SelectQueryTest, CsvArrayEmptyText) {
 TEST_F(SelectQueryTest, CsvMultipleFilesWithExpectedAndMismatchedColumns) {
   auto file_path = getDataFilesPath() + "different_cols";
   sql("CREATE FOREIGN TABLE " + default_table_name +
-      " (t TEXT, i1 BIGINT) SERVER omnisci_local_csv WITH ("
+      " (t TEXT, i1 BIGINT) SERVER default_local_delimited WITH ("
       "file_path = '" +
       file_path + "');");
   queryAndAssertException("SELECT * FROM " + default_table_name + ";",
@@ -4874,7 +4905,7 @@ TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
 
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i BIGINT[]) "s +
-                      "SERVER omnisci_local_csv WITH (file_path = '" +
+                      "SERVER default_local_delimited WITH (file_path = '" +
                       getDataFilesPath() + "/" + "example_1_dir_archives/');";
   sql(query);
   auto td = cat_->getMetadataForTable(default_table_name, false);
@@ -6015,7 +6046,7 @@ class RegexParserSelectQueryTest : public SelectQueryTest,
                           const std::string& line_regex = {}) {
     std::string query{"CREATE FOREIGN TABLE " + default_table_name +
                       " (t TIMESTAMP, txt TEXT)"
-                      " SERVER omnisci_local_regex_parser"
+                      " SERVER default_local_regex_parsed"
                       " WITH (file_path = '" +
                       getFilePath(file_name) + "', buffer_size = " +
                       std::to_string(buffer_size) + ", HEADER = false"};

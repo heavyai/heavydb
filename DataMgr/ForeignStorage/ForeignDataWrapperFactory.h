@@ -35,12 +35,12 @@ void validate_regex_parser_options(const import_export::CopyParams& copy_params)
  * @brief Encapsulates an enumeration of foreign data wrapper type strings
  */
 struct DataWrapperType {
-  static constexpr char const* CSV = "OMNISCI_CSV";
-  static constexpr char const* PARQUET = "OMNISCI_PARQUET";
-  static constexpr char const* REGEX_PARSER = "OMNISCI_REGEX_PARSER";
-  static constexpr char const* INTERNAL_CATALOG = "OMNISCI_INTERNAL_CATALOG";
-  static constexpr char const* INTERNAL_MEMORY_STATS = "INTERNAL_OMNISCI_MEMORY_STATS";
-  static constexpr char const* INTERNAL_STORAGE_STATS = "INTERNAL_OMNISCI_STORAGE_STATS";
+  static constexpr char const* CSV = "DELIMITED_FILE";
+  static constexpr char const* PARQUET = "PARQUET_FILE";
+  static constexpr char const* REGEX_PARSER = "REGEX_PARSED_FILE";
+  static constexpr char const* INTERNAL_CATALOG = "INTERNAL_CATALOG";
+  static constexpr char const* INTERNAL_MEMORY_STATS = "INTERNAL_MEMORY_STATS";
+  static constexpr char const* INTERNAL_STORAGE_STATS = "INTERNAL_STORAGE_STATS";
 
   static constexpr std::array<char const*, 3> INTERNAL_DATA_WRAPPERS{
       INTERNAL_CATALOG,

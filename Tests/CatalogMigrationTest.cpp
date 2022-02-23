@@ -328,7 +328,7 @@ TEST_F(ForeignTablesTest, ForeignTablesAreNotDroppedWhenFsiIsDisabled) {
   loginAdmin();
 
   const auto file_path = BF::canonical("../../Tests/FsiDataFiles/example_1.csv").string();
-  sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
+  sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER default_local_delimited "
       "WITH (file_path = '" +
       file_path + "');");
   sql("CREATE TABLE test_table (c1 int);");
@@ -355,12 +355,12 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
   g_enable_fsi = false;
 
   assertExpectedDefaultServer(catalog.get(),
-                              "omnisci_local_csv",
+                              "default_local_delimited",
                               foreign_storage::DataWrapperType::CSV,
                               OMNISCI_ROOT_USER_ID);
 
   assertExpectedDefaultServer(catalog.get(),
-                              "omnisci_local_parquet",
+                              "default_local_parquet",
                               foreign_storage::DataWrapperType::PARQUET,
                               OMNISCI_ROOT_USER_ID);
 }

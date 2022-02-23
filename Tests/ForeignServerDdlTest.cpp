@@ -47,7 +47,7 @@ std::string get_file_storage_types() {
 }
 
 std::string get_data_wrapper_types() {
-  return "OMNISCI_PARQUET, OMNISCI_CSV, OMNISCI_REGEX_PARSER"
+  return "PARQUET_FILE, DELIMITED_FILE, REGEX_PARSED_FILE"
          ".";
 }
 }  // namespace
@@ -95,58 +95,51 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
 };
 
 TEST_F(CreateForeignServerTest, AllValidParameters) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, AllValidParametersAndReadFromCache) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, ExistingServerWithIfNotExists) {
-  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
-  sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, ExistingServerWithoutIfNotExists) {
   std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   sql(query);
   queryAndAssertException(query,
                           "A foreign server with name \"test_server\" already exists.");
 }
 
-TEST_F(CreateForeignServerTest, OmniSciPrefix) {
-  std::string query{
-      "CREATE SERVER omnisci_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  queryAndAssertException(query, "Server names cannot start with \"omnisci\".");
-}
-
 TEST_F(CreateForeignServerTest, MissingStorageType) {
   std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
       "(base_path = '/test_path/');"};
   queryAndAssertException(query, "Foreign server options must contain \"STORAGE_TYPE\".");
 }
 
 TEST_F(CreateForeignServerTest, MissingBasePath) {
   std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
       "(storage_type = 'LOCAL_FILE');"};
   sql(query);
 }
 
 TEST_F(CreateForeignServerTest, InvalidOption) {
   std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
       "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
       "Invalid foreign server option \"INVALID_KEY\". "
@@ -157,7 +150,7 @@ TEST_F(CreateForeignServerTest, InvalidOption) {
 
 TEST_F(CreateForeignServerTest, InvalidStorageType) {
   std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
   std::string error_message{
       "Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
@@ -168,7 +161,7 @@ TEST_F(CreateForeignServerTest, InvalidStorageType) {
 
 TEST_F(CreateForeignServerTest, FsiDisabled) {
   std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   g_enable_fsi = false;
   queryAndAssertException(query, "Syntax error at: SERVER");
@@ -186,9 +179,27 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
 }
 
 TEST_F(CreateForeignServerTest, MissingWithClause) {
-  std::string query{"CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_parquet;"};
+  std::string query{"CREATE SERVER test_server FOREIGN DATA WRAPPER parquet_file;"};
   queryAndAssertException(query, "Foreign server options must contain \"STORAGE_TYPE\".");
 }
+
+class ReservedServerNamePrefixTest : public DBHandlerTestFixture,
+                                     public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(ReservedServerNamePrefixTest, ReservedPrefix) {
+  auto prefix = GetParam();
+  std::string query{"CREATE SERVER " + prefix +
+                    "_server FOREIGN DATA WRAPPER delimited_file WITH "
+                    "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
+  queryAndAssertException(
+      query,
+      "Foreign server names cannot start with \"default\", \"system\", or \"internal\".");
+}
+
+INSTANTIATE_TEST_SUITE_P(ReservedPrefixes,
+                         ReservedServerNamePrefixTest,
+                         ::testing::Values("default", "internal", "system"),
+                         [](const auto& param_info) { return param_info.param; });
 
 class DropForeignServerTest : public DBHandlerTestFixture {
  protected:
@@ -196,7 +207,7 @@ class DropForeignServerTest : public DBHandlerTestFixture {
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
     dropTestTable();
-    sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
+    sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
@@ -211,7 +222,7 @@ class DropForeignServerTest : public DBHandlerTestFixture {
   void createTestServer1() {
     const auto base_path =
         boost::filesystem::canonical("../../Tests/FsiDataFiles/").string();
-    sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER omnisci_csv "
+    sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '" +
         base_path + "');");
   }
@@ -243,10 +254,10 @@ TEST_F(DropForeignServerTest, NonExistingServerWithoutIfExists) {
 }
 
 TEST_F(DropForeignServerTest, DefaultServers) {
-  queryAndAssertException("DROP SERVER omnisci_local_csv;",
-                          "OmniSci default servers cannot be dropped.");
-  queryAndAssertException("DROP SERVER omnisci_local_parquet;",
-                          "OmniSci default servers cannot be dropped.");
+  queryAndAssertException("DROP SERVER default_local_delimited;",
+                          "Default servers cannot be dropped.");
+  queryAndAssertException("DROP SERVER default_local_parquet;",
+                          "Default servers cannot be dropped.");
 }
 
 TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
@@ -301,7 +312,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
 
   void createTestServer() {
-    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
@@ -326,7 +337,7 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
 TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithoutPrivilege) {
   login("test_user", "test_pass");
   queryAndAssertException(
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Server test_server will not be created. "
       "User has no create privileges.");
@@ -377,7 +388,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, AlterServerWithoutPrivilege) {
   createTestServer();
   login("test_user", "test_pass");
   queryAndAssertException(
-      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;",
+      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER PARQUET_FILE;",
       "Server test_server can not be altered. User has no ALTER SERVER "
       "privileges.");
 }
@@ -386,18 +397,18 @@ TEST_F(ForeignServerPrivilegesDdlTest, AlterServerWithPrivilege) {
   createTestServer();
   sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
-  sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;");
+  sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER PARQUET_FILE;");
   auto foreign_server = getCatalog().getForeignServerFromStorage("test_server");
-  ASSERT_EQ(foreign_server->data_wrapper_type, "OMNISCI_PARQUET");
+  ASSERT_EQ(foreign_server->data_wrapper_type, "PARQUET_FILE");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, AlterServerWithSpecificPrivilege) {
   createTestServer();
   sql("GRANT ALTER ON SERVER test_server TO test_user;");
   login("test_user", "test_pass");
-  sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;");
+  sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER PARQUET_FILE;");
   auto foreign_server = getCatalog().getForeignServerFromStorage("test_server");
-  ASSERT_EQ(foreign_server->data_wrapper_type, "OMNISCI_PARQUET");
+  ASSERT_EQ(foreign_server->data_wrapper_type, "PARQUET_FILE");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantRevokeAlterServerWithPrivilege) {
@@ -406,7 +417,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantRevokeAlterServerWithPrivilege) {
   sql("REVOKE ALTER SERVER ON DATABASE omnisci FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
-      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;",
+      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER PARQUET_FILE;",
       "Server test_server can not be altered. User has no ALTER SERVER "
       "privileges.");
 }
@@ -417,7 +428,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantRevokeAlterServerWithSpecificPrivile
   sql("REVOKE ALTER ON SERVER test_server FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
-      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_PARQUET;",
+      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER PARQUET_FILE;",
       "Server test_server can not be altered. User has no ALTER SERVER "
       "privileges.");
 }
@@ -442,7 +453,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithGrantThenRevokePrivilege)
   sql("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Server test_server will not be created. "
       "User has no create privileges.");
@@ -535,7 +546,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantAllRevokeCreateServerCreateServer) {
   sql("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Server test_server will not be created. "
       "User has no create privileges.");
@@ -548,7 +559,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantCreateServerRevokeAllCreateServer) {
   sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');",
       "Server test_server will not be created. "
       "User has no create privileges.");
@@ -573,12 +584,12 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
     DBHandlerTestFixture::SetUp();
     // Check defeault server exist
     {
-      auto foreign_server = getCatalog().getForeignServer("omnisci_local_csv");
+      auto foreign_server = getCatalog().getForeignServer("default_local_delimited");
       ASSERT_NE(foreign_server, nullptr);
       ASSERT_GT(foreign_server->id, 0);
     }
     {
-      auto foreign_server = getCatalog().getForeignServer("omnisci_local_parquet");
+      auto foreign_server = getCatalog().getForeignServer("default_local_parquet");
       ASSERT_NE(foreign_server, nullptr);
       ASSERT_GT(foreign_server->id, 0);
     }
@@ -638,21 +649,23 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
   }
 
   void assertServerLocalCSVFound(const TQueryResult& result) {
-    assertServerResultFound(
-        result, "omnisci_local_csv", "OMNISCI_CSV", "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
+    assertServerResultFound(result,
+                            "default_local_delimited",
+                            "DELIMITED_FILE",
+                            "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
 
   void assertServerLocalParquetFound(const TQueryResult& result) {
     assertServerResultFound(result,
-                            "omnisci_local_parquet",
-                            "OMNISCI_PARQUET",
+                            "default_local_parquet",
+                            "PARQUET_FILE",
                             "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
 
   void assertServerLocalRegexParserFound(const TQueryResult& result) {
     assertServerResultFound(result,
-                            "omnisci_local_regex_parser",
-                            "OMNISCI_REGEX_PARSER",
+                            "default_local_regex_parsed",
+                            "REGEX_PARSED_FILE",
                             "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}");
   }
 
@@ -691,7 +704,7 @@ TEST_F(ShowForeignServerTest, ShowAllDefaultInInformationSchemaDb) {
 
 TEST_F(ShowForeignServerTest, SHOW_WHERE_EQ) {
   TQueryResult result;
-  std::string query{"SHOW SERVERS WHERE server_name = 'omnisci_local_csv';"};
+  std::string query{"SHOW SERVERS WHERE server_name = 'default_local_delimited';"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
@@ -710,8 +723,8 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE) {
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_EQ) {
   TQueryResult result;
   std::string query{
-      "SHOW SERVERS WHERE server_name LIKE '%_csv' OR server_name = "
-      "'omnisci_local_parquet';"};
+      "SHOW SERVERS WHERE server_name LIKE '%_delimited' OR server_name = "
+      "'default_local_parquet';"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 2);
@@ -722,7 +735,8 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_EQ) {
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_AND_EQ) {
   TQueryResult result;
   std::string query{
-      "SHOW SERVERS WHERE server_name LIKE '%_csv' AND data_wrapper = 'OMNISCI_CSV';"};
+      "SHOW SERVERS WHERE server_name LIKE '%_delimited' AND data_wrapper = "
+      "'DELIMITED_FILE';"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumResults(result, 1);
@@ -732,7 +746,8 @@ TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_AND_EQ) {
 TEST_F(ShowForeignServerTest, SHOW_WHERE_LIKE_OR_LIKE_AND_LIKE) {
   TQueryResult result;
   std::string query{
-      "SHOW SERVERS WHERE server_name LIKE '%_csv' OR data_wrapper = 'OMNISCI_PARQUET' "
+      "SHOW SERVERS WHERE server_name LIKE '%_delimited' OR data_wrapper = "
+      "'PARQUET_FILE' "
       "AND options LIKE '%STORAGE_TYPE%';"};
   sql(result, query);
   assertExpectedFormat(result);
@@ -769,7 +784,7 @@ TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_EQ) {
   {
     TQueryResult result;
     std::string query{
-        "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+        "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
         "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
     sql(result, query);
   }
@@ -805,7 +820,7 @@ TEST_F(ShowForeignServerTest, SHOW_TIMESTAMP_EQ) {
     size_t num_results = result.row_set.columns[CREATED_AT].data.int_col.size();
     ASSERT_GT(num_results, static_cast<size_t>(0));
     ASSERT_LE(num_results, LOCAL_DATA_WRAPPERS_COUNT + 1);
-    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "DELIMITED_FILE", options_json);
     for (const auto& timestamp : result.row_set.columns[CREATED_AT].data.int_col) {
       // Check all returned values
       ASSERT_TRUE(isDateTimeAfterTimeStamp(timestamp, current_time));
@@ -819,7 +834,7 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
   {
     TQueryResult result;
     std::string query{
-        "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+        "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
         "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
     sql(result, query);
   }
@@ -833,21 +848,21 @@ TEST_F(ShowForeignServerTest, SHOW_ADD_DROP) {
     assertServerLocalCSVFound(result);
     assertServerLocalParquetFound(result);
     assertServerLocalRegexParserFound(result);
-    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "DELIMITED_FILE", options_json);
   }
   {
     TQueryResult result;
     std::string query{"SHOW SERVERS WHERE server_name = 'test_server';"};
     sql(result, query);
     assertNumResults(result, 1);
-    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "DELIMITED_FILE", options_json);
   }
   {
     TQueryResult result;
     std::string query{"SHOW SERVERS WHERE options LIKE '%test_path%';"};
     sql(result, query);
     assertNumResults(result, 1);
-    assertServerResultFound(result, "test_server", "OMNISCI_CSV", options_json);
+    assertServerResultFound(result, "test_server", "DELIMITED_FILE", options_json);
     ASSERT_TRUE(isDateTimeAfterTimeStamp(
         result.row_set.columns[CREATED_AT].data.int_col[0], current_time));
   }
@@ -938,7 +953,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
 
   void createTestServer() {
-    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
@@ -1010,9 +1025,9 @@ int32_t AlterForeignServerTest::test_user_id;
 
 TEST_F(AlterForeignServerTest, SetDataWrapper) {
   createTestServer();
-  sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER omnisci_parquet;");
+  sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER parquet_file;");
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_parquet", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "parquet_file", DEFAULT_OPTIONS));
 }
 
 TEST_F(AlterForeignServerTest, ModifyOption) {
@@ -1020,7 +1035,7 @@ TEST_F(AlterForeignServerTest, ModifyOption) {
   sql("ALTER SERVER test_server SET ( base_path = '/new_path/' );");
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server",
-                                  "omnisci_csv",
+                                  "delimited_file",
                                   std::map<std::string, std::string, std::less<>>{
                                       {"base_path", "/new_path/"},
                                       {"storage_type", "LOCAL_FILE"},
@@ -1031,14 +1046,14 @@ TEST_F(AlterForeignServerTest, ChangeOwner) {
   createTestServer();
   sql("ALTER SERVER test_server OWNER TO test_user;");
   assertExpectedForeignServer(createExpectedForeignServer(
-      "test_server", "omnisci_csv", DEFAULT_OPTIONS, test_user_id));
+      "test_server", "delimited_file", DEFAULT_OPTIONS, test_user_id));
 }
 
 TEST_F(AlterForeignServerTest, RenameServerDropServer) {
   createTestServer();
   sql("ALTER SERVER test_server RENAME TO renamed_server;");
   assertExpectedForeignServer(
-      createExpectedForeignServer("renamed_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("renamed_server", "delimited_file", DEFAULT_OPTIONS));
   assertNullForeignServer();
   sql("DROP SERVER renamed_server;");
   assertNullForeignServer("renamed_server");
@@ -1049,7 +1064,7 @@ TEST_F(AlterForeignServerTest, UserCreateServerRenameServerDropServer) {
   createTestServer();
   sql("ALTER SERVER test_server RENAME TO renamed_server;");
   assertExpectedForeignServer(createExpectedForeignServer(
-      "renamed_server", "omnisci_csv", DEFAULT_OPTIONS, test_user_id));
+      "renamed_server", "delimited_file", DEFAULT_OPTIONS, test_user_id));
   assertNullForeignServer();
   sql("DROP SERVER renamed_server;");
   assertNullForeignServer("renamed_server");
@@ -1090,14 +1105,14 @@ TEST_F(AlterForeignServerTest, UserCreateServerDropUserChangeOwner) {
   dropTestUser();
   sql("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";");
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
   // test_user must be recreated for remaining tests
   createTestUser();
 }
 
 TEST_F(AlterForeignServerTest, AlterNonExistentForeignServer) {
   queryAndAssertException(
-      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER omnisci_parquet;",
+      "ALTER SERVER test_server SET FOREIGN DATA WRAPPER parquet_file;",
       "Foreign server with name \"test_server\" does not exist "
       "and can not be altered.");
 }
@@ -1109,12 +1124,12 @@ TEST_F(AlterForeignServerTest, ChangeOwnerToNonExistentUser) {
                           " exist. Foreign server with name \"test_server\" can not "
                           "have owner changed.");
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
 }
 
 TEST_F(AlterForeignServerTest, RenameToExistingServer) {
   createTestServer();
-  sql("CREATE SERVER renamed_server FOREIGN DATA WRAPPER omnisci_csv "
+  sql("CREATE SERVER renamed_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = "
       "'/another_test_path/');");
   queryAndAssertException("ALTER SERVER test_server RENAME TO renamed_server;",
@@ -1122,7 +1137,7 @@ TEST_F(AlterForeignServerTest, RenameToExistingServer) {
                           "\" can not be renamed to \"renamed_server\"."
                           "Foreign server with name \"renamed_server\" exists.");
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
 }
 
 TEST_F(AlterForeignServerTest, FsiDisabled) {
@@ -1132,18 +1147,19 @@ TEST_F(AlterForeignServerTest, FsiDisabled) {
                           "Syntax error at: SERVER");
 }
 
-TEST_F(AlterForeignServerTest, OmniSciPrefix) {
-  queryAndAssertException("ALTER SERVER omnisci_local_csv RENAME TO renamed_server;",
-                          "OmniSci default servers cannot be altered.");
+TEST_F(AlterForeignServerTest, RenameDefaultServer) {
+  queryAndAssertException(
+      "ALTER SERVER default_local_delimited RENAME TO renamed_server;",
+      "Default servers cannot be altered.");
 }
 
-TEST_F(AlterForeignServerTest, RenameServerToOmniSciPrefix) {
+TEST_F(AlterForeignServerTest, RenameServerToReservedPrefix) {
   createTestServer();
-  queryAndAssertException("ALTER SERVER test_server RENAME TO omnisci_local_csv;",
-                          "OmniSci prefix can not be used for new"
-                          " name of server.");
+  queryAndAssertException(
+      "ALTER SERVER test_server RENAME TO default_local_delimited;",
+      "Foreign server names cannot start with \"default\", \"system\", or \"internal\".");
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
 }
 
 TEST_F(AlterForeignServerTest, InvalidOption) {
@@ -1155,7 +1171,7 @@ TEST_F(AlterForeignServerTest, InvalidOption) {
       get_file_server_options()};
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
 }
 
 TEST_F(AlterForeignServerTest, InvalidStorageType) {
@@ -1170,7 +1186,7 @@ TEST_F(AlterForeignServerTest, InvalidStorageType) {
 
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
 }
 
 TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
@@ -1182,7 +1198,7 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
       get_data_wrapper_types()};
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
-      createExpectedForeignServer("test_server", "omnisci_csv", DEFAULT_OPTIONS));
+      createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
 }
 
 int main(int argc, char** argv) {

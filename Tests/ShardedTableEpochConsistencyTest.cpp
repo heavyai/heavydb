@@ -1077,7 +1077,7 @@ TEST_F(EpochValidationTest, DifferentTableTypes) {
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
   sql("create view test_view as select * from test_table;");
   if (!isDistributedMode()) {
-    sql("create foreign table test_foreign_table(a int) server omnisci_local_csv "
+    sql("create foreign table test_foreign_table(a int) server default_local_delimited "
         "with (file_path = '" +
         boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
   }

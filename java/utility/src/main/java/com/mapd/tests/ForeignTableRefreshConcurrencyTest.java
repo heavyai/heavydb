@@ -248,7 +248,7 @@ public class ForeignTableRefreshConcurrencyTest {
     MapdTestClient dba = MapdTestClient.getClient(
             "localhost", 6274, "db1", "admin", "HyperInteractive");
     dba.runSql("CREATE SERVER test_server "
-            + "FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = 'LOCAL_FILE', "
+            + "FOREIGN DATA WRAPPER delimited_file WITH (storage_type = 'LOCAL_FILE', "
             + "base_path = '" + foreign_server_path.toString() + "');");
     for (int i = 0; i < num_foreign_manual_refresh_threads; ++i) {
       createForeignTestTableManualRefresh(dba, "test_foreign_table_manual_refresh_" + i);

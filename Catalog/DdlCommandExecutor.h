@@ -51,7 +51,6 @@ class DdlCommand {
  protected:
   const DdlCommandData& ddl_data_;
   std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr_;
-  bool isDefaultServer(const std::string& server_name);
 };
 
 class CreateForeignServerCommand : public DdlCommand {

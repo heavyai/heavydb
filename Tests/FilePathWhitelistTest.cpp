@@ -85,7 +85,7 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     } else if (GetParam() == "ForeignTable") {
       query =
           "CREATE FOREIGN TABLE test_foreign_table (col1 text) "
-          "SERVER omnisci_local_csv "
+          "SERVER default_local_delimited "
           "WITH (file_path = '" +
           file_path + "');";
     } else {

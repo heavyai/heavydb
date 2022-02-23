@@ -10,6 +10,6 @@ CREATE FOREIGN TABLE ##TAB##  (
   public_session_id TEXT ENCODING DICT(32),
   field_names TEXT[] ENCODING DICT(32),
   field_values TEXT[] ENCODING DICT(32))
-SERVER omnisci_local_regex_parser
+SERVER default_local_regex_parsed
 WITH (FILE_PATH = '##FILE##',
       LINE_REGEX = '^([^\s]+)\s(\w)\s(\d+)\s([^\s]+)\s(?:stdlog)\s(\w+)\s(?:\d+)\s(\d+)\s(\w+)\s([^\s]+)\s([^\s]+)\s(\{[^\}]+\})\s(\{[^\}]+\})$')

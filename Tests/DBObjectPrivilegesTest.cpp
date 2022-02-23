@@ -285,7 +285,7 @@ struct ServerObject : public DBHandlerTestFixture {
     }
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
-    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
@@ -3070,7 +3070,7 @@ class TablePermissionsTest : public DBHandlerTestFixture {
   void createTestForeignTable() {
     sql("DROP FOREIGN TABLE IF EXISTS test_table;");
     std::string query{
-        "CREATE FOREIGN TABLE test_table (i BIGINT) SERVER omnisci_local_csv WITH "
+        "CREATE FOREIGN TABLE test_table (i BIGINT) SERVER default_local_delimited WITH "
         "(file_path = '" +
         getDataFilesPath() + "1.csv');"};
     sql(query);
@@ -3092,6 +3092,7 @@ class TablePermissionsTest : public DBHandlerTestFixture {
     } else {
       sql("DROP TABLE IF EXISTS test_table;");
     }
+    sql("DROP TABLE IF EXISTS renamed_test_table;");
   }
 
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
@@ -3486,7 +3487,7 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
     sql("GRANT ACCESS ON DATABASE omnisci TO " + name + ";");
   }
   void createTestServer() {
-    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
@@ -3886,7 +3887,7 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
         name_suffix + ";");
     if (!isDistributedMode()) {
       sql("CREATE SERVER test_server_" + name_suffix +
-          " FOREIGN DATA WRAPPER omnisci_csv "
+          " FOREIGN DATA WRAPPER delimited_file "
           "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
     }
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
@@ -4259,7 +4260,8 @@ class AlterServerOwnerTest : public ReassignOwnedTest {
   }
 
   static void createServer() {
-    sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type "
+    sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER delimited_file WITH "
+        "(storage_type "
         "= 'LOCAL_FILE', base_path = '/test_path/');");
     // grant alter on server to other user to create additional ObjectRoleDescriptor that
     // needs to be updated

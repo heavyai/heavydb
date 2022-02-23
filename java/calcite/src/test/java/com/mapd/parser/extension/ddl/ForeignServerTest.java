@@ -20,7 +20,7 @@ public class ForeignServerTest extends DDLTest {
     final JsonObject expectedJsonObject =
             getJsonFromFile("alter_foreign_server_set_data_wrapper_csv.json");
     final TPlanResult result = processDdlCommand(
-            "ALTER SERVER test_server SET FOREIGN DATA WRAPPER OMNISCI_CSV;");
+            "ALTER SERVER test_server SET FOREIGN DATA WRAPPER DELIMITED_FILE;");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
 
@@ -122,7 +122,7 @@ public class ForeignServerTest extends DDLTest {
     final JsonObject expectedJsonObject =
             getJsonFromFile("show_foreign_server_where.json");
     final TPlanResult result =
-            processDdlCommand("SHOW SERVERS WHERE data_wrapper = 'omnisci_csv';");
+            processDdlCommand("SHOW SERVERS WHERE data_wrapper = 'delimited_file';");
     final JsonObject actualJsonObject =
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);

@@ -1497,7 +1497,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
       "tstamp "
       "TIMESTAMP, dt DATE, i_array INTEGER[], t_array TEXT[5], p POINT, l LINESTRING, "
       "poly POLYGON, mpoly MULTIPOLYGON) "
-      "SERVER omnisci_local_csv "
+      "SERVER default_local_delimited "
       "WITH (file_path = '" +
       test_source_path + "/example_1.csv" + "');");
   sqlAndCompareResult(
@@ -1509,7 +1509,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_Defaults) {
         "t_array TEXT[5] ENCODING DICT(32),\n  p GEOMETRY(POINT) ENCODING NONE,\n  l "
         "GEOMETRY(LINESTRING) ENCODING NONE,\n  poly GEOMETRY(POLYGON) ENCODING "
         "NONE,\n  mpoly GEOMETRY(MULTIPOLYGON) ENCODING NONE)"
-        "\nSERVER omnisci_local_csv"
+        "\nSERVER default_local_delimited"
         "\nWITH (FILE_PATH='" +
         test_source_path + "/example_1.csv" +
         "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
@@ -1526,7 +1526,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
       "l GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32), "
       "poly GEOMETRY(POLYGON, 4326) ENCODING NONE, "
       "mpoly GEOMETRY(MULTIPOLYGON, 900913)) "
-      "SERVER omnisci_local_csv "
+      "SERVER default_local_delimited "
       "WITH (file_path = '" +
       test_source_path + "/example_1.csv" + "');");
   sqlAndCompareResult(
@@ -1540,7 +1540,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_WithEncodings) {
         "ENCODING DAYS(16),\n  p GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32),\n  l "
         "GEOMETRY(LINESTRING, 4326) ENCODING COMPRESSED(32),\n  poly GEOMETRY(POLYGON, "
         "4326) ENCODING NONE,\n  mpoly GEOMETRY(MULTIPOLYGON, 900913) ENCODING NONE)"
-        "\nSERVER omnisci_local_csv"
+        "\nSERVER default_local_delimited"
         "\nWITH (FILE_PATH='" +
         test_source_path + "/example_1.csv" +
         "', REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"}});
@@ -1555,7 +1555,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
   std::string start_date_time = buffer;
 
   sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) "
-      "SERVER omnisci_local_csv "
+      "SERVER default_local_delimited "
       "WITH (file_path = '" +
       test_source_path + "/example_1.csv" +
       "', fragment_size = 50, refresh_update_type = 'append', refresh_timing_type = "
@@ -1567,7 +1567,7 @@ TEST_F(ShowCreateTableTest, ForeignTable_AllOptions) {
       "quote = '`', quoted = 'false');");
   sqlAndCompareResult("SHOW CREATE TABLE test_foreign_table;",
                       {{"CREATE FOREIGN TABLE test_foreign_table (\n  i INTEGER)"
-                        "\nSERVER omnisci_local_csv"
+                        "\nSERVER default_local_delimited"
                         "\nWITH (ARRAY_DELIMITER='_', ARRAY_MARKER='[]', "
                         "BUFFER_SIZE='100', DELIMITER='|', ESCAPE='\\', "
                         "FILE_PATH='" +
@@ -1786,7 +1786,7 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
 
   void sqlCreateBasicForeignTable(std::string& table_name) {
     sql("CREATE FOREIGN TABLE " + table_name +
-        " (i INTEGER) SERVER omnisci_local_parquet WITH "
+        " (i INTEGER) SERVER default_local_parquet WITH "
         "(file_path = '" +
         test_source_path + "/0.parquet" + "');");
   }
@@ -1918,7 +1918,7 @@ TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
 
 TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
   sql("CREATE FOREIGN TABLE " + foreign_table1 +
-      " (t TEXT, i INTEGER[]) SERVER omnisci_local_parquet WITH "
+      " (t TEXT, i INTEGER[]) SERVER default_local_parquet WITH "
       "(file_path = '" +
       test_source_path + "/example_1.parquet" + "');");
   sql("SELECT * FROM " + foreign_table1 + ";");
@@ -2476,7 +2476,8 @@ TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
   sql("create view test_view as select * from test_table_1;");
 
   if (!isDistributedMode()) {
-    sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
+    sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER "
+        "default_local_delimited "
         "WITH (file_path = '" +
         test_source_path + "/0.csv');");
   }
@@ -2511,7 +2512,7 @@ TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
     GTEST_SKIP() << "Foreign tables are currently not supported in distributed mode";
   }
 
-  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER omnisci_local_csv "
+  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER default_local_delimited "
       "WITH "
       "(file_path = '" +
       test_source_path + "/0.csv');");
@@ -2984,7 +2985,7 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
   sql(create_temp_table_sql);
   std::string create_foreign_table_sql{
       "CREATE FOREIGN TABLE test_foreign_table (\n  "
-      "i INTEGER)\nSERVER omnisci_local_csv\nWITH (FILE_PATH='" +
+      "i INTEGER)\nSERVER default_local_delimited\nWITH (FILE_PATH='" +
       boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() +
       "', "
       "REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='ALL');"};
@@ -3432,7 +3433,8 @@ TEST_F(StorageDetailsSystemTableTest, NonLocalTables) {
   sql("CREATE TEMPORARY TABLE test_table (c1 INTEGER);");
   sql("INSERT INTO test_table VALUES (10);");
 
-  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER omnisci_local_csv WITH "
+  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER "
+      "default_local_delimited WITH "
       "(file_path = '" +
       test_source_path + "/0.csv');");
   sql("CREATE VIEW test_view AS SELECT * FROM test_foreign_table;");
@@ -3540,7 +3542,8 @@ class GetTableDetailsTest : public DBHandlerTestFixture {
   void createTestTables() {
     sql("CREATE TABLE test_table_1 (i INTEGER);");
     sql("CREATE TEMPORARY TABLE test_table_2 (i INTEGER);");
-    sql("CREATE FOREIGN TABLE test_table_3 (i INTEGER) SERVER omnisci_local_csv WITH "
+    sql("CREATE FOREIGN TABLE test_table_3 (i INTEGER) SERVER default_local_delimited "
+        "WITH "
         "(file_path = '" +
         test_source_path + "/1.csv');");
     sql("CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;");
@@ -3614,7 +3617,7 @@ TEST_F(GetTableDetailsTest, DefaultRefreshOptions) {
 
 TEST_F(GetTableDetailsTest, ScheduledAppendRefresh) {
   auto [start_date_time, start_date_time_str] = getHourFromNow();
-  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER omnisci_local_csv WITH "
+  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER default_local_delimited WITH "
       "(file_path = '" +
       test_source_path +
       "/1.csv', refresh_update_type = 'append', "

@@ -5,7 +5,7 @@
     "filters": [
       {
         "attribute": "data_wrapper",
-        "value": "omnisci_csv",
+        "value": "delimited_file",
         "operation": "EQUALS"
       }
     ]

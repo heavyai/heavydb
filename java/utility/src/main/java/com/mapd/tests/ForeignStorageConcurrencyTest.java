@@ -54,7 +54,7 @@ public class ForeignStorageConcurrencyTest {
                   "localhost", 6274, db, adminName, adminPassword);
 
           dba.runSql("CREATE SERVER test_server "
-                  + "FOREIGN DATA WRAPPER omnisci_csv WITH (storage_type = 'LOCAL_FILE', "
+                  + "FOREIGN DATA WRAPPER delimited_file WITH (storage_type = 'LOCAL_FILE', "
                   + "base_path = '" + System.getProperty("user.dir") + "');");
 
           dba.runSql("CREATE FOREIGN TABLE test_table "
