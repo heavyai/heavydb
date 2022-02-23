@@ -86,7 +86,9 @@ class CodeCacheAccessor {
       return result;
     }
 
-    CHECK_EQ(compiling_key_, nullptr);
+    if (compiling_key_) {
+      CHECK(false);
+    }
     compiling_key_ = &key;
     return result;
   }
