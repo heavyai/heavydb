@@ -349,7 +349,9 @@ class Executor {
     (decltype(executors_){}).swap(executors_);
   }
 
-  static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
+  // runs clear memory routines under the executor lock to prevent flushing pages in use
+  static void clearMemory(const Data_Namespace::MemoryLevel memory_level,
+                          Data_Namespace::DataMgr* data_mgr);
 
   static size_t getArenaBlockSize();
 
@@ -383,9 +385,7 @@ class Executor {
   }
 
   SchemaProviderPtr getSchemaProvider() const { return schema_provider_; }
-  void setSchemaProvider(SchemaProviderPtr provider) {
-    schema_provider_ = provider;
-  }
+  void setSchemaProvider(SchemaProviderPtr provider) { schema_provider_ = provider; }
 
   int getDatabaseId() const { return db_id_; }
   void setDatabaseId(int db_id) { db_id_ = db_id; }

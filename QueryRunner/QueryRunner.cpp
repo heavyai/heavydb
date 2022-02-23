@@ -269,12 +269,14 @@ bool QueryRunner::gpusPresent() const {
 
 void QueryRunner::clearGpuMemory() const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
-  Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
+  Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL,
+                        &Catalog_Namespace::SysCatalog::instance().getDataMgr());
 }
 
 void QueryRunner::clearCpuMemory() const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
-  Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
+  Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL,
+                        &Catalog_Namespace::SysCatalog::instance().getDataMgr());
 }
 
 std::vector<MemoryInfo> QueryRunner::getMemoryInfo(

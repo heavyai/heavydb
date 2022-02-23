@@ -32,7 +32,7 @@
 #include <numeric>
 #include <thread>
 
-#include "Catalog/Catalog.h"
+#include "Catalog/DictDescriptor.h"
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
@@ -199,14 +199,16 @@ std::shared_ptr<Executor> Executor::getExecutor(
   return executor;
 }
 
-void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
+void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level,
+                           Data_Namespace::DataMgr* data_mgr) {
   switch (memory_level) {
     case Data_Namespace::MemoryLevel::CPU_LEVEL:
     case Data_Namespace::MemoryLevel::GPU_LEVEL: {
       mapd_unique_lock<mapd_shared_mutex> flush_lock(
           execute_mutex_);  // Don't flush memory while queries are running
 
-      Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
+      CHECK(data_mgr);
+      data_mgr->clearMemory(memory_level);
       if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
         // The hash table cache uses CPU memory not managed by the buffer manager. In the
         // future, we should manage these allocations with the buffer manager directly.

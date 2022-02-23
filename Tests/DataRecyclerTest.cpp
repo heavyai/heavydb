@@ -452,12 +452,11 @@ TEST(DataRecycler, DAG_Cache_Size_Management) {
 }
 
 TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        &QR::get()->getCatalog()->getDataMgr())
-                      .get();
+  auto data_mgr = &QR::get()->getCatalog()->getDataMgr();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, data_mgr).get();
   std::set<QueryPlanHash> visited_hashtable_key;
-  auto clearCaches = [&executor, &visited_hashtable_key] {
-    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+  auto clearCaches = [&executor, data_mgr, &visited_hashtable_key] {
+    Executor::clearMemory(MemoryLevel::CPU_LEVEL, data_mgr);
     executor->getQueryPlanDagCache().clearQueryPlanCache();
     visited_hashtable_key.clear();
   };
@@ -684,12 +683,11 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
 }
 
 TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        &QR::get()->getCatalog()->getDataMgr())
-                      .get();
+  auto data_mgr = &QR::get()->getCatalog()->getDataMgr();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, data_mgr).get();
   std::set<QueryPlanHash> visited_hashtable_key;
-  auto clearCaches = [&executor, &visited_hashtable_key] {
-    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+  auto clearCaches = [&executor, data_mgr, &visited_hashtable_key] {
+    Executor::clearMemory(MemoryLevel::CPU_LEVEL, data_mgr);
     executor->getQueryPlanDagCache().clearQueryPlanCache();
     visited_hashtable_key.clear();
   };
@@ -916,12 +914,11 @@ TEST(DataRecycler, Baseline_Hashtable_Cache_Maintanence) {
 TEST(DataRecycler, Hashtable_From_Subqueries) {
   // todo (yoonmin): revisit here if we support skipping hashtable building based on
   // consideration of filter quals
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        &QR::get()->getCatalog()->getDataMgr())
-                      .get();
+  auto data_mgr = &QR::get()->getCatalog()->getDataMgr();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, data_mgr).get();
   std::set<QueryPlanHash> visited_hashtable_key;
-  auto clearCaches = [&executor, &visited_hashtable_key] {
-    executor->clearMemory(MemoryLevel::CPU_LEVEL);
+  auto clearCaches = [&executor, data_mgr, &visited_hashtable_key] {
+    Executor::clearMemory(MemoryLevel::CPU_LEVEL, data_mgr);
     executor->getQueryPlanDagCache().clearQueryPlanCache();
     visited_hashtable_key.clear();
   };

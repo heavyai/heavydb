@@ -2544,7 +2544,8 @@ void DBHandler::clear_gpu_memory(const TSessionId& session) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
   }
   try {
-    Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
+    Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL,
+                          &session_ptr->getCatalog().getDataMgr());
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -2565,7 +2566,8 @@ void DBHandler::clear_cpu_memory(const TSessionId& session) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
   }
   try {
-    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
+    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL,
+                          &session_ptr->getCatalog().getDataMgr());
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -5114,7 +5116,8 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
           }
         });
     CHECK(dispatch_queue_);
-    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
+    auto executor =
+        Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
     if (g_enable_runtime_query_interrupt && !query_session.empty()) {
       executor->enrollQuerySession(query_session,
                                    query_str,
@@ -5166,7 +5169,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
         }
 
         auto executor = Executor::getExecutor(
-            Executor::UNITARY_EXECUTOR_ID,  &cat.getDataMgr(), "", "", system_parameters_);
+            Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr(), "", "", system_parameters_);
         auto schema_provider =
             std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat);
         const TableOptimizer optimizer(td, executor.get(), schema_provider, cat);
@@ -6170,7 +6173,8 @@ void DBHandler::interruptQuery(const Catalog_Namespace::SessionInfo& session_inf
                   << ", leafCount " << leaf_aggregator_.leafCount() << ", User "
                   << session_info.get_currentUser().userLoggable() << ", Database "
                   << session_info.getCatalog().getCurrentDB().dbName << std::endl;
-          auto target_executor = Executor::getExecutor(executor_id, &session_info.getCatalog().getDataMgr());
+          auto target_executor =
+              Executor::getExecutor(executor_id, &session_info.getCatalog().getDataMgr());
           target_executor->interrupt(target_query_session, session_info.get_session_id());
           found_valid_session = true;
         }
