@@ -427,6 +427,13 @@ class ExecuteTestBase {
     return res;
   }
 
+  SQLTypeInfo dictType(int size = 4, bool notnull = false, int comp = 0) {
+    SQLTypeInfo res(kTEXT, notnull, kENCODING_DICT);
+    res.set_size(size);
+    res.set_comp_param(comp);
+    return res;
+  }
+
   ExecutionResult runSqlQuery(const std::string& sql,
                               ExecutorDeviceType device_type,
                               bool allow_loop_joins) {
@@ -538,7 +545,7 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 class Distributed50 : public ExecuteTestBase, public ::testing::Test {};
 
 TEST_F(Distributed50, FailOver) {
-  createTable("dist5", {{"col1", SQLTypeInfo(kTEXT, false, kENCODING_DICT)}});
+  createTable("dist5", {{"col1", dictType()}});
 
   auto dt = ExecutorDeviceType::CPU;
 
@@ -712,10 +719,7 @@ TEST_F(Insert, IntArrayInsert) {
 TEST_F(Insert, DictBoundary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    SQLTypeInfo small_dict_type(kTEXT, false, kENCODING_DICT);
-    small_dict_type.set_size(1);
-    createTable("table_with_small_dict",
-                {{"i", SQLTypeInfo(kINT)}, {"t", small_dict_type}});
+    createTable("table_with_small_dict", {{"i", SQLTypeInfo(kINT)}, {"t", dictType(1)}});
 
     string csv;
     for (int cVal = 0; cVal < 280; cVal++) {
@@ -734,6 +738,107 @@ TEST_F(Insert, DictBoundary) {
                   "SELECT count(*) FROM table_with_small_dict WHERE t IS NULL;", dt)));
 
     dropTable("table_with_small_dict");
+  }
+}
+
+class KeyForString : public ExecuteTestBase, public ::testing::Test {};
+
+TEST_F(KeyForString, KeyForString) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_NO_THROW(createTable("kfs",
+                                {{"ts", dictType(1)},
+                                 {"ss", dictType(2)},
+                                 {"ws", dictType(4)},
+                                 {"ns", dictType(4, true)},
+                                 {"sa", arrayType(kTEXT)}}));
+    insertJsonValues("kfs",
+                     R"___({"ts": "0", "ss": "0", "ws": "0", "ns": "0", "sa": ["0", "0"]}
+{"ts": "1", "ss": "1", "ws": "1", "ns": "1", "sa": ["1", "1"]}
+{"ts": null, "ss": null, "ws": null, "ns": "2", "sa": ["2", "2"]})___");
+
+    ASSERT_EQ(3, v<int64_t>(run_simple_agg("select count(*) from kfs;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from kfs where key_for_string(ts) is not null;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from kfs where key_for_string(ss) is not null;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from kfs where key_for_string(ws) is not null;", dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(run_simple_agg(
+                  "select count(*) from kfs where key_for_string(ns) is not null;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "select count(*) from kfs where key_for_string(sa[1]) is not null;", dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count(*) from kfs where key_for_string(ts) = key_for_string(ss);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count(*) from kfs where key_for_string(ss) = key_for_string(ws);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(ts);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(ns);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(sa[1]);",
+            dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ts)) from kfs;", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ss)) from kfs;", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ws)) from kfs;", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ns)) from kfs;", dt)));
+    ASSERT_EQ(
+        0, v<int64_t>(run_simple_agg("select min(key_for_string(sa[1])) from kfs;", dt)));
+    ASSERT_EQ(
+        0, v<int64_t>(run_simple_agg("select min(key_for_string(sa[2])) from kfs;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ts)) from kfs;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ss)) from kfs;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ws)) from kfs;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ns)) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select max(key_for_string(sa[1])) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select max(key_for_string(sa[2])) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select count(key_for_string(ts)) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select count(key_for_string(ss)) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select count(key_for_string(ws)) from kfs;", dt)));
+    ASSERT_EQ(
+        3, v<int64_t>(run_simple_agg("select count(key_for_string(ns)) from kfs;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg("select count(key_for_string(sa[1])) from kfs;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg("select count(key_for_string(sa[2])) from kfs;", dt)));
+
+    EXPECT_NO_THROW(dropTable("kfs"));
   }
 }
 
