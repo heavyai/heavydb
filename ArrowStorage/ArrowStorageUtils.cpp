@@ -210,10 +210,16 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesImpl(
                       }
                     });
 
-  using ArrowType = typename arrow::CTypeTraits<T>::ArrowType;
-  using ArrayType = typename arrow::TypeTraits<ArrowType>::ArrayType;
+  std::shared_ptr<arrow::Array> array;
+  if constexpr (std::is_same_v<T, bool>) {
+    array = std::make_shared<arrow::Int8Array>(arr->length(), std::move(resultBuf));
+  } else {
+    using ArrowType = typename arrow::CTypeTraits<T>::ArrowType;
+    using ArrayType = typename arrow::TypeTraits<ArrowType>::ArrayType;
 
-  auto array = std::make_shared<ArrayType>(arr->length(), std::move(resultBuf));
+    array = std::make_shared<ArrayType>(arr->length(), std::move(resultBuf));
+  }
+
   return std::make_shared<arrow::ChunkedArray>(array);
 }
 
