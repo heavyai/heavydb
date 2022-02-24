@@ -214,12 +214,133 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesImpl(
   if constexpr (std::is_same_v<T, bool>) {
     array = std::make_shared<arrow::Int8Array>(arr->length(), std::move(resultBuf));
   } else {
-    using ArrowType = typename arrow::CTypeTraits<T>::ArrowType;
-    using ArrayType = typename arrow::TypeTraits<ArrowType>::ArrayType;
-
-    array = std::make_shared<ArrayType>(arr->length(), std::move(resultBuf));
+    array = std::make_shared<arrow::PrimitiveArray>(
+        arr->type(), arr->length(), std::move(resultBuf));
   }
 
+  return std::make_shared<arrow::ChunkedArray>(array);
+}
+
+// With current parser we used timestamp convertor for time type.
+// It sets 1899-12-31 date (-2209075200 secs from epoch) for parsed values
+// and therefore values should be adjusted.
+void copyTimestampToTimeReplacingNulls(int64_t* dst, std::shared_ptr<arrow::Array> arr) {
+  auto src = reinterpret_cast<const int64_t*>(arr->data()->buffers[1]->data());
+  auto null_value = inline_null_value<int64_t>();
+  auto length = arr->length();
+
+  if (arr->null_count() == length) {
+    std::fill(dst, dst + length, null_value);
+  } else if (arr->null_count() == 0) {
+    std::transform(src, src + length, dst, [](int64_t v) { return v + 2209075200; });
+  } else {
+    const uint8_t* bitmap_data = arr->null_bitmap_data();
+
+    size_t end_full_byte = length / 8;
+    size_t tail_bits = length % 8;
+    size_t offs = 0;
+
+    for (size_t bitmap_idx = 0; bitmap_idx < end_full_byte; ++bitmap_idx) {
+      auto inversed_bitmap = ~bitmap_data[bitmap_idx];
+      for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
+        auto is_null = (inversed_bitmap >> bitmap_offset) & 1;
+        auto val = src[offs] + 2209075200;
+        dst[offs] = is_null ? null_value : val;
+        ++offs;
+      }
+    }
+
+    for (size_t i = 0; i < tail_bits; ++i) {
+      auto is_null = (~bitmap_data[end_full_byte] >> i) & 1;
+      auto val = src[offs] + 2209075200;
+      dst[offs] = is_null ? null_value : val;
+      ++offs;
+    }
+  }
+}
+
+std::shared_ptr<arrow::ChunkedArray> convertTimestampToTimeReplacingNulls(
+    std::shared_ptr<arrow::ChunkedArray> arr) {
+  auto resultBuf = arrow::AllocateBuffer(sizeof(int64_t) * arr->length()).ValueOrDie();
+  auto resultData = reinterpret_cast<int64_t*>(resultBuf->mutable_data());
+
+  tbb::parallel_for(tbb::blocked_range<int>(0, arr->num_chunks()),
+                    [&](const tbb::blocked_range<int>& r) {
+                      for (int c = r.begin(); c != r.end(); ++c) {
+                        size_t offset = 0;
+                        for (int i = 0; i < c; i++) {
+                          offset += arr->chunk(i)->length();
+                        }
+                        copyTimestampToTimeReplacingNulls(resultData + offset,
+                                                          arr->chunk(c));
+                      }
+                    });
+
+  auto array = std::make_shared<arrow::Int64Array>(arr->length(), std::move(resultBuf));
+  return std::make_shared<arrow::ChunkedArray>(array);
+}
+
+template <typename ArrowIntType, typename ResultIntType>
+void copyDateReplacingNulls(ResultIntType* dst, std::shared_ptr<arrow::Array> arr) {
+  auto src = reinterpret_cast<const ArrowIntType*>(arr->data()->buffers[1]->data());
+  auto null_value = inline_null_value<ResultIntType>();
+  auto length = arr->length();
+
+  if (arr->null_count() == length) {
+    std::fill(dst, dst + length, null_value);
+  } else if (arr->null_count() == 0) {
+    std::transform(src, src + length, dst, [](ArrowIntType v) {
+      return static_cast<ResultIntType>(v);
+    });
+  } else {
+    const uint8_t* bitmap_data = arr->null_bitmap_data();
+
+    size_t end_full_byte = length / 8;
+    size_t tail_bits = length % 8;
+    size_t offs = 0;
+
+    for (size_t bitmap_idx = 0; bitmap_idx < end_full_byte; ++bitmap_idx) {
+      auto inversed_bitmap = ~bitmap_data[bitmap_idx];
+      for (int8_t bitmap_offset = 0; bitmap_offset < 8; ++bitmap_offset) {
+        auto is_null = (inversed_bitmap >> bitmap_offset) & 1;
+        auto val = static_cast<ArrowIntType>(src[offs]);
+        dst[offs] = is_null ? null_value : val;
+        ++offs;
+      }
+    }
+
+    for (size_t i = 0; i < tail_bits; ++i) {
+      auto is_null = (~bitmap_data[end_full_byte] >> i) & 1;
+      auto val = static_cast<ArrowIntType>(src[offs]);
+      dst[offs] = is_null ? null_value : val;
+      ++offs;
+    }
+  }
+}
+
+template <typename ArrowIntType, typename ResultIntType>
+std::shared_ptr<arrow::ChunkedArray> convertDateReplacingNulls(
+    std::shared_ptr<arrow::ChunkedArray> arr) {
+  auto resultBuf =
+      arrow::AllocateBuffer(sizeof(ResultIntType) * arr->length()).ValueOrDie();
+  auto resultData = reinterpret_cast<ResultIntType*>(resultBuf->mutable_data());
+
+  tbb::parallel_for(tbb::blocked_range<int>(0, arr->num_chunks()),
+                    [&](const tbb::blocked_range<int>& r) {
+                      for (int c = r.begin(); c != r.end(); ++c) {
+                        size_t offset = 0;
+                        for (int i = 0; i < c; i++) {
+                          offset += arr->chunk(i)->length();
+                        }
+                        copyDateReplacingNulls<ArrowIntType, ResultIntType>(
+                            resultData + offset, arr->chunk(c));
+                      }
+                    });
+
+  using ResultArrowType = typename arrow::CTypeTraits<ResultIntType>::ArrowType;
+  using ArrayType = typename arrow::TypeTraits<ResultArrowType>::ArrayType;
+
+  auto array = std::make_shared<ArrayType>(arr->length(), std::move(resultBuf));
   return std::make_shared<arrow::ChunkedArray>(array);
 }
 
@@ -595,7 +716,7 @@ std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
     case kNUMERIC:
       return decimal(type.get_precision(), type.get_scale());
     case kTIME:
-      return time32(TimeUnit::SECOND);
+      return timestamp(TimeUnit::SECOND);
     case kDATE:
 #ifdef HAVE_CUDA
       return arrow::date64();
@@ -639,7 +760,26 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
     std::shared_ptr<arrow::ChunkedArray> arr,
     const SQLTypeInfo& type,
     StringDictionary* dict) {
-  if (type.is_integer() || is_datetime(type.get_type())) {
+  if (type.get_type() == kTIME) {
+    if (type.get_size() != 8) {
+      throw std::runtime_error("Unsupported time type for Arrow import: "s +
+                               type.toString());
+    }
+    return convertTimestampToTimeReplacingNulls(arr);
+  }
+  if (type.get_type() == kDATE) {
+    switch (type.get_size()) {
+      case 2:
+        return convertDateReplacingNulls<int32_t, int16_t>(arr);
+      case 4:
+        return replaceNullValuesImpl<int32_t>(arr);
+      case 8:
+        return convertDateReplacingNulls<int32_t, int64_t>(arr);
+      default:
+        throw std::runtime_error("Unsupported date type for Arrow import: "s +
+                                 type.toString());
+    }
+  } else if (type.is_integer() || is_datetime(type.get_type())) {
     switch (type.get_size()) {
       case 1:
         return replaceNullValuesImpl<int8_t>(arr);
@@ -650,8 +790,8 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
       case 8:
         return replaceNullValuesImpl<int64_t>(arr);
       default:
-        // TODO: throw unsupported integer type exception
-        CHECK(false);
+        throw std::runtime_error("Unsupported integer/datetime type for Arrow import: "s +
+                                 type.toString());
     }
   } else if (type.is_fp()) {
     switch (type.get_size()) {

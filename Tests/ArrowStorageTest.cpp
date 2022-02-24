@@ -153,13 +153,13 @@ void checkDatum(const Datum& actual, T expected, const SQLTypeInfo& type) {
   switch (type.get_type()) {
     case kBOOLEAN:
     case kTINYINT:
-      CHECK_EQ(actual.tinyintval, expected);
+      ASSERT_EQ(static_cast<T>(actual.tinyintval), expected);
       break;
     case kSMALLINT:
-      CHECK_EQ(actual.smallintval, expected);
+      ASSERT_EQ(static_cast<T>(actual.smallintval), expected);
       break;
     case kINT:
-      CHECK_EQ(actual.intval, expected);
+      ASSERT_EQ(static_cast<T>(actual.intval), expected);
       break;
     case kBIGINT:
     case kNUMERIC:
@@ -167,19 +167,19 @@ void checkDatum(const Datum& actual, T expected, const SQLTypeInfo& type) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      CHECK_EQ(actual.bigintval, expected);
+      ASSERT_EQ(actual.bigintval, static_cast<int64_t>(expected));
       break;
     case kFLOAT:
-      CHECK_EQ(actual.floatval, expected);
+      CHECK_EQ(static_cast<T>(actual.floatval), expected);
       break;
     case kDOUBLE:
-      CHECK_EQ(actual.doubleval, expected);
+      CHECK_EQ(static_cast<T>(actual.doubleval), expected);
       break;
     case kVARCHAR:
     case kCHAR:
     case kTEXT:
       if (type.get_compression() == kENCODING_DICT) {
-        CHECK_EQ(actual.intval, expected);
+        CHECK_EQ(static_cast<T>(actual.intval), expected);
       }
       break;
     default:
@@ -240,15 +240,49 @@ void checkChunkData(ArrowStorage& storage,
   size_t start_row = frag_idx * fragment_size;
   size_t end_row = std::min(row_count, start_row + fragment_size);
   size_t frag_rows = end_row - start_row;
-  checkChunkMeta(
-      chunk_meta_map.at(col_idx + 1),
-      storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
-      frag_rows,
-      frag_rows * sizeof(T),
-      false,
-      *std::min_element(expected.begin() + start_row, expected.begin() + end_row),
-      *std::max_element(expected.begin() + start_row, expected.begin() + end_row));
   std::vector<T> expected_chunk(expected.begin() + start_row, expected.begin() + end_row);
+
+  auto has_nulls = std::any_of(expected_chunk.begin(),
+                               expected_chunk.end(),
+                               [](const T& v) { return v == inline_null_value<T>(); });
+  auto min =
+      std::accumulate(expected_chunk.begin(),
+                      expected_chunk.end(),
+                      std::numeric_limits<T>::max(),
+                      [](T min, T val) -> T {
+                        return val == inline_null_value<T>() ? min : std::min(min, val);
+                      });
+  auto max =
+      std::accumulate(expected_chunk.begin(),
+                      expected_chunk.end(),
+                      std::numeric_limits<T>::min(),
+                      [](T max, T val) -> T {
+                        return val == inline_null_value<T>() ? max : std::max(max, val);
+                      });
+  auto col_type = storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type;
+  if (col_type.get_type() == kDATE) {
+    int64_t date_min = min == std::numeric_limits<T>::max()
+                           ? std::numeric_limits<int64_t>::max()
+                           : DateConverters::get_epoch_seconds_from_days(min);
+    int64_t date_max = max == std::numeric_limits<T>::min()
+                           ? std::numeric_limits<int64_t>::min()
+                           : DateConverters::get_epoch_seconds_from_days(max);
+    checkChunkMeta(chunk_meta_map.at(col_idx + 1),
+                   col_type,
+                   frag_rows,
+                   frag_rows * sizeof(T),
+                   has_nulls,
+                   date_min,
+                   date_max);
+  } else {
+    checkChunkMeta(chunk_meta_map.at(col_idx + 1),
+                   col_type,
+                   frag_rows,
+                   frag_rows * sizeof(T),
+                   has_nulls,
+                   min,
+                   max);
+  }
   checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_chunk);
 }
 
@@ -1185,6 +1219,169 @@ TEST_F(ArrowStorageTest, AppendJsonData_StringFixedSizeArrays) {
                  std::vector<std::string>({}),
                  std::vector<std::string>({"str2"s, "str8"s, "str3"s}),
                  std::vector<std::string>({"str1"s, "<NULL>", "str3"s})}));
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData_DateTime) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  TableInfoPtr tinfo = storage.createTable(
+      "table1",
+      {{"ts_0", SQLTypeInfo(kTIMESTAMP, 0, 0)},
+       {"ts_3", SQLTypeInfo(kTIMESTAMP, 3, 0)},
+       {"ts_6", SQLTypeInfo(kTIMESTAMP, 6, 0)},
+       {"ts_9", SQLTypeInfo(kTIMESTAMP, 9, 0)},
+       {"t", SQLTypeInfo(kTIME)},
+       {"d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
+       {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
+       {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)}});
+  ArrowStorage::CsvParseOptions parse_options;
+  parse_options.header = false;
+  storage.appendCsvData(
+      "2014-12-13 22:23:15,2014-12-13 22:23:15.323,1999-07-11 14:02:53.874533,2006-04-26 "
+      "03:49:04.607435125,15:13:14,1999-09-09,1999-09-09,1999-09-09",
+      tinfo->table_id,
+      parse_options);
+  storage.appendCsvData(
+      "2014-12-13 22:23:15,2014-12-13 22:23:15.323,2014-12-13 22:23:15.874533,2014-12-13 "
+      "22:23:15.607435763,15:13:14,,,",
+      tinfo->table_id,
+      parse_options);
+  storage.appendCsvData(
+      "2014-12-14 22:23:15,2014-12-14 22:23:15.750,2014-12-14 22:23:15.437321,2014-12-14 "
+      "22:23:15.934567401,15:13:14,1999-09-09,1999-09-09,1999-09-09",
+      tinfo->table_id,
+      parse_options);
+  checkData(storage,
+            tinfo->table_id,
+            3,
+            32'000'000,
+            std::vector<int64_t>({1418509395, 1418509395, 1418595795}),
+            std::vector<int64_t>({1418509395323, 1418509395323, 1418595795750}),
+            std::vector<int64_t>({931701773874533, 1418509395874533, 1418595795437321}),
+            std::vector<int64_t>(
+                {1146023344607435125, 1418509395607435763, 1418595795934567401}),
+            std::vector<int64_t>({54794, 54794, 54794}),
+            std::vector<int32_t>({10843, inline_null_value<int32_t>(), 10843}),
+            std::vector<int16_t>({10843, inline_null_value<int16_t>(), 10843}),
+            std::vector<int32_t>({10843, inline_null_value<int32_t>(), 10843}));
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData_DateTime_Multifrag) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  ArrowStorage::TableOptions table_options;
+  table_options.fragment_size = 2;
+  TableInfoPtr tinfo = storage.createTable(
+      "table1",
+      {{"ts_0", SQLTypeInfo(kTIMESTAMP, 0, 0)},
+       {"ts_3", SQLTypeInfo(kTIMESTAMP, 3, 0)},
+       {"ts_6", SQLTypeInfo(kTIMESTAMP, 6, 0)},
+       {"ts_9", SQLTypeInfo(kTIMESTAMP, 9, 0)},
+       {"t", SQLTypeInfo(kTIME)},
+       {"d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)},
+       {"o1", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
+       {"o2", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT)}},
+      table_options);
+  ArrowStorage::CsvParseOptions parse_options;
+  parse_options.header = false;
+  for (int i = 0; i < 4; ++i) {
+    storage.appendCsvData(
+        "2014-12-13 22:23:15,2014-12-13 22:23:15.323,1999-07-11 "
+        "14:02:53.874533,2006-04-26 "
+        "03:49:04.607435125,15:13:14,1999-09-09,1999-09-09,1999-09-09",
+        tinfo->table_id,
+        parse_options);
+  }
+  for (int i = 0; i < 3; ++i) {
+    storage.appendCsvData(
+        "2014-12-13 22:23:15,2014-12-13 22:23:15.323,2014-12-13 "
+        "22:23:15.874533,2014-12-13 "
+        "22:23:15.607435763,15:13:14,,,",
+        tinfo->table_id,
+        parse_options);
+  }
+  for (int i = 0; i < 3; ++i) {
+    storage.appendCsvData(
+        "2014-12-14 22:23:15,2014-12-14 22:23:15.750,2014-12-14 "
+        "22:23:15.437321,2014-12-14 "
+        "22:23:15.934567401,15:13:14,1999-09-09,1999-09-09,1999-09-09",
+        tinfo->table_id,
+        parse_options);
+  }
+  checkData(storage,
+            tinfo->table_id,
+            10,
+            2,
+            std::vector<int64_t>({1418509395,
+                                  1418509395,
+                                  1418509395,
+                                  1418509395,
+                                  1418509395,
+                                  1418509395,
+                                  1418509395,
+                                  1418595795,
+                                  1418595795,
+                                  1418595795}),
+            std::vector<int64_t>({1418509395323,
+                                  1418509395323,
+                                  1418509395323,
+                                  1418509395323,
+                                  1418509395323,
+                                  1418509395323,
+                                  1418509395323,
+                                  1418595795750,
+                                  1418595795750,
+                                  1418595795750}),
+            std::vector<int64_t>({931701773874533,
+                                  931701773874533,
+                                  931701773874533,
+                                  931701773874533,
+                                  1418509395874533,
+                                  1418509395874533,
+                                  1418509395874533,
+                                  1418595795437321,
+                                  1418595795437321,
+                                  1418595795437321}),
+            std::vector<int64_t>({1146023344607435125,
+                                  1146023344607435125,
+                                  1146023344607435125,
+                                  1146023344607435125,
+                                  1418509395607435763,
+                                  1418509395607435763,
+                                  1418509395607435763,
+                                  1418595795934567401,
+                                  1418595795934567401,
+                                  1418595795934567401}),
+            std::vector<int64_t>(
+                {54794, 54794, 54794, 54794, 54794, 54794, 54794, 54794, 54794, 54794}),
+            std::vector<int32_t>({10843,
+                                  10843,
+                                  10843,
+                                  10843,
+                                  inline_null_value<int32_t>(),
+                                  inline_null_value<int32_t>(),
+                                  inline_null_value<int32_t>(),
+                                  10843,
+                                  10843,
+                                  10843}),
+            std::vector<int16_t>({10843,
+                                  10843,
+                                  10843,
+                                  10843,
+                                  inline_null_value<int16_t>(),
+                                  inline_null_value<int16_t>(),
+                                  inline_null_value<int16_t>(),
+                                  10843,
+                                  10843,
+                                  10843}),
+            std::vector<int32_t>({10843,
+                                  10843,
+                                  10843,
+                                  10843,
+                                  inline_null_value<int32_t>(),
+                                  inline_null_value<int32_t>(),
+                                  inline_null_value<int32_t>(),
+                                  10843,
+                                  10843,
+                                  10843}));
 }
 
 int main(int argc, char** argv) {

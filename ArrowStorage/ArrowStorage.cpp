@@ -23,6 +23,7 @@
 #include <arrow/io/api.h>
 #include <arrow/json/reader.h>
 #include <arrow/util/decimal.h>
+#include <arrow/util/value_parsing.h>
 
 using namespace std::string_literals;
 
@@ -796,12 +797,25 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseCsv(
   arrow_convert_options.include_columns = arrow_read_options.column_names;
   arrow_convert_options.strings_can_be_null = true;
 
+  bool need_time_parser = false;
   for (auto& col_info : col_infos) {
     if (!col_info->is_rowid) {
       arrow_read_options.column_names.push_back(col_info->name);
       arrow_convert_options.column_types.emplace(col_info->name,
                                                  getArrowImportType(col_info->type));
+      if (col_info->type.get_type() == kTIME) {
+        need_time_parser = true;
+      }
     }
+  }
+  // There is no built-in converter for TIME types in Arrow 5.0 CSV reader and
+  // therefore we add a parser to parse it as a custom datetime.
+  // We will be able to switch to buil-in converter starting from Arrow 6.0.
+  if (need_time_parser) {
+    arrow_convert_options.timestamp_parsers.push_back(
+        arrow::TimestampParser::MakeISO8601());
+    arrow_convert_options.timestamp_parsers.push_back(
+        arrow::TimestampParser::MakeStrptime("%H:%M:%S"));
   }
 
   auto table_reader_result = arrow::csv::TableReader::Make(

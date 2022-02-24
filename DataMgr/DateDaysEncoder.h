@@ -26,6 +26,9 @@
 
 #include <Shared/DatumFetchers.h>
 
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+
 template <typename T, typename V>
 class DateDaysEncoder : public Encoder {
  public:
@@ -123,6 +126,35 @@ class DateDaysEncoder : public Encoder {
     UNREACHABLE();
   }
 
+  void updateStatsEncoded(const int8_t* const dst_data,
+                          const size_t num_elements) override {
+    const V* data = reinterpret_cast<const V*>(dst_data);
+
+    std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
+        tbb::blocked_range(size_t(0), num_elements),
+        std::tuple(dataMin, dataMax, has_nulls),
+        [&](const auto& range, auto init) {
+          auto [min, max, nulls] = init;
+          for (size_t i = range.begin(); i < range.end(); i++) {
+            if (data[i] != std::numeric_limits<V>::min()) {
+              const T val = DateConverters::get_epoch_seconds_from_days(data[i]);
+              min = std::min(min, val);
+              max = std::max(max, val);
+            } else {
+              nulls = true;
+            }
+          }
+          return std::tuple(min, max, nulls);
+        },
+        [&](auto lhs, auto rhs) {
+          const auto [lhs_min, lhs_max, lhs_nulls] = lhs;
+          const auto [rhs_min, rhs_max, rhs_nulls] = rhs;
+          return std::tuple(std::min(lhs_min, rhs_min),
+                            std::max(lhs_max, rhs_max),
+                            lhs_nulls || rhs_nulls);
+        });
+  }
+
   // Only called from the executor for synthesized meta-information.
   void reduceStats(const Encoder& that) override {
     const auto that_typed = static_cast<const DateDaysEncoder<T, V>&>(that);
@@ -175,6 +207,10 @@ class DateDaysEncoder : public Encoder {
     dataMin = std::numeric_limits<T>::max();
     dataMax = std::numeric_limits<T>::lowest();
     has_nulls = false;
+  }
+
+  void fillChunkStats(ChunkStats& stats, const SQLTypeInfo& ti) override {
+    ::fillChunkStats(stats, ti, dataMin, dataMax, has_nulls);
   }
 
   T dataMin;
