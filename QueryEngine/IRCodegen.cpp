@@ -42,11 +42,6 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (u_oper) {
     return {codegen(u_oper, co)};
   }
-  auto geo_col_var = dynamic_cast<const Analyzer::GeoColumnVar*>(expr);
-  if (geo_col_var) {
-    // inherits from ColumnVar, so it is important we check this first
-    return codegenGeoColumnVar(geo_col_var, fetch_columns, co);
-  }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
     return codegenColumn(col_var, fetch_columns, co);
@@ -145,21 +140,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (array_oper_expr) {
     return {codegenArrayExpr(array_oper_expr, co)};
   }
-  auto geo_uop = dynamic_cast<const Analyzer::GeoUOper*>(expr);
-  if (geo_uop) {
-    return {codegenGeoUOper(geo_uop, co)};
-  }
-  auto geo_binop = dynamic_cast<const Analyzer::GeoBinOper*>(expr);
-  if (geo_binop) {
-    return {codegenGeoBinOper(geo_binop, co)};
-  }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};
-  }
-  auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
-  if (geo_expr) {
-    return codegenGeoExpr(geo_expr, co);
   }
   if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
     return {posArg(nullptr)};

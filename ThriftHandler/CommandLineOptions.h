@@ -115,10 +115,6 @@ class CommandLineOptions {
   std::string allowed_import_paths{};
   std::string allowed_export_paths{};
 
-#ifdef ENABLE_GEOS
-  std::string libgeos_so_filename = {"libgeos_c.so"};
-#endif
-
   void fillOptions();
   void fillAdvancedOptions();
 

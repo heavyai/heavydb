@@ -421,12 +421,12 @@ std::unique_ptr<GeoBase> GeoBase::run(GeoBase::GeoOp op, const GeoBase& other) c
   if (!result || result->IsEmpty() ||
       !(result->getGeometryType() == wkbPolygon ||
         result->getGeometryType() == wkbMultiPolygon)) {
-    // throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
-    //                    "Currenly don't support invalid or empty result");
+    throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
+                        "Currenly don't support invalid or empty result");
     // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
     // Not supporting EMPTY polygons, return a dot polygon
-    return GeoTypesFactory::createGeoType(
-        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+    // return GeoTypesFactory::createGeoType(
+    //     "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
   }
   return GeoTypesFactory::createGeoType(result);
 }
@@ -479,12 +479,12 @@ std::unique_ptr<GeoBase> GeoBase::optimized_run(GeoBase::GeoOp op,
   if (!result || result->IsEmpty() ||
       !(result->getGeometryType() == wkbPolygon ||
         result->getGeometryType() == wkbMultiPolygon)) {
-    // throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
-    //                    "Currenly don't support invalid or empty result");
+    throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
+                        "Currenly don't support invalid or empty result");
     // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
     // Not supporting EMPTY polygons, return a dot polygon
-    return GeoTypesFactory::createGeoType(
-        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+    // return GeoTypesFactory::createGeoType(
+    //     "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
   }
   return GeoTypesFactory::createGeoType(result);
 }
@@ -503,12 +503,12 @@ std::unique_ptr<GeoBase> GeoBase::run(GeoBase::GeoOp op, double param) const {
   if (!result || result->IsEmpty() ||
       !(result->getGeometryType() == wkbPolygon ||
         result->getGeometryType() == wkbMultiPolygon)) {
-    // throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
-    //                    "Currenly don't support invalid or empty result");
+    throw GeoTypesError(std::string(OGRGeometryTypeToName(geom_->getGeometryType())),
+                        "Currenly don't support invalid or empty result");
     // return GeoTypesFactory::createGeoType("POLYGON EMPTY");
     // Not supporting EMPTY polygons, return a dot polygon
-    return GeoTypesFactory::createGeoType(
-        "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
+    // return GeoTypesFactory::createGeoType(
+    //     "MULTIPOLYGON(((0 0,0.0000001 0,0 0.0000001)))");
   }
   return GeoTypesFactory::createGeoType(result);
 }
@@ -1094,47 +1094,7 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
                                         std::vector<int>& ring_sizes,
                                         std::vector<int>& poly_rings,
                                         const bool promote_poly_to_mpoly) {
-  switch (geospatial_base->getType()) {
-    case GeoBase::GeoType::kPOINT: {
-      const auto geospatial_point = dynamic_cast<GeoPoint*>(geospatial_base.get());
-      CHECK(geospatial_point);
-      geospatial_point->getColumns(coords);
-      ti.set_type(kPOINT);
-      break;
-    }
-    case GeoBase::GeoType::kLINESTRING: {
-      const auto geospatial_linestring =
-          dynamic_cast<GeoLineString*>(geospatial_base.get());
-      CHECK(geospatial_linestring);
-      geospatial_linestring->getColumns(coords, bounds);
-      ti.set_type(kLINESTRING);
-      break;
-    }
-    case GeoBase::GeoType::kPOLYGON: {
-      const auto geospatial_poly = dynamic_cast<GeoPolygon*>(geospatial_base.get());
-      CHECK(geospatial_poly);
-      geospatial_poly->getColumns(coords, ring_sizes, bounds);
-      if (promote_poly_to_mpoly) {
-        if (ring_sizes.size()) {
-          CHECK_GT(coords.size(), 0u);
-          poly_rings.push_back(1 + geospatial_poly->getNumInteriorRings());
-        }
-      }
-      ti.set_type(kPOLYGON);
-      break;
-    }
-    case GeoBase::GeoType::kMULTIPOLYGON: {
-      const auto geospatial_mpoly = dynamic_cast<GeoMultiPolygon*>(geospatial_base.get());
-      CHECK(geospatial_mpoly);
-      geospatial_mpoly->getColumns(coords, ring_sizes, poly_rings, bounds);
-      ti.set_type(kMULTIPOLYGON);
-      break;
-    }
-    case GeoBase::GeoType::kGEOMETRY:
-    case GeoBase::GeoType::kGEOMETRYCOLLECTION:
-    default:
-      throw std::runtime_error("Unrecognized geospatial type");
-  }
+  UNREACHABLE();
 }
 
 void GeoTypesFactory::getNullGeoColumns(SQLTypeInfo& ti,
@@ -1143,27 +1103,7 @@ void GeoTypesFactory::getNullGeoColumns(SQLTypeInfo& ti,
                                         std::vector<int>& ring_sizes,
                                         std::vector<int>& poly_rings,
                                         const bool promote_poly_to_mpoly) {
-  auto t = ti.get_type();
-  switch (t) {
-    case kPOINT: {
-      // NULL fixlen coords array
-      coords.push_back(NULL_ARRAY_DOUBLE);
-      coords.push_back(NULL_DOUBLE);
-    } break;
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON: {
-      // Leaving coords array empty
-      // NULL fixlen bounds array
-      bounds.push_back(NULL_ARRAY_DOUBLE);
-      bounds.push_back(NULL_DOUBLE);
-      bounds.push_back(NULL_DOUBLE);
-      bounds.push_back(NULL_DOUBLE);
-      // Leaving ring_sizes and poly_rings arrays empty
-    } break;
-    default:
-      throw std::runtime_error("Unsupported NULL geo");
-  }
+  UNREACHABLE();
 }
 
 }  // namespace Geospatial

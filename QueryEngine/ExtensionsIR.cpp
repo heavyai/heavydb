@@ -570,10 +570,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
       continue;
     }
     if (arg_ti.is_buffer()) {
-      // POINT [un]compressed coord check requires custom checker and chunk iterator
-      // Non-POINT NULL geographies will have a normally encoded null coord array
-      auto fname =
-          (arg_ti.get_type() == kPOINT) ? "point_coord_array_is_null" : "array_is_null";
+      auto fname = "array_is_null";
       auto is_null_lv = cgen_state_->emitExternalCall(
           fname, get_int_type(1, cgen_state_->context_), {orig_arg_lvs[j], posArg(arg)});
       one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, is_null_lv);

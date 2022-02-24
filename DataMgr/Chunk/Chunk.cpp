@@ -88,15 +88,6 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
         str_encoder->setIndexBuffer(index_buf_);
         break;
       }
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON: {
-        auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
-        CHECK(str_encoder);
-        str_encoder->setIndexBuffer(index_buf_);
-        break;
-      }
       default:
         UNREACHABLE();
     }
@@ -150,15 +141,6 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
       return str_encoder->getNumElemsForBytesInsertData(
           src_data.stringsPtr, start_idx, num_elems, byte_limit, replicating);
     }
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON: {
-      StringNoneEncoder* str_encoder =
-          dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
-      return str_encoder->getNumElemsForBytesInsertData(
-          src_data.stringsPtr, start_idx, num_elems, byte_limit, replicating);
-    }
     default:
       CHECK(false);
       return 0;
@@ -188,15 +170,6 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
       case kVARCHAR:
       case kCHAR: {
         CHECK_EQ(kENCODING_NONE, ti.get_compression());
-        StringNoneEncoder* str_encoder =
-            dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
-        return str_encoder->appendData(
-            src_data.stringsPtr, start_idx, num_elems, replicating);
-      }
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =
             dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         return str_encoder->appendData(
@@ -233,15 +206,6 @@ void Chunk::initEncoder() {
       case kVARCHAR:
       case kCHAR: {
         CHECK_EQ(kENCODING_NONE, column_info_->type.get_compression());
-        StringNoneEncoder* str_encoder =
-            dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
-        str_encoder->setIndexBuffer(index_buf_);
-        break;
-      }
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =
             dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
         str_encoder->setIndexBuffer(index_buf_);

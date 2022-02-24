@@ -97,12 +97,8 @@ std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
 
 TargetValue run_simple_agg(const string& query_str,
                            const ExecutorDeviceType device_type,
-                           const bool geo_return_geo_tv = true,
                            const bool allow_loop_joins = true) {
   auto rows = QR::get()->runSQL(query_str, device_type, allow_loop_joins);
-  if (geo_return_geo_tv) {
-    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  }
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size()) << query_str;
   return crt_row[0];

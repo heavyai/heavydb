@@ -228,20 +228,6 @@ static int match_arguments(const SQLTypeInfo& arg_type,
     case kDECIMAL:
     case kNUMERIC:
       return match_numeric_argument(arg_type, is_arg_literal, sig_type, penalty_score);
-    case kPOINT:
-    case kLINESTRING:
-      if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
-           sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||
-           sig_type == ExtArgumentType::PFloat || sig_type == ExtArgumentType::PDouble) &&
-          sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
-        penalty_score += 1000;
-        return 2;
-      } else if (sig_type == ExtArgumentType::GeoPoint ||
-                 sig_type == ExtArgumentType::GeoLineString) {
-        penalty_score += 1000;
-        return 1;
-      }
-      return -1;
     case kARRAY:
       if ((sig_type == ExtArgumentType::PInt8 || sig_type == ExtArgumentType::PInt16 ||
            sig_type == ExtArgumentType::PInt32 || sig_type == ExtArgumentType::PInt64 ||
@@ -265,32 +251,6 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         } else {
           return -1;
         }
-      }
-      break;
-    case kPOLYGON:
-      if (sig_type == ExtArgumentType::PInt8 && sig_pos + 3 < max_pos &&
-          sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
-          sig_types[sig_pos + 2] == ExtArgumentType::PInt32 &&
-          sig_types[sig_pos + 3] == ExtArgumentType::Int64) {
-        penalty_score += 1000;
-        return 4;
-      } else if (sig_type == ExtArgumentType::GeoPolygon) {
-        penalty_score += 1000;
-        return 1;
-      }
-      break;
-    case kMULTIPOLYGON:
-      if (sig_type == ExtArgumentType::PInt8 && sig_pos + 5 < max_pos &&
-          sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
-          sig_types[sig_pos + 2] == ExtArgumentType::PInt32 &&
-          sig_types[sig_pos + 3] == ExtArgumentType::Int64 &&
-          sig_types[sig_pos + 4] == ExtArgumentType::PInt32 &&
-          sig_types[sig_pos + 5] == ExtArgumentType::Int64) {
-        penalty_score += 1000;
-        return 6;
-      } else if (sig_type == ExtArgumentType::GeoMultiPolygon) {
-        penalty_score += 1000;
-        return 1;
       }
       break;
     case kNULLT:  // NULL maps to a pointer and size argument
@@ -371,7 +331,6 @@ static int match_arguments(const SQLTypeInfo& arg_type,
          kDATE
          kINTERVAL_DAY_TIME
          kINTERVAL_YEAR_MONTH
-         kGEOMETRY
          kEVAL_CONTEXT_TYPE
          kVOID
          kCURSOR

@@ -185,21 +185,6 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("TEXT")) {
     return kTEXT;
   }
-  if (type_name == std::string("POINT")) {
-    return kPOINT;
-  }
-  if (type_name == std::string("LINESTRING")) {
-    return kLINESTRING;
-  }
-  if (type_name == std::string("POLYGON")) {
-    return kPOLYGON;
-  }
-  if (type_name == std::string("MULTIPOLYGON")) {
-    return kMULTIPOLYGON;
-  }
-  if (type_name == std::string("GEOMETRY")) {
-    return kGEOMETRY;
-  }
 
   throw std::runtime_error("Unsupported type: " + type_name);
 }

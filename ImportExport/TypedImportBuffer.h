@@ -104,12 +104,6 @@ class TypedImportBuffer : boost::noncopyable {
           array_buffer_ = new std::vector<ArrayDatum>();
         }
         break;
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        geo_string_buffer_ = new std::vector<std::string>();
-        break;
       default:
         CHECK(false);
     }
@@ -170,12 +164,6 @@ class TypedImportBuffer : boost::noncopyable {
         } else {
           delete array_buffer_;
         }
-        break;
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        delete geo_string_buffer_;
         break;
       default:
         CHECK(false);
@@ -400,12 +388,6 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       }
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        geo_string_buffer_->clear();
-        break;
       default:
         CHECK(false);
     }

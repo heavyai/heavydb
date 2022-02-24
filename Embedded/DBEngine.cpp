@@ -183,9 +183,6 @@ class DBEngineImpl : public DBEngine {
                                       prog_config_opts_.udf_file_name,
                                       prog_config_opts_.udf_compiler_path,
                                       prog_config_opts_.udf_compiler_options,
-#ifdef ENABLE_GEOS
-                                      prog_config_opts_.libgeos_so_filename,
-#endif
                                       prog_config_opts_.disk_cache_config,
                                       is_new_db);
     } catch (const std::exception& e) {
@@ -296,13 +293,8 @@ class DBEngineImpl : public DBEngine {
         col_details.encoding = sqlToColumnEncoding(sql_enc);
         col_details.nullable = !ct.get_notnull();
         col_details.is_array = (sql_type == kARRAY);
-        if (IS_GEO(sql_type)) {
-          col_details.precision = static_cast<int>(ct.get_subtype());
-          col_details.scale = ct.get_output_srid();
-        } else {
-          col_details.precision = ct.get_precision();
-          col_details.scale = ct.get_scale();
-        }
+        col_details.precision = ct.get_precision();
+        col_details.scale = ct.get_scale();
         if (col_details.encoding == ColumnEncoding::DICT) {
           // have to get the actual size of the encoding from the dictionary
           // definition

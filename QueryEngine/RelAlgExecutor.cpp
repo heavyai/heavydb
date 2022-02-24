@@ -921,17 +921,7 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
       if (scan_ra->getTableId() > 0) {
         const auto col_id = rex_input->getIndex();
         const auto info = scan_ra->getColumnInfoBySpi(col_id + 1);
-        if (info->type.get_physical_cols() > 0) {
-          CHECK(IS_GEO(info->type.get_type()));
-          std::unordered_set<const RexInput*> synthesized_physical_inputs;
-          for (auto i = 0; i < info->type.get_physical_cols(); i++) {
-            auto physical_input =
-                new RexInput(scan_ra, SPIMAP_GEO_PHYSICAL_INPUT(col_id, i));
-            synthesized_physical_inputs_owned.emplace_back(physical_input);
-            synthesized_physical_inputs.insert(physical_input);
-          }
-          return synthesized_physical_inputs;
-        }
+        CHECK_EQ(info->type.get_physical_cols(), 0);
       }
     }
     return {rex_input};
@@ -2159,13 +2149,6 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         }
         break;
       }
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        str_col_buffers[col_ids[col_idx]].push_back(
-            col_datum.stringval ? *col_datum.stringval : "");
-        break;
       default:
         CHECK(false);
     }

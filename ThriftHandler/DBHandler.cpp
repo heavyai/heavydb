@@ -105,8 +105,6 @@
 
 #include "Shared/ArrowUtil.h"
 
-#define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
-
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_parquet_import_fsi;
 #endif
@@ -220,10 +218,6 @@ void DBHandler::expire_idle_sessions_unsafe(
   }
 }
 
-#ifdef ENABLE_GEOS
-extern std::unique_ptr<std::string> g_libgeos_so_filename;
-#endif
-
 DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const std::vector<LeafHostInfo>& string_leaves,
                      const std::string& base_data_path,
@@ -250,9 +244,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const std::string& udf_filename,
                      const std::string& clang_path,
                      const std::vector<std::string>& clang_options,
-#ifdef ENABLE_GEOS
-                     const std::string& libgeos_so_filename,
-#endif
                      const File_Namespace::DiskCacheConfig& disk_cache_config,
                      const bool is_new_db)
     : leaf_aggregator_(db_leaves)
@@ -285,9 +276,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , render_compositor_use_last_gpu_(render_compositor_use_last_gpu)
     , render_mem_bytes_(render_mem_bytes)
     , num_reader_threads_(num_reader_threads)
-#ifdef ENABLE_GEOS
-    , libgeos_so_filename_(libgeos_so_filename)
-#endif
     , disk_cache_config_(disk_cache_config)
     , udf_filename_(udf_filename)
     , clang_path_(clang_path)
@@ -474,13 +462,6 @@ void DBHandler::initialize(const bool is_new_db) {
       LOG(ERROR) << "Distributed aggregator support disabled: " << e.what();
     }
   }
-
-#ifdef ENABLE_GEOS
-  if (!libgeos_so_filename_.empty()) {
-    g_libgeos_so_filename.reset(new std::string(libgeos_so_filename_));
-    LOG(INFO) << "Overriding default geos library with '" + *g_libgeos_so_filename + "'";
-  }
-#endif
 }
 
 DBHandler::~DBHandler() {
@@ -2174,13 +2155,8 @@ TColumnType DBHandler::populateThriftColumnType(const Catalog* cat,
   if (col_type.col_type.is_array || cd->columnType.get_type() == kDATE) {
     col_type.col_type.size = cd->columnType.get_size();  // only for arrays and dates
   }
-  if (IS_GEO(cd->columnType.get_type())) {
-    ThriftSerializers::fixup_geo_column_descriptor(
-        col_type, cd->columnType.get_subtype(), cd->columnType.get_output_srid());
-  } else {
-    col_type.col_type.precision = cd->columnType.get_precision();
-    col_type.col_type.scale = cd->columnType.get_scale();
-  }
+  col_type.col_type.precision = cd->columnType.get_precision();
+  col_type.col_type.scale = cd->columnType.get_scale();
   col_type.is_system = cd->isSystemCol;
   if (cd->columnType.get_compression() == EncodingType::kENCODING_DICT &&
       cat != nullptr) {
@@ -3527,14 +3503,6 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         SQLTypes t = best_types[col_idx];
         EncodingType encodingType = best_encodings[col_idx];
         SQLTypeInfo ti(t, false, encodingType);
-        if (IS_GEO(t)) {
-          // set this so encoding_to_thrift does the right thing
-          ti.set_compression(copy_params.geo_coords_encoding);
-          // fill in these directly
-          col.col_type.precision = static_cast<int>(copy_params.geo_coords_type);
-          col.col_type.scale = copy_params.geo_coords_srid;
-          col.col_type.comp_param = copy_params.geo_coords_comp_param;
-        }
         col.col_type.type = type_to_thrift(ti);
         col.col_type.encoding = encoding_to_thrift(ti);
         if (copy_params.sanitize_column_names) {
@@ -4216,14 +4184,6 @@ void DBHandler::create_table(const TSessionId& session,
     } else if (col.col_type.type == TDatumType::STR) {
       // non DICT encoded strings
       col_stmt.append(" ENCODING NONE");
-    } else if (col.col_type.type == TDatumType::POINT ||
-               col.col_type.type == TDatumType::LINESTRING ||
-               col.col_type.type == TDatumType::POLYGON ||
-               col.col_type.type == TDatumType::MULTIPOLYGON) {
-      // non encoded compressable geo
-      if (col.col_type.scale == 4326) {
-        col_stmt.append(" ENCODING NONE");
-      }
     }
     col_stmts.push_back(col_stmt);
   }
@@ -5556,12 +5516,7 @@ void DBHandler::insert_data(const TSessionId& session,
         CHECK_EQ(rows_expected, thrift_insert_data.data[col_idx].var_len_data.size());
         for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
           if (t_arr_datum.is_null) {
-            if ((cd->columnName.find("_coords") != std::string::npos) &&
-                geo_ti.get_type() == kPOINT) {
-              // For geo point, we manually mark its null sentinel to coord buffer
-              array_column->push_back(
-                  import_export::ImporterUtils::composeNullPointCoords(ti, geo_ti));
-            } else if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
+            if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
               array_column->push_back(import_export::ImporterUtils::composeNullArray(ti));
             } else {
               array_column->emplace_back(0, nullptr, true);

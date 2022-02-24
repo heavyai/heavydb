@@ -2559,7 +2559,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
               "Query execution has been interrupted while performing " + work_type_str);
         }
         auto& result_rows = res.rs;
-        result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
         const auto num_rows = result_rows->rowCount();
 
         if (0 == num_rows) {
@@ -3752,13 +3751,6 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     loader->setAddingColumns(true);
 
-    // set_geo_physical_import_buffer below needs a sorted import_buffers
-    std::sort(import_buffers.begin(),
-              import_buffers.end(),
-              [](decltype(import_buffers[0])& a, decltype(import_buffers[0])& b) {
-                return a->getColumnDesc()->columnId < b->getColumnDesc()->columnId;
-              });
-
     size_t nrows = td->fragmenter->getNumRows();
     if (nrows > 0) {
       int skip_physical_cols = 0;
@@ -4228,18 +4220,7 @@ void CopyTableStmt::execute(
           throw std::runtime_error("'geo_coords_type' option must be a string");
         }
         const std::string* s = str_literal->get_stringval();
-        if (boost::iequals(*s, "geography")) {
-          throw std::runtime_error(
-              "GEOGRAPHY coords type not yet supported. Please use GEOMETRY.");
-          // copy_params.geo_coords_type = kGEOGRAPHY;
-        } else if (boost::iequals(*s, "geometry")) {
-          copy_params.geo_coords_type = kGEOMETRY;
-        } else {
-          throw std::runtime_error(
-              "Invalid string for 'geo_coords_type' option (must be 'GEOGRAPHY' or "
-              "'GEOMETRY'): " +
-              *s);
-        }
+        throw std::runtime_error("'geo_coords_type' option is not supported " + *s);
       } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());

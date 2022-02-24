@@ -349,8 +349,6 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
     } else {
       const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
       CHECK(col_var);
-      auto col_id = col_var->get_column_id();
-      auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
       auto local_col_id = plan_state_->getLocalColumnId(col_var, false);
       const auto& col_ti = col_var->get_type_info();
       col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
@@ -3410,7 +3408,6 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #define EXECUTE_INCLUDE
 #include "ArrayOps.cpp"
 #include "DateAdd.cpp"
-#include "GeoOps.cpp"
 #include "StringFunctions.cpp"
 #include "TableFunctions/TableFunctionOps.cpp"
 #undef EXECUTE_INCLUDE

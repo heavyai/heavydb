@@ -22,9 +22,6 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
-#ifdef ENABLE_GEOS
-extern std::unique_ptr<llvm::Module> g_rt_geos_module;
-#endif
 
 llvm::ConstantInt* CgenState::inlineIntNull(const SQLTypeInfo& type_info) {
   auto type = type_info.get_type();

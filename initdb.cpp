@@ -46,9 +46,6 @@ static void loadGeo(std::string base_path) {
   std::string udf_filename{};
   std::string udf_compiler_path{};
   std::vector<std::string> udf_compiler_options{};
-#ifdef ENABLE_GEOS
-  std::string libgeos_so_filename{};
-#endif
   std::vector<LeafHostInfo> db_leaves{};
   std::vector<LeafHostInfo> string_leaves{};
 
@@ -111,9 +108,6 @@ static void loadGeo(std::string base_path) {
                                                 udf_filename,
                                                 udf_compiler_path,
                                                 udf_compiler_options,
-#ifdef ENABLE_GEOS
-                                                libgeos_so_filename,
-#endif
                                                 disk_cache_config,
                                                 false);
   db_handler->internal_connect(session_id, OMNISCI_ROOT_USER, OMNISCI_DEFAULT_DB);

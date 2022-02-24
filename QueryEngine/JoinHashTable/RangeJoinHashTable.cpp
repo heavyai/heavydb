@@ -562,24 +562,8 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
 
 llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
                                             llvm::Value* offset_ptr) {
-  const auto key_component_width = getKeyComponentWidth();
-  CHECK(key_component_width == 4 || key_component_width == 8);
-  const auto key_size_lv = LL_INT(getKeyComponentCount() * key_component_width);
-  llvm::Value* key_buff_lv{nullptr};
-  switch (key_component_width) {
-    case 4:
-      key_buff_lv =
-          LL_BUILDER.CreateAlloca(llvm::Type::getInt32Ty(LL_CONTEXT), key_size_lv);
-      break;
-    case 8:
-      key_buff_lv =
-          LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
-      break;
-    default:
-      CHECK(false);
-  }
-
   LOG(FATAL) << "Range join key currently only supported for geospatial types.";
+  llvm::Value* key_buff_lv{nullptr};
   return key_buff_lv;
 }
 

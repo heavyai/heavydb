@@ -28,11 +28,7 @@ namespace {
 using cost_t = unsigned;
 using node_t = size_t;
 
-static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
-                                                           {kARRAY, 60},
-                                                           {kLINESTRING, 70},
-                                                           {kPOLYGON, 80},
-                                                           {kMULTIPOLYGON, 90}};
+static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kARRAY, 60}};
 
 // Returns a lhs/rhs cost for the given qualifier. Must be strictly greater than 0.
 std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,

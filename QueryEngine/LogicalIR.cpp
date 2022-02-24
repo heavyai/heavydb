@@ -393,10 +393,7 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   const auto operand_lv = codegen(operand, true, co).front();
   // NULL-check array
   if (ti.is_array()) {
-    // POINT [un]compressed coord check requires custom checker and chunk iterator
-    // Non-POINT NULL geographies will have a normally encoded null coord array
-    auto fname =
-        (ti.get_type() == kPOINT) ? "point_coord_array_is_null" : "array_is_null";
+    auto fname = "array_is_null";
     return cgen_state_->emitExternalCall(
         fname, get_int_type(1, cgen_state_->context_), {operand_lv, posArg(operand)});
   }

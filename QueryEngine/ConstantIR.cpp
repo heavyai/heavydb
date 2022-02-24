@@ -23,13 +23,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
                                                  const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   if (co.hoist_literals) {
-    if (const auto geo_constant = dynamic_cast<const Analyzer::GeoConstant*>(constant)) {
-      return codegenGeoConstant(geo_constant, co);
-    } else {
-      std::vector<const Analyzer::Constant*> constants(
-          executor()->deviceCount(co.device_type), constant);
-      return codegenHoistedConstants(constants, enc_type, dict_id);
-    }
+    std::vector<const Analyzer::Constant*> constants(
+        executor()->deviceCount(co.device_type), constant);
+    return codegenHoistedConstants(constants, enc_type, dict_id);
   }
   const auto& type_info = constant->get_type_info();
   const auto type =

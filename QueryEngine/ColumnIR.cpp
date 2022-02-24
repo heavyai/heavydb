@@ -107,7 +107,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
                                                        const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const bool hoist_literals = co.hoist_literals;
-  auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
   CHECK_LT(static_cast<size_t>(rte_idx), cgen_state_->frag_offsets_.size());
   if (col_var->get_table_id() > 0) {
@@ -115,27 +114,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
       return {codegenRowId(col_var, co)};
     }
     auto col_ti = col_var->get_type_info();
-    if (col_ti.get_physical_coord_cols() > 0) {
-      std::vector<llvm::Value*> cols;
-      for (auto i = 0; i < col_ti.get_physical_coord_cols(); i++) {
-        int col0_id = col_id + i + 1;
-        auto col0_ti = get_geo_physical_col_type(col_ti, i);
-        auto col0_var = makeExpr<Analyzer::ColumnVar>(
-            col0_ti, col_var->get_table_id(), col0_id, rte_idx);
-        auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
-        cols.insert(cols.end(), col.begin(), col.end());
-        if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-          plan_state_->columns_to_not_fetch_.insert(
-              column_var_to_descriptor(col0_var.get()));
-        }
-      }
-      if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-        plan_state_->columns_to_not_fetch_.insert(column_var_to_descriptor(col_var));
-      } else {
-        plan_state_->columns_to_fetch_.insert(column_var_to_descriptor(col_var));
-      }
-      return cols;
-    }
+    CHECK_EQ(col_ti.get_physical_coord_cols(), 0);
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
   if (grouped_col_lv) {

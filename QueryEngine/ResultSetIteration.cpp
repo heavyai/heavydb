@@ -26,7 +26,6 @@
 #include "ParserNode.h"
 #include "QueryEngine/TargetValue.h"
 #include "ResultSet.h"
-#include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/likely.h"
@@ -37,6 +36,8 @@
 
 #include <memory>
 #include <utility>
+
+using VarlenDatumPtr = std::unique_ptr<VarlenDatum>;
 
 namespace {
 
@@ -885,46 +886,6 @@ inline std::unique_ptr<ArrayDatum> lazy_fetch_chunk(const int8_t* ptr,
   return ad;
 }
 
-struct GeoLazyFetchHandler {
-  template <typename... T>
-  static inline auto fetch(const SQLTypeInfo& geo_ti,
-                           const ResultSet::GeoReturnType return_type,
-                           T&&... vals) {
-    constexpr int num_vals = sizeof...(vals);
-    static_assert(
-        num_vals % 2 == 0,
-        "Must have consistent pointer/size pairs for lazy fetch of geo target values.");
-    const auto vals_vector = make_vals_vector(std::make_index_sequence<num_vals / 2>{},
-                                              std::make_tuple(vals...));
-    std::array<VarlenDatumPtr, num_vals / 2> ad_arr;
-    size_t ctr = 0;
-    for (const auto& col_pair : vals_vector) {
-      ad_arr[ctr] = lazy_fetch_chunk(col_pair.first, col_pair.second);
-      // Regular chunk iterator used to fetch this datum sets the right nullness.
-      // That includes the fixlen bounds array.
-      // However it may incorrectly set it for the POINT coord array datum
-      // if 1st byte happened to hold NULL_ARRAY_TINYINT. One should either use
-      // the specialized iterator for POINT coords or rely on regular iterator +
-      // reset + recheck, which is what is done below.
-      auto is_point = (geo_ti.get_type() == kPOINT && ctr == 0);
-      if (is_point) {
-        // Resetting POINT coords array nullness here
-        ad_arr[ctr]->is_null = false;
-      }
-      if (!geo_ti.get_notnull()) {
-        // Recheck and set nullness
-        if (ad_arr[ctr]->length == 0 || ad_arr[ctr]->pointer == NULL ||
-            (is_point &&
-             is_null_point(geo_ti, ad_arr[ctr]->pointer, ad_arr[ctr]->length))) {
-          ad_arr[ctr]->is_null = true;
-        }
-      }
-      ctr++;
-    }
-    return ad_arr;
-  }
-};
-
 inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
                                                        const int64_t length,
                                                        Data_Namespace::DataMgr* data_mgr,
@@ -935,85 +896,6 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
   // Just fetching the data from gpu, not checking geo nullness
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
 }
-
-struct GeoQueryOutputFetchHandler {
-  static inline auto yieldGpuPtrFetcher() {
-    return [](const int64_t ptr, const int64_t length) -> VarlenDatumPtr {
-      // Just fetching the data from gpu, not checking geo nullness
-      return std::make_unique<VarlenDatum>(length, reinterpret_cast<int8_t*>(ptr), false);
-    };
-  }
-
-  static inline auto yieldGpuDatumFetcher(Data_Namespace::DataMgr* data_mgr_ptr,
-                                          const int device_id) {
-    return [data_mgr_ptr, device_id](const int64_t ptr,
-                                     const int64_t length) -> VarlenDatumPtr {
-      return fetch_data_from_gpu(ptr, length, data_mgr_ptr, device_id);
-    };
-  }
-
-  static inline auto yieldCpuDatumFetcher() {
-    return [](const int64_t ptr, const int64_t length) -> VarlenDatumPtr {
-      // Just fetching the data from gpu, not checking geo nullness
-      return std::make_unique<VarlenDatum>(length, reinterpret_cast<int8_t*>(ptr), false);
-    };
-  }
-
-  template <typename... T>
-  static inline auto fetch(const SQLTypeInfo& geo_ti,
-                           const ResultSet::GeoReturnType return_type,
-                           Data_Namespace::DataMgr* data_mgr,
-                           const bool fetch_data_from_gpu,
-                           const int device_id,
-                           T&&... vals) {
-    auto ad_arr_generator = [&](auto datum_fetcher) {
-      constexpr int num_vals = sizeof...(vals);
-      static_assert(
-          num_vals % 2 == 0,
-          "Must have consistent pointer/size pairs for lazy fetch of geo target values.");
-      const auto vals_vector = std::vector<int64_t>{vals...};
-
-      std::array<VarlenDatumPtr, num_vals / 2> ad_arr;
-      size_t ctr = 0;
-      for (size_t i = 0; i < vals_vector.size(); i += 2, ctr++) {
-        if (vals_vector[i] == 0) {
-          // projected null
-          CHECK(!geo_ti.get_notnull());
-          ad_arr[ctr] = std::make_unique<ArrayDatum>(0, nullptr, true);
-          continue;
-        }
-        ad_arr[ctr] = datum_fetcher(vals_vector[i], vals_vector[i + 1]);
-        // All fetched datums come in with is_null set to false
-        if (!geo_ti.get_notnull()) {
-          bool is_null = false;
-          // Now need to set the nullness
-          if (ad_arr[ctr]->length == 0 || ad_arr[ctr]->pointer == NULL) {
-            is_null = true;
-          } else if (geo_ti.get_type() == kPOINT && ctr == 0 &&
-                     is_null_point(geo_ti, ad_arr[ctr]->pointer, ad_arr[ctr]->length)) {
-            is_null = true;  // recognizes compressed and uncompressed points
-          } else if (ad_arr[ctr]->length == 4 * sizeof(double)) {
-            // Bounds
-            auto dti = SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kDOUBLE);
-            is_null = dti.is_null_fixlen_array(ad_arr[ctr]->pointer, ad_arr[ctr]->length);
-          }
-          ad_arr[ctr]->is_null = is_null;
-        }
-      }
-      return ad_arr;
-    };
-
-    if (fetch_data_from_gpu) {
-      if (return_type == ResultSet::GeoReturnType::GeoTargetValueGpuPtr) {
-        return ad_arr_generator(yieldGpuPtrFetcher());
-      } else {
-        return ad_arr_generator(yieldGpuDatumFetcher(data_mgr, device_id));
-      }
-    } else {
-      return ad_arr_generator(yieldCpuDatumFetcher());
-    }
-  }
-};
 
 template <typename T>
 inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(

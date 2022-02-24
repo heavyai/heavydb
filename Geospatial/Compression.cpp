@@ -51,49 +51,8 @@ uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
 // Compress non-NULL geo coords; and also NULL POINT coords (special case)
 std::vector<uint8_t> compress_coords(const std::vector<double>& coords,
                                      const SQLTypeInfo& ti) {
-  CHECK(!coords.empty()) << "Coord compression received no data";
-  bool is_null_point = false;
-  if (!ti.get_notnull()) {
-    is_null_point = (ti.get_type() == kPOINT && coords[0] == NULL_ARRAY_DOUBLE);
-  }
-
-  bool x = true;
-  bool is_geoint32 =
-      (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32);
-  size_t coord_data_size = (is_geoint32) ? (ti.get_comp_param() / 8) : sizeof(double);
+  UNREACHABLE();
   std::vector<uint8_t> compressed_coords;
-  compressed_coords.reserve(coords.size() * coord_data_size);
-  for (auto coord : coords) {
-    uint64_t coord_data;
-    if (is_null_point) {
-      coord_data = compress_null_point(ti, x);
-    } else {
-      if (ti.get_output_srid() == 4326) {
-        if (x) {
-          if (coord < -180.0 || coord > 180.0) {
-            throw std::runtime_error("WGS84 longitude " + std::to_string(coord) +
-                                     " is out of bounds");
-          }
-        } else {
-          if (coord < -90.0 || coord > 90.0) {
-            throw std::runtime_error("WGS84 latitude " + std::to_string(coord) +
-                                     " is out of bounds");
-          }
-        }
-      }
-      if (is_geoint32) {
-        coord_data = compress_coord(coord, ti, x);
-      } else {
-        auto coord_data_ptr = reinterpret_cast<uint64_t*>(&coord);
-        coord_data = *coord_data_ptr;
-      }
-    }
-    for (size_t i = 0; i < coord_data_size; i++) {
-      compressed_coords.push_back(coord_data & 0xFF);
-      coord_data >>= 8;
-    }
-    x = !x;
-  }
   return compressed_coords;
 }
 
@@ -179,16 +138,7 @@ std::shared_ptr<std::vector<double>> decompress_coords<double, int32_t>(
 bool is_null_point(const SQLTypeInfo& geo_ti,
                    const int8_t* coords,
                    const size_t coords_sz) {
-  if (geo_ti.get_type() == kPOINT && !geo_ti.get_notnull()) {
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      if (geo_ti.get_comp_param() == 32) {
-        return Geospatial::is_null_point_longitude_geoint32(*((int32_t*)coords));
-      }
-    } else {
-      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
-      return *((double*)coords) == NULL_ARRAY_DOUBLE;
-    }
-  }
+  UNREACHABLE();
   return false;
 }
 

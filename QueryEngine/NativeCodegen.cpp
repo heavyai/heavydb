@@ -87,53 +87,6 @@ extern std::unique_ptr<llvm::Module> g_rt_module;
 extern std::unique_ptr<llvm::Module> g_rt_libdevice_module;
 #endif
 
-#ifdef ENABLE_GEOS
-extern std::unique_ptr<llvm::Module> g_rt_geos_module;
-
-#include <llvm/Support/DynamicLibrary.h>
-
-#ifndef GEOS_LIBRARY_FILENAME
-#error Configuration should include GEOS library file name
-#endif
-std::unique_ptr<std::string> g_libgeos_so_filename(
-    new std::string(GEOS_LIBRARY_FILENAME));
-static llvm::sys::DynamicLibrary geos_dynamic_library;
-static std::mutex geos_init_mutex;
-
-extern bool g_enable_smem_non_grouped_agg;
-extern bool g_enable_filter_function;
-extern size_t g_gpu_smem_threshold;
-extern bool g_enable_smem_grouped_non_count_agg;
-extern bool g_enable_dynamic_watchdog;
-extern double g_running_query_interrupt_freq;
-
-namespace {
-
-void load_geos_dynamic_library() {
-  std::lock_guard<std::mutex> guard(geos_init_mutex);
-
-  if (!geos_dynamic_library.isValid()) {
-    if (!g_libgeos_so_filename || g_libgeos_so_filename->empty()) {
-      LOG(WARNING) << "Misconfigured GEOS library file name, trying 'libgeos_c.so'";
-      g_libgeos_so_filename.reset(new std::string("libgeos_c.so"));
-    }
-    auto filename = *g_libgeos_so_filename;
-    std::string error_message;
-    geos_dynamic_library =
-        llvm::sys::DynamicLibrary::getPermanentLibrary(filename.c_str(), &error_message);
-    if (!geos_dynamic_library.isValid()) {
-      LOG(ERROR) << "Failed to load GEOS library '" + filename + "'";
-      std::string exception_message = "Failed to load GEOS library: " + error_message;
-      throw std::runtime_error(exception_message.c_str());
-    } else {
-      LOG(INFO) << "Loaded GEOS library '" + filename + "'";
-    }
-  }
-}
-
-}  // namespace
-#endif
-
 namespace {
 
 void throw_parseIR_error(const llvm::SMDiagnostic& parse_error,
@@ -513,28 +466,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
   }
 
   if (cgen_state_->needs_geos_) {
-#ifdef ENABLE_GEOS
-    load_geos_dynamic_library();
-
-    // Read geos runtime module and bind GEOS API function references to GEOS library
-    auto rt_geos_module_copy = llvm::CloneModule(
-        *g_rt_geos_module.get(), cgen_state_->vmap_, [](const llvm::GlobalValue* gv) {
-          auto func = llvm::dyn_cast<llvm::Function>(gv);
-          if (!func) {
-            return true;
-          }
-          return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
-                  func->getLinkage() ==
-                      llvm::GlobalValue::LinkageTypes::InternalLinkage ||
-                  func->getLinkage() == llvm::GlobalValue::LinkageTypes::ExternalLinkage);
-        });
-    CodeGenerator::link_udf_module(rt_geos_module_copy,
-                                   *module,
-                                   cgen_state_.get(),
-                                   llvm::Linker::Flags::LinkOnlyNeeded);
-#else
     throw std::runtime_error("GEOS is disabled in this build");
-#endif
   }
 
   auto execution_engine =
@@ -1470,24 +1402,6 @@ llvm::Module* read_libdevice_module(llvm::LLVMContext& context) {
 }
 #endif
 
-#ifdef ENABLE_GEOS
-llvm::Module* read_geos_module(llvm::LLVMContext& context) {
-  llvm::SMDiagnostic err;
-
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(omnisci::get_root_abs_path() +
-                                                     "/QueryEngine/GeosRuntime.bc");
-  CHECK(!buffer_or_error.getError()) << "root path=" << omnisci::get_root_abs_path();
-  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
-
-  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
-  CHECK(!owner.takeError());
-  auto module = owner.get().release();
-  CHECK(module);
-
-  return module;
-}
-#endif
-
 namespace {
 
 void bind_pos_placeholders(const std::string& pos_fn_name,
@@ -1754,10 +1668,6 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 }  // namespace
 
 std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMContext()));
-
-#ifdef ENABLE_GEOS
-std::unique_ptr<llvm::Module> g_rt_geos_module(read_geos_module(getGlobalLLVMContext()));
-#endif
 
 #ifdef HAVE_CUDA
 std::unique_ptr<llvm::Module> g_rt_libdevice_module(
@@ -2035,9 +1945,6 @@ void Executor::createErrorCheckControlFlow(
             int32_t num_shift_by_blockDim = shared::getExpOfTwo(blockSize());
             int total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
             uint64_t interrupt_checking_freq = 32;
-            auto freq_control_knob = g_running_query_interrupt_freq;
-            CHECK_GT(freq_control_knob, 0);
-            CHECK_LE(freq_control_knob, 1.0);
             if (!input_table_infos.empty()) {
               const auto& outer_table_info = *input_table_infos.begin();
               auto num_outer_table_tuples = outer_table_info.info.getNumTuples();
@@ -2065,20 +1972,6 @@ void Executor::createErrorCheckControlFlow(
                   // too small `max_inc`, so this correction is necessary to make
                   // `interrupt_checking_freq` be valid (i.e., larger than zero)
                   max_inc = 2;
-                }
-                auto calibrated_inc = uint64_t(floor(max_inc * (1 - freq_control_knob)));
-                interrupt_checking_freq =
-                    uint64_t(pow(2, shared::getExpOfTwo(calibrated_inc)));
-                // add the coverage when interrupt_checking_freq > K
-                // if so, some threads still cannot be branched to the interrupt checker
-                // so we manually use smaller but close to the max_inc as freq
-                if (interrupt_checking_freq > max_inc) {
-                  interrupt_checking_freq = max_inc / 2;
-                }
-                if (interrupt_checking_freq < 8) {
-                  // such small freq incurs too frequent interrupt status checking,
-                  // so we fixup to the minimum freq value at some reasonable degree
-                  interrupt_checking_freq = 8;
                 }
               }
             }
@@ -2129,18 +2022,8 @@ void Executor::createErrorCheckControlFlow(
         if (!err_lv_returned_from_row_func) {
           err_lv_returned_from_row_func = err_lv;
         }
-        if (device_type == ExecutorDeviceType::GPU && g_enable_dynamic_watchdog) {
-          // let kernel execution finish as expected, regardless of the observed error,
-          // unless it is from the dynamic watchdog where all threads within that block
-          // return together.
-          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                         err_lv,
-                                         cgen_state_->llInt(Executor::ERR_OUT_OF_TIME));
-        } else {
-          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE,
-                                         err_lv,
-                                         cgen_state_->llInt(static_cast<int32_t>(0)));
-        }
+        err_lv = ir_builder.CreateICmp(
+            llvm::ICmpInst::ICMP_NE, err_lv, cgen_state_->llInt(static_cast<int32_t>(0)));
         auto error_bb = llvm::BasicBlock::Create(
             cgen_state_->context_, ".error_exit", query_func, new_bb);
         const auto error_code_arg = get_arg_by_name(query_func, "error_code");
@@ -2402,32 +2285,6 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
   }
 
   if (query_mem_desc_ptr->getQueryDescriptionType() ==
-          QueryDescriptionType::NonGroupedAggregate &&
-      g_enable_smem_non_grouped_agg &&
-      query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty()) {
-    // TODO: relax this, if necessary
-    if (gpu_blocksize < query_mem_desc_ptr->getEntryCount()) {
-      return false;
-    }
-    // skip shared memory usage when dealing with 1) variable length targets, 2)
-    // not a COUNT aggregate
-    const auto target_infos =
-        target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
-    std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
-    if (std::find_if(target_infos.begin(),
-                     target_infos.end(),
-                     [&supported_aggs](const TargetInfo& ti) {
-                       if (ti.sql_type.is_varlen() ||
-                           !supported_aggs.count(ti.agg_kind)) {
-                         return true;
-                       } else {
-                         return false;
-                       }
-                     }) == target_infos.end()) {
-      return true;
-    }
-  }
-  if (query_mem_desc_ptr->getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash &&
       g_enable_smem_group_by) {
     /**
@@ -2451,7 +2308,7 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
         query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
         !query_mem_desc_ptr->useStreamingTopN()) {
       const size_t shared_memory_threshold_bytes = std::min(
-          g_gpu_smem_threshold == 0 ? SIZE_MAX : g_gpu_smem_threshold,
+          SIZE_MAX,
           cuda_mgr->getMinSharedMemoryPerBlockForAllDevices() / num_blocks_per_mp);
       const auto output_buffer_size =
           query_mem_desc_ptr->getRowSize() * query_mem_desc_ptr->getEntryCount();
@@ -2465,9 +2322,6 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
       const auto target_infos =
           target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
       std::unordered_set<SQLAgg> supported_aggs{kCOUNT};
-      if (g_enable_smem_grouped_non_count_agg) {
-        supported_aggs = {kCOUNT, kMIN, kMAX, kSUM, kAVG};
-      }
       if (std::find_if(target_infos.begin(),
                        target_infos.end(),
                        [&supported_aggs](const TargetInfo& ti) {
@@ -2625,11 +2479,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   if (gpu_shared_mem_optimization) {
     // disable interleaved bins optimization on the GPU
     query_mem_desc->setHasInterleavedBinsOnGpu(false);
-    LOG(DEBUG1) << "GPU shared memory is used for the " +
-                       query_mem_desc->queryDescTypeToString() + " query(" +
-                       std::to_string(get_shared_memory_size(gpu_shared_mem_optimization,
-                                                             query_mem_desc.get())) +
-                       " out of " + std::to_string(g_gpu_smem_threshold) + " bytes).";
   }
 
   const GpuSharedMemoryContext gpu_smem_context(
@@ -2731,18 +2580,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   CHECK(cgen_state_->row_func_);
   cgen_state_->row_func_bb_ =
       llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
-
-  if (g_enable_filter_function) {
-    auto filter_func_ft =
-        llvm::FunctionType::get(get_int_type(32, cgen_state_->context_), {}, false);
-    cgen_state_->filter_func_ = llvm::Function::Create(filter_func_ft,
-                                                       llvm::Function::ExternalLinkage,
-                                                       "filter_func",
-                                                       cgen_state_->module_);
-    CHECK(cgen_state_->filter_func_);
-    cgen_state_->filter_func_bb_ = llvm::BasicBlock::Create(
-        cgen_state_->context_, "entry", cgen_state_->filter_func_);
-  }
 
   cgen_state_->current_func_ = cgen_state_->row_func_;
   cgen_state_->ir_builder_.SetInsertPoint(cgen_state_->row_func_bb_);

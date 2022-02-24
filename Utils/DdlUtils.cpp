@@ -185,12 +185,6 @@ void SqlType::check_type() {
         throw std::runtime_error("Only TIME(0) is supported now.");
       }
       break;
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      // Storing SRID in param1
-      break;
     default:
       param1 = 0;
       break;
@@ -452,14 +446,8 @@ void validate_and_set_type(ColumnDescriptor& cd, SqlType* column_type) {
   } else {
     cd.columnType.set_type(column_type->get_type());
   }
-  if (IS_GEO(column_type->get_type())) {
-    cd.columnType.set_subtype(static_cast<SQLTypes>(column_type->get_param1()));
-    cd.columnType.set_input_srid(column_type->get_param2());
-    cd.columnType.set_output_srid(column_type->get_param2());
-  } else {
-    cd.columnType.set_dimension(column_type->get_param1());
-    cd.columnType.set_scale(column_type->get_param2());
-  }
+  cd.columnType.set_dimension(column_type->get_param1());
+  cd.columnType.set_scale(column_type->get_param2());
 }
 
 void validate_and_set_array_size(ColumnDescriptor& cd, const SqlType* column_type) {

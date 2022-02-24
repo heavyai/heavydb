@@ -266,11 +266,7 @@ std::unique_ptr<TargetValueConverter> TargetValueConverterFactory::create(
                 {kTEXT, TextConverterFactory()},
                 {kCHAR, TextConverterFactory()},
                 {kVARCHAR, TextConverterFactory()},
-                {kARRAY, ArraysConverterFactory()},
-                {kPOINT, GeoConverterFactory<GeoPointValueConverter>()},
-                {kLINESTRING, GeoConverterFactory<GeoLinestringValueConverter>()},
-                {kPOLYGON, GeoConverterFactory<GeoPolygonValueConverter>()},
-                {kMULTIPOLYGON, GeoConverterFactory<GeoMultiPolygonValueConverter>()}};
+                {kARRAY, ArraysConverterFactory()}};
 
   auto factory = factories.find(param.target->columnType.get_type());
 

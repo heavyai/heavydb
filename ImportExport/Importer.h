@@ -334,26 +334,6 @@ class Importer : public DataStreamSink, public AbstractImporter {
     GeoFileLayerContents contents;
   };
   Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }
-  static void set_geo_physical_import_buffer(
-      const Catalog_Namespace::Catalog& catalog,
-      const ColumnDescriptor* cd,
-      std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-      size_t& col_idx,
-      std::vector<double>& coords,
-      std::vector<double>& bounds,
-      std::vector<int>& ring_sizes,
-      std::vector<int>& poly_rings,
-      int render_group);
-  static void set_geo_physical_import_buffer_columnar(
-      const Catalog_Namespace::Catalog& catalog,
-      const ColumnDescriptor* cd,
-      std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-      size_t& col_idx,
-      std::vector<std::vector<double>>& coords_column,
-      std::vector<std::vector<double>>& bounds_column,
-      std::vector<std::vector<int>>& ring_sizes_column,
-      std::vector<std::vector<int>>& poly_rings_column,
-      std::vector<int>& render_groups_column);
   void checkpoint(const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs);
   auto getLoader() const { return loader.get(); }
 

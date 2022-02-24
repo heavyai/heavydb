@@ -184,9 +184,6 @@ class DBHandler : public OmniSciIf {
             const std::string& udf_filename,
             const std::string& clang_path,
             const std::vector<std::string>& clang_options,
-#ifdef ENABLE_GEOS
-            const std::string& libgeos_so_filename,
-#endif
             const File_Namespace::DiskCacheConfig& disk_cache_config,
             const bool is_new_db);
   void initialize(const bool is_new_db);
@@ -900,9 +897,6 @@ class DBHandler : public OmniSciIf {
   const bool render_compositor_use_last_gpu_;
   const size_t render_mem_bytes_;
   const size_t num_reader_threads_;
-#ifdef ENABLE_GEOS
-  const std::string& libgeos_so_filename_;
-#endif
   const File_Namespace::DiskCacheConfig& disk_cache_config_;
   const std::string& udf_filename_;
   const std::string& clang_path_;

@@ -57,12 +57,7 @@ enum SQLTypes {
   kARRAY = 15,
   kINTERVAL_DAY_TIME = 16,
   kINTERVAL_YEAR_MONTH = 17,
-  kPOINT = 18,
-  kLINESTRING = 19,
-  kPOLYGON = 20,
-  kMULTIPOLYGON = 21,
   kTINYINT = 22,
-  kGEOMETRY = 23,
   kEVAL_CONTEXT_TYPE = 24,  // Placeholder Type for ANY
   kVOID = 25,
   kCURSOR = 26,
@@ -111,18 +106,8 @@ inline std::string toString(const SQLTypes& type) {
       return "DAY TIME INTERVAL";
     case kINTERVAL_YEAR_MONTH:
       return "YEAR MONTH INTERVAL";
-    case kPOINT:
-      return "POINT";
-    case kLINESTRING:
-      return "LINESTRING";
-    case kPOLYGON:
-      return "POLYGON";
-    case kMULTIPOLYGON:
-      return "MULTIPOLYGON";
     case kTINYINT:
       return "TINYINT";
-    case kGEOMETRY:
-      return "GEOMETRY";
     case kEVAL_CONTEXT_TYPE:
       return "UNEVALUATED ANY";
     case kVOID:
@@ -248,11 +233,8 @@ enum EncodingType {
   (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || \
    ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL) || ((T) == kTINYINT))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
-#define IS_GEO(T) \
-  (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 #define IS_INTERVAL(T) ((T) == kINTERVAL_DAY_TIME || (T) == kINTERVAL_YEAR_MONTH)
 #define IS_DECIMAL(T) ((T) == kNUMERIC || (T) == kDECIMAL)
-#define IS_GEO_POLY(T) (((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 
 #include "InlineNullValues.h"
 
@@ -350,72 +332,15 @@ class SQLTypeInfo {
     return get_size();
   }
   inline int get_physical_cols() const {
-    switch (type) {
-      case kPOINT:
-        return 1;  // coords
-      case kLINESTRING:
-        return 2;  // coords, bounds
-      case kPOLYGON:
-        return 4;  // coords, ring_sizes, bounds, render_group
-      case kMULTIPOLYGON:
-        return 5;  // coords, ring_sizes, poly_rings, bounds, render_group
-      default:
-        break;
-    }
     return 0;
   }
   inline int get_physical_coord_cols() const {
-    // @TODO dmitri/simon rename this function?
-    // It needs to return the number of extra columns
-    // which need to go through the executor, as opposed
-    // to those which are only needed by CPU for poly
-    // cache building or what-not. For now, we just omit
-    // the Render Group column. If we add Bounding Box
-    // or something this may require rethinking. Perhaps
-    // these two functions need to return an array of
-    // offsets rather than just a number to loop over,
-    // so that executor and non-executor columns can
-    // be mixed.
-    // NOTE(adb): In binding to extension functions, we need to know some pretty specific
-    // type info about each of the physical coords cols for each geo type. I added checks
-    // there to ensure the physical coords col for the geo type match what we expect. If
-    // these values are ever changed, corresponding values in
-    // ExtensionFunctionsBinding.cpp::compute_narrowing_conv_scores and
-    // ExtensionFunctionsBinding.cpp::compute_widening_conv_scores will also need to be
-    // changed.
-    switch (type) {
-      case kPOINT:
-        return 1;
-      case kLINESTRING:
-        return 1;  // omit bounds
-      case kPOLYGON:
-        return 2;  // omit bounds, render group
-      case kMULTIPOLYGON:
-        return 3;  // omit bounds, render group
-      default:
-        break;
-    }
     return 0;
   }
   inline bool has_bounds() const {
-    switch (type) {
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        return true;
-      default:
-        break;
-    }
     return false;
   }
   inline bool has_render_group() const {
-    switch (type) {
-      case kPOLYGON:
-      case kMULTIPOLYGON:
-        return true;
-      default:
-        break;
-    }
     return false;
   }
   HOST DEVICE inline void set_type(SQLTypes t) { type = t; }
@@ -432,15 +357,6 @@ class SQLTypeInfo {
   inline void set_comp_param(int p) { comp_param = p; }
 #ifndef __CUDACC__
   inline std::string get_type_name() const {
-    if (IS_GEO(type)) {
-      std::string srid_string = "";
-      if (get_output_srid() > 0) {
-        srid_string = ", " + std::to_string(get_output_srid());
-      }
-      CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
-      return type_name[static_cast<int>(subtype)] + "(" +
-             type_name[static_cast<int>(type)] + srid_string + ")";
-    }
     std::string ps = "";
     if (type == kDECIMAL || type == kNUMERIC) {
       ps = "(" + std::to_string(dimension) + "," + std::to_string(scale) + ")";
@@ -523,13 +439,10 @@ class SQLTypeInfo {
   inline bool is_buffer() const {
     return is_array() || is_column() || is_column_list() || is_bytes();
   }
-  inline bool transforms() const {
-    return IS_GEO(type) && get_output_srid() != get_input_srid();
-  }
+  inline bool transforms() const { return false; }
 
   inline bool is_varlen() const {  // TODO: logically this should ignore fixlen arrays
-    return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY ||
-           IS_GEO(type);
+    return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY;
   }
 
   // need this here till is_varlen can be fixed w/o negative impact to existing code
@@ -1011,10 +924,6 @@ class SQLTypeInfo {
       case kARRAY:
         // TODO: return size for fixlen arrays?
         break;
-      case kPOINT:
-      case kLINESTRING:
-      case kPOLYGON:
-      case kMULTIPOLYGON:
       case kCOLUMN:
       case kCOLUMN_LIST:
         break;

@@ -72,11 +72,6 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kTIMESTAMP:
         case kDATE:
           return new NoneEncoder<int64_t>(buffer);
-        case kPOINT:
-        case kLINESTRING:
-        case kPOLYGON:
-        case kMULTIPOLYGON:
-          return new StringNoneEncoder(buffer);
         default: {
           return 0;
         }
@@ -198,17 +193,7 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
       break;
     }
     case kENCODING_GEOINT: {
-      switch (sqlType.get_type()) {
-        case kPOINT:
-        case kLINESTRING:
-        case kPOLYGON:
-        case kMULTIPOLYGON:
-          return new StringNoneEncoder(buffer);
-        default: {
-          return 0;
-        }
-      }
-      break;
+      return 0;
     }
     default: {
       return 0;

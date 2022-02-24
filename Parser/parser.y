@@ -106,9 +106,9 @@ using namespace Parser;
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE CLUSTER COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token CURSOR DATABASE DATAFRAME DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token DUMP ELSE END EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
-%token GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
-%token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
-%token OPTIMIZED OPTION ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
+%token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
+%token IS LANGUAGE LAST LENGTH LIKE LIMIT MOD NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
+%token OPTIMIZED OPTION ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token SERVER SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION USAGE
 %token PUBLIC REAL REFERENCES RENAME RESTORE REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
 %token UNIQUE UPDATE USER VALIDATE VALUES VIEW WHEN WHENEVER WHERE WITH WORK EDIT ACCESS DASHBOARD SQL EDITOR
@@ -967,7 +967,6 @@ data_type:
 	| TIME '(' non_neg_int ')' { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTIME, $<intval>3)); }
 	| TIMESTAMP { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTIMESTAMP)); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(kTIMESTAMP, $<intval>3)); }
-	| geometry_type { $<nodeval>$ = $<nodeval>1; }
 	| data_type '[' ']'
 	{
 		$<nodeval>$ = $<nodeval>1;
@@ -983,18 +982,6 @@ data_type:
 		dynamic_cast<SQLType*>(($<nodeval>$)->get())->set_is_array(true);
 		dynamic_cast<SQLType*>(($<nodeval>$)->get())->set_array_size($<intval>3);
 	}
-	;
-
-geo_type:	POINT { $<intval>$ = kPOINT; }
-	|	LINESTRING { $<intval>$ = kLINESTRING; }
-	|	POLYGON { $<intval>$ = kPOLYGON; }
-	|	MULTIPOLYGON { $<intval>$ = kMULTIPOLYGON; }
-	;
-
-geometry_type:	GEOMETRY '(' geo_type ')'
-		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOMETRY), 0, false)); }
-	|	GEOMETRY '(' geo_type ',' INTNUM ')'
-		{ $<nodeval>$ = TrackedPtr<Node>::make(lexer.parsed_node_tokens_, new SQLType(static_cast<SQLTypes>($<intval>3), static_cast<int>(kGEOMETRY), $<intval>5, false)); }
 	;
 
 	/* the various things you can name */

@@ -89,8 +89,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
-    , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , cached_row_count_(uninitialized_cached_row_count) {}
 
 ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
@@ -125,8 +124,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
-    , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , cached_row_count_(uninitialized_cached_row_count) {}
 
 ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
@@ -143,8 +141,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
     , for_validation_only_(false)
-    , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {
+    , cached_row_count_(uninitialized_cached_row_count) {
   if (device_type == ExecutorDeviceType::GPU) {
     device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
         data_mgr_, estimator_->getBufferSize(), device_id_);
@@ -165,8 +162,7 @@ ResultSet::ResultSet(const std::string& explanation)
     , explanation_(explanation)
     , just_explain_(true)
     , for_validation_only_(false)
-    , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString) {}
+    , cached_row_count_(uninitialized_cached_row_count) {}
 
 ResultSet::ResultSet(int64_t queue_time_ms,
                      int64_t render_time_ms,
@@ -179,8 +175,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     , separate_varlen_storage_valid_(false)
     , just_explain_(true)
     , for_validation_only_(false)
-    , cached_row_count_(uninitialized_cached_row_count)
-    , geo_return_type_(GeoReturnType::WktString){};
+    , cached_row_count_(uninitialized_cached_row_count) {}
 
 ResultSet::~ResultSet() {
   if (storage_) {

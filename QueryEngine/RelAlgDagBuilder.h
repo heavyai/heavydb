@@ -41,7 +41,6 @@
 #include "SchemaMgr/ColumnInfo.h"
 #include "SchemaMgr/SchemaProvider.h"
 #include "SchemaMgr/TableInfo.h"
-#include "Shared/sqltypes_geo.h"
 #include "Shared/toString.h"
 
 class Rex {
@@ -889,12 +888,8 @@ class RelScan : public RelAlgNode {
       col_idx = spi - 1;
     }
 
-    // Physical geo column case.
-    if (geo_idx > 0) {
-      CHECK(false);
-      return get_geo_physical_col_name(
-          column_infos_[col_idx]->name, column_infos_[col_idx]->type, geo_idx - 1);
-    }
+    // Is not physical geo column case.
+    CHECK_EQ(geo_idx, 0);
 
     CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->name;
@@ -910,11 +905,8 @@ class RelScan : public RelAlgNode {
       col_idx = spi - 1;
     }
 
-    // Physical geo column case.
-    if (geo_idx > 0) {
-      CHECK(false);
-      return get_geo_physical_col_type(column_infos_[col_idx]->type, geo_idx - 1);
-    }
+    // Is not physical geo column case.
+    CHECK_EQ(geo_idx, 0);
 
     CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->type;

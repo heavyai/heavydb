@@ -60,14 +60,6 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::INTERVAL_DAY_TIME;
     case kINTERVAL_YEAR_MONTH:
       return TDatumType::INTERVAL_YEAR_MONTH;
-    case kPOINT:
-      return TDatumType::POINT;
-    case kLINESTRING:
-      return TDatumType::LINESTRING;
-    case kPOLYGON:
-      return TDatumType::POLYGON;
-    case kMULTIPOLYGON:
-      return TDatumType::MULTIPOLYGON;
     default:
       break;
   }
@@ -104,14 +96,6 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kINTERVAL_DAY_TIME;
     case TDatumType::INTERVAL_YEAR_MONTH:
       return kINTERVAL_YEAR_MONTH;
-    case TDatumType::POINT:
-      return kPOINT;
-    case TDatumType::LINESTRING:
-      return kLINESTRING;
-    case TDatumType::POLYGON:
-      return kPOLYGON;
-    case TDatumType::MULTIPOLYGON:
-      return kMULTIPOLYGON;
     default:
       break;
   }
@@ -176,11 +160,6 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
   } else if (type == kTIMESTAMP) {
     internal_ti.set_precision(ti.precision);
   }
-  if (IS_GEO(type)) {
-    internal_ti.set_subtype(static_cast<SQLTypes>(ti.precision));
-    internal_ti.set_input_srid(ti.scale);
-    internal_ti.set_output_srid(ti.scale);
-  }
   internal_ti.set_size(ti.size);
   return internal_ti.get_type_name();
 }
@@ -201,18 +180,6 @@ inline std::string thrift_to_encoding_name(const TTypeInfo& ti) {
 inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti,
                                          const bool strip_geo_encoding = false) {
   const auto ti = thrift_to_type(thrift_ti.type);
-  if (IS_GEO(ti)) {
-    const auto base_type = static_cast<SQLTypes>(thrift_ti.precision);
-    CHECK_LT(base_type, kSQLTYPE_LAST);
-    return SQLTypeInfo(
-        ti,
-        thrift_ti.scale,
-        thrift_ti.scale,
-        !thrift_ti.nullable,
-        strip_geo_encoding ? kENCODING_NONE : thrift_to_encoding(thrift_ti.encoding),
-        thrift_ti.comp_param,
-        base_type);
-  }
   if (thrift_ti.is_array) {
     auto ati = SQLTypeInfo(kARRAY,
                            thrift_ti.precision,

@@ -422,157 +422,6 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
   }
 };
 
-class GeoPointColumnDescriptor : public TestColumnDescriptor {
-  std::string prefix;
-
- public:
-  GeoPointColumnDescriptor(SQLTypes sql_type = kPOINT){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "POINT"; };
-
-  std::string getColumnWktStringValue(int row) {
-    return "POINT (" + std::to_string(row) + " 0)";
-  }
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-
-  bool check_column_value(int row, const TDatum* value) override {
-    std::string mapd_val;
-    if (!checked_get(row, value, mapd_val, std::string(""))) {
-      return false;
-    }
-
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
-class GeoLinestringColumnDescriptor : public TestColumnDescriptor {
-  std::string prefix;
-
- public:
-  GeoLinestringColumnDescriptor(SQLTypes sql_type = kLINESTRING){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "LINESTRING"; };
-
-  std::string getColumnWktStringValue(int row) {
-    std::string linestring = "LINESTRING (0 0";
-    for (int i = 0; i <= row; i++) {
-      linestring += "," + std::to_string(row) + " 0";
-    }
-    linestring += ")";
-    return linestring;
-  }
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-
-  bool check_column_value(int row, const TDatum* value) override {
-    std::string mapd_val;
-    if (!checked_get(row, value, mapd_val, std::string(""))) {
-      return false;
-    }
-
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
-class GeoMultiPolygonColumnDescriptor : public TestColumnDescriptor {
-  std::string prefix;
-
- public:
-  GeoMultiPolygonColumnDescriptor(SQLTypes sql_type = kMULTIPOLYGON){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "MULTIPOLYGON"; };
-
-  std::string getColumnWktStringValue(int row) {
-    std::string polygon =
-        "MULTIPOLYGON (((0 " + std::to_string(row) + ",4 " + std::to_string(row) + ",4 " +
-        std::to_string(row + 4) + ",0 " + std::to_string(row + 4) + ",0 " +
-        std::to_string(row) + "),(1 " + std::to_string(row + 1) + ",1 " +
-        std::to_string(row + 2) + ",2 " + std::to_string(row + 2) + ",2 " +
-        std::to_string(row + 1) + ",1 " + std::to_string(row + 1) + ")))";
-    return polygon;
-  }
-
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-
-  bool check_column_value(int row, const TDatum* value) override {
-    std::string mapd_val;
-    if (!checked_get(row, value, mapd_val, std::string(""))) {
-      return false;
-    }
-
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
-class GeoPolygonColumnDescriptor : public TestColumnDescriptor {
-  std::string prefix;
-
- public:
-  GeoPolygonColumnDescriptor(SQLTypes sql_type = kPOLYGON){};
-
-  bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
-
-  std::string get_column_definition() override { return "POLYGON"; };
-
-  std::string getColumnWktStringValue(int row) {
-    std::string polygon =
-        "POLYGON ((0 " + std::to_string(row) + ",4 " + std::to_string(row) + ",4 " +
-        std::to_string(row + 4) + ",0 " + std::to_string(row + 4) + ",0 " +
-        std::to_string(row) + "),(1 " + std::to_string(row + 1) + ",1 " +
-        std::to_string(row + 2) + ",2 " + std::to_string(row + 2) + ",2 " +
-        std::to_string(row + 1) + ",1 " + std::to_string(row + 1) + "))";
-    return polygon;
-  }
-
-  std::string get_column_value(int row) override {
-    return "'" + getColumnWktStringValue(row) + "'";
-  };
-
-  bool check_column_value(int row, const TDatum* value) override {
-    std::string mapd_val;
-    if (!checked_get(row, value, mapd_val, std::string(""))) {
-      return false;
-    }
-
-    if (mapd_val == getColumnWktStringValue(row)) {
-      return true;
-    }
-
-    LOG(ERROR) << "row: " << std::to_string(row) << " " << getColumnWktStringValue(row)
-               << " vs. " << mapd_val;
-    return false;
-  }
-};
-
 struct Ctas
     : testing::Test,
       testing::WithParamInterface<std::vector<std::shared_ptr<TestColumnDescriptor>>> {
@@ -1078,23 +927,6 @@ TIME_COLUMN_TEST(TIMESTAMP_32,
                  160 * 60 * 100);
 ARRAY_COLUMN_TEST(TIMESTAMP, "TIMESTAMP");
 
-const std::shared_ptr<TestColumnDescriptor> GEO_POINT =
-    std::shared_ptr<TestColumnDescriptor>(new GeoPointColumnDescriptor(kPOINT));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_POINT);
-
-const std::shared_ptr<TestColumnDescriptor> GEO_LINESTRING =
-    std::shared_ptr<TestColumnDescriptor>(new GeoLinestringColumnDescriptor(kLINESTRING));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_LINESTRING);
-
-const std::shared_ptr<TestColumnDescriptor> GEO_POLYGON =
-    std::shared_ptr<TestColumnDescriptor>(new GeoPolygonColumnDescriptor(kPOLYGON));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_POLYGON);
-
-const std::shared_ptr<TestColumnDescriptor> GEO_MULTI_POLYGON =
-    std::shared_ptr<TestColumnDescriptor>(
-        new GeoMultiPolygonColumnDescriptor(kMULTIPOLYGON));
-INSTANTIATE_DATA_INGESTION_TEST(GEO_MULTI_POLYGON);
-
 INSTANTIATE_TEST_SUITE_P(
     MIXED_NO_GEO,
     Ctas,
@@ -1138,12 +970,7 @@ INSTANTIATE_TEST_SUITE_P(
     Update,
     testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{TEXT,
                                                                        INTEGER,
-                                                                       DOUBLE,
-                                                                       GEO_POINT,
-                                                                       GEO_LINESTRING,
-                                                                       GEO_POLYGON,
-                                                                       GEO_MULTI_POLYGON
-
+                                                                       DOUBLE
     }));
 
 int main(int argc, char* argv[]) {

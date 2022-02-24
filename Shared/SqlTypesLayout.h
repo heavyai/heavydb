@@ -199,11 +199,6 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
         throw std::runtime_error("Projecting on unsized array column not supported.");
       }
       return ti.get_size() * 8;
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      return 32;
     case kCOLUMN:
     case kCOLUMN_LIST:
       return ti.get_elem_type().get_size() * 8;

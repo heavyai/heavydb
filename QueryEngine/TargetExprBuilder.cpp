@@ -40,7 +40,7 @@ namespace {
 
 inline bool is_varlen_projection(const Analyzer::Expr* target_expr,
                                  const SQLTypeInfo& ti) {
-  return dynamic_cast<const Analyzer::GeoExpr*>(target_expr) && ti.get_type() == kPOINT;
+  return false;
 }
 
 std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info,
@@ -350,85 +350,7 @@ void TargetExprCodegen::codegenAggregate(
     }
 
     if (is_varlen_projection(target_expr, target_info.sql_type)) {
-      CHECK(!query_mem_desc.didOutputColumnar());
-
-      CHECK_EQ(target_info.sql_type.get_type(), kPOINT);
-      CHECK_LT(target_lv_idx, target_lvs.size());
-      CHECK(varlen_output_buffer);
-      auto target_lv = target_lvs[target_lv_idx];
-
-      std::string agg_fname_suffix = "";
-      if (co.device_type == ExecutorDeviceType::GPU &&
-          query_mem_desc.threadsShareMemory()) {
-        agg_fname_suffix += "_shared";
-      }
-
-      // first write the varlen data into the varlen buffer and get the pointer location
-      // into the varlen buffer
-      auto& builder = executor->cgen_state_->ir_builder_;
-      auto orig_bb = builder.GetInsertBlock();
-      auto target_ptr_type = llvm::dyn_cast<llvm::PointerType>(target_lv->getType());
-      CHECK(target_ptr_type) << "Varlen projections expect a pointer input.";
-      auto is_nullptr =
-          builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
-                             target_lv,
-                             llvm::ConstantPointerNull::get(llvm::PointerType::get(
-                                 target_ptr_type->getPointerElementType(), 0)));
-      llvm::BasicBlock* true_bb{nullptr};
-      {
-        DiamondCodegen nullcheck_diamond(
-            is_nullptr, executor, false, "varlen_null_check", nullptr, false);
-        // maintain a reference to the true bb, overriding the diamond codegen destructor
-        true_bb = nullcheck_diamond.cond_true_;
-        // if not null, process the pointer and insert it into the varlen buffer
-        builder.SetInsertPoint(nullcheck_diamond.cond_false_);
-        auto arr_ptr_lv = executor->cgen_state_->ir_builder_.CreateBitCast(
-            target_lv,
-            llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0));
-        const int64_t chosen_bytes =
-            target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16;
-        const auto output_buffer_slot = LL_BUILDER.CreateZExt(
-            LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched")),
-            llvm::Type::getInt64Ty(LL_CONTEXT));
-        const auto varlen_buffer_row_sz = query_mem_desc.varlenOutputBufferElemSize();
-        CHECK(varlen_buffer_row_sz);
-        const auto output_buffer_slot_bytes = LL_BUILDER.CreateAdd(
-            LL_BUILDER.CreateMul(output_buffer_slot,
-                                 executor->cgen_state_->llInt(
-                                     static_cast<int64_t>(*varlen_buffer_row_sz))),
-            executor->cgen_state_->llInt(static_cast<int64_t>(
-                query_mem_desc.varlenOutputRowSizeToSlot(slot_index))));
-
-        std::vector<llvm::Value*> varlen_agg_args{
-            executor->castToIntPtrTyIn(varlen_output_buffer, 8),
-            output_buffer_slot_bytes,
-            arr_ptr_lv,
-            executor->cgen_state_->llInt(chosen_bytes)};
-        auto varlen_offset_ptr =
-            group_by_and_agg->emitCall(agg_base_name + agg_fname_suffix, varlen_agg_args);
-
-        // then write that pointer location into the 64 bit slot in the output buffer
-        auto varlen_offset_int = LL_BUILDER.CreatePtrToInt(
-            varlen_offset_ptr, llvm::Type::getInt64Ty(LL_CONTEXT));
-        builder.CreateBr(nullcheck_diamond.cond_true_);
-
-        // use the true block to do the output buffer insertion regardless of nullness
-        builder.SetInsertPoint(nullcheck_diamond.cond_true_);
-        auto output_phi =
-            builder.CreatePHI(llvm::Type::getInt64Ty(executor->cgen_state_->context_), 2);
-        output_phi->addIncoming(varlen_offset_int, nullcheck_diamond.cond_false_);
-        output_phi->addIncoming(executor->cgen_state_->llInt(static_cast<int64_t>(0)),
-                                orig_bb);
-
-        std::vector<llvm::Value*> agg_args{agg_col_ptr, output_phi};
-        group_by_and_agg->emitCall("agg_id" + agg_fname_suffix, agg_args);
-      }
-      CHECK(true_bb);
-      builder.SetInsertPoint(true_bb);
-
-      ++slot_index;
-      ++target_lv_idx;
-      continue;
+      UNREACHABLE();
     }
 
     const bool float_argument_input = takes_float_argument(target_info);

@@ -581,18 +581,6 @@ SQLTypes JsonColumnSqlType::getSqlType(const std::string& type) {
   if (boost::iequals(type, "INTEGER")) {
     return kINT;
   }
-  if (boost::iequals(type, "LINESTRING")) {
-    return kLINESTRING;
-  }
-  if (boost::iequals(type, "MULTIPOLYGON")) {
-    return kMULTIPOLYGON;
-  }
-  if (boost::iequals(type, "POINT")) {
-    return kPOINT;
-  }
-  if (boost::iequals(type, "POLYGON")) {
-    return kPOLYGON;
-  }
   if (boost::iequals(type, "SMALLINT")) {
     return kSMALLINT;
   }
@@ -618,8 +606,6 @@ int JsonColumnSqlType::getParam1(const rapidjson::Value& data_type) {
   if (data_type.HasMember("precision") && !data_type["precision"].IsNull()) {
     CHECK(data_type["precision"].IsInt());
     param1 = data_type["precision"].GetInt();
-  } else if (auto type = getSqlType(data_type); IS_GEO(type)) {
-    param1 = static_cast<int>(kGEOMETRY);
   }
   return param1;
 }
@@ -630,11 +616,6 @@ int JsonColumnSqlType::getParam2(const rapidjson::Value& data_type) {
   if (data_type.HasMember("scale") && !data_type["scale"].IsNull()) {
     CHECK(data_type["scale"].IsInt());
     param2 = data_type["scale"].GetInt();
-  } else if (auto type = getSqlType(data_type); IS_GEO(type) &&
-                                                data_type.HasMember("coordinateSystem") &&
-                                                !data_type["coordinateSystem"].IsNull()) {
-    CHECK(data_type["coordinateSystem"].IsInt());
-    param2 = data_type["coordinateSystem"].GetInt();
   }
   return param2;
 }

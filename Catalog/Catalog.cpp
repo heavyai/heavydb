@@ -71,7 +71,6 @@
 #include "Shared/StringTransform.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
-#include "Shared/sqltypes_geo.h"
 #include "StringDictionary/StringDictionaryClient.h"
 
 #include "MapDRelease.h"
@@ -325,43 +324,7 @@ void Catalog::updateFixlenArrayColumns() {
 }
 
 void Catalog::updateGeoColumns() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query(
-        "select name from sqlite_master WHERE type='table' AND "
-        "name='mapd_version_history'");
-    if (sqliteConnector_.getNumRows() == 0) {
-      sqliteConnector_.query(
-          "CREATE TABLE mapd_version_history(version integer, migration_history text "
-          "unique)");
-    } else {
-      sqliteConnector_.query(
-          "select * from mapd_version_history where migration_history = "
-          "'notnull_geo_columns'");
-      if (sqliteConnector_.getNumRows() != 0) {
-        // legacy geo columns had migrated
-        // no need for further execution
-        sqliteConnector_.query("END TRANSACTION");
-        return;
-      }
-    }
-    // Insert check for migration
-    sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
-        std::vector<std::string>{std::to_string(MAPD_VERSION), "notnull_geo_columns"});
-    LOG(INFO) << "Updating mapd_columns, legacy geo columns";
-    // Upating all geo columns
-    string queryString(
-        "UPDATE mapd_columns SET is_notnull=1 WHERE coltype=" + std::to_string(kPOINT) +
-        " OR coltype=" + std::to_string(kLINESTRING) + " OR coltype=" +
-        std::to_string(kPOLYGON) + " OR coltype=" + std::to_string(kMULTIPOLYGON) + ";");
-    sqliteConnector_.query(queryString);
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
+  UNREACHABLE();
 }
 
 void Catalog::updateFrontendViewSchema() {
@@ -833,7 +796,6 @@ void Catalog::createDashboardSystemRoles() {
 void Catalog::CheckAndExecuteMigrations() {
   updateTableDescriptorSchema();
   updateFixlenArrayColumns();
-  updateGeoColumns();
   updateFrontendViewAndLinkUsers();
   updateFrontendViewSchema();
   updateLinkSchema();
@@ -1929,106 +1891,7 @@ void Catalog::roll(const bool forward) {
 
 void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
                               list<ColumnDescriptor>& columns) {
-  const auto& col_ti = cd.columnType;
-  if (IS_GEO(col_ti.get_type())) {
-    switch (col_ti.get_type()) {
-      case kPOINT: {
-        ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 0);
-        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
-        columns.push_back(physical_cd_coords);
-
-        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-        break;
-      }
-      case kLINESTRING: {
-        ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 0);
-        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
-        columns.push_back(physical_cd_coords);
-
-        ColumnDescriptor physical_cd_bounds(true);
-        physical_cd_bounds.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 1);
-        physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 1);
-        columns.push_back(physical_cd_bounds);
-
-        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-        break;
-      }
-      case kPOLYGON: {
-        ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 0);
-        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
-        columns.push_back(physical_cd_coords);
-
-        ColumnDescriptor physical_cd_ring_sizes(true);
-        physical_cd_ring_sizes.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 1);
-        physical_cd_ring_sizes.columnType = get_geo_physical_col_type(col_ti, 1);
-        columns.push_back(physical_cd_ring_sizes);
-
-        ColumnDescriptor physical_cd_bounds(true);
-        physical_cd_bounds.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 2);
-        physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 2);
-        columns.push_back(physical_cd_bounds);
-
-        ColumnDescriptor physical_cd_render_group(true);
-        physical_cd_render_group.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 3);
-        physical_cd_render_group.columnType = get_geo_physical_col_type(col_ti, 3);
-        columns.push_back(physical_cd_render_group);
-
-        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-        break;
-      }
-      case kMULTIPOLYGON: {
-        ColumnDescriptor physical_cd_coords(true);
-        physical_cd_coords.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 0);
-        physical_cd_coords.columnType = get_geo_physical_col_type(col_ti, 0);
-        columns.push_back(physical_cd_coords);
-
-        ColumnDescriptor physical_cd_ring_sizes(true);
-        physical_cd_ring_sizes.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 1);
-        physical_cd_ring_sizes.columnType = get_geo_physical_col_type(col_ti, 1);
-        columns.push_back(physical_cd_ring_sizes);
-
-        ColumnDescriptor physical_cd_poly_rings(true);
-        physical_cd_poly_rings.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 2);
-        physical_cd_poly_rings.columnType = get_geo_physical_col_type(col_ti, 2);
-        columns.push_back(physical_cd_poly_rings);
-
-        ColumnDescriptor physical_cd_bounds(true);
-        physical_cd_bounds.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 3);
-        physical_cd_bounds.columnType = get_geo_physical_col_type(col_ti, 3);
-        columns.push_back(physical_cd_bounds);
-
-        ColumnDescriptor physical_cd_render_group(true);
-        physical_cd_render_group.columnName =
-            get_geo_physical_col_name(cd.columnName, col_ti, 4);
-        physical_cd_render_group.columnType = get_geo_physical_col_type(col_ti, 4);
-        columns.push_back(physical_cd_render_group);
-
-        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
-
-        break;
-      }
-      default:
-        throw runtime_error("Unrecognized geometry type.");
-        break;
-    }
-  }
+  UNREACHABLE();
 }
 
 void Catalog::createTable(

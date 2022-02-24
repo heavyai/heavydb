@@ -1157,11 +1157,6 @@ inline bool is_null_value(const SQLTypeInfo& ti, const Datum& constval) {
     case kCHAR:
     case kTEXT:
       return constval.stringval == nullptr;
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      return constval.stringval == nullptr;
     case kFLOAT:
       return constval.floatval == NULL_FLOAT;
     case kDOUBLE:
@@ -1279,12 +1274,6 @@ void Constant::set_null_value() {
     case kVARCHAR:
     case kCHAR:
     case kTEXT:
-      constval.stringval = nullptr;
-      break;
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
       constval.stringval = nullptr;
       break;
     case kFLOAT:
@@ -2129,11 +2118,6 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
       return val1.bigintval == val2.bigintval;
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      return *val1.stringval == *val2.stringval;
     default:
       throw std::runtime_error("Unrecognized type for Constant Datum equality: " +
                                ti.get_type_name());
@@ -3419,24 +3403,8 @@ int32_t WidthBucketExpr::get_partition_count_val() const {
 namespace {
 
 SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
-  CHECK(geo);
-  switch (geo->getType()) {
-    case Geospatial::GeoBase::GeoType::kPOINT: {
-      return kPOINT;
-    }
-    case Geospatial::GeoBase::GeoType::kLINESTRING: {
-      return kLINESTRING;
-    }
-    case Geospatial::GeoBase::GeoType::kPOLYGON: {
-      return kPOLYGON;
-    }
-    case Geospatial::GeoBase::GeoType::kMULTIPOLYGON: {
-      return kMULTIPOLYGON;
-    }
-    default:
-      UNREACHABLE();
-      return kNULLT;
-  }
+  UNREACHABLE();
+  return kNULLT;
 }
 
 }  // namespace

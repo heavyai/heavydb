@@ -141,16 +141,6 @@ ColumnType sqlToColumnType(const SQLTypes& type) {
       return ColumnType::INTERVAL_DAY_TIME;
     case kINTERVAL_YEAR_MONTH:
       return ColumnType::INTERVAL_YEAR_MONTH;
-    case kPOINT:
-      return ColumnType::POINT;
-    case kLINESTRING:
-      return ColumnType::LINESTRING;
-    case kPOLYGON:
-      return ColumnType::POLYGON;
-    case kMULTIPOLYGON:
-      return ColumnType::MULTIPOLYGON;
-    case kGEOMETRY:
-      return ColumnType::GEOMETRY;
     default:
       return ColumnType::UNKNOWN;
   }

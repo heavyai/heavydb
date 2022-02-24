@@ -60,12 +60,8 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 }
 
 TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
-                                     const ExecutorDeviceType dt,
-                                     const bool geo_return_geo_tv = true) {
+                                     const ExecutorDeviceType dt) {
   auto rows = QR::get()->runSQL(stmt, dt, true, true);
-  if (geo_return_geo_tv) {
-    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  }
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size()) << stmt;
   return crt_row[0];

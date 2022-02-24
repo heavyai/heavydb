@@ -98,12 +98,6 @@ void shuffleByIndexes(const ColumnDescriptor* cd,
     case kARRAY:
       shuffleByIndexesImpl(indexes, *data.arraysPtr);
       break;
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      shuffleByIndexesImpl(indexes, *data.stringsPtr);
-      break;
     default:
       CHECK(false);
   }

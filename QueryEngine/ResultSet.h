@@ -399,7 +399,6 @@ class ResultSet {
     return {};
   }
 
-  bool isGeoColOnGpu(const size_t col_idx) const;
   int getDeviceId() const;
 
   void setOuterTableId(int id) { outer_table_id_ = id; }
@@ -444,21 +443,6 @@ class ResultSet {
                                                 const Executor*);
 
   size_t getLimit() const;
-
-  /**
-   * Geo return type options when accessing geo columns from a result set.
-   */
-  enum class GeoReturnType {
-    GeoTargetValue,      /**< Copies the geo data into a struct of vectors - coords are
-                            uncompressed */
-    WktString,           /**< Returns the geo data as a WKT string */
-    GeoTargetValuePtr,   /**< Returns only the pointers of the underlying buffers for the
-                            geo data. */
-    GeoTargetValueGpuPtr /**< If geo data is currently on a device, keep the data on the
-                            device and return the device ptrs */
-  };
-  GeoReturnType getGeoReturnType() const { return geo_return_type_; }
-  void setGeoReturnType(const GeoReturnType val) { geo_return_type_ = val; }
 
   void copyColumnIntoBuffer(const size_t column_idx,
                             int8_t* output_buffer,
@@ -619,11 +603,6 @@ class ResultSet {
     VarlenTargetPtrPair()
         : ptr1(nullptr), compact_sz1(0), ptr2(nullptr), compact_sz2(0) {}
   };
-  TargetValue makeGeoTargetValue(const int8_t* geo_target_ptr,
-                                 const size_t slot_idx,
-                                 const TargetInfo& target_info,
-                                 const size_t target_logical_idx,
-                                 const size_t entry_buff_idx) const;
 
   struct StorageLookupResult {
     const ResultSetStorage* storage_ptr;
@@ -862,9 +841,6 @@ class ResultSet {
   bool for_validation_only_;
   mutable std::atomic<int64_t> cached_row_count_;
   mutable std::mutex row_iteration_mutex_;
-
-  // only used by geo
-  mutable GeoReturnType geo_return_type_;
 
   friend class ResultSetManager;
   friend class ResultSetRowIterator;
