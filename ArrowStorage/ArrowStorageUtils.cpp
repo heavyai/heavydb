@@ -353,7 +353,6 @@ std::shared_ptr<arrow::ChunkedArray> convertDateReplacingNulls(
 template <typename T>
 std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArrayImpl(
     std::shared_ptr<arrow::ChunkedArray> arr) {
-  int64_t null_elems = 0;
   size_t elems_count = 0;
   int32_t arrays_count = 0;
   std::vector<int32_t> out_elem_offsets;
@@ -361,26 +360,18 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArrayImpl(
   out_elem_offsets.reserve(arr->num_chunks());
   out_offset_offsets.reserve(arr->num_chunks());
 
-  // In Arrow format NULL arrays have no elements but in OmniSci format we
-  // should have a single element holding a sentinel array NULL value.
-  // Here we compute a length of the resulting elments buffer and output
-  // offsets for chunks. Also check if there are any NULL elements in
-  // arrays requiring replacement.
   for (auto& chunk : arr->chunks()) {
     auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
     CHECK(chunk_list);
-    auto elems_list = chunk_list->values();
 
     out_offset_offsets.push_back(arrays_count);
     out_elem_offsets.push_back(static_cast<int32_t>(elems_count));
 
     auto offset_data = chunk_list->data()->GetValues<uint32_t>(1);
-    // There might be nulls out of offsets range represented by the chunk,
-    // but we still can avoid conversion if there are no NULLs at all.
-    null_elems += elems_list->null_count();
     arrays_count += chunk->length();
     elems_count += offset_data[chunk->length()] - offset_data[0];
   }
+
   if (elems_count > std::numeric_limits<int32_t>::max()) {
     throw std::runtime_error("Input arrow array is too big for conversion.");
   }
@@ -452,9 +443,85 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArrayImpl(
   return std::make_shared<arrow::ChunkedArray>(list_array);
 }
 
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenStringArrayImpl(
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    StringDictionary* dict) {
+  size_t elems_count = 0;
+  int32_t arrays_count = 0;
+  std::vector<int32_t> out_elem_offsets;
+  std::vector<int32_t> out_offset_offsets;
+  out_elem_offsets.reserve(arr->num_chunks());
+  out_offset_offsets.reserve(arr->num_chunks());
+
+  for (auto& chunk : arr->chunks()) {
+    auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
+    CHECK(chunk_list);
+
+    out_offset_offsets.push_back(arrays_count);
+    out_elem_offsets.push_back(static_cast<int32_t>(elems_count));
+
+    auto offset_data = chunk_list->data()->GetValues<uint32_t>(1);
+    arrays_count += chunk->length();
+    elems_count += offset_data[chunk->length()] - offset_data[0];
+  }
+
+  if (elems_count > std::numeric_limits<int32_t>::max()) {
+    throw std::runtime_error("Input arrow array is too big for conversion.");
+  }
+
+  auto offset_buf =
+      arrow::AllocateBuffer(sizeof(int32_t) * arr->length() + 1).ValueOrDie();
+  auto offset_ptr = reinterpret_cast<int32_t*>(offset_buf->mutable_data());
+
+  auto elem_buf = arrow::AllocateBuffer(sizeof(int32_t) * elems_count).ValueOrDie();
+  auto elem_ptr = reinterpret_cast<int32_t*>(elem_buf->mutable_data());
+
+  tbb::parallel_for(
+      tbb::blocked_range<int>(0, arr->num_chunks()),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int c = r.begin(); c != r.end(); ++c) {
+          auto elem_offset = out_elem_offsets[c];
+          auto offset_offset = out_offset_offsets[c];
+          auto chunk_array = std::dynamic_pointer_cast<arrow::ListArray>(arr->chunk(c));
+          auto elem_array =
+              std::dynamic_pointer_cast<arrow::StringArray>(chunk_array->values());
+          CHECK(elem_array);
+
+          bool use_negative_offset = false;
+          for (int64_t i = 0; i < chunk_array->length(); ++i) {
+            offset_ptr[offset_offset++] = use_negative_offset
+                                              ? -elem_offset * sizeof(int32_t)
+                                              : elem_offset * sizeof(int32_t);
+            if (chunk_array->IsNull(i)) {
+              use_negative_offset = true;
+            } else {
+              use_negative_offset = false;
+              auto offs = chunk_array->value_offset(i);
+              auto len = chunk_array->value_length(i);
+              for (int j = 0; j < len; ++j) {
+                auto view = elem_array->GetView(offs + j);
+                elem_ptr[elem_offset++] =
+                    dict->getOrAdd(std::string_view(view.data(), view.length()));
+              }
+            }
+          }
+        }
+      });
+  auto last_chunk = arr->chunk(arr->num_chunks() - 1);
+  offset_ptr[arr->length()] = static_cast<int32_t>(
+      last_chunk->IsNull(last_chunk->length() - 1) ? -elems_count * sizeof(int32_t)
+                                                   : elems_count * sizeof(int32_t));
+
+  auto elem_array = std::make_shared<arrow::Int32Array>(elems_count, std::move(elem_buf));
+  auto list_array = std::make_shared<arrow::ListArray>(
+      arrow::list(arrow::int32()), arr->length(), std::move(offset_buf), elem_array);
+  return std::make_shared<arrow::ChunkedArray>(list_array);
+}
+
 std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArray(
     std::shared_ptr<arrow::ChunkedArray> arr,
-    const SQLTypeInfo& type) {
+    const SQLTypeInfo& type,
+    StringDictionary* dict) {
   auto list_type = std::dynamic_pointer_cast<arrow::ListType>(arr->type());
   if (!list_type) {
     throw std::runtime_error("Unsupported large Arrow list:: "s + list_type->ToString());
@@ -484,6 +551,9 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArray(
     }
   } else if (elem_type.is_boolean()) {
     return replaceNullValuesVarlenArrayImpl<bool>(arr);
+  } else if (elem_type.is_dict_encoded_string()) {
+    CHECK_EQ(elem_type.get_size(), 4);
+    return replaceNullValuesVarlenStringArrayImpl(arr, dict);
   }
 
   throw std::runtime_error("Unsupported varlen array: "s + type.toString());
@@ -823,7 +893,7 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
   } else if (type.is_fixlen_array()) {
     return replaceNullValuesFixedSizeArray(arr, type, dict);
   } else if (type.is_varlen_array()) {
-    return replaceNullValuesVarlenArray(arr, type);
+    return replaceNullValuesVarlenArray(arr, type, dict);
   }
   CHECK(false) << "Unexpected type: " << type.toString();
   return nullptr;
@@ -961,7 +1031,8 @@ std::shared_ptr<arrow::ChunkedArray> createDictionaryEncodedColumn(
     auto raw_converted_data =
         reinterpret_cast<IndexType*>(converted_indices_buf->mutable_data());
     for (size_t i = 0; i < bulk_size; ++i) {
-      if (raw_data[i] > static_cast<int32_t>(std::numeric_limits<IndexType>::max())) {
+      if (raw_data[i] > static_cast<int32_t>(std::numeric_limits<IndexType>::max()) ||
+          raw_data[i] == inline_null_value<int>()) {
         raw_converted_data[i] = static_cast<IndexType>(StringDictionary::INVALID_STR_ID);
       } else {
         raw_converted_data[i] = static_cast<IndexType>(raw_data[i]);
