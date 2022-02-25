@@ -135,7 +135,7 @@ TEST_F(InitDBTest, Help) {
                                         thrift to stdout/stderr.
 
 Logging:
-  --log-directory arg (="log")          Logging directory. May be relative to
+  --log-directory arg (="log")          Logging directory. May be relative to 
                                         data directory, or absolute.
   --log-file-name arg (=initheavy.{SEVERITY}.%Y%m%d-%H%M%S.log)
                                         Log file name relative to 
