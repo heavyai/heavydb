@@ -55,6 +55,11 @@ class RelAlgExecutor {
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
+                 int db_id,
+                 SchemaProviderPtr schema_provider,
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr);
+
+  RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
                  const std::string& query_ra,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);

@@ -41,6 +41,7 @@
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
+
 #include "ImportExport/ImportUtils.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
@@ -100,9 +101,9 @@ class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> 
 }  // namespace
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-               const Catalog_Namespace::Catalog* cat,
-               SchemaProviderPtr schema_provider,
-               std::shared_ptr<const query_state::QueryState> query_state)
+                               const Catalog_Namespace::Catalog* cat,
+                               SchemaProviderPtr schema_provider,
+                               std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
     , cat_(cat)
     , db_id_(cat->getDatabaseId())
@@ -112,9 +113,21 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
     , queue_time_ms_(0) {}
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-               const Catalog_Namespace::Catalog* cat,
-               const std::string& query_ra,
-               std::shared_ptr<const query_state::QueryState> query_state)
+                               int db_id,
+                               SchemaProviderPtr schema_provider,
+                               std::shared_ptr<const query_state::QueryState> query_state)
+    : executor_(executor)
+    , cat_(nullptr)
+    , db_id_(db_id)
+    , schema_provider_(schema_provider)
+    , query_state_(std::move(query_state))
+    , now_(0)
+    , queue_time_ms_(0) {}
+
+RelAlgExecutor::RelAlgExecutor(Executor* executor,
+                               const Catalog_Namespace::Catalog* cat,
+                               const std::string& query_ra,
+                               std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
     , cat_(cat)
     , db_id_(cat->getDatabaseId())
@@ -123,37 +136,34 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
           cat_->getDatabaseId(),
           std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat),
           nullptr))
-    , schema_provider_(
-          std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
+    , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-               const Catalog_Namespace::Catalog* cat,
-               std::unique_ptr<RelAlgDag> query_dag,
-               std::shared_ptr<const query_state::QueryState> query_state)
+                               const Catalog_Namespace::Catalog* cat,
+                               std::unique_ptr<RelAlgDag> query_dag,
+                               std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
     , cat_(cat)
     , db_id_(cat->getDatabaseId())
     , query_dag_(std::move(query_dag))
-    , schema_provider_(
-          std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
+    , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
-               int db_id,
-               SchemaProviderPtr schema_provider,
-               std::unique_ptr<RelAlgDag> query_dag,
-               std::shared_ptr<const query_state::QueryState> query_state)
+                               int db_id,
+                               SchemaProviderPtr schema_provider,
+                               std::unique_ptr<RelAlgDag> query_dag,
+                               std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
     , cat_(nullptr)
     , db_id_(db_id)
     , query_dag_(std::move(query_dag))
-    , schema_provider_(
-          std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
+    , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
@@ -422,7 +432,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(executor_, cat_, schema_provider_, query_state_);
+    RelAlgExecutor ra_executor(executor_, db_id_, schema_provider_, query_state_);
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
