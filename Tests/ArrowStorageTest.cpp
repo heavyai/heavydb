@@ -1384,6 +1384,61 @@ TEST_F(ArrowStorageTest, AppendJsonData_DateTime_Multifrag) {
                                   10843}));
 }
 
+TEST_F(ArrowStorageTest, AppendCsvData_BoolWithNulls) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  ArrowStorage::TableOptions table_options;
+  table_options.fragment_size = 2;
+  TableInfoPtr tinfo =
+      storage.createTable("table1",
+                          {{"b1", SQLTypeInfo(kBOOLEAN)}, {"b2", SQLTypeInfo(kBOOLEAN)}},
+                          table_options);
+  ArrowStorage::CsvParseOptions parse_options;
+  parse_options.header = false;
+  storage.appendCsvData("true,true", tinfo->table_id, parse_options);
+  storage.appendCsvData("true,false", tinfo->table_id, parse_options);
+  storage.appendCsvData("false,true", tinfo->table_id, parse_options);
+  storage.appendCsvData(",true", tinfo->table_id, parse_options);
+  storage.appendCsvData(",false", tinfo->table_id, parse_options);
+  storage.appendCsvData("true,", tinfo->table_id, parse_options);
+  storage.appendCsvData("false,", tinfo->table_id, parse_options);
+  storage.appendCsvData(",", tinfo->table_id, parse_options);
+  checkData(storage,
+            tinfo->table_id,
+            8,
+            2,
+            std::vector<int8_t>({1, 1, 0, -128, -128, 1, 0, -128}),
+            std::vector<int8_t>({1, 0, 1, 1, 0, -128, -128, -128}));
+}
+
+TEST_F(ArrowStorageTest, AppendCsvData_BoolWithNulls_SingleChunk) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  ArrowStorage::TableOptions table_options;
+  table_options.fragment_size = 2;
+  TableInfoPtr tinfo =
+      storage.createTable("table1",
+                          {{"b1", SQLTypeInfo(kBOOLEAN)}, {"b2", SQLTypeInfo(kBOOLEAN)}},
+                          table_options);
+  ArrowStorage::CsvParseOptions parse_options;
+  parse_options.header = false;
+  storage.appendCsvData(
+      "true,true\n"
+      "true,false\n"
+      "false,true\n"
+      ",true\n"
+      ",false\n"
+      "true,\n"
+      "false,\n"
+      ",",
+      tinfo->table_id,
+      parse_options);
+  checkData(storage,
+            tinfo->table_id,
+            8,
+            2,
+            std::vector<int8_t>({1, 1, 0, -128, -128, 1, 0, -128}),
+            std::vector<int8_t>({1, 0, 1, 1, 0, -128, -128, -128}));
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

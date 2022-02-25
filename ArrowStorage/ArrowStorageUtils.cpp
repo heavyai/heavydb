@@ -130,7 +130,13 @@ void copyArrayDataReplacingNulls(T* dst,
   auto null_value = inline_null_value<T>();
 
   if (arr->null_count() == arr->length()) {
-    std::fill(dst, dst + length, null_value);
+    if constexpr (std::is_same_v<T, bool>) {
+      std::fill(reinterpret_cast<int8_t*>(dst),
+                reinterpret_cast<int8_t*>(dst + length),
+                null_value);
+    } else {
+      std::fill(dst, dst + length, null_value);
+    }
   } else if (arr->null_count() == 0) {
     if constexpr (std::is_same_v<T, bool>) {
       convertBoolBitmapBufferWithoutNulls(reinterpret_cast<int8_t*>(dst),
