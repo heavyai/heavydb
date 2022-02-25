@@ -331,7 +331,7 @@ void SysCatalog::importDataFromOldMapdDB() {
       basePath_ + "/" + shared::kCatalogDirectoryName + "/" + shared::kSystemCatalogName;
   LOG(INFO) << "Global metadata has been successfully moved into a separate catalog: "
             << sys_catalog_path
-            << ". Using this database with an older version of omnisci_server "
+            << ". Using this database with an older version of heavydb "
                "is now impossible.";
   try {
     sqliteConnector_->query("DETACH DATABASE old_cat");

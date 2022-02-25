@@ -127,9 +127,9 @@ outputs:
         - arrow-cpp-proc * {{ build_ext }}
     test:
       commands:
-        - omnisql -v
-        - which omnisci_initdb
-        - which omnisci_server
+        - heavysql -v
+        - which initheavy
+        - which heavydb
     about:
       home: https://www.omnisci.com/
       license: Apache-2.0

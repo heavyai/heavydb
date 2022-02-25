@@ -378,7 +378,7 @@ void Calcite::init(const int db_port,
     CHECK(false) << "JNI mode no longer supported.";
   }
   if (calcite_port == 0) {
-    // dummy process for initdb
+    // dummy process for initheavy
     remote_calcite_port_ = calcite_port;
     server_available_ = false;
   } else {
@@ -581,7 +581,7 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
     } catch (const std::exception& ex) {
       LOG(FATAL)
           << "Error occurred trying to communicate with Calcite server, the error was: '"
-          << ex.what() << "', omnisci_server restart will be required";
+          << ex.what() << "', heavydb restart will be required";
       return ret;  // satisfy return-type warning
     }
   } else {

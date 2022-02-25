@@ -33,9 +33,9 @@ if hash setsid 2>/dev/null; then
     # to see process groups (PGID's), try 'pstree -g' or something like:
     #     ps -u yourname -o pid,ppid,pgid,args | head -1 ; ps -u yourname -o pid,ppid,pgid,args | grep -E 'omnisci|calcite' | grep -v grep
     if [ "$TTY" != "" ]; then
-      setsid $DIR/scripts/inneromnisci "$@" <$TTY &
+      setsid $DIR/scripts/innerstartheavy "$@" <$TTY &
     else
-      setsid $DIR/scripts/inneromnisci --non-interactive "$@" &
+      setsid $DIR/scripts/innerstartheavy --non-interactive "$@" &
     fi
     SUBPID=$!
 else
@@ -44,9 +44,9 @@ else
     PGID=$$
     export PGID
     if [ "$TTY" != "" ]; then
-      $DIR/scripts/inneromnisci "$@" <$TTY &
+      $DIR/scripts/innerstartheavy "$@" <$TTY &
     else
-      $DIR/scripts/inneromnisci --non-interactive "$@" &
+      $DIR/scripts/innerstartheavy --non-interactive "$@" &
     fi
     SUBPID=$!
 fi

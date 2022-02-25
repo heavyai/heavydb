@@ -101,7 +101,7 @@ required.add_argument(
     "--import-file",
     dest="import_file",
     required=True,
-    help="Absolute path to file on omnisci_server machine with data for "
+    help="Absolute path to file on heavydb machine with data for "
     + "import test",
 )
 required.add_argument(

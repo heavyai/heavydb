@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "../../QueryEngine/OmniSciTypes.h"
 #include "../../QueryEngine/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.h"
+#include "../../QueryEngine/heavydbTypes.h"
 
 /*
   This file contains tesing compile-time UDTFs. The unit-tests are

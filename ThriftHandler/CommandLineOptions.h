@@ -39,7 +39,7 @@ class LeafHostInfo;
 class CommandLineOptions {
  public:
   CommandLineOptions(char const* argv0, bool dist_v5_ = false)
-      : log_options_(argv0), dist_v5_(dist_v5_) {
+      : log_options_(argv0), exe_name(argv0), dist_v5_(dist_v5_) {
     fillOptions();
     fillAdvancedOptions();
   }
@@ -130,6 +130,7 @@ class CommandLineOptions {
   po::options_description help_desc;
   po::options_description developer_desc;
   logger::LogOptions log_options_;
+  std::string exe_name;
   po::positional_options_description positional_options;
 
  public:

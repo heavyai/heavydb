@@ -19,7 +19,7 @@
 #ifndef __CUDACC__
 
 #include <vector>
-#include "QueryEngine/OmniSciTypes.h"
+#include "QueryEngine/heavydbTypes.h"
 
 template <typename T, typename Z>
 struct GeoRaster {

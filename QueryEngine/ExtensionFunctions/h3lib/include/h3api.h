@@ -25,7 +25,7 @@
 
 // OmniSci addition adding OmniSci-specific includes
 #include <cmath>
-#include "QueryEngine/OmniSciTypes.h"
+#include "QueryEngine/heavydbTypes.h"
 // End OmniSci addition
 
 /*

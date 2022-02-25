@@ -49,8 +49,8 @@ while (( $# )); do
 done
 
 if [ -z "${MAPD_DATA}" ]; then
-  MAPD_DATA=${MAPD_DATA:="$PWD/data"}
-  echo "Using default data directory: \"$MAPD_DATA\" if file path is not whitelisted use '--data /path_to_server_data_directory'"
+  MAPD_DATA=${MAPD_DATA:="$PWD/storage"}
+  echo "Using default storage directory: \"$MAPD_DATA\" if file path is not whitelisted use '--data /path_to_server_data_directory'"
 fi
 
 SAMPLE_PATH=${SAMPLE_PATH:="$MAPD_DATA/import/sample_datasets"}
@@ -108,11 +108,11 @@ for idx in $idxs; do
     filebase="${filename%%.*}"
 
     echo "- adding schema"
-    ./bin/omnisql omnisci -u admin -p HyperInteractive --port "$MAPD_TCP_PORT" < "$SAMPLE_PATH/$filebase"/*.sql
+    ./bin/heavysql omnisci -u admin -p HyperInteractive --port "$MAPD_TCP_PORT" < "$SAMPLE_PATH/$filebase"/*.sql
     table=${tables[$idx]}
     for csv in $SAMPLE_PATH/$filebase/*csv; do
       echo "- inserting file: $csv"
-      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/omnisql omnisci -u admin -p HyperInteractive --port "$MAPD_TCP_PORT"
+      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/heavysql omnisci -u admin -p HyperInteractive --port "$MAPD_TCP_PORT"
     done
   fi
 done

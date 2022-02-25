@@ -89,7 +89,7 @@ LogOptions::LogOptions(char const* argv0)
     : log_dir_(std::make_unique<boost::filesystem::path>(shared::kDefaultLogDirName)) {
   // Log file base_name matches name of program.
   std::string const base_name =
-      argv0 == nullptr ? std::string("omnisci_server") : filename(argv0);
+      argv0 == nullptr ? std::string("heavydb") : filename(argv0);
   file_name_pattern_ = base_name + file_name_pattern_;
   symlink_ = base_name + symlink_;
   set_options();

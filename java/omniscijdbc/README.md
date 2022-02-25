@@ -2,7 +2,7 @@
 JDBC Integration Testing Notes.
 
     1. Check out and build the branch to be tested. 
-    2. Use initdb to create a fresh instance of the  default database.
+    2. Use initheavy to create a fresh instance of the  default database.
     3. Start the OmniSci server to run over the new database instance.
     4. Start the OmniSci web server specifying  the --cert, --key and --enable-https options.  Test certificates can be found in the resources folder of the project.  
     5. There are a range of configuration files in the resources directory; these files expect the server to be running on 'localhost'.  To connect to a server running on a different host or port, these files will need to be edited.

@@ -32,7 +32,7 @@ using uid_t = int;
 #endif
 
 inline constexpr char const* const getDefaultHistoryFilename() {
-  return ".omnisql_history";
+  return ".heavysql_history";
 }
 
 class DefaultEnvResolver {

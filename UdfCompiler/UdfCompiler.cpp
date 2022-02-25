@@ -296,7 +296,7 @@ UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
     , target_arch_(target_arch)
 #endif
 {
-  // To ifguard unsupported code included in OmniSciTypes.h (i.e. <shared_mutex>)
+  // To ifguard unsupported code included in heavydbTypes.h (i.e. <shared_mutex>)
   clang_options_.emplace_back(std::string("-D UDF_COMPILED"));
 }
 
@@ -309,7 +309,7 @@ UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
     , target_arch_(target_arch)
 #endif
 {
-  // To ifguard unsupported code included in OmniSciTypes.h (i.e. <shared_mutex>)
+  // To ifguard unsupported code included in heavydbTypes.h (i.e. <shared_mutex>)
   clang_options_.emplace_back(std::string("-D UDF_COMPILED"));
 }
 

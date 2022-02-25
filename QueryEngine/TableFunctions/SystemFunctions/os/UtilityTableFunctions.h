@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "QueryEngine/OmniSciTypes.h"
+#include "QueryEngine/heavydbTypes.h"
 
 #ifndef __CUDACC__
 

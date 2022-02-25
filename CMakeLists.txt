@@ -45,7 +45,7 @@ if(ENABLE_IWYU)
   endif()
 endif()
 
-project(omnisci)
+project(heavyai)
 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Rendering")
   set(MAPD_EDITION "OS")
@@ -925,13 +925,10 @@ if (ENABLE_MEMKIND)
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
 endif()
 
-set(initdb_source_files initdb.cpp)
-add_executable(initdb ${initdb_source_files})
+add_executable(initheavy initdb.cpp)
 
-set(omnisci_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
-
-add_executable(omnisci_server ${omnisci_server_source_files})
-set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
+add_executable(heavydb MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
+set_target_properties(heavydb PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
@@ -973,8 +970,8 @@ execute_process(
   OUTPUT_VARIABLE MAPD_GIT_HASH
   OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-file(WRITE ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt "${MAPD_GIT_HASH}\n")
-file(STRINGS ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt MAPD_GIT_HASH)
+file(WRITE ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt "${MAPD_GIT_HASH}\n")
+file(STRINGS ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt MAPD_GIT_HASH)
 set(CPACK_PACKAGE_VERSION "${MAPD_VERSION_RAW}-${MAPD_BUILD_DATE}-${MAPD_GIT_HASH}")
 
 configure_file(
@@ -982,18 +979,18 @@ configure_file(
   "${CMAKE_BINARY_DIR}/MapDRelease.h"
   @ONLY
   )
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
-# required to force regen of MAPD_GIT_HASH.txt, MapDRelease.h
+# required to force regen of heavyai_git_hash.txt, MapDRelease.h
 add_custom_target(rerun_cmake ALL
   COMMAND cmake .
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-add_dependencies(omnisci_server rerun_cmake)
+add_dependencies(heavydb rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
+target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
-target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(initheavy mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
     ${LOCALE_LINK_FLAG})
 
@@ -1056,7 +1053,7 @@ set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty/licenses" DESTINATION "ThirdParty" COMPONENT "doc")
 
-# OmniSciTypes.h local includes (for UDF/UDTF)
+# heavydbTypes.h local includes (for UDF/UDTF)
 install(FILES Shared/funcannotations.h DESTINATION "Shared/" COMPONENT "include")
 install(FILES Shared/InlineNullValues.h DESTINATION "Shared/" COMPONENT "include")
 install(FILES Logger/Logger.h DESTINATION "Logger/" COMPONENT "include")
@@ -1092,12 +1089,12 @@ add_subdirectory(ThirdParty/generate_cert)
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    install(FILES systemd/omnisci_sd_server.service.in systemd/omnisci_sd_server@.service.in DESTINATION systemd)
-    install(FILES systemd/omnisci-sds.conf.in DESTINATION systemd)
+    install(FILES systemd/heavydb_sd_server.service.in systemd/heavydb_sd_server@.service.in DESTINATION systemd)
+    install(FILES systemd/heavy-sds.conf.in DESTINATION systemd)
   endif()
-  install(FILES systemd/omnisci_server.service.in systemd/omnisci_server@.service.in DESTINATION systemd)
-  install(FILES systemd/omnisci.conf.in DESTINATION systemd)
-  install(PROGRAMS systemd/install_omnisci_systemd.sh DESTINATION systemd)
+  install(FILES systemd/heavydb.service.in systemd/heavydb@.service.in DESTINATION systemd)
+  install(FILES systemd/heavy.conf.in DESTINATION systemd)
+  install(PROGRAMS systemd/install_heavy_systemd.sh DESTINATION systemd)
 endif()
 
 ## mvn process for java code
@@ -1164,8 +1161,8 @@ add_custom_target(maven_populate_cache
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb omnisci_server DESTINATION bin COMPONENT "exe")
-install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION "." COMPONENT "doc")
+install(TARGETS initheavy heavydb DESTINATION bin COMPONENT "exe")
+install(FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt DESTINATION "." COMPONENT "doc")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine COMPONENT "exe")
 endif()
@@ -1192,8 +1189,8 @@ endif()
 set(CPACK_RESOURCE_FILE_LICENSE "${EULA_FILE}")
 install(FILES "${EULA_FILE}" DESTINATION "."  COMPONENT "doc")
 
-install(PROGRAMS startomnisci DESTINATION ".")
-install(PROGRAMS scripts/inneromnisci DESTINATION "scripts")
+install(PROGRAMS startheavy DESTINATION ".")
+install(PROGRAMS scripts/innerstartheavy DESTINATION "scripts")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

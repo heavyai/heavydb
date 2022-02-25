@@ -50,7 +50,7 @@ bool find_file(const path& root, const path& fileName, path& result) {
 }
 }  // namespace
 
-// Class to test the initdb executable.
+// Class to test the initheavy executable.
 class InitDBTest : public testing::Test {
  private:
   path initdb_;
@@ -62,7 +62,7 @@ class InitDBTest : public testing::Test {
     ASSERT_FALSE(bf::exists(temp_dir_));
     ASSERT_FALSE(bf::exists(nonexistant_dir_));
     bf::create_directory(temp_dir_);
-    ASSERT_TRUE(find_file(bf::relative(path("../")), "initdb", initdb_));
+    ASSERT_TRUE(find_file(bf::relative(path("../")), "initheavy", initdb_));
   }
   void TearDown() override { bf::remove_all(temp_dir_); }
 
@@ -136,11 +136,11 @@ TEST_F(InitDBTest, Help) {
 
 Logging:
   --log-directory arg (="log")          Logging directory. May be relative to
-                                         data directory, or absolute.
-  --log-file-name arg (=initdb.{SEVERITY}.%Y%m%d-%H%M%S.log)
+                                        data directory, or absolute.
+  --log-file-name arg (=initheavy.{SEVERITY}.%Y%m%d-%H%M%S.log)
                                         Log file name relative to 
                                         log-directory.
-  --log-symlink arg (=initdb.{SEVERITY})
+  --log-symlink arg (=initheavy.{SEVERITY})
                                         Symlink to active log.
   --log-severity arg (=INFO)            Log to file severity level: INFO 
                                         WARNING ERROR FATAL

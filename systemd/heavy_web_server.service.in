@@ -1,0 +1,14 @@
+[Unit]
+Description=HEAVY.AI web server
+After=network.target remote-fs.target
+
+[Service]
+User=@HEAVYAI_USER@
+Group=@HEAVYAI_GROUP@
+WorkingDirectory=@HEAVYAI_PATH@
+ExecStart=@HEAVYAI_PATH@/bin/heavy_web_server --config @HEAVYAI_STORAGE@/heavy.conf
+LimitNOFILE=65536
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

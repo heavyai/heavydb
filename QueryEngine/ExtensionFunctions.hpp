@@ -11,7 +11,7 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "OmniSciTypes.h"
+#include "heavydbTypes.h"
 
 /* Example extension functions:
  *

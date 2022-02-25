@@ -388,7 +388,7 @@ void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
 
 void RowToColumnLoader::closeConnection() {
   try {
-    client_->disconnect(session_);  // disconnect from omnisci_server
+    client_->disconnect(session_);  // disconnect from heavydb
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {

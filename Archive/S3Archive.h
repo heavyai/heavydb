@@ -82,8 +82,8 @@ class S3Archive : public Archive {
     this->file_sort_order_by = file_sort_order_by;
     this->file_sort_regex = file_sort_regex;
 
-    // this must be local to omnisci_server not client
-    // or posix dir path accessible to omnisci_server
+    // this must be local to heavydb not client
+    // or posix dir path accessible to heavydb
     auto env_s3_temp_dir = getenv("TMPDIR");
     s3_temp_dir = env_s3_temp_dir ? env_s3_temp_dir : "/tmp";
   }

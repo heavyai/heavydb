@@ -107,7 +107,7 @@ void createConnection(ConnectionDetails con) {
   try {
     mytransport->open();  // open transport
     client->connect(
-        session, con.user_name, con.passwd, con.db_name);  // connect to omnisci_server
+        session, con.user_name, con.passwd, con.db_name);  // connect to heavydb
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -117,7 +117,7 @@ void createConnection(ConnectionDetails con) {
 
 void closeConnection() {
   try {
-    client->disconnect(session);  // disconnect from omnisci_server
+    client->disconnect(session);  // disconnect from heavydb
     mytransport->close();         // close transport
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;

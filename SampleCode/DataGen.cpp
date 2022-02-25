@@ -21,11 +21,11 @@
  *
  * Usage: <table> <database> <user> <password> [<num rows>] [hostname[:port]]
  * The program executes the following:
- * 1. connect to omnisci_server at hostname:port (default: localhost:6274)
+ * 1. connect to heavydb at hostname:port (default: localhost:6274)
  *    with <database> <user> <password>
  * 2. get the table descriptor of <table>
  * 3. randomly generate tab-delimited data that can be imported to <table>
- * 4. disconnect from omnisci_server
+ * 4. disconnect from heavydb
  **/
 
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
@@ -213,11 +213,11 @@ int main(int argc, char** argv) {
   TSessionId session;
   try {
     transport->open();                                    // open transport
-    client.connect(session, user_name, passwd, db_name);  // connect to omnisci_server
+    client.connect(session, user_name, passwd, db_name);  // connect to heavydb
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
     data_gen(table_details.row_desc, delimiter, num_rows);
-    client.disconnect(session);  // disconnect from omnisci_server
+    client.disconnect(session);  // disconnect from heavydb
     transport->close();          // close transport
   } catch (TOmniSciException& e) {
     std::cerr << e.error_msg << std::endl;

@@ -118,7 +118,7 @@ struct TableFunctionManager {
     }
 
     // The members layout of Column must match with Column defined in
-    // OmniSciTypes.h
+    // heavydbTypes.h
     struct Column {
       int8_t* ptr;
       int64_t size;

@@ -6,8 +6,6 @@ Server Dependencies
 
 Installation scripts are provided for building and installing OmniSciDB dependencies for most major linux operating systems and MacOS in the `scripts` directory. Prebuilt dependencies for CentOS 7 and Ubuntu 18.04 and 20.04, and can also be downloaded from OmniSci using the included `mapd-deps-prebuilt.sh` script (see `Prebuilt Dependencies`, below).
 
-Dependencies for ``omnisci_web_server`` and other Go utils are in `ThirdParty/go`. See `ThirdParty/go/src/mapd/vendor/README.md` for instructions on how to add new deps.
-
 Prebuilt Dependencies
 =====================
 

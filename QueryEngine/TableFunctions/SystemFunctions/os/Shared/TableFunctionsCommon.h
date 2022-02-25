@@ -25,7 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "QueryEngine/OmniSciTypes.h"
+#include "QueryEngine/heavydbTypes.h"
 
 template <typename T>
 TEMPLATE_NOINLINE std::pair<T, T> get_column_min_max(const Column<T>& col);

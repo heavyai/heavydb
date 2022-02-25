@@ -18,7 +18,7 @@
 
 #ifdef HAVE_MLPACK
 
-#include "../../QueryEngine/OmniSciTypes.h"
+#include "../../QueryEngine/heavydbTypes.h"
 
 #include <mlpack/methods/dbscan/dbscan.hpp>
 #include <mlpack/methods/kmeans/kmeans.hpp>

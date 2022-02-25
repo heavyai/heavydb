@@ -7486,8 +7486,8 @@ void DBHandler::convertResultSet(ExecutionResult& result,
   auto qs = create_query_state(session_ptr, query_state_str);
   QueryStateProxy qsp = qs->createQueryStateProxy();
 
-  // omnisql only accepts column format as being 'VALID",
-  //   assume that omnisci_server should only return column format
+  // heavysql only accepts column format as being 'VALID",
+  //   assume that heavydb should only return column format
   int32_t nRows = result.getDataPtr()->rowCount();
 
   convertRows(_return,

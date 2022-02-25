@@ -93,7 +93,7 @@ make -j ${CPU_COUNT:-`nproc`} || make -j ${CPU_COUNT:-`nproc`} || make
 if [[ "$RUN_TESTS" == "2" ]]
 then
     mkdir tmp
-    $PREFIX/bin/initdb tmp
+    $PREFIX/bin/initheavy tmp
     make sanity_tests
     rm -rf tmp
 else

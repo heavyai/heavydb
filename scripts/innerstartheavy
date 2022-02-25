@@ -29,7 +29,7 @@ MAPD_HTTP_PORT=${MAPD_HTTP_PORT:=6278}
 MAPD_WEB_PORT=${MAPD_WEB_PORT:=6273}
 MAPD_CALCITE_PORT=${MAPD_CALCITE_PORT:=6279}
 
-MAPD_DATA=${MAPD_DATA:="data"}
+MAPD_DATA=${MAPD_DATA:="storage"}
 
 while (( $# )); do
     case "$1" in
@@ -84,7 +84,7 @@ echo "Calcite TCP:  localhost:${MAPD_CALCITE_PORT}"
 
 if [ ! -d $MAPD_DATA/data ]; then
     mkdir -p $MAPD_DATA
-    ./bin/initdb -f --data $MAPD_DATA
+    ./bin/initheavy -f --data $MAPD_DATA
 fi
 
 VMAJOR=${BASH_VERSINFO[0]}
@@ -106,16 +106,16 @@ if [[ -z "$icd_path" ]]; then
   YELLOW='\033[1;33m'
   NORMAL='\033[0m'
   LBLUE='\033[1;34m'
-  echo -e "${YELLOW}Warning: ${NORMAL}Cannot find the Nvidia Vulkan driver manifest file \"nvidia_icd.json\" in the expected system directories. As a result the backend renderer may not work. 
-  Please verify that the nvidia driver and vulkan loader are installed appropriately. 
+  echo -e "${YELLOW}Warning: ${NORMAL}Cannot find the Nvidia Vulkan driver manifest file \"nvidia_icd.json\" in the expected system directories. As a result the backend renderer may not work.
+  Please verify that the nvidia driver and vulkan loader are installed appropriately.
   See: ${LBLUE}https://docs.omnisci.com/troubleshooting/vulkan-graphics-api-beta#bare-metal-installs${NORMAL} for some installation and troubleshooting tips."
 else
     export VK_ICD_FILENAMES=$icd_path
-fi 
+fi
 
-./bin/omnisci_server $MAPD_DATA $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT --calcite-port $MAPD_CALCITE_PORT $CONFIG $VERBOSE $* &
+./bin/heavydb $MAPD_DATA $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT --calcite-port $MAPD_CALCITE_PORT $CONFIG $VERBOSE $* &
 PID1=$!
-echo "- omnisci_server $PID1 started"
+echo "- heavydb $PID1 started"
 
 if [ "$INSERT_SAMPLE_DATA" = true ]; then
     echo "- waiting 5s before inserting sample data"
@@ -123,7 +123,7 @@ if [ "$INSERT_SAMPLE_DATA" = true ]; then
     . "$DIR/insert_sample_data"
 fi
 
-if [ -d frontend ] && [ -e ./bin/omnisci_web_server ]; then
+if [ -d frontend ] && [ -e ./bin/heavy_web_server ]; then
     # use https for backend-url if both ssl-cert and ssl-key options are in the config file
     BACKEND_URL="--backend-url http://localhost:${MAPD_HTTP_PORT}"
     if [ -e "$CONFIG_FILE" ]; then
@@ -135,9 +135,9 @@ if [ -d frontend ] && [ -e ./bin/omnisci_web_server ]; then
             BACKEND_URL=""
         fi
     fi
-    ./bin/omnisci_web_server $RO --port $MAPD_WEB_PORT ${BACKEND_URL} --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $CONFIG $VERBOSE &
+    ./bin/heavy_web_server $RO --port $MAPD_WEB_PORT ${BACKEND_URL} --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $CONFIG $VERBOSE &
     PID2=$!
-    echo "- omnisci_web_server $PID2 started"
+    echo "- heavy_web_server $PID2 started"
 
     if [ ! "$DISABLE_OPEN_FRONTEND" = true ]; then
         if [ ! -z "$HTTPS" ] ; then

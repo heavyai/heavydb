@@ -919,7 +919,7 @@ class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
     TDetectResult thrift_result;
     TCopyParams copy_params;
     // Setting S3 credentials through copy params simulates
-    // environment variables configured on the omnisql client
+    // environment variables configured on the heavysql client
     copy_params.s3_access_key = s3_access_key;
     copy_params.s3_secret_key = s3_secret_key;
     copy_params.s3_session_token = s3_session_token;
@@ -1050,7 +1050,7 @@ class ThriftImportServerPrivilegeTest : public ThriftDetectServerPrivilegeTest {
     const auto& db_handler_and_session_id = getDbHandlerAndSessionId();
     TCopyParams copy_params;
     // Setting S3 credentials through copy params simulates
-    // environment variables configured on the omnisql client
+    // environment variables configured on the heavysql client
     copy_params.s3_access_key = s3_access_key;
     copy_params.s3_secret_key = s3_secret_key;
     copy_params.s3_session_token = s3_session_token;

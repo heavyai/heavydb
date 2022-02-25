@@ -1149,7 +1149,7 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages ");
-  desc.add_options()("version,v", "Print omnisql version number");
+  desc.add_options()("version,v", "Print heavysql version number");
   desc.add_options()("no-header,n", "Do not print query result header");
   desc.add_options()(
       "timing,t",
@@ -1199,7 +1199,7 @@ int main(int argc, char** argv) {
                   .run(),
               vm);
     if (vm.count("help")) {
-      std::cout << "Usage: omnisql [<database>] [{--user|-u} <user>] [{--passwd|-p} "
+      std::cout << "Usage: heavysql [<database>] [{--user|-u} <user>] [{--passwd|-p} "
                    "<password>] [--port <port number>] "
                    "[{-s|--server} <server host>] [--http] [{--no-header|-n}] "
                    "[{--quiet|-q}] [{--delimiter|-d}]\n\n";
@@ -1207,7 +1207,7 @@ int main(int argc, char** argv) {
       return 0;
     }
     if (vm.count("version")) {
-      std::cout << "OmniSQL Version: " << OmniSQLRelease << std::endl;
+      std::cout << "HeavySQL Version: " << OmniSQLRelease << std::endl;
       return 0;
     }
     if (vm.count("quiet")) {
@@ -1261,7 +1261,7 @@ int main(int argc, char** argv) {
   try {
     transport->open();
   } catch (...) {
-    std::cout << "Failed to open transport. Is omnisci_server running?" << std::endl;
+    std::cout << "Failed to open transport. Is heavydb running?" << std::endl;
     return 1;
   }
   if ((success = thrift_with_retry(kCONNECT, context, nullptr))) {
@@ -1290,7 +1290,7 @@ int main(int argc, char** argv) {
   linenoiseSetMultiLine(1);
 
   std::string current_line;
-  std::string prompt("omnisql> ");
+  std::string prompt("heavysql> ");
 
   /* Now this is the main loop of the typical linenoise-based application.
    * The call to linenoise() will block as long as the user types something
@@ -1336,7 +1336,7 @@ int main(int argc, char** argv) {
         linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line).c_str());
         linenoiseHistorySave(cmd_file);
         current_line.clear();
-        prompt.assign("omnisql> ");
+        prompt.assign("heavysql> ");
         (void)backchannel(TURN_ON, nullptr);
         if (thrift_with_retry(kSQL, context, query.c_str())) {
           (void)backchannel(TURN_OFF, nullptr);

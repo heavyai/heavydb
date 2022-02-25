@@ -26,7 +26,7 @@
 // and we need to clean up macros such as ERROR and GetObject
 // For some compilation paths  the lean and mean must
 // also be be set, or conflicts can arrise with ws2def.h
-// (DelimtedParserUtils.cpp has this issue when buidling initdb)
+// (DelimtedParserUtils.cpp has this issue when buidling initheavy)
 #define WIN32_LEAN_AND_MEAN
 #endif
 

@@ -1011,7 +1011,9 @@ void CommandLineOptions::validate() {
   }
 
   {
-    const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
+    auto exe_filename = boost::filesystem::path(exe_name).filename().string();
+    const auto lock_file =
+        boost::filesystem::path(base_path) / std::string(exe_filename + "_pid.lck");
     auto pid = std::to_string(getpid());
 
     int pid_fd = omnisci::open(lock_file.string().c_str(), O_RDWR | O_CREAT, 0644);
@@ -1223,7 +1225,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     po::notify(vm);
 
     if (vm.count("help")) {
-      std::cerr << "Usage: omnisci_server <data directory path> [-p <port number>] "
+      std::cerr << "Usage: heavydb <data directory path> [-p <port number>] "
                    "[--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;
@@ -1231,7 +1233,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       return 0;
     }
     if (vm.count("dev-options")) {
-      std::cout << "Usage: omnisci_server <data directory path> [-p <port number>] "
+      std::cout << "Usage: heavydb <data directory path> [-p <port number>] "
                    "[--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;

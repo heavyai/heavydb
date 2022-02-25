@@ -4,7 +4,7 @@
 External API
 ==================================
 
-OmniSciDB uses Apache's Thrift software framework for all external client communication.  The open source clients shipped with the repository include OmniSci's `omnisql` command line process, JDBC driver and SQLImporter utility.  For a full list of Thrift enabled clients supported by OmniSci see Table :ref:`omnisci-open-source-clients` below. The full list of thrift API methods can be found in the `omnisci.thrift` file in the root of the OmniSciDB source directory.
+OmniSciDB uses Apache's Thrift software framework for all external client communication.  The open source clients shipped with the repository include OmniSci's `heavysql` command line process, JDBC driver and SQLImporter utility.  For a full list of Thrift enabled clients supported by OmniSci see Table :ref:`omnisci-open-source-clients` below. The full list of thrift API methods can be found in the `omnisci.thrift` file in the root of the OmniSciDB source directory.
 
 All internal communication between the discrete processes within OmniSciDB also use the Thrift communication framework.  For example, communications between OmniSciDB and Apache Calcite are facilitated via Thrift.
 
@@ -41,7 +41,7 @@ As mentioned in the 'Design' section the server opens two ports, a binary port a
    Client process Protocols
    ============== ===================================
    JDBC Driver     Binary/Binary Encrypted/HTTP/HTTPS
-   Omnisql         Binary/Binary Encrypted/HTTP/HTTPS
+   heavysql        Binary/Binary Encrypted/HTTP/HTTPS
    SQLImporter     Binary/HTTP/HTTPS
    KafkaImporter   Binary/HTTP/HTTPS
    StreamInserter  Binary/HTTP/HTTPS
