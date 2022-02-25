@@ -266,13 +266,14 @@ void TextFileBufferParser::processGeoColumn(
     ++import_idx;
   } else {
     SQLTypeInfo import_ti{col_ti};
-    if (is_null) {
+    if (is_null || geo_string.empty() || geo_string == "NULL") {
       Geospatial::GeoTypesFactory::getNullGeoColumns(import_ti,
                                                      coords,
                                                      bounds,
                                                      ring_sizes,
                                                      poly_rings,
                                                      PROMOTE_POLYGON_TO_MULTIPOLYGON);
+      is_null = true;
     } else {
       // extract geometry directly from WKT
       if (!Geospatial::GeoTypesFactory::getGeoColumns(std::string(geo_string),
@@ -308,6 +309,12 @@ void TextFileBufferParser::processGeoColumn(
         }
       }
     }
+  }
+
+  // allowed to be null?
+  if (is_null && col_ti.get_notnull()) {
+    throw std::runtime_error("NULL value provided for column (" + cd->columnName +
+                             ") with NOT NULL constraint.");
   }
 
   // import extracted geo

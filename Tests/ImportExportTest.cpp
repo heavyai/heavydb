@@ -1444,6 +1444,40 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
   validateImportStatus(4, 1, false);
 }
 
+TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
+  // Skip non local test cases for NOT NULL columns since other cases add no additional
+  // coverage
+  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index int, p POINT NOT NULL, l LINESTRING NOT NULL, poly POLYGON NOT NULL, "
+      "multipoly MULTIPOLYGON NOT NULL",
+      "invalid_records/geo_types_not_null",
+      "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_geo_regex(4),
+      "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
+      "ST_AsText(multipoly) as multipoly FROM import_test;'",
+      256,
+      {},
+      false,
+      /*is_odbc_geo=*/true);
+  // clang-format off
+    assertResultSetEqual({
+    {
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
+    }},
+    query);
+  // clang-format on
+  validateImportStatus(1, 4, false);
+}
+
 TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
@@ -1483,6 +1517,44 @@ TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
     query);
   // clang-format on
   validateImportStatus(2, 1, false);
+}
+
+TEST_P(ImportAndSelectTest, NotNullArrayTypeColumns) {
+  // Skip non local test cases for NOT NULL columns since other cases add no additional
+  // coverage
+  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index INT, b BOOLEAN[] NOT NULL, t TINYINT[] NOT NULL, s SMALLINT[] NOT NULL, i "
+      "INTEGER[] NOT NULL, bi BIGINT[] "
+      "NOT NULL, "
+      "f FLOAT[] NOT NULL, tm TIME[] NOT NULL, tp TIMESTAMP[] NOT NULL, d DATE[] NOT "
+      "NULL, txt TEXT[] NOT NULL, fixedpoint "
+      "DECIMAL(10,5)[] NOT NULL",
+      "invalid_records/array_fixed_len_types_not_null",  // uses the same test file as
+                                                         // fixed length arrays
+      "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_array_regex(11),
+      "",  // unused odbc_select
+      24);
+
+  // clang-format off
+  assertResultSetEqual({
+    {
+      1L, array({True,False}), array({50L, 100L}), array({30000L, 20000L}), array({2000000000L,-100000L}),
+      array({9000000000000000000L,-9000000000000000000L}), array({10.1f, 11.1f}), array({"00:00:10","01:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1","text_2"}),array({1.23,2.34})
+    }},
+    query);
+  // clang-format on
+  validateImportStatus(1, 11, false);
 }
 
 TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
@@ -1526,6 +1598,43 @@ TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
   validateImportStatus(2, 1, false);
 }
 
+TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
+  // Skip non local test cases for NOT NULL columns since other cases add no additional
+  // coverage
+  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "index INT, b BOOLEAN[2] NOT NULL, t TINYINT[2] NOT NULL, s SMALLINT[2] NOT NULL, "
+      "i INTEGER[2] NOT NULL, bi BIGINT[2] "
+      "NOT NULL, "
+      "f FLOAT[2] NOT NULL, tm TIME[2] NOT NULL, tp TIMESTAMP[2] NOT NULL, d DATE[2] NOT "
+      "NULL, txt TEXT[2] NOT NULL, fixedpoint "
+      "DECIMAL(10,5)[2] NOT NULL",
+      "invalid_records/array_fixed_len_types_not_null",
+      "SELECT * FROM import_test_new ORDER BY index;",
+      "(\\d+),\\s*" + get_line_array_regex(11),
+      "",  // unused odbc_select
+      24);
+
+  // clang-format off
+  assertResultSetEqual({
+    {
+      1L, array({True,False}), array({50L, 100L}), array({30000L, 20000L}), array({2000000000L,-100000L}),
+      array({9000000000000000000L,-9000000000000000000L}), array({10.1f, 11.1f}), array({"00:00:10","01:00:10"}),
+      array({"1/1/2000 00:00:59", "1/1/2010 00:00:59"}), array({"1/1/2000", "2/2/2000"}),
+      array({"text_1","text_2"}),array({1.23,2.34})
+    }},
+    query);
+  // clang-format on
+  validateImportStatus(1, 11, false);
+}
+
 TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
   if (testShouldBeSkipped()) {
     GTEST_SKIP();
@@ -1556,6 +1665,47 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
   // clang-format on
 
   validateImportStatus(3, 1, false);
+  assertResultSetEqual(expected_values, query);
+}
+
+TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
+  // Skip non local test cases for NOT NULL columns since other cases add no additional
+  // coverage
+  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+    GTEST_SKIP();
+  }
+  if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
+        param_.import_type == "parquet")) {
+    GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
+                    "handling tests";
+  }
+  auto query = createTableCopyFromAndSelect(
+      "b BOOLEAN NOT NULL, t TINYINT NOT NULL, s SMALLINT NOT NULL, i INTEGER NOT NULL, "
+      "bi BIGINT NOT NULL, f FLOAT NOT NULL, "
+      "dc DECIMAL(10,5) NOT NULL, tm TIME NOT NULL, tp TIMESTAMP NOT NULL, d DATE NOT "
+      "NULL, txt TEXT NOT NULL, "
+      "txt_2 TEXT NOT NULL ENCODING NONE",
+      "invalid_records/scalar_types_not_null",
+      "SELECT * FROM import_test_new ORDER BY s;",
+      get_line_regex(12),
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      14);
+
+  auto expected_values =
+      std::vector<std::vector<NullableTargetValue>>{{True,
+                                                     100L,
+                                                     30000L,
+                                                     2000000000L,
+                                                     9000000000000000000L,
+                                                     10.1f,
+                                                     100.1234,
+                                                     "00:00:10",
+                                                     "1/1/2000 00:00:59",
+                                                     "1/1/2000",
+                                                     "text_1",
+                                                     "quoted text"}};
+
+  validateImportStatus(1, 12, false);
   assertResultSetEqual(expected_values, query);
 }
 

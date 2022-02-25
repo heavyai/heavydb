@@ -157,6 +157,8 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
         } catch (const std::runtime_error& error) {
           invalid_indices_.insert(current_chunk_offset_ + i);
         }
+      } else if (column_type_.get_notnull()) {  // item is null for NOT NULL column
+        invalid_indices_.insert(current_chunk_offset_ + i);
       }
     }
     current_chunk_offset_ += levels_read;

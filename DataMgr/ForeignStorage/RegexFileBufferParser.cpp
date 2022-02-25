@@ -244,10 +244,22 @@ ParseBufferResult RegexFileBufferParser::parseBuffer(
           auto cd = *cd_it;
           const auto& column_type = cd->columnType;
           if (request.import_buffers[import_buffer_index]) {
-            bool is_null =
-                (set_all_nulls || isNullDatum(parsed_columns_sv[parsed_column_index],
-                                              cd,
-                                              request.copy_params.null_str));
+            bool is_null = false;
+            try {
+              is_null =
+                  (set_all_nulls || isNullDatum(parsed_columns_sv[parsed_column_index],
+                                                cd,
+                                                request.copy_params.null_str));
+            } catch (const std::exception& e) {
+              if (request.track_rejected_rows) {
+                result.rejected_rows.insert(current_row_id);
+                fillRejectedRowWithInvalidData(
+                    columns, cd_it, import_buffer_index, request);
+                break;  // skip rest of row
+              } else {
+                throw;
+              }
+            }
             if (column_type.is_geometry()) {
               auto starting_import_buffer_index = import_buffer_index;
               try {

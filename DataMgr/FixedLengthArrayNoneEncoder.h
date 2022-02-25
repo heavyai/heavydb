@@ -73,8 +73,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     data_subset.reserve(selected_idx.size());
     for (const auto& index : selected_idx) {
       auto current_data = data + array_size * (index);
-      data_subset.emplace_back(
-          ArrayDatum(array_size, current_data, false, DoNothingDeleter{}));
+      data_subset.emplace_back(ArrayDatum(array_size,
+                                          current_data,
+                                          is_null_ignore_not_null(current_data),
+                                          DoNothingDeleter{}));
     }
     return appendData(&data_subset, 0, selected_idx.size(), false);
   }
@@ -237,10 +239,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     update_elem_stats(ArrayDatum(array_size, array, is_null(array), DoNothingDeleter()));
   }
 
-  static bool is_null(const SQLTypeInfo& type, int8_t* array) {
-    if (type.get_notnull()) {
-      return false;
-    }
+  static bool is_null_ignore_not_null(const SQLTypeInfo& type, int8_t* array) {
     switch (type.get_subtype()) {
       case kBOOLEAN: {
         return (array[0] == NULL_ARRAY_BOOLEAN);
@@ -290,6 +289,13 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     return false;
   }
 
+  static bool is_null(const SQLTypeInfo& type, int8_t* array) {
+    if (type.get_notnull()) {
+      return false;
+    }
+    return is_null_ignore_not_null(type, array);
+  }
+
   bool resetChunkStats(const ChunkStats& stats) override {
     auto elem_type = buffer_->getSqlType().get_elem_type();
     if (initialized && DatumEqual(elem_min, stats.min, elem_type) &&
@@ -318,6 +324,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   size_t array_size;
 
   bool is_null(int8_t* array) { return is_null(buffer_->getSqlType(), array); }
+
+  bool is_null_ignore_not_null(int8_t* array) {
+    return is_null_ignore_not_null(buffer_->getSqlType(), array);
+  }
 
   void update_elem_stats(const ArrayDatum& array) {
     if (array.is_null) {

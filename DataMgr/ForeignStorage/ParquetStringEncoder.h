@@ -80,6 +80,10 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
           ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
                                                   i);
         }
+      } else if (ParquetEncoder::column_type_
+                     .get_notnull()) {  // item is null for NOT NULL column
+        ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
+                                                i);
       }
     }
     ParquetEncoder::current_chunk_offset_ += levels_read;

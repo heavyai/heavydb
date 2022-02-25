@@ -74,6 +74,11 @@ class ParquetStringNoneEncoder : public ParquetEncoder {
           memcpy(encode_buffer_.data() + total_len, byte_array.ptr, byte_array.len);
           total_len += byte_array.len;
         }
+      } else if (is_error_tracking_enabled_ &&
+                 ParquetEncoder::column_type_
+                     .get_notnull()) {  // item is null for NOT NULL column
+        ParquetEncoder::invalid_indices_.insert(ParquetEncoder::current_chunk_offset_ +
+                                                i);
       }
     }
     if (is_error_tracking_enabled_) {

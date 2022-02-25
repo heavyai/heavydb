@@ -203,10 +203,20 @@ ParseBufferResult CsvFileBufferParser::parseBuffer(ParseBufferRequest& request,
         bool column_is_present =
             !(skip_column_import(request, col_idx) && columns_are_pre_filtered);
         CHECK(row.size() > import_idx || !column_is_present);
-        bool is_null =
-            column_is_present
-                ? isNullDatum(row[import_idx], cd, request.copy_params.null_str)
-                : true;
+        bool is_null = false;
+        try {
+          is_null = column_is_present
+                        ? isNullDatum(row[import_idx], cd, request.copy_params.null_str)
+                        : true;
+        } catch (const std::exception& e) {
+          if (request.track_rejected_rows) {
+            result.rejected_rows.insert(current_row_id);
+            fillRejectedRowWithInvalidData(columns, cd_it, col_idx, request);
+            break;  // skip rest of row
+          } else {
+            throw;
+          }
+        }
 
         if (col_ti.is_geometry()) {
           if (!skip_column_import(request, col_idx)) {

@@ -104,7 +104,8 @@ class ParquetArrayEncoder : public ParquetEncoder {
 
  protected:
   virtual void processLastArray() {
-    if (is_error_tracking_enabled_ && is_invalid_array_) {
+    if (is_error_tracking_enabled_ &&
+        (is_invalid_array_ || (isLastArrayNull() && column_type_.get_notnull()))) {
       invalid_indices_.insert(num_array_assembled_);
     }
     ++num_array_assembled_;

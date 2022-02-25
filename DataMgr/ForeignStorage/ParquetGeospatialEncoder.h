@@ -47,6 +47,11 @@ class ParquetGeospatialEncoder : public ParquetEncoder, public GeospatialEncoder
     for (int64_t i = 0, j = 0; i < levels_read; ++i) {
       clearParseBuffers();
       if (def_levels[i] == 0) {
+        if (is_error_tracking_enabled_ &&
+            column_type_
+                .get_notnull()) {  // mark as invalid due to a null in a NOT NULL column
+          invalid_indices_.insert(current_chunk_offset_ + i);
+        }
         processNullGeoElement();
       } else {
         CHECK(j < values_read);
