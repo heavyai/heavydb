@@ -335,7 +335,7 @@ public class RuntimeInterruptConcurrencyTest {
     logger.info("RuntimeInterruptConcurrencyTest()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     cleanupUserAndDB(su);
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE USER u0 (password = 'password', is_super = 'false');");

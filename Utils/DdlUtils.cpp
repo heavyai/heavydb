@@ -27,6 +27,7 @@
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Geospatial/Types.h"
 #include "Parser/ReservedKeywords.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
 #include "Shared/misc.h"
 #include "Shared/sqltypes.h"
@@ -831,10 +832,12 @@ void FilePathWhitelist::initialize(const std::string& data_dir,
 
   auto data_dir_path = boost::filesystem::canonical(data_dir);
   CHECK(whitelisted_import_paths_.empty());
-  whitelisted_import_paths_.emplace_back((data_dir_path / "mapd_import").string());
+  whitelisted_import_paths_.emplace_back(
+      (data_dir_path / shared::kDefaultImportDirName).string());
 
   CHECK(whitelisted_export_paths_.empty());
-  whitelisted_export_paths_.emplace_back((data_dir_path / "mapd_export").string());
+  whitelisted_export_paths_.emplace_back(
+      (data_dir_path / shared::kDefaultExportDirName).string());
 
   if (!allowed_import_paths.empty()) {
     set_whitelisted_paths(

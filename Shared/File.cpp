@@ -45,7 +45,7 @@ std::string get_data_file_path(const std::string& base_path,
                                int file_id,
                                size_t page_size) {
   return base_path + "/" + std::to_string(file_id) + "." + std::to_string(page_size) +
-         std::string(MAPD_FILE_EXT);  // MAPD_FILE_EXT has preceding "."
+         std::string(DATA_FILE_EXT);  // DATA_FILE_EXT has preceding "."
 }
 
 FILE* create(const std::string& basePath,
@@ -98,7 +98,7 @@ FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
 }
 
 FILE* open(int fileId) {
-  std::string s(std::to_string(fileId) + std::string(MAPD_FILE_EXT));
+  std::string s(std::to_string(fileId) + std::string(DATA_FILE_EXT));
   FILE* f = omnisci::fopen(
       s.c_str(), g_read_only ? "rb" : "r+b");  // opens existing file for updates
   if (f == nullptr) {

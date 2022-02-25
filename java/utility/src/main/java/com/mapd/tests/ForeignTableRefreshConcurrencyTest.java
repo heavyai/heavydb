@@ -232,7 +232,7 @@ public class ForeignTableRefreshConcurrencyTest {
     logger.info("ForeignTableRefreshConcurrencyTest()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
 
     // initialize
     su.runSql("DROP DATABASE IF EXISTS db1;");

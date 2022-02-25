@@ -22,6 +22,7 @@
 #include <gtest/gtest.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -109,8 +110,10 @@ class AlterSystemTest : public DBHandlerTestFixture {
     for (const auto& user : users_) {
       std::stringstream create;
       create << "CREATE USER " << user
-             << " (password = 'HyperInteractive', is_super = 'false', "
-                "default_db='omnisci');";
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'false', "
+                    "default_db='" +
+                    shared::kDefaultDbName + "');";
       sql(create.str());
       for (const auto& db : dbs_) {
         std::stringstream grant;
@@ -123,9 +126,9 @@ class AlterSystemTest : public DBHandlerTestFixture {
   static void createSuperUsers() {
     for (const auto& user : superusers_) {
       std::stringstream create;
-      create
-          << "CREATE USER " << user
-          << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
+      create << "CREATE USER " << user
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'true', default_db='" + shared::kDefaultDbName + "');";
       sql(create.str());
     }
   }
@@ -176,7 +179,7 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_CPU_SUPER) {
   TSessionId new_session;
   TQueryResult result;
 
-  login("admin", "HyperInteractive", "db1", new_session);
+  login("admin", shared::kDefaultRootPasswd, "db1", new_session);
   testClearMemory(new_session, TExecuteMode::CPU);
 
   logout(new_session);
@@ -186,7 +189,7 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_GPU_SUPER) {
   TSessionId super_session;
   TQueryResult result;
 
-  login("super1", "HyperInteractive", "db1", super_session);
+  login("super1", shared::kDefaultRootPasswd, "db1", super_session);
   testClearMemory(super_session, TExecuteMode::GPU);
 
   logout(super_session);
@@ -195,7 +198,7 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_GPU_SUPER) {
 TEST_F(AlterSystemTest, CLEAR_MEMORY_NOSUPER) {
   TSessionId user_session;
   TQueryResult result;
-  login("user1", "HyperInteractive", "db1", user_session);
+  login("user1", shared::kDefaultRootPasswd, "db1", user_session);
   try {
     sql(result, "ALTER SYSTEM CLEAR CPU MEMORY", user_session);
     FAIL() << "An exception should have been thrown for this test case.";

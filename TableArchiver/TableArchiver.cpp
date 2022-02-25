@@ -185,7 +185,7 @@ void adjust_altered_table_files(const std::string& temp_data_dir,
       std::vector<std::string> tokens;
       boost::split(tokens, file_name, boost::is_any_of("."));
       // ref. FileMgr::init for hint of data file name layout
-      if (tokens.size() > 2 && MAPD_FILE_EXT == "." + tokens[2]) {
+      if (tokens.size() > 2 && DATA_FILE_EXT == "." + tokens[2]) {
         thread_controller.startThread([file_name, file_path, tokens, &column_ids_map] {
           const auto page_size = boost::lexical_cast<int64_t>(tokens[1]);
           const auto file_size = boost::filesystem::file_size(file_path);

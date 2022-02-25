@@ -25,6 +25,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
+#include "Shared/SysDefinitions.h"
 #include "ThriftHandler/CommandLineOptions.h"
 #include "ThriftHandler/DBHandler.h"
 
@@ -189,8 +190,10 @@ class DBEngineImpl : public DBEngine {
     } catch (const std::exception& e) {
       LOG(FATAL) << "Failed to initialize database handler: " << e.what();
     }
-    db_handler_->connect(
-        session_id_, OMNISCI_ROOT_USER, OMNISCI_ROOT_PASSWD_DEFAULT, OMNISCI_DEFAULT_DB);
+    db_handler_->connect(session_id_,
+                         shared::kRootUsername,
+                         shared::kDefaultRootPasswd,
+                         shared::kDefaultDbName);
     base_path_ = base_path;
     initialized = true;
     return true;
@@ -437,9 +440,9 @@ class DBEngineImpl : public DBEngine {
   bool is_temp_db_;
   std::string udf_filename_;
 
-  std::vector<std::string> system_folders_ = {"mapd_catalogs",
-                                              "mapd_data",
-                                              "mapd_export"};
+  std::vector<std::string> system_folders_ = {shared::kCatalogDirectoryName,
+                                              shared::kDataDirectoryName,
+                                              shared::kDefaultExportDirName};
 };
 
 namespace {

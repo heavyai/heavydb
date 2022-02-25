@@ -33,7 +33,7 @@ using namespace foreign_storage;
 using namespace File_Namespace;
 using namespace TestHelpers;
 
-static const std::string data_path = "./tmp/mapd_data";
+static const std::string data_path = "./tmp/" + shared::kDataDirectoryName;
 static const std::string test_table_name = "test_cache_table";
 static const std::string test_server_name = "test_cache_server";
 static const std::string test_first_col_name = "col1";
@@ -132,7 +132,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
   }
 
   static void SetUpTestSuite() {
-    cache_path_ = "./tmp/mapd_data/test_foreign_data_cache";
+    cache_path_ = "./tmp/" + shared::kDataDirectoryName + "/test_foreign_data_cache";
     boost::filesystem::remove_all(cache_path_);
     reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi});
   }
@@ -302,7 +302,7 @@ class CacheDiskStorageTest : public ForeignStorageCacheUnitTest {
  protected:
   static constexpr size_t page_size_ = 64;
   static void SetUpTestSuite() {
-    cache_path_ = "./tmp/mapd_data/test_foreign_data_cache";
+    cache_path_ = "./tmp/" + shared::kDataDirectoryName + "/test_foreign_data_cache";
   }
   static void TearDownTestSuite() {}
   void SetUp() override {
@@ -316,14 +316,14 @@ class CacheDiskStorageTest : public ForeignStorageCacheUnitTest {
 TEST_F(CacheDiskStorageTest, CacheMetadata_VerifyMetadataFileCreated) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
   chunk_wrapper1.cacheMetadata(chunk_key1);
-  ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/0.4096.mapd"));
+  ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/0.4096" DATA_FILE_EXT));
 }
 
 TEST_F(CacheDiskStorageTest, CacheChunk_VerifyChunkFileCreated) {
   ChunkWrapper<int32_t> chunk_wrapper1{kINT, {1, 2, 3, 4}};
   chunk_wrapper1.cacheMetadataThenChunk(chunk_key1);
-  ASSERT_TRUE(
-      boost::filesystem::exists(cache_path_ + "/1." + to_string(page_size_) + ".mapd"));
+  ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/1." + to_string(page_size_) +
+                                        DATA_FILE_EXT));
 }
 
 TEST_F(CacheDiskStorageTest, RecoverCache_Metadata) {
@@ -380,9 +380,9 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
     auto buffer_map = cache.getChunkBuffersForCaching(std::set<ChunkKey>{chunk_key1});
     buffer_map[chunk_key1]->append(source_buffer.getMemoryPtr(), source_buffer.size());
     cache.checkpoint(chunk_key1[CHUNK_KEY_DB_IDX], chunk_key1[CHUNK_KEY_TABLE_IDX]);
-    ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/0.4096.mapd"));
+    ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/0.4096" DATA_FILE_EXT));
     ASSERT_TRUE(boost::filesystem::exists(cache_path_ + "/1." +
-                                          to_string(DEFAULT_PAGE_SIZE) + ".mapd"));
+                                          to_string(DEFAULT_PAGE_SIZE) + DATA_FILE_EXT));
   }
   // Cache files should persist after cache is destroyed.
   ASSERT_TRUE(boost::filesystem::exists(cache_path_));

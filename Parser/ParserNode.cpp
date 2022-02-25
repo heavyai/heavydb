@@ -66,6 +66,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/enable_assign_render_groups.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
@@ -6010,7 +6011,7 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "GRANT failed, because it can only be executed by super user.");
   }
-  if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
+  if (std::find(get_grantees().begin(), get_grantees().end(), shared::kRootUsername) !=
       get_grantees().end()) {
     throw std::runtime_error(
         "Request to grant role failed because mapd root user has all privileges by "
@@ -6043,7 +6044,7 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "REVOKE failed, because it can only be executed by super user.");
   }
-  if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
+  if (std::find(get_grantees().begin(), get_grantees().end(), shared::kRootUsername) !=
       get_grantees().end()) {
     throw std::runtime_error(
         "Request to revoke role failed because privileges can not be revoked from "
@@ -6136,7 +6137,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Invalid file path for COPY TO");
   } else if (!boost::filesystem::path(*file_path_).is_absolute()) {
     std::string file_name = boost::filesystem::path(*file_path_).filename().string();
-    std::string file_dir = g_base_path + "/mapd_export/" + session.get_session_id() + "/";
+    std::string file_dir = g_base_path + "/" + shared::kDefaultExportDirName + "/" +
+                           session.get_session_id() + "/";
     if (!boost::filesystem::exists(file_dir)) {
       if (!boost::filesystem::create_directories(file_dir)) {
         throw std::runtime_error("Directory " + file_dir + " cannot be created.");
@@ -6144,7 +6146,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     *file_path_ = file_dir + file_name;
   } else {
-    // Above branch will create a new file in the mapd_export directory. If that
+    // Above branch will create a new file in the export directory. If that
     // path is not exercised, go through applicable file path validations.
     ddl_utils::validate_allowed_file_path(*file_path_,
                                           ddl_utils::DataTransferType::EXPORT);

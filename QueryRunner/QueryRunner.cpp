@@ -34,6 +34,7 @@
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/import_helpers.h"
 #include "TestProcessSignalHandler.h"
@@ -85,9 +86,9 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                const size_t max_gpu_mem,
                                const int reserved_gpu_mem) {
   return QueryRunner::init(db_path,
-                           std::string{OMNISCI_ROOT_USER},
+                           shared::kRootUsername,
                            "HyperInteractive",
-                           std::string{OMNISCI_DEFAULT_DB},
+                           shared::kDefaultDbName,
                            {},
                            {},
                            udf_filename,
@@ -101,9 +102,9 @@ QueryRunner* QueryRunner::init(const File_Namespace::DiskCacheConfig* disk_cache
                                const std::vector<LeafHostInfo>& string_servers,
                                const std::vector<LeafHostInfo>& leaf_servers) {
   return QueryRunner::init(db_path,
-                           std::string{OMNISCI_ROOT_USER},
+                           shared::kRootUsername,
                            "HyperInteractive",
-                           std::string{OMNISCI_DEFAULT_DB},
+                           shared::kDefaultDbName,
                            string_servers,
                            leaf_servers,
                            "",
@@ -166,11 +167,13 @@ QueryRunner::QueryRunner(const char* db_path,
   g_serialize_temp_tables = true;
   boost::filesystem::path base_path{db_path};
   CHECK(boost::filesystem::exists(base_path));
-  auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
+  auto system_db_file =
+      base_path / shared::kCatalogDirectoryName / shared::kDefaultDbName;
   CHECK(boost::filesystem::exists(system_db_file));
-  auto data_dir = base_path / "mapd_data";
+  auto data_dir = base_path / shared::kDataDirectoryName;
   File_Namespace::DiskCacheConfig disk_cache_config{
-      (base_path / "omnisci_disk_cache").string(), File_Namespace::DiskCacheLevel::fsi};
+      (base_path / shared::kDefaultDiskCacheDirName).string(),
+      File_Namespace::DiskCacheLevel::fsi};
   if (cache_config) {
     disk_cache_config = *cache_config;
   }
@@ -1209,9 +1212,10 @@ void ImportDriver::importGeoTable(const std::string& file_path,
   if (create_table) {
     const auto td = cat.getMetadataForTable(table_name);
     if (td != nullptr) {
-      throw std::runtime_error("Error: Table " + table_name +
-                               " already exists. Possible failure to correctly re-create "
-                               "mapd_data directory.");
+      throw std::runtime_error(
+          "Error: Table " + table_name +
+          " already exists. Possible failure to correctly re-create " +
+          shared::kDataDirectoryName + " directory.");
     }
     if (table_name != ImportHelpers::sanitize_name(table_name)) {
       throw std::runtime_error("Invalid characters in table name: " + table_name);

@@ -97,6 +97,7 @@ public class MetaConnect {
   private static final int KMULTIPOLYGON = 21;
   private static final int KTINYINT = 22;
 
+  private static final String CATALOG_DIR_NAME = "catalogs";
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
           new ConcurrentHashMap<>();
   private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS =
@@ -160,7 +161,7 @@ public class MetaConnect {
       MAPDLOGGER.error(err);
       throw new RuntimeException(err);
     }
-    String connectURL = "jdbc:sqlite:" + dataDir + "/mapd_catalogs/" + catalog;
+    String connectURL = "jdbc:sqlite:" + dataDir + "/" + CATALOG_DIR_NAME + "/" + catalog;
     try {
       catConn = DriverManager.getConnection(connectURL);
     } catch (SQLException ex) {
@@ -297,7 +298,7 @@ public class MetaConnect {
     try {
       // open temp table json file
       final String filePath =
-              dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
+              dataDir + "/" + CATALOG_DIR_NAME + "/" + default_db + "_temp_tables.json";
       MAPDLOGGER.debug("Opening temp table file at " + filePath);
       String tempTablesJsonStr;
       try {
@@ -500,7 +501,7 @@ public class MetaConnect {
 
     // open table json file
     final String filePath =
-            dataDir + "/mapd_catalogs/" + default_db + "_temp_tables.json";
+            dataDir + "/" + CATALOG_DIR_NAME + "/" + default_db + "_temp_tables.json";
     MAPDLOGGER.debug("Opening temp table file at " + filePath);
 
     String tempTablesJsonStr;
@@ -796,7 +797,7 @@ public class MetaConnect {
     }
     if (mapdPort == -1) {
       // use sql
-      connectToCatalog("omnisci_system_catalog"); // hardcoded sys catalog
+      connectToCatalog("system_catalog"); // hardcoded sys catalog
       Set<String> dbNames = getDatabases_SQL();
       disconnectFromCatalog();
       for (String dbName : dbNames) {

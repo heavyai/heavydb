@@ -35,7 +35,7 @@ public class CalciteViewsConcurrencyTest {
     logger.info("testViewsResolutionConcurrency()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");

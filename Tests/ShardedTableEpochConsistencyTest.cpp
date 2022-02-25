@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "DBHandlerTestHelpers.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -31,7 +32,7 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
     createDBHandler();
     dropUser();
     sql("create user non_super_user (password = 'HyperInteractive');");
-    sql("grant all on database omnisci to non_super_user;");
+    sql("grant all on database " + shared::kDefaultDbName + " to non_super_user;");
   }
 
   static void TearDownTestSuite() { dropUser(); }

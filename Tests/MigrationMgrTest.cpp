@@ -24,6 +24,7 @@
 #include "Logger/Logger.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
 
 #ifndef BASE_PATH
@@ -392,7 +393,7 @@ int main(int argc, char** argv) {
   // tests that do and assert metadata updates.
   g_enable_auto_metadata_update = false;
   QR::init(BASE_PATH,
-           std::string{OMNISCI_ROOT_USER},
+           std::string{shared::kRootUsername},
            "HyperInteractive",
            "migration_mgr_db",
            {},

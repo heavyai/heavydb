@@ -6,7 +6,7 @@ The :cpp:class:`Catalog_Namespace::Catalog` is the top-level container for schem
 - Dashboards
 - mapd_dictionaries
 
-Data is persisted using a *SQLite* database per catalog in the `mapd_catalogs` directory, with the name of the *SQLite* database file corresponding to the database name. Just like the `SysCatalog`, a `Catalog` loads all data from SQLite on creation and flushes writes to SQLite immediately.
+Data is persisted using a *SQLite* database per catalog in the `catalogs` directory, with the name of the *SQLite* database file corresponding to the database name. Just like the `SysCatalog`, a `Catalog` loads all data from SQLite on creation and flushes writes to SQLite immediately.
 
 Below is a UML representation of the schema of the SQLite database backing a catalog:
 

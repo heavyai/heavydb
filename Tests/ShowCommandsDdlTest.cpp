@@ -28,6 +28,7 @@
 #include "DataMgr/BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "Geospatial/ColumnNames.h"
 #include "Shared/File.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/misc.h"
 #include "TestHelpers.h"
 
@@ -56,8 +57,8 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
-    getID(result, "admin", "omnisci", admin_id);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
+    getID(result, shared::kRootUsername, shared::kDefaultDbName, admin_id);
   }
 
   static void SetUpTestSuite() {
@@ -82,7 +83,8 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
-    assertSessionResultFound(result, "admin", "omnisci", admin_id);
+    assertSessionResultFound(
+        result, shared::kRootUsername, shared::kDefaultDbName, admin_id);
     DBHandlerTestFixture::TearDown();
   }
 
@@ -90,8 +92,10 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
     for (const auto& user : users_) {
       std::stringstream create;
       create << "CREATE USER " << user
-             << " (password = 'HyperInteractive', is_super = 'false', "
-                "default_db='omnisci');";
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'false', "
+                    "default_db='" +
+                    shared::kDefaultDbName + "');";
       sql(create.str());
       for (const auto& db : dbs_) {
         std::stringstream grant;
@@ -104,9 +108,9 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
   static void createSuperUsers() {
     for (const auto& user : superusers_) {
       std::stringstream create;
-      create
-          << "CREATE USER " << user
-          << " (password = 'HyperInteractive', is_super = 'true', default_db='omnisci');";
+      create << "CREATE USER " << user
+             << " (password = '" + shared::kDefaultRootPasswd +
+                    "', is_super = 'true', default_db='" + shared::kDefaultDbName + "');";
       sql(create.str());
       for (const auto& db : dbs_) {
         std::stringstream grant;
@@ -135,7 +139,7 @@ class ShowUserSessionsTest : public DBHandlerTestFixture {
   static void createDBs() {
     for (const auto& db : dbs_) {
       std::stringstream create;
-      create << "CREATE DATABASE " << db << " (owner = 'admin');";
+      create << "CREATE DATABASE " << db << " (owner = '" + shared::kRootUsername + "');";
       sql(create.str());
     }
   }
@@ -239,44 +243,47 @@ TEST_F(ShowUserSessionsTest, SHOW) {
   sql(result, "SHOW USER SESSIONS;");
   assertExpectedFormat(result);
   assertNumSessions(result, 1);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
 }
 
 TEST_F(ShowUserSessionsTest, SHOW_ADMIN_MULTIDB) {
   TSessionId new_session;
-  login("admin", "HyperInteractive", "db1", new_session);
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "db1", new_session);
   TQueryResult result;
   sql(result, "SHOW USER SESSIONS;");
   assertExpectedFormat(result);
   assertNumSessions(result, 2);
-  assertSessionResultFound(result, "admin", "db1", 1);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, "db1", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   logout(new_session);
 }
 
 TEST_F(ShowUserSessionsTest, SHOW_ADMIN_MULTISESSION_SINGLEDB) {
   TSessionId new_session;
-  login("admin", "HyperInteractive", "omnisci", new_session);
+  login(shared::kRootUsername,
+        shared::kDefaultRootPasswd,
+        shared::kDefaultDbName,
+        new_session);
   TQueryResult result;
   std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 2);
-  assertSessionResultFound(result, "admin", "omnisci", 2);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 2);
   logout(new_session);
 }
 
 TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTISESSION) {
   TSessionId session1;
-  login("user1", "HyperInteractive", "db1", session1);
+  login("user1", shared::kDefaultRootPasswd, "db1", session1);
   TSessionId session2;
-  login("user2", "HyperInteractive", "db1", session2);
+  login("user2", shared::kDefaultRootPasswd, "db1", session2);
   TQueryResult result;
   std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 3);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   assertSessionResultFound(result, "user1", "db1", 1);
   assertSessionResultFound(result, "user2", "db1", 1);
   logout(session1);
@@ -285,15 +292,15 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTISESSION) {
 
 TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDBS) {
   TSessionId session1;
-  login("user1", "HyperInteractive", "db1", session1);
+  login("user1", shared::kDefaultRootPasswd, "db1", session1);
   TSessionId session2;
-  login("user2", "HyperInteractive", "db2", session2);
+  login("user2", shared::kDefaultRootPasswd, "db2", session2);
   TQueryResult result;
   std::string query{"SHOW USER SESSIONS;"};
   sql(result, query);
   assertExpectedFormat(result);
   assertNumSessions(result, 3);
-  assertSessionResultFound(result, "admin", "omnisci", 1);
+  assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   assertSessionResultFound(result, "user1", "db1", 1);
   assertSessionResultFound(result, "user2", "db2", 1);
   logout(session1);
@@ -306,7 +313,7 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_ALL) {
     for (auto const& user : get_users()) {
       for (auto const& db : get_dbs()) {
         TSessionId session;
-        login(user, "HyperInteractive", db, session);
+        login(user, shared::kDefaultRootPasswd, db, session);
         session_ids.push_back(session);
       }
     }
@@ -329,16 +336,16 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_ALL) {
 
 TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDB_LOGOUT) {
   TSessionId session1;
-  login("user1", "HyperInteractive", "db1", session1);
+  login("user1", shared::kDefaultRootPasswd, "db1", session1);
   TSessionId session2;
-  login("user2", "HyperInteractive", "db2", session2);
+  login("user2", shared::kDefaultRootPasswd, "db2", session2);
   std::string session2_id;
   {
     TQueryResult result;
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 3);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
     assertSessionResultFound(result, "user1", "db1", 1);
     assertSessionResultFound(result, "user2", "db2", 1);
     getID(result, "user2", "db2", session2_id);
@@ -350,7 +357,7 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDB_LOGOUT) {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 2);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
     assertSessionResultFound(result, "user2", "db2", session2_id);
   }
 
@@ -360,20 +367,20 @@ TEST_F(ShowUserSessionsTest, SHOW_USERS_MULTIDB_LOGOUT) {
     sql(result, "SHOW USER SESSIONS;");
     assertExpectedFormat(result);
     assertNumSessions(result, 1);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
   }
 }
 
 TEST_F(ShowUserSessionsTest, PRIVILEGES_SUPERUSER) {
   TSessionId supersession;
-  login("super1", "HyperInteractive", "db2", supersession);
+  login("super1", shared::kDefaultRootPasswd, "db2", supersession);
   {
     TQueryResult result;
     std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, supersession);
     assertExpectedFormat(result);
     assertNumSessions(result, 2);
-    assertSessionResultFound(result, "admin", "omnisci", 1);
+    assertSessionResultFound(result, shared::kRootUsername, shared::kDefaultDbName, 1);
     assertSessionResultFound(result, "super1", "db2", 1);
   }
   logout(supersession);
@@ -381,7 +388,7 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_SUPERUSER) {
 
 TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
   TSessionId usersession;
-  login("user1", "HyperInteractive", "db1", usersession);
+  login("user1", shared::kDefaultRootPasswd, "db1", usersession);
 
   try {
     TQueryResult result;
@@ -436,7 +443,8 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
                          bool can_login = true) {
     users_.push_back(user);
     std::stringstream create;
-    create << "CREATE USER " << user << " (password = 'HyperInteractive', is_super = '"
+    create << "CREATE USER " << user
+           << " (password = '" + shared::kDefaultRootPasswd + "', is_super = '"
            << (is_super ? "true" : "false") << "', can_login = '"
            << (can_login ? "true" : "false") << "'";
     if (!database.empty()) {
@@ -452,7 +460,7 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
   }
 
   static void dropDatabases() {
-    login("admin", "HyperInteractive", "omnisci");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, shared::kDefaultDbName);
     for (const auto& database : databases_) {
       std::stringstream drop;
       drop << "DROP DATABASE IF EXISTS " << database << ";";
@@ -461,7 +469,7 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
   }
 
   static void dropUsers() {
-    login("admin", "HyperInteractive", "omnisci");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, shared::kDefaultDbName);
     for (const auto& user : users_) {
       std::stringstream drop;
       drop << "DROP USER IF EXISTS " << user << ";";
@@ -562,7 +570,7 @@ class ShowUserDetailsTest : public DBHandlerTestFixture {
 };
 
 TEST_F(ShowUserDetailsTest, AsNonSuper) {
-  login("user1", "HyperInteractive", "db1");
+  login("user1", shared::kDefaultRootPasswd, "db1");
 
   {
     TQueryResult result;
@@ -610,7 +618,7 @@ TEST_F(ShowUserDetailsTest, AsNonSuper) {
 }
 
 TEST_F(ShowUserDetailsTest, AsSuper) {
-  login("super1", "HyperInteractive", "db1");
+  login("super1", shared::kDefaultRootPasswd, "db1");
 
   {
     TQueryResult result;
@@ -659,7 +667,7 @@ TEST_F(ShowUserDetailsTest, AsSuper) {
 }
 
 TEST_F(ShowUserDetailsTest, AllAsNonSuper) {
-  login("user1", "HyperInteractive", "db1");
+  login("user1", shared::kDefaultRootPasswd, "db1");
   TQueryResult result;
   EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS;"), TOmniSciException);
   EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1;"), TOmniSciException);
@@ -670,11 +678,11 @@ TEST_F(ShowUserDetailsTest, AllAsNonSuper) {
 
 TEST_F(ShowUserDetailsTest, AllAsSuper) {
   TQueryResult result;
-  login("super1", "HyperInteractive", "db1");
+  login("super1", shared::kDefaultRootPasswd, "db1");
   sql(result, "SHOW ALL USER DETAILS;");
   assertExpectedFormatForSuperUserWithAll(result);
   assertNumUsers(result, 9);
-  assertUserResultFound(result, "admin");
+  assertUserResultFound(result, shared::kRootUsername);
   assertUserResultFound(result, "user1");
   assertUserResultFound(result, "user2");
   assertUserResultFound(result, "user3");
@@ -687,7 +695,7 @@ TEST_F(ShowUserDetailsTest, AllAsSuper) {
 
 TEST_F(ShowUserDetailsTest, ColumnsAsNonSuper) {
   using namespace std::string_literals;
-  login("user1", "HyperInteractive", "db1");
+  login("user1", shared::kDefaultRootPasswd, "db1");
   TQueryResult result;
   sql(result, "SHOW USER DETAILS user1;");
   assertNumColumns(result, 3);
@@ -700,7 +708,7 @@ TEST_F(ShowUserDetailsTest, ColumnsAsSuper) {
   auto& syscat = Catalog_Namespace::SysCatalog::instance();
   auto cat = syscat.getCatalog("db1");
   std::string db1id = cat ? std::to_string(cat->getDatabaseId()) : "";
-  login("super1", "HyperInteractive", "db1");
+  login("super1", shared::kDefaultRootPasswd, "db1");
 
   {
     TQueryResult result;
@@ -726,7 +734,7 @@ TEST_F(ShowUserDetailsTest, ColumnsAllAsSuper) {
   auto& syscat = Catalog_Namespace::SysCatalog::instance();
   auto cat = syscat.getCatalog("db1");
   std::string db1id = cat ? std::to_string(cat->getDatabaseId()) : "";
-  login("super1", "HyperInteractive", "db1");
+  login("super1", shared::kDefaultRootPasswd, "db1");
 
   TQueryResult result;
   sql(result, "SHOW ALL USER DETAILS user1;");
@@ -760,7 +768,7 @@ class ShowTableDdlTest : public DBHandlerTestFixture {
 
   static void createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   }
 
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
@@ -866,7 +874,7 @@ TEST_F(ShowTableDdlTest, TestUserSeesTestTableAfterGrantDrop) {
 }
 
 TEST_F(ShowTableDdlTest, SuperUserSeesTestTableAfterTestUserCreates) {
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestTable();
   switchToAdmin();
@@ -912,7 +920,7 @@ class ShowRolesTest : public DBHandlerTestFixture {
                              const bool is_super_user = false) {
     sql("CREATE USER " + user_name + " (password = '" + pass + "', is_super = '" +
         (is_super_user ? "true" : "false") + "');");
-    sql("GRANT ALL ON DATABASE omnisci TO " + user_name + ";");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO " + user_name + ";");
   }
 
   static void dropTestUser(const std::string& user_name) {
@@ -1198,12 +1206,12 @@ TEST_F(ShowDatabasesTest, DefaultDatabase) {
   // clang-format off
   if (isDistributedMode()) {
     assertExpectedResult({"Database", "Owner"},
-                         {{"omnisci", "admin"}},
+                         {{shared::kDefaultDbName, shared::kRootUsername}},
                          result);
   } else {
     assertExpectedResult({"Database", "Owner"},
-                         {{"omnisci", "admin"},
-                          {"information_schema", "admin"}},
+                         {{shared::kDefaultDbName, shared::kRootUsername},
+                          {"information_schema", shared::kRootUsername}},
                      result);
   }
   // clang-format on
@@ -1262,15 +1270,15 @@ TEST_F(ShowDatabasesTest, AdminLoginAndOtherUserDatabases) {
   if (isDistributedMode()) {
     assertExpectedResult(
         {"Database", "Owner"},
-        {{"omnisci", "admin"},
+        {{shared::kDefaultDbName, shared::kRootUsername},
          {"test_db_1", "test_user_1"},
          {"test_db_2", "test_user_2"}},
         result);
   } else {
     assertExpectedResult(
         {"Database", "Owner"},
-        {{"omnisci", "admin"},
-         {"information_schema", "admin"},
+        {{shared::kDefaultDbName, shared::kRootUsername},
+         {"information_schema", shared::kRootUsername},
          {"test_db_1", "test_user_1"},
          {"test_db_2", "test_user_2"}},
         result);
@@ -1289,15 +1297,15 @@ TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
   if (isDistributedMode()) {
     assertExpectedResult(
         {"Database", "Owner"},
-        {{"omnisci", "admin"},
+        {{shared::kDefaultDbName, shared::kRootUsername},
          {"test_db_1", "test_user_1"},
          {"test_db_2", "test_user_2"}},
         result);
   } else {
     assertExpectedResult(
         {"Database", "Owner"},
-        {{"omnisci", "admin"},
-         {"information_schema", "admin"},
+        {{shared::kDefaultDbName, shared::kRootUsername},
+         {"information_schema", shared::kRootUsername},
          {"test_db_1", "test_user_1"},
          {"test_db_2", "test_user_2"}},
         result);
@@ -1631,7 +1639,7 @@ class SystemTablesShowCreateTableTest : public ShowCreateTableTest {
     if (isDistributedMode()) {
       GTEST_SKIP() << "Test is not supported in distributed mode.";
     }
-    login("admin", "HyperInteractive", "information_schema");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
   }
 };
 
@@ -1743,7 +1751,8 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
   static inline constexpr int64_t empty_mgr_size{0};
   static inline constexpr int64_t chunk_size{DEFAULT_PAGE_SIZE + METADATA_PAGE_SIZE};
   // TODO(Misiu): These can be made constexpr once c++20 is supported.
-  static inline std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
+  static inline std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
   static inline std::string foreign_table1{"foreign_table1"};
   static inline std::string foreign_table2{"foreign_table2"};
   static inline std::string foreign_table3{"foreign_table3"};
@@ -1754,7 +1763,7 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
     loginAdmin();
     sql("DROP DATABASE IF EXISTS test_db;");
     sql("CREATE DATABASE test_db;");
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     getCatalog().getDataMgr().getPersistentStorageMgr()->getDiskCache()->clear();
   }
 
@@ -1769,7 +1778,7 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
       GTEST_SKIP() << "Test not supported in distributed mode.";
     }
     DBHandlerTestFixture::SetUp();
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table1 + ";");
     sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table2 + ";");
     sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table3 + ";");
@@ -1992,12 +2001,12 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     dropTestTables();
   }
 
   void TearDown() override {
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     dropTestTables();
     DBHandlerTestFixture::TearDown();
   }
@@ -2570,9 +2579,9 @@ class ShowQueriesTest : public DBHandlerTestFixture {
     sql("DROP USER IF EXISTS u1;");
     sql("DROP USER IF EXISTS u2;");
     sql("CREATE USER u1 (password = 'u1');");
-    sql("GRANT ALL ON DATABASE omnisci TO u1;");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO u1;");
     sql("CREATE USER u2 (password = 'u2');");
-    sql("GRANT ALL ON DATABASE omnisci TO u2;");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO u2;");
   }
 
   static void dropTestUser() {
@@ -2586,14 +2595,14 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   TSessionId query_session;
   TSessionId show_queries_cmd_session;
 
-  login("u1", "u1", "omnisci", query_session);
+  login("u1", "u1", shared::kDefaultDbName, query_session);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   // mock the running query by just enrolling the meaningless query
   executor->enrollQuerySession(
       query_session, "MOCK_QUERY", "0", 0, QuerySessionStatus::RUNNING_QUERY_KERNEL);
 
   auto show_queries_thread1 = std::async(std::launch::deferred, [&] {
-    login("u2", "u2", "omnisci", show_queries_cmd_session);
+    login("u2", "u2", shared::kDefaultDbName, show_queries_cmd_session);
     sql(non_admin_res, "SHOW QUERIES;", show_queries_cmd_session);
   });
 
@@ -2671,7 +2680,8 @@ class SystemTablesTest : public DBHandlerTestFixture {
 
   static void createUser(const std::string& user_name) {
     sql("CREATE USER " + user_name +
-        " (password = 'test_pass', is_super = 'false', default_db = 'omnisci');");
+        " (password = 'test_pass', is_super = 'false', default_db = '" +
+        shared::kDefaultDbName + "');");
     sql("GRANT ACCESS ON DATABASE information_schema TO " + user_name + ";");
   }
 
@@ -2713,7 +2723,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     db_handler->replace_dashboard(session_id,
                                   id,
                                   new_name,
-                                  "admin",
+                                  shared::kRootUsername,
                                   dashboard->dashboardState,
                                   dashboard->imageHash,
                                   dashboard->dashboardMetadata);
@@ -2748,13 +2758,14 @@ class SystemTablesTest : public DBHandlerTestFixture {
   }
 
   void resetPermissions() {
-    sql("REVOKE ALL ON DATABASE omnisci FROM test_user_1, test_user_2;");
+    sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName +
+        " FROM test_user_1, test_user_2;");
     sql("REVOKE ALL ON DATABASE information_schema FROM test_user_1, test_user_2;");
     sql("GRANT ACCESS ON DATABASE information_schema TO test_user_1, test_user_2;");
   }
 
   void loginInformationSchema() {
-    login("admin", "HyperInteractive", "information_schema");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
   }
 
   void initTestTableAndClearMemory() {
@@ -2906,50 +2917,68 @@ TEST_F(SystemTablesTest, SystemTableDisabled) {
 }
 
 TEST_F(SystemTablesTest, UsersSystemTable) {
+  // clang-format off
   sqlAndCompareResult(
       "SELECT * FROM users ORDER BY user_name;",
-      {{getUserId("admin"), "admin", True, i(-1), Null, True},
-       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
-       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True}});
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
 
   switchToAdmin();
   createUser("test_user_3");
 
   loginInformationSchema();
+  // clang-format off
   sqlAndCompareResult(
       "SELECT * FROM users ORDER BY user_name;",
-      {{getUserId("admin"), "admin", True, i(-1), Null, True},
-       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
-       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True},
-       {getUserId("test_user_3"), "test_user_3", False, i(1), "omnisci", True}});
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_3"), "test_user_3", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
 
   switchToAdmin();
   sql("ALTER USER test_user_3 (is_super = 'true');");
 
   loginInformationSchema();
+  // clang-format off
   sqlAndCompareResult(
       "SELECT * FROM users ORDER BY user_name;",
-      {{getUserId("admin"), "admin", True, i(-1), Null, True},
-       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
-       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True},
-       {getUserId("test_user_3"), "test_user_3", True, i(1), "omnisci", True}});
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_3"), "test_user_3", True, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
 
   switchToAdmin();
   dropUser("test_user_3");
 
   loginInformationSchema();
+  // clang-format off
   sqlAndCompareResult(
       "SELECT * FROM users ORDER BY user_name;",
-      {{getUserId("admin"), "admin", True, i(-1), Null, True},
-       {getUserId("test_user_1"), "test_user_1", False, i(1), "omnisci", True},
-       {getUserId("test_user_2"), "test_user_2", False, i(1), "omnisci", True}});
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
 }
 
 TEST_F(SystemTablesTest, TablesSystemTable) {
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
-  login("admin", "HyperInteractive", "test_db_1");
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
   std::string create_table_sql{"CREATE TABLE test_table_1 (\n  i INTEGER);"};
   sql(create_table_sql);
   std::string create_view_sql{"CREATE VIEW test_view_1 AS SELECT * FROM test_table_1;"};
@@ -2958,24 +2987,24 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
   auto view_1_id = getTableId("test_view_1");
 
   loginInformationSchema();
-  // Skip the "omnisci" database, since it can contain default created tables
-  // and tables created by other test suites.
+  // Skip the shared::kDefaultDbName database, since it can contain default
+  // created tables and tables created by other test suites.
   // clang-format off
   sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
-                      {{i(3), "test_db_1", table_1_id, "test_table_1", getUserId("admin"),
-                        "admin", i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_name;",
+                      {{i(3), "test_db_1", table_1_id, "test_table_1", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
                         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
                         i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
                         create_table_sql},
-                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId("admin"),
-                        "admin", i(2), "VIEW", "SELECT * FROM test_table_1;",
+                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_1;",
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
                         i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql}});
   // clang-format on
 
-  login("admin", "HyperInteractive", "test_db_1");
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
   sql("ALTER TABLE test_table_1 RENAME TO test_table_2;");
   create_table_sql = "CREATE TABLE test_table_2 (\n  i INTEGER);";
   std::string create_view_sql_2{"CREATE VIEW test_view_2 AS SELECT * FROM test_table_2;"};
@@ -2998,29 +3027,29 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY table_name;",
+                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_name;",
                       {{i(3), "test_db_1", foreign_table_id, "test_foreign_table",
-                        getUserId("admin"), "admin", i(2), "FOREIGN", Null,
+                        getUserId(shared::kRootUsername), shared::kRootUsername, i(2), "FOREIGN", Null,
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
                         i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_foreign_table_sql},
-                       {i(3), "test_db_1", table_1_id, "test_table_2", getUserId("admin"),
-                        "admin", i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                       {i(3), "test_db_1", table_1_id, "test_table_2", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
                         i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
                         i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
                         create_table_sql},
                        {i(3), "test_db_1", temp_table_id, "test_temp_table",
-                        getUserId("admin"), "admin", i(3), "TEMPORARY", Null,
+                        getUserId(shared::kRootUsername), shared::kRootUsername, i(3), "TEMPORARY", Null,
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
                         i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_temp_table_sql},
-                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId("admin"),
-                        "admin", i(2), "VIEW", "SELECT * FROM test_table_1;",
+                       {i(3), "test_db_1", view_1_id, "test_view_1", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_1;",
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
                         i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql},
-                       {i(3), "test_db_1", view_2_id, "test_view_2", getUserId("admin"),
-                        "admin", i(2), "VIEW", "SELECT * FROM test_table_2;",
+                       {i(3), "test_db_1", view_2_id, "test_view_2", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, i(2), "VIEW", "SELECT * FROM test_table_2;",
                         i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_CHUNK_SIZE),
                         i(DEFAULT_PAGE_SIZE), i(DEFAULT_MAX_ROWS),
                         i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), create_view_sql_2}});
@@ -3031,21 +3060,21 @@ TEST_F(SystemTablesTest, DashboardsSystemTable) {
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
-  login("admin", "HyperInteractive", "test_db_1");
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
   createDashboard("test_dashboard_1");
   auto last_updated_1 = getLastUpdatedTime("test_dashboard_1");
 
   loginInformationSchema();
-  // Skip the "omnisci" database, since it can contain dashboards created by other test
-  // suites.
+  // Skip the shared::kDefaultDbName database, since it can contain dashboards
+  // created by other test suites.
   // clang-format off
   sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
-                      {{i(3), "test_db_1", i(1), "test_dashboard_1", getUserId("admin"),
-                        "admin", last_updated_1, array({"test_table"})}});
+                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY dashboard_name;",
+                      {{i(3), "test_db_1", i(1), "test_dashboard_1", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, last_updated_1, array({"test_table"})}});
   // clang-format on
 
-  login("admin", "HyperInteractive", "test_db_1");
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
   createDashboard("test_dashboard_2");
   updateDashboardName("test_dashboard_1", "test_dashboard_3");
   auto last_updated_2 = getLastUpdatedTime("test_dashboard_2");
@@ -3054,11 +3083,11 @@ TEST_F(SystemTablesTest, DashboardsSystemTable) {
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY dashboard_name;",
-                      {{i(3), "test_db_1", i(2), "test_dashboard_2", getUserId("admin"),
-                        "admin", last_updated_2, array({"test_table"})},
-                       {i(3), "test_db_1", i(1), "test_dashboard_3", getUserId("admin"),
-                        "admin", last_updated_3, array({"test_table"})}});
+                      std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY dashboard_name;",
+                      {{i(3), "test_db_1", i(2), "test_dashboard_2", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, last_updated_2, array({"test_table"})},
+                       {i(3), "test_db_1", i(1), "test_dashboard_3", getUserId(shared::kRootUsername),
+                        shared::kRootUsername, last_updated_3, array({"test_table"})}});
   // clang-format on
 }
 
@@ -3067,60 +3096,74 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
   sql("CREATE DATABASE test_db_1;");
 
   loginInformationSchema();
-  sqlAndCompareResult(
-      "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin"), "admin"},
-       {getDbId("omnisci"), "omnisci", getUserId("admin"), "admin"},
-       {getDbId("test_db_1"), "test_db_1", getUserId("admin"), "admin"}});
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_1"), "test_db_1",
+                        getUserId(shared::kRootUsername), shared::kRootUsername}});
+  // clang-format on
 
   switchToAdmin();
   sql("CREATE DATABASE test_db_2;");
 
   loginInformationSchema();
-  sqlAndCompareResult(
-      "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin"), "admin"},
-       {getDbId("omnisci"), "omnisci", getUserId("admin"), "admin"},
-       {getDbId("test_db_1"), "test_db_1", getUserId("admin"), "admin"},
-       {getDbId("test_db_2"), "test_db_2", getUserId("admin"), "admin"}});
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_1"), "test_db_1",
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_2"), "test_db_2",
+                        getUserId(shared::kRootUsername), shared::kRootUsername}});
+  // clang-format on
 
   switchToAdmin();
   sql("DROP DATABASE test_db_1;");
 
   loginInformationSchema();
-  sqlAndCompareResult(
-      "SELECT * FROM databases ORDER BY database_name;",
-      {{getDbId("information_schema"), "information_schema", getUserId("admin"), "admin"},
-       {getDbId("omnisci"), "omnisci", getUserId("admin"), "admin"},
-       {getDbId("test_db_2"), "test_db_2", getUserId("admin"), "admin"}});
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId("test_db_2"), "test_db_2",
+                        getUserId(shared::kRootUsername), shared::kRootUsername}});
+  // clang-format on
 }
 
 TEST_F(SystemTablesTest, PermissionsSystemTable) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
-                      {{"test_user_1", True, i(2), "information_schema",
-                        "information_schema", i(-1), getUserId("admin"), "admin",
-                        "database", array({"access"})},
-                       {"test_user_2", True, i(2), "information_schema",
-                        "information_schema", i(-1), getUserId("admin"), "admin",
-                        "database", array({"access"})}});
+                      {{"test_user_1", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
   // clang-format on
 
   switchToAdmin();
-  sql("GRANT CREATE, SELECT ON DATABASE omnisci to test_user_1;");
+  sql("GRANT CREATE, SELECT ON DATABASE " + shared::kDefaultDbName + " to test_user_1;");
 
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name, object_name;",
-                      {{"test_user_1", True, i(2), "information_schema",
-                        "information_schema", i(-1), getUserId("admin"), "admin",
-                        "database", array({"access"})},
-                       {"test_user_1", True, i(1), "omnisci", "omnisci", i(-1),
-                        getUserId("admin"), "admin", "table",
+                      {{"test_user_1", True, i(1), shared::kDefaultDbName,
+                        shared::kDefaultDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "table",
                         array({"select table", "create table"})},
-                       {"test_user_2", True, i(2), "information_schema",
-                        "information_schema", i(-1), getUserId("admin"), "admin",
-                        "database", array({"access"})}});
+                        {"test_user_1", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
   // clang-format on
 }
 
@@ -3131,7 +3174,7 @@ TEST_F(SystemTablesTest, RoleAssignmentsSystemTable) {
 
   loginInformationSchema();
   sqlAndCompareResult("SELECT * FROM role_assignments ORDER BY user_name;",
-                      {{"test_role_1", "admin"},
+                      {{"test_role_1", shared::kRootUsername},
                        {"test_role_1", "test_user_1"},
                        {"test_role_1", "test_user_2"}});
 
@@ -3139,8 +3182,9 @@ TEST_F(SystemTablesTest, RoleAssignmentsSystemTable) {
   sql("REVOKE test_role_1 FROM test_user_1;");
 
   loginInformationSchema();
-  sqlAndCompareResult("SELECT * FROM role_assignments ORDER BY role_name, user_name;",
-                      {{"test_role_1", "admin"}, {"test_role_1", "test_user_2"}});
+  sqlAndCompareResult(
+      "SELECT * FROM role_assignments ORDER BY role_name, user_name;",
+      {{"test_role_1", shared::kRootUsername}, {"test_role_1", "test_user_2"}});
 }
 
 TEST_F(SystemTablesTest, RolesSystemTable) {
@@ -3211,7 +3255,7 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
 TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   initTestTableAndClearMemory();
 
-  auto db_id = getDbId("omnisci");
+  auto db_id = getDbId(shared::kDefaultDbName);
   auto table_id = getTableId("test_table_1");
 
   loginInformationSchema();
@@ -3224,7 +3268,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   loginInformationSchema();
   // clang-format off
   sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU';",
-                      {{"Server", db_id, "omnisci", table_id, "test_table_1", i(1), "i",
+                      {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1", i(1), "i",
                         array({db_id, table_id, i(1), i(0)}), i(0), "CPU", "USED", i(1),
                         getCpuPageSize(), i(0), i(0), i(1)},
                        {"Server", Null, Null, Null, Null, Null, Null, Null, i(0), "CPU",
@@ -3239,7 +3283,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   }
   initTestTableAndClearMemory();
 
-  auto db_id = getDbId("omnisci");
+  auto db_id = getDbId(shared::kDefaultDbName);
   auto table_id = getTableId("test_table_1");
 
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
@@ -3250,7 +3294,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'GPU' AND "
                       "device_id = " + std::to_string(device_id) + ";",
-                      {{"Server", db_id, "omnisci", table_id, "test_table_1", i(1), "i",
+                      {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1", i(1), "i",
                         array({db_id, table_id, i(1), i(0)}), i(device_id), "GPU", "USED",
                         i(1), getGpuPageSize(device_id), i(0), i(0), i(0)},
                        {"Server", Null, Null, Null, Null, Null, Null, Null, i(device_id),
@@ -3267,10 +3311,10 @@ TEST_F(SystemTablesTest, SystemTablesJoin) {
                       "ORDER BY role_name;",
                       {{"information_schema", "test_user_1", True, i(2),
                         "information_schema", "information_schema", i(-1),
-                        getUserId("admin"), "admin", "database", array({"access"})},
+                        getUserId(shared::kRootUsername), shared::kRootUsername, "database", array({"access"})},
                        {"information_schema", "test_user_2", True, i(2),
                         "information_schema", "information_schema", i(-1),
-                        getUserId("admin"), "admin", "database", array({"access"})}});
+                        getUserId(shared::kRootUsername), shared::kRootUsername, "database", array({"access"})}});
   // clang-format on
 }
 
@@ -3302,7 +3346,7 @@ class StorageDetailsSystemTableTest : public SystemTablesTest,
     SystemTablesTest::SetUp();
     switchToAdmin();
     sql("CREATE DATABASE test_db;");
-    login("admin", "HyperInteractive", "test_db");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
   }
 
   void TearDown() override {
@@ -3335,10 +3379,11 @@ class StorageDetailsSystemTableTest : public SystemTablesTest,
                                            result.total_dictionary_data_file_size});
     }
     loginInformationSchema();
-    // Skip the "omnisci" database, since it can contain default created tables
-    // and tables created by other test suites.
+    // Skip the shared::kDefaultDbName database, since it can contain default
+    // created tables and tables created by other test suites.
     std::string query{"SELECT * FROM storage_details WHERE database_id <> " +
-                      std::to_string(getDbId("omnisci")) + " ORDER BY table_id;"};
+                      std::to_string(getDbId(shared::kDefaultDbName)) +
+                      " ORDER BY table_id;"};
     SystemTablesTest::sqlAndCompareResult(query, target_values);
   }
 

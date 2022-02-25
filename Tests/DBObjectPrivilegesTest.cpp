@@ -13,6 +13,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "DBHandlerTestHelpers.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
 #include "ThriftHandler/QueryState.h"
@@ -612,8 +613,8 @@ TEST(Roles, RecursiveRoleCheckTest) {
 }
 
 TEST_F(DatabaseObject, AccessDefaultsTest) {
-  auto cat_mapd = sys_cat.getCatalog(OMNISCI_DEFAULT_DB);
-  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  auto cat_mapd = sys_cat.getCatalog(shared::kDefaultDbName);
+  DBObject mapd_object(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(*cat_mapd);
 
@@ -627,12 +628,12 @@ TEST_F(DatabaseObject, AccessDefaultsTest) {
 TEST_F(DatabaseObject, SqlEditorAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_juve;
 
-  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(shared::kDefaultDbName, db_meta));
   CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
   session_juve.reset(new Catalog_Namespace::SessionInfo(
       sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_juve->getCatalog();
-  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DatabaseDBObjectType);
@@ -674,12 +675,12 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
 TEST_F(DatabaseObject, DBLoginAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_juve;
 
-  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(shared::kDefaultDbName, db_meta));
   CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
   session_juve.reset(new Catalog_Namespace::SessionInfo(
       sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_juve->getCatalog();
-  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DatabaseDBObjectType);
@@ -720,7 +721,7 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
 TEST_F(DatabaseObject, TableAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
 
-  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(shared::kDefaultDbName, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
@@ -730,7 +731,7 @@ TEST_F(DatabaseObject, TableAccessTest) {
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DROP_TABLE));
   ASSERT_NO_THROW(bayern_privs.add(AccessPrivileges::ALTER_TABLE));
-  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(TableDBObjectType);
@@ -775,14 +776,14 @@ TEST_F(DatabaseObject, TableAccessTest) {
 
 TEST_F(DatabaseObject, ViewAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
-  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(shared::kDefaultDbName, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
-  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(ViewDBObjectType);
@@ -821,14 +822,14 @@ TEST_F(DatabaseObject, ViewAccessTest) {
 
 TEST_F(DatabaseObject, DashboardAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
-  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(shared::kDefaultDbName, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
-  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DashboardDBObjectType);
@@ -867,14 +868,14 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
 TEST_F(DatabaseObject, DatabaseAllTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
 
-  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(shared::kDefaultDbName, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(new Catalog_Namespace::SessionInfo(
       sys_cat.getCatalog(db_meta.dbName), user_meta, ExecutorDeviceType::GPU, ""));
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
-  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.resetPrivileges();
@@ -1832,9 +1833,9 @@ TEST(DBObject, LoadKey) {
                     tbname + ";");
 
   // test the LoadKey() function
-  auto cat = sys_cat.getCatalog(OMNISCI_DEFAULT_DB);
+  auto cat = sys_cat.getCatalog(shared::kDefaultDbName);
 
-  DBObject dbo1(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject dbo1(shared::kDefaultDbName, DBObjectType::DatabaseDBObjectType);
   DBObject dbo2(tbname, DBObjectType::TableDBObjectType);
   DBObject dbo3(vwname, DBObjectType::ViewDBObjectType);
 
@@ -2333,7 +2334,8 @@ TEST(SysCatalog, RenameDatabase_ExistingDB) {
 
 TEST(SysCatalog, RenameDatabase_FailedCopy) {
   using namespace std::string_literals;
-  auto trash_file_path = sys_cat.getCatalogBasePath() + "/mapd_catalogs/trash";
+  auto trash_file_path =
+      sys_cat.getCatalogBasePath() + "/" + shared::kCatalogDirectoryName + "/trash";
 
   ScopeGuard s = [&trash_file_path] {
     boost::filesystem::remove(trash_file_path);
@@ -2644,7 +2646,8 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
   dbname2.clear();
   ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
   EXPECT_EQ(dbname2,
-            OMNISCI_DEFAULT_DB);  // correctly fell back to system default database
+            shared::kDefaultDbName);  // correctly fell back to system default
+                                      // database
 }
 
 TEST(SysCatalog, SwitchDatabase) {
@@ -2684,7 +2687,7 @@ TEST(SysCatalog, SwitchDatabase) {
   //   ASSERT_ANY_THROW(agg->leafCatalogConsistencyCheck(*dqr->getSession()));
   //   agg->switch_database(dqr->getSession()->get_session_id(), dbname);
   //   ASSERT_NO_THROW(sql("DROP TABLE " + tname + ";"));
-  //   agg->switch_database(dqr->getSession()->get_session_id(), OMNISCI_DEFAULT_DB);
+  //   agg->switch_database(dqr->getSession()->get_session_id(), shared::kDefaultDbName);
   // }
 
   // cleanup
@@ -2744,14 +2747,15 @@ TEST(SysCatalog, AllUserMetaTest) {
   run_ddl_statement("CREATE DATABASE " + europa + ";");
   run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO Bayern;");
   run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO Juventus;");
-  run_ddl_statement("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Arsenal;");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName +
+                    " TO Arsenal;");
   run_ddl_statement("GRANT CREATE ON DATABASE " + champions + " TO Juventus;");
   run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO Arsenal;");
-  run_ddl_statement("GRANT CREATE ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Bayern;");
+  run_ddl_statement("GRANT CREATE ON DATABASE " + shared::kDefaultDbName + " TO Bayern;");
   run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO Juventus;");
 
   Catalog_Namespace::UserMetadata user_meta;
-  auto db_default(OMNISCI_DEFAULT_DB);
+  auto db_default(shared::kDefaultDbName);
   auto db_champions(champions);
   auto db_europa(europa);
   auto user_chelsea("Chelsea"s);
@@ -2835,14 +2839,15 @@ TEST(SysCatalog, RecursiveRolesUserMetaData) {
   run_ddl_statement("CREATE DATABASE " + europa + ";");
   run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO Sudens;");
   run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO OldLady;");
-  run_ddl_statement("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Gunners;");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName +
+                    " TO Gunners;");
   run_ddl_statement("GRANT CREATE ON DATABASE " + champions + " TO OldLady;");
   run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO Gunners;");
-  run_ddl_statement("GRANT CREATE ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Sudens;");
+  run_ddl_statement("GRANT CREATE ON DATABASE " + shared::kDefaultDbName + " TO Sudens;");
   run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO OldLady;");
 
   Catalog_Namespace::UserMetadata user_meta;
-  auto db_default(OMNISCI_DEFAULT_DB);
+  auto db_default(shared::kDefaultDbName);
   auto db_champions(champions);
   auto db_europa(europa);
   auto user_chelsea("Chelsea"s);
@@ -2876,7 +2881,7 @@ TEST(SysCatalog, RecursiveRolesUserMetaData) {
 
 TEST(Login, Deactivation) {
   // SysCatalog::login doesn't accept constants
-  std::string database = OMNISCI_DEFAULT_DB;
+  std::string database = shared::kDefaultDbName;
   std::string active_user = "active_user";
   std::string deactivated_user = "deactivated_user";
 
@@ -2918,7 +2923,8 @@ class GetDbObjectsForGranteeTest : public DBHandlerTestFixture {
 
   void allOnDatabase(std::string privilege) {
     g_enable_fsi = false;
-    sql("GRANT " + privilege + " ON DATABASE omnisci TO test_user;");
+    sql("GRANT " + privilege + " ON DATABASE " + shared::kDefaultDbName +
+        " TO test_user;");
 
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     std::vector<TDBObject> db_objects{};
@@ -2926,7 +2932,7 @@ class GetDbObjectsForGranteeTest : public DBHandlerTestFixture {
 
     std::unordered_set<TDBObjectType::type> privilege_types{};
     for (const auto& db_object : db_objects) {
-      ASSERT_EQ("omnisci", db_object.objectName);
+      ASSERT_EQ(shared::kDefaultDbName, db_object.objectName);
       ASSERT_EQ(TDBObjectType::DatabaseDBObjectType, db_object.objectType);
       ASSERT_EQ("test_user", db_object.grantee);
 
@@ -2963,7 +2969,7 @@ TEST_F(GetDbObjectsForGranteeTest, UserWithGrantAllPrivilegesOnDatabase) {
 }
 
 TEST(DefaultUser, RoleList) {
-  auto* grantee = sys_cat.getGrantee(OMNISCI_ROOT_USER);
+  auto* grantee = sys_cat.getGrantee(shared::kRootUsername);
   EXPECT_TRUE(grantee);
   EXPECT_TRUE(grantee->getRoles().empty());
 }
@@ -2981,7 +2987,7 @@ class TablePermissionsTest : public DBHandlerTestFixture {
                             const std::string& username,
                             const std::string& password) {
     Catalog_Namespace::UserMetadata user_meta;
-    std::string db_name = "omnisci";
+    std::string db_name = shared::kDefaultDbName;
     std::string username_local = username;
     ASSERT_NO_THROW(sys_cat.login(db_name, username_local, password, user_meta, false));
     auto user_qr = get_qr_for_user(db_name, user_meta);
@@ -3064,7 +3070,7 @@ class TablePermissionsTest : public DBHandlerTestFixture {
 
   static void createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   }
 
   void createTestForeignTable() {
@@ -3394,41 +3400,41 @@ TEST_F(ForeignTablePermissionsTest, ForeignTableGrantRevokeCreateTablePrivilege)
                                   "created. User has no CREATE TABLE privileges.");
 
   switchToAdmin();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   login("test_user", "test_pass");
   executeLambdaAndAssertException([this] { createTestForeignTable(); },
                                   "Foreign table \"test_table\" will not be "
                                   "created. User has no CREATE TABLE privileges.");
 
   switchToAdmin();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestForeignTable();
 
   // clean up permissions
   switchToAdmin();
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+  sql("REVOKE CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
 }
 
 TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshOwner) {
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestForeignTable();
   runQuery("REFRESH FOREIGN TABLES test_table;");
   // clean up permissions
   switchToAdmin();
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+  sql("REVOKE CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
 }
 
 TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshSuperUser) {
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestForeignTable();
   switchToAdmin();
   runQuery("REFRESH FOREIGN TABLES test_table;");
   // clean up permissions
-  sql("REVOKE CREATE TABLE ON DATABASE omnisci FROM test_user;");
+  sql("REVOKE CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
 }
 
 TEST_F(ForeignTablePermissionsTest, ForeignTableRefreshNonOwner) {
@@ -3477,14 +3483,14 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
   }
   static void createTestUser(std::string name) {
     sql("CREATE USER  " + name + " (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO  " + name + ";");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO  " + name + ";");
   }
 
   static void dropTestUser(std::string name) { sql("DROP USER IF EXISTS " + name + ";"); }
 
   void revokeTestUserServerPrivileges(std::string name) {
-    sql("REVOKE ALL ON DATABASE omnisci FROM " + name + ";");
-    sql("GRANT ACCESS ON DATABASE omnisci TO " + name + ";");
+    sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM " + name + ";");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO " + name + ";");
   }
   void createTestServer() {
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
@@ -3513,7 +3519,7 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
 
   void assertDBAccessObj(std::vector<TDBObject>& db_objs) {
     assertExpectedDBObj(db_objs,
-                        "omnisci",
+                        shared::kDefaultDbName,
                         TDBObjectType::DatabaseDBObjectType,
                         {0, 0, 0, 1},
                         "test_user",
@@ -3531,13 +3537,13 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
 
 TEST_F(ServerPrivApiTest, CreateForGrantee) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
   ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
-                      "omnisci",
+                      shared::kDefaultDbName,
                       TDBObjectType::DatabaseDBObjectType,
                       {1, 0, 0, 0},
                       "test_user",
@@ -3546,13 +3552,13 @@ TEST_F(ServerPrivApiTest, CreateForGrantee) {
 
 TEST_F(ServerPrivApiTest, DropForGrantee) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT DROP SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
   ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
-                      "omnisci",
+                      shared::kDefaultDbName,
                       TDBObjectType::DatabaseDBObjectType,
                       {0, 1, 0, 0},
                       "test_user",
@@ -3561,13 +3567,13 @@ TEST_F(ServerPrivApiTest, DropForGrantee) {
 
 TEST_F(ServerPrivApiTest, AlterForGrantee) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT ALTER SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
   ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
-                      "omnisci",
+                      shared::kDefaultDbName,
                       TDBObjectType::DatabaseDBObjectType,
                       {0, 0, 1, 0},
                       "test_user",
@@ -3591,13 +3597,13 @@ TEST_F(ServerPrivApiTest, AlterOnServerGrantee) {
 
 TEST_F(ServerPrivApiTest, UsageForGrantee) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
   ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
-                      "omnisci",
+                      shared::kDefaultDbName,
                       TDBObjectType::DatabaseDBObjectType,
                       {0, 0, 0, 1},
                       "test_user",
@@ -3621,14 +3627,14 @@ TEST_F(ServerPrivApiTest, UsageOnServerGrantee) {
 
 TEST_F(ServerPrivApiTest, GetDBObjNonSuser) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user");
   ASSERT_EQ(priv_objs.size(), 2u);
   assertDBAccessObj(priv_objs);
   assertExpectedDBObj(priv_objs,
-                      "omnisci",
+                      shared::kDefaultDbName,
                       TDBObjectType::DatabaseDBObjectType,
                       {1, 0, 0, 0},
                       "test_user",
@@ -3637,7 +3643,7 @@ TEST_F(ServerPrivApiTest, GetDBObjNonSuser) {
 
 TEST_F(ServerPrivApiTest, GetDBObjNoAccess) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user_2;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user_2;");
   login("test_user", "test_pass");
   std::vector<TDBObject> priv_objs;
   db_handler->get_db_objects_for_grantee(priv_objs, session_id, "test_user_2");
@@ -3832,7 +3838,8 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
     createTestUser("test_user_2", "test_pass");
     createTestUser("test_user_3", "test_pass");
     createTestUser("all_permissions_test_user", "test_pass");
-    sql("GRANT ALL ON DATABASE omnisci TO all_permissions_test_user;");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName +
+        " TO all_permissions_test_user;");
   }
 
   static void TearDownTestSuite() {
@@ -3866,11 +3873,12 @@ class ReassignOwnedTest : public DBHandlerTestFixture {
   static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
     sql("CREATE USER " + user_name + " (password = '" + pass + "');");
     sql("GRANT ACCESS, CREATE TABLE, CREATE VIEW, CREATE DASHBOARD ON "
-        "DATABASE omnisci TO " +
-        user_name + ";");
+        "DATABASE " +
+        shared::kDefaultDbName + " TO " + user_name + ";");
     if (!isDistributedMode()) {
       // FSI is currently not supported in distributed mode.
-      sql("GRANT CREATE SERVER ON DATABASE omnisci TO " + user_name + ";");
+      sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO " +
+          user_name + ";");
     }
     UserMetadata user_metadata{};
     SysCatalog::instance().getMetadataForUser(user_name, user_metadata);

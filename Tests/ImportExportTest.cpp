@@ -46,6 +46,7 @@
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/enable_assign_render_groups.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
@@ -3388,7 +3389,8 @@ TEST_P(SortedImportTest, SortedOnRegexWithoutSortRegex) {
 
 namespace {
 void remove_all_files_from_export() {
-  boost::filesystem::path path_to_remove(BASE_PATH "/mapd_export/");
+  boost::filesystem::path path_to_remove(BASE_PATH "/" + shared::kDefaultExportDirName +
+                                         "/");
   if (boost::filesystem::exists(path_to_remove)) {
     for (boost::filesystem::directory_iterator end_dir_it, it(path_to_remove);
          it != end_dir_it;
@@ -3558,8 +3560,8 @@ class ExportTest : public ImportTestGDAL {
                                const std::string& geo_type,
                                const bool with_array_columns) {
     // re-import exported file(s) to new table
-    auto actual_file =
-        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
+    auto actual_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                       getDbHandlerAndSessionId().second + "/" + file;
     actual_file = boost::filesystem::canonical(actual_file).string();
     if (file_type == "" || file_type == "CSV") {
       // create table
@@ -3607,8 +3609,8 @@ class ExportTest : public ImportTestGDAL {
 
   void doCompareBinary(const std::string& file, const bool gzipped) {
     if (!g_regenerate_export_test_reference_files) {
-      auto actual_exported_file =
-          BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
+      auto actual_exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                                  getDbHandlerAndSessionId().second + "/" + file;
       auto actual_reference_file = "../../Tests/Export/QueryExport/datafiles/" + file;
       auto exported_file_contents = readBinaryFile(actual_exported_file, gzipped);
       auto reference_file_contents = readBinaryFile(actual_reference_file, gzipped);
@@ -3618,8 +3620,8 @@ class ExportTest : public ImportTestGDAL {
 
   void doCompareText(const std::string& file, const bool gzipped) {
     if (!g_regenerate_export_test_reference_files) {
-      auto actual_exported_file =
-          BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
+      auto actual_exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                                  getDbHandlerAndSessionId().second + "/" + file;
       auto actual_reference_file = "../../Tests/Export/QueryExport/datafiles/" + file;
       auto exported_lines = readTextFile(actual_exported_file, gzipped);
       auto reference_lines = readTextFile(actual_reference_file, gzipped);
@@ -3635,8 +3637,8 @@ class ExportTest : public ImportTestGDAL {
                             const std::string& layer_name,
                             const bool ignore_trailing_comma_diff) {
     if (!g_regenerate_export_test_reference_files) {
-      auto actual_exported_file =
-          BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
+      auto actual_exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                                  getDbHandlerAndSessionId().second + "/" + file;
       auto actual_reference_file = "../../Tests/Export/QueryExport/datafiles/" + file;
       auto exported_lines = readFileWithOGRInfo(actual_exported_file, layer_name);
       auto reference_lines = readFileWithOGRInfo(actual_reference_file, layer_name);
@@ -3648,8 +3650,8 @@ class ExportTest : public ImportTestGDAL {
   }
 
   void removeExportedFile(const std::string& file) {
-    auto exported_file =
-        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
+    auto exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                         getDbHandlerAndSessionId().second + "/" + file;
     if (g_regenerate_export_test_reference_files) {
       auto reference_file = "../../Tests/Export/QueryExport/datafiles/" + file;
       ASSERT_NO_THROW(boost::filesystem::copy_file(
@@ -3662,8 +3664,8 @@ class ExportTest : public ImportTestGDAL {
 
   void doTestArrayNullHandling(const std::string& file,
                                const std::string& other_options) {
-    std::string exp_file =
-        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
+    std::string exp_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                           getDbHandlerAndSessionId().second + "/" + file;
     ASSERT_NO_THROW(
         sql("CREATE TABLE query_export_test (col_int INTEGER, "
             "col_int_var_array INTEGER[], col_point GEOMETRY(POINT, 4326));"));
@@ -3682,8 +3684,8 @@ class ExportTest : public ImportTestGDAL {
   void doTestNulls(const std::string& file,
                    const std::string& file_type,
                    const std::string& select) {
-    std::string exp_file =
-        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file;
+    std::string exp_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                           getDbHandlerAndSessionId().second + "/" + file;
     ASSERT_NO_THROW(
         sql("CREATE TABLE query_export_test (a GEOMETRY(POINT, 4326), b "
             "GEOMETRY(LINESTRING, 4326), c GEOMETRY(POLYGON, 4326), d "
@@ -3765,7 +3767,8 @@ class ExportTest : public ImportTestGDAL {
 
   std::vector<std::string> readFileWithOGRInfo(const std::string& file,
                                                const std::string& layer_name) {
-    std::string temp_file = BASE_PATH "/mapd_export/" + std::to_string(getpid()) + ".tmp";
+    std::string temp_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                            std::to_string(getpid()) + ".tmp";
     std::string ogrinfo_cmd = "ogrinfo " + file + " " + layer_name;
     boost::process::system(ogrinfo_cmd, boost::process::std_out > temp_file);
     auto lines =
@@ -4309,8 +4312,8 @@ class TemporalColumnExportTest : public DBHandlerTestFixture {
 
   void assertExpectedFileContent(const std::string& file_name,
                                  const std::vector<std::string>& rows) {
-    auto file_path =
-        BASE_PATH "/mapd_export/" + getDbHandlerAndSessionId().second + "/" + file_name;
+    auto file_path = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
+                     getDbHandlerAndSessionId().second + "/" + file_name;
     ASSERT_TRUE(boost::filesystem::exists(file_path));
     std::ifstream file{file_path};
     ASSERT_TRUE(file.is_open());

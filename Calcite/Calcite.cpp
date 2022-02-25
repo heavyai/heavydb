@@ -25,6 +25,7 @@
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/fixautotools.h"
@@ -101,7 +102,8 @@ static void start_calcite_server_as_daemon(const int db_port,
   std::string KeyStoreP = "-Y";
   std::string KeyStorePasswdP = "-Z";
   // FIXME: this path should be getting pulled from logger rather than hardcoded
-  std::string logDirectory = "-DMAPD_LOG_DIR=" + data_dir + "/mapd_log/";
+  std::string logDirectory =
+      "-DLOG_DIR=" + data_dir + "/" + shared::kDefaultLogDirName + "/";
   std::string userDefinedFunctionsP = "";
   std::string userDefinedFunctionsD = "";
 

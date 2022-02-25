@@ -22,6 +22,7 @@
 #include "ForeignTableSchema.h"
 #include "FsiChunkUtils.h"
 #include "ImportExport/Importer.h"
+#include "Shared/SysDefinitions.h"
 #include "TextFileBufferParser.h"
 #include "UserMapping.h"
 
@@ -147,7 +148,7 @@ void InternalSystemDataWrapper::populateChunkMetadata(
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   auto catalog = sys_catalog.getCatalog(db_id_);
   CHECK(catalog);
-  CHECK_EQ(catalog->name(), INFORMATION_SCHEMA_DB);
+  CHECK_EQ(catalog->name(), shared::kInfoSchemaDbName);
 
   initializeObjectsForTable(foreign_table_->tableName);
   if (row_count_ > static_cast<size_t>(foreign_table_->maxFragRows)) {
@@ -191,7 +192,7 @@ void InternalSystemDataWrapper::populateChunkBuffers(
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   auto catalog = sys_catalog.getCatalog(db_id_);
   CHECK(catalog);
-  CHECK_EQ(catalog->name(), INFORMATION_SCHEMA_DB);
+  CHECK_EQ(catalog->name(), shared::kInfoSchemaDbName);
 
   auto fragment_id = required_buffers.begin()->first[CHUNK_KEY_FRAGMENT_IDX];
   CHECK_EQ(fragment_id, 0)

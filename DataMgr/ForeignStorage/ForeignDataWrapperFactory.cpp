@@ -28,6 +28,7 @@
 #endif
 #include "Catalog/os/UserMapping.h"
 #include "RegexParserDataWrapper.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/misc.h"
 
 namespace {

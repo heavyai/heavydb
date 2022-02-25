@@ -16,13 +16,13 @@ Data on disk is organized into metadata pages and data multipages. The `BufferMg
 Directory Structure
 ===================
 
-The OmniSciDB data directory contains a `mapd_data` folder which stores the physical data pages for each table. Everytime a table is created, a new folder is created in `mapd_data` identified with the **table_id** and **database_id** uniquely representing each table in the system. The directory name takes the following form:
+The OmniSciDB data directory contains a `data` folder which stores the physical data pages for each table. Everytime a table is created, a new folder is created in `data` identified with the **table_id** and **database_id** uniquely representing each table in the system. The directory name takes the following form:
 
-``mapd_data/table_<db_id>_<table_id>``
+``data/table_<db_id>_<table_id>``
 
 E.g. for table 1, db 1:
 
-``mapd_data/table_1_1``
+``data/table_1_1``
 
 Within the data directory, data is stored in multipage files which vary in number, size, and makeup depending on the width, row count, and insert / update / delete activity for the table.
 

@@ -1079,7 +1079,7 @@ public class DateTimeTest {
     Random r = new Random(seed);
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     LocalDateTime d0 = createRandomDateTime(r);
     LocalDateTime d1 = createRandomDateTime(r);
 

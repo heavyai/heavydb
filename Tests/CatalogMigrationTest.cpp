@@ -25,6 +25,7 @@
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
+#include "Shared/SysDefinitions.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -55,7 +56,8 @@ bool has_result(SqliteConnector& conn, const std::string& query) {
 class CatalogTest : public DBHandlerTestFixture {
  protected:
   CatalogTest()
-      : cat_conn_("omnisci", BF::absolute("mapd_catalogs", BASE_PATH).string()) {}
+      : cat_conn_(shared::kDefaultDbName,
+                  BF::absolute(shared::kCatalogDirectoryName, BASE_PATH).string()) {}
 
   static void SetUpTestSuite() {
     DBHandlerTestFixture::createDBHandler();
@@ -79,7 +81,7 @@ class CatalogTest : public DBHandlerTestFixture {
 
   std::unique_ptr<Catalog_Namespace::Catalog> initCatalog() {
     Catalog_Namespace::DBMetadata db_metadata;
-    db_metadata.dbName = "omnisci";
+    db_metadata.dbName = shared::kDefaultDbName;
     std::vector<LeafHostInfo> leaves{};
     return std::make_unique<Catalog_Namespace::Catalog>(
         BASE_PATH, db_metadata, nullptr, leaves, nullptr, false);
@@ -91,8 +93,8 @@ class CatalogTest : public DBHandlerTestFixture {
 class SysCatalogTest : public CatalogTest {
  protected:
   SysCatalogTest()
-      : syscat_conn_("omnisci_system_catalog",
-                     BF::absolute("mapd_catalogs", BASE_PATH).string()) {}
+      : syscat_conn_(shared::kSystemCatalogName,
+                     BF::absolute(shared::kCatalogDirectoryName, BASE_PATH).string()) {}
 
   void TearDown() override {
     if (tableExists("mapd_users")) {
@@ -357,12 +359,12 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
   assertExpectedDefaultServer(catalog.get(),
                               "default_local_delimited",
                               foreign_storage::DataWrapperType::CSV,
-                              OMNISCI_ROOT_USER_ID);
+                              shared::kRootUserId);
 
   assertExpectedDefaultServer(catalog.get(),
                               "default_local_parquet",
                               foreign_storage::DataWrapperType::PARQUET,
-                              OMNISCI_ROOT_USER_ID);
+                              shared::kRootUserId);
 }
 
 class SystemTableMigrationTest : public SysCatalogTest {
@@ -382,7 +384,7 @@ class SystemTableMigrationTest : public SysCatalogTest {
   void dropInformationSchemaDb() {
     auto& system_catalog = SC::instance();
     Catalog_Namespace::DBMetadata db_metadata;
-    if (system_catalog.getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
+    if (system_catalog.getMetadataForDB(shared::kInfoSchemaDbName, db_metadata)) {
       system_catalog.dropDatabase(db_metadata);
     }
   }
@@ -391,13 +393,13 @@ class SystemTableMigrationTest : public SysCatalogTest {
     if (tableExists("mapd_version_history")) {
       syscat_conn_.query_with_text_param(
           "DELETE FROM mapd_version_history WHERE migration_history = ?",
-          INFORMATION_SCHEMA_MIGRATION);
+          shared::kInfoSchemaMigrationName);
     }
   }
 
   bool isInformationSchemaMigrationRecorded() {
     return hasResult("SELECT * FROM mapd_version_history WHERE migration_history = '" +
-                     INFORMATION_SCHEMA_MIGRATION + "';");
+                     shared::kInfoSchemaMigrationName + "';");
   }
 };
 
@@ -410,7 +412,7 @@ TEST_F(SystemTableMigrationTest, SystemTablesEnabled) {
 
 TEST_F(SystemTableMigrationTest, PreExistingInformationSchemaDatabase) {
   g_enable_system_tables = false;
-  SC::instance().createDatabase("information_schema", OMNISCI_ROOT_USER_ID);
+  SC::instance().createDatabase("information_schema", shared::kRootUserId);
 
   g_enable_system_tables = true;
   g_enable_fsi = true;

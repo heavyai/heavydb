@@ -32,6 +32,7 @@ f* Copyright 2020 OmniSci, Inc.
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/enable_assign_render_groups.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
@@ -707,7 +708,8 @@ class SelectQueryTest : public ForeignTableTest {
 
 class CacheControllingSelectQueryBaseTest : public SelectQueryTest {
  public:
-  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
+  inline static std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
   File_Namespace::DiskCacheLevel starting_cache_level_;
   File_Namespace::DiskCacheLevel cache_level_;
 
@@ -757,7 +759,8 @@ class CacheControllingSelectQueryTest
 
 class RecoverCacheQueryTest : public ForeignTableTest {
  public:
-  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache";
+  inline static std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
   Catalog_Namespace::Catalog* cat_;
   PersistentStorageMgr* psm_;
   foreign_storage::ForeignStorageCache* cache_;
@@ -4897,7 +4900,8 @@ class CacheDefaultTest : public DBHandlerTestFixture {};
 TEST_F(CacheDefaultTest, Path) {
   auto cat = &getCatalog();
   auto cache = cat->getDataMgr().getPersistentStorageMgr()->getDiskCache();
-  ASSERT_EQ(cache->getCacheDirectory(), to_string(BASE_PATH) + "/omnisci_disk_cache");
+  ASSERT_EQ(cache->getCacheDirectory(),
+            to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName);
 }
 
 TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {

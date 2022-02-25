@@ -24,6 +24,7 @@
 
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -41,7 +42,8 @@ class TableTest : public DBHandlerTestFixture {
  protected:
   inline static Catalog_Namespace::Catalog* cat_;
   inline static foreign_storage::ForeignStorageCache* cache_;
-  inline static std::string cache_path_ = to_string(BASE_PATH) + "/omnisci_disk_cache/";
+  inline static std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName + "/";
   inline static PersistentStorageMgr* psm_;
 
   static void SetUpTestSuite() {

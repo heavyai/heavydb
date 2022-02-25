@@ -429,11 +429,11 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   // start background thread to clean up _DELETE_ME files
   const unsigned int wait_interval =
       3;  // wait time in secs after looking for deleted file before looking again
-  server_threads.insert(
-      std::make_unique<std::thread>(file_delete,
-                                    std::ref(g_running),
-                                    wait_interval,
-                                    prog_config_opts.base_path + "/mapd_data"));
+  server_threads.insert(std::make_unique<std::thread>(
+      file_delete,
+      std::ref(g_running),
+      wait_interval,
+      prog_config_opts.base_path + "/" + shared::kDataDirectoryName));
   server_threads.insert(std::make_unique<std::thread>(heartbeat));
 
   if (!g_enable_thrift_logs) {

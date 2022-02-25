@@ -38,31 +38,31 @@ public class SystemTableConcurrencyTest {
 
   private void runTest() throws Exception {
     final List<ThreadDbQueries> queriesPerThread = Arrays.asList(
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_1 (password = 'HyperInteractive');",
                             "ALTER USER user_1 (password = 'HyperInteractive2');",
                             "DROP USER user_1;",
                             "CREATE USER user_2 (password = 'HyperInteractive');",
                             "ALTER USER user_2 (password = 'HyperInteractive2');",
                             "DROP USER user_2;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_3 (password = 'HyperInteractive');",
-                            "GRANT SELECT ON DATABASE omnisci TO user_3;",
-                            "REVOKE SELECT ON DATABASE omnisci FROM user_3;",
-                            "GRANT CREATE ON DATABASE omnisci TO user_3;",
-                            "REVOKE CREATE ON DATABASE omnisci FROM user_3;",
+                            "GRANT SELECT ON DATABASE heavyai TO user_3;",
+                            "REVOKE SELECT ON DATABASE heavyai FROM user_3;",
+                            "GRANT CREATE ON DATABASE heavyai TO user_3;",
+                            "REVOKE CREATE ON DATABASE heavyai FROM user_3;",
                             "DROP USER user_3;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE DATABASE db_1;",
                             "CREATE DATABASE db_2;",
                             "DROP DATABASE db_1;",
                             "DROP DATABASE db_2;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE ROLE role_1;",
                             "CREATE ROLE role_2;",
                             "DROP ROLE role_1;",
                             "DROP ROLE role_2;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE TABLE table_1 (i INTEGER, t TEXT);",
                             "INSERT INTO table_1 VALUES (1, 'abc');",
                             "SELECT AVG(i) FROM table_1;",
@@ -70,7 +70,7 @@ public class SystemTableConcurrencyTest {
                             "SELECT * FROM view_1;",
                             "DROP VIEW view_1;",
                             "DROP TABLE table_1;")),
-            new ThreadDbQueries("omnisci",
+            new ThreadDbQueries("heavyai",
                     Arrays.asList("CREATE USER user_4 (password = 'HyperInteractive');",
                             "CREATE USER user_5 (password = 'HyperInteractive');",
                             "CREATE ROLE role_3;",
@@ -119,7 +119,7 @@ public class SystemTableConcurrencyTest {
       try {
         logger.info("Starting thread[0]");
         MapdTestClient user = MapdTestClient.getClient(
-                "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+                "localhost", 6274, "heavyai", "admin", "HyperInteractive");
         barrier.await();
         logger.info("0 create dashboard \"dashboard_1\"");
         int dashboardId = user.create_dashboard("dashboard_1");

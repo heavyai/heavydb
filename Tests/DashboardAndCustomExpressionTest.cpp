@@ -23,6 +23,7 @@
 #include <boost/range/combine.hpp>
 
 #include "DBHandlerTestHelpers.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -33,7 +34,7 @@ class BaseTestFixture : public DBHandlerTestFixture {
  protected:
   static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
     sql("CREATE USER " + user_name + " (password = '" + pass + "');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO " + user_name + ";");
     Catalog_Namespace::UserMetadata user_metadata{};
     Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
                                                                  user_metadata);
@@ -211,7 +212,7 @@ class GetDashboardTest : public DBHandlerTestFixture {
 
   static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
     sql("CREATE USER " + user_name + " (password = '" + pass + "');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO " + user_name + ";");
     Catalog_Namespace::UserMetadata user_metadata{};
     Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
                                                                  user_metadata);
@@ -228,7 +229,7 @@ class GetDashboardTest : public DBHandlerTestFixture {
 TEST_F(GetDashboardTest, AsAdmin) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
   const auto test_dashboard_id = db_handler->create_dashboard(
-      session_id, OMNISCI_DEFAULT_DB, "state", "image", "metadata");
+      session_id, shared::kDefaultDbName, "state", "image", "metadata");
   ASSERT_EQ(getNumDashboards(), size_t(1));
 
   TDashboard db;
@@ -246,7 +247,7 @@ TEST_F(GetDashboardTest, AsUser) {
   const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
 
   const auto test_dashboard_id = db_handler->create_dashboard(
-      session_id, OMNISCI_DEFAULT_DB, "state", "image", "metadata");
+      session_id, shared::kDefaultDbName, "state", "image", "metadata");
 
   DBObject object(test_dashboard_id, DBObjectType::DashboardDBObjectType);
   TestPermissions usr_privs(false, false, true, true);
@@ -259,7 +260,7 @@ TEST_F(GetDashboardTest, AsUser) {
   TDashboard db;
   std::vector<TDashboard> dashboards;
   TSessionId usr_session;
-  login("test_user_1", "test_pass", OMNISCI_DEFAULT_DB, usr_session);
+  login("test_user_1", "test_pass", shared::kDefaultDbName, usr_session);
   db_handler->get_dashboard(db, usr_session, test_dashboard_id);
   ASSERT_EQ(usr_perms, db.dashboard_permissions);
   db_handler->get_dashboards(dashboards, usr_session);
@@ -604,7 +605,7 @@ TEST_F(UnshareDashboardsGroupTest, Group) {
 
 TEST_P(ShareAndUnshareDashboardsTest, AsUnauthorizedUser) {
   bool do_share = getDoShare();
-  sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user_1");
   login("test_user_1", "");
   std::stringstream error_stream;
   error_stream << "Share/Unshare dashboard(s) failed with error(s)\n";
@@ -617,13 +618,14 @@ TEST_P(ShareAndUnshareDashboardsTest, AsUnauthorizedUser) {
       error_stream.str());
   assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_1"});
   loginAdmin();
-  sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
+  sql("REVOKE ACCESS ON DATABASE " + shared::kDefaultDbName + " FROM test_user_1");
 }
 
 TEST_P(ShareAndUnshareDashboardsTest, AsUnauthorizedUserForSomeDashboards) {
   bool do_share = getDoShare();
-  sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1, test_user_2;");
-  sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB +
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName +
+      " TO test_user_1, test_user_2;");
+  sql("GRANT CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
       " TO test_user_1, test_user_2;");
   teardownDashboards();
   login("test_user_1", "");
@@ -646,15 +648,16 @@ TEST_P(ShareAndUnshareDashboardsTest, AsUnauthorizedUserForSomeDashboards) {
       error_stream.str());
   assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_3"});
   loginAdmin();
-  sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB +
+  sql("REVOKE CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
       " FROM test_user_1, test_user_2;");
-  sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB +
+  sql("REVOKE ACCESS ON DATABASE " + shared::kDefaultDbName +
       " FROM test_user_1, test_user_2;");
 }
 
 TEST_F(ShareDashboardsRegularTest, AsNonSuperUser) {
-  sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
-  sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1;");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user_1");
+  sql("GRANT CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
+      " TO test_user_1;");
   teardownDashboards();
   login("test_user_1", "");
   setupNewDashboards(3);
@@ -662,13 +665,15 @@ TEST_F(ShareDashboardsRegularTest, AsNonSuperUser) {
   shareOrUnshareDashboards(permissions, {"test_user_2"}, true);
   assertExpectedDashboardPrivilegesForUsers(permissions, {"test_user_2"});
   loginAdmin();
-  sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1;");
-  sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
+  sql("REVOKE CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
+      " FROM test_user_1;");
+  sql("REVOKE ACCESS ON DATABASE " + shared::kDefaultDbName + " FROM test_user_1");
 }
 
 TEST_F(UnshareDashboardsRegularTest, AsNonSuperUser) {
-  sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
-  sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1;");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user_1");
+  sql("GRANT CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
+      " TO test_user_1;");
   teardownDashboards();
   login("test_user_1", "");
   setupNewDashboards(3);
@@ -676,14 +681,16 @@ TEST_F(UnshareDashboardsRegularTest, AsNonSuperUser) {
   shareOrUnshareDashboards(permissions, {"test_user_2"}, false);
   assertExpectedDashboardPrivilegesForUsers(permissions.getComplement(), {"test_user_2"});
   loginAdmin();
-  sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1;");
-  sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
+  sql("REVOKE CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
+      " FROM test_user_1;");
+  sql("REVOKE ACCESS ON DATABASE " + shared::kDefaultDbName + " FROM test_user_1");
 }
 
 TEST_P(ShareAndUnshareDashboardsTest, MixedErrors) {
   bool do_share = getDoShare();
-  sql("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1");
-  sql("GRANT CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " TO test_user_1;");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user_1");
+  sql("GRANT CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
+      " TO test_user_1;");
   login("test_user_1", "");
   setupNewDashboards(3);
   auto dashboard_ids = getTestDashboardIds();
@@ -715,8 +722,9 @@ TEST_P(ShareAndUnshareDashboardsTest, MixedErrors) {
       error_stream.str());
   assertExpectedDashboardPrivilegesForUsers(getInitialPermissions(), {"test_user_2"});
   loginAdmin();
-  sql("REVOKE CREATE DASHBOARD ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1;");
-  sql("REVOKE ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " FROM test_user_1");
+  sql("REVOKE CREATE DASHBOARD ON DATABASE " + shared::kDefaultDbName +
+      " FROM test_user_1;");
+  sql("REVOKE ACCESS ON DATABASE " + shared::kDefaultDbName + " FROM test_user_1");
 }
 
 class DashboardBulkDeleteTest : public DBHandlerTestFixture {
@@ -757,7 +765,7 @@ class DashboardBulkDeleteTest : public DBHandlerTestFixture {
 
   static int32_t createTestUser(const std::string& user_name, const std::string& pass) {
     sql("CREATE USER " + user_name + " (password = '" + pass + "');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO " + user_name + ";");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO " + user_name + ";");
     Catalog_Namespace::UserMetadata user_metadata{};
     Catalog_Namespace::SysCatalog::instance().getMetadataForUser(user_name,
                                                                  user_metadata);
@@ -807,7 +815,7 @@ TEST_F(DashboardBulkDeleteTest, NoDeleteDashboardPrivilege) {
   auto db_id_2 =
       db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
   TSessionId unprivileged_session;
-  login("test_user", "test_pass", "omnisci", unprivileged_session);
+  login("test_user", "test_pass", shared::kDefaultDbName, unprivileged_session);
   sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_1) + " to test_user");
   try {
     db_handler->delete_dashboards(unprivileged_session, {db_id_1, db_id_2});
@@ -832,7 +840,7 @@ TEST_F(DashboardBulkDeleteTest, NonSuperDeleteDashboardPrivilege) {
   auto db_id_2 =
       db_handler->create_dashboard(session_id, "test2", "state", "image", "metadata");
   TSessionId non_super_session;
-  login("test_user", "test_pass", "omnisci", non_super_session);
+  login("test_user", "test_pass", shared::kDefaultDbName, non_super_session);
   sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_1) + " to test_user");
   sql("GRANT DELETE ON DASHBOARD " + std::to_string(db_id_2) + " to test_user");
   db_handler->delete_dashboards(non_super_session, {db_id_1, db_id_2});
@@ -845,7 +853,7 @@ TEST_F(DashboardBulkDeleteTest, InvalidNoPrivilegeMix) {
   auto db_id =
       db_handler->create_dashboard(session_id, "test1", "state", "image", "metadata");
   TSessionId non_super_session;
-  login("test_user", "test_pass", "omnisci", non_super_session);
+  login("test_user", "test_pass", shared::kDefaultDbName, non_super_session);
   try {
     db_handler->delete_dashboards(non_super_session, {0, db_id});
     FAIL() << "An exception should have been thrown for this test case.";
@@ -873,9 +881,9 @@ class CustomExpressionTest : public BaseTestFixture {
     sql("CREATE TABLE test_table_1 (i INTEGER);");
     sql("CREATE TABLE test_table_2 (i INTEGER);");
     sql("GRANT SELECT ON TABLE test_table_2 TO test_user;");
-    sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+    sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
     TSessionId user_session;
-    login("test_user", "test_pass", "omnisci", user_session);
+    login("test_user", "test_pass", shared::kDefaultDbName, user_session);
     TQueryResult result;
     sql(result, "CREATE TABLE test_table_3 (i INTEGER);", user_session);
   }
@@ -1033,7 +1041,7 @@ TEST_F(CustomExpressionTest, CreateCustomExpressionSuperUser) {
 
 TEST_F(CustomExpressionTest, CreateCustomExpressionNonSuperUser) {
   TSessionId user_session;
-  login("test_user", "test_pass", "omnisci", user_session);
+  login("test_user", "test_pass", shared::kDefaultDbName, user_session);
   executeLambdaAndAssertException(
       [&user_session]() {
         const auto db_handler = getDbHandlerAndSessionId().first;
@@ -1103,7 +1111,7 @@ TEST_F(CustomExpressionTest, GetCustomExpressionsSuperUser) {
 TEST_F(CustomExpressionTest, GetCustomExpressionsNonSuperUser) {
   auto custom_expression_ids = createTestCustomExpressions();
   TSessionId user_session;
-  login("test_user", "test_pass", "omnisci", user_session);
+  login("test_user", "test_pass", shared::kDefaultDbName, user_session);
   const auto db_handler = getDbHandlerAndSessionId().first;
   std::vector<TCustomExpression> result;
   db_handler->get_custom_expressions(result, user_session);
@@ -1156,7 +1164,7 @@ TEST_F(CustomExpressionTest, UpdateCustomExpressionNonSuperUser) {
   auto id = db_handler->create_custom_expression(session_id, t_custom_expr);
 
   TSessionId user_session;
-  login("test_user", "test_pass", "omnisci", user_session);
+  login("test_user", "test_pass", shared::kDefaultDbName, user_session);
   executeLambdaAndAssertException(
       [db_handler = db_handler, &user_session, id]() {
         db_handler->update_custom_expression(user_session, id, "new_test_expr_json");
@@ -1205,7 +1213,7 @@ TEST_F(CustomExpressionTest, DeleteCustomExpressionNonSuperUser) {
   const auto db_handler = getDbHandlerAndSessionId().first;
   auto custom_expression_ids = createTestCustomExpressions();
   TSessionId user_session;
-  login("test_user", "test_pass", "omnisci", user_session);
+  login("test_user", "test_pass", shared::kDefaultDbName, user_session);
   executeLambdaAndAssertException(
       [db_handler = db_handler, &user_session, &custom_expression_ids]() {
         db_handler->delete_custom_expressions(user_session, custom_expression_ids, false);

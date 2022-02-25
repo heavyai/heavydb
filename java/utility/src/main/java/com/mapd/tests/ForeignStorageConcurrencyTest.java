@@ -197,7 +197,7 @@ public class ForeignStorageConcurrencyTest {
     logger.info("ForeignStorageConcurrencyTest()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
 
     // Initialize.
     su.runSql("DROP DATABASE IF EXISTS db1;");

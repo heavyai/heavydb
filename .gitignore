@@ -60,7 +60,7 @@ java/src/gen/
 gen-js/
 gen-py/
 java/target/
-java/**/mapd_log/
+java/**/log/
 
 # go files
 ThirdParty/go/bin/

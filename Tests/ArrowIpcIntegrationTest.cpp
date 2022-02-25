@@ -33,6 +33,7 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
 #include <boost/program_options.hpp>
+#include "Shared/SysDefinitions.h"
 #include "Shared/ThriftJSONProtocolInclude.h"
 
 #ifdef HAVE_CUDA
@@ -739,7 +740,7 @@ int main(int argc, char* argv[]) {
 
     std::string user = "admin";
     std::string pwd = "HyperInteractive";
-    std::string db = "omnisci";
+    std::string db = shared::kDefaultDbName;
 
     po::options_description desc("Options");
 

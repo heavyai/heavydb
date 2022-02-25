@@ -36,7 +36,7 @@ Program Options
 ``omnisci_server --help`` includes the logging options::
 
     Logging:
-    --log-directory arg (="mapd_log")     Logging directory. May be relative to
+    --log-directory arg (="log")          Logging directory. May be relative to
                                           data directory, or absolute.
     --log-file-name arg (=omnisci_server.{SEVERITY}.%Y%m%d-%H%M%S.log)
                                           Log file name relative to

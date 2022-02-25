@@ -152,9 +152,9 @@ FileMetadata FileMgr::getMetadataForFile(
     return fileMetadata;
   }
   // note that boost::filesystem leaves preceding dot on
-  // extension - hence MAPD_FILE_EXT is ".mapd"
+  // extension - hence DATA_FILE_EXT is ".data"
   std::string extension(fileIterator->path().extension().string());
-  if (extension == MAPD_FILE_EXT) {
+  if (extension == DATA_FILE_EXT) {
     std::string fileStem(fileIterator->path().stem().string());
     // remove trailing dot if any
     if (fileStem.size() > 0 && fileStem.back() == '.') {

@@ -22,7 +22,7 @@
  */
 #pragma once
 
-#define MAPD_FILE_EXT ".mapd"
+#define DATA_FILE_EXT ".data"
 
 #include <cstdint>
 #include <cstdio>

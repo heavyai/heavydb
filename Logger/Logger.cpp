@@ -46,6 +46,7 @@ bool g_enable_debug_timer{false};
 #include <mutex>
 #include <regex>
 
+#include "Shared/SysDefinitions.h"
 #include "Shared/nvtx_helpers.h"
 
 namespace logger {
@@ -85,7 +86,7 @@ std::string filename(char const* path) {
 }
 
 LogOptions::LogOptions(char const* argv0)
-    : log_dir_(std::make_unique<boost::filesystem::path>("mapd_log")) {
+    : log_dir_(std::make_unique<boost::filesystem::path>(shared::kDefaultLogDirName)) {
   // Log file base_name matches name of program.
   std::string const base_name =
       argv0 == nullptr ? std::string("omnisci_server") : filename(argv0);

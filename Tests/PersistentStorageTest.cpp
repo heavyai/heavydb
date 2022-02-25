@@ -23,7 +23,7 @@
 
 #include "Catalog/Catalog.h"
 
-const std::string data_path = "./tmp/mapd_data";
+const std::string data_path = "./tmp/" + shared::kDataDirectoryName;
 extern bool g_enable_fsi;
 
 using namespace foreign_storage;

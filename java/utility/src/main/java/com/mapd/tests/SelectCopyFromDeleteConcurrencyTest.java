@@ -132,9 +132,9 @@ public class SelectCopyFromDeleteConcurrencyTest {
           try {
             final String username = threadId % 2 == 0 ? "alice" : "bob";
             MapdTestClient dba = MapdTestClient.getClient(
-                    "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+                    "localhost", 6274, "heavyai", "admin", "HyperInteractive");
             MapdTestClient user = MapdTestClient.getClient(
-                    "localhost", 6274, "omnisci", username, "password");
+                    "localhost", 6274, "heavyai", username, "password");
             final String prefix = "for_" + username + "_" + threadId + "_";
 
             run_test(dba, user, prefix, input_file_path_, shard_count, runs);
@@ -169,21 +169,21 @@ public class SelectCopyFromDeleteConcurrencyTest {
 
     // Use the default database for now
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER alice (password = 'password', is_super = 'false');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
-    su.runSql("GRANT CREATE on DATABASE omnisci TO alice;");
-    su.runSql("GRANT CREATE on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO alice;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO bob;");
 
-    su.runSql("GRANT CREATE VIEW on DATABASE omnisci TO alice;");
-    su.runSql("GRANT CREATE VIEW on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE VIEW on DATABASE heavyai TO alice;");
+    su.runSql("GRANT CREATE VIEW on DATABASE heavyai TO bob;");
 
-    su.runSql("GRANT DROP VIEW on DATABASE omnisci TO alice;");
-    su.runSql("GRANT DROP VIEW on DATABASE omnisci TO bob;");
+    su.runSql("GRANT DROP VIEW on DATABASE heavyai TO alice;");
+    su.runSql("GRANT DROP VIEW on DATABASE heavyai TO bob;");
 
-    su.runSql("GRANT ACCESS on database omnisci TO alice;");
-    su.runSql("GRANT ACCESS on database omnisci TO bob;");
+    su.runSql("GRANT ACCESS on database heavyai TO alice;");
+    su.runSql("GRANT ACCESS on database heavyai TO bob;");
 
     final int num_threads = 5;
     runTest(num_threads, shard_count);

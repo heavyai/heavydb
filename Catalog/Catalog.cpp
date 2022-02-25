@@ -73,6 +73,7 @@
 #include "Shared/DateTimeParser.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "StringDictionary/StringDictionaryClient.h"
@@ -160,8 +161,8 @@ namespace {
 
 inline auto table_json_filepath(const std::string& base_path,
                                 const std::string& db_name) {
-  return boost::filesystem::path(base_path + "/mapd_catalogs/" + db_name +
-                                 "_temp_tables.json");
+  return boost::filesystem::path(base_path + "/" + shared::kCatalogDirectoryName + "/" +
+                                 db_name + "_temp_tables.json");
 }
 
 }  // namespace
@@ -173,7 +174,7 @@ Catalog::Catalog(const string& basePath,
                  std::shared_ptr<Calcite> calcite,
                  bool is_new_db)
     : basePath_(basePath)
-    , sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/")
+    , sqliteConnector_(curDB.dbName, basePath + "/" + shared::kCatalogDirectoryName + "/")
     , currentDB_(curDB)
     , dataMgr_(dataMgr)
     , string_dict_hosts_(string_dict_hosts)
@@ -271,7 +272,7 @@ void Catalog::updateTableDescriptorSchema() {
     }
     if (std::find(cols.begin(), cols.end(), std::string("userid")) == cols.end()) {
       string queryString("ALTER TABLE mapd_tables ADD userid integer DEFAULT " +
-                         std::to_string(OMNISCI_ROOT_USER_ID));
+                         std::to_string(shared::kRootUserId));
       sqliteConnector_.query(queryString);
     }
     if (std::find(cols.begin(), cols.end(), std::string("sort_column_id")) ==
@@ -569,9 +570,9 @@ void Catalog::updateDictionaryNames() {
         int dictId = sqliteConnector_.getData<int>(r, 0);
         std::string dictName = sqliteConnector_.getData<string>(r, 1);
 
-        std::string oldName =
-            g_base_path + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
-        std::string newName = g_base_path + "/mapd_data/DB_" +
+        std::string oldName = g_base_path + "/" + shared::kDataDirectoryName + "/" +
+                              currentDB_.dbName + "_" + dictName;
+        std::string newName = g_base_path + "/" + shared::kDataDirectoryName + "/DB_" +
                               std::to_string(currentDB_.dbId) + "_DICT_" +
                               std::to_string(dictId);
 
@@ -983,8 +984,9 @@ void Catalog::buildMaps() {
     int dictNBits = sqliteConnector_.getData<int>(r, 2);
     bool is_shared = sqliteConnector_.getData<bool>(r, 3);
     int refcount = sqliteConnector_.getData<int>(r, 4);
-    std::string fname = g_base_path + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
-                        "_DICT_" + std::to_string(dictId);
+    std::string fname = g_base_path + "/" + shared::kDataDirectoryName + "/DB_" +
+                        std::to_string(currentDB_.dbId) + "_DICT_" +
+                        std::to_string(dictId);
     DictRef dict_ref(currentDB_.dbId, dictId);
     DictDescriptor* dd = new DictDescriptor(
         dict_ref, dictName, dictNBits, is_shared, refcount, fname, false);
@@ -1951,8 +1953,8 @@ void Catalog::delDictionary(const ColumnDescriptor& cd) {
   const DictRef dictRef(currentDB_.dbId, dictId);
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE dictid = ?",
                                          std::to_string(dictId));
-  File_Namespace::renameForDelete(g_base_path + "/mapd_data/DB_" +
-                                  std::to_string(currentDB_.dbId) + "_DICT_" +
+  File_Namespace::renameForDelete(g_base_path + "/" + shared::kDataDirectoryName +
+                                  "/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" +
                                   std::to_string(dictId));
 
   std::unique_ptr<StringDictionaryClient> client;
@@ -3395,8 +3397,8 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
     dictName = td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
     sqliteConnector_.query_with_text_param(
         "UPDATE mapd_dictionaries SET name = ? WHERE name = 'Initial_key'", dictName);
-    folderPath = g_base_path + "/mapd_data/DB_" + std::to_string(currentDB_.dbId) +
-                 "_DICT_" + std::to_string(dictId);
+    folderPath = g_base_path + "/" + shared::kDataDirectoryName + "/DB_" +
+                 std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
   }
   DictDescriptor dd(currentDB_.dbId,
                     dictId,
@@ -4343,7 +4345,8 @@ void Catalog::eraseDbMetadata() {
     eraseTableMetadata(table);
   }
   // Physically erase database metadata
-  boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + currentDB_.dbName);
+  boost::filesystem::remove(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                            currentDB_.dbName);
   calciteMgr_->updateMetadata(currentDB_.dbName, "");
 }
 
@@ -4451,7 +4454,7 @@ void Catalog::createDefaultServersIfNotExists() {
       "default_local_delimited",
       foreign_storage::DataWrapperType::CSV,
       options,
-      OMNISCI_ROOT_USER_ID);
+      shared::kRootUserId);
   local_csv_server->validate();
   createForeignServerNoLocks(std::move(local_csv_server), true);
 
@@ -4460,7 +4463,7 @@ void Catalog::createDefaultServersIfNotExists() {
       "default_local_parquet",
       foreign_storage::DataWrapperType::PARQUET,
       options,
-      OMNISCI_ROOT_USER_ID);
+      shared::kRootUserId);
   local_parquet_server->validate();
   createForeignServerNoLocks(std::move(local_parquet_server), true);
 #endif
@@ -4469,7 +4472,7 @@ void Catalog::createDefaultServersIfNotExists() {
       "default_local_regex_parsed",
       foreign_storage::DataWrapperType::REGEX_PARSER,
       options,
-      OMNISCI_ROOT_USER_ID);
+      shared::kRootUserId);
   local_regex_parser_server->validate();
   createForeignServerNoLocks(std::move(local_regex_parser_server), true);
 }
@@ -5467,7 +5470,7 @@ void Catalog::restoreOldOwnersInMemory(
 }
 
 void Catalog::conditionallyInitializeSystemObjects() {
-  if (g_enable_system_tables && name() == INFORMATION_SCHEMA_DB) {
+  if (g_enable_system_tables && name() == shared::kInfoSchemaDbName) {
     initializeSystemServers();
     initializeSystemTables();
   }
@@ -5646,11 +5649,8 @@ void Catalog::initializeSystemTables() {
 
 void Catalog::createSystemTableServer(const std::string& server_name,
                                       const std::string& data_wrapper_type) {
-  auto server =
-      std::make_unique<foreign_storage::ForeignServer>(server_name,
-                                                       data_wrapper_type,
-                                                       foreign_storage::OptionsMap{},
-                                                       OMNISCI_ROOT_USER_ID);
+  auto server = std::make_unique<foreign_storage::ForeignServer>(
+      server_name, data_wrapper_type, foreign_storage::OptionsMap{}, shared::kRootUserId);
   server->validate();
   createForeignServer(std::move(server), true);
 }
@@ -5671,7 +5671,7 @@ Catalog::getSystemTableSchema(
   foreign_table.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
   foreign_table.fragPageSize = DEFAULT_PAGE_SIZE;
   foreign_table.maxRows = DEFAULT_MAX_ROWS;
-  foreign_table.userId = OMNISCI_ROOT_USER_ID;
+  foreign_table.userId = shared::kRootUserId;
   foreign_table.storageType = StorageType::FOREIGN_TABLE;
   foreign_table.hasDeletedCol = false;
   foreign_table.keyMetainfo = "[]";

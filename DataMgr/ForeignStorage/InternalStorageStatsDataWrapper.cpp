@@ -131,7 +131,7 @@ void InternalStorageStatsDataWrapper::initializeObjectsForTable(
   CHECK(global_file_mgr);
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   for (const auto& catalog : sys_catalog.getCatalogsForAllDbs()) {
-    if (catalog->name() != INFORMATION_SCHEMA_DB) {
+    if (catalog->name() != shared::kInfoSchemaDbName) {
       std::set<std::string> found_dict_paths;
       for (const auto& [table_id, shard_id] :
            catalog->getAllPersistedTableAndShardIds()) {

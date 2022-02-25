@@ -48,7 +48,7 @@ if [ -f omnisci-sds.conf.in ]; then
   sudo mkdir -p "${vars['OMNISCI_STORAGE']}/sds"
 fi
 
-if [ ! -d "${vars['OMNISCI_DATA']}/mapd_catalogs" ]; then
+if [ ! -d "${vars['OMNISCI_DATA']}/catalogs" ]; then
   sudo ${vars["OMNISCI_PATH"]}/bin/initdb ${vars['OMNISCI_DATA']}
 fi
 

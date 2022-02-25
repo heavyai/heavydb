@@ -26,6 +26,7 @@
 #include <boost/process.hpp>
 
 #include "Logger/Logger.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 namespace bp = boost::process;
@@ -134,8 +135,8 @@ TEST_F(InitDBTest, Help) {
                                         thrift to stdout/stderr.
 
 Logging:
-  --log-directory arg (="mapd_log")     Logging directory. May be relative to 
-                                        data directory, or absolute.
+  --log-directory arg (="log")          Logging directory. May be relative to
+                                         data directory, or absolute.
   --log-file-name arg (=initdb.{SEVERITY}.%Y%m%d-%H%M%S.log)
                                         Log file name relative to 
                                         log-directory.
@@ -172,13 +173,15 @@ TEST_F(InitDBTest, AlreadyInit) {
 }
 // Blocked by existing cache.
 TEST_F(InitDBTest, ExistingCache) {
-  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache");
+  boost::filesystem::create_directory(get_temp_dir() + "/" +
+                                      shared::kDefaultDiskCacheDirName);
   CommandLineTestcase(get_executable(),
                       get_temp_dir(),
                       1,
                       "",
-                      "OmniSci disk cache already exists at " + get_temp_dir() +
-                          "/omnisci_disk_cache" + ". Use -f to force reinitialization.");
+                      "OmniSci disk cache already exists at " + get_temp_dir() + "/" +
+                          shared::kDefaultDiskCacheDirName +
+                          ". Use -f to force reinitialization.");
 }
 // Override existing database.
 TEST_F(InitDBTest, Force) {
@@ -187,10 +190,13 @@ TEST_F(InitDBTest, Force) {
 }
 // Override existing cache
 TEST_F(InitDBTest, ForceCache) {
-  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache");
-  boost::filesystem::create_directory(get_temp_dir() + "/omnisci_disk_cache/temp");
+  boost::filesystem::create_directory(get_temp_dir() + "/" +
+                                      shared::kDefaultDiskCacheDirName);
+  boost::filesystem::create_directory(get_temp_dir() + "/" +
+                                      shared::kDefaultDiskCacheDirName + "/temp");
   CommandLineTestcase(get_executable(), get_temp_dir() + " -f", 0, "", "");
-  ASSERT_FALSE(boost::filesystem::exists(get_temp_dir() + "/omnisci_disk_cache/temp"));
+  ASSERT_FALSE(boost::filesystem::exists(get_temp_dir() + "/" +
+                                         shared::kDefaultDiskCacheDirName + "/temp"));
 }
 // Data directory does not exist.
 TEST_F(InitDBTest, MissingDir) {

@@ -68,6 +68,7 @@
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/ArrowUtil.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -337,7 +338,8 @@ void DBHandler::initialize(const bool is_new_db) {
     is_rendering_enabled = false;
   }
 
-  const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
+  const auto data_path =
+      boost::filesystem::path(base_data_path_) / shared::kDataDirectoryName;
   // calculate the total amount of memory we need to reserve from each gpu that the Buffer
   // manage cannot ask for
   size_t total_reserved = reserved_gpu_mem_;
@@ -452,7 +454,7 @@ void DBHandler::initialize(const bool is_new_db) {
     LOG(FATAL) << "Failed to initialize system catalog: " << e.what();
   }
 
-  import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
+  import_path_ = boost::filesystem::path(base_data_path_) / shared::kDefaultImportDirName;
   start_time_ = std::time(nullptr);
 
   if (is_rendering_enabled) {
@@ -4148,7 +4150,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
   if (copy_params.source_type != import_export::SourceType::kOdbc) {
     std::string file_name{file_name_in};
     if (path_is_relative(file_name)) {
-      // assume relative paths are relative to data_path / mapd_import / <session>
+      // assume relative paths are relative to data_path / import / <session>
       auto temp_file_path = import_path_ / picosha2::hash256_hex_string(session) /
                             boost::filesystem::path(file_name).filename();
       file_name = temp_file_path.string();
@@ -4567,15 +4569,15 @@ TDashboard DBHandler::get_dashboard_impl(
 
 namespace {
 bool is_info_schema_db(const std::string& db_name) {
-  return (db_name == INFORMATION_SCHEMA_DB &&
-          SysCatalog::instance().hasExecutedMigration(INFORMATION_SCHEMA_MIGRATION));
+  return (db_name == shared::kInfoSchemaDbName &&
+          SysCatalog::instance().hasExecutedMigration(shared::kInfoSchemaMigrationName));
 }
 
 void check_not_info_schema_db(const std::string& db_name,
                               bool throw_mapd_exception = false) {
   if (is_info_schema_db(db_name)) {
     std::string error_message{"Write requests/queries are not allowed in the " +
-                              INFORMATION_SCHEMA_DB + " database."};
+                              shared::kInfoSchemaDbName + " database."};
     if (throw_mapd_exception) {
       THROW_MAPD_EXCEPTION(error_message)
     } else {
@@ -5190,7 +5192,7 @@ void DBHandler::importGeoTableSingle(const TSessionId& session,
   std::string file_name{file_name_in};
 
   if (path_is_relative(file_name)) {
-    // assume relative paths are relative to data_path / mapd_import / <session>
+    // assume relative paths are relative to data_path / import / <session>
     auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
                      boost::filesystem::path(file_name).filename();
     file_name = file_path.string();
@@ -5634,7 +5636,7 @@ void DBHandler::get_first_geo_file_in_archive(std::string& _return,
   std::string archive_path(archive_path_in);
 
   if (path_is_relative(archive_path)) {
-    // assume relative paths are relative to data_path / mapd_import / <session>
+    // assume relative paths are relative to data_path / import / <session>
     auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
                      boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
@@ -5676,7 +5678,7 @@ void DBHandler::get_all_files_in_archive(std::vector<std::string>& _return,
 
   std::string archive_path(archive_path_in);
   if (path_is_relative(archive_path)) {
-    // assume relative paths are relative to data_path / mapd_import / <session>
+    // assume relative paths are relative to data_path / import / <session>
     auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
                      boost::filesystem::path(archive_path).filename();
     archive_path = file_path.string();
@@ -5714,7 +5716,7 @@ void DBHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return,
 
   // handle relative paths
   if (path_is_relative(file_name)) {
-    // assume relative paths are relative to data_path / mapd_import / <session>
+    // assume relative paths are relative to data_path / import / <session>
     auto file_path = import_path_ / picosha2::hash256_hex_string(session) /
                      boost::filesystem::path(file_name).filename();
     file_name = file_path.string();

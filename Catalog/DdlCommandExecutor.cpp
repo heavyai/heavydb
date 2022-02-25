@@ -30,6 +30,7 @@
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 
 #include "QueryEngine/Execute.h"  // Executor::getArenaBlockSize()
 #include "QueryEngine/ExternalCacheInvalidators.h"

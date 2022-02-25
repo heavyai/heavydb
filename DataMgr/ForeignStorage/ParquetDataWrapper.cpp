@@ -28,6 +28,7 @@
 #include "ImportExport/RenderGroupAnalyzer.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
 #include "Shared/misc.h"
 #include "Utils/DdlUtils.h"

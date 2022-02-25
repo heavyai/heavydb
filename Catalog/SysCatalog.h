@@ -52,10 +52,8 @@
 #include "LeafHostInfo.h"
 
 #include "../Calcite/Calcite.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/mapd_shared_mutex.h"
-
-#include "Catalog/SysDefinitions.h"
-// "information_schema_db_created";
 
 class Calcite;
 
@@ -346,7 +344,7 @@ class SysCatalog : private CommonFileOperations {
   static void destroy() { instance_.reset(); }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
-  std::string name() const { return OMNISCI_DEFAULT_DB; }
+  std::string name() const { return shared::kDefaultDbName; }
   void renameObjectsInDescriptorMap(DBObject& object,
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,
@@ -508,7 +506,7 @@ class SysCatalog : private CommonFileOperations {
   std::shared_ptr<Catalog> dummyCatalog_;
   std::unordered_map<std::string, std::shared_ptr<UserMetadata>> temporary_users_by_name_;
   std::unordered_map<int32_t, std::shared_ptr<UserMetadata>> temporary_users_by_id_;
-  int32_t next_temporary_user_id_{OMNISCI_TEMPORARY_USER_ID_RANGE};
+  int32_t next_temporary_user_id_{shared::kTempUserIdRange};
 };
 
 }  // namespace Catalog_Namespace

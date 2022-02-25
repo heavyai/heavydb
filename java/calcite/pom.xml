@@ -155,7 +155,7 @@
         <version>2.22.0</version>
         <configuration>
           <systemPropertyVariables>
-            <MAPD_LOG_DIR>.</MAPD_LOG_DIR>
+            <LOG_DIR>.</LOG_DIR>
           </systemPropertyVariables>
           <useSystemClassLoader>
             false

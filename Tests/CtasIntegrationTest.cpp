@@ -26,6 +26,7 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
 #include "QueryEngine/TargetValue.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/sqltypes.h"
 #include "TestHelpers.h"
@@ -1204,9 +1205,9 @@ int main(int argc, char* argv[]) {
     int port = 6274;
     std::string cert = "";
 
-    std::string user = "admin";
-    std::string pwd = "HyperInteractive";
-    std::string db = "omnisci";
+    auto user = shared::kRootUsername;
+    auto pwd = shared::kDefaultRootPasswd;
+    auto db = shared::kDefaultDbName;
 
     desc.add_options()(
         "host",

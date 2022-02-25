@@ -28,6 +28,7 @@
 #include "DataMgr/OmniSciAwsSdk.h"
 #endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
+#include "Shared/SysDefinitions.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
 #include "Utils/DdlUtils.h"
@@ -193,10 +194,10 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
 
   inline static const std::string CONFIG_FILE_PATH{"./file_path_whitelist_test.conf"};
   inline static std::string temp_file_path_;
-  inline static const std::string DEFAULT_IMPORT_PATH{std::string{BASE_PATH} +
-                                                      "/mapd_import"};
-  inline static const std::string DEFAULT_EXPORT_PATH{std::string{BASE_PATH} +
-                                                      "/mapd_export"};
+  inline static const std::string DEFAULT_IMPORT_PATH{std::string{BASE_PATH} + "/" +
+                                                      shared::kDefaultImportDirName};
+  inline static const std::string DEFAULT_EXPORT_PATH{std::string{BASE_PATH} + "/" +
+                                                      shared::kDefaultExportDirName};
 };
 
 TEST_P(FilePathWhitelistTest, WhitelistedPath) {
@@ -513,7 +514,7 @@ class DBHandlerFilePathTest
   }
 
   static boost::filesystem::path getImportPath() {
-    return boost::filesystem::canonical(BASE_PATH) / "mapd_import";
+    return boost::filesystem::canonical(BASE_PATH) / shared::kDefaultImportDirName;
   }
 
   std::string getFilePath(const std::string& file_name_prefix) {

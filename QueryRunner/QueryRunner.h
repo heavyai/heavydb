@@ -36,6 +36,7 @@
 #include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
 #include "QueryEngine/RelAlgTranslator.h"
+#include "Shared/SysDefinitions.h"
 #include "ThriftHandler/QueryState.h"
 
 namespace Catalog_Namespace {
@@ -150,9 +151,9 @@ class QueryRunner {
                            const std::vector<LeafHostInfo>& string_servers,
                            const std::vector<LeafHostInfo>& leaf_servers) {
     return QueryRunner::init(db_path,
-                             std::string{OMNISCI_ROOT_USER},
+                             shared::kRootUsername,
                              "HyperInteractive",
-                             std::string{OMNISCI_DEFAULT_DB},
+                             shared::kDefaultDbName,
                              string_servers,
                              leaf_servers);
   }

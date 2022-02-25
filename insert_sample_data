@@ -53,7 +53,7 @@ if [ -z "${MAPD_DATA}" ]; then
   echo "Using default data directory: \"$MAPD_DATA\" if file path is not whitelisted use '--data /path_to_server_data_directory'"
 fi
 
-SAMPLE_PATH=${SAMPLE_PATH:="$MAPD_DATA/mapd_import/sample_datasets"}
+SAMPLE_PATH=${SAMPLE_PATH:="$MAPD_DATA/import/sample_datasets"}
 
 MKRES=$(mkdir -p "$SAMPLE_PATH")
 if ! mkdir -p "$SAMPLE_PATH" || [ ! -w "$SAMPLE_PATH" ] ; then

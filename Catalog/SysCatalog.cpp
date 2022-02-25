@@ -47,6 +47,7 @@
 #include "RWLocks.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "include/bcrypt.h"
@@ -80,13 +81,13 @@ std::string hash_with_bcrypt(const std::string& pwd) {
 std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_path) {
   std::filesystem::path catalog_base_data_path;
 
-  // For a read-only server, make a temporary copy of mapd_catalogs.
+  // For a read-only server, make a temporary copy of the catalog directory.
   // This catalog copy must take place before any other catalog accesses.
   if (!g_read_only) {
-    // Catalog directory mapd_catalogs will be in the normal location.
+    // Catalog directory will be in the normal location.
     catalog_base_data_path = base_data_path;
   } else {
-    // Catalog directory mapd_catalogs will be in a temporary location.
+    // Catalog directory will be in a temporary location.
     catalog_base_data_path = base_data_path / "temporary";
 
     // Delete the temporary directory if it exists.
@@ -99,8 +100,9 @@ std::filesystem::path copy_catalog_if_read_only(std::filesystem::path base_data_
     std::filesystem::create_directories(catalog_base_data_path);
 
     // Make the temporary copy of the catalog.
-    const auto normal_catalog_path = base_data_path / "mapd_catalogs";
-    const auto temporary_catalog_path = catalog_base_data_path / "mapd_catalogs";
+    const auto normal_catalog_path = base_data_path / shared::kCatalogDirectoryName;
+    const auto temporary_catalog_path =
+        catalog_base_data_path / shared::kCatalogDirectoryName;
     LOG(INFO) << "copying catalog from " << normal_catalog_path << " to "
               << temporary_catalog_path << " for read-only server";
     std::filesystem::copy(normal_catalog_path,
@@ -129,7 +131,7 @@ std::string UserMetadata::userLoggable() const {
 }
 
 auto CommonFileOperations::assembleCatalogName(std::string const& name) {
-  return base_path_ + "/mapd_catalogs/" + name;
+  return base_path_ + "/" + shared::kCatalogDirectoryName + "/" + name;
 };
 
 void CommonFileOperations::removeCatalogByFullPath(std::string const& full_path) {
@@ -176,9 +178,11 @@ void SysCatalog::init(const std::string& basePath,
     string_dict_hosts_ = string_dict_hosts;
     aggregator_ = aggregator;
     bool db_exists =
-        boost::filesystem::exists(basePath_ + "/mapd_catalogs/" + OMNISCI_SYSTEM_CATALOG);
+        boost::filesystem::exists(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                                  shared::kSystemCatalogName);
     sqliteConnector_.reset(
-        new SqliteConnector(OMNISCI_SYSTEM_CATALOG, basePath_ + "/mapd_catalogs/"));
+        new SqliteConnector(shared::kSystemCatalogName,
+                            basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
     if (is_new_db) {
       initDB();
     } else {
@@ -220,9 +224,9 @@ void SysCatalog::initDB() {
         "mapd_databases, can_login boolean)");
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL, 1)",
-        std::vector<std::string>{OMNISCI_ROOT_USER_ID_STR,
-                                 OMNISCI_ROOT_USER,
-                                 hash_with_bcrypt(OMNISCI_ROOT_PASSWD_DEFAULT)});
+        std::vector<std::string>{shared::kRootUserIdStr,
+                                 shared::kRootUsername,
+                                 hash_with_bcrypt(shared::kDefaultRootPasswd)});
     sqliteConnector_->query(
         "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
         "integer references mapd_users)");
@@ -245,8 +249,9 @@ void SysCatalog::initDB() {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  createDatabase(OMNISCI_DEFAULT_DB, OMNISCI_ROOT_USER_ID);
-  createRole_unsafe(OMNISCI_ROOT_USER, /*userPrivateRole=*/true, /*is_temporary=*/false);
+  createDatabase(shared::kDefaultDbName, shared::kRootUserId);
+  createRole_unsafe(
+      shared::kRootUsername, /*userPrivateRole=*/true, /*is_temporary=*/false);
 }
 
 void SysCatalog::checkAndExecuteMigrations() {
@@ -288,7 +293,7 @@ void SysCatalog::updateUserSchema() {
 
 void SysCatalog::importDataFromOldMapdDB() {
   sys_sqlite_lock sqlite_lock(this);
-  std::string mapd_db_path = basePath_ + "/mapd_catalogs/mapd";
+  std::string mapd_db_path = basePath_ + "/" + shared::kCatalogDirectoryName + "/mapd";
   sqliteConnector_->query("ATTACH DATABASE `" + mapd_db_path + "` as old_cat");
   sqliteConnector_->query("BEGIN TRANSACTION");
   LOG(INFO) << "Moving global metadata into a separate catalog";
@@ -323,7 +328,7 @@ void SysCatalog::importDataFromOldMapdDB() {
   }
   sqliteConnector_->query("END TRANSACTION");
   const std::string sys_catalog_path =
-      basePath_ + "/mapd_catalogs/" + OMNISCI_SYSTEM_CATALOG;
+      basePath_ + "/" + shared::kCatalogDirectoryName + "/" + shared::kSystemCatalogName;
   LOG(INFO) << "Global metadata has been successfully moved into a separate catalog: "
             << sys_catalog_path
             << ". Using this database with an older version of omnisci_server "
@@ -500,7 +505,7 @@ void SysCatalog::migratePrivileges() {
         auto type = DBObjectType::TableDBObjectType;
         DBObjectKey key{type, grantee.second};
         DBObject object(
-            dbName, type, key, AccessPrivileges::ALL_TABLE_MIGRATE, OMNISCI_ROOT_USER_ID);
+            dbName, type, key, AccessPrivileges::ALL_TABLE_MIGRATE, shared::kRootUserId);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
@@ -513,7 +518,7 @@ void SysCatalog::migratePrivileges() {
                         type,
                         key,
                         AccessPrivileges::ALL_DASHBOARD_MIGRATE,
-                        OMNISCI_ROOT_USER_ID);
+                        shared::kRootUserId);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
@@ -523,19 +528,18 @@ void SysCatalog::migratePrivileges() {
         auto type = DBObjectType::ViewDBObjectType;
         DBObjectKey key{type, grantee.second};
         DBObject object(
-            dbName, type, key, AccessPrivileges::ALL_VIEW_MIGRATE, OMNISCI_ROOT_USER_ID);
+            dbName, type, key, AccessPrivileges::ALL_VIEW_MIGRATE, shared::kRootUserId);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
       }
     }
     for (auto user : user_has_privs) {
       auto dbName = dbs_by_id[0];
-      if (user.second == false && user.first != OMNISCI_ROOT_USER_ID) {
+      if (user.second == false && user.first != shared::kRootUserId) {
         {
           auto type = DBObjectType::DatabaseDBObjectType;
           DBObjectKey key{type, 0};
-          DBObject object(
-              dbName, type, key, AccessPrivileges::NONE, OMNISCI_ROOT_USER_ID);
+          DBObject object(dbName, type, key, AccessPrivileges::NONE, shared::kRootUserId);
           insertOrUpdateObjectPrivileges(
               sqliteConnector_, users_by_id[user.first], true, object);
         }
@@ -554,7 +558,7 @@ void SysCatalog::addAdminUserRole() {
   try {
     sqliteConnector_->query(
         "SELECT roleName FROM mapd_object_permissions WHERE roleName = \'" +
-        OMNISCI_ROOT_USER + "\'");
+        shared::kRootUsername + "\'");
     if (sqliteConnector_->getNumRows() != 0) {
       // already done
       sqliteConnector_->query("END TRANSACTION");
@@ -562,7 +566,7 @@ void SysCatalog::addAdminUserRole() {
     }
 
     createRole_unsafe(
-        OMNISCI_ROOT_USER, /*userPrivateRole=*/true, /*is_temporary=*/false);
+        shared::kRootUsername, /*userPrivateRole=*/true, /*is_temporary=*/false);
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -743,7 +747,7 @@ void SysCatalog::migrateDBAccessPrivileges() {
     for (auto db_ : databases) {
       CHECK(getMetadataForDB(db_.second, dbmeta));
       for (auto user : users) {
-        if (user.first != OMNISCI_ROOT_USER_ID) {
+        if (user.first != shared::kRootUserId) {
           {
             DBObjectKey key;
             key.permissionType = DBObjectType::DatabaseDBObjectType;
@@ -1251,7 +1255,7 @@ void SysCatalog::renameDatabase(std::string const& old_name,
   if (getMetadataForDB(new_name, new_db)) {
     throw std::runtime_error("Database " + new_name + " already exists.");
   }
-  if (to_upper(new_name) == to_upper(OMNISCI_SYSTEM_CATALOG)) {
+  if (to_upper(new_name) == to_upper(shared::kSystemCatalogName)) {
     throw std::runtime_error("Database name " + new_name + "is reserved.");
   }
 
@@ -1293,12 +1297,12 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   if (getMetadataForDB(name, db)) {
     throw runtime_error("Database " + name + " already exists.");
   }
-  if (to_upper(name) == to_upper(OMNISCI_SYSTEM_CATALOG)) {
+  if (to_upper(name) == to_upper(shared::kSystemCatalogName)) {
     throw runtime_error("Database name " + name + " is reserved.");
   }
 
   std::unique_ptr<SqliteConnector> dbConn(
-      new SqliteConnector(name, basePath_ + "/mapd_catalogs/"));
+      new SqliteConnector(name, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
   // NOTE(max): it's okay to run this in a separate transaction. If we fail later
   // we delete the database anyways.
   // If we run it in the same transaction as SysCatalog functions, then Catalog
@@ -1358,7 +1362,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     dbConn->query(Catalog::getCustomExpressionsSchema());
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");
-    boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+    boost::filesystem::remove(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                              name);
     throw;
   }
   dbConn->query("END TRANSACTION");
@@ -1375,7 +1380,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 
     cat = getCatalog(db, true);
 
-    if (owner != OMNISCI_ROOT_USER_ID) {
+    if (owner != shared::kRootUserId) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
       UserMetadata user;
@@ -1384,7 +1389,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     }
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
-    boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+    boost::filesystem::remove(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                              name);
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
@@ -1397,7 +1403,8 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     try {
       cat->createDefaultServersIfNotExists();
     } catch (...) {
-      boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+      boost::filesystem::remove(basePath_ + "/" + shared::kCatalogDirectoryName + "/" +
+                                name);
       throw;
     }
   }
@@ -1627,11 +1634,11 @@ void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
       dbname = db_meta.dbName;
       // loaded the user's default database
     } else {
-      if (!getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta)) {
-        throw std::runtime_error(std::string("Database ") + OMNISCI_DEFAULT_DB +
+      if (!getMetadataForDB(shared::kDefaultDbName, db_meta)) {
+        throw std::runtime_error(std::string("Database ") + shared::kDefaultDbName +
                                  " does not exist.");
       }
-      dbname = OMNISCI_DEFAULT_DB;
+      dbname = shared::kDefaultDbName;
       // loaded the mapd database by default
     }
   }
@@ -2072,7 +2079,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
 
   // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
-  DBObject dbObject(OMNISCI_DEFAULT_DB, DatabaseDBObjectType);
+  DBObject dbObject(shared::kDefaultDbName, DatabaseDBObjectType);
   DBObjectKey objKey;
   // 0 is an id that does not exist
   objKey.dbId = 0;
@@ -2561,7 +2568,7 @@ void SysCatalog::buildUserRoleMap() {
     std::string userName = sqliteConnector_->getData<string>(r, 1);
     // required for declared nomenclature before v4.0.0
     if ((boost::equals(roleName, "mapd_default_suser_role") &&
-         boost::equals(userName, OMNISCI_ROOT_USER)) ||
+         boost::equals(userName, shared::kRootUsername)) ||
         (boost::equals(roleName, "mapd_default_user_role") &&
          !boost::equals(userName, "mapd_default_user_role"))) {
       // grouprole already exists with roleName==userName in mapd_roles table
@@ -2919,19 +2926,19 @@ void SysCatalog::reassignObjectOwners(
 }
 
 void SysCatalog::initializeInformationSchemaDb() {
-  if (g_enable_system_tables && !hasExecutedMigration(INFORMATION_SCHEMA_MIGRATION)) {
+  if (g_enable_system_tables && !hasExecutedMigration(shared::kInfoSchemaMigrationName)) {
     sys_write_lock write_lock(this);
     DBMetadata db_metadata;
-    if (getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata)) {
-      LOG(WARNING) << "A database with name \"" << INFORMATION_SCHEMA_DB
+    if (getMetadataForDB(shared::kInfoSchemaDbName, db_metadata)) {
+      LOG(WARNING) << "A database with name \"" << shared::kInfoSchemaDbName
                    << "\" already exists. System table creation will be skipped. Rename "
                       "this database in order to use system tables.";
     } else {
-      createDatabase(INFORMATION_SCHEMA_DB, OMNISCI_ROOT_USER_ID);
+      createDatabase(shared::kInfoSchemaDbName, shared::kRootUserId);
       try {
-        recordExecutedMigration(INFORMATION_SCHEMA_MIGRATION);
+        recordExecutedMigration(shared::kInfoSchemaMigrationName);
       } catch (...) {
-        getMetadataForDB(INFORMATION_SCHEMA_DB, db_metadata);
+        getMetadataForDB(shared::kInfoSchemaDbName, db_metadata);
         dropDatabase(db_metadata);
         throw;
       }

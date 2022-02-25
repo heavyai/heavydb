@@ -32,6 +32,7 @@
 #include "DataMgr/ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.h"
 #include "FileMgr.h"
 #include "Shared/File.h"
+#include "Shared/SysDefinitions.h"
 
 namespace File_Namespace {
 
@@ -75,7 +76,7 @@ struct DiskCacheConfig {
     return "";
   }
   static std::string getDefaultPath(const std::string& base_path) {
-    return base_path + "/omnisci_disk_cache";
+    return base_path + "/" + shared::kDefaultDiskCacheDirName;
   }
 };
 

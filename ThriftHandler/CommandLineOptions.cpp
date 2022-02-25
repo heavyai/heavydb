@@ -26,6 +26,7 @@
 #include "MapDRelease.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/enable_assign_render_groups.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
@@ -1003,7 +1004,7 @@ void CommandLineOptions::validate_base_path() {
 
 void CommandLineOptions::validate() {
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
-  const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
+  const auto data_path = boost::filesystem::path(base_path) / shared::kDataDirectoryName;
   if (!boost::filesystem::exists(data_path)) {
     throw std::runtime_error("OmniSci data directory does not exist at '" + base_path +
                              "'");
@@ -1046,13 +1047,14 @@ void CommandLineOptions::validate() {
     throw std::runtime_error("File containing DB queries " + db_query_file +
                              " does not exist.");
   }
-  const auto db_file =
-      boost::filesystem::path(base_path) / "mapd_catalogs" / OMNISCI_SYSTEM_CATALOG;
+  const auto db_file = boost::filesystem::path(base_path) /
+                       shared::kCatalogDirectoryName / shared::kSystemCatalogName;
   if (!boost::filesystem::exists(db_file)) {
     {  // check old system catalog existsense
-      const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs/mapd";
+      const auto db_file =
+          boost::filesystem::path(base_path) / shared::kCatalogDirectoryName / "mapd";
       if (!boost::filesystem::exists(db_file)) {
-        throw std::runtime_error("OmniSci system catalog " + OMNISCI_SYSTEM_CATALOG +
+        throw std::runtime_error("System catalog " + shared::kSystemCatalogName +
                                  " does not exist.");
       }
     }
@@ -1107,10 +1109,14 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathWhitelist::initialize(
       base_path, allowed_import_paths, allowed_export_paths);
 
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_catalogs");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/temporary/mapd_catalogs");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_data");
-  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/mapd_log");
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/" +
+                                               shared::kCatalogDirectoryName);
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/temporary/" +
+                                               shared::kCatalogDirectoryName);
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/" +
+                                               shared::kDataDirectoryName);
+  ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/" +
+                                               shared::kDefaultLogDirName);
   g_enable_s3_fsi = false;
 
   if (!g_enable_legacy_delimited_import ||
@@ -1152,7 +1158,7 @@ void CommandLineOptions::validate() {
   }
 
   if (disk_cache_config.path.empty()) {
-    disk_cache_config.path = base_path + "/omnisci_disk_cache";
+    disk_cache_config.path = base_path + "/" + shared::kDefaultDiskCacheDirName;
   }
   ddl_utils::FilePathBlacklist::addToBlacklist(disk_cache_config.path);
 

@@ -26,6 +26,7 @@
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
 #include "OSDependent/omnisci_path.h"
+#include "Shared/SysDefinitions.h"
 #include "ThriftHandler/DBHandler.h"
 
 #define CALCITEPORT 3279
@@ -122,7 +123,7 @@ static void loadGeo(std::string base_path) {
 #endif
                                                 disk_cache_config,
                                                 false);
-  db_handler->internal_connect(session_id, OMNISCI_ROOT_USER, OMNISCI_DEFAULT_DB);
+  db_handler->internal_connect(session_id, shared::kRootUsername, shared::kDefaultDbName);
 
   // Execute on CPU by default
   db_handler->set_execution_mode(session_id, TExecuteMode::CPU);
@@ -211,7 +212,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "Catalog basepath " + base_path + " does not exist.\n";
     return 1;
   }
-  std::string catalogs_path = base_path + "/mapd_catalogs";
+  std::string catalogs_path = base_path + "/" + shared::kCatalogDirectoryName;
   if (boost::filesystem::exists(catalogs_path)) {
     if (force) {
       boost::filesystem::remove_all(catalogs_path);
@@ -221,7 +222,7 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
-  std::string data_path = base_path + "/mapd_data";
+  std::string data_path = base_path + "/" + shared::kDataDirectoryName;
   if (boost::filesystem::exists(data_path)) {
     if (force) {
       boost::filesystem::remove_all(data_path);
@@ -231,7 +232,7 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
-  std::string export_path = base_path + "/mapd_export";
+  std::string export_path = base_path + "/" + shared::kDefaultExportDirName;
   if (boost::filesystem::exists(export_path)) {
     if (force) {
       boost::filesystem::remove_all(export_path);
@@ -241,7 +242,7 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   }
-  std::string disk_cache_path = base_path + "/omnisci_disk_cache";
+  std::string disk_cache_path = base_path + "/" + shared::kDefaultDiskCacheDirName;
   if (boost::filesystem::exists(disk_cache_path)) {
     if (force) {
       boost::filesystem::remove_all(disk_cache_path);
@@ -252,12 +253,11 @@ int main(int argc, char* argv[]) {
     }
   }
   if (!boost::filesystem::create_directory(catalogs_path)) {
-    std::cerr << "Cannot create mapd_catalogs subdirectory under " << base_path
-              << std::endl;
+    std::cerr << "Cannot create " + shared::kCatalogDirectoryName + " subdirectory under "
+              << base_path << std::endl;
   }
   if (!boost::filesystem::create_directory(export_path)) {
-    std::cerr << "Cannot create mapd_export subdirectory under " << base_path
-              << std::endl;
+    std::cerr << "Cannot create export subdirectory under " << base_path << std::endl;
   }
 
   log_options.set_base_path(base_path);

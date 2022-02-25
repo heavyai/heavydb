@@ -5,7 +5,7 @@
 - Databases
 - Permissions
 
-Data is persisted using a *SQLite* database at `<path_to_db/mapd_catalogs/omnisci_system_catalog>`. When the `SysCatalog` is created, the contents of the SQLite database is read and stored in memory. Subsequent reads only reference in-memory data structures. All writes are immediately flushed to SQLite.
+Data is persisted using a *SQLite* database at `<path_to_db/catalogs/system_catalog>`. When the `SysCatalog` is created, the contents of the SQLite database is read and stored in memory. Subsequent reads only reference in-memory data structures. All writes are immediately flushed to SQLite.
 
 Below is a UML representation of the schema of the SQLite database backing the system catalog:
 

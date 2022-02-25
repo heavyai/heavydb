@@ -82,7 +82,7 @@ echo "Backend HTTP: localhost:${MAPD_HTTP_PORT}"
 echo "Frontend Web: localhost:${MAPD_WEB_PORT}"
 echo "Calcite TCP:  localhost:${MAPD_CALCITE_PORT}"
 
-if [ ! -d $MAPD_DATA/mapd_data ]; then
+if [ ! -d $MAPD_DATA/data ]; then
     mkdir -p $MAPD_DATA
     ./bin/initdb -f --data $MAPD_DATA
 fi

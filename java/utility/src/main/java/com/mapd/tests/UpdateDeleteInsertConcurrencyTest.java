@@ -187,7 +187,7 @@ public class UpdateDeleteInsertConcurrencyTest {
 
             sql = "INSERT INTO " + tableName + " VALUES "
                     + "(" + tid + "," + tid + "," + tid + "," + tid + "," + tid + ","
-                    + tid + "," + tid + "," + (tid % 2 == 0 ? "'mapd'" : "'omnisci'")
+                    + tid + "," + tid + "," + (tid % 2 == 0 ? "'value_1'" : "'value_2'")
                     + ");";
             logger.info(logPrefix + " " + sql);
             user.runSql(sql);
@@ -231,11 +231,11 @@ public class UpdateDeleteInsertConcurrencyTest {
       logger.info("Using temporary tables");
     }
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
-    su.runSql("GRANT CREATE on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO bob;");
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("GRANT CREATE on DATABASE db1 TO bob;");

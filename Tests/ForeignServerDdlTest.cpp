@@ -23,6 +23,7 @@
 
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -74,7 +75,7 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ("test_server", foreign_server->name);
     ASSERT_EQ(foreign_storage::DataWrapperType::CSV, foreign_server->data_wrapper_type);
-    ASSERT_EQ(OMNISCI_ROOT_USER_ID, foreign_server->user_id);
+    ASSERT_EQ(shared::kRootUserId, foreign_server->user_id);
 
     ASSERT_TRUE(foreign_server->options.find(
                     foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY) !=
@@ -300,13 +301,13 @@ class ForeignServerPrivilegesDdlTest : public DBHandlerTestFixture {
   }
 
   void revokeTestUserServerPrivileges() {
-    sql("REVOKE ALL ON DATABASE omnisci FROM test_user;");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   }
 
   static void createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   }
 
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
@@ -344,7 +345,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithoutPrivilege) {
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithPrivilege) {
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestServer();
   assertExpectedForeignServerCreatedByUser();
@@ -352,7 +353,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithPrivilege) {
 
 TEST_F(ForeignServerPrivilegesDdlTest,
        CreateServerWithPrivilegeThenDropWithoutDropPrivilege) {
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestServer();
   assertExpectedForeignServerCreatedByUser();
@@ -370,7 +371,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithoutPrivilege) {
 
 TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithPrivilege) {
   createTestServer();
-  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT DROP SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   sql("DROP SERVER test_server;");
   assertNullForeignServer();
@@ -395,7 +396,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, AlterServerWithoutPrivilege) {
 
 TEST_F(ForeignServerPrivilegesDdlTest, AlterServerWithPrivilege) {
   createTestServer();
-  sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT ALTER SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   sql("ALTER SERVER test_server SET FOREIGN DATA WRAPPER PARQUET_FILE;");
   auto foreign_server = getCatalog().getForeignServerFromStorage("test_server");
@@ -413,8 +414,8 @@ TEST_F(ForeignServerPrivilegesDdlTest, AlterServerWithSpecificPrivilege) {
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantRevokeAlterServerWithPrivilege) {
   createTestServer();
-  sql("GRANT ALTER SERVER ON DATABASE omnisci TO test_user;");
-  sql("REVOKE ALTER SERVER ON DATABASE omnisci FROM test_user;");
+  sql("GRANT ALTER SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE ALTER SERVER ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "ALTER SERVER test_server SET FOREIGN DATA WRAPPER PARQUET_FILE;",
@@ -449,8 +450,8 @@ TEST_F(ForeignServerPrivilegesDdlTest,
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithGrantThenRevokePrivilege) {
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
-  sql("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
@@ -461,8 +462,8 @@ TEST_F(ForeignServerPrivilegesDdlTest, CreateServerWithGrantThenRevokePrivilege)
 
 TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithGrantThenRevokePrivilege) {
   createTestServer();
-  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
-  sql("REVOKE DROP SERVER ON DATABASE omnisci FROM test_user;");
+  sql("GRANT DROP SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE DROP SERVER ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
                           "Server test_server will not be dropped. "
@@ -481,9 +482,11 @@ TEST_F(ForeignServerPrivilegesDdlTest, DropServerWithGrantThenRevokeSpecificPriv
 
 TEST_F(ForeignServerPrivilegesDdlTest, RevokeNonExistentPrivilege) {
   createTestServer();
-  queryAndAssertException("REVOKE DROP SERVER ON DATABASE omnisci FROM test_user;",
-                          "Can not revoke privileges because"
-                          " test_user has no privileges to omnisci");
+  queryAndAssertException(
+      "REVOKE DROP SERVER ON DATABASE " + shared::kDefaultDbName + " FROM test_user;",
+      "Can not revoke privileges because"
+      " test_user has no privileges to " +
+          shared::kDefaultDbName);
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, RevokeNonExistentSpecificPrivilege) {
@@ -507,14 +510,16 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantPrivilegeOnNonExistentDatabase) {
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantPrivilegeFsiDisabled) {
   g_enable_fsi = false;
-  queryAndAssertException("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;",
-                          "GRANT failed. SERVER object unrecognized.");
+  queryAndAssertException(
+      "GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;",
+      "GRANT failed. SERVER object unrecognized.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, RevokePrivilegeFsiDisabled) {
   g_enable_fsi = false;
-  queryAndAssertException("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;",
-                          "REVOKE failed. SERVER object unrecognized.");
+  queryAndAssertException(
+      "REVOKE CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " FROM test_user;",
+      "REVOKE failed. SERVER object unrecognized.");
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantSpecificPrivilegeFsiDisabled) {
@@ -525,7 +530,7 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantSpecificPrivilegeFsiDisabled) {
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantAllCreateServerDropServer) {
-  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
+  sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   createTestServer();
   assertExpectedForeignServerCreatedByUser();
@@ -535,15 +540,15 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantAllCreateServerDropServer) {
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantAllDropServer) {
   createTestServer();
-  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
+  sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   sql("DROP SERVER test_server;");
   assertNullForeignServer();
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantAllRevokeCreateServerCreateServer) {
-  sql("GRANT ALL ON DATABASE omnisci TO test_user;");
-  sql("REVOKE CREATE SERVER ON DATABASE omnisci FROM test_user;");
+  sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
@@ -553,10 +558,10 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantAllRevokeCreateServerCreateServer) {
 }
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantCreateServerRevokeAllCreateServer) {
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
-  sql("REVOKE ALL ON DATABASE omnisci FROM test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   // must still allow access for login:
-  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
@@ -567,10 +572,10 @@ TEST_F(ForeignServerPrivilegesDdlTest, GrantCreateServerRevokeAllCreateServer) {
 
 TEST_F(ForeignServerPrivilegesDdlTest, GrantDropServerRevokeAllDropServer) {
   createTestServer();
-  sql("GRANT DROP SERVER ON DATABASE omnisci TO test_user;");
-  sql("REVOKE ALL ON DATABASE omnisci FROM test_user;");
+  sql("GRANT DROP SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE ALL ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   // must still allow access for login:
-  sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
                           "Server test_server will not be dropped. "
@@ -878,16 +883,17 @@ TEST_F(ShowForeignServerTest, SHOW_PRIVILEGE) {
   // check that servers are only shown to users with correct privilege
 
   sql("CREATE USER test (password = 'HyperInterative', is_super = 'false', "
-      "default_db='omnisci');");
-  sql("GRANT ACCESS ON DATABASE omnisci TO test;");
+      "default_db='" +
+      shared::kDefaultDbName + "');");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test;");
   TSessionId test_session_id;
-  login("test", "HyperInteractive", "omnisci", test_session_id);
+  login("test", shared::kDefaultRootPasswd, shared::kDefaultDbName, test_session_id);
   {
     TQueryResult result;
     sql(result, "SHOW SERVERS;", test_session_id);
     assertNumResults(result, 0);
   }
-  sql("GRANT ALL ON DATABASE omnisci TO test;");
+  sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO test;");
   queryAndAssertAllDefaultServers(test_session_id);
   logout(test_session_id);
   sql("DROP USER test;");
@@ -946,8 +952,8 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
 
   static void createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
-    sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+    sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   }
 
   static void dropTestUser() { sql("DROP USER IF EXISTS test_user;"); }
@@ -971,7 +977,7 @@ class AlterForeignServerTest : public DBHandlerTestFixture {
       const std::string& server_name,
       const std::string& data_wrapper,
       const std::map<std::string, std::string, std::less<>>& options,
-      const int owner_user_id = OMNISCI_ROOT_USER_ID) {
+      const int owner_user_id = shared::kRootUserId) {
     foreign_storage::OptionsContainer options_container(
         foreign_storage::OptionsContainer(options).getOptionsAsJsonString());
     foreign_storage::ForeignServer foreign_server{
@@ -1073,10 +1079,11 @@ TEST_F(AlterForeignServerTest, UserCreateServerRenameServerDropServer) {
 TEST_F(AlterForeignServerTest, UserCreateServerAttemptChangeOwner) {
   login("test_user", "test_pass");
   createTestServer();
-  queryAndAssertException("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";",
-                          "Only a super user can change a foreign server's owner."
-                          " Current user is not a super-user. Foreign server with name"
-                          " \"test_server\" will not have owner changed.");
+  queryAndAssertException(
+      "ALTER SERVER test_server OWNER TO " + shared::kRootUsername + ";",
+      "Only a super user can change a foreign server's owner."
+      " Current user is not a super-user. Foreign server with name"
+      " \"test_server\" will not have owner changed.");
 }
 
 TEST_F(AlterForeignServerTest, ChangeOwnerSwicthUserDropServer) {
@@ -1091,7 +1098,7 @@ TEST_F(AlterForeignServerTest, UserCreateServerChangeOwnerDropServer) {
   login("test_user", "test_pass");
   createTestServer();
   loginAdmin();
-  sql("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";");
+  sql("ALTER SERVER test_server OWNER TO " + shared::kRootUsername + ";");
   login("test_user", "test_pass");
   queryAndAssertException("DROP SERVER test_server;",
                           "Server test_server will not be dropped. User has"
@@ -1103,7 +1110,7 @@ TEST_F(AlterForeignServerTest, UserCreateServerDropUserChangeOwner) {
   createTestServer();
   loginAdmin();
   dropTestUser();
-  sql("ALTER SERVER test_server OWNER TO " + OMNISCI_ROOT_USER + ";");
+  sql("ALTER SERVER test_server OWNER TO " + shared::kRootUsername + ";");
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
   // test_user must be recreated for remaining tests

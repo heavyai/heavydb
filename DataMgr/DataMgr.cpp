@@ -303,15 +303,17 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
 void DataMgr::convertDB(const std::string basePath) {
   // no need for locking, as this is only called in the constructor
 
-  /* check that "mapd_data" directory exists and it's empty */
-  std::string mapdDataPath(basePath + "/../mapd_data/");
+  /* check that the data directory exists and it's empty */
+  std::string mapdDataPath(basePath + "/../" + shared::kDataDirectoryName + "/");
   boost::filesystem::path path(mapdDataPath);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path)) {
-      LOG(FATAL) << "Path to directory mapd_data to convert DB is not a directory.";
+      LOG(FATAL) << "Path to directory \"" + shared::kDataDirectoryName +
+                        "\" to convert DB is not a directory.";
     }
   } else {  // data directory does not exist
-    LOG(FATAL) << "Path to directory mapd_data to convert DB does not exist.";
+    LOG(FATAL) << "Path to directory \"" + shared::kDataDirectoryName +
+                      "\" to convert DB does not exist.";
   }
 
   File_Namespace::GlobalFileMgr* gfm{nullptr};

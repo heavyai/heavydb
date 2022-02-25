@@ -26,6 +26,7 @@
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
 #include "Fragmenter/FragmentDefaultValues.h"
+#include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 #include "Utils/DdlUtils.h"
 
@@ -125,7 +126,7 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
 
   int createTestUser() {
     sql("CREATE USER test_user (password = 'test_pass');");
-    sql("GRANT ACCESS ON DATABASE omnisci TO test_user;");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
     Catalog_Namespace::UserMetadata user_metadata;
     Catalog_Namespace::SysCatalog::instance().getMetadataForUser("test_user",
                                                                  user_metadata);
@@ -178,7 +179,7 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
                           const ddl_utils::TableType table_type,
                           const std::string& table_name,
                           const int column_count,
-                          const int user_id = OMNISCI_ROOT_USER_ID,
+                          const int user_id = shared::kRootUserId,
                           const int max_fragment_size = DEFAULT_FRAGMENT_ROWS) {
     EXPECT_EQ(table_name, td->tableName);
     EXPECT_EQ(Fragmenter_Namespace::FragmenterType::INSERT_ORDER, td->fragType);
@@ -1066,7 +1067,7 @@ TEST_P(CreateTableTest, UnauthorizedUser) {
 
 TEST_P(CreateTableTest, AuthorizedUser) {
   auto user_id = createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
 
   sql(getCreateTableQuery(GetParam(), "test_table", "(col1 INTEGER)"));
@@ -1360,7 +1361,7 @@ TEST_F(CreateForeignTableTest, UnauthorizedServerUsage) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1373,7 +1374,7 @@ TEST_F(CreateForeignTableTest, AuthorizedServerUsage) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   sql("GRANT USAGE ON SERVER test_server TO test_user;");
   login("test_user", "test_pass");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1386,8 +1387,8 @@ TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
       "SERVER test_server WITH (file_path = '" +
@@ -1397,8 +1398,8 @@ TEST_F(CreateForeignTableTest, AuthorizedDatabaseServerUser) {
 
 TEST_F(CreateForeignTableTest, NonSuserServerOwnerUsage) {
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT CREATE SERVER ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT CREATE SERVER ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
@@ -1412,7 +1413,7 @@ TEST_F(CreateForeignTableTest, RevokedServerUsage) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   sql("GRANT USAGE ON SERVER test_server TO test_user;");
   sql("REVOKE USAGE ON SERVER test_server FROM test_user;");
   login("test_user", "test_pass");
@@ -1427,9 +1428,9 @@ TEST_F(CreateForeignTableTest, RevokedDatabaseServerUsage) {
   sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
       "WITH (storage_type = 'LOCAL_FILE', base_path = '');");
   createTestUser();
-  sql("GRANT CREATE TABLE ON DATABASE omnisci TO test_user;");
-  sql("GRANT SERVER USAGE ON DATABASE omnisci TO test_user;");
-  sql("REVOKE SERVER USAGE ON DATABASE omnisci FROM test_user;");
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("GRANT SERVER USAGE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  sql("REVOKE SERVER USAGE ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
   login("test_user", "test_pass");
   queryAndAssertException(
       "CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER[]) "
@@ -1521,8 +1522,8 @@ TEST_P(DropTableTest, NonExistingTableWithIfExists) {
 TEST_P(DropTableTest, NonExistentTableWithoutIfExists) {
   std::string query = getDropTableQuery(GetParam(), "test_table_2");
   queryAndAssertException(query,
-                          "Table/View test_table_2 for catalog omnisci does "
-                          "not exist");
+                          "Table/View test_table_2 for catalog " +
+                              shared::kDefaultDbName + " does not exist");
 }
 
 TEST_P(DropTableTest, UnauthorizedUser) {

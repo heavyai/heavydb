@@ -52,10 +52,11 @@
 #include <thrift/transport/TSocket.h>
 #include "Shared/ThriftJSONProtocolInclude.h"
 
-#include "../Fragmenter/InsertOrderFragmenter.h"
+#include "Fragmenter/InsertOrderFragmenter.h"
 #include "Logger/Logger.h"
 #include "MapDRelease.h"
 #include "Shared/StringTransform.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/ThriftTypesConvert.h"
 #include "Shared/base64.h"
@@ -1527,8 +1528,8 @@ int main(int argc, char** argv) {
       if (temp_line.size() > 11) {
         context.privs_role_name.clear();
         context.privs_role_name = strtok(line + 12, " ");
-        if (!context.privs_role_name.compare(OMNISCI_ROOT_USER)) {
-          std::cerr << "Command privileges failed because " << OMNISCI_ROOT_USER
+        if (!context.privs_role_name.compare(shared::kRootUsername)) {
+          std::cerr << "Command privileges failed because " << shared::kRootUsername
                     << " root user has all privileges by default." << std::endl;
           success = false;
         } else {
