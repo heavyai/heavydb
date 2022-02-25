@@ -30,8 +30,6 @@
 #include "../Catalog/Catalog.h"
 #include "../DataMgr/DataMgr.h"
 #include "../Fragmenter/Fragmenter.h"
-#include "../Parser/ParserNode.h"
-#include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "PopulateTableRandom.h"
 #include "ScanTable.h"

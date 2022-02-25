@@ -23,8 +23,8 @@
 #include "Geospatial/ColumnNames.h"
 #include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
+#include "Parser/ParserNode.h"
 #include "Parser/ParserWrapper.h"
-#include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
@@ -527,7 +527,7 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   return {root_node_shared_ptr, join_info.first, join_info.second, relAlgTranslator};
 }
 
-std::unique_ptr<Parser::DDLStmt> QueryRunner::createDDLStatement(
+std::unique_ptr<Parser::Stmt> QueryRunner::createStatement(
     const std::string& stmt_str_in) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
@@ -543,7 +543,7 @@ std::unique_ptr<Parser::DDLStmt> QueryRunner::createDDLStatement(
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  if (pw.isCalciteDdl()) {
+  if (pw.isDdl()) {
     const auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
@@ -556,8 +556,7 @@ std::unique_ptr<Parser::DDLStmt> QueryRunner::createDDLStatement(
                                           calciteQueryParsingOption,
                                           calciteOptimizationOption)
                                 .plan_result;
-    std::unique_ptr<Parser::DDLStmt> ptr = create_ddl_from_calcite(query_json);
-    return ptr;
+    return Parser::create_stmt_for_json(query_json);
   }
 
   // simply fail here as non-Calcite parsing is about to be removed
@@ -580,7 +579,7 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
 
-  if (pw.isCalciteDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+  if (pw.isDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
     const auto& cat = session_info_->getCatalog();
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
@@ -606,16 +605,6 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
     executor.execute();
     return;
   }
-
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  CHECK_EQ(parser.parse(stmt_str, parse_trees, last_parsed), 0) << stmt_str_in;
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front().get();
-  auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-  CHECK(ddl);
-  ddl->execute(*session_info_);
 }
 
 std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
@@ -635,30 +624,6 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
     return execution_result->getRows();
   }
 
-  auto query_state = create_query_state(session_info_, query_str);
-  auto stdlog = STDLOG(query_state);
-
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  CHECK_EQ(parser.parse(query_str, parse_trees, last_parsed), 0) << query_str;
-  CHECK_EQ(parse_trees.size(), size_t(1));
-  auto stmt = parse_trees.front().get();
-  auto insert_values_stmt = dynamic_cast<Parser::InsertValuesStmt*>(stmt);
-  if (insert_values_stmt) {
-    insert_values_stmt->execute(*session_info_);
-    return nullptr;
-  }
-  auto ctas_stmt = dynamic_cast<Parser::CreateTableAsSelectStmt*>(stmt);
-  if (ctas_stmt) {
-    ctas_stmt->execute(*session_info_);
-    return nullptr;
-  }
-  auto itas_stmt = dynamic_cast<Parser::InsertIntoTableAsSelectStmt*>(stmt);
-  if (itas_stmt) {
-    itas_stmt->execute(*session_info_);
-    return nullptr;
-  }
   UNREACHABLE();
   return nullptr;
 }
@@ -794,27 +759,12 @@ std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
     }
 
     ParserWrapper pw{text};
-    if (pw.isCalciteDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
+    if (pw.isDdl() || pw.getDMLType() == ParserWrapper::DMLType::Insert) {
       runDDLStatement(text);
       results.push_back(nullptr);
     } else {
-      // TODO: Maybe remove this redundant parsing after enhancing Parser::Stmt?
-      SQLParser parser;
-      std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-      std::string last_parsed;
-      CHECK_EQ(parser.parse(text, parse_trees, last_parsed), 0);
-      CHECK_EQ(parse_trees.size(), size_t(1));
-      auto stmt = parse_trees.front().get();
-      Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-      Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);
-      if (ddl != nullptr && dml == nullptr) {
-        runDDLStatement(text);
-        results.push_back(nullptr);
-      } else if (ddl == nullptr && dml != nullptr) {
-        results.push_back(runSQL(text, dt, true, true));
-      } else {
-        throw std::runtime_error("Unexpected SQL statement type: " + text);
-      }
+      // is not DDL, then assume it's DML and try to execute
+      results.push_back(runSQL(text, dt, true, true));
     }
   }
   return results;

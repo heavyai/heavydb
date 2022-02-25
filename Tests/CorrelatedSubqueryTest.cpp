@@ -20,7 +20,6 @@
 
 #include <ctime>
 #include <iostream>
-#include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/Visitors/SQLOperatorDetector.h"

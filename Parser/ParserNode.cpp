@@ -74,9 +74,6 @@
 #include "Utils/FsiUtils.h"
 
 #include "gen-cpp/CalciteServer.h"
-#include "parser.h"
-
-bool g_enable_calcite_ddl_parser{true};
 
 size_t g_leaf_count{0};
 bool g_test_drop_column_rollback{false};
@@ -6845,7 +6842,29 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 }
 
-std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& query_json) {
+std::unique_ptr<Parser::Stmt> create_stmt_for_query(
+    const std::string& queryStr,
+    const Catalog_Namespace::SessionInfo& session_info) {
+  auto session_copy = session_info;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+  auto query_state = query_state::QueryState::create(session_ptr, queryStr);
+  const auto& cat = session_info.getCatalog();
+  auto calcite_mgr = cat.getCalciteMgr();
+  const auto calciteQueryParsingOption =
+      calcite_mgr->getCalciteQueryParsingOption(true, false, true);
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto query_json = calcite_mgr
+                              ->process(query_state->createQueryStateProxy(),
+                                        pg_shim(queryStr),
+                                        calciteQueryParsingOption,
+                                        calciteOptimizationOption)
+                              .plan_result;
+  return create_stmt_for_json(query_json);
+}
+
+std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json) {
   CHECK(!query_json.empty());
   VLOG(2) << "Parsing JSON DDL from Calcite: " << query_json;
   rapidjson::Document ddl_query;
@@ -6859,7 +6878,7 @@ std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& quer
 
   const auto& ddl_command = std::string_view(payload["command"].GetString());
 
-  Parser::DDLStmt* stmt = nullptr;
+  Parser::Stmt* stmt = nullptr;
   if (ddl_command == "CREATE_TABLE") {
     stmt = new Parser::CreateTableStmt(payload);
   } else if (ddl_command == "DROP_TABLE") {
@@ -6925,15 +6944,16 @@ std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& quer
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
-  return std::unique_ptr<Parser::DDLStmt>(stmt);
+  return std::unique_ptr<Parser::Stmt>(stmt);
 }
 
-void execute_ddl_from_calcite(
+void execute_stmt_for_json(
     const std::string& query_json,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr) {
-  std::unique_ptr<Parser::DDLStmt> stmt = create_ddl_from_calcite(query_json);
-  if (stmt != nullptr) {
-    (*stmt).execute(*session_ptr);
+  std::unique_ptr<Parser::Stmt> stmt = create_stmt_for_json(query_json);
+  auto ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
+  if (ddl != nullptr) {
+    (*ddl).execute(*session_ptr);
   }
 }
 

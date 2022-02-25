@@ -64,7 +64,6 @@ stages involved in executing a query.
 
 .. _Thrift: https://thrift.apache.org/
 .. _Calcite: https://calcite.apache.org/
-.. _Bison: https://www.gnu.org/software/bison/
 
 Simplified Execution Model
 ==========================

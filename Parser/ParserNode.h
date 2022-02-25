@@ -2227,9 +2227,13 @@ struct ShouldInvalidateSessionsByUser<RenameUserStmt> : public std::true_type {}
  * QueryRunner/DistributedQueryRunner, where we do not want to link in the thrift
  * dependencies wich DdlCommandExecutor currently brings along.
  */
-std::unique_ptr<Parser::DDLStmt> create_ddl_from_calcite(const std::string& query_json);
+std::unique_ptr<Parser::Stmt> create_stmt_for_query(
+    const std::string& queryStr,
+    const Catalog_Namespace::SessionInfo& session_info);
 
-void execute_ddl_from_calcite(
+std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json);
+
+void execute_stmt_for_json(
     const std::string& query_json,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
 

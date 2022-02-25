@@ -25,7 +25,6 @@
 #include "../Catalog/Catalog.h"
 #include "../Catalog/DBObject.h"
 #include "../DataMgr/DataMgr.h"
-#include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "ThriftHandler/QueryState.h"
 #include "gen-cpp/CalciteServer.h"

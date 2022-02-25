@@ -48,7 +48,7 @@ class ResultSet;
 class ExecutionResult;
 
 namespace Parser {
-class DDLStmt;
+class Stmt;
 class CopyTableStmt;
 }  // namespace Parser
 
@@ -212,7 +212,7 @@ class QueryRunner {
   BufferPoolStats getBufferPoolStats(const Data_Namespace::MemoryLevel memory_level,
                                      const bool current_db_only) const;
 
-  virtual std::unique_ptr<Parser::DDLStmt> createDDLStatement(const std::string&);
+  virtual std::unique_ptr<Parser::Stmt> createStatement(const std::string&);
   virtual void runDDLStatement(const std::string&);
   virtual void validateDDLStatement(const std::string&);
 

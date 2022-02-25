@@ -35,7 +35,7 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
-#include "Parser/ParseDDL.h"
+#include "Parser/ParserNode.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
 #include "Shared/ThreadController.h"
@@ -367,10 +367,13 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   };
   std::unique_ptr<decltype(tmp_files_cleaner), decltype(tmp_files_cleaner)> tfc(
       &tmp_files_cleaner, tmp_files_cleaner);
+
   // extract & parse schema
   const auto schema_str = get_table_schema(archive_path, td->tableName, compression);
-  const auto create_table_stmt =
-      Parser::parseDDL<Parser::CreateTableStmt>("table schema", schema_str);
+  std::unique_ptr<Parser::Stmt> stmt = Parser::create_stmt_for_query(schema_str, session);
+  const auto create_table_stmt = dynamic_cast<Parser::CreateTableStmt*>(stmt.get());
+  CHECK(create_table_stmt);
+
   // verify compatibility between source and destination schemas
   TableDescriptor src_td;
   std::list<ColumnDescriptor> src_columns;
@@ -531,14 +534,22 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const std::string& compression) {
   // replace table name and drop foreign dict references
   const auto schema_str = get_table_schema(archive_path, table_name, compression);
-  Parser::parseDDL<Parser::CreateTableStmt>("table schema", schema_str)->execute(session);
+  std::unique_ptr<Parser::Stmt> stmt = Parser::create_stmt_for_query(schema_str, session);
+  const auto create_table_stmt = dynamic_cast<Parser::CreateTableStmt*>(stmt.get());
+  CHECK(create_table_stmt);
+  create_table_stmt->execute(session);
+
   try {
     restoreTable(
         session, cat_->getMetadataForTable(table_name), archive_path, compression);
   } catch (...) {
-    Parser::parseDDL<Parser::DropTableStmt>("statement",
-                                            "DROP TABLE IF EXISTS " + table_name + ";")
-        ->execute(session);
+    const auto schema_str = "DROP TABLE IF EXISTS " + table_name + ";";
+    std::unique_ptr<Parser::Stmt> stmt =
+        Parser::create_stmt_for_query(schema_str, session);
+    const auto drop_table_stmt = dynamic_cast<Parser::DropTableStmt*>(stmt.get());
+    CHECK(drop_table_stmt);
+    drop_table_stmt->execute(session);
+
     throw;
   }
 }

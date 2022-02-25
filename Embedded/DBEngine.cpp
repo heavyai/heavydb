@@ -20,7 +20,6 @@
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ParserWrapper.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"

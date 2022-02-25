@@ -32,7 +32,6 @@
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
-extern bool g_enable_calcite_ddl_parser;
 
 using namespace std;
 using namespace TestHelpers;
@@ -943,12 +942,7 @@ TEST_P(CreateTableTest, ArrayTypes) {
 TEST_P(CreateTableTest, FixedEncodingForNonNumberOrTimeType) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 POINT ENCODING FIXED(8))");
-  if (g_enable_calcite_ddl_parser) {
-    EXPECT_ANY_THROW(sql(query));
-  } else {
-    queryAndAssertException(
-        query, "col1: Fixed encoding is only supported for integer or time columns.");
-  }
+  EXPECT_ANY_THROW(sql(query));
 }
 
 TEST_P(CreateTableTest, DictEncodingNonTextType) {
@@ -991,11 +985,7 @@ TEST_P(CreateTableTest, NonEncodedDictArray) {
 TEST_P(CreateTableTest, FixedLengthArrayOfVarLengthType) {
   std::string query =
       getCreateTableQuery(GetParam(), "test_table", "(col1 LINESTRING[5])");
-  if (g_enable_calcite_ddl_parser) {
-    EXPECT_ANY_THROW(sql(query));
-  } else {
-    queryAndAssertException(query, "col1: Unexpected fixed length array size");
-  }
+  EXPECT_ANY_THROW(sql(query));
 }
 
 TEST_P(CreateTableTest, UnsupportedTimestampPrecision) {
@@ -1121,10 +1111,6 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
   } catch (const TOmniSciException& e) {
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
-    } else {
-      if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("No negative number in type definition.", e.error_msg);
-      }
     }
   }
 }
@@ -1564,10 +1550,6 @@ TEST_P(CreateTableTest, InvalidSyntax) {
   } catch (const TOmniSciException& e) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
-    } else {
-      if (!g_enable_calcite_ddl_parser) {
-        ASSERT_EQ("Syntax error at: INTEGER", e.error_msg);
-      }
     }
   }
 }

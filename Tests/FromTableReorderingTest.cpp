@@ -17,7 +17,6 @@
 #include "TestHelpers.h"
 
 #include "../ImportExport/Importer.h"
-#include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
