@@ -57,6 +57,9 @@
             <manifest>
               <mainClass>com.mapd.common.SockTransportProperties</mainClass>
             </manifest>
+            <manifestEntries>
+              <Multi-Release>true</Multi-Release>
+            </manifestEntries>
           </archive>
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
