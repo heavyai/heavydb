@@ -61,7 +61,6 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       }
     }
     current_batch_offset_ += levels_read;
-    encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
     appendData(def_levels, rep_levels, values_read, levels_read, values);
   }
 
@@ -87,7 +86,6 @@ class ParquetStringEncoder : public TypedParquetInPlaceEncoder<V, V> {
       }
     }
     ParquetEncoder::current_chunk_offset_ += levels_read;
-    encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
     appendData(def_levels, rep_levels, values_read, levels_read, values);
   }
 

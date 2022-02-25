@@ -25,6 +25,7 @@
 #include "Encoder.h"
 
 #include <Shared/DatumFetchers.h>
+#include "Shared/Iteration.h"
 
 template <typename T, typename V>
 class DateDaysEncoder : public Encoder {
@@ -46,15 +47,17 @@ class DateDaysEncoder : public Encoder {
       const int8_t*,
       int8_t* data,
       const std::vector<size_t>& selected_idx) override {
-    std::vector<V> data_subset;
-    data_subset.reserve(selected_idx.size());
-    auto encoded_data = reinterpret_cast<V*>(data);
-    for (const auto& index : selected_idx) {
-      data_subset.emplace_back(encoded_data[index]);
-    }
-    auto append_data = reinterpret_cast<int8_t*>(data_subset.data());
-    return appendEncodedOrUnencodedData(
-        append_data, selected_idx.size(), SQLTypeInfo{}, false, -1, true);
+    std::shared_ptr<ChunkMetadata> chunk_metadata;
+    // NOTE: the use of `execute_over_contiguous_indices` is an optimization;
+    // it prevents having to copy or move the indexed data and instead performs
+    // an append over contiguous sections of indices.
+    shared::execute_over_contiguous_indices(
+        selected_idx, [&](const size_t start_pos, const size_t end_pos) {
+          size_t elem_count = end_pos - start_pos;
+          chunk_metadata =
+              appendEncodedData(nullptr, data, selected_idx[start_pos], elem_count);
+        });
+    return chunk_metadata;
   }
 
   std::shared_ptr<ChunkMetadata> appendEncodedData(const int8_t*,
