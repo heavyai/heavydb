@@ -481,6 +481,13 @@ TEST_F(ForeignStorageCacheLRUTest, Reorder) {
   ASSERT_THROW(lru_alg.evictNextChunk(), NoEntryFoundException);
 }
 
+TEST_F(ForeignStorageCacheUnitTest, RecoverDeadPages) {
+  ChunkWrapper<int32_t> chunk_wrapper{kINT, {1, 2, 3, 4}};
+  chunk_wrapper.cacheMetadataThenChunk(chunk_key1);
+  boost::filesystem::remove_all(cache_path_ + "/table_1_1");
+  reinitializeCache(cache_, {cache_path_, DiskCacheLevel::fsi});
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

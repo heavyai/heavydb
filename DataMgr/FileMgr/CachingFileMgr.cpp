@@ -138,7 +138,16 @@ void CachingFileMgr::readTableFileMgrs() {
 int32_t CachingFileMgr::epoch(int32_t db_id, int32_t tb_id) const {
   mapd_shared_lock<mapd_shared_mutex> read_lock(table_dirs_mutex_);
   auto tables_it = table_dirs_.find({db_id, tb_id});
-  CHECK(tables_it != table_dirs_.end());
+  if (tables_it == table_dirs_.end()) {
+    // If there is no directory for this table, that means the cache does not recognize
+    // the table that is requested.  This can happen if a table was dropped, and it's
+    // pages were invalidated but not yet freed and then the server crashed before they
+    // were freed.  Upon re-starting the FileMgr will find these pages and attempt to
+    // compare their epoch to know if they are valid or not.  In this case we should
+    // return an invalid epoch to indicate that any page for this table is not valid and
+    // should be freed.
+    return Epoch::min_allowable_epoch();
+  }
   auto& [pair, table_dir] = *tables_it;
   return table_dir->getEpoch();
 }
