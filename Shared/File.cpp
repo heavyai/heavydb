@@ -58,7 +58,7 @@ FILE* create(const std::string& basePath,
                << "', Number of pages and page size must be positive integers. numPages "
                << numPages << " pageSize " << pageSize;
   }
-  FILE* f = omnisci::fopen(path.c_str(), "w+b");
+  FILE* f = heavyai::fopen(path.c_str(), "w+b");
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << path
                << "', the error was: " << std::strerror(errno);
@@ -80,7 +80,7 @@ FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
     LOG(FATAL) << "Error trying to create file '" << fullPath
                << "', not allowed read only ";
   }
-  FILE* f = omnisci::fopen(fullPath.c_str(), "w+b");
+  FILE* f = heavyai::fopen(fullPath.c_str(), "w+b");
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to create file '" << fullPath
                << "', the error was:  " << std::strerror(errno);
@@ -99,7 +99,7 @@ FILE* create(const std::string& fullPath, const size_t requestedFileSize) {
 
 FILE* open(int fileId) {
   std::string s(std::to_string(fileId) + std::string(DATA_FILE_EXT));
-  FILE* f = omnisci::fopen(
+  FILE* f = heavyai::fopen(
       s.c_str(), g_read_only ? "rb" : "r+b");  // opens existing file for updates
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to open file '" << s
@@ -109,7 +109,7 @@ FILE* open(int fileId) {
 }
 
 FILE* open(const std::string& path) {
-  FILE* f = omnisci::fopen(
+  FILE* f = heavyai::fopen(
       path.c_str(), g_read_only ? "rb" : "r+b");  // opens existing file for updates
   if (f == nullptr) {
     LOG(FATAL) << "Error trying to open file '" << path

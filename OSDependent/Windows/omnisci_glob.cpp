@@ -74,7 +74,7 @@ void glob(const fs::path& base, const fs::path& pattern, std::vector<std::string
 
 }  // namespace
 
-namespace omnisci {
+namespace heavyai {
 
 std::vector<std::string> glob(const std::string& pattern) {
   std::vector<std::string> results;
@@ -85,4 +85,4 @@ std::vector<std::string> glob(const std::string& pattern) {
   return results;
 }
 
-}  // namespace omnisci
+}  // namespace heavyai

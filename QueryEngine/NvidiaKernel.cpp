@@ -50,7 +50,7 @@ void fill_options(std::vector<CUjit_option>& option_keys,
 }
 
 boost::filesystem::path get_gpu_rt_path() {
-  boost::filesystem::path gpu_rt_path{omnisci::get_root_abs_path()};
+  boost::filesystem::path gpu_rt_path{heavyai::get_root_abs_path()};
   gpu_rt_path /= "QueryEngine";
   gpu_rt_path /= "cuda_mapd_rt.fatbin";
   if (!boost::filesystem::exists(gpu_rt_path)) {
@@ -61,7 +61,7 @@ boost::filesystem::path get_gpu_rt_path() {
 }
 
 boost::filesystem::path get_cuda_table_functions_path() {
-  boost::filesystem::path cuda_table_functions_path{omnisci::get_root_abs_path()};
+  boost::filesystem::path cuda_table_functions_path{heavyai::get_root_abs_path()};
   cuda_table_functions_path /= "QueryEngine";
   cuda_table_functions_path /= "CudaTableFunctions.a";
   if (!boost::filesystem::exists(cuda_table_functions_path)) {

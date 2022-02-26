@@ -20,7 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace omnisci {
+namespace heavyai {
 std::vector<std::string> glob(const std::string& pattern) {
   std::vector<std::string> results;
   glob_t glob_result;
@@ -31,4 +31,4 @@ std::vector<std::string> glob(const std::string& pattern) {
   globfree(&glob_result);
   return results;
 }
-}  // namespace omnisci
+}  // namespace heavyai

@@ -30,7 +30,7 @@
 #include <iterator>
 #include <sstream>
 
-namespace omnisci {
+namespace heavyai {
 
 class UUID {
   using value_type = uint8_t;
@@ -116,4 +116,4 @@ inline std::string to_string(const UUID& uuid) {
 
 constexpr UUID empty_uuid{};
 
-}  // namespace omnisci
+}  // namespace heavyai

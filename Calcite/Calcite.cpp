@@ -80,7 +80,7 @@ static void start_calcite_server_as_daemon(const int db_port,
                                            const std::string& ssl_key_file,
                                            const std::string& db_config_file,
                                            const std::string& udf_filename) {
-  auto root_abs_path = omnisci::get_root_abs_path();
+  auto root_abs_path = heavyai::get_root_abs_path();
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
       "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";

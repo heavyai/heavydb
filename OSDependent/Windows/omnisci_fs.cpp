@@ -28,7 +28,7 @@
 
 #include "Logger/Logger.h"
 
-namespace omnisci {
+namespace heavyai {
 
 size_t file_size(const int fd) {
   struct _stat64i32 buf;
@@ -104,4 +104,4 @@ int get_page_size() {
 int32_t ftruncate(const int32_t fd, int64_t length) {
   return _chsize_s(fd, length);
 }
-}  // namespace omnisci
+}  // namespace heavyai

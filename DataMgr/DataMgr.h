@@ -148,7 +148,7 @@ class ProcBuddyinfoParser {
     const long page_size =
         sysconf(_SC_PAGE_SIZE);  // in case x86-64 is configured to use 2MB pages
 #else
-    const long page_size = omnisci::get_page_size();
+    const long page_size = heavyai::get_page_size();
 #endif
     size_t scaled = 0;
     size_t total = 0;

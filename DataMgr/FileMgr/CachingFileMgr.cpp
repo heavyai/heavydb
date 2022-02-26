@@ -789,7 +789,7 @@ void TableFileMgr::writeAndSyncEpochToDisk() {
 #ifdef __APPLE__
   status = fcntl(fileno(epoch_file_), 51);
 #else
-  status = omnisci::fsync(fileno(epoch_file_));
+  status = heavyai::fsync(fileno(epoch_file_));
 #endif
   CHECK(status == 0) << "Could not sync epoch file to disk";
   is_checkpointed_ = true;

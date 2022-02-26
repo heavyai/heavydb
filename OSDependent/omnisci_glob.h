@@ -19,6 +19,6 @@
 #include <string>
 #include <vector>
 
-namespace omnisci {
+namespace heavyai {
 std::vector<std::string> glob(const std::string& pattern);
-}
+}  // namespace heavyai

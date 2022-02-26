@@ -279,7 +279,7 @@ void Executor::initialize_extension_module_sources() {
   if (Executor::extension_module_sources.find(
           Executor::ExtModuleKinds::template_module) ==
       Executor::extension_module_sources.end()) {
-    auto root_path = omnisci::get_root_abs_path();
+    auto root_path = heavyai::get_root_abs_path();
     auto template_path = root_path + "/QueryEngine/RuntimeFunctions.bc";
     CHECK(boost::filesystem::exists(template_path));
     Executor::extension_module_sources[Executor::ExtModuleKinds::template_module] =

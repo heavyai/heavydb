@@ -185,7 +185,7 @@ void CudaMgr::fillDeviceProperties() {
         cuDeviceGet(&device_properties_[device_num].device, device_num + start_gpu_));
     CUuuid cuda_uuid;
     checkError(cuDeviceGetUuid(&cuda_uuid, device_properties_[device_num].device));
-    device_properties_[device_num].uuid = omnisci::UUID(cuda_uuid.bytes);
+    device_properties_[device_num].uuid = heavyai::UUID(cuda_uuid.bytes);
     checkError(cuDeviceGetAttribute(&device_properties_[device_num].computeMajor,
                                     CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
                                     device_properties_[device_num].device));

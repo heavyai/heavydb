@@ -18,7 +18,7 @@
 #include "Shared/json.h"
 #include "TestHelpers.h"
 
-using JSON = omnisci::JSON;
+using JSON = heavyai::JSON;
 
 TEST(JSON, Types) {
   //////////

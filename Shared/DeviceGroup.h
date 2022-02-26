@@ -4,7 +4,7 @@
 
 #include "Shared/uuid.h"
 
-namespace omnisci {
+namespace heavyai {
 struct DeviceIdentifier {
   const int32_t index;   //!< index into device group (currently num_gpus - start_gpu)
   const int32_t gpu_id;  //!< Gpu Id for device (ignores start_gpu). Assigned by CudaMgr
@@ -13,4 +13,4 @@ struct DeviceIdentifier {
 };
 
 using DeviceGroup = std::vector<DeviceIdentifier>;
-}  // namespace omnisci
+}  // namespace heavyai

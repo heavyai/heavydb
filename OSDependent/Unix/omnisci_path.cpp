@@ -35,7 +35,7 @@
 #include <link.h>
 #endif
 
-namespace omnisci {
+namespace heavyai {
 
 std::string get_root_abs_path() {
 #ifdef ENABLE_EMBEDDED_DATABASE
@@ -82,4 +82,4 @@ std::string get_root_abs_path() {
   return mapd_root.string();
 }
 
-}  // namespace omnisci
+}  // namespace heavyai

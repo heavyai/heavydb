@@ -163,10 +163,10 @@ const char* convert(const std::string& s) {
 std::string exec_output(std::string cmd) {
   std::array<char, 128> buffer;
   std::string result;
-  std::unique_ptr<FILE, decltype(&omnisci::pclose)> pipe(omnisci::popen(cmd.c_str(), "r"),
-                                                         omnisci::pclose);
+  std::unique_ptr<FILE, decltype(&heavyai::pclose)> pipe(heavyai::popen(cmd.c_str(), "r"),
+                                                         heavyai::pclose);
   if (!pipe) {
-    throw std::runtime_error("omnisci::popen(\"" + cmd + "\") failed!");
+    throw std::runtime_error("heavyai::popen(\"" + cmd + "\") failed!");
   }
   while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
     result += buffer.data();

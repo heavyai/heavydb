@@ -22,7 +22,7 @@
 
 #include "Shared/clean_windows.h"
 
-namespace omnisci {
+namespace heavyai {
 
 std::string get_root_abs_path() {
   char abs_exe_path[MAX_PATH];
@@ -36,4 +36,4 @@ std::string get_root_abs_path() {
   return mapd_root.string();
 }
 
-}  // namespace omnisci
+}  // namespace heavyai

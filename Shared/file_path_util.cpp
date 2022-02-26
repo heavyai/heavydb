@@ -73,7 +73,7 @@ std::vector<std::string> glob_local_recursive_files(const std::string& file_path
     }
     // empty directories will not throw an error
   } else {
-    auto glob_results = omnisci::glob(file_path);
+    auto glob_results = heavyai::glob(file_path);
     for (const auto& path : glob_results) {
       if (recurse && boost::filesystem::is_directory(path)) {
         auto expanded_paths = glob_local_recursive_files(path, true);

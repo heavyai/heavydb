@@ -22,7 +22,7 @@
 
 #include "Logger/Logger.h"
 
-namespace omnisci {
+namespace heavyai {
 
 int get_page_size() {
   return getpagesize();
@@ -85,4 +85,4 @@ int32_t ftruncate(const int32_t fd, int64_t length) {
   return ::ftruncate(fd, length);
 }
 
-}  // namespace omnisci
+}  // namespace heavyai

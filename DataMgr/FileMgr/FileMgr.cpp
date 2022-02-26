@@ -652,7 +652,7 @@ void FileMgr::writeAndSyncEpochToDisk() {
 #ifdef __APPLE__
   status = fcntl(fileno(epochFile_), 51);
 #else
-  status = omnisci::fsync(fileno(epochFile_));
+  status = heavyai::fsync(fileno(epochFile_));
 #endif
   CHECK(status == 0) << "Could not sync epoch file to disk";
   epochIsCheckpointed_ = true;
@@ -1076,7 +1076,7 @@ void FileMgr::writeAndSyncVersionToDisk(const std::string& versionFileName,
 #ifdef __APPLE__
   status = fcntl(fileno(epochFile_), 51);
 #else
-  status = omnisci::fsync(fileno(versionFile));
+  status = heavyai::fsync(fileno(versionFile));
 #endif
   if (status != 0) {
     LOG(FATAL) << "Could not sync version file " << versionFilePath << " to disk";

@@ -17,7 +17,7 @@
 // EXAMPLE #1
 //
 //   #include "Shared/json.h"
-//   using JSON = omnisci::JSON;
+//   using JSON = heavyai::JSON;
 //   JSON json;
 //   json["item1"] = "abc";
 //   json["item2"] = 123;
@@ -30,7 +30,7 @@
 // EXAMPLE #2
 //
 //   #include "Shared/json.h"
-//   using JSON = omnisci::JSON;
+//   using JSON = heavyai::JSON;
 //   std::string text = R"json(
 //     {
 //       "item1": "abc",
@@ -60,7 +60,7 @@
 // Calling any public JSON constructor except the move constructor creates a new document.
 // Calling JSON's operator[] creates a reference into an existing document.
 
-namespace omnisci {
+namespace heavyai {
 
 class JSON final {
   std::shared_ptr<rapidjson::Document> doc_;
@@ -348,4 +348,4 @@ inline bool operator!=(const T& value, const JSON& json) {
   return (json != value);
 }
 
-}  // namespace omnisci
+}  // namespace heavyai

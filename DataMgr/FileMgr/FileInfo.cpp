@@ -226,7 +226,7 @@ int32_t FileInfo::syncToDisk() {
 #ifdef __APPLE__
     const int32_t sync_result = fcntl(fileno(f), 51);
 #else
-    const int32_t sync_result = omnisci::fsync(fileno(f));
+    const int32_t sync_result = heavyai::fsync(fileno(f));
 #endif
     if (sync_result == 0) {
       isDirty = false;

@@ -134,7 +134,7 @@ static void loadGeo(std::string base_path) {
     const std::string table_name = SampleGeoTableNames[i];
     const std::string file_name = SampleGeoFileNames[i];
 
-    auto file_path = boost::filesystem::path(omnisci::get_root_abs_path()) /
+    auto file_path = boost::filesystem::path(heavyai::get_root_abs_path()) /
                      "ThirdParty" / "geo_samples" / file_name;
 
     if (!boost::filesystem::exists(file_path)) {

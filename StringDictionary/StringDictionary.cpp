@@ -51,10 +51,10 @@ bool g_cache_string_hash{true};
 
 namespace {
 
-const int SYSTEM_PAGE_SIZE = omnisci::get_page_size();
+const int SYSTEM_PAGE_SIZE = heavyai::get_page_size();
 
 int checked_open(const char* path, const bool recover) {
-  auto fd = omnisci::open(path, O_RDWR | O_CREAT | (recover ? O_APPEND : O_TRUNC), 0644);
+  auto fd = heavyai::open(path, O_RDWR | O_CREAT | (recover ? O_APPEND : O_TRUNC), 0644);
   if (fd > 0) {
     return fd;
   }
@@ -147,8 +147,8 @@ StringDictionary::StringDictionary(const DictRef& dict_ref,
         (storage_path / boost::filesystem::path("DictPayload")).string();
     payload_fd_ = checked_open(payload_path.c_str(), recover);
     offset_fd_ = checked_open(offsets_path_.c_str(), recover);
-    payload_file_size_ = omnisci::file_size(payload_fd_);
-    offset_file_size_ = omnisci::file_size(offset_fd_);
+    payload_file_size_ = heavyai::file_size(payload_fd_);
+    offset_file_size_ = heavyai::file_size(offset_fd_);
   }
   bool storage_is_empty = false;
   if (payload_file_size_ == 0) {
@@ -160,11 +160,11 @@ StringDictionary::StringDictionary(const DictRef& dict_ref,
   }
   if (!isTemp_) {  // we never mmap or recover temp dictionaries
     payload_map_ =
-        reinterpret_cast<char*>(omnisci::checked_mmap(payload_fd_, payload_file_size_));
+        reinterpret_cast<char*>(heavyai::checked_mmap(payload_fd_, payload_file_size_));
     offset_map_ = reinterpret_cast<StringIdxEntry*>(
-        omnisci::checked_mmap(offset_fd_, offset_file_size_));
+        heavyai::checked_mmap(offset_fd_, offset_file_size_));
     if (recover) {
-      const size_t bytes = omnisci::file_size(offset_fd_);
+      const size_t bytes = heavyai::file_size(offset_fd_);
       if (bytes % sizeof(StringIdxEntry) != 0) {
         LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
       }
@@ -361,12 +361,12 @@ StringDictionary::~StringDictionary() noexcept {
   if (payload_map_) {
     if (!isTemp_) {
       CHECK(offset_map_);
-      omnisci::checked_munmap(payload_map_, payload_file_size_);
-      omnisci::checked_munmap(offset_map_, offset_file_size_);
+      heavyai::checked_munmap(payload_map_, payload_file_size_);
+      heavyai::checked_munmap(offset_map_, offset_file_size_);
       CHECK_GE(payload_fd_, 0);
-      omnisci::close(payload_fd_);
+      heavyai::close(payload_fd_);
       CHECK_GE(offset_fd_, 0);
-      omnisci::close(offset_fd_);
+      heavyai::close(offset_fd_);
     } else {
       CHECK(offset_map_);
       free(payload_map_);
@@ -1412,11 +1412,11 @@ void StringDictionary::checkAndConditionallyIncreasePayloadCapacity(
         write_length - (payload_file_size_ - payload_file_off_);
     if (!isTemp_) {
       CHECK_GE(payload_fd_, 0);
-      omnisci::checked_munmap(payload_map_, payload_file_size_);
+      heavyai::checked_munmap(payload_map_, payload_file_size_);
       addPayloadCapacity(min_capacity_needed);
       CHECK(payload_file_off_ + write_length <= payload_file_size_);
       payload_map_ =
-          reinterpret_cast<char*>(omnisci::checked_mmap(payload_fd_, payload_file_size_));
+          reinterpret_cast<char*>(heavyai::checked_mmap(payload_fd_, payload_file_size_));
     } else {
       addPayloadCapacity(min_capacity_needed);
       CHECK(payload_file_off_ + write_length <= payload_file_size_);
@@ -1432,11 +1432,11 @@ void StringDictionary::checkAndConditionallyIncreaseOffsetCapacity(
         write_length - (offset_file_size_ - offset_file_off);
     if (!isTemp_) {
       CHECK_GE(offset_fd_, 0);
-      omnisci::checked_munmap(offset_map_, offset_file_size_);
+      heavyai::checked_munmap(offset_map_, offset_file_size_);
       addOffsetCapacity(min_capacity_needed);
       CHECK(offset_file_off + write_length <= offset_file_size_);
       offset_map_ = reinterpret_cast<StringIdxEntry*>(
-          omnisci::checked_mmap(offset_fd_, offset_file_size_));
+          heavyai::checked_mmap(offset_fd_, offset_file_size_));
     } else {
       addOffsetCapacity(min_capacity_needed);
       CHECK(offset_file_off + write_length <= offset_file_size_);
@@ -1588,11 +1588,11 @@ bool StringDictionary::checkpoint() noexcept {
   CHECK(!isTemp_);
   bool ret = true;
   ret = ret &&
-        (omnisci::msync((void*)offset_map_, offset_file_size_, /*async=*/false) == 0);
+        (heavyai::msync((void*)offset_map_, offset_file_size_, /*async=*/false) == 0);
   ret = ret &&
-        (omnisci::msync((void*)payload_map_, payload_file_size_, /*async=*/false) == 0);
-  ret = ret && (omnisci::fsync(offset_fd_) == 0);
-  ret = ret && (omnisci::fsync(payload_fd_) == 0);
+        (heavyai::msync((void*)payload_map_, payload_file_size_, /*async=*/false) == 0);
+  ret = ret && (heavyai::fsync(offset_fd_) == 0);
+  ret = ret && (heavyai::fsync(payload_fd_) == 0);
   return ret;
 }
 

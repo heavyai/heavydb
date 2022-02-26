@@ -18,6 +18,6 @@
 
 #include <string>
 
-namespace omnisci {
+namespace heavyai {
 std::string get_root_abs_path();
-}
+}  // namespace heavyai

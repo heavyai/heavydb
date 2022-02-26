@@ -18,7 +18,7 @@
 
 #include "Shared/clean_windows.h"
 
-namespace omnisci {
+namespace heavyai {
 std::string get_hostname() {
   static constexpr DWORD kSize = MAX_COMPUTERNAME_LENGTH + 1;
   DWORD buffer_size = kSize;
@@ -29,4 +29,4 @@ std::string get_hostname() {
     return {};
   }
 }
-}  // namespace omnisci
+}  // namespace heavyai

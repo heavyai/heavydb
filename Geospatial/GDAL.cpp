@@ -74,17 +74,17 @@ void GDAL::init() {
 #ifdef _WIN32
     _putenv_s(
         "GDAL_DATA",
-        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str());
+        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data").c_str());
     _putenv_s(
         "PROJ_LIB",
-        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str());
+        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str());
 #else
     setenv("GDAL_DATA",
-           std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
+           std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data").c_str(),
            true);
     setenv(
         "PROJ_LIB",
-        std::string(omnisci::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str(),
+        std::string(heavyai::get_root_abs_path() + "/ThirdParty/gdal-data/proj").c_str(),
         true);
 #endif
 

@@ -833,7 +833,7 @@ void DBHandler::get_server_status(TServerStatus& _return, const TSessionId& sess
   _return.rendering_enabled = rendering_enabled;
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
-  _return.host_name = omnisci::get_hostname();
+  _return.host_name = heavyai::get_hostname();
   _return.poly_rendering_enabled = rendering_enabled;
   _return.role = getServerRole();
   _return.renderer_status_json =
@@ -867,7 +867,7 @@ void DBHandler::get_status(std::vector<TServerStatus>& _return,
   ret.rendering_enabled = rendering_enabled;
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
-  ret.host_name = omnisci::get_hostname();
+  ret.host_name = heavyai::get_hostname();
   ret.poly_rendering_enabled = rendering_enabled;
   ret.role = getServerRole();
   ret.renderer_status_json =
@@ -2852,7 +2852,7 @@ void DBHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
   for (auto memInfo : internal_memory) {
     TNodeMemoryInfo nodeInfo;
     if (leaf_aggregator_.leafCount() > 0) {
-      nodeInfo.host_name = omnisci::get_hostname();
+      nodeInfo.host_name = heavyai::get_hostname();
     }
     nodeInfo.page_size = memInfo.pageSize;
     nodeInfo.max_num_pages = memInfo.maxNumPages;
