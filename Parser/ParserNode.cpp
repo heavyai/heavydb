@@ -77,7 +77,7 @@
 
 size_t g_leaf_count{0};
 bool g_test_drop_column_rollback{false};
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 extern bool g_enable_fsi;
 
 bool g_enable_legacy_delimited_import{true};
@@ -137,15 +137,19 @@ std::shared_ptr<Analyzer::Expr> StringLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
     TlistRefType allow_tlist_ref) const {
-  return analyzeValue(*stringval_);
+  return analyzeValue(*stringval_, false);
 }
 
-std::shared_ptr<Analyzer::Expr> StringLiteral::analyzeValue(
-    const std::string& stringval) {
-  SQLTypeInfo ti(kVARCHAR, stringval.length(), 0, true);
-  Datum d;
-  d.stringval = new std::string(stringval);
-  return makeExpr<Analyzer::Constant>(ti, false, d);
+std::shared_ptr<Analyzer::Expr> StringLiteral::analyzeValue(const std::string& stringval,
+                                                            const bool is_null) {
+  if (!is_null) {
+    const SQLTypeInfo ti(kVARCHAR, stringval.length(), 0, true);
+    Datum d;
+    d.stringval = new std::string(stringval);
+    return makeExpr<Analyzer::Constant>(ti, false, d);
+  }
+  // Null value
+  return makeExpr<Analyzer::Constant>(kVARCHAR, true);
 }
 
 std::shared_ptr<Analyzer::Expr> IntLiteral::analyze(
@@ -4062,7 +4066,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           int colNum = 0;
           for (const auto targetDescriptor : target_column_descriptors) {
             auto sourceDataMetaInfo = res.targets_meta[colNum++];
-
             ConverterCreateParameter param{
                 num_rows_this_itr,
                 catalog,
@@ -4071,7 +4074,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
                 targetDescriptor->columnType,
                 !targetDescriptor->columnType.get_notnull(),
                 result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
-                g_enable_experimental_string_functions
+                g_enable_string_functions &&
+                        sourceDataMetaInfo.get_type_info().is_dict_encoded_string()
                     ? executor->getStringDictionaryProxy(
                           sourceDataMetaInfo.get_type_info().get_comp_param(),
                           result_rows->getRowSetMemOwner(),

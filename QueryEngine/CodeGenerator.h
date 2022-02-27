@@ -39,6 +39,11 @@ class CodeGenerator {
                                     const bool fetch_columns,
                                     const CompilationOptions&);
 
+  llvm::Value* codegenPseudoStringOper(
+      const Analyzer::ColumnVar*,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+      const CompilationOptions&);
+
   // Generates constant values in the literal buffer of a query.
   std::vector<llvm::Value*> codegenHoistedConstants(
       const std::vector<const Analyzer::Constant*>& constants,
@@ -214,7 +219,7 @@ class CodeGenerator {
   llvm::Value* codegenWidthBucketExpr(const Analyzer::WidthBucketExpr*,
                                       const CompilationOptions&);
 
-  llvm::Value* codegen(const Analyzer::LowerExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::StringOper*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);
 

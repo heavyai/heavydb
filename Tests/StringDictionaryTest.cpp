@@ -263,7 +263,6 @@ TEST(StringDictionary, BuildTranslationMap) {
   source_string_dict->getOrAddBulk(strings, string_ids.data());
   auto dummy_callback = [](const std::string_view& source_string,
                            const int32_t source_string_id) { return false; };
-
   {
     // First try to translate to empty dictionary.
     // Should get back all INVALID_STR_IDs
@@ -525,7 +524,7 @@ TEST(StringDictionaryProxy, BuildIntersectionTranslationMapToOtherProxy) {
                                                 dest_string_dict->storageEntryCount());
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildIntersectionTranslationMapToOtherProxy(
-            dest_string_dict_proxy.get());
+            dest_string_dict_proxy.get(), {});
     ASSERT_FALSE(str_proxy_translation_map.empty());
     const auto& translated_ids = str_proxy_translation_map.getVectorMap();
     const size_t num_ids = translated_ids.size() - 1;  // Subtract 1 for INVALID_STR_ID
@@ -573,7 +572,7 @@ TEST(StringDictionaryProxy, BuildIntersectionTranslationMapToOtherProxy) {
 
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildIntersectionTranslationMapToOtherProxy(
-            dest_string_dict_proxy.get());
+            dest_string_dict_proxy.get(), {});
     ASSERT_FALSE(str_proxy_translation_map.empty());
     const auto& translated_ids = str_proxy_translation_map.getVectorMap();
     const size_t num_ids = translated_ids.size() - 1;  // Subtract 1 for INVALID_STR_ID
@@ -640,7 +639,7 @@ TEST(StringDictionaryProxy, BuildUnionTranslationMapToEmptyProxy) {
                                                 dest_string_dict->storageEntryCount());
     const auto str_proxy_translation_map =
         source_string_dict_proxy->buildUnionTranslationMapToOtherProxy(
-            dest_string_dict_proxy.get());
+            dest_string_dict_proxy.get(), {});
     ASSERT_FALSE(str_proxy_translation_map.empty());
     ASSERT_EQ(str_proxy_translation_map.numUntranslatedStrings(), strings.size());
     const auto& translated_ids = str_proxy_translation_map.getVectorMap();
@@ -781,7 +780,7 @@ TEST(StringDictionaryProxy, BuildUnionTranslationMapToPartialOverlapProxy) {
   ASSERT_EQ(dest_sdp.storageEntryCount(), num_dest_persisted_entries);
   ASSERT_EQ(dest_sdp.transientEntryCount(), num_dest_transient_entries);
 
-  const auto id_map = source_sdp.buildUnionTranslationMapToOtherProxy(&dest_sdp);
+  const auto id_map = source_sdp.buildUnionTranslationMapToOtherProxy(&dest_sdp, {});
   const size_t expected_num_untranslated_strings =
       calc_expected_untranslated_strings(num_source_persisted_entries,
                                          num_dest_persisted_entries,

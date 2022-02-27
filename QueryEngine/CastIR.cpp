@@ -205,22 +205,23 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
       return operand_lv;
     }
 
+    const std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
     auto string_dictionary_translation_mgr =
         std::make_unique<StringDictionaryTranslationMgr>(
             operand_ti.get_comp_param(),
             ti.get_comp_param(),
             ti.is_dict_intersection(),
+            string_op_infos,
             co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                       : Data_Namespace::CPU_LEVEL,
             executor()->deviceCount(co.device_type),
             executor(),
-            &executor()->getCatalog()->getDataMgr());
-    string_dictionary_translation_mgr->buildTranslationMap();
-    string_dictionary_translation_mgr->createKernelBuffers();
+            &executor()->getCatalog()->getDataMgr(),
+            false /* delay_translation */);
 
     return cgen_state_
         ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
-        ->codegenCast(operand_lv, operand_ti, true /* add_nullcheck */);
+        ->codegen(operand_lv, operand_ti, true /* add_nullcheck */, co);
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {

@@ -103,9 +103,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (sample_ratio_expr) {
     return {codegen(sample_ratio_expr, co)};
   }
-  auto lower_expr = dynamic_cast<const Analyzer::LowerExpr*>(expr);
-  if (lower_expr) {
-    return {codegen(lower_expr, co)};
+  auto string_oper_expr = dynamic_cast<const Analyzer::StringOper*>(expr);
+  if (string_oper_expr) {
+    return {codegen(string_oper_expr, co)};
   }
   auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
   if (cardinality_expr) {

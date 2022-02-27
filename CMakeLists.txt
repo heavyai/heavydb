@@ -838,6 +838,7 @@ get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
 add_subdirectory(Catalog)
+add_subdirectory(StringOps)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)
 add_subdirectory(ImportExport)
@@ -869,7 +870,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger Geospatial)
+set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer StringOps ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger Geospatial)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)

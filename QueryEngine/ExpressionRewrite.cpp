@@ -29,6 +29,7 @@
 #include "QueryEngine/ScalarExprVisitor.h"
 #include "QueryEngine/WindowExpressionRewrite.h"
 #include "Shared/sqldefs.h"
+#include "StringOps/StringOps.h"
 
 namespace {
 
@@ -665,18 +666,52 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
                                        rhs);
   }
 
-  std::shared_ptr<Analyzer::Expr> visitLower(
-      const Analyzer::LowerExpr* lower_expr) const override {
-    const auto constant_arg_expr =
-        dynamic_cast<const Analyzer::Constant*>(lower_expr->get_arg());
-    if (constant_arg_expr) {
-      return Parser::StringLiteral::analyzeValue(
-          boost::locale::to_lower(*constant_arg_expr->get_constval().stringval));
+  std::shared_ptr<Analyzer::Expr> visitStringOper(
+      const Analyzer::StringOper* string_oper) const override {
+    const auto original_args = string_oper->getOwnArgs();
+    std::vector<std::shared_ptr<Analyzer::Expr>> rewritten_args;
+    const bool parent_in_string_op_chain = in_string_op_chain_;
+    if (!parent_in_string_op_chain) {
+      chained_string_op_exprs_.clear();
+      in_string_op_chain_ = true;
     }
-    return makeExpr<Analyzer::LowerExpr>(lower_expr->get_own_arg());
+    size_t rewritten_arg_literal_arity = 0;
+    for (auto original_arg : original_args) {
+      rewritten_args.emplace_back(visit(original_arg.get()));
+      if (dynamic_cast<const Analyzer::Constant*>(rewritten_args.back().get())) {
+        rewritten_arg_literal_arity++;
+      }
+    }
+    if (!parent_in_string_op_chain) {
+      in_string_op_chain_ = false;
+    }
+    const auto kind = string_oper->get_kind();
+    if (string_oper->getArity() == rewritten_arg_literal_arity) {
+      Analyzer::StringOper literal_string_oper(kind, rewritten_args);
+      const auto literal_args = literal_string_oper.getLiteralArgs();
+      const auto string_op_info = StringOps_Namespace::StringOpInfo(kind, literal_args);
+      const auto literal_result =
+          StringOps_Namespace::apply_string_op_to_literals(string_op_info);
+      return Parser::StringLiteral::analyzeValue(literal_result.first,
+                                                 literal_result.second /* is null */);
+    }
+    chained_string_op_exprs_.emplace_back(
+        makeExpr<Analyzer::StringOper>(kind, rewritten_args));
+    if (parent_in_string_op_chain) {
+      CHECK(in_string_op_chain_);
+      CHECK(rewritten_args[0]->get_type_info().is_dict_encoded_string());
+      CHECK(dynamic_cast<Analyzer::ColumnVar*>(rewritten_args[0].get()));
+      return rewritten_args[0]->deep_copy();
+    } else {
+      CHECK(!in_string_op_chain_);
+      return makeExpr<Analyzer::StringOper>(
+          kind, rewritten_args, chained_string_op_exprs_);
+    }
   }
 
  protected:
+  mutable bool in_string_op_chain_{false};
+  mutable std::vector<std::shared_ptr<Analyzer::Expr>> chained_string_op_exprs_;
   mutable std::unordered_map<const Analyzer::Expr*, const SQLTypeInfo> casts_;
   mutable int32_t num_overflows_;
 

@@ -440,7 +440,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
     apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
   }
 
-  if (g_enable_experimental_string_functions) {
+  if (g_enable_string_functions) {
     // Use the locale setting of the server by default. The generate parameter can be
     // updated appropriately if a locale override option is ever supported.
     boost::locale::generator generator;

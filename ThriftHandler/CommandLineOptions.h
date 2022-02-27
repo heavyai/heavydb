@@ -201,7 +201,7 @@ extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_legacy_delimited_import;

@@ -585,7 +585,12 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
           // skip cast for a constructed point lhs
           return nullptr;
         }
-        const auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        if (!eq_left_op_col) {
+          if (dynamic_cast<const Analyzer::StringOper*>(eq_left_op)) {
+            return nullptr;
+          }
+        }
         CHECK(eq_left_op_col);
         if (eq_left_op_col->get_rte_idx() != 0) {
           return nullptr;

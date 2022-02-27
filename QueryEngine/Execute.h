@@ -519,12 +519,15 @@ class Executor {
       const int source_dict_id,
       const int dest_dict_id,
       const RowSetMemoryOwner::StringTranslationType translation_type,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const bool with_generation) const;
 
-  const StringDictionaryProxy::IdMap* getIntersectionStringProxyTranslationMap(
+  const StringDictionaryProxy::IdMap* getJoinIntersectionStringProxyTranslationMap(
       const StringDictionaryProxy* source_proxy,
-      const StringDictionaryProxy* dest_proxy,
+      StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& source_string_op_infos,
+      const std::vector<StringOps_Namespace::StringOpInfo>& dest_source_string_op_infos,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
   bool isCPUOnly() const;

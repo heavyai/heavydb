@@ -117,7 +117,7 @@ size_t g_min_memory_allocation_size{
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 bool g_enable_lazy_fetch{true};
 bool g_enable_runtime_query_interrupt{true};
 bool g_enable_non_kernel_time_query_interrupt{true};
@@ -567,24 +567,37 @@ const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
     const int source_dict_id,
     const int dest_dict_id,
     const RowSetMemoryOwner::StringTranslationType translation_type,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool with_generation) const {
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
-  return row_set_mem_owner->getOrAddStringProxyTranslationMap(
-      source_dict_id, dest_dict_id, with_generation, translation_type, catalog_);
+  return row_set_mem_owner->getOrAddStringProxyTranslationMap(source_dict_id,
+                                                              dest_dict_id,
+                                                              with_generation,
+                                                              translation_type,
+                                                              string_op_infos,
+                                                              catalog_);
 }
 
-const StringDictionaryProxy::IdMap* Executor::getIntersectionStringProxyTranslationMap(
+const StringDictionaryProxy::IdMap*
+Executor::getJoinIntersectionStringProxyTranslationMap(
     const StringDictionaryProxy* source_proxy,
-    const StringDictionaryProxy* dest_proxy,
+    StringDictionaryProxy* dest_proxy,
+    const std::vector<StringOps_Namespace::StringOpInfo>& source_string_op_infos,
+    const std::vector<StringOps_Namespace::StringOpInfo>& dest_string_op_infos,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
-  return row_set_mem_owner->addStringProxyIntersectionTranslationMap(source_proxy,
-                                                                     dest_proxy);
+  // First translate lhs onto itself if there are string ops
+  if (!dest_string_op_infos.empty()) {
+    row_set_mem_owner->addStringProxyUnionTranslationMap(
+        dest_proxy, dest_proxy, dest_string_op_infos);
+  }
+  return row_set_mem_owner->addStringProxyIntersectionTranslationMap(
+      source_proxy, dest_proxy, source_string_op_infos);
 }
 
 const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
@@ -592,14 +605,16 @@ const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTransl
     const int dest_dict_id_in,
     const bool with_generation,
     const RowSetMemoryOwner::StringTranslationType translation_type,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     const Catalog_Namespace::Catalog* catalog) {
   const auto source_proxy =
       getOrAddStringDictProxy(source_dict_id_in, with_generation, catalog);
   auto dest_proxy = getOrAddStringDictProxy(dest_dict_id_in, with_generation, catalog);
   if (translation_type == RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION) {
-    return addStringProxyIntersectionTranslationMap(source_proxy, dest_proxy);
+    return addStringProxyIntersectionTranslationMap(
+        source_proxy, dest_proxy, string_op_infos);
   } else {
-    return addStringProxyUnionTranslationMap(source_proxy, dest_proxy);
+    return addStringProxyUnionTranslationMap(source_proxy, dest_proxy, string_op_infos);
   }
 }
 
@@ -899,7 +914,7 @@ std::vector<int8_t> Executor::serializeLiterals(
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
         const auto str_id =
-            g_enable_experimental_string_functions
+            g_enable_string_functions
                 ? getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
                       ->getOrAddTransient(p->first)
                 : getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
@@ -1739,6 +1754,7 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
     plan_state_.reset(nullptr);
     if (cgen_state_) {
       cgen_state_->in_values_bitmaps_.clear();
+      cgen_state_->str_dict_translation_mgrs_.clear();
     }
   };
 

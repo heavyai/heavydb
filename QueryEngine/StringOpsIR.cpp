@@ -20,6 +20,7 @@
 #include "../Shared/funcannotations.h"
 #include "../Shared/sqldefs.h"
 #include "Parser/ParserNode.h"
+#include "QueryEngine/ExpressionRewrite.h"
 
 #include <boost/locale/conversion.hpp>
 
@@ -104,26 +105,55 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
   return cgen_state_->emitCall("key_for_string_encoded", str_lv);
 }
 
-llvm::Value* CodeGenerator::codegen(const Analyzer::LowerExpr* expr,
+llvm::Value* CodeGenerator::codegen(const Analyzer::StringOper* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
-  if (co.device_type == ExecutorDeviceType::GPU) {
-    throw QueryMustRunOnCpu();
+  const auto& expr_ti = expr->get_type_info();
+  const auto dict_id = expr_ti.get_comp_param();
+
+  std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
+  // This is a band-aid as currently we do fold the expression,
+  // but in at least one scenerio of filter predicates the chained
+  // string opers (which are successfully generated during the creation of the
+  // compound work unit) can get dropped before getting here. Need to spend
+  // more time determining where and why.
+  auto chained_string_op_exprs = expr->getChainedStringOpExprs();
+  if (chained_string_op_exprs.empty()) {
+    // Likely will change the below to a CHECK but until we have more confidence
+    // that all potential query patterns have nodes that might contain string ops folded,
+    // leaving as an error for now
+    throw std::runtime_error(
+        "Expected folded string operator but found operator unfolded.");
+  }
+  // Consider encapsulating below in an Analyzer::StringOper method to dedup
+  for (const auto& chained_string_op_expr : chained_string_op_exprs) {
+    auto chained_string_op =
+        dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
+    CHECK(chained_string_op);
+    StringOps_Namespace::StringOpInfo string_op_info(chained_string_op->get_kind(),
+                                                     chained_string_op->getLiteralArgs());
+    string_op_infos.emplace_back(string_op_info);
   }
 
-  auto str_id_lv = codegen(expr->get_arg(), true, co);
+  auto string_dictionary_translation_mgr =
+      std::make_unique<StringDictionaryTranslationMgr>(
+          dict_id,
+          dict_id,
+          false,  // translate_intersection_only
+          string_op_infos,
+          co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                    : Data_Namespace::CPU_LEVEL,
+          executor()->deviceCount(co.device_type),
+          executor(),
+          &executor()->getCatalog()->getDataMgr(),
+          false /* delay_translation */);
+
+  auto str_id_lv = codegen(expr->getArg(0), true, co);
   CHECK_EQ(size_t(1), str_id_lv.size());
 
-  const auto string_dictionary_proxy = executor()->getStringDictionaryProxy(
-      expr->get_type_info().get_comp_param(), executor()->getRowSetMemoryOwner(), true);
-  CHECK(string_dictionary_proxy);
-
-  std::vector<llvm::Value*> args{
-      str_id_lv[0],
-      cgen_state_->llInt(reinterpret_cast<int64_t>(string_dictionary_proxy))};
-
-  return cgen_state_->emitExternalCall(
-      "lower_encoded", get_int_type(32, cgen_state_->context_), args);
+  return cgen_state_
+      ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
+      ->codegen(str_id_lv[0], expr_ti, true /* add_nullcheck */, co);
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,

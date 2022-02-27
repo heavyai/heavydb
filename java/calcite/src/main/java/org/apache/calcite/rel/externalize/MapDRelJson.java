@@ -59,6 +59,7 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.fun.SqlTrimFunction;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.JsonBuilder;
@@ -335,7 +336,7 @@ public class MapDRelJson {
         final RexLiteral literal = (RexLiteral) node;
         final Object value2 = literal.getValue2();
         map = jsonBuilder.map();
-        if (value2 instanceof TimeUnitRange) {
+        if (value2 instanceof TimeUnitRange || value2 instanceof SqlTrimFunction.Flag) {
           map.put("literal", value2.toString());
         } else {
           map.put("literal", value2);

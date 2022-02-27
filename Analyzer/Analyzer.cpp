@@ -139,10 +139,6 @@ std::shared_ptr<Analyzer::Expr> SampleRatioExpr::deep_copy() const {
   return makeExpr<SampleRatioExpr>(arg->deep_copy());
 }
 
-std::shared_ptr<Analyzer::Expr> LowerExpr::deep_copy() const {
-  return makeExpr<LowerExpr>(arg->deep_copy());
-}
-
 std::shared_ptr<Analyzer::Expr> CardinalityExpr::deep_copy() const {
   return makeExpr<CardinalityExpr>(arg->deep_copy());
 }
@@ -1656,11 +1652,13 @@ void SampleRatioExpr::group_predicates(std::list<const Expr*>& scan_predicates,
   }
 }
 
-void LowerExpr::group_predicates(std::list<const Expr*>& scan_predicates,
-                                 std::list<const Expr*>& join_predicates,
-                                 std::list<const Expr*>& const_predicates) const {
+void StringOper::group_predicates(std::list<const Expr*>& scan_predicates,
+                                  std::list<const Expr*>& join_predicates,
+                                  std::list<const Expr*>& const_predicates) const {
   std::set<int> rte_idx_set;
-  arg->collect_rte_idx(rte_idx_set);
+  for (const auto& arg : args_) {
+    arg->collect_rte_idx(rte_idx_set);
+  }
   if (rte_idx_set.size() > 1) {
     join_predicates.push_back(this);
   } else if (rte_idx_set.size() == 1) {
@@ -1909,6 +1907,33 @@ std::shared_ptr<Analyzer::Expr> Var::rewrite_agg_to_var(
   }
   throw std::runtime_error(
       "Internal error: cannot find Var from having clause in targetlist.");
+}
+
+std::shared_ptr<Analyzer::Expr> StringOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> rewritten_args;
+  for (const auto& arg : args_) {
+    rewritten_args.emplace_back(arg->rewrite_with_targetlist(tlist));
+  }
+  return makeExpr<StringOper>(kind_, rewritten_args);
+}
+
+std::shared_ptr<Analyzer::Expr> StringOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> rewritten_args;
+  for (const auto& arg : args_) {
+    rewritten_args.emplace_back(arg->rewrite_with_child_targetlist(tlist));
+  }
+  return makeExpr<StringOper>(kind_, rewritten_args);
+}
+
+std::shared_ptr<Analyzer::Expr> StringOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> rewritten_args;
+  for (const auto& arg : args_) {
+    rewritten_args.emplace_back(arg->rewrite_agg_to_var(tlist));
+  }
+  return makeExpr<StringOper>(kind_, rewritten_args);
 }
 
 std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_targetlist(
@@ -2254,14 +2279,6 @@ bool SampleRatioExpr::operator==(const Expr& rhs) const {
     return false;
   }
   return true;
-}
-
-bool LowerExpr::operator==(const Expr& rhs) const {
-  if (typeid(rhs) != typeid(LowerExpr)) {
-    return false;
-  }
-
-  return *arg == *dynamic_cast<const LowerExpr&>(rhs).get_arg();
 }
 
 bool CardinalityExpr::operator==(const Expr& rhs) const {
@@ -2734,10 +2751,6 @@ std::string SampleRatioExpr::toString() const {
   return str;
 }
 
-std::string LowerExpr::toString() const {
-  return "LOWER(" + arg->toString() + ") ";
-}
-
 std::string CardinalityExpr::toString() const {
   std::string str{"CARDINALITY("};
   str += arg->toString();
@@ -3028,11 +3041,13 @@ void SampleRatioExpr::find_expr(bool (*f)(const Expr*),
   arg->find_expr(f, expr_list);
 }
 
-void LowerExpr::find_expr(bool (*f)(const Expr*),
-                          std::list<const Expr*>& expr_list) const {
+void StringOper::find_expr(bool (*f)(const Expr*),
+                           std::list<const Expr*>& expr_list) const {
   if (f(this)) {
     add_unique(expr_list);
-  } else {
+    return;
+  }
+  for (const auto& arg : args_) {
     arg->find_expr(f, expr_list);
   }
 }
@@ -3191,6 +3206,12 @@ void ArrayExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
   }
 }
 
+void StringOper::collect_rte_idx(std::set<int>& rte_idx_set) const {
+  for (const auto& arg : args_) {
+    arg->collect_rte_idx(rte_idx_set);
+  }
+}
+
 void FunctionOper::collect_rte_idx(std::set<int>& rte_idx_set) const {
   for (unsigned i = 0; i < getArity(); i++) {
     const auto expr = getArg(i);
@@ -3242,6 +3263,14 @@ void ArrayExpr::collect_column_var(
   for (unsigned i = 0; i < getElementCount(); i++) {
     const auto expr = getElement(i);
     expr->collect_column_var(colvar_set, include_agg);
+  }
+}
+
+void StringOper::collect_column_var(
+    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+    bool include_agg) const {
+  for (const auto& arg : args_) {
+    arg->collect_column_var(colvar_set, include_agg);
   }
 }
 
@@ -3346,12 +3375,130 @@ void CaseExpr::get_domain(DomainSet& domain_set) const {
   }
 }
 
+std::shared_ptr<Analyzer::Expr> StringOper::deep_copy() const {
+  std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+  for (const auto& arg : args_) {
+    args_copy.emplace_back(arg->deep_copy());
+  }
+  std::vector<std::shared_ptr<Analyzer::Expr>> chained_string_op_exprs_copy;
+  for (const auto& chained_string_op_expr : chained_string_op_exprs_) {
+    chained_string_op_exprs_copy.emplace_back(chained_string_op_expr->deep_copy());
+  }
+  return makeExpr<Analyzer::StringOper>(kind_, args_copy, chained_string_op_exprs_);
+}
+
+std::shared_ptr<Analyzer::Expr> LowerStringOper::deep_copy() const {
+  return makeExpr<Analyzer::LowerStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> UpperStringOper::deep_copy() const {
+  return makeExpr<Analyzer::UpperStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> InitCapStringOper::deep_copy() const {
+  return makeExpr<Analyzer::InitCapStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> ReverseStringOper::deep_copy() const {
+  return makeExpr<Analyzer::ReverseStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> RepeatStringOper::deep_copy() const {
+  return makeExpr<Analyzer::RepeatStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> PadStringOper::deep_copy() const {
+  return makeExpr<Analyzer::PadStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> TrimStringOper::deep_copy() const {
+  return makeExpr<Analyzer::TrimStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> SubstringStringOper::deep_copy() const {
+  return makeExpr<Analyzer::SubstringStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> ReplaceStringOper::deep_copy() const {
+  return makeExpr<Analyzer::ReplaceStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> OverlayStringOper::deep_copy() const {
+  return makeExpr<Analyzer::OverlayStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> ConcatStringOper::deep_copy() const {
+  return makeExpr<Analyzer::ConcatStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> SplitPartStringOper::deep_copy() const {
+  return makeExpr<Analyzer::SplitPartStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> RegexpReplaceStringOper::deep_copy() const {
+  return makeExpr<Analyzer::RegexpReplaceStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> RegexpSubstrStringOper::deep_copy() const {
+  return makeExpr<Analyzer::RegexpSubstrStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
 std::shared_ptr<Analyzer::Expr> FunctionOper::deep_copy() const {
   std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
   for (size_t i = 0; i < getArity(); ++i) {
     args_copy.push_back(getArg(i)->deep_copy());
   }
   return makeExpr<Analyzer::FunctionOper>(type_info, getName(), args_copy);
+}
+
+bool StringOper::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(StringOper)) {
+    return false;
+  }
+  const auto rhs_string_oper = dynamic_cast<const StringOper*>(&rhs);
+
+  if (!rhs_string_oper) {
+    // CHECK here instead?
+    return false;
+  }
+
+  if (get_kind() != rhs_string_oper->get_kind()) {
+    return false;
+  }
+  if (getArity() != rhs_string_oper->getArity()) {
+    return false;
+  }
+
+  for (size_t i = 0; i < getArity(); ++i) {
+    if (!(*getArg(i) == *(rhs_string_oper->getArg(i)))) {
+      return false;
+    }
+  }
+  if (chained_string_op_exprs_.size() !=
+      rhs_string_oper->chained_string_op_exprs_.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < chained_string_op_exprs_.size(); ++i) {
+    if (!(*(chained_string_op_exprs_[i]) ==
+          *(rhs_string_oper->chained_string_op_exprs_[i]))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool FunctionOper::operator==(const Expr& rhs) const {
@@ -3374,6 +3521,15 @@ bool FunctionOper::operator==(const Expr& rhs) const {
     }
   }
   return true;
+}
+
+std::string StringOper::toString() const {
+  std::string str{"(" + ::toString(kind_) + " "};
+  for (const auto& arg : args_) {
+    str += arg->toString();
+  }
+  str += ")";
+  return str;
 }
 
 std::string FunctionOper::toString() const {
@@ -3707,6 +3863,222 @@ bool GeoTransformOperator::operator==(const Expr& rhs) const {
     return false;
   }
   return true;
+}
+
+bool StringOper::hasSingleDictEncodedColInput() const {
+  auto comparator = Analyzer::ColumnVar::colvar_comp;
+  std::set<const Analyzer::ColumnVar*,
+           bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+      colvar_set(comparator);
+  collect_column_var(colvar_set, true);
+  if (colvar_set.size() != 1UL) {
+    return false;
+  }
+  auto col_expr_ptr = *colvar_set.begin();
+  CHECK(col_expr_ptr);
+  return col_expr_ptr->get_type_info().is_dict_encoded_string();
+}
+
+std::vector<size_t> StringOper::getLiteralArgIndexes() const {
+  std::vector<size_t> literal_arg_indexes;
+  const auto num_args = args_.size();
+  for (size_t idx = 0; idx < num_args; ++idx) {
+    if (dynamic_cast<const Constant*>(args_[idx].get())) {
+      literal_arg_indexes.emplace_back(idx);
+    }
+  }
+  return literal_arg_indexes;
+}
+
+using LiteralArgMap = std::map<size_t, std::pair<SQLTypes, Datum>>;
+
+LiteralArgMap StringOper::getLiteralArgs() const {
+  LiteralArgMap literal_arg_map;
+  const auto num_args = getArity();
+  for (size_t idx = 0; idx < num_args; ++idx) {
+    const auto constant_arg_expr = dynamic_cast<const Analyzer::Constant*>(getArg(idx));
+    if (constant_arg_expr) {
+      literal_arg_map.emplace(
+          std::make_pair(idx,
+                         std::make_pair(constant_arg_expr->get_type_info().get_type(),
+                                        constant_arg_expr->get_constval())));
+    }
+  }
+  return literal_arg_map;
+}
+
+void StringOper::check_operand_types(
+    const size_t min_args,
+    const std::vector<OperandTypeFamily>& expected_type_families,
+    const std::vector<std::string>& arg_names,
+    const bool dict_encoded_cols_only,
+    const bool cols_first_arg_only) const {
+  std::ostringstream oss;
+  if (!g_enable_string_functions) {
+    oss << "Function " << ::toString(get_kind()) << " not supported.";
+    throw std::runtime_error(oss.str());
+  }
+  const size_t num_args = args_.size();
+  CHECK_EQ(expected_type_families.size(), arg_names.size());
+  if (num_args < min_args || num_args > expected_type_families.size()) {
+    oss << "Error instantiating " << ::toString(get_kind()) << " operator. ";
+    oss << "Expected " << expected_type_families.size() << " arguments, but received "
+        << num_args << ".";
+  }
+  for (size_t arg_idx = 0; arg_idx < num_args; ++arg_idx) {
+    const auto& expected_type_family = expected_type_families[arg_idx];
+    // We need to remove any casts that Calcite may add to try the right operand type,
+    // even if we don't support them. Need to check how this works with casts we do
+    // support.
+    auto arg_ti = args_[arg_idx]->get_type_info();
+    const auto decasted_arg = remove_cast(args_[arg_idx]);
+    const bool is_arg_constant =
+        dynamic_cast<const Analyzer::Constant*>(decasted_arg.get()) != nullptr;
+    auto decasted_arg_ti = decasted_arg->get_type_info();
+    // We need to prevent any non-string type from being casted to a string, but can
+    // permit non-integer types being casted to integers Todo: Find a cleaner way to
+    // handle this (we haven't validated any of the casts that calcite has given us at the
+    // point of RelAlgTranslation)
+    if (arg_ti != decasted_arg_ti &&
+        ((arg_ti.is_string() && !decasted_arg_ti.is_string()) ||
+         (arg_ti.is_integer() && decasted_arg_ti.is_string()))) {
+      arg_ti = decasted_arg_ti;
+    }
+
+    if (cols_first_arg_only && !is_arg_constant && arg_idx >= 1UL) {
+      oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
+          << "Currently only column inputs allowed for the primary argument, "
+          << "but a column input was received for argument " << arg_idx << ".";
+      throw std::runtime_error(oss.str());
+    }
+    switch (expected_type_family) {
+      case OperandTypeFamily::STRING_FAMILY: {
+        if (!arg_ti.is_string()) {
+          oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
+              << "Expected text type for argument " << arg_idx + 1 << " ("
+              << arg_names[arg_idx] << ").";
+          throw std::runtime_error(oss.str());
+          break;
+        }
+        if (dict_encoded_cols_only &&
+            (!is_arg_constant && !arg_ti.is_dict_encoded_string())) {
+          oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
+              << "Currently only text-encoded dictionary-encoded column inputs are "
+              << "allowed, but a none-encoded text column argument was received.";
+          throw std::runtime_error(oss.str());
+          break;
+        }
+        break;
+      }
+      case OperandTypeFamily::INT_FAMILY: {
+        if (!IS_INTEGER(arg_ti.get_type())) {
+          oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
+              << "Expected integer type for argument " << arg_idx + 1 << " ("
+              << arg_names[arg_idx] << ").";
+          throw std::runtime_error(oss.str());
+          break;
+        }
+        if (dict_encoded_cols_only && !is_arg_constant) {
+          oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
+              << "Currently only text-encoded dictionary column inputs are "
+              << "allowed, but an integer-type column was provided.";
+          throw std::runtime_error(oss.str());
+          break;
+        }
+        break;
+      }
+    }
+  }
+}
+
+SqlStringOpKind ConcatStringOper::get_concat_ordered_kind(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& operands) {
+  if (operands.size() != 2UL) {
+    std::ostringstream oss;
+    oss << "Concat operator expects two arguments, but was provided " << operands.size()
+        << ".";
+    throw std::runtime_error(oss.str());
+  }
+  if (operands[1].get()->get_type_info().is_dict_encoded_string() &&
+      !(operands[0].get()->get_type_info().is_dict_encoded_string())) {
+    return SqlStringOpKind::RCONCAT;
+  }
+  return SqlStringOpKind::CONCAT;
+}
+
+std::vector<std::shared_ptr<Analyzer::Expr>> ConcatStringOper::normalize_operands(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& operands) {
+  if (get_concat_ordered_kind(operands) == SqlStringOpKind::RCONCAT) {
+    CHECK_EQ(operands.size(), 2UL);  // Size should be 2 per get_concat_ordered_kind
+    return {operands[1], operands[0]};
+  }
+  return operands;
+}
+
+SqlStringOpKind PadStringOper::get_and_validate_pad_op_kind(
+    const SqlStringOpKind pad_op_kind) {
+  if (!(pad_op_kind == SqlStringOpKind::LPAD || pad_op_kind == SqlStringOpKind::RPAD)) {
+    // Arguably should CHECK here
+    throw std::runtime_error("Invalid pad type supplied to PAD operator");
+  }
+  return pad_op_kind;
+}
+
+SqlStringOpKind TrimStringOper::get_and_validate_trim_op_kind(
+    const SqlStringOpKind trim_op_kind_maybe,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& args) {
+  auto get_trim_type_if_exists = [&args]() {
+    if (args.empty()) {
+      return SqlStringOpKind::INVALID;
+    }
+    const auto trim_type_arg = dynamic_cast<const Analyzer::Constant*>(args[0].get());
+    if (!trim_type_arg) {
+      return SqlStringOpKind::INVALID;
+    }
+    const auto trim_type_str = to_upper(*trim_type_arg->get_constval().stringval);
+    if (trim_type_str == "BOTH") {
+      return SqlStringOpKind::TRIM;
+    }
+    if (trim_type_str == "LEADING") {
+      return SqlStringOpKind::LTRIM;
+    }
+    if (trim_type_str == "TRAILING") {
+      return SqlStringOpKind::RTRIM;
+    }
+    return SqlStringOpKind::INVALID;
+  };
+
+  const auto trim_op_kind = trim_op_kind_maybe == SqlStringOpKind::TRIM
+                                ? get_trim_type_if_exists()
+                                : trim_op_kind_maybe;
+  TrimStringOper::validate_trim_op_kind(trim_op_kind);
+  return trim_op_kind;
+}
+
+std::vector<std::shared_ptr<Analyzer::Expr>> TrimStringOper::normalize_operands(
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& operands,
+    const SqlStringOpKind string_op_kind) {
+  if (operands.size() < 2UL) {
+    throw std::runtime_error("Trim operator expects 2 arguments.");
+  }
+
+  // Calcite is returning LTRIM/RTRIM(string_literal1, string_literal2) with the
+  // arguments in that order, but LTRIM/TRIM(string_var, string_literal) in the
+  // reverse order that the main TRIM operator uses as well
+  // Until we can look into that more, reverse order only if we have a const then
+  // non-const input order
+
+  if (string_op_kind == SqlStringOpKind::LTRIM ||
+      string_op_kind == SqlStringOpKind::RTRIM) {
+    CHECK_EQ(operands.size(), 2UL);
+    if (dynamic_cast<const Analyzer::Constant*>(operands[0].get()) &&
+        !dynamic_cast<const Analyzer::Constant*>(operands[1].get())) {
+      return {operands[1], operands[0]};
+    }
+    return operands;
+  }
+  CHECK_EQ(operands.size(), 3UL);
+  return {operands[2], operands[1]};
 }
 
 }  // namespace Analyzer

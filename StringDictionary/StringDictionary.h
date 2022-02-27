@@ -17,13 +17,14 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARY_H
 #define STRINGDICTIONARY_STRINGDICTIONARY_H
 
-#include "../Shared/mapd_shared_mutex.h"
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
+#include "StringOps/StringOpInfo.h"
 
 #include <functional>
 #include <future>
 #include <map>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -32,6 +33,10 @@
 extern bool g_enable_stringdict_parallel;
 
 class StringDictionaryClient;
+
+namespace StringOps_Namespace {
+struct StringOpInfo;
+}
 
 class DictPayloadUnavailable : public std::runtime_error {
  public:
@@ -123,7 +128,8 @@ class StringDictionary {
       const int64_t source_generation,
       const int64_t dest_generation,
       const bool dest_has_transients,
-      StringLookupCallback const& dest_transient_lookup_callback) const;
+      StringLookupCallback const& dest_transient_lookup_callback,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
 
   bool checkpoint() noexcept;
 
@@ -268,7 +274,7 @@ class StringDictionary {
   size_t offset_file_size_;
   size_t payload_file_size_;
   size_t payload_file_off_;
-  mutable mapd_shared_mutex rw_mutex_;
+  mutable std::shared_mutex rw_mutex_;
   mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>>
       like_cache_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;

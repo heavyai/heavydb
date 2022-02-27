@@ -118,7 +118,7 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateCurrentUser(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateLower(const RexFunctionOperator*) const;
+  std::shared_ptr<Analyzer::Expr> translateStringOper(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateCardinality(const RexFunctionOperator*) const;
 

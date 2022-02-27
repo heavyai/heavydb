@@ -149,7 +149,8 @@ inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("DECIMAL")) {
     return kDECIMAL;
   }
-  if (type_name == std::string("CHAR") || type_name == std::string("VARCHAR")) {
+  if (type_name == std::string("CHAR") || type_name == std::string("VARCHAR") ||
+      type_name == std::string("SYMBOL")) {
     return kTEXT;
   }
   if (type_name == std::string("BOOLEAN")) {

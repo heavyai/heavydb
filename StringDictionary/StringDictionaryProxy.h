@@ -30,6 +30,10 @@
 #include <tuple>
 #include <vector>
 
+namespace StringOps_Namespace {
+struct StringOpInfo;
+}
+
 // used to access a StringDictionary when transient strings are involved
 class StringDictionaryProxy {
  public:
@@ -43,8 +47,6 @@ class StringDictionaryProxy {
 
   bool operator==(StringDictionaryProxy const&) const;
   bool operator!=(StringDictionaryProxy const&) const;
-
-  // enum SetOp { kUnion = 0, kIntersection };
 
   int32_t getOrAdd(const std::string& str) noexcept;
   StringDictionary* getDictionary() const noexcept;
@@ -85,6 +87,8 @@ class StringDictionaryProxy {
     size_t const offset_;
     std::vector<int32_t> vector_map_;
     int64_t num_untranslated_strings_{-1};
+    int32_t range_start_{0};
+    int32_t range_end_{0};
 
    public:
     // +1 is added to skip string_id=-1 reserved for INVALID_STR_ID. id_map[-1]==-1.
@@ -103,6 +107,11 @@ class StringDictionaryProxy {
     int32_t const* data() const { return vector_map_.data(); }
     int32_t domainStart() const { return -static_cast<int32_t>(offset_); }
     int32_t domainEnd() const { return static_cast<int32_t>(numNonTransients()); }
+    void setRangeStart(const int32_t range_start) { range_start_ = range_start; }
+    void setRangeEnd(const int32_t range_end) { range_end_ = range_end; }
+    int32_t rangeStart() const { return range_start_; }
+    int32_t rangeEnd() const { return range_end_; }
+
     // Next two methods are currently used by buildUnionTranslationMapToOtherProxy to
     // short circuit iteration over ids after intersection translation if all
     // ids translated. Currently the private num_untranslated_strings_ is initialized
@@ -144,9 +153,12 @@ class StringDictionaryProxy {
    *
    */
   IdMap buildIntersectionTranslationMapToOtherProxy(
-      const StringDictionaryProxy* dest_proxy) const;
+      const StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
 
-  IdMap buildUnionTranslationMapToOtherProxy(StringDictionaryProxy* dest_proxy) const;
+  IdMap buildUnionTranslationMapToOtherProxy(
+      StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_types) const;
 
   /**
    * @brief Returns the number of string entries in the underlying string dictionary,
@@ -240,6 +252,7 @@ class StringDictionaryProxy {
   std::string getStringUnlocked(const int32_t string_id) const;
   size_t transientEntryCountUnlocked() const;
   size_t entryCountUnlocked() const;
+  size_t persistedC() const;
   template <typename String>
   int32_t lookupTransientStringUnlocked(const String& lookup_string) const;
   size_t getTransientBulkImpl(const std::vector<std::string>& strings,
@@ -257,7 +270,9 @@ class StringDictionaryProxy {
                                              int32_t* string_ids) const;
 
   IdMap buildIntersectionTranslationMapToOtherProxyUnlocked(
-      const StringDictionaryProxy* dest_proxy) const;
+      const StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+
   std::shared_ptr<StringDictionary> string_dict_;
   const int32_t string_dict_id_;
   TransientMap transient_str_to_int_;

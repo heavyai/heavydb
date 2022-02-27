@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include "Shared/StringTransform.h"
 #include "sqltypes.h"
 
 #include <optional>

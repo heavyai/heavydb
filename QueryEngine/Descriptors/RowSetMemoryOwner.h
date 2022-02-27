@@ -32,6 +32,7 @@
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "Shared/quantile.h"
 #include "StringDictionary/StringDictionaryProxy.h"
+#include "StringOps/StringOpInfo.h"
 
 namespace Catalog_Namespace {
 class Catalog;
@@ -134,18 +135,35 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     return it->second.get();
   }
 
+  std::string generate_translation_map_key(
+      const int32_t source_proxy_id,
+      const int32_t dest_proxy_id,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    std::ostringstream oss;
+    oss << "{source_dict_id: " << source_proxy_id << ", dest_dict_id: " << dest_proxy_id
+        << " StringOps: " << string_op_infos << "}";
+    // for (const auto& string_op_info : string_op_infos) {
+    //  oss << "{" << string_op_info.toString() << "}";
+    //}
+    // oss << "]";
+    return oss.str();
+  }
+
   const StringDictionaryProxy::IdMap* addStringProxyIntersectionTranslationMap(
       const StringDictionaryProxy* source_proxy,
-      const StringDictionaryProxy* dest_proxy) {
+      const StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    const auto map_key = std::make_pair(source_proxy->getDictionary()->getDictId(),
-                                        dest_proxy->getDictionary()->getDictId());
+    const auto map_key =
+        generate_translation_map_key(source_proxy->getDictionary()->getDictId(),
+                                     dest_proxy->getDictionary()->getDictId(),
+                                     string_op_infos);
     auto it = str_proxy_intersection_translation_maps_owned_.find(map_key);
     if (it == str_proxy_intersection_translation_maps_owned_.end()) {
       it = str_proxy_intersection_translation_maps_owned_
-               .emplace(
-                   map_key,
-                   source_proxy->buildIntersectionTranslationMapToOtherProxy(dest_proxy))
+               .emplace(map_key,
+                        source_proxy->buildIntersectionTranslationMapToOtherProxy(
+                            dest_proxy, string_op_infos))
                .first;
     }
     return &it->second;
@@ -153,15 +171,19 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   const StringDictionaryProxy::IdMap* addStringProxyUnionTranslationMap(
       const StringDictionaryProxy* source_proxy,
-      StringDictionaryProxy* dest_proxy) {
+      StringDictionaryProxy* dest_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    const auto map_key = std::make_pair(source_proxy->getDictionary()->getDictId(),
-                                        dest_proxy->getDictionary()->getDictId());
+    const auto map_key =
+        generate_translation_map_key(source_proxy->getDictionary()->getDictId(),
+                                     dest_proxy->getDictionary()->getDictId(),
+                                     string_op_infos);
     auto it = str_proxy_union_translation_maps_owned_.find(map_key);
     if (it == str_proxy_union_translation_maps_owned_.end()) {
       it = str_proxy_union_translation_maps_owned_
                .emplace(map_key,
-                        source_proxy->buildUnionTranslationMapToOtherProxy(dest_proxy))
+                        source_proxy->buildUnionTranslationMapToOtherProxy(
+                            dest_proxy, string_op_infos))
                .first;
     }
     return &it->second;
@@ -195,6 +217,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       const int dest_dict_id_in,
       const bool with_generation,
       const StringTranslationType translation_map_type,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       const Catalog_Namespace::Catalog* catalog);
 
   void addColBuffer(const void* col_buffer) {
@@ -252,9 +275,11 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::list<std::string> strings_;
   std::list<std::vector<int64_t>> arrays_;
   std::unordered_map<int, std::shared_ptr<StringDictionaryProxy>> str_dict_proxy_owned_;
-  std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
+  // std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
+  std::map<std::string, StringDictionaryProxy::IdMap>
       str_proxy_intersection_translation_maps_owned_;
-  std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
+  // std::map<std::pair<int, int>, StringDictionaryProxy::IdMap>
+  std::map<std::string, StringDictionaryProxy::IdMap>
       str_proxy_union_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;

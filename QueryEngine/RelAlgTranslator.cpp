@@ -28,6 +28,7 @@
 #include "WindowContext.h"
 
 #include <future>
+#include <sstream>
 
 #include "Analyzer/Analyzer.h"
 #include "Parser/ParserNode.h"
@@ -36,7 +37,7 @@
 
 extern bool g_enable_watchdog;
 
-bool g_enable_experimental_string_functions = false;
+bool g_enable_string_functions{true};
 
 namespace {
 
@@ -302,7 +303,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
       return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kTEXT: {
-      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
+      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>(),
+                                                 false);
     }
     case kBOOLEAN: {
       Datum d;
@@ -1291,19 +1293,55 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
   return Parser::UserLiteral::get(user);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLower(
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
     const RexFunctionOperator* rex_function) const {
-  const auto& args = translateFunctionArgs(rex_function);
-  CHECK_EQ(size_t(1), args.size());
-  CHECK(args[0]);
-
-  if (args[0]->get_type_info().is_dict_encoded_string() ||
-      dynamic_cast<Analyzer::Constant*>(args[0].get())) {
-    return makeExpr<Analyzer::LowerExpr>(args[0]);
+  const auto func_name = rex_function->getName();
+  if (!g_enable_string_functions) {
+    std::ostringstream oss;
+    oss << "Function " << func_name << " not supported.";
+    throw std::runtime_error(oss.str());
   }
+  const auto string_op_kind = ::name_to_string_op_kind(func_name);
+  const auto args = translateFunctionArgs(rex_function);
 
-  throw std::runtime_error(rex_function->getName() +
-                           " expects a dictionary encoded text column or a literal.");
+  switch (string_op_kind) {
+    case SqlStringOpKind::LOWER:
+      return makeExpr<Analyzer::LowerStringOper>(args);
+    case SqlStringOpKind::UPPER:
+      return makeExpr<Analyzer::UpperStringOper>(args);
+    case SqlStringOpKind::INITCAP:
+      return makeExpr<Analyzer::InitCapStringOper>(args);
+    case SqlStringOpKind::REVERSE:
+      return makeExpr<Analyzer::ReverseStringOper>(args);
+    case SqlStringOpKind::REPEAT:
+      return makeExpr<Analyzer::RepeatStringOper>(args);
+    case SqlStringOpKind::CONCAT:
+      return makeExpr<Analyzer::ConcatStringOper>(args);
+    case SqlStringOpKind::LPAD:
+    case SqlStringOpKind::RPAD: {
+      return makeExpr<Analyzer::PadStringOper>(string_op_kind, args);
+    }
+    case SqlStringOpKind::TRIM:
+    case SqlStringOpKind::LTRIM:
+    case SqlStringOpKind::RTRIM: {
+      return makeExpr<Analyzer::TrimStringOper>(string_op_kind, args);
+    }
+    case SqlStringOpKind::SUBSTRING:
+      return makeExpr<Analyzer::SubstringStringOper>(args);
+    case SqlStringOpKind::OVERLAY:
+      return makeExpr<Analyzer::OverlayStringOper>(args);
+    case SqlStringOpKind::REPLACE:
+      return makeExpr<Analyzer::ReplaceStringOper>(args);
+    case SqlStringOpKind::SPLIT_PART:
+      return makeExpr<Analyzer::SplitPartStringOper>(args);
+    case SqlStringOpKind::REGEXP_REPLACE:
+      return makeExpr<Analyzer::RegexpReplaceStringOper>(args);
+    case SqlStringOpKind::REGEXP_SUBSTR:
+      return makeExpr<Analyzer::RegexpSubstrStringOper>(args);
+    default: {
+      throw std::runtime_error("Unsupported string function.");
+    }
+  }
 }
 
 Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
@@ -1514,8 +1552,26 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == "CURRENT_USER"sv) {
     return translateCurrentUser(rex_function);
   }
-  if (g_enable_experimental_string_functions && rex_function->getName() == "LOWER"sv) {
-    return translateLower(rex_function);
+  if (func_resolve(rex_function->getName(),
+                   "LOWER"sv,
+                   "UPPER"sv,
+                   "INITCAP"sv,
+                   "REVERSE"sv,
+                   "REPEAT"sv,
+                   "||"sv,
+                   "LPAD"sv,
+                   "RPAD"sv,
+                   "TRIM"sv,
+                   "LTRIM"sv,
+                   "RTRIM"sv,
+                   "SUBSTRING"sv,
+                   "OVERLAY"sv,
+                   "REPLACE"sv,
+                   "SPLIT_PART"sv,
+                   "REGEXP_REPLACE"sv,
+                   "REGEXP_SUBSTR"sv,
+                   "REGEXP_MATCH"sv)) {
+    return translateStringOper(rex_function);
   }
   if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {
     return translateCardinality(rex_function);

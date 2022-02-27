@@ -80,6 +80,32 @@ enum SQLAgg {
   kSINGLE_VALUE
 };
 
+enum class SqlStringOpKind {
+  /* Unary */
+  LOWER = 1,
+  UPPER,
+  INITCAP,
+  REVERSE,
+  /* Binary */
+  REPEAT,
+  CONCAT,
+  RCONCAT,
+  /* Ternary */
+  LPAD,
+  RPAD,
+  TRIM,
+  LTRIM,
+  RTRIM,
+  SUBSTRING,
+  OVERLAY,
+  REPLACE,
+  SPLIT_PART,
+  /* 6 args */
+  REGEXP_REPLACE,
+  REGEXP_SUBSTR,
+  INVALID
+};
+
 enum class SqlWindowFunctionKind {
   ROW_NUMBER,
   RANK,
@@ -219,6 +245,108 @@ inline std::string toString(const SQLOps& op) {
       return "OVERLAPS";
   }
   LOG(FATAL) << "Invalid operation kind: " << op;
+  return "";
+}
+
+inline SqlStringOpKind name_to_string_op_kind(const std::string& func_name) {
+  if (func_name == "LOWER") {
+    return SqlStringOpKind::LOWER;
+  }
+  if (func_name == "UPPER") {
+    return SqlStringOpKind::UPPER;
+  }
+  if (func_name == "INITCAP") {
+    return SqlStringOpKind::INITCAP;
+  }
+  if (func_name == "REVERSE") {
+    return SqlStringOpKind::REVERSE;
+  }
+  if (func_name == "REPEAT") {
+    return SqlStringOpKind::REPEAT;
+  }
+  if (func_name == "||") {
+    return SqlStringOpKind::CONCAT;
+  }
+  if (func_name == "LPAD") {
+    return SqlStringOpKind::LPAD;
+  }
+  if (func_name == "RPAD") {
+    return SqlStringOpKind::RPAD;
+  }
+  if (func_name == "TRIM") {
+    return SqlStringOpKind::TRIM;
+  }
+  if (func_name == "LTRIM") {
+    return SqlStringOpKind::LTRIM;
+  }
+  if (func_name == "RTRIM") {
+    return SqlStringOpKind::RTRIM;
+  }
+  if (func_name == "SUBSTRING") {
+    return SqlStringOpKind::SUBSTRING;
+  }
+  if (func_name == "OVERLAY") {
+    return SqlStringOpKind::OVERLAY;
+  }
+  if (func_name == "REPLACE") {
+    return SqlStringOpKind::REPLACE;
+  }
+  if (func_name == "SPLIT_PART") {
+    return SqlStringOpKind::SPLIT_PART;
+  }
+  if (func_name == "REGEXP_REPLACE") {
+    return SqlStringOpKind::REGEXP_REPLACE;
+  }
+  if (func_name == "REGEXP_SUBSTR") {
+    return SqlStringOpKind::REGEXP_SUBSTR;
+  }
+  if (func_name == "REGEXP_MATCH") {
+    return SqlStringOpKind::REGEXP_SUBSTR;
+  }
+  LOG(FATAL) << "Invalid string function " << func_name << ".";
+  return SqlStringOpKind::INVALID;
+}
+
+inline std::string toString(const SqlStringOpKind& kind) {
+  switch (kind) {
+    case SqlStringOpKind::LOWER:
+      return "LOWER";
+    case SqlStringOpKind::UPPER:
+      return "UPPER";
+    case SqlStringOpKind::INITCAP:
+      return "INITCAP";
+    case SqlStringOpKind::REVERSE:
+      return "REVERSE";
+    case SqlStringOpKind::REPEAT:
+      return "REPEAT";
+    case SqlStringOpKind::CONCAT:
+    case SqlStringOpKind::RCONCAT:
+      return "||";
+    case SqlStringOpKind::LPAD:
+      return "LPAD";
+    case SqlStringOpKind::RPAD:
+      return "RPAD";
+    case SqlStringOpKind::TRIM:
+      return "TRIM";
+    case SqlStringOpKind::LTRIM:
+      return "LTRIM";
+    case SqlStringOpKind::RTRIM:
+      return "RTRIM";
+    case SqlStringOpKind::SUBSTRING:
+      return "SUBSTRING";
+    case SqlStringOpKind::OVERLAY:
+      return "OVERLAY";
+    case SqlStringOpKind::REPLACE:
+      return "REPLACE";
+    case SqlStringOpKind::SPLIT_PART:
+      return "SPLIT_PART";
+    case SqlStringOpKind::REGEXP_REPLACE:
+      return "REGEXP_REPLACE";
+    case SqlStringOpKind::REGEXP_SUBSTR:
+      return "REGEXP_SUBSTR";
+    default:
+      LOG(FATAL) << "Invalid string operation";
+  }
   return "";
 }
 

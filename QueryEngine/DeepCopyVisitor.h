@@ -83,10 +83,6 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     return makeExpr<Analyzer::SampleRatioExpr>(visit(expr->get_arg()));
   }
 
-  RetType visitLower(const Analyzer::LowerExpr* expr) const override {
-    return makeExpr<Analyzer::LowerExpr>(visit(expr->get_arg()));
-  }
-
   RetType visitCardinality(const Analyzer::CardinalityExpr* cardinality) const override {
     return makeExpr<Analyzer::CardinalityExpr>(visit(cardinality->get_arg()));
   }
@@ -200,6 +196,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                               partition_keys_copy,
                                               order_keys_copy,
                                               window_func->getCollation());
+  }
+
+  RetType visitStringOper(const Analyzer::StringOper* string_oper) const override {
+    return string_oper->deep_copy();
   }
 
   RetType visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {

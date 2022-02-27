@@ -32,7 +32,7 @@
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
 
-extern bool g_enable_experimental_string_functions;
+extern bool g_enable_string_functions;
 
 bool g_enable_auto_metadata_update{true};
 
@@ -329,7 +329,8 @@ void InsertOrderFragmenter::updateColumns(
           targetDescriptor->columnType,
           !targetDescriptor->columnType.get_notnull(),
           sourceDataProvider.getLiteralDictionary(),
-          g_enable_experimental_string_functions
+          g_enable_string_functions &&
+                  sourceDataMetaInfo.get_type_info().is_dict_encoded_string()
               ? executor->getStringDictionaryProxy(
                     sourceDataMetaInfo.get_type_info().get_comp_param(),
                     executor->getRowSetMemoryOwner(),

@@ -138,7 +138,8 @@ class StringLiteral : public Literal {
       const Catalog_Namespace::Catalog& catalog,
       Analyzer::Query& query,
       TlistRefType allow_tlist_ref = TLIST_NONE) const override;
-  static std::shared_ptr<Analyzer::Expr> analyzeValue(const std::string&);
+  static std::shared_ptr<Analyzer::Expr> analyzeValue(const std::string& stringval,
+                                                      const bool is_null);
   std::string to_string() const override { return "'" + *stringval_ + "'"; }
 
  private:

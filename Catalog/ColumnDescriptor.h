@@ -20,6 +20,7 @@
 #include <cassert>
 #include <optional>
 #include <string>
+#include "../Shared/StringTransform.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/toString.h"
 

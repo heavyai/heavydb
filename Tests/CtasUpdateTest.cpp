@@ -3207,7 +3207,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
 
   // globals for "lower()"
   //  Use system locale setting by default (as done in the server).
-  g_enable_experimental_string_functions = true;
+  g_enable_string_functions = true;
   boost::locale::generator generator;
   std::locale::global(generator.generate(""));
 
@@ -3220,7 +3220,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
                        {{"Sue", "Smith", "CA"}, {"Sue", "Smith", "ca"}},
                        select_result);
 
-  g_enable_experimental_string_functions = false;
+  g_enable_string_functions = false;
 }
 
 TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
@@ -3243,7 +3243,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
 
   // globals for "lower()"
   //  Use system locale setting by default (as done in the server).
-  g_enable_experimental_string_functions = true;
+  g_enable_string_functions = true;
   boost::locale::generator generator;
   std::locale::global(generator.generate(""));
 
@@ -3256,7 +3256,7 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
                        {{"united states", "Washington", "US"}},
                        select_result);
 
-  g_enable_experimental_string_functions = false;
+  g_enable_string_functions = false;
 }
 
 const char* create_table_mini_sort = R"(

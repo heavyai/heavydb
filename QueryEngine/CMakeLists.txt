@@ -162,11 +162,6 @@ else()
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderRelAlgUtils.cpp)
 endif()
 
-#if(HAVE_PDAL)
-#  list(APPEND query_engine_source_files
-#  TableFunctions/SystemFunctions/Loaders/PdalLoader.cpp)
-#endif()
-
 set(group_by_hash_test_files
     GroupByHashTest.cpp
     MurmurHash.cpp
@@ -305,6 +300,7 @@ target_precompile_headers(QueryEngine PRIVATE
 
 set(QUERY_ENGINE_LIBS
   OSDependent
+  StringOps
   Analyzer
   StringDictionary
   Utils

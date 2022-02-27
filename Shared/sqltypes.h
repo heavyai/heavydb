@@ -23,13 +23,13 @@
 #pragma once
 
 #include "../Logger/Logger.h"
-#include "StringTransform.h"
 #include "funcannotations.h"
 
 #include <cassert>
 #include <ctime>
 #include <memory>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -481,26 +481,16 @@ class SQLTypeInfo {
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
   std::string toString() const { return to_string(); }  // for PRINT macro
   inline std::string to_string() const {
-    return concat("(type=",
-                  type_name[static_cast<int>(type)],
-                  ", dimension=",
-                  get_dimension(),
-                  ", scale=",
-                  get_scale(),
-                  ", null=",
-                  get_notnull() ? "not nullable" : "nullable",
-                  ", name=",
-                  get_compression_name(),
-                  ", comp=",
-                  get_comp_param(),
-                  ", subtype=",
-                  type_name[static_cast<int>(subtype)],
-                  ", size=",
-                  get_size(),
-                  ", element_size=",
-                  get_elem_type().get_size(),
-                  ")");
+    std::ostringstream oss;
+    oss << "(type=" << type_name[static_cast<int>(type)]
+        << ", dimension=" << get_dimension() << ", scale=" << get_scale()
+        << ", null=" << (get_notnull() ? "not nullable" : "nullable")
+        << ", name=" << get_compression_name() << ", comp=" << get_comp_param()
+        << ", subtype=" << type_name[static_cast<int>(subtype)] << ", size=" << get_size()
+        << ", element_size=" << get_elem_type().get_size() << ")";
+    return oss.str();
   }
+
   inline std::string get_buffer_name() const {
     if (is_array()) {
       return "Array";
@@ -1144,3 +1134,9 @@ inline auto generate_column_list_type(const SQLTypes subtype) {
   ti.set_subtype(subtype);
   return ti;
 }
+
+struct SqlLiteralArg {
+  size_t index;
+  SQLTypeInfo ti;
+  Datum datum;
+};

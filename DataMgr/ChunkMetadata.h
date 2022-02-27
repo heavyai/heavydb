@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include "../Shared/sqltypes.h"
+#include "Shared/StringTransform.h"
 #include "Shared/types.h"
 
 #include "Logger/Logger.h"

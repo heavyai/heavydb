@@ -23,13 +23,14 @@
 
 #pragma once
 
-#include <vector>
-#include "../DataMgr/MemoryLevel.h"
+#include "DataMgr/MemoryLevel.h"
+#include "StringOps/StringOpInfo.h"
 
-#include <iostream>
+#include <vector>
 
 class StringDictionaryProxy;
 struct StringDictionaryProxyTranslationMgr;
+struct CompilationOptions;
 
 namespace Data_Namespace {
 class DataMgr;
@@ -46,20 +47,24 @@ enum StringFunctorType : unsigned int;
 }
 class StringDictionaryTranslationMgr {
  public:
-  StringDictionaryTranslationMgr(const int32_t source_string_dict_id,
-                                 const int32_t dest_string_dict_id,
-                                 const bool translate_intersection_only,
-                                 const Data_Namespace::MemoryLevel memory_level,
-                                 const int device_count,
-                                 Executor* executor,
-                                 Data_Namespace::DataMgr* data_mgr);
+  StringDictionaryTranslationMgr(
+      const int32_t source_string_dict_id,
+      const int32_t dest_string_dict_id,
+      const bool translate_intersection_only,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+      const Data_Namespace::MemoryLevel memory_level,
+      const int device_count,
+      Executor* executor,
+      Data_Namespace::DataMgr* data_mgr,
+      const bool delay_translation);
 
   ~StringDictionaryTranslationMgr();
   void buildTranslationMap();
   void createKernelBuffers();
-  llvm::Value* codegenCast(llvm::Value* str_id_input,
-                           const SQLTypeInfo& input_ti,
-                           const bool add_nullcheck) const;
+  llvm::Value* codegen(llvm::Value* str_id_input,
+                       const SQLTypeInfo& input_ti,
+                       const bool add_nullcheck,
+                       const CompilationOptions& co) const;
 
   bool isMapValid() const;
   const int32_t* data() const;
@@ -69,6 +74,8 @@ class StringDictionaryTranslationMgr {
   const int32_t source_string_dict_id_;
   const int32_t dest_string_dict_id_;
   const bool translate_intersection_only_;
+  const std::vector<StringOps_Namespace::StringOpInfo> string_op_infos_;
+  const bool has_null_string_op_;
   const Data_Namespace::MemoryLevel memory_level_;
   const int device_count_;
   Executor* executor_;

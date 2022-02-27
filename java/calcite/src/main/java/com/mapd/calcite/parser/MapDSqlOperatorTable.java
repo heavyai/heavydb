@@ -27,11 +27,14 @@ import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
 import org.apache.calcite.schema.FunctionParameter;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.SqlAggFunction;
+import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlKind;
+import org.apache.calcite.sql.SqlLiteral;
+import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlOperatorTable;
@@ -39,16 +42,21 @@ import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.SqlTableFunction;
 import org.apache.calcite.sql.fun.SqlArrayValueConstructor;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
+import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
+import org.apache.calcite.sql.type.SameOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.sql.type.SqlTypeTransforms;
+import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
 import org.apache.calcite.util.Optionality;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,7 +164,6 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     listOpTab = (ListSqlOperatorTable) tableList.get(1);
   }
 
-  // ~ Methods ----------------------------------------------------------------
   /**
    * Adds an operator to this table.
    *
@@ -190,7 +197,18 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new WidthBucket());
     opTab.addOperator(new ArrayLength());
     opTab.addOperator(new PgILike());
+    opTab.addOperator(new LTrim());
+    opTab.addOperator(new RTrim());
+    opTab.addOperator(new LPad());
+    opTab.addOperator(new RPad());
+    opTab.addOperator(new Replace());
+    opTab.addOperator(new Reverse());
+    opTab.addOperator(new Repeat());
+    opTab.addOperator(new SplitPart());
     opTab.addOperator(new RegexpLike());
+    opTab.addOperator(new RegexpReplace());
+    opTab.addOperator(new RegexpSubstr());
+    opTab.addOperator(new RegexpMatch());
     opTab.addOperator(new Likely());
     opTab.addOperator(new Unlikely());
     opTab.addOperator(new Sign());
@@ -281,6 +299,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     assert suffix_idx > 0;
     return str.substring(0, suffix_idx);
   }
+
+  //@Deprecated // to be removed before 2.0
+  // public static final SqlFunction LTRIM = SqlLibraryOperators.LTRIM;
+
+  //@Deprecated // to be removed before 2.0
+  // public static final SqlFunction RTRIM = SqlLibraryOperators.RTRIM;
 
   public static class SqlArrayValueConstructorAllowingEmpty
           extends SqlArrayValueConstructor {
@@ -762,6 +786,396 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+  }
+
+  public static class LeftRightTrim extends SqlFunction {
+    public LeftRightTrim(final String name, final SqlKind kind) {
+      super(name,
+              kind,
+              ReturnTypes.ARG0.andThen(SqlTypeTransforms.TO_NULLABLE)
+                      .andThen(SqlTypeTransforms.TO_VARYING),
+              null,
+              OperandTypes.and(
+                      OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.STRING),
+                      new SameOperandTypeChecker(2) {
+                        @Override
+                        protected List<Integer> getOperandList(int operandCount) {
+                          return ImmutableList.of(0, 1);
+                        }
+                      }),
+              SqlFunctionCategory.STRING);
+    }
+
+    @Override
+    public SqlCall createCall(@Nullable SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            @Nullable SqlNode... operands) {
+      assert functionQualifier == null;
+      switch (operands.length) {
+        case 1:
+          operands = new SqlNode[] {SqlLiteral.createCharString(" ", pos), operands[0]};
+          break;
+        case 2:
+          if (operands[1] == null) {
+            operands[1] = SqlLiteral.createCharString(" ", pos);
+          }
+          operands = new SqlNode[] {operands[1], operands[0]};
+          break;
+        default:
+          throw new IllegalArgumentException(
+                  "Invalid operand count " + Arrays.toString(operands));
+      }
+      return super.createCall(functionQualifier, pos, operands);
+    }
+  }
+
+  public static class LTrim extends LeftRightTrim {
+    public LTrim() {
+      super("LTRIM", SqlKind.LTRIM);
+    }
+  }
+  public static class RTrim extends LeftRightTrim {
+    public RTrim() {
+      super("RTRIM", SqlKind.RTRIM);
+    }
+  }
+  public static class LeftRightPad extends SqlFunction {
+    public LeftRightPad(final String name) {
+      super(name,
+              SqlKind.OTHER_FUNCTION,
+              ReturnTypes.ARG0.andThen(SqlTypeTransforms.TO_NULLABLE)
+                      .andThen(SqlTypeTransforms.TO_VARYING),
+              null,
+              OperandTypes.and(OperandTypes.family(SqlTypeFamily.STRING,
+                                       SqlTypeFamily.INTEGER,
+                                       SqlTypeFamily.STRING),
+                      new SameOperandTypeChecker(3) {
+                        @Override
+                        protected List<Integer> getOperandList(int operandCount) {
+                          return ImmutableList.of(0, 2);
+                        }
+                      }),
+              SqlFunctionCategory.STRING);
+    }
+
+    @Override
+    public SqlCall createCall(@Nullable SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            @Nullable SqlNode... operands) {
+      assert functionQualifier == null;
+      switch (operands.length) {
+        case 2:
+          operands = new SqlNode[] {
+                  operands[0], operands[1], SqlLiteral.createCharString(" ", pos)};
+          break;
+        case 3:
+          if (operands[2] == null) {
+            operands[2] = SqlLiteral.createCharString(" ", pos);
+          }
+          operands = new SqlNode[] {operands[0], operands[1], operands[2]};
+          break;
+        default:
+          throw new IllegalArgumentException(
+                  "Invalid operand count " + Arrays.toString(operands));
+      }
+      return super.createCall(functionQualifier, pos, operands);
+    }
+
+    @Override
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      if (!super.checkOperandTypes(callBinding, throwOnFailure)) {
+        return false;
+      }
+      switch (kind) {
+        case TRIM:
+          return SqlTypeUtil.isCharTypeComparable(callBinding,
+                  ImmutableList.of(callBinding.operand(0), callBinding.operand(2)),
+                  throwOnFailure);
+        default:
+          return true;
+      }
+    }
+  }
+
+  public static class LPad extends LeftRightPad {
+    public LPad() {
+      super("LPAD");
+    }
+  }
+  public static class RPad extends LeftRightPad {
+    public RPad() {
+      super("RPAD");
+    }
+  }
+
+  public static class SplitPart extends SqlFunction {
+    public SplitPart() {
+      super("SPLIT_PART",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class Replace extends SqlFunction {
+    public Replace() {
+      super("REPLACE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+
+    @Override
+    public SqlCall createCall(@Nullable SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            @Nullable SqlNode... operands) {
+      assert functionQualifier == null;
+      switch (operands.length) {
+        case 2:
+          operands = new SqlNode[] {
+                  operands[0], operands[1], SqlLiteral.createCharString("", pos)};
+          break;
+        case 3:
+          break;
+        default:
+          throw new IllegalArgumentException(
+                  "Invalid operand count " + Arrays.toString(operands));
+      }
+      return super.createCall(functionQualifier, pos, operands);
+    }
+  }
+  public static class Reverse extends SqlFunction {
+    public Reverse() {
+      super("REVERSE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+  public static class Repeat extends SqlFunction {
+    public Repeat() {
+      super("REPEAT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      return families;
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class RegexpReplace extends SqlFunction {
+    public RegexpReplace() {
+      super("REGEXP_REPLACE",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      families.add(SqlTypeFamily.INTEGER);
+      families.add(SqlTypeFamily.STRING);
+      return families;
+    }
+
+    @Override
+    public SqlCall createCall(@Nullable SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            @Nullable SqlNode... operands) {
+      assert functionQualifier == null;
+      final int num_operands = operands.length;
+      if (num_operands < 2 || num_operands > 6) {
+        throw new IllegalArgumentException(
+                "Invalid operand count " + Arrays.toString(operands));
+      }
+      SqlNode[] new_operands = new SqlNode[6];
+      // operand string
+      new_operands[0] = operands[0];
+      // pattern
+      new_operands[1] = operands[1];
+      // replacement
+      if (num_operands < 3 || operands[2] == null) {
+        new_operands[2] = SqlLiteral.createCharString("", pos);
+      } else {
+        new_operands[2] = operands[2];
+      }
+      // position
+      if (num_operands < 4 || operands[3] == null) {
+        new_operands[3] = SqlLiteral.createExactNumeric("1", pos);
+      } else {
+        new_operands[3] = operands[3];
+      }
+      // occurrence
+      if (num_operands < 5 || operands[4] == null) {
+        new_operands[4] = SqlLiteral.createExactNumeric("0", pos);
+      } else {
+        new_operands[4] = operands[4];
+      }
+      // parameters
+      if (num_operands < 6 || operands[5] == null) {
+        new_operands[5] = SqlLiteral.createCharString("c", pos);
+      } else {
+        new_operands[5] = operands[5];
+      }
+      return super.createCall(functionQualifier, pos, new_operands);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class RegexpSubstr extends SqlFunction {
+    public RegexpSubstr() {
+      super("REGEXP_SUBSTR",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.STRING);
+    }
+
+    public RegexpSubstr(final String alias) {
+      super(alias,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(getSignatureFamilies()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+      java.util.ArrayList<SqlTypeFamily> families =
+              new java.util.ArrayList<SqlTypeFamily>();
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      families.add(SqlTypeFamily.INTEGER);
+      families.add(SqlTypeFamily.STRING);
+      families.add(SqlTypeFamily.INTEGER);
+      return families;
+    }
+
+    @Override
+    public SqlCall createCall(@Nullable SqlLiteral functionQualifier,
+            SqlParserPos pos,
+            @Nullable SqlNode... operands) {
+      assert functionQualifier == null;
+      final int num_operands = operands.length;
+      if (num_operands < 2 || num_operands > 6) {
+        throw new IllegalArgumentException(
+                "Invalid operand count " + Arrays.toString(operands));
+      }
+      SqlNode[] new_operands = new SqlNode[6];
+
+      // operand string (required)
+      new_operands[0] = operands[0];
+      // pattern (required)
+      new_operands[1] = operands[1];
+      // start position
+      if (num_operands < 3 || operands[2] == null) {
+        new_operands[2] = SqlLiteral.createExactNumeric("1", pos);
+      } else {
+        new_operands[2] = operands[2];
+      }
+      // match occurrence
+      if (num_operands < 4 || operands[3] == null) {
+        new_operands[3] = SqlLiteral.createExactNumeric("1", pos);
+      } else {
+        new_operands[3] = operands[3];
+      }
+      // regex params (default 'c' = case sensitive)
+      if (num_operands < 5 || operands[4] == null) {
+        new_operands[4] = SqlLiteral.createCharString("c", pos);
+      } else {
+        new_operands[4] = operands[4];
+      }
+      // Sub-match occurrence, valid with regex param 'e'
+      if (num_operands < 6 || operands[5] == null) {
+        new_operands[5] = SqlLiteral.createExactNumeric("1", pos);
+      } else {
+        new_operands[5] = operands[5];
+      }
+      return super.createCall(functionQualifier, pos, new_operands);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class RegexpMatch extends RegexpSubstr {
+    public RegexpMatch() {
+      super("REGEXP_MATCH");
     }
   }
 

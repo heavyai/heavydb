@@ -22058,7 +22058,9 @@ TEST(TemporaryTables, Unsupported) {
                         "DICTIONARY(str) REFERENCES test(null_str));"));
 }
 
-TEST(Select, Interop) {
+TEST(Select, DISABLED_Interop) {
+  // Disable this test until we can determine good ways to exercise Sqlite
+  // given that we've now implemented concat and substr natively
   SKIP_ALL_ON_AGGREGATOR();
   g_enable_interop = true;
   ScopeGuard interop_guard = [] { g_enable_interop = false; };

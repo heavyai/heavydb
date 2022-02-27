@@ -15,6 +15,7 @@
  */
 
 #include "StringDictionary/StringDictionaryProxy.h"
+#include "StringOps/StringOps.h"
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
@@ -189,7 +190,7 @@ StringDictionary::StringDictionary(const DictRef& dict_ref,
       }
 
       unsigned string_id = 0;
-      mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+      std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
 
       uint32_t thread_inits = 0;
       const auto thread_count = std::thread::hardware_concurrency();
@@ -272,7 +273,7 @@ void StringDictionary::eachStringSerially(int64_t const generation,
     CHECK_LE(n, static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
     for (unsigned id = 0; id < n; ++id) {
       {
-        mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+        std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
         client_->get_string(str, id);
       }
       serial_callback(str, id);
@@ -280,7 +281,7 @@ void StringDictionary::eachStringSerially(int64_t const generation,
   } else {
     size_t const n = std::min(static_cast<size_t>(generation), str_count_);
     CHECK_LE(n, static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
     for (unsigned id = 0; id < n; ++id) {
       serial_callback(getStringFromStorageFast(static_cast<int>(id)), id);
     }
@@ -513,7 +514,7 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
 
   std::vector<size_t> num_strings_not_found_per_thread(thread_info.num_threads, 0UL);
 
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   const int64_t num_dict_strings = generation >= 0 ? generation : storageEntryCount();
   const bool dictionary_is_empty = (num_dict_strings == 0);
   if (dictionary_is_empty) {
@@ -594,7 +595,7 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     return;
   }
   // Single-thread path.
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
 
   const size_t initial_str_count = str_count_;
   size_t idx = 0;
@@ -652,7 +653,7 @@ void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_str
   std::vector<string_dict_hash_t> input_strings_hashes(input_strings.size());
   hashStrings(input_strings, input_strings_hashes);
 
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   size_t shadow_str_count =
       str_count_;  // Need to shadow str_count_ now with bulk add methods
   const size_t storage_high_water_mark = shadow_str_count;
@@ -742,7 +743,7 @@ template void StringDictionary::getOrAddBulk(
 
 template <class String>
 int32_t StringDictionary::getIdOfString(const String& str) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   if (isClient()) {
     if constexpr (std::is_same_v<std::string, std::decay_t<String>>) {
       return client_->get(str);
@@ -764,7 +765,7 @@ int32_t StringDictionary::getUnlocked(const std::string_view sv) const noexcept 
 }
 
 std::string StringDictionary::getString(int32_t string_id) const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   if (isClient()) {
     std::string ret;
     client_->get_string(ret, string_id);
@@ -780,7 +781,7 @@ std::string StringDictionary::getStringUnlocked(int32_t string_id) const noexcep
 
 std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const
     noexcept {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   CHECK(!isClient());
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
@@ -788,7 +789,7 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) con
 }
 
 size_t StringDictionary::storageEntryCount() const {
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   if (isClient()) {
     return client_->storage_entry_count();
   }
@@ -826,7 +827,7 @@ std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
                                                const bool is_simple,
                                                const char escape,
                                                const size_t generation) const {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   if (isClient()) {
     return client_->get_like(pattern, icase, is_simple, escape, generation);
   }
@@ -937,7 +938,7 @@ std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
 std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
                                                   const std::string& comp_operator,
                                                   const size_t generation) {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   if (isClient()) {
     return client_->get_compare(pattern, comp_operator, generation);
   }
@@ -1098,7 +1099,7 @@ bool is_regexp_like(const std::string& str,
 std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
                                                      const char escape,
                                                      const size_t generation) const {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   if (isClient()) {
     return client_->get_regexp_like(pattern, escape, generation);
   }
@@ -1143,7 +1144,7 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
 }
 
 std::vector<std::string> StringDictionary::copyStrings() const {
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   if (isClient()) {
     // TODO(miyu): support remote string dictionary
     throw std::runtime_error(
@@ -1262,13 +1263,13 @@ int32_t StringDictionary::getOrAddImpl(const std::string_view& str) noexcept {
   CHECK(str.size() <= MAX_STRLEN);
   const string_dict_hash_t hash = hash_string(str);
   {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
     const uint32_t bucket = computeBucket(hash, str, string_id_string_dict_hash_table_);
     if (string_id_string_dict_hash_table_[bucket] != INVALID_STR_ID) {
       return string_id_string_dict_hash_table_[bucket];
     }
   }
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
   if (fillRateIsHigh(str_count_)) {
     // resize when more than 50% is full
     increaseHashTableCapacity();
@@ -1716,7 +1717,7 @@ void StringDictionary::populate_string_array_ids(
 std::vector<std::string_view> StringDictionary::getStringViews(
     const size_t generation) const {
   auto timer = DEBUG_TIMER(__func__);
-  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   const int64_t num_strings = generation >= 0 ? generation : storageEntryCount();
   CHECK_LE(num_strings, static_cast<int64_t>(StringDictionary::MAX_STRCOUNT));
   // The CHECK_LE below is currently redundant with the check
@@ -1778,14 +1779,39 @@ std::vector<int32_t> StringDictionary::buildDictionaryTranslationMap(
   const size_t num_source_strings = storageEntryCount();
   const size_t num_dest_strings = dest_dict->storageEntryCount();
   std::vector<int32_t> translated_ids(num_source_strings);
+
   buildDictionaryTranslationMap(dest_dict.get(),
                                 translated_ids.data(),
                                 num_source_strings,
                                 num_dest_strings,
                                 true,  // Just assume true for dest_has_transients as this
                                        // function is only used for testing currently
-                                dest_transient_lookup_callback);
+                                dest_transient_lookup_callback,
+                                {});
   return translated_ids;
+}
+
+void order_translation_locks(const int32_t source_db_id,
+                             const int32_t source_dict_id,
+                             const int32_t dest_db_id,
+                             const int32_t dest_dict_id,
+                             std::shared_lock<std::shared_mutex>& source_read_lock,
+                             std::shared_lock<std::shared_mutex>& dest_read_lock) {
+  const bool dicts_are_same =
+      source_db_id == dest_db_id && source_dict_id == dest_dict_id;
+  const bool source_dict_is_locked_first =
+      source_db_id < dest_db_id ||
+      (source_db_id == dest_db_id && source_dict_id < dest_dict_id);
+  if (dicts_are_same) {
+    // dictionaries are same, only take one write lock
+    dest_read_lock.lock();
+  } else if (source_dict_is_locked_first) {
+    source_read_lock.lock();
+    dest_read_lock.lock();
+  } else {
+    dest_read_lock.lock();
+    source_read_lock.lock();
+  }
 }
 
 size_t StringDictionary::buildDictionaryTranslationMap(
@@ -1794,7 +1820,8 @@ size_t StringDictionary::buildDictionaryTranslationMap(
     const int64_t source_generation,
     const int64_t dest_generation,
     const bool dest_has_transients,
-    StringLookupCallback const& dest_transient_lookup_callback) const {
+    StringLookupCallback const& dest_transient_lookup_callback,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
   auto timer = DEBUG_TIMER(__func__);
   CHECK_GE(source_generation, 0L);
   CHECK_GE(dest_generation, 0L);
@@ -1817,19 +1844,15 @@ size_t StringDictionary::buildDictionaryTranslationMap(
 
   // Sort this/source dict and dest dict on folder_ so we can enforce
   // lock ordering and avoid deadlocks
-
-  const int32_t dest_db_id = dest_dict->getDbId();
-  const int32_t dest_dict_id = dest_dict->getDictId();
-  if (getDbId() == dest_db_id && getDictId() == dest_dict_id) {
-    throw std::runtime_error("Cannot translate between a string dictionary and itself.");
-  }
-  const bool this_dict_is_locked_first =
-      getDbId() < dest_db_id || (getDbId() == dest_db_id && getDictId() < dest_dict_id);
-
-  mapd_shared_lock<mapd_shared_mutex> first_read_lock(
-      this_dict_is_locked_first ? rw_mutex_ : dest_dict->rw_mutex_);
-  mapd_shared_lock<mapd_shared_mutex> second_read_lock(
-      this_dict_is_locked_first ? dest_dict->rw_mutex_ : rw_mutex_);
+  std::shared_lock<std::shared_mutex> source_read_lock(rw_mutex_, std::defer_lock);
+  std::shared_lock<std::shared_mutex> dest_read_lock(dest_dict->rw_mutex_,
+                                                     std::defer_lock);
+  order_translation_locks(getDbId(),
+                          getDictId(),
+                          dest_dict->getDbId(),
+                          dest_dict->getDictId(),
+                          source_read_lock,
+                          dest_read_lock);
 
   // For both source and destination dictionaries we cap the max
   // entries to be translated/translated to at the supplied
@@ -1850,6 +1873,9 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   // in other contexts been shown to exhibit better performance when low
   // numbers of threads are needed than just letting tbb figure the number of threads,
   // but should benchmark in this specific context
+
+  const StringOps_Namespace::StringOps string_ops(string_op_infos);
+  const bool has_string_ops = string_ops.size();
 
   tbb::task_arena limited_arena(thread_info.num_threads);
   std::vector<size_t> num_strings_not_translated_per_thread(thread_info.num_threads, 0UL);
@@ -1886,20 +1912,29 @@ size_t StringDictionary::buildDictionaryTranslationMap(
             const int32_t start_idx = r.begin();
             const int32_t end_idx = r.end();
             size_t num_strings_not_translated = 0;
+            std::string string_ops_storage;  // Needs to be thread local to back
+                                             // string_view returned by string_ops()
             for (int32_t source_string_id = start_idx; source_string_id != end_idx;
                  ++source_string_id) {
               const std::string_view source_str =
-                  getStringFromStorageFast(source_string_id);
+                  has_string_ops ? string_ops(getStringFromStorageFast(source_string_id),
+                                              string_ops_storage)
+                                 : getStringFromStorageFast(source_string_id);
+
+              if (source_str.empty()) {
+                translated_ids[source_string_id] = inline_int_null_value<int32_t>();
+                continue;
+              }
               // Get the hash from this/the source dictionary's cache, as the function
               // will be the same for the dest_dict, sparing us having to recompute it
 
               // Todo(todd): Remove option to turn string hash cache off or at least
               // make a constexpr to avoid these branches when we expect it to be always
               // on going forward
-              const string_dict_hash_t hash = materialize_hashes_
+              const string_dict_hash_t hash = (materialize_hashes_ && !has_string_ops)
                                                   ? hash_cache_[source_string_id]
                                                   : hash_string(source_str);
-              uint32_t hash_bucket = dest_dict->computeBucket(
+              const uint32_t hash_bucket = dest_dict->computeBucket(
                   hash, source_str, dest_dict->string_id_string_dict_hash_table_);
               const auto translated_string_id =
                   dest_dict->string_id_string_dict_hash_table_[hash_bucket];

@@ -38,17 +38,31 @@
 #include <tbb/parallel_for.h>
 #endif  // HAVE_TBB
 
+bool one_or_more_string_ops_is_null(
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+  for (const auto& string_op_info : string_op_infos) {
+    if (string_op_info.hasNullLiteralArg()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     const int32_t source_string_dict_id,
     const int32_t dest_string_dict_id,
     const bool translate_intersection_only,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     Executor* executor,
-    Data_Namespace::DataMgr* data_mgr)
+    Data_Namespace::DataMgr* data_mgr,
+    const bool delay_translation)
     : source_string_dict_id_(source_string_dict_id)
     , dest_string_dict_id_(dest_string_dict_id)
     , translate_intersection_only_(translate_intersection_only)
+    , string_op_infos_(string_op_infos)
+    , has_null_string_op_(one_or_more_string_ops_is_null(string_op_infos))
     , memory_level_(memory_level)
     , device_count_(device_count)
     , executor_(executor)
@@ -59,6 +73,10 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
 #endif  // HAVE_CUDA
+  if (!delay_translation && !has_null_string_op_) {
+    buildTranslationMap();
+    createKernelBuffers();
+  }
 }
 
 StringDictionaryTranslationMgr::~StringDictionaryTranslationMgr() {
@@ -75,6 +93,7 @@ void StringDictionaryTranslationMgr::buildTranslationMap() {
       translate_intersection_only_
           ? RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION
           : RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
+      string_op_infos_,
       executor_->getRowSetMemoryOwner(),
       true);
 }
@@ -105,11 +124,58 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
   }
 }
 
-llvm::Value* StringDictionaryTranslationMgr::codegenCast(llvm::Value* input_str_id_lv,
-                                                         const SQLTypeInfo& input_ti,
-                                                         const bool add_nullcheck) const {
+llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_lv,
+                                                     const SQLTypeInfo& input_ti,
+                                                     const bool add_nullcheck,
+                                                     const CompilationOptions& co) const {
+  CHECK(kernel_translation_maps_.size() == static_cast<size_t>(device_count_) ||
+        has_null_string_op_);
+  if (!co.hoist_literals && kernel_translation_maps_.size() > 1UL) {
+    // Currently the only way to have multiple kernel translation maps is
+    // to be running on GPU, where we would need to have a different pointer
+    // per GPU to the translation map, as the address space is not shared
+    // between GPUs
+
+    CHECK(memory_level_ == Data_Namespace::GPU_LEVEL);
+    CHECK(co.device_type == ExecutorDeviceType::GPU);
+
+    // Since we currently cannot support different code per device, the only
+    // way to allow for a different kernel translation map/kernel per
+    // device(i.e. GPU) is via hoisting the map handle literal so that
+    // it can be paramertized as a kernel argument. Hence if literal
+    // hoisting is disabled (generally b/c we have an update query),
+    // the surest fire way of ensuring one and only one translation map
+    // that can have a hard-coded handle in the generated code is by running
+    // on CPU (which per the comment above currently always has a device
+    // count of 1).
+
+    // This is not currently a major limitation as we currently run
+    // all update queries on CPU, but it would be if we want to run
+    // on multiple GPUs.
+
+    // Todo(todd): Examine ways around the above limitation, likely either
+    // a dedicated kernel parameter for translation maps (like we have for
+    // join hash tables), or perhaps better for a number of reasons, reworking
+    // the translation map plumbing to use the join infra (which would also
+    // mean we could use pieces like the baseline hash join for multiple
+    // input string dictionaries, i.e. CONCAT on two string columns).
+
+    throw QueryMustRunOnCpu();
+  }
+  CHECK(co.hoist_literals || kernel_translation_maps_.size() == 1UL);
+
   auto cgen_state_ptr = executor_->getCgenStatePtr();
   AUTOMATIC_IR_METADATA(cgen_state_ptr);
+
+  if (has_null_string_op_) {
+    // If any of the string ops can statically be determined to output all nulls
+    // (currently determined by whether any of the constant literal inputs to the
+    // string operation are null), then simply generate codegen a null
+    // dictionary-encoded value
+    const auto null_ti = SQLTypeInfo(kTEXT, true /* is_nullable */, kENCODING_DICT);
+    return static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(null_ti));
+  }
+
   std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
   std::vector<const Analyzer::Constant*> constants;
   for (const auto kernel_translation_map : kernel_translation_maps_) {
@@ -124,10 +190,15 @@ llvm::Value* StringDictionaryTranslationMgr::codegenCast(llvm::Value* input_str_
     constants_owned.push_back(translation_map_handle_literal);
     constants.push_back(translation_map_handle_literal.get());
   }
+  CHECK_GE(constants.size(), 1UL);
+  CHECK(co.hoist_literals || constants.size() == 1UL);
 
   CodeGenerator code_generator(executor_);
+
   const auto translation_map_handle_lvs =
-      code_generator.codegenHoistedConstants(constants, kENCODING_NONE, 0);
+      co.hoist_literals
+          ? code_generator.codegenHoistedConstants(constants, kENCODING_NONE, 0)
+          : code_generator.codegen(constants[0], false, co);
   CHECK_EQ(size_t(1), translation_map_handle_lvs.size());
 
   std::unique_ptr<CodeGenerator::NullCheckCodegen> nullcheck_codegen;
