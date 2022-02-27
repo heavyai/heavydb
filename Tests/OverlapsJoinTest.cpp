@@ -739,7 +739,8 @@ class OverlapsJoinHashTableMock : public OverlapsJoinHashTable {
             executor,
             HashJoin::normalizeColumnPairs(condition.get(),
                                            *executor->getCatalog(),
-                                           executor->getTemporaryTables()),
+                                           executor->getTemporaryTables())
+                .first,
             device_count,
             {},
             {})

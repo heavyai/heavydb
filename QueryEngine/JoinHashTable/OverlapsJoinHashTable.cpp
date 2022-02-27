@@ -63,8 +63,10 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                            query_hint,
                                            table_id_to_node_map);
   } else {
-    inner_outer_pairs = HashJoin::normalizeColumnPairs(
-        condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
+    inner_outer_pairs =
+        HashJoin::normalizeColumnPairs(
+            condition.get(), *executor->getCatalog(), executor->getTemporaryTables())
+            .first;
   }
   CHECK(!inner_outer_pairs.empty());
 
@@ -108,6 +110,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
 
   auto hashtable_access_path_info =
       HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
+                                                    {},
                                                     condition->get_optype(),
                                                     join_type,
                                                     hashtable_build_dag_map,

@@ -4209,12 +4209,15 @@ std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
         reverse_logical_distribution(translator.translateScalarRex(
             bw_equals ? bw_equals.get() : rex_condition_component));
     auto join_condition_cf = qual_to_conjunctive_form(join_condition);
-    join_condition_quals.insert(join_condition_quals.end(),
-                                join_condition_cf.quals.begin(),
-                                join_condition_cf.quals.end());
-    join_condition_quals.insert(join_condition_quals.end(),
-                                join_condition_cf.simple_quals.begin(),
-                                join_condition_cf.simple_quals.end());
+
+    auto append_folded_cf_quals = [&join_condition_quals](const auto& cf_quals) {
+      for (const auto& cf_qual : cf_quals) {
+        join_condition_quals.emplace_back(fold_expr(cf_qual.get()));
+      }
+    };
+
+    append_folded_cf_quals(join_condition_cf.quals);
+    append_folded_cf_quals(join_condition_cf.simple_quals);
   }
   return combine_equi_join_conditions(join_condition_quals);
 }

@@ -16,15 +16,19 @@
 
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 
+#include "QueryEngine/CodeGenerator.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/ScalarExprVisitor.h"
+
+#include <sstream>
 
 extern bool g_enable_overlaps_hashjoin;
 
@@ -161,6 +165,42 @@ std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferSet& s) {
   }
   os << "}\n";
   return os;
+}
+
+std::ostream& operator<<(std::ostream& os,
+                         const InnerOuterStringOpInfos& inner_outer_string_op_infos) {
+  os << "(" << inner_outer_string_op_infos.first << ", "
+     << inner_outer_string_op_infos.second << ")";
+  return os;
+}
+
+std::string toString(const InnerOuterStringOpInfos& inner_outer_string_op_infos) {
+  std::ostringstream os;
+  os << inner_outer_string_op_infos;
+  return os.str();
+}
+
+std::ostream& operator<<(
+    std::ostream& os,
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs) {
+  os << "[";
+  bool first_elem = true;
+  for (const auto& inner_outer_string_op_infos : inner_outer_string_op_infos_pairs) {
+    if (!first_elem) {
+      os << ", ";
+    }
+    first_elem = false;
+    os << inner_outer_string_op_infos;
+  }
+  os << "]";
+  return os;
+}
+
+std::string toString(
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs) {
+  std::ostringstream os;
+  os << inner_outer_string_op_infos_pairs;
+  return os.str();
 }
 
 HashJoinMatchingSet HashJoin::codegenMatchingSet(
@@ -336,13 +376,15 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
   return join_hash_table;
 }
 
-std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
-HashJoin::getStrDictProxies(const InnerOuter& cols, const Executor* executor) {
+std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
+HashJoin::getStrDictProxies(const InnerOuter& cols,
+                            const Executor* executor,
+                            const bool has_string_ops) {
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto inner_ti = inner_col->get_type_info();
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
-  std::pair<const StringDictionaryProxy*, const StringDictionaryProxy*>
+  std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
       inner_outer_str_dict_proxies{nullptr, nullptr};
   if (inner_ti.is_string() && outer_col) {
     CHECK(outer_col->get_type_info().is_string());
@@ -352,7 +394,8 @@ HashJoin::getStrDictProxies(const InnerOuter& cols, const Executor* executor) {
     inner_outer_str_dict_proxies.second =
         executor->getStringDictionaryProxy(outer_col->get_comp_param(), true);
     CHECK(inner_outer_str_dict_proxies.second);
-    if (*inner_outer_str_dict_proxies.first == *inner_outer_str_dict_proxies.second) {
+    if (!has_string_ops &&
+        *inner_outer_str_dict_proxies.first == *inner_outer_str_dict_proxies.second) {
       // Dictionaries are the same - don't need to translate
       CHECK(inner_col->get_comp_param() == outer_col->get_comp_param());
       inner_outer_str_dict_proxies.first = nullptr;
@@ -364,30 +407,56 @@ HashJoin::getStrDictProxies(const InnerOuter& cols, const Executor* executor) {
 
 const StringDictionaryProxy::IdMap* HashJoin::translateInnerToOuterStrDictProxies(
     const InnerOuter& cols,
+    const InnerOuterStringOpInfos& inner_outer_string_op_infos,
+    ExpressionRange& col_range,
     const Executor* executor) {
-  const auto inner_outer_proxies = HashJoin::getStrDictProxies(cols, executor);
+  const bool has_string_ops = inner_outer_string_op_infos.first.size() ||
+                              inner_outer_string_op_infos.second.size();
+  const auto inner_outer_proxies =
+      HashJoin::getStrDictProxies(cols, executor, has_string_ops);
   const bool translate_dictionary =
       inner_outer_proxies.first && inner_outer_proxies.second;
   if (translate_dictionary) {
     const auto inner_dict_id = inner_outer_proxies.first->getDictId();
     const auto outer_dict_id = inner_outer_proxies.second->getDictId();
-    CHECK_NE(inner_dict_id, outer_dict_id);
-    return executor->getIntersectionStringProxyTranslationMap(
+    CHECK(has_string_ops || inner_dict_id != outer_dict_id);
+    const auto id_map = executor->getJoinIntersectionStringProxyTranslationMap(
         inner_outer_proxies.first,
         inner_outer_proxies.second,
+        inner_outer_string_op_infos.first,
+        inner_outer_string_op_infos.second,
         executor->getRowSetMemoryOwner());
+    if (!inner_outer_string_op_infos.second.empty()) {
+      // String op was applied to lhs table,
+      // need to expand column range appropriately
+      col_range = ExpressionRange::makeIntRange(
+          std::min(col_range.getIntMin(),
+                   static_cast<int64_t>(
+                       inner_outer_proxies.second->transientEntryCount() + 1) *
+                       -1),
+          col_range.getIntMax(),
+          0,
+          col_range.hasNulls());
+    }
+    return id_map;
   }
   return nullptr;
 }
 
 CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     const std::vector<InnerOuter>& inner_outer_pairs,
-    const Executor* executor) {
+    const Executor* executor,
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs) {
   CHECK(executor);
   std::vector<const void*> sd_inner_proxy_per_key;
-  std::vector<const void*> sd_outer_proxy_per_key;
+  std::vector<void*> sd_outer_proxy_per_key;
   std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
   const auto db_id = executor->getCatalog()->getCurrentDB().dbId;
+  const bool has_string_op_infos = inner_outer_string_op_infos_pairs.size();
+  if (has_string_op_infos) {
+    CHECK_EQ(inner_outer_pairs.size(), inner_outer_string_op_infos_pairs.size());
+  }
+  size_t string_op_info_pairs_idx = 0;
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
     const auto outer_col = inner_outer_pair.second;
@@ -396,13 +465,16 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     ChunkKey cache_key_chunks_for_column{
         db_id, inner_col->get_table_id(), inner_col->get_column_id()};
     if (inner_ti.is_string() &&
-        !(inner_ti.get_comp_param() == outer_ti.get_comp_param())) {
+        (!(inner_ti.get_comp_param() == outer_ti.get_comp_param()) ||
+         (has_string_op_infos &&
+          (inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].first.size() ||
+           inner_outer_string_op_infos_pairs[string_op_info_pairs_idx].second.size())))) {
       CHECK(outer_ti.is_string());
       CHECK(inner_ti.get_compression() == kENCODING_DICT &&
             outer_ti.get_compression() == kENCODING_DICT);
       const auto sd_inner_proxy = executor->getStringDictionaryProxy(
           inner_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
-      const auto sd_outer_proxy = executor->getStringDictionaryProxy(
+      auto sd_outer_proxy = executor->getStringDictionaryProxy(
           outer_ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
       CHECK(sd_inner_proxy && sd_outer_proxy);
       sd_inner_proxy_per_key.push_back(sd_inner_proxy);
@@ -413,13 +485,16 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
       sd_outer_proxy_per_key.emplace_back();
     }
     cache_key_chunks.push_back(cache_key_chunks_for_column);
+    string_op_info_pairs_idx++;
   }
   return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
 }
 
 std::vector<const StringDictionaryProxy::IdMap*>
-HashJoin::translateCompositeStrDictProxies(const CompositeKeyInfo& composite_key_info,
-                                           const Executor* executor) {
+HashJoin::translateCompositeStrDictProxies(
+    const CompositeKeyInfo& composite_key_info,
+    const std::vector<InnerOuterStringOpInfos>& string_op_infos_for_keys,
+    const Executor* executor) {
   const auto& inner_proxies = composite_key_info.sd_inner_proxy_per_key;
   const auto& outer_proxies = composite_key_info.sd_outer_proxy_per_key;
   const size_t num_proxies = inner_proxies.size();
@@ -432,20 +507,40 @@ HashJoin::translateCompositeStrDictProxies(const CompositeKeyInfo& composite_key
     if (translate_proxies) {
       const auto inner_proxy =
           reinterpret_cast<const StringDictionaryProxy*>(inner_proxies[proxy_pair_idx]);
-      const auto outer_proxy =
-          reinterpret_cast<const StringDictionaryProxy*>(outer_proxies[proxy_pair_idx]);
+      auto outer_proxy =
+          reinterpret_cast<StringDictionaryProxy*>(outer_proxies[proxy_pair_idx]);
       CHECK(inner_proxy);
       CHECK(outer_proxy);
 
       CHECK_NE(inner_proxy->getDictId(), outer_proxy->getDictId());
       proxy_translation_maps.emplace_back(
-          executor->getIntersectionStringProxyTranslationMap(
-              inner_proxy, outer_proxy, executor->getRowSetMemoryOwner()));
+          executor->getJoinIntersectionStringProxyTranslationMap(
+              inner_proxy,
+              outer_proxy,
+              string_op_infos_for_keys[proxy_pair_idx].first,
+              string_op_infos_for_keys[proxy_pair_idx].second,
+              executor->getRowSetMemoryOwner()));
     } else {
       proxy_translation_maps.emplace_back(nullptr);
     }
   }
   return proxy_translation_maps;
+}
+
+llvm::Value* HashJoin::codegenColOrStringOper(
+    const Analyzer::Expr* col_or_string_oper,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    CodeGenerator& code_generator,
+    const CompilationOptions& co) {
+  if (!string_op_infos.empty()) {
+    const auto coerced_col_var =
+        dynamic_cast<const Analyzer::ColumnVar*>(col_or_string_oper);
+    CHECK(coerced_col_var);
+    std::vector<llvm::Value*> codegen_val_vec{
+        code_generator.codegenPseudoStringOper(coerced_col_var, string_op_infos, co)};
+    return codegen_val_vec[0];
+  }
+  return code_generator.codegen(col_or_string_oper, true, co)[0];
 }
 
 std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view table,
@@ -680,13 +775,14 @@ void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
   }
 }
 
-InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
-                                         const Analyzer::Expr* rhs,
-                                         const Catalog_Namespace::Catalog& cat,
-                                         const TemporaryTables* temporary_tables,
-                                         const bool is_overlaps_join) {
-  const auto& lhs_ti = lhs->get_type_info();
-  const auto& rhs_ti = rhs->get_type_info();
+std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
+    const Analyzer::Expr* lhs,
+    const Analyzer::Expr* rhs,
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables,
+    const bool is_overlaps_join) {
+  SQLTypeInfo lhs_ti = lhs->get_type_info();
+  SQLTypeInfo rhs_ti = rhs->get_type_info();
   if (!is_overlaps_join) {
     if (lhs_ti.get_type() != rhs_ti.get_type()) {
       throw HashJoinFail("Equijoin types must be identical, found: " +
@@ -715,15 +811,48 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
   if (lhs_ti.is_decimal() && (lhs_cast || rhs_cast)) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
-  const auto lhs_col =
-      lhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-  const auto rhs_col =
-      rhs_cast ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+  auto lhs_col = lhs_cast
+                     ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
+                     : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+  auto rhs_col = rhs_cast
+                     ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
+                     : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+
+  const auto lhs_string_oper =
+      lhs_cast ? dynamic_cast<const Analyzer::StringOper*>(lhs_cast->get_operand())
+               : dynamic_cast<const Analyzer::StringOper*>(lhs);
+  const auto rhs_string_oper =
+      rhs_cast ? dynamic_cast<const Analyzer::StringOper*>(rhs_cast->get_operand())
+               : dynamic_cast<const Analyzer::StringOper*>(rhs);
+
+  auto process_string_op_infos = [](const auto& string_oper, auto& col, auto& ti) {
+    std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
+    if (string_oper) {
+      col = dynamic_cast<const Analyzer::ColumnVar*>(string_oper->getArg(0));
+      CHECK(col);
+      ti = col->get_type_info();
+      CHECK(ti.is_dict_encoded_string());
+      const auto chained_string_op_exprs = string_oper->getChainedStringOpExprs();
+      CHECK_GT(chained_string_op_exprs.size(), 0UL);
+      for (const auto& chained_string_op_expr : chained_string_op_exprs) {
+        auto chained_string_op =
+            dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
+        CHECK(chained_string_op);
+        StringOps_Namespace::StringOpInfo string_op_info(
+            chained_string_op->get_kind(), chained_string_op->getLiteralArgs());
+        string_op_infos.emplace_back(string_op_info);
+      }
+    }
+    return string_op_infos;
+  };
+
+  auto outer_string_op_infos = process_string_op_infos(lhs_string_oper, lhs_col, lhs_ti);
+  auto inner_string_op_infos = process_string_op_infos(rhs_string_oper, rhs_col, rhs_ti);
+
   if (!lhs_col && !rhs_col) {
     throw HashJoinFail("Cannot use hash join for given expression");
   }
+
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::ColumnVar* outer_col{nullptr};
   auto outer_ti = lhs_ti;
@@ -739,6 +868,7 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
     inner_col = lhs_col;
     outer_col = rhs_col;
     std::swap(outer_ti, inner_ti);
+    std::swap(outer_string_op_infos, inner_string_op_infos);
     outer_expr = rhs;
   }
   if (!inner_col) {
@@ -818,14 +948,15 @@ InnerOuter HashJoin::normalizeColumnPair(const Analyzer::Expr* lhs,
                                    normalized_outer_ti.get_type_name()));
   }
 
-  return {normalized_inner_col, normalized_outer_col};
+  return std::make_pair(std::make_pair(normalized_inner_col, normalized_outer_col),
+                        std::make_pair(inner_string_op_infos, outer_string_op_infos));
 }
 
-std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
-    const Analyzer::BinOper* condition,
-    const Catalog_Namespace::Catalog& cat,
-    const TemporaryTables* temporary_tables) {
-  std::vector<InnerOuter> result;
+std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>>
+HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
+                               const Catalog_Namespace::Catalog& cat,
+                               const TemporaryTables* temporary_tables) {
+  std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>> result;
   const auto lhs_tuple_expr =
       dynamic_cast<const Analyzer::ExpressionTuple*>(condition->get_left_operand());
   const auto rhs_tuple_expr =
@@ -837,19 +968,23 @@ std::vector<InnerOuter> HashJoin::normalizeColumnPairs(
     const auto& rhs_tuple = rhs_tuple_expr->getTuple();
     CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
     for (size_t i = 0; i < lhs_tuple.size(); ++i) {
-      result.push_back(normalizeColumnPair(lhs_tuple[i].get(),
-                                           rhs_tuple[i].get(),
-                                           cat,
-                                           temporary_tables,
-                                           condition->is_overlaps_oper()));
+      const auto col_pair = normalizeColumnPair(lhs_tuple[i].get(),
+                                                rhs_tuple[i].get(),
+                                                cat,
+                                                temporary_tables,
+                                                condition->is_overlaps_oper());
+      result.first.emplace_back(col_pair.first);
+      result.second.emplace_back(col_pair.second);
     }
   } else {
     CHECK(!lhs_tuple_expr && !rhs_tuple_expr);
-    result.push_back(normalizeColumnPair(condition->get_left_operand(),
-                                         condition->get_right_operand(),
-                                         cat,
-                                         temporary_tables,
-                                         condition->is_overlaps_oper()));
+    const auto col_pair = normalizeColumnPair(condition->get_left_operand(),
+                                              condition->get_right_operand(),
+                                              cat,
+                                              temporary_tables,
+                                              condition->is_overlaps_oper());
+    result.first.emplace_back(col_pair.first);
+    result.second.emplace_back(col_pair.second);
   }
 
   return result;
@@ -862,7 +997,7 @@ InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
                     const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
-  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
+  return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables).first;
 }
 
 }  // namespace

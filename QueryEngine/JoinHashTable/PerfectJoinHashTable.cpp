@@ -38,10 +38,10 @@ std::unique_ptr<HashingSchemeRecycler> PerfectJoinHashTable::hash_table_layout_c
     std::make_unique<HashingSchemeRecycler>();
 
 namespace {
-
-InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,
-                    const Catalog_Namespace::Catalog& cat,
-                    const TemporaryTables* temporary_tables) {
+std::pair<InnerOuter, InnerOuterStringOpInfos> get_cols(
+    const Analyzer::BinOper* qual_bin_oper,
+    const Catalog_Namespace::Catalog& cat,
+    const TemporaryTables* temporary_tables) {
   const auto lhs = qual_bin_oper->get_left_operand();
   const auto rhs = qual_bin_oper->get_right_operand();
   return HashJoin::normalizeColumnPair(lhs, rhs, cat, temporary_tables);
@@ -156,8 +156,10 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const TableIdToNodeMap& table_id_to_node_map) {
   CHECK(IS_EQUIVALENCE(qual_bin_oper->get_optype()));
-  const auto cols =
+  const auto cols_and_string_op_infos =
       get_cols(qual_bin_oper.get(), *executor->getCatalog(), executor->temporary_tables_);
+  const auto& cols = cols_and_string_op_infos.first;
+  const auto& inner_outer_string_op_infos = cols_and_string_op_infos.second;
   const auto inner_col = cols.first;
   CHECK(inner_col);
   const auto& ti = inner_col->get_type_info();
@@ -211,6 +213,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   inner_outer_pairs.emplace_back(inner_col, cols.second);
   auto hashtable_access_path_info =
       HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs,
+                                                    {inner_outer_string_op_infos},
                                                     qual_bin_oper->get_optype(),
                                                     join_type,
                                                     hashtable_build_dag_map,
@@ -219,6 +222,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   if (VLOGGING(1)) {
     ts1 = std::chrono::steady_clock::now();
   }
+
   auto join_hash_table = std::shared_ptr<PerfectJoinHashTable>(
       new PerfectJoinHashTable(qual_bin_oper,
                                inner_col,
@@ -232,7 +236,8 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
                                executor,
                                device_count,
                                hashtable_access_path_info,
-                               table_id_to_node_map));
+                               table_id_to_node_map,
+                               inner_outer_string_op_infos));
   try {
     join_hash_table->reify();
   } catch (const TableMustBeReplicated& e) {
@@ -268,9 +273,16 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   return join_hash_table;
 }
 
-bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::Expr* outer_col_expr,
-                                  const Executor* executor) {
+bool needs_dictionary_translation(
+    const InnerOuter& inner_outer_col_pair,
+    const InnerOuterStringOpInfos& inner_outer_string_op_infos,
+    const Executor* executor) {
+  if (inner_outer_string_op_infos.first.size() ||
+      inner_outer_string_op_infos.second.size()) {
+    return true;
+  }
+  auto inner_col = inner_outer_col_pair.first;
+  auto outer_col_expr = inner_outer_col_pair.second;
   const auto catalog = executor->getCatalog();
   CHECK(catalog);
   const auto inner_cd = get_column_descriptor_maybe(
@@ -352,7 +364,7 @@ void PerfectJoinHashTable::reify() {
   CHECK_LT(0, device_count_);
   auto catalog = const_cast<Catalog_Namespace::Catalog*>(executor_->getCatalog());
   const auto cols =
-      get_cols(qual_bin_oper_.get(), *catalog, executor_->temporary_tables_);
+      get_cols(qual_bin_oper_.get(), *catalog, executor_->temporary_tables_).first;
   const auto inner_col = cols.first;
   HashJoin::checkHashJoinReplicationConstraint(
       inner_col->get_table_id(),
@@ -371,6 +383,11 @@ void PerfectJoinHashTable::reify() {
 
   inner_outer_pairs_.push_back(cols);
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
+  // Todo(todd): Clean up the fact that we store the inner outer column pairs as a vector,
+  // even though only one is ever valid for perfect hash layout. Either move to 1 or keep
+  // the vector but move it to the HashTable parent class
+  needs_dict_translation_ = needs_dictionary_translation(
+      inner_outer_pairs_.front(), inner_outer_string_op_infos_, executor_);
 
   std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>> fragments_per_device;
   std::vector<ColumnsForDevice> columns_per_device;
@@ -396,9 +413,26 @@ void PerfectJoinHashTable::reify() {
                                   : nullptr,
                               *catalog));
   }
-  // Now check if on the number of entries per column exceeds the rhs join hash table
-  // range, and skip trying to build a One-to-One hash table if so
-  if (!isOneToOneHashPossible(columns_per_device)) {
+
+  // Assume we will need one-to-many if we have a string operation, as these tend
+  // to be cardinality-reducting operations, i.e. |S(t)| < |t|
+  // Todo(todd): Ostensibly only string ops on the rhs/inner expression cause rhs dups and
+  // so we may be too conservative here, but validate
+
+  const bool has_string_ops = inner_outer_string_op_infos_.first.size() ||
+                              inner_outer_string_op_infos_.second.size();
+
+  // Also check if on the number of entries per column exceeds the rhs join hash table
+  // range, and skip trying to build a One-to-One hash table if so. There is a slight edge
+  // case where this can be overly pessimistic, and that is if the non-null values are all
+  // unique, but there are multiple null values, but we currently don't have the metadata
+  // to track null counts (only column nullability from the ddl and null existence from
+  // the encoded data), and this is probably too much of an edge case to worry about for
+  // now given the general performance benfits of skipping 1:1 if we are fairly confident
+  // it is doomed up front
+
+  if (hash_type_ == HashType::OneToOne &&
+      (has_string_ops || !isOneToOneHashPossible(columns_per_device))) {
     hash_type_ = HashType::OneToMany;
   }
 
@@ -419,6 +453,7 @@ void PerfectJoinHashTable::reify() {
             col_range_,
             inner_col,
             outer_col ? outer_col : inner_col,
+            inner_outer_string_op_infos_,
             chunk_key,
             columns_per_device[device_id].join_columns.front().num_elems,
             qual_bin_oper_->get_optype(),
@@ -478,29 +513,18 @@ void PerfectJoinHashTable::reify() {
   }
 }
 
-Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
-    const std::vector<InnerOuter>& inner_outer_pairs) const {
-  for (const auto& inner_outer_pair : inner_outer_pairs) {
-    if (needs_dictionary_translation(
-            inner_outer_pair.first, inner_outer_pair.second, executor_)) {
-      needs_dict_translation_ = true;
-      return Data_Namespace::CPU_LEVEL;
-    }
-  }
-  return memory_level_;
-}
-
 ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
     DeviceAllocator* dev_buff_owner,
     const Catalog_Namespace::Catalog& catalog) {
-  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
   std::vector<JoinColumn> join_columns;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinColumnTypeInfo> join_column_types;
   std::vector<JoinBucketInfo> join_bucket_info;
   std::vector<std::shared_ptr<void>> malloc_owner;
+  const auto effective_memory_level =
+      get_effective_memory_level(memory_level_, needs_dict_translation_);
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
     const auto inner_cd = get_column_descriptor_maybe(
@@ -535,7 +559,8 @@ void PerfectJoinHashTable::reifyForDevice(const ChunkKey& chunk_key,
                                           const int device_id,
                                           const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
-  const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
+  const auto effective_memory_level =
+      get_effective_memory_level(memory_level_, needs_dict_translation_);
 
   CHECK_EQ(columns_for_device.join_columns.size(), size_t(1));
   CHECK_EQ(inner_outer_pairs_.size(), size_t(1));
@@ -545,6 +570,7 @@ void PerfectJoinHashTable::reifyForDevice(const ChunkKey& chunk_key,
                                             join_column,
                                             inner_outer_pairs_.front(),
                                             layout,
+
                                             effective_memory_level,
                                             device_id);
     if (err) {
@@ -588,8 +614,11 @@ int PerfectJoinHashTable::initHashTableForDevice(
   int err{0};
   const int32_t hash_join_invalid_val{-1};
   auto hashtable_layout = layout;
-  auto allow_hashtable_recycling = HashtableRecycler::isSafeToCacheHashtable(
-      table_id_to_node_map_, needs_dict_translation_, inner_col->get_table_id());
+  auto allow_hashtable_recycling =
+      HashtableRecycler::isSafeToCacheHashtable(table_id_to_node_map_,
+                                                needs_dict_translation_,
+                                                {inner_outer_string_op_infos_},
+                                                inner_col->get_table_id());
   if (allow_hashtable_recycling) {
     auto cached_hashtable_layout_type = hash_table_layout_cache_->getItemFromCache(
         hashtable_cache_key_,
@@ -608,8 +637,17 @@ int PerfectJoinHashTable::initHashTableForDevice(
       hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
                                                CacheItemType::PERFECT_HT,
                                                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+      if (device_id == 0) {
+        if (hash_table && device_id == 0) {
+          std::cout << "Found perfect hash table in cache for key: "
+                    << hashtable_cache_key_ << std::endl;
+        } else {
+          std::cout << "Did not find perfect hash table in cache for key: "
+                    << hashtable_cache_key_ << std::endl;
+        }
+      }
     }
-    if (!hash_table) {
+    if (!hash_table && needs_dict_translation_) {
       std::unique_lock<std::mutex> str_proxy_translation_lock(
           str_proxy_translation_mutex_);
       // It's not ideal to populate the str dict proxy translation map at the per device
@@ -620,11 +658,16 @@ int PerfectJoinHashTable::initHashTableForDevice(
       // Hoist cache lookup to PerfectJoinHashTable::reify and then move this proxy
       // translation to that level as well, conditioned on the hash table not being
       // cached.
-      if (needs_dict_translation_ && !str_proxy_translation_map_) {
+      if (!str_proxy_translation_map_) {
         CHECK_GE(inner_outer_pairs_.size(), 1UL);
-        str_proxy_translation_map_ = HashJoin::translateInnerToOuterStrDictProxies(
-            inner_outer_pairs_.front(), executor_);
+        str_proxy_translation_map_ =
+            HashJoin::translateInnerToOuterStrDictProxies(inner_outer_pairs_.front(),
+                                                          inner_outer_string_op_infos_,
+                                                          col_range_,
+                                                          executor_);
       }
+      hash_entry_info = get_bucketized_hash_entry_info(
+          inner_col->get_type_info(), col_range_, isBitwiseEq());
     }
     decltype(std::chrono::steady_clock::now()) ts1, ts2;
     ts1 = std::chrono::steady_clock::now();
@@ -635,9 +678,12 @@ int PerfectJoinHashTable::initHashTableForDevice(
         // for multiple devices, all devices except the first to take
         // cpu_hash_table_buff_lock should find their hash table cached now
         // from the first device to run
-        hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
-                                                 CacheItemType::PERFECT_HT,
-                                                 DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+        if (allow_hashtable_recycling) {
+          hash_table =
+              initHashTableOnCpuFromCache(hashtable_cache_key_,
+                                          CacheItemType::PERFECT_HT,
+                                          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+        }
         if (!hash_table) {
           PerfectJoinHashTableBuilder builder;
           if (hashtable_layout == HashType::OneToOne) {
@@ -842,20 +888,24 @@ llvm::Value* PerfectJoinHashTable::codegenHashTableLoad(const size_t table_idx) 
 
 std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
     llvm::Value* hash_ptr,
+    llvm::Value* key_lv,
     const Analyzer::Expr* key_col,
     const int shard_count,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   CodeGenerator code_generator(executor_);
-  const auto key_lvs = code_generator.codegen(key_col, true, co);
-  CHECK_EQ(size_t(1), key_lvs.size());
+  CHECK(key_lv);
+  // Todo(todd): Fix below, it's gross (but didn't want to redo the plumbing yet)
+  // const auto key_lv = key_lvs.size() && key_lvs[0]
+  //                        ? key_lvs[0]
+  //                        : code_generator.codegen(key_col, true, co)[0];
   auto const& key_col_ti = key_col->get_type_info();
   auto hash_entry_info =
       get_bucketized_hash_entry_info(key_col_ti, col_range_, isBitwiseEq());
 
   std::vector<llvm::Value*> hash_join_idx_args{
       hash_ptr,
-      executor_->cgen_state_->castToTypeIn(key_lvs.front(), 64),
+      executor_->cgen_state_->castToTypeIn(key_lv, 64),
       executor_->cgen_state_->llInt(col_range_.getIntMin()),
       executor_->cgen_state_->llInt(col_range_.getIntMax())};
   if (shard_count) {
@@ -895,8 +945,10 @@ std::vector<llvm::Value*> PerfectJoinHashTable::getHashJoinArgs(
 HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOptions& co,
                                                              const size_t index) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
-  const auto cols = get_cols(
-      qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto cols =
+      get_cols(
+          qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_)
+          .first;
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -919,7 +971,12 @@ HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(const CompilationOp
         "rewriting table order in "
         "FROM clause.");
   }
-  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_col, shard_count, co);
+  CodeGenerator code_generator(executor_);
+
+  auto key_lv = HashJoin::codegenColOrStringOper(
+      key_col, inner_outer_string_op_infos_.second, code_generator, co);
+
+  auto hash_join_idx_args = getHashJoinArgs(pos_ptr, key_lv, key_col, shard_count, co);
   const int64_t sub_buff_size = getComponentBufferSize();
   const auto& key_col_ti = key_col->get_type_info();
 
@@ -1035,8 +1092,10 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
   using namespace std::string_literals;
 
   CHECK(getHashType() == HashType::OneToOne);
-  const auto cols = get_cols(
+  const auto cols_and_string_op_infos = get_cols(
       qual_bin_oper_.get(), *executor_->getCatalog(), executor_->temporary_tables_);
+  const auto& cols = cols_and_string_op_infos.first;
+  const auto& inner_outer_string_op_infos = cols_and_string_op_infos.second;
   auto key_col = cols.second;
   CHECK(key_col);
   auto val_col = cols.first;
@@ -1050,19 +1109,21 @@ llvm::Value* PerfectJoinHashTable::codegenSlot(const CompilationOptions& co,
           val_col_var,
           get_max_rte_scan_table(executor_->cgen_state_->scan_idx_to_hash_pos_))) {
     throw std::runtime_error(
-        "Query execution fails because the query contains not supported self-join "
+        "Query execution failed because the query contains not supported self-join "
         "pattern. We suspect the query requires multiple left-deep join tree due to "
-        "the "
-        "join condition of the self-join and is not supported for now. Please consider "
-        "rewriting table order in "
-        "FROM clause.");
+        "the join condition of the self-join and is not supported for now. Please "
+        "consider chaning the table order in the FROM clause.");
   }
-  const auto key_lvs = code_generator.codegen(key_col, true, co);
-  CHECK_EQ(size_t(1), key_lvs.size());
+
+  auto key_lv = HashJoin::codegenColOrStringOper(
+      key_col, inner_outer_string_op_infos.second, code_generator, co);
+
+  // CHECK_EQ(size_t(1), key_lvs.size());
   auto hash_ptr = codegenHashTableLoad(index);
   CHECK(hash_ptr);
   const int shard_count = shardCount();
-  const auto hash_join_idx_args = getHashJoinArgs(hash_ptr, key_col, shard_count, co);
+  const auto hash_join_idx_args =
+      getHashJoinArgs(hash_ptr, key_lv, key_col, shard_count, co);
 
   const auto& key_col_ti = key_col->get_type_info();
   std::string fname((key_col_ti.get_type() == kDATE) ? "bucketized_hash_join_idx"s

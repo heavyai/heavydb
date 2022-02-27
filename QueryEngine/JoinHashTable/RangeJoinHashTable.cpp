@@ -128,6 +128,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                  condition->get_left_operand()});
   auto hashtable_access_path_info =
       HashtableRecycler::getHashtableAccessPathInfo(inner_outer_pairs_for_cache_access,
+                                                    {},
                                                     condition->get_optype(),
                                                     join_type,
                                                     hashtable_build_dag_map,

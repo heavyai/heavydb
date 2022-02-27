@@ -34,10 +34,27 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
       crt_bin->get_optype() != prev_bin->get_optype()) {
     return false;
   }
-  const auto crt_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
-      remove_cast(crt_bin->get_own_right_operand()));
-  const auto prev_inner = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
-      remove_cast(prev_bin->get_own_right_operand()));
+
+  auto get_rhs_col_var = [](const auto bin_oper) {
+    auto inner_col_var = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
+        remove_cast(bin_oper->get_own_right_operand()));
+    if (!inner_col_var) {
+      const auto string_oper = std::dynamic_pointer_cast<Analyzer::StringOper>(
+          remove_cast(bin_oper->get_own_right_operand()));
+      if (string_oper && string_oper->getArity() >= 1UL) {
+        inner_col_var =
+            std::dynamic_pointer_cast<Analyzer::ColumnVar>(string_oper->getOwnArg(0));
+      }
+    }
+    return inner_col_var;
+  };
+
+  const std::shared_ptr<Analyzer::ColumnVar> crt_inner_col_var = get_rhs_col_var(crt_bin);
+  const std::shared_ptr<Analyzer::ColumnVar> prev_inner_col_var =
+      get_rhs_col_var(prev_bin);
+  if (!crt_inner_col_var || !prev_inner_col_var) {
+    return false;
+  }
   AllRangeTableIndexVisitor visitor;
   const auto crt_outer_rte_set = visitor.visit(crt_bin->get_left_operand());
   const auto prev_outer_rte_set = visitor.visit(prev_bin->get_left_operand());
@@ -46,9 +63,8 @@ bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
       crt_outer_rte_set != prev_outer_rte_set) {
     return false;
   }
-  if (!crt_inner || !prev_inner ||
-      crt_inner->get_table_id() != prev_inner->get_table_id() ||
-      crt_inner->get_rte_idx() != prev_inner->get_rte_idx()) {
+  if (crt_inner_col_var->get_table_id() != prev_inner_col_var->get_table_id() ||
+      crt_inner_col_var->get_rte_idx() != prev_inner_col_var->get_rte_idx()) {
     return false;
   }
   return true;

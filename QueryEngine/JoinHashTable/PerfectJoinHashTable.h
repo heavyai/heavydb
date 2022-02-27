@@ -159,9 +159,6 @@ class PerfectJoinHashTable : public HashJoin {
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
 
-  Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
-      const std::vector<InnerOuter>& inner_outer_pairs) const;
-
   std::vector<InnerOuter> inner_outer_pairs_;
 
   PerfectJoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -176,7 +173,8 @@ class PerfectJoinHashTable : public HashJoin {
                        Executor* executor,
                        const int device_count,
                        HashtableAccessPathInfo hashtable_access_path_info,
-                       const TableIdToNodeMap& table_id_to_node_map)
+                       const TableIdToNodeMap& table_id_to_node_map,
+                       const InnerOuterStringOpInfos& inner_outer_string_op_infos = {})
       : qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
@@ -192,7 +190,8 @@ class PerfectJoinHashTable : public HashJoin {
       , hashtable_cache_key_(hashtable_access_path_info.hashed_query_plan_dag)
       , hashtable_cache_meta_info_(hashtable_access_path_info.meta_info)
       , table_keys_(hashtable_access_path_info.table_keys)
-      , table_id_to_node_map_(table_id_to_node_map) {
+      , table_id_to_node_map_(table_id_to_node_map)
+      , inner_outer_string_op_infos_(inner_outer_string_op_infos) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
     CHECK_GT(device_count_, 0);
     hash_tables_for_device_.resize(device_count_);
@@ -220,6 +219,7 @@ class PerfectJoinHashTable : public HashJoin {
   llvm::Value* codegenHashTableLoad(const size_t table_idx);
 
   std::vector<llvm::Value*> getHashJoinArgs(llvm::Value* hash_ptr,
+                                            llvm::Value* key_lvs,
                                             const Analyzer::Expr* key_col,
                                             const int shard_count,
                                             const CompilationOptions& co);
@@ -234,6 +234,7 @@ class PerfectJoinHashTable : public HashJoin {
     const ExpressionRange col_range;
     const Analyzer::ColumnVar* inner_col;
     const Analyzer::ColumnVar* outer_col;
+    InnerOuterStringOpInfos inner_outer_string_op_infos;
     const ChunkKey chunk_key;
     const size_t num_elements;
     const SQLOps optype;
@@ -247,6 +248,7 @@ class PerfectJoinHashTable : public HashJoin {
     if (info.inner_col->get_type_info().is_string()) {
       boost::hash_combine(hash, info.outer_col->toString());
     }
+    boost::hash_combine(hash, ::toString(info.inner_outer_string_op_infos));
     boost::hash_combine(hash, info.col_range.toString());
     boost::hash_combine(hash, info.num_elements);
     boost::hash_combine(hash, info.optype);
@@ -273,14 +275,25 @@ class PerfectJoinHashTable : public HashJoin {
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
+  const InnerOuterStringOpInfos inner_outer_string_op_infos_;
 
   static std::unique_ptr<HashtableRecycler> hash_table_cache_;
   static std::unique_ptr<HashingSchemeRecycler> hash_table_layout_cache_;
 };
 
-bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
-                                  const Analyzer::Expr* outer_col,
-                                  const Executor* executor);
+bool needs_dictionary_translation(
+    const InnerOuter& inner_outer_col_pair,
+    const InnerOuterStringOpInfos& inner_outer_string_op_infos,
+    const Executor* executor);
+
+inline Data_Namespace::MemoryLevel get_effective_memory_level(
+    const Data_Namespace::MemoryLevel memory_level,
+    const bool needs_dict_translation) {
+  if (needs_dict_translation) {
+    return Data_Namespace::CPU_LEVEL;
+  }
+  return memory_level;
+}
 
 std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,

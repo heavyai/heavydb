@@ -1354,6 +1354,76 @@ TEST_F(StringFunctionTest, GroupBy) {
   }
 }
 
+TEST_F(StringFunctionTest, Join) {
+  // Turn off loop joins with the third parameter to ensure hash joins work
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Ensure loop join throws
+    {
+      EXPECT_ANY_THROW(
+          sql("select COUNT(*) from string_function_test_people, "
+              "string_function_test_countries;",
+              dt,
+              false));
+    }
+    // Both sides
+    {
+      auto result_set =
+          sql("select first_name, name as country_name "
+              "from string_function_test_people a "
+              "join string_function_test_countries b on lower(country_code) = "
+              "lower(code) order by a.id asc;",
+              dt,
+              false);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN", "United States"},
+          {"John", "United States"},
+          {"JOHN", "Canada"},
+          {"Sue", "Canada"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // String op lhs
+    {
+      auto result_set =
+          sql("select first_name, name as country_name "
+              "from string_function_test_people a "
+              "join string_function_test_countries b on upper(country_code) = code order "
+              "by a.id asc;",
+              dt,
+              false);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN", "United States"}, {"John", "United States"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // String op rhs
+    {
+      auto result_set =
+          sql("select first_name, name as country_name "
+              "from string_function_test_people a "
+              "join string_function_test_countries b on country_code = lower(code) order "
+              "by a.id asc;",
+              dt,
+              false);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN", "United States"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // Two arg baseline join
+    {
+      auto result_set =
+          sql("select first_name, upper(name) as upper_country_name "
+              "from string_function_test_people a "
+              "join string_function_test_countries b on lower(country_code) = "
+              "lower(code) and upper(country_code) = repeat(code, 1) order by a.id asc;",
+              dt,
+              false);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"JOHN", "UNITED STATES"}, {"John", "UNITED STATES"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, SelectLiteral) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

@@ -607,6 +607,22 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       }
     }
     if (*lhs == *rhs) {
+      if (!lhs_ti.get_notnull()) {
+        CHECK(!rhs_ti.get_notnull());
+        // We can't fold the ostensible tautaulogy
+        // for nullable lhs and rhs types, as
+        // lhs <> rhs when they are null
+
+        // We likely could turn this into a lhs is not null
+        // operatation, but is it worth it?
+        return makeExpr<Analyzer::BinOper>(ti,
+                                           bin_oper->get_contains_agg(),
+                                           bin_oper->get_optype(),
+                                           bin_oper->get_qualifier(),
+                                           lhs,
+                                           rhs);
+      }
+      CHECK(rhs_ti.get_notnull());
       // Tautologies: v=v; v<=v; v>=v
       if (optype == kEQ || optype == kLE || optype == kGE) {
         Datum d;

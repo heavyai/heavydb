@@ -156,6 +156,37 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::StringOper* expr,
       ->codegen(str_id_lv[0], expr_ti, true /* add_nullcheck */, co);
 }
 
+// Method below is for join probes, as we cast the StringOper nodes to ColumnVars early to
+// not special case that codepath (but retain the StringOpInfos, which we use here to
+// execute the same string ops as we would on a native StringOper node)
+llvm::Value* CodeGenerator::codegenPseudoStringOper(
+    const Analyzer::ColumnVar* expr,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  const auto& expr_ti = expr->get_type_info();
+  const auto dict_id = expr_ti.get_comp_param();
+  auto string_dictionary_translation_mgr =
+      std::make_unique<StringDictionaryTranslationMgr>(
+          dict_id,
+          dict_id,
+          false,  // translate_intersection_only
+          string_op_infos,
+          co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                    : Data_Namespace::CPU_LEVEL,
+          executor()->deviceCount(co.device_type),
+          executor(),
+          &executor()->getCatalog()->getDataMgr(),
+          false /* delay_translation */);
+
+  auto str_id_lv = codegen(expr, true /* fetch_column */, co);
+  CHECK_EQ(size_t(1), str_id_lv.size());
+
+  return cgen_state_
+      ->moveStringDictionaryTranslationMgr(std::move(string_dictionary_translation_mgr))
+      ->codegen(str_id_lv[0], expr_ti, true /* add_nullcheck */, co);
+}
+
 llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
