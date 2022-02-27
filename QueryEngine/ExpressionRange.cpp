@@ -299,6 +299,9 @@ ExpressionRange getExpressionRange(
     const Executor* executor,
     boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals);
 
+ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
+                                   const Executor* executor);
+
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
 
 ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
@@ -350,6 +353,11 @@ ExpressionRange getExpressionRange(
   if (column_var_expr) {
     return getExpressionRange(column_var_expr, query_infos, executor, simple_quals);
   }
+  auto string_oper_expr = dynamic_cast<const Analyzer::StringOper*>(expr);
+  if (string_oper_expr) {
+    return getExpressionRange(string_oper_expr, executor);
+  }
+
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
     return getExpressionRange(like_expr);
@@ -657,6 +665,48 @@ ExpressionRange getExpressionRange(
     return apply_simple_quals(col_expr, col_range, simple_quals);
   }
   return getLeafColumnRange(col_expr, query_infos, executor, is_outer_join_proj);
+}
+
+ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
+                                   const Executor* executor) {
+  auto chained_string_op_exprs = string_oper_expr->getChainedStringOpExprs();
+  if (chained_string_op_exprs.empty()) {
+    throw std::runtime_error(
+        "StringOper getExpressionRange() Expected folded string operator but found "
+        "operator unfolded.");
+  }
+  // Consider encapsulating below in an Analyzer::StringOper method to dedup
+  std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
+  for (const auto& chained_string_op_expr : chained_string_op_exprs) {
+    auto chained_string_op =
+        dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
+    CHECK(chained_string_op);
+    StringOps_Namespace::StringOpInfo string_op_info(chained_string_op->get_kind(),
+                                                     chained_string_op->getLiteralArgs());
+    string_op_infos.emplace_back(string_op_info);
+  }
+  const auto string_oper_col_var_expr = string_oper_expr->getArg(0);
+  CHECK(string_oper_col_var_expr);
+  const auto string_oper_col_var =
+      dynamic_cast<const Analyzer::ColumnVar*>(string_oper_col_var_expr);
+  CHECK(string_oper_col_var);
+  const auto string_oper_col_var_ti = string_oper_col_var->get_type_info();
+  CHECK(string_oper_col_var_ti.is_dict_encoded_string());
+  const auto dict_id = string_oper_col_var_ti.get_comp_param();
+
+  const auto translation_map = executor->getStringProxyTranslationMap(
+      dict_id,
+      dict_id,
+      RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
+      string_op_infos,
+      executor->getRowSetMemoryOwner(),
+      true);
+
+  // Todo(todd): Track null presence in StringDictionaryProxy::IdMap
+  return ExpressionRange::makeIntRange(translation_map->rangeStart(),
+                                       translation_map->rangeEnd() - 1,
+                                       0 /* bucket */,
+                                       true /* assume has nulls */);
 }
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
