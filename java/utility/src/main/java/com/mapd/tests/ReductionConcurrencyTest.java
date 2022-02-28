@@ -165,13 +165,13 @@ public class ReductionConcurrencyTest {
     logger.info("ReductionConcurrencyTest()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
+            "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("DROP USER IF EXISTS dba;");
     su.runSql("DROP USER IF EXISTS bob;");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
-    su.runSql("GRANT CREATE on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE on DATABASE heavyai TO bob;");
 
     su.runSql("DROP DATABASE IF EXISTS db1;");
     su.runSql("CREATE DATABASE db1;");

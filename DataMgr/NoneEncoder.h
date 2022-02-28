@@ -92,7 +92,7 @@ class NoneEncoder : public Encoder {
         std::fill(encoded_data.begin(), encoded_data.end(), data);
       }
     } else {
-      updateStatsEncoded(src_data, num_elems_to_append);
+      updateStats(src_data, num_elems_to_append);
     }
     if (offset == -1) {
       num_elems_ += num_elems_to_append;
