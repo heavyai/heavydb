@@ -161,24 +161,6 @@ install_rdkafka
 # libuv
 install_libuv
 
-VERS=3.0.2
-wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
-tar xvf v$VERS.tar.gz
-mkdir -p glbinding-$VERS/build
-pushd glbinding-$VERS/build
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DOPTION_BUILD_DOCS=OFF \
-    -DOPTION_BUILD_EXAMPLES=OFF \
-    -DOPTION_BUILD_TESTS=OFF \
-    -DOPTION_BUILD_TOOLS=OFF \
-    -DOPTION_BUILD_WITH_BOOST_THREAD=OFF \
-    ..
-make -j $(nproc)
-make install
-popd
-
 # OpenSAML
 VERS=3.2.2
 download_make_install ${HTTP_DEPS}/xerces-c-3.2.2.tar.gz

@@ -12,7 +12,6 @@ double-conversion | [BSD-like](<https://github.com/google/double-conversion/blob
 EGL, KHR | [MIT]() | Rendering Support |
 fmt | [MIT](https://github.com/fmtlib/fmt/blob/master/LICENSE.rst) | Folly |
 Folly | [Apache](https://github.com/facebook/folly/blob/master/LICENSE) | Multiple |
-glbinding | [MIT](<https://github.com/cginternals/glbinding/blob/master/LICENSE>) | OpenGL management |
 gflags | [BSD-like](<https://github.com/gflags/gflags/blob/master/COPYING.txt>) | Folly |
 glog | [BSD-like](<https://github.com/google/glog/blob/master/COPYING>) | C++ logging |
 cpp-jwt | [MIT](<https://github.com/arun11299/cpp-jwt/blob/master/LICENSE>) | Elliptical Curve Digital Signature |
