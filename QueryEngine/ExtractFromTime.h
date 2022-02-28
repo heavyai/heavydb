@@ -19,7 +19,8 @@
 
 #include <cstdint>
 #include <ctime>
-#include "Shared/funcannotations.h"
+/* `../` is required for UDFCompiler */
+#include "../Shared/funcannotations.h"
 
 static constexpr int64_t kNanoSecsPerSec = 1000000000;
 static constexpr int64_t kMicroSecsPerSec = 1000000;

@@ -48,6 +48,8 @@ enum TExtArgumentType {
   ColumnListBool,
   ColumnTextEncodingDict,
   ColumnListTextEncodingDict,
+  ColumnTimestamp,
+  Timestamp,
 }
 
 /* See QueryEngine/TableFunctions/TableFunctionsFactory.h for required values */

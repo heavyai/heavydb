@@ -434,10 +434,14 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ColumnBool;
     case TExtArgumentType::ColumnTextEncodingDict:
       return ExtArgumentType::ColumnTextEncodingDict;
+    case TExtArgumentType::ColumnTimestamp:
+      return ExtArgumentType::ColumnTimestamp;
     case TExtArgumentType::TextEncodingNone:
       return ExtArgumentType::TextEncodingNone;
     case TExtArgumentType::TextEncodingDict:
       return ExtArgumentType::TextEncodingDict;
+    case TExtArgumentType::Timestamp:
+      return ExtArgumentType::Timestamp;
     case TExtArgumentType::ColumnListInt8:
       return ExtArgumentType::ColumnListInt8;
     case TExtArgumentType::ColumnListInt16:
@@ -531,10 +535,14 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ColumnBool;
     case ExtArgumentType::ColumnTextEncodingDict:
       return TExtArgumentType::ColumnTextEncodingDict;
+    case ExtArgumentType::ColumnTimestamp:
+      return TExtArgumentType::ColumnTimestamp;
     case ExtArgumentType::TextEncodingNone:
       return TExtArgumentType::TextEncodingNone;
     case ExtArgumentType::TextEncodingDict:
       return TExtArgumentType::TextEncodingDict;
+    case ExtArgumentType::Timestamp:
+      return TExtArgumentType::Timestamp;
     case ExtArgumentType::ColumnListInt8:
       return TExtArgumentType::ColumnListInt8;
     case ExtArgumentType::ColumnListInt16:

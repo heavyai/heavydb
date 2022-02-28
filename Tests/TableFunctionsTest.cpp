@@ -65,7 +65,8 @@ class TableFunctions : public ::testing::Test {
     {
       run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
       run_ddl_statement(
-          "CREATE TABLE tf_test (x INT, x2 INT, f FLOAT, d DOUBLE, d2 DOUBLE) WITH "
+          "CREATE TABLE tf_test (x INT, x2 INT, f FLOAT, d "
+          "DOUBLE, d2 DOUBLE) WITH "
           "(FRAGMENT_SIZE=2);");
 
       TestHelpers::ValuesGenerator gen("tf_test");
@@ -111,13 +112,15 @@ class TableFunctions : public ::testing::Test {
 
       for (const auto& r : v) {
         const auto insert_query = gen(r[0], r[1], r[2], r[3], r[4]);
+
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
     }
     {
       run_ddl_statement("DROP TABLE IF EXISTS err_test;");
       run_ddl_statement(
-          "CREATE TABLE err_test (x INT, y BIGINT, f FLOAT, d DOUBLE, x2 INT) WITH "
+          "CREATE TABLE err_test (x INT, y BIGINT, f FLOAT, d "
+          "DOUBLE, x2 INT) WITH "
           "(FRAGMENT_SIZE=2);");
 
       TestHelpers::ValuesGenerator gen("err_test");
@@ -131,12 +134,57 @@ class TableFunctions : public ::testing::Test {
         run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       }
     }
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS time_test;");
+      run_ddl_statement("CREATE TABLE time_test(t1 TIMESTAMP(9));");
+
+      TestHelpers::ValuesGenerator gen("time_test");
+      std::vector<std::string> v = {"'1971-01-01 01:01:01.001001001'",
+                                    "'1972-02-02 02:02:02.002002002'",
+                                    "'1973-03-03 03:03:03.003003003'"};
+
+      for (const auto& s : v) {
+        const auto insert_query = gen(s);
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    }
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS time_test_castable;");
+      run_ddl_statement("CREATE TABLE time_test_castable(t1 TIMESTAMP(6));");
+
+      TestHelpers::ValuesGenerator gen("time_test_castable");
+      std::vector<std::string> v = {"'1971-01-01 01:01:01.001001'",
+                                    "'1972-02-02 02:02:02.002002'",
+                                    "'1973-03-03 03:03:03.003003'"};
+
+      for (const auto& s : v) {
+        const auto insert_query = gen(s);
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    }
+
+    {
+      run_ddl_statement("DROP TABLE IF EXISTS time_test_uncastable;");
+      run_ddl_statement("CREATE TABLE time_test_uncastable(t1 TIMESTAMP(6));");
+
+      // nanosecond precision TIMESTAMPS can only represent years up to ~2262
+      TestHelpers::ValuesGenerator gen("time_test_uncastable");
+      std::vector<std::string> v = {"'2300-01-01 00:00:00.000000001'"};
+
+      for (const auto& s : v) {
+        const auto insert_query = gen(s);
+        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      }
+    }
   }
 
   void TearDown() override {
     run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
     run_ddl_statement("DROP TABLE IF EXISTS sd_test;");
     run_ddl_statement("DROP TABLE IF EXISTS err_test");
+    run_ddl_statement("DROP TABLE IF EXISTS time_test");
+    run_ddl_statement("DROP TABLE IF EXISTS time_test_castable");
+    run_ddl_statement("DROP TABLE IF EXISTS time_test_uncastable");
   }
 };
 
@@ -145,42 +193,48 @@ TEST_F(TableFunctions, BasicProjection) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 0)) ORDER BY "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test), 0)) ORDER BY "
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(0));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) ORDER BY "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test), 1)) ORDER BY "
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 2)) ORDER BY "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test), 2)) ORDER BY "
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(10));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 3)) ORDER BY "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test), 3)) ORDER BY "
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(15));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 4)) ORDER BY "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test), 4)) ORDER BY "
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(20));
     }
     if (dt == ExecutorDeviceType::CPU) {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), 0)) ORDER "
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+          "FROM tf_test), 0)) ORDER "
           "BY "
           "out0;",
           dt);
@@ -188,7 +242,8 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     if (dt == ExecutorDeviceType::CPU) {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), 1)) ORDER "
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+          "FROM tf_test), 1)) ORDER "
           "BY "
           "out0;",
           dt);
@@ -196,12 +251,16 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_adder(1, cursor(SELECT d, d2 FROM tf_test)));", dt);
+          "SELECT out0 FROM TABLE(row_adder(1, "
+          "cursor(SELECT d, d2 FROM tf_test)));",
+          dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_adder(4, cursor(SELECT d, d2 FROM tf_test)));", dt);
+          "SELECT out0 FROM TABLE(row_adder(4, "
+          "cursor(SELECT d, d2 FROM tf_test)));",
+          dt);
       ASSERT_EQ(rows->rowCount(), size_t(20));
     }
     {
@@ -214,12 +273,15 @@ TEST_F(TableFunctions, BasicProjection) {
     // Omit sizer (kRowMultiplier)
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_adder(cursor(SELECT d, d2 FROM tf_test)));", dt);
+          "SELECT out0 FROM TABLE(row_adder(cursor(SELECT d, "
+          "d2 FROM tf_test)));",
+          dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test))) ORDER BY "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test))) ORDER BY "
           "out0;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -238,7 +300,8 @@ TEST_F(TableFunctions, BasicProjection) {
     {
       // swap output column order
       const auto rows = run_multiple_agg(
-          "SELECT out1, out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT x FROM "
+          "SELECT out1, out0 FROM "
+          "TABLE(get_max_with_row_offset(cursor(SELECT x FROM "
           "tf_test)));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
@@ -259,7 +322,8 @@ TEST_F(TableFunctions, BasicProjection) {
     // TextEncodingDict specific tests
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT base FROM sd_test),"
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT base FROM "
+          "sd_test),"
           "1));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -282,7 +346,8 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT derived FROM sd_test),"
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT derived FROM "
+          "sd_test),"
           "1));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -294,10 +359,12 @@ TEST_F(TableFunctions, BasicProjection) {
       }
     }
 
-    // Test boolean scalars AND return of less rows than allocated in table function
+    // Test boolean scalars AND return of less rows than allocated in table
+    // function
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(sort_column_limit(CURSOR(SELECT x FROM tf_test), 2, "
+          "SELECT out0 FROM TABLE(sort_column_limit(CURSOR(SELECT x FROM "
+          "tf_test), 2, "
           "true, "
           "true)) ORDER by out0;",
           dt);
@@ -312,7 +379,8 @@ TEST_F(TableFunctions, BasicProjection) {
 
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(sort_column_limit(CURSOR(SELECT x FROM tf_test), 3, "
+          "SELECT out0 FROM TABLE(sort_column_limit(CURSOR(SELECT x FROM "
+          "tf_test), 3, "
           "false, "
           "true)) ORDER by out0 DESC;",
           dt);
@@ -415,7 +483,8 @@ TEST_F(TableFunctions, BasicProjection) {
     // Test for columns containing null values (QE-163)
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_test_nullable(cursor(SELECT x from tf_test), 1)) "
+          "SELECT out0 FROM TABLE(ct_test_nullable(cursor(SELECT x from "
+          "tf_test), 1)) "
           "where out0 is not null;",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(2));
@@ -430,7 +499,8 @@ TEST_F(TableFunctions, BasicProjection) {
     // Test for pre-flight sizer (QE-179)
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_test_preflight_sizer(cursor(SELECT x from tf_test), "
+          "SELECT out0 FROM TABLE(ct_test_preflight_sizer(cursor(SELECT x from "
+          "tf_test), "
           "0, 2));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(2));
@@ -443,7 +513,8 @@ TEST_F(TableFunctions, BasicProjection) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_test_preflight_sizer_const(cursor(SELECT x from "
+          "SELECT out0 FROM TABLE(ct_test_preflight_sizer_const(cursor(SELECT "
+          "x from "
           "tf_test)));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(2));
@@ -491,45 +562,42 @@ TEST_F(TableFunctions, BasicProjection) {
     // Tests various invalid returns from a table function:
     if (dt == ExecutorDeviceType::CPU) {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -1));", dt);
+          "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+          "FROM tf_test), -1));",
+          dt);
       ASSERT_EQ(rows->rowCount(), size_t(0));
     }
 
     if (dt == ExecutorDeviceType::CPU) {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -2));",
-              dt),
-          std::runtime_error);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+                                    "FROM tf_test), -2));",
+                                    dt),
+                   std::runtime_error);
     }
 
     // TODO: enable the following tests after QE-50 is resolved:
     if (false && dt == ExecutorDeviceType::CPU) {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -3));",
-              dt),
-          UserTableFunctionError);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+                                    "FROM tf_test), -3));",
+                                    dt),
+                   UserTableFunctionError);
     }
 
     if (false && dt == ExecutorDeviceType::CPU) {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -4));",
-              dt),
-          UserTableFunctionError);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+                                    "FROM tf_test), -4));",
+                                    dt),
+                   UserTableFunctionError);
     }
 
     if (false && dt == ExecutorDeviceType::CPU) {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d FROM tf_test), -5));",
-              dt),
-          TableFunctionError);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM TABLE(row_copier2(cursor(SELECT d "
+                                    "FROM tf_test), -5));",
+                                    dt),
+                   TableFunctionError);
     }
   }
 }
-
 TEST_F(TableFunctions, GpuDefaultOutputInitializaiton) {
   for (auto dt : {ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -574,7 +642,8 @@ TEST_F(TableFunctions, GroupByIn) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test GROUP BY d), "
           "1)) "
           "ORDER BY out0;",
           dt);
@@ -582,7 +651,8 @@ TEST_F(TableFunctions, GroupByIn) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test GROUP BY d), "
           "2)) "
           "ORDER BY out0;",
           dt);
@@ -590,7 +660,8 @@ TEST_F(TableFunctions, GroupByIn) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test GROUP BY d), "
           "3)) "
           "ORDER BY out0;",
           dt);
@@ -598,7 +669,8 @@ TEST_F(TableFunctions, GroupByIn) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), "
+          "SELECT out0 FROM TABLE(row_copier(cursor(SELECT d "
+          "FROM tf_test GROUP BY d), "
           "4)) "
           "ORDER BY out0;",
           dt);
@@ -775,7 +847,8 @@ TEST_F(TableFunctions, GroupByInAndOut) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "SELECT out0, count(*) FROM "
+          "TABLE(row_copier(cursor(SELECT d FROM tf_test), "
           "1)) "
           "GROUP BY out0 ORDER BY out0;",
           dt);
@@ -783,7 +856,8 @@ TEST_F(TableFunctions, GroupByInAndOut) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "SELECT out0, count(*) FROM "
+          "TABLE(row_copier(cursor(SELECT d FROM tf_test), "
           "2)) "
           "GROUP BY out0 ORDER BY out0;",
           dt);
@@ -791,7 +865,8 @@ TEST_F(TableFunctions, GroupByInAndOut) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "SELECT out0, count(*) FROM "
+          "TABLE(row_copier(cursor(SELECT d FROM tf_test), "
           "3)) "
           "GROUP BY out0 ORDER BY out0;",
           dt);
@@ -799,7 +874,8 @@ TEST_F(TableFunctions, GroupByInAndOut) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), "
+          "SELECT out0, count(*) FROM "
+          "TABLE(row_copier(cursor(SELECT d FROM tf_test), "
           "4)) "
           "GROUP BY out0 ORDER BY out0;",
           dt);
@@ -808,7 +884,8 @@ TEST_F(TableFunctions, GroupByInAndOut) {
     // TextEncodingDict specific tests
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT base FROM sd_test),"
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT base FROM "
+          "sd_test),"
           "1)) "
           "ORDER BY out0;",
           dt);
@@ -822,7 +899,8 @@ TEST_F(TableFunctions, GroupByInAndOut) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT derived FROM sd_test),"
+          "SELECT out0 FROM TABLE(row_copier_text(cursor(SELECT derived FROM "
+          "sd_test),"
           "1)) "
           "ORDER BY out0;",
           dt);
@@ -843,7 +921,8 @@ TEST_F(TableFunctions, ConstantCasts) {
     // Numeric constant to float
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT f FROM "
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT f "
+          "FROM "
           "tf_test), 2.2));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -851,7 +930,8 @@ TEST_F(TableFunctions, ConstantCasts) {
     // Numeric constant to double
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d FROM "
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d "
+          "FROM "
           "tf_test), 2.2));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -859,7 +939,8 @@ TEST_F(TableFunctions, ConstantCasts) {
     // Integer constant to double
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d FROM "
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d "
+          "FROM "
           "tf_test), 2));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -867,7 +948,8 @@ TEST_F(TableFunctions, ConstantCasts) {
     // Numeric (integer) constant to double
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d FROM "
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT d "
+          "FROM "
           "tf_test), 2.));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -875,7 +957,8 @@ TEST_F(TableFunctions, ConstantCasts) {
     // Integer constant
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x FROM "
+          "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x "
+          "FROM "
           "tf_test), 2));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -883,10 +966,10 @@ TEST_F(TableFunctions, ConstantCasts) {
     // Should throw: Numeric constant to integer
     {
       EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x FROM "
-              "tf_test), 2.2));",
-              dt),
+          run_multiple_agg("SELECT out0 FROM "
+                           "TABLE(ct_binding_scalar_multiply(CURSOR(SELECT x FROM "
+                           "tf_test), 2.2));",
+                           dt),
           std::exception);
     }
     // Should throw: boolean constant to integer
@@ -905,7 +988,8 @@ TEST_F(TableFunctions, Template) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT x FROM tf_test), "
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT x FROM "
+          "tf_test), "
           "cursor(SELECT d from tf_test)))",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
@@ -914,7 +998,8 @@ TEST_F(TableFunctions, Template) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT d FROM tf_test), "
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT d FROM "
+          "tf_test), "
           "cursor(SELECT d2 from tf_test)))",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
@@ -923,7 +1008,8 @@ TEST_F(TableFunctions, Template) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT x FROM tf_test), "
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT x FROM "
+          "tf_test), "
           "cursor(SELECT x from tf_test)))",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
@@ -932,7 +1018,8 @@ TEST_F(TableFunctions, Template) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT d FROM tf_test), "
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT d FROM "
+          "tf_test), "
           "cursor(SELECT x from tf_test)))",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
@@ -942,7 +1029,8 @@ TEST_F(TableFunctions, Template) {
     // TextEncodingDict
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT base FROM sd_test),"
+          "SELECT out0 FROM TABLE(ct_binding_column2(cursor(SELECT base FROM "
+          "sd_test),"
           "cursor(SELECT derived from sd_test)))",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -986,7 +1074,9 @@ TEST_F(TableFunctions, NamedOutput) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT total FROM TABLE(ct_named_output(cursor(SELECT d FROM tf_test)));", dt);
+          "SELECT total FROM TABLE(ct_named_output(cursor(SELECT d FROM "
+          "tf_test)));",
+          dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
       auto crt_row = rows->getNextRow(false, false);
       ASSERT_EQ(TestHelpers::v<double>(crt_row[0]), static_cast<double>(11));
@@ -1004,7 +1094,8 @@ TEST_F(TableFunctions, NamedOutput) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT total FROM TABLE(ct_named_user_const_output(cursor(SELECT x FROM "
+          "SELECT total FROM TABLE(ct_named_user_const_output(cursor(SELECT x "
+          "FROM "
           "tf_test), 1));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
@@ -1013,7 +1104,8 @@ TEST_F(TableFunctions, NamedOutput) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT total FROM TABLE(ct_named_user_const_output(cursor(SELECT x FROM "
+          "SELECT total FROM TABLE(ct_named_user_const_output(cursor(SELECT x "
+          "FROM "
           "tf_test), 2));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(2));
@@ -1044,7 +1136,9 @@ TEST_F(TableFunctions, CursorlessInputs) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT answer FROM TABLE(ct_no_arg_constant_sizing()) ORDER BY answer;", dt);
+          "SELECT answer FROM TABLE(ct_no_arg_constant_sizing()) ORDER BY "
+          "answer;",
+          dt);
       ASSERT_EQ(rows->rowCount(), size_t(42));
       for (size_t i = 0; i < 42; i++) {
         auto crt_row = rows->getNextRow(false, false);
@@ -1091,7 +1185,8 @@ TEST_F(TableFunctions, CursorlessInputs) {
 
     {
       const auto rows = run_multiple_agg(
-          "SELECT answer1, answer2 FROM TABLE(ct_scalar_2_args_constant_sizing(100, "
+          "SELECT answer1, answer2 FROM "
+          "TABLE(ct_scalar_2_args_constant_sizing(100, "
           "5));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(5));
@@ -1103,8 +1198,8 @@ TEST_F(TableFunctions, CursorlessInputs) {
       }
     }
 
-    // Tests for user-defined constant parameter sizing, which were separately broken
-    // from the above
+    // Tests for user-defined constant parameter sizing, which were separately
+    // broken from the above
     {
       const auto rows = run_multiple_agg(
           "SELECT output FROM TABLE(ct_no_cursor_user_constant_sizer(8, 10));", dt);
@@ -1118,7 +1213,8 @@ TEST_F(TableFunctions, CursorlessInputs) {
 
     {
       const auto rows = run_multiple_agg(
-          "SELECT output FROM TABLE(ct_templated_no_cursor_user_constant_sizer(7, 4));",
+          "SELECT output FROM "
+          "TABLE(ct_templated_no_cursor_user_constant_sizer(7, 4));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(4));
 
@@ -1279,8 +1375,8 @@ TEST_F(TableFunctions, DictionaryWriteAccess) {
 TEST_F(TableFunctions, TextEncodedNoneLiteralArgs) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    // Following tests ability to transform to std::string running on CPU (runs on CPU
-    // only)
+    // Following tests ability to transform to std::string running on CPU (runs
+    // on CPU only)
     {
       const std::string test_string{"this is only a test"};
       const size_t test_string_len{test_string.size()};
@@ -1309,12 +1405,13 @@ TEST_F(TableFunctions, TextEncodedNoneLiteralArgs) {
       ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[0]), static_cast<int64_t>(2));
     }
 
-    // Following tests varchar element accessors and that TextEncodedNone literal inputs
-    // play nicely with column inputs + RowMultiplier
+    // Following tests varchar element accessors and that TextEncodedNone
+    // literal inputs play nicely with column inputs + RowMultiplier
     {
       const std::string test_string{"theater"};
       const std::string test_query(
-          "SELECT idx, char_bytes FROM TABLE(ct_get_string_chars(CURSOR(SELECT x FROM "
+          "SELECT idx, char_bytes FROM TABLE(ct_get_string_chars(CURSOR(SELECT "
+          "x FROM "
           "tf_test), '" +
           test_string + "', 1)) ORDER BY idx;");
       const auto rows = run_multiple_agg(test_query, dt);
@@ -1334,36 +1431,32 @@ TEST_F(TableFunctions, ThrowingTests) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT x FROM "
-              "err_test)));",
-              dt),
-          UserTableFunctionError);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM "
+                                    "TABLE(column_list_safe_row_sum(cursor(SELECT x FROM "
+                                    "err_test)));",
+                                    dt),
+                   UserTableFunctionError);
     }
     {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT y FROM "
-              "err_test)));",
-              dt),
-          UserTableFunctionError);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM "
+                                    "TABLE(column_list_safe_row_sum(cursor(SELECT y FROM "
+                                    "err_test)));",
+                                    dt),
+                   UserTableFunctionError);
     }
     {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT f FROM "
-              "err_test)));",
-              dt),
-          UserTableFunctionError);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM "
+                                    "TABLE(column_list_safe_row_sum(cursor(SELECT f FROM "
+                                    "err_test)));",
+                                    dt),
+                   UserTableFunctionError);
     }
     {
-      EXPECT_THROW(
-          run_multiple_agg(
-              "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT d FROM "
-              "err_test)));",
-              dt),
-          UserTableFunctionError);
+      EXPECT_THROW(run_multiple_agg("SELECT out0 FROM "
+                                    "TABLE(column_list_safe_row_sum(cursor(SELECT d FROM "
+                                    "err_test)));",
+                                    dt),
+                   UserTableFunctionError);
     }
     {
       EXPECT_THROW(run_multiple_agg("SELECT * FROM TABLE(ct_require(cursor(SELECT x"
@@ -1442,7 +1535,8 @@ TEST_F(TableFunctions, ThrowingTests) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT x2 FROM "
+          "SELECT out0 FROM TABLE(column_list_safe_row_sum(cursor(SELECT x2 "
+          "FROM "
           "err_test)));",
           dt);
       ASSERT_EQ(rows->rowCount(), size_t(1));
@@ -1451,7 +1545,8 @@ TEST_F(TableFunctions, ThrowingTests) {
                 static_cast<int32_t>(10));  // 0+1+2+3+4=10
     }
 
-    // Ensure TableFunctionMgr and error throwing works properly for templated CPU TFs
+    // Ensure TableFunctionMgr and error throwing works properly for templated
+    // CPU TFs
     {
       EXPECT_THROW(
           run_multiple_agg("SELECT * FROM TABLE(ct_throw_if_gt_100(CURSOR(SELECT "
@@ -1462,8 +1557,10 @@ TEST_F(TableFunctions, ThrowingTests) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT CAST(val AS INT) AS val FROM TABLE(ct_throw_if_gt_100(CURSOR(SELECT "
-          "CAST(f AS DOUBLE) AS f FROM (VALUES (0.0), (1.0), (2.0), (3.0)) AS t(f)))) "
+          "SELECT CAST(val AS INT) AS val FROM "
+          "TABLE(ct_throw_if_gt_100(CURSOR(SELECT "
+          "CAST(f AS DOUBLE) AS f FROM (VALUES (0.0), (1.0), "
+          "(2.0), (3.0)) AS t(f)))) "
           "ORDER BY val;",
           dt);
       const size_t num_rows = rows->rowCount();
@@ -1483,7 +1580,8 @@ std::string gen_grid_values(const int32_t num_x_bins,
                             const std::string& aliased_table = "") {
   const std::string project_w_sql = add_w_val ? ", CAST(w AS INT) as w" : "";
   std::string values_sql =
-      "SELECT CAST(id AS INT) as id, CAST(x AS INT) AS x, CAST(y AS INT) AS y, CAST(z AS "
+      "SELECT CAST(id AS INT) as id, CAST(x AS INT) AS x, "
+      "CAST(y AS INT) AS y, CAST(z AS "
       "INT) AS z" +
       project_w_sql + " FROM (VALUES ";
   auto gen_values = [](const int32_t num_x_bins,
@@ -1597,8 +1695,79 @@ void print_result(const ResultSetPtr rows) {
   }
 }
 
+TEST_F(TableFunctions, TimestampTests) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // TIMESTAMP columns which already have nanosecond precision
+    {
+      const auto result = run_multiple_agg(
+          "SELECT ns,us,ms,s,m,h,d,mo,y FROM "
+          "TABLE(ct_timestamp_count_metrics(cursor(SELECT t1 FROM "
+          "time_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(3));
+      std::vector<std::vector<int64_t>> expected_result_set;
+      expected_result_set.emplace_back(
+          std::vector<int64_t>({1001001001, 1001001, 1001, 1, 1, 1, 1, 1, 1971}));
+      expected_result_set.emplace_back(
+          std::vector<int64_t>({2002002002, 2002002, 2002, 2, 2, 2, 2, 2, 1972}));
+      expected_result_set.emplace_back(
+          std::vector<int64_t>({3003003003, 3003003, 3003, 3, 3, 3, 3, 3, 1973}));
+      check_result_against_expected_result(result, expected_result_set);
+    }
+
+    // TIMESTAMP columns which require upcasting to nanosecond precision
+    {
+      const auto result = run_multiple_agg(
+          "SELECT ns,us,ms,s,m,h,d,mo,y FROM "
+          "TABLE(ct_timestamp_count_metrics(cursor(SELECT t1 FROM "
+          "time_test_castable)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(3));
+      std::vector<std::vector<int64_t>> expected_result_set;
+      expected_result_set.emplace_back(
+          std::vector<int64_t>({1001001000, 1001001, 1001, 1, 1, 1, 1, 1, 1971}));
+      expected_result_set.emplace_back(
+          std::vector<int64_t>({2002002000, 2002002, 2002, 2, 2, 2, 2, 2, 1972}));
+      expected_result_set.emplace_back(
+          std::vector<int64_t>({3003003000, 3003003, 3003, 3, 3, 3, 3, 3, 1973}));
+      check_result_against_expected_result(result, expected_result_set);
+    }
+
+    // TIMESTAMP columns which cannot be upcasted to nanosecond precision, due to not
+    // enough range
+    {
+      EXPECT_THROW(run_multiple_agg("SELECT ns,us,ms,s,m,h,d,mo,y FROM "
+                                    "TABLE(ct_timestamp_count_metrics(cursor(SELECT t1 "
+                                    "FROM time_test_uncastable)));",
+                                    dt),
+                   UserTableFunctionError);
+    }
+
+    // TIMESTAMP scalar inputs
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_timestamp_add_offset(cursor(SELECT t1 FROM "
+          "time_test), CAST ('1970-01-01 00:00:00.000000001' AS TIMESTAMP(9))));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(3));
+      std::vector<std::string> expected_result_set({"1971-01-01 01:01:01.001001002",
+                                                    "1972-02-02 02:02:02.002002003",
+                                                    "1973-03-03 03:03:03.003003004"});
+      for (size_t i = 0; i < 3; i++) {
+        auto row = result->getNextRow(true, false);
+        Datum d;
+        d.bigintval = TestHelpers::v<int64_t>(row[0]);
+        std::string asString = DatumToString(d, SQLTypeInfo(kTIMESTAMP, 9, 0, false));
+        ASSERT_EQ(asString, expected_result_set[i]);
+      }
+    }
+  }
+}
+
 TEST_F(TableFunctions, FilterTransposeRuleOneCursor) {
-  // Test FILTER_TABLE_FUNCTION_TRANSPOSE optimization on single cursor table functions
+  // Test FILTER_TABLE_FUNCTION_TRANSPOSE optimization on single cursor table
+  // functions
 
   enum StatType { MIN, MAX };
 
@@ -1706,8 +1875,8 @@ TEST_F(TableFunctions, FilterTransposeRuleOneCursor) {
 
     {
       // filter that filters out all rows
-      // compare_tf_pushdown_with_values_rollup(grid_values, "z <> 3 AND x <= 0 AND y
-      // between 1 and 2", "", StatType::MIN, dt);
+      // compare_tf_pushdown_with_values_rollup(grid_values, "z <> 3 AND x <= 0
+      // AND y between 1 and 2", "", StatType::MIN, dt);
       const std::string pushdown_filter{"z <> 3 AND x <= 0 AND y between 1 and 2"};
       run_tests_for_filter(grid_values, pushdown_filter, "", dt);
     }
@@ -1815,21 +1984,24 @@ TEST_F(TableFunctions, FilterTransposeRuleMultipleCursors) {
         check_result_set_equality(tf_rows, values_projection_rows);
       };
 
-  // TM: Commenting out the following function to eliminate an unused variable warning
-  // but leaving as its quite useful for debugging
+  // TM: Commenting out the following function to eliminate an unused variable
+  // warning but leaving as its quite useful for debugging
 
   // auto print_tf_pushdown_projection = [&](const std::string& values1_sql,
   //                                        const std::string& values2_sql,
   //                                        const std::string& filter_sql,
-  //                                        const std::string& non_pushdown_filter_sql,
-  //                                        const ExecutorDeviceType dt) {
+  //                                        const std::string&
+  //                                        non_pushdown_filter_sql, const
+  //                                        ExecutorDeviceType dt) {
   //  std::string tf_filter = filter_sql;
   //  if (non_pushdown_filter_sql.size()) {
   //    tf_filter += " AND " + non_pushdown_filter_sql;
   //  }
   //  const std::string tf_query =
-  //      "SELECT * FROM TABLE(ct_union_pushdown_projection(CURSOR(" + values1_sql +
-  //      "), CURSOR(" + values2_sql + "))) WHERE " + tf_filter + " ORDER BY id;";
+  //      "SELECT * FROM TABLE(ct_union_pushdown_projection(CURSOR(" +
+  //      values1_sql +
+  //      "), CURSOR(" + values2_sql + "))) WHERE " + tf_filter + " ORDER BY
+  //      id;";
   //  const auto tf_rows = run_multiple_agg(tf_query, dt);
   //  print_result(tf_rows);
   //};
@@ -2023,14 +2195,16 @@ TEST_F(TableFunctions, FilterTransposeRuleMisc) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg(
-          "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM tf_test WHERE "
+          "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM "
+          "tf_test WHERE "
           "x>1)));",
           dt);
       check_result(rows, {2 + 3, 3 + 3, 4 + 3});
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM tf_test)))"
+          "SELECT * FROM TABLE(ct_copy_and_add_size(cursor(SELECT x FROM "
+          "tf_test)))"
           "WHERE x>1;",
           dt);
       check_result(rows, {2 + 3, 3 + 3, 4 + 3});
@@ -2050,7 +2224,8 @@ TEST_F(TableFunctions, FilterTransposeRuleMisc) {
       // x=0,1,2,3,4
       // x2=5,4,3,2,1
       const auto rows = run_multiple_agg(
-          "SELECT * FROM TABLE(ct_add_size_and_mul_alpha(cursor(SELECT x, x2 FROM "
+          "SELECT * FROM TABLE(ct_add_size_and_mul_alpha(cursor(SELECT x, x2 "
+          "FROM "
           "tf_test WHERE "
           "x>1 and x2>1), 4));",
           dt);
@@ -2060,7 +2235,8 @@ TEST_F(TableFunctions, FilterTransposeRuleMisc) {
       // x =0,1,2,3,4
       // x2=5,4,3,2,1
       const auto rows = run_multiple_agg(
-          "SELECT * FROM TABLE(ct_add_size_and_mul_alpha(cursor(SELECT x, x2 FROM "
+          "SELECT * FROM TABLE(ct_add_size_and_mul_alpha(cursor(SELECT x, x2 "
+          "FROM "
           "tf_test), 4)) WHERE x>1 and x2>1;",
           dt);
       check_result2(rows, {2 + 2, 3 + 2}, {3 * 4, 2 * 4});
@@ -2068,7 +2244,8 @@ TEST_F(TableFunctions, FilterTransposeRuleMisc) {
     // Multiple cursor arguments
     {
       const auto rows = run_multiple_agg(
-          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), 0"
+          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT "
+          "x, x FROM tf_test), 0"
           ", cursor(SELECT x, x FROM tf_test), 0));",
           dt);
       check_result2(
@@ -2076,8 +2253,10 @@ TEST_F(TableFunctions, FilterTransposeRuleMisc) {
     }
     {
       const auto rows = run_multiple_agg(
-          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT x, x FROM tf_test), 0"
-          ", cursor(SELECT x, x + 1 FROM tf_test WHERE x > 2), 15)) WHERE (x > 1 AND x < "
+          "SELECT x, d FROM TABLE(ct_sparse_add(cursor(SELECT "
+          "x, x FROM tf_test), 0"
+          ", cursor(SELECT x, x + 1 FROM tf_test WHERE x > "
+          "2), 15)) WHERE (x > 1 AND x < "
           "4);",
           dt);
       check_result2(rows, {2, 3}, {(2 + 15) * 2, (3 + 4) * 2});

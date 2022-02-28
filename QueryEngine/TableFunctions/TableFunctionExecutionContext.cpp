@@ -229,7 +229,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           default:
             UNREACHABLE();
         }
-      } else if (ti.is_integer()) {
+      } else if (ti.is_integer() || ti.is_timestamp()) {
         switch (get_bit_width(ti)) {
           case 8:
             col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.tinyintval,

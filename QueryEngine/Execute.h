@@ -1139,6 +1139,8 @@ class Executor {
   ResultSetRecyclerHolder& getRecultSetRecyclerHolder();
 
   CgenState* getCgenStatePtr() const { return cgen_state_.get(); }
+  PlanState* getPlanStatePtr() const { return plan_state_.get(); }
+
   llvm::LLVMContext& getContext() { return *context_.get(); }
   void update_extension_modules(bool update_runtime_modules_only = false);
 

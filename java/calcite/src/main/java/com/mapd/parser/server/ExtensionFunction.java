@@ -64,6 +64,7 @@ public class ExtensionFunction {
     ColumnFloat,
     ColumnDouble,
     ColumnBool,
+    ColumnTimestamp,
     GeoPoint,
     GeoLineString,
     Cursor,
@@ -71,6 +72,7 @@ public class ExtensionFunction {
     GeoMultiPolygon,
     TextEncodingNone,
     TextEncodingDict,
+    Timestamp,
     ColumnListInt8,
     ColumnListInt16,
     ColumnListInt32,
@@ -263,6 +265,8 @@ public class ExtensionFunction {
         return "column_bool";
       case ColumnTextEncodingDict:
         return "column_text_encoding_dict";
+      case ColumnTimestamp:
+        return "column_timestamp";
       case GeoPoint:
         return "geo_point";
       case Cursor:
@@ -273,6 +277,8 @@ public class ExtensionFunction {
         return "geo_polygon";
       case GeoMultiPolygon:
         return "geo_multi_polygon";
+      case Timestamp:
+        return "timestamp";
       case TextEncodingNone:
         return "text_encoding_none";
       case TextEncodingDict:
@@ -339,7 +345,8 @@ public class ExtensionFunction {
             || type == ExtArgumentType.ColumnInt32 || type == ExtArgumentType.ColumnInt64
             || type == ExtArgumentType.ColumnFloat || type == ExtArgumentType.ColumnDouble
             || type == ExtArgumentType.ColumnBool
-            || type == ExtArgumentType.ColumnTextEncodingDict;
+            || type == ExtArgumentType.ColumnTextEncodingDict
+            || type == ExtArgumentType.ColumnTimestamp;
   }
 
   private static boolean isColumnListType(final ExtArgumentType type) {
@@ -394,6 +401,8 @@ public class ExtensionFunction {
       case ColumnTextEncodingDict:
       case ColumnListTextEncodingDict:
         return ExtArgumentType.TextEncodingDict;
+      case ColumnTimestamp:
+        return ExtArgumentType.Timestamp;
     }
     MAPDLOGGER.error("getValueType: no value for type " + type);
     assert false;
@@ -441,6 +450,8 @@ public class ExtensionFunction {
       case TextEncodingNone:
       case TextEncodingDict:
         return SqlTypeName.VARCHAR;
+      case Timestamp:
+        return SqlTypeName.TIMESTAMP;
       case ColumnListInt8:
       case ColumnListInt16:
       case ColumnListInt32:

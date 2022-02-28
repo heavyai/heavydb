@@ -112,6 +112,7 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
     case ExtArgumentType::ColumnInt8:
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnFloat:
+    case ExtArgumentType::ColumnTimestamp:
     case ExtArgumentType::TextEncodingNone:
     case ExtArgumentType::ColumnListInt64:
     case ExtArgumentType::ColumnListInt32:

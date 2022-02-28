@@ -16,8 +16,10 @@
 
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
 
+#include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
 
@@ -74,6 +76,8 @@ inline llvm::Type* get_llvm_type_from_sql_column_type(const SQLTypeInfo elem_ti,
     }
     CHECK(elem_ti.is_bytes());  // None encoded string
     return get_int_ptr_type(8, ctx);
+  } else if (elem_ti.is_timestamp()) {
+    return get_int_ptr_type(elem_ti.get_size() * 8, ctx);
   }
   LOG(FATAL) << "get_llvm_type_from_sql_column_type: not implemented for "
              << ::toString(elem_ti);
@@ -144,9 +148,9 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
   } else {
     ir_builder.CreateStore(llvm::Constant::getNullValue(data_ptr_llvm_type), col_ptr_ptr);
   }
+  llvm::Value* size_val = nullptr;
   if (data_size != nullptr) {
     auto data_size_type = data_size->getType();
-    llvm::Value* size_val = nullptr;
     if (data_size_type->isPointerTy()) {
       CHECK(data_size_type->getPointerElementType()->isIntegerTy(64));
       size_val =
@@ -282,11 +286,117 @@ llvm::Value* alloc_column_list(std::string col_list_name,
   return col_list_ptr;
 }
 
+llvm::Value* cast_value(llvm::Value* value,
+                        SQLTypeInfo& orig_ti,
+                        SQLTypeInfo& dest_ti,
+                        bool nullable,
+                        CodeGenerator& codeGenerator) {
+  /*
+  Codegens a cast of a value from a given origin type to a given destination type, if such
+  implementation is available. Errors for unsupported casts.
+  */
+  if (orig_ti.is_timestamp() && dest_ti.is_timestamp()) {
+    return codeGenerator.codegenCastBetweenTimestamps(
+        value, orig_ti, dest_ti, !dest_ti.get_notnull());
+  } else {
+    throw std::runtime_error("Unsupported cast from " + orig_ti.get_type_name() + " to " +
+                             dest_ti.get_type_name() + " during UDTF code generation.");
+  }
+}
+
+void cast_column(llvm::Value* col_base_ptr,
+                 llvm::Function* func,
+                 SQLTypeInfo& orig_ti,
+                 SQLTypeInfo& dest_ti,
+                 std::string index,
+                 llvm::IRBuilder<>& ir_builder,
+                 llvm::LLVMContext& ctx,
+                 CodeGenerator& codeGenerator) {
+  /*
+  Generates code to cast a Column instance from a given origin
+  SQLType to a new destinaton SQLType. To do so, it generates a
+  loop with the following overall structure:
+
+     --------------
+     | pre_header |
+     |   i = 0    |
+     --------------
+           |
+           v
+    ----------------              ----------------
+    |    cond      |              |     body     |
+    | i < col.size |   (True) ->  | cast(col[i]) |
+    ----------------              |     i++      |
+        (False) ^                 ----------------
+           |     \____________________/
+           |
+           v
+    ---------------
+    |     end     |
+    ---------------
+
+  The correctness of the cast as well as error handling/early
+  exiting in case of cast failures are left to the CodeGenerator
+  which generates the code for the cast operation itself.
+ */
+
+  llvm::BasicBlock* for_pre =
+      llvm::BasicBlock::Create(ctx, "for_pre_cast." + index, func);
+  llvm::BasicBlock* for_cond =
+      llvm::BasicBlock::Create(ctx, "for_cond_cast." + index, func);
+  llvm::BasicBlock* for_body =
+      llvm::BasicBlock::Create(ctx, "for_body_cast." + index, func);
+  llvm::BasicBlock* for_end =
+      llvm::BasicBlock::Create(ctx, "for_end_cast." + index, func);
+  ir_builder.CreateBr(for_pre);
+
+  // pre-header: load column ptr and size
+  ir_builder.SetInsertPoint(for_pre);
+  llvm::StructType* col_struct_type = llvm::StructType::get(
+      ctx, {ir_builder.getInt64Ty()->getPointerTo(), ir_builder.getInt64Ty()});
+  llvm::Value* struct_cast = ir_builder.CreateBitCast(
+      col_base_ptr, col_struct_type->getPointerTo(), "col_struct." + index);
+  llvm::Value* gep_ptr =
+      ir_builder.CreateStructGEP(struct_cast, 0, "col_ptr_addr." + index);
+  llvm::Value* col_ptr = ir_builder.CreateLoad(gep_ptr, "col_ptr." + index);
+  llvm::Value* gep_sz =
+      ir_builder.CreateStructGEP(struct_cast, 1, "col_sz_addr." + index);
+  llvm::Value* col_sz = ir_builder.CreateLoad(gep_sz, "col_sz." + index);
+  ir_builder.CreateBr(for_cond);
+
+  // condition: check induction variable against loop predicate
+  ir_builder.SetInsertPoint(for_cond);
+  llvm::PHINode* for_ind_var =
+      ir_builder.CreatePHI(ir_builder.getInt64Ty(), 2, "for_ind_var." + index);
+  for_ind_var->addIncoming(ir_builder.getInt64(0), for_pre);
+  llvm::Value* for_pred =
+      ir_builder.CreateICmpSLT(for_ind_var, col_sz, "for_pred." + index);
+  ir_builder.CreateCondBr(for_pred, for_body, for_end);
+
+  // body: perform value cast, increment induction variable
+  ir_builder.SetInsertPoint(for_body);
+  ;
+  llvm::Value* val_gep = ir_builder.CreateInBoundsGEP(
+      ir_builder.getInt64Ty(), col_ptr, for_ind_var, "val_gep." + index);
+  llvm::Value* val_load =
+      ir_builder.CreateLoad(ir_builder.getInt64Ty(), val_gep, "val_load." + index);
+  llvm::Value* cast_result = cast_value(val_load, orig_ti, dest_ti, false, codeGenerator);
+  cast_result->setName("cast_result." + index);
+  ir_builder.CreateStore(cast_result, val_gep);
+  llvm::Value* for_inc =
+      ir_builder.CreateAdd(for_ind_var, ir_builder.getInt64(1), "for_inc." + index);
+  ir_builder.CreateBr(for_cond);
+  // the cast codegening may have generated extra blocks, so for_body does not necessarily
+  // jump to for_cond directly
+  llvm::Instruction* inc_as_inst = llvm::cast<llvm::Instruction>(for_inc);
+  for_ind_var->addIncoming(for_inc, inc_as_inst->getParent());
+  ir_builder.SetInsertPoint(for_end);
+}
+
 }  // namespace
 
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     const TableFunctionExecutionUnit& exe_unit,
-    const CompilationOptions& co,
     bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
 
@@ -297,20 +407,18 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
 
   entry_point_func_ = generate_entry_point(cgen_state);
 
-  generateEntryPoint(exe_unit,
-                     /*is_gpu=*/co.device_type == ExecutorDeviceType::GPU,
-                     emit_only_preflight_fn);
+  generateEntryPoint(exe_unit, emit_only_preflight_fn);
 
-  if (co.device_type == ExecutorDeviceType::GPU) {
+  if (co_.device_type == ExecutorDeviceType::GPU) {
     CHECK(!emit_only_preflight_fn);
     generateGpuKernel();
   }
-  return finalize(co, emit_only_preflight_fn);
+  return finalize(emit_only_preflight_fn);
 }
 
 bool TableFunctionCompilationContext::passColumnsByValue(
-    const TableFunctionExecutionUnit& exe_unit,
-    bool is_gpu) {
+    const TableFunctionExecutionUnit& exe_unit) {
+  bool is_gpu = co_.device_type == ExecutorDeviceType::GPU;
   auto mod = executor_->get_rt_udf_module(is_gpu).get();
   if (mod != nullptr) {
     auto* flag = mod->getModuleFlag("pass_column_arguments_by_value");
@@ -366,7 +474,6 @@ void TableFunctionCompilationContext::generateTableFunctionCall(
 
 void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit,
-    bool is_gpu,
     bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
   CHECK(entry_point_func_);
@@ -402,14 +509,15 @@ void TableFunctionCompilationContext::generateEntryPoint(
   auto row_count_heads = generate_column_heads_load(
       exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
   auto input_str_dict_proxy_heads =
-      !is_gpu ? (generate_column_heads_load(exe_unit.input_exprs.size(),
-                                            input_str_dict_proxies_arg,
-                                            cgen_state->ir_builder_,
-                                            ctx))
-              : std::vector<llvm::Value*>();
+      co_.device_type == ExecutorDeviceType::CPU
+          ? (generate_column_heads_load(exe_unit.input_exprs.size(),
+                                        input_str_dict_proxies_arg,
+                                        cgen_state->ir_builder_,
+                                        ctx))
+          : std::vector<llvm::Value*>();
   // The column arguments of C++ UDTFs processed by clang must be
   // passed by reference, see rbc issues 200 and 289.
-  auto pass_column_by_value = passColumnsByValue(exe_unit, is_gpu);
+  auto pass_column_by_value = passColumnsByValue(exe_unit);
   std::vector<llvm::Value*> func_args;
   size_t func_arg_index = 0;
   if (exe_unit.table_func.usesManager()) {
@@ -417,6 +525,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
     func_arg_index++;
   }
   int col_index = -1;
+
   for (size_t i = 0; i < exe_unit.input_exprs.size(); i++) {
     const auto& expr = exe_unit.input_exprs[i];
     const auto& ti = expr->get_type_info();
@@ -429,7 +538,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
       func_args.push_back(
           cgen_state->ir_builder_.CreateLoad(r->getType()->getPointerElementType(), r));
       CHECK_EQ(col_index, -1);
-    } else if (ti.is_integer() || ti.is_boolean()) {
+    } else if (ti.is_integer() || ti.is_boolean() || ti.is_timestamp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_int_ptr_type(get_bit_width(ti), ctx));
       func_args.push_back(
@@ -458,15 +567,16 @@ void TableFunctionCompilationContext::generateEntryPoint(
                : varchar_struct_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column()) {
-      auto [col, col_ptr] =
-          alloc_column(std::string("input_col.") + std::to_string(func_arg_index),
-                       i,
-                       ti.get_elem_type(),
-                       col_heads[i],
-                       row_count_heads[i],
-                       !is_gpu ? input_str_dict_proxy_heads[i] : nullptr,
-                       ctx,
-                       cgen_state->ir_builder_);
+      auto [col, col_ptr] = alloc_column(
+          std::string("input_col.") + std::to_string(func_arg_index),
+          i,
+          ti.get_elem_type(),
+          col_heads[i],
+          row_count_heads[i],
+          co_.device_type == ExecutorDeviceType::CPU ? input_str_dict_proxy_heads[i]
+                                                     : nullptr,
+          ctx,
+          cgen_state->ir_builder_);
       func_args.push_back((pass_column_by_value
                                ? cgen_state->ir_builder_.CreateLoad(
                                      col->getType()->getPointerElementType(), col)
@@ -498,11 +608,12 @@ void TableFunctionCompilationContext::generateEntryPoint(
     }
   }
   auto output_str_dict_proxy_heads =
-      !is_gpu ? (generate_column_heads_load(exe_unit.target_exprs.size(),
-                                            output_str_dict_proxies_arg,
-                                            cgen_state->ir_builder_,
-                                            ctx))
-              : std::vector<llvm::Value*>();
+      co_.device_type == ExecutorDeviceType::CPU
+          ? (generate_column_heads_load(exe_unit.target_exprs.size(),
+                                        output_str_dict_proxies_arg,
+                                        cgen_state->ir_builder_,
+                                        ctx))
+          : std::vector<llvm::Value*>();
 
   std::vector<llvm::Value*> output_col_args;
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
@@ -521,13 +632,16 @@ void TableFunctionCompilationContext::generateEntryPoint(
         std::string("output_col.") + std::to_string(i),
         i,
         ti,
-        (is_gpu ? output_load : nullptr),  // CPU: set_output_row_size will set the output
-                                           // Column ptr member
+        (co_.device_type == ExecutorDeviceType::GPU
+             ? output_load
+             : nullptr),  // CPU: set_output_row_size will set the output
+                          // Column ptr member
         output_row_count_ptr,
-        !is_gpu ? output_str_dict_proxy_heads[i] : nullptr,
+        co_.device_type == ExecutorDeviceType::CPU ? output_str_dict_proxy_heads[i]
+                                                   : nullptr,
         ctx,
         cgen_state->ir_builder_);
-    if (!is_gpu && !emit_only_preflight_fn) {
+    if (co_.device_type == ExecutorDeviceType::CPU && !emit_only_preflight_fn) {
       cgen_state->emitExternalCall(
           "TableFunctionManager_register_output_column",
           llvm::Type::getVoidTy(ctx),
@@ -540,7 +654,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   // column instances are passed by value
   if ((exe_unit.table_func.hasOutputSizeKnownPreLaunch() ||
        exe_unit.table_func.hasPreFlightOutputSizer()) &&
-      !is_gpu && !emit_only_preflight_fn) {
+      (co_.device_type == ExecutorDeviceType::CPU) && !emit_only_preflight_fn) {
     cgen_state->emitExternalCall(
         "TableFunctionManager_set_output_row_size",
         llvm::Type::getVoidTy(ctx),
@@ -559,6 +673,10 @@ void TableFunctionCompilationContext::generateEntryPoint(
     }
   }
 
+  if (exe_unit.table_func.mayRequireCastingInputTypes() && !emit_only_preflight_fn) {
+    generateCastsForInputTypes(exe_unit, func_args);
+  }
+
   generateTableFunctionCall(
       exe_unit, func_args, bb_exit, output_row_count_ptr, emit_only_preflight_fn);
 
@@ -567,6 +685,94 @@ void TableFunctionCompilationContext::generateEntryPoint(
   // std::cout << "=================================" << std::endl;
 
   verify_function_ir(entry_point_func_);
+}
+
+void TableFunctionCompilationContext::generateCastsForInputTypes(
+    const TableFunctionExecutionUnit& exe_unit,
+    const std::vector<llvm::Value*>& func_args) {
+  auto* cgen_state = executor_->getCgenStatePtr();
+  llvm::LLVMContext& ctx = cgen_state->context_;
+  llvm::IRBuilder<>* ir_builder = &cgen_state->ir_builder_;
+  CodeGenerator codeGenerator = CodeGenerator(cgen_state, executor_->getPlanStatePtr());
+  llvm::Function* old_func = cgen_state->current_func_;
+  cgen_state->current_func_ =
+      entry_point_func_;  // update cgen_state current func for CodeGenerator
+
+  size_t func_arg_index = 0;
+  if (exe_unit.table_func.usesManager()) {
+    ++func_arg_index;
+  }
+  for (size_t i = 0; i < exe_unit.input_exprs.size(); ++i) {
+    const auto& ti = exe_unit.input_exprs[i]->get_type_info();
+
+    // skip over column list args
+    if (ti.is_column_list()) {
+      func_arg_index++;
+      i += (ti.get_dimension() - 1);
+      continue;
+    }
+
+    // TIMESTAMP columns should always have nanosecond precision
+    if (ti.is_column() && ti.get_subtype() == kTIMESTAMP && ti.get_precision() != 9) {
+      llvm::Value* col_ptr = func_args[func_arg_index];
+      SQLTypeInfo orig_ti = SQLTypeInfo(
+          ti.get_subtype(), ti.get_precision(), ti.get_dimension(), ti.get_notnull());
+      SQLTypeInfo dest_ti =
+          SQLTypeInfo(kTIMESTAMP, 9, ti.get_dimension(), ti.get_notnull());
+      cast_column(col_ptr,
+                  entry_point_func_,
+                  orig_ti,
+                  dest_ti,
+                  std::to_string(func_arg_index),
+                  *ir_builder,
+                  ctx,
+                  codeGenerator);
+    }
+  }
+
+  // The QueryEngine CodeGenerator will codegen return values corresponding to
+  // QueryExecutionError codes. Since at the table function level we'd like error handling
+  // to be done by the TableFunctionManager, we replace the codegen'd returns by calls to
+  // the appropriate Manager functions.
+  std::vector<llvm::ReturnInst*> rets_to_replace;
+  for (llvm::BasicBlock& BB : *entry_point_func_) {
+    for (llvm::Instruction& I : BB) {
+      if (!llvm::isa<llvm::ReturnInst>(&I)) {
+        continue;
+      }
+      llvm::ReturnInst* RI = llvm::cast<llvm::ReturnInst>(&I);
+      llvm::Value* retValue = RI->getReturnValue();
+      if (!retValue || !llvm::isa<llvm::ConstantInt>(retValue)) {
+        continue;
+      }
+      llvm::ConstantInt* retConst = llvm::cast<llvm::ConstantInt>(retValue);
+      if (retConst->getValue() == 7) {
+        // ret 7 = underflow/overflow during casting attempt
+        rets_to_replace.push_back(RI);
+      }
+    }
+  }
+
+  auto prev_insert_point = ir_builder->saveIP();
+  for (llvm::ReturnInst* RI : rets_to_replace) {
+    ir_builder->SetInsertPoint(RI);
+    llvm::Value* err_msg = ir_builder->CreateGlobalStringPtr(
+        "Underflow or overflow during casting of input types!", "cast_err_str");
+    llvm::Value* error_call;
+    if (exe_unit.table_func.usesManager()) {
+      llvm::Value* mgr_ptr = func_args[0];
+      error_call = cgen_state->emitExternalCall("TableFunctionManager_error_message",
+                                                ir_builder->getInt32Ty(),
+                                                {mgr_ptr, err_msg});
+    } else {
+      error_call = cgen_state->emitExternalCall(
+          "table_function_error", ir_builder->getInt32Ty(), {err_msg});
+    }
+    llvm::ReplaceInstWithInst(RI, llvm::ReturnInst::Create(ctx, error_call));
+  }
+  ir_builder->restoreIP(prev_insert_point);
+
+  cgen_state->current_func_ = old_func;
 }
 
 void TableFunctionCompilationContext::generateGpuKernel() {
@@ -611,7 +817,6 @@ void TableFunctionCompilationContext::generateGpuKernel() {
 }
 
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
-    const CompilationOptions& co,
     bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
   /*
@@ -619,7 +824,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
     TODO 2: detect and link only the udf's that are needed
   */
   auto cgen_state = executor_->getCgenStatePtr();
-  auto is_gpu = co.device_type == ExecutorDeviceType::GPU;
+  auto is_gpu = co_.device_type == ExecutorDeviceType::GPU;
   if (executor_->has_rt_udf_module(is_gpu)) {
     CodeGenerator::link_udf_module(executor_->get_rt_udf_module(is_gpu),
                                    *(cgen_state->module_),
@@ -649,11 +854,11 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
                                                 kernel_func_,
                                                 {entry_point_func_, kernel_func_},
                                                 /*is_gpu_smem_used=*/false,
-                                                co,
+                                                co_,
                                                 gpu_target);
   } else {
     auto ee =
-        CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co);
+        CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co_);
     auto cpu_code = std::make_shared<CpuCompilationContext>(std::move(ee));
     cpu_code->setFunctionPointer(entry_point_func_);
     code = cpu_code;

@@ -84,9 +84,10 @@ PInt32, PInt64, PFloat, PDouble, PBool, Bool, ArrayInt8, ArrayInt16,
 ArrayInt32, ArrayInt64, ArrayFloat, ArrayDouble, ArrayBool, GeoPoint,
 GeoLineString, Cursor, GeoPolygon, GeoMultiPolygon, ColumnInt8,
 ColumnInt16, ColumnInt32, ColumnInt64, ColumnFloat, ColumnDouble,
-ColumnBool, ColumnTextEncodingDict, TextEncodingNone, TextEncodingDict,
-ColumnListInt8, ColumnListInt16, ColumnListInt32, ColumnListInt64,
-ColumnListFloat, ColumnListDouble, ColumnListBool, ColumnListTextEncodingDict'''.strip().replace(' ', '').replace('\n', '').split(',')
+ColumnBool, ColumnTextEncodingDict, ColumnTimestamp, TextEncodingNone,
+TextEncodingDict, Timestamp, ColumnListInt8, ColumnListInt16, ColumnListInt32,
+ColumnListInt64, ColumnListFloat, ColumnListDouble, ColumnListBool,
+ColumnListTextEncodingDict'''.strip().replace(' ', '').replace('\n', '').split(',')
 
 OutputBufferSizeTypes = '''
 kConstant, kUserSpecifiedConstantParameter, kUserSpecifiedRowMultiplier, kTableFunctionSpecifiedParameter, kPreFlightParameter
@@ -296,6 +297,8 @@ class Bracket:
         elif name == 'TextEncodingDict':
             ctype = name
         elif name == 'TextEncodingNone':
+            ctype = name
+        elif name == 'Timestamp':
             ctype = name
         else:
             raise NotImplementedError(self)

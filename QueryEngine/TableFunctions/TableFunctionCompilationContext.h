@@ -28,7 +28,8 @@ class Executor;
 
 class TableFunctionCompilationContext {
  public:
-  TableFunctionCompilationContext(Executor* executor) : executor_(executor) {}
+  TableFunctionCompilationContext(Executor* executor, const CompilationOptions& co)
+      : executor_(executor), co_(co) {}
 
   // non-copyable
   TableFunctionCompilationContext(const TableFunctionCompilationContext&) = delete;
@@ -36,25 +37,25 @@ class TableFunctionCompilationContext {
       delete;
 
   std::shared_ptr<CompilationContext> compile(const TableFunctionExecutionUnit& exe_unit,
-                                              const CompilationOptions& co,
                                               bool emit_only_preflight_fn);
 
  private:
   void generateEntryPoint(const TableFunctionExecutionUnit& exe_unit,
-                          bool is_gpu,
                           bool emit_only_preflight_fn);
   void generateTableFunctionCall(const TableFunctionExecutionUnit& exe_unit,
                                  const std::vector<llvm::Value*>& func_args,
                                  llvm::BasicBlock* bb_exit,
                                  llvm::Value* output_row_count_ptr,
                                  bool emit_only_preflight_fn);
+  void generateCastsForInputTypes(const TableFunctionExecutionUnit& exe_unit,
+                                  const std::vector<llvm::Value*>& func_args);
   void generateGpuKernel();
-  bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit, bool is_gpu);
+  bool passColumnsByValue(const TableFunctionExecutionUnit& exe_unit);
 
-  std::shared_ptr<CompilationContext> finalize(const CompilationOptions& co,
-                                               bool emit_only_preflight_fn);
+  std::shared_ptr<CompilationContext> finalize(bool emit_only_preflight_fn);
 
   llvm::Function* entry_point_func_;
   llvm::Function* kernel_func_;
   Executor* executor_;
+  const CompilationOptions& co_;
 };

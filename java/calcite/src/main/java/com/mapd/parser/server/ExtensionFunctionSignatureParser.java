@@ -231,6 +231,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Array<bool>")) {
       return ExtensionFunction.ExtArgumentType.ArrayBool;
     }
+    if (type_name.equals("Timestamp")) {
+      return ExtensionFunction.ExtArgumentType.Timestamp;
+    }
     if (type_name.equals("Column<int8_t>") || type_name.equals("Column<char>")) {
       return ExtensionFunction.ExtArgumentType.ColumnInt8;
     }
@@ -252,6 +255,9 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.equals("Column<TextEncodingDict>")) {
       return ExtensionFunction.ExtArgumentType.ColumnTextEncodingDict;
+    }
+    if (type_name.equals("Column<Timestamp>")) {
+      return ExtensionFunction.ExtArgumentType.ColumnTimestamp;
     }
     if (type_name.equals("Cursor")) {
       return ExtensionFunction.ExtArgumentType.Cursor;

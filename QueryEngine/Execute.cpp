@@ -2080,11 +2080,10 @@ ResultSetPtr Executor::executeTableFunction(
                                                    table_infos,
                                                    PlanState::DeletedColumnsMap{},
                                                    nullptr);  // locks compilation_mutex
-      TableFunctionCompilationContext tf_compilation_context(this);
+      CompilationOptions pre_flight_co = CompilationOptions::makeCpuOnly(co);
+      TableFunctionCompilationContext tf_compilation_context(this, pre_flight_co);
       compilation_context =
-          tf_compilation_context.compile(exe_unit,
-                                         CompilationOptions::makeCpuOnly(co),
-                                         true /* emit_only_preflight_fn*/);
+          tf_compilation_context.compile(exe_unit, true /* emit_only_preflight_fn*/);
     }
     exe_context.execute(exe_unit,
                         table_infos,
@@ -2101,9 +2100,9 @@ ResultSetPtr Executor::executeTableFunction(
                                                  table_infos,
                                                  PlanState::DeletedColumnsMap{},
                                                  nullptr);  // locks compilation_mutex
-    TableFunctionCompilationContext tf_compilation_context(this);
+    TableFunctionCompilationContext tf_compilation_context(this, co);
     compilation_context =
-        tf_compilation_context.compile(exe_unit, co, false /* emit_only_preflight_fn */);
+        tf_compilation_context.compile(exe_unit, false /* emit_only_preflight_fn */);
   }
   return exe_context.execute(exe_unit,
                              table_infos,

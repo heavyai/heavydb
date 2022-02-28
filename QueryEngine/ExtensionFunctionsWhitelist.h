@@ -33,6 +33,9 @@
 #include "Shared/sqltypes.h"
 #include "Shared/toString.h"
 
+// NOTE: To maintain backwards compatibility:
+// New types should always be appended to the end of the type list
+// Existing types should never be removed!
 enum class ExtArgumentType {
   Int8,
   Int16,
@@ -79,6 +82,8 @@ enum class ExtArgumentType {
   ColumnListBool,
   ColumnTextEncodingDict,
   ColumnListTextEncodingDict,
+  ColumnTimestamp,
+  Timestamp,
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

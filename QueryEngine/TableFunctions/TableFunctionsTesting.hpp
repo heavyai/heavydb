@@ -1193,8 +1193,8 @@ TEMPLATE_NOINLINE int32_t ct_get_string_chars__template(const Column<T>& indices
                                                         Column<int32_t>& idx,
                                                         Column<int8_t>& char_bytes) {
   const int32_t str_len = str.size();
-  // Note: we assume RowMultiplier is 1 for this test, was to make running on GPU easy
-  // Todo: Provide Constant RowMultiplier interface
+  // Note: we assume RowMultiplier is 1 for this test, was to make running on
+  // GPU easy Todo: Provide Constant RowMultiplier interface
   if (multiplier != 1) {
     return 0;
   }
@@ -1897,5 +1897,85 @@ const Column<int32_t>& input_arg2, const int32_t arg1, const int32_t arg2,
   return num_rows;
 }
 
-
 #endif
+
+#ifndef __CUDACC__
+
+// clang-format off
+/*
+  UDTF: ct_timestamp_count_metrics(TableFunctionManager, Column<Timestamp>) -> Column<int64_t> ns, Column<int64_t> us, Column<int64_t> ms, Column<int64_t> s, Column<int64_t> m, Column<int64_t> h, Column<int64_t> d, Column<int64_t> mo, Column<int64_t> y
+  UDTF: ct_timestamp_add_offset(TableFunctionManager, Column<Timestamp>, Timestamp) -> Column<Timestamp>
+  UDTF: ct_timestamp_column_list_input(TableFunctionManager, ColumnList<int64_t>, Column<Timestamp>) -> Column<Timestamp>
+*/
+// clang-format on
+
+// Test table functions with Timestamp Column inputs
+// and Timestamp type helper functions
+EXTENSION_NOINLINE_HOST int32_t ct_timestamp_count_metrics(TableFunctionManager& mgr,
+                                                           const Column<Timestamp>& input,
+                                                           Column<int64_t>& ns,
+                                                           Column<int64_t>& us,
+                                                           Column<int64_t>& ms,
+                                                           Column<int64_t>& s,
+                                                           Column<int64_t>& m,
+                                                           Column<int64_t>& h,
+                                                           Column<int64_t>& d,
+                                                           Column<int64_t>& mo,
+                                                           Column<int64_t>& y) {
+  int size = input.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    if (input.isNull(i)) {
+      ns.setNull(i);
+      us.setNull(i);
+      ms.setNull(i);
+      s.setNull(i);
+      m.setNull(i);
+      h.setNull(i);
+      d.setNull(i);
+      mo.setNull(i);
+      y.setNull(i);
+    } else {
+      ns[i] = input[i].getNanoseconds();
+      us[i] = input[i].getMicroseconds();
+      ms[i] = input[i].getMilliseconds();
+      s[i] = input[i].getSeconds();
+      m[i] = input[i].getMinutes();
+      h[i] = input[i].getHours();
+      d[i] = input[i].getDay();
+      mo[i] = input[i].getMonth();
+      y[i] = input[i].getYear();
+    }
+  }
+  return size;
+}
+
+// Test table functions with scalar Timestamp inputs
+EXTENSION_NOINLINE_HOST int32_t ct_timestamp_add_offset(TableFunctionManager& mgr,
+                                                        const Column<Timestamp>& input,
+                                                        const Timestamp offset,
+                                                        Column<Timestamp>& out) {
+  int size = input.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    if (input.isNull(i)) {
+      out.setNull(i);
+    } else {
+      out[i] = input[i] + offset;
+    }
+  }
+  return size;
+}
+
+// Dummy test for ColumnList inputs + Column Timestamp input
+EXTENSION_NOINLINE_HOST int32_t
+ct_timestamp_column_list_input(TableFunctionManager& mgr,
+                               const ColumnList<int64_t>& input,
+                               const Column<Timestamp>& input2,
+                               Column<int64_t>& out) {
+  mgr.set_output_row_size(1);
+  out[0] = 1;
+  return 1;
+}
+
+#endif  // ifndef __CUDACC__

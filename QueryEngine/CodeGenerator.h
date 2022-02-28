@@ -142,6 +142,11 @@ class CodeGenerator {
                                                           const SQLTypeInfo& ti,
                                                           CgenState* cgen_state);
 
+  llvm::Value* codegenCastBetweenTimestamps(llvm::Value* ts_lv,
+                                            const SQLTypeInfo& operand_dimen,
+                                            const SQLTypeInfo& target_dimen,
+                                            const bool nullable);
+
  private:
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
@@ -320,11 +325,6 @@ class CodeGenerator {
   llvm::Value* codegenCastTimestampToDate(llvm::Value* ts_lv,
                                           const int dimen,
                                           const bool nullable);
-
-  llvm::Value* codegenCastBetweenTimestamps(llvm::Value* ts_lv,
-                                            const SQLTypeInfo& operand_dimen,
-                                            const SQLTypeInfo& target_dimen,
-                                            const bool nullable);
 
   llvm::Value* codegenCastFromString(llvm::Value* operand_lv,
                                      const SQLTypeInfo& operand_ti,

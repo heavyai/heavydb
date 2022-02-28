@@ -193,10 +193,14 @@ std::string serialize_type(const ExtArgumentType type,
       return (declare ? (byval ? "{i8*, i64}" : "i8*") : "column_bool");
     case ExtArgumentType::ColumnTextEncodingDict:
       return (declare ? (byval ? "{i32*, i64}" : "i8*") : "column_text_encoding_dict");
+    case ExtArgumentType::ColumnTimestamp:
+      return (declare ? (byval ? "{i64*, i64}" : "i8*") : "column_timestamp");
     case ExtArgumentType::TextEncodingNone:
       return (declare ? (byval ? "{i8*, i64}*" : "i8*") : "text_encoding_none");
     case ExtArgumentType::TextEncodingDict:
       return (declare ? "{i8*, i32}*" : "text_encoding_dict");
+    case ExtArgumentType::Timestamp:
+      return (declare ? "{ i64 }" : "timestamp");
     case ExtArgumentType::ColumnListInt8:
       return (declare ? "{i8**, i64, i64}*" : "column_list_int8");
     case ExtArgumentType::ColumnListInt16:
@@ -285,6 +289,10 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return SQLTypeInfo(kTEXT, false, kENCODING_NONE);
     case ExtArgumentType::TextEncodingDict:
       return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
+    case ExtArgumentType::Timestamp:
+      return SQLTypeInfo(kTIMESTAMP, 9, 0, false);
+    case ExtArgumentType::ColumnTimestamp:
+      return generate_column_type(kTIMESTAMP);
     case ExtArgumentType::ColumnListInt8:
       return generate_column_type(kTINYINT);
     case ExtArgumentType::ColumnListInt16:
@@ -421,6 +429,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMN<BOOLEAN>";
     case ExtArgumentType::ColumnTextEncodingDict:
       return "COLUMN<TEXT ENCODING DICT>";
+    case ExtArgumentType::ColumnTimestamp:
+      return "COLUMN<TIMESTAMP(9)>";
     case ExtArgumentType::Cursor:
       return "CURSOR";
     case ExtArgumentType::GeoPoint:
@@ -437,6 +447,8 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "TEXT ENCODING NONE";
     case ExtArgumentType::TextEncodingDict:
       return "TEXT ENCODING DICT";
+    case ExtArgumentType::Timestamp:
+      return "TIMESTAMP(9)";
     case ExtArgumentType::ColumnListInt8:
       return "COLUMNLIST<TINYINT>";
     case ExtArgumentType::ColumnListInt16:
@@ -637,11 +649,17 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "column_text_encoding_dict") {
     return ExtArgumentType::ColumnTextEncodingDict;
   }
+  if (type_name == "column_timestamp") {
+    return ExtArgumentType::ColumnTimestamp;
+  }
   if (type_name == "text_encoding_none") {
     return ExtArgumentType::TextEncodingNone;
   }
   if (type_name == "text_encoding_dict") {
     return ExtArgumentType::TextEncodingDict;
+  }
+  if (type_name == "timestamp") {
+    return ExtArgumentType::Timestamp;
   }
   if (type_name == "column_list_int8") {
     return ExtArgumentType::ColumnListInt8;

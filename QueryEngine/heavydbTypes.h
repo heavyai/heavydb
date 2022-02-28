@@ -21,6 +21,12 @@
 #include <stdexcept>
 #include <type_traits>
 
+#include "ExtractFromTime.h"
+
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+#include "../Shared/DateTimeParser.h"
+#endif
+
 /* `../` is required for UDFCompiler */
 #include "../Shared/InlineNullValues.h"
 #include "../Shared/funcannotations.h"
@@ -143,6 +149,107 @@ struct TextEncodingNone {
   DEVICE ALWAYS_INLINE operator char*() const { return ptr_; }
   DEVICE ALWAYS_INLINE int64_t size() const { return size_; }
   DEVICE ALWAYS_INLINE bool isNull() const { return size_ == 0; }
+};
+
+struct Timestamp {
+  int64_t time;
+
+  DEVICE Timestamp(int64_t timeval) : time(timeval) {}
+
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+  DEVICE Timestamp(std::string_view const str) {
+    time = dateTimeParse<kTIMESTAMP>(str, 9);
+  }
+#endif
+
+  DEVICE ALWAYS_INLINE const Timestamp operator+(const Timestamp& other) const {
+#ifndef __CUDACC__
+    if (other.time > 0) {
+      if (time > (std::numeric_limits<int64_t>::max() - other.time)) {
+        throw std::underflow_error("Underflow in Timestamp addition!");
+      }
+    } else {
+      if (time < (std::numeric_limits<int64_t>::min() - other.time)) {
+        throw std::overflow_error("Overflow in Timestamp addition!");
+      }
+    }
+#endif
+    return Timestamp(time + other.time);
+  }
+
+  DEVICE ALWAYS_INLINE const Timestamp operator-(const Timestamp& other) const {
+#ifndef __CUDACC__
+    if (other.time > 0) {
+      if (time < (std::numeric_limits<int64_t>::min() + other.time)) {
+        throw std::underflow_error("Underflow in Timestamp substraction!");
+      }
+    } else {
+      if (time > (std::numeric_limits<int64_t>::max() + other.time)) {
+        throw std::overflow_error("Overflow in Timestamp substraction!");
+      }
+    }
+#endif
+    return Timestamp(time - other.time);
+  }
+
+  DEVICE ALWAYS_INLINE int64_t operator/(const Timestamp& other) const {
+#ifndef __CUDACC__
+    if (other.time == 0) {
+      throw std::runtime_error("Timestamp division by zero!");
+    }
+#endif
+    return time / other.time;
+  }
+
+  DEVICE ALWAYS_INLINE const Timestamp operator*(const int64_t multiplier) const {
+#ifndef __CUDACC__
+    uint64_t overflow_test =
+        static_cast<uint64_t>(time) * static_cast<uint64_t>(multiplier);
+    if (time != 0 && overflow_test / time != static_cast<uint64_t>(multiplier)) {
+      throw std::runtime_error("Overflow in Timestamp multiplication!");
+    }
+#endif
+    return Timestamp(time * multiplier);
+  }
+
+  DEVICE ALWAYS_INLINE bool operator==(const Timestamp& other) const {
+    return time == other.time;
+  }
+
+  DEVICE ALWAYS_INLINE bool operator!=(const Timestamp& other) const {
+    return !operator==(other);
+  }
+
+  DEVICE ALWAYS_INLINE int64_t getNanoseconds() const {
+    return ExtractFromTime(kNANOSECOND, time);
+  }
+  // Should always be safe as we're downcasting to lower precisions
+  DEVICE ALWAYS_INLINE int64_t getMicroseconds() const {
+    return ExtractFromTime(kMICROSECOND, time / (kNanoSecsPerSec / kMicroSecsPerSec));
+  }
+  // Should always be safe as we're downcasting to lower precisions
+  DEVICE ALWAYS_INLINE int64_t getMilliseconds() const {
+    return ExtractFromTime(kMILLISECOND, time / (kNanoSecsPerSec / kMilliSecsPerSec));
+  }
+  // Should always be safe as we're downcasting to lower precisions
+  DEVICE ALWAYS_INLINE int64_t getSeconds() const {
+    return ExtractFromTime(kSECOND, time / kNanoSecsPerSec);
+  }
+  DEVICE ALWAYS_INLINE int64_t getMinutes() const {
+    return ExtractFromTime(kMINUTE, time / kNanoSecsPerSec);
+  }
+  DEVICE ALWAYS_INLINE int64_t getHours() const {
+    return ExtractFromTime(kHOUR, time / kNanoSecsPerSec);
+  }
+  DEVICE ALWAYS_INLINE int64_t getDay() const {
+    return ExtractFromTime(kDAY, time / kNanoSecsPerSec);
+  }
+  DEVICE ALWAYS_INLINE int64_t getMonth() const {
+    return ExtractFromTime(kMONTH, time / kNanoSecsPerSec);
+  }
+  DEVICE ALWAYS_INLINE int64_t getYear() const {
+    return ExtractFromTime(kYEAR, time / kNanoSecsPerSec);
+  }
 };
 
 struct GeoPoint {
@@ -352,6 +459,16 @@ struct Column<TextEncodingDict> {
   }
 #endif
 };
+
+template <>
+DEVICE inline bool Column<Timestamp>::isNull(int64_t index) const {
+  return is_null(ptr_[index].time);
+}
+
+template <>
+DEVICE inline void Column<Timestamp>::setNull(int64_t index) {
+  set_null(ptr_[index].time);
+}
 
 /*
   ColumnList is an ordered list of Columns.

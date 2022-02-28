@@ -531,6 +531,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.ColumnBool;
       case ColumnTextEncodingDict:
         return ExtensionFunction.ExtArgumentType.ColumnTextEncodingDict;
+      case ColumnTimestamp:
+        return ExtensionFunction.ExtArgumentType.ColumnTimestamp;
       case GeoPoint:
         return ExtensionFunction.ExtArgumentType.GeoPoint;
       case GeoLineString:
@@ -545,6 +547,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         return ExtensionFunction.ExtArgumentType.TextEncodingNone;
       case TextEncodingDict:
         return ExtensionFunction.ExtArgumentType.TextEncodingDict;
+      case Timestamp:
+        return ExtensionFunction.ExtArgumentType.Timestamp;
       case ColumnListInt8:
         return ExtensionFunction.ExtArgumentType.ColumnListInt8;
       case ColumnListInt16:

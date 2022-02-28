@@ -122,8 +122,10 @@ SQLTypeInfo ext_arg_type_to_type_info_output(const ExtArgumentType ext_arg_type)
     case ExtArgumentType::ColumnListTextEncodingDict:
     case ExtArgumentType::TextEncodingDict:
       return SQLTypeInfo(kTEXT, false, kENCODING_DICT);
+    case ExtArgumentType::ColumnTimestamp:
+      return SQLTypeInfo(kTIMESTAMP, 9, 0, false);
     default:
-      LOG(WARNING) << "ext_arg_pointer_type_to_type_info: ExtArgumentType `"
+      LOG(WARNING) << "ext_arg_type_to_type_info_output: ExtArgumentType `"
                    << ExtensionFunctionsWhitelist::toString(ext_arg_type)
                    << "` conversion to SQLTypeInfo not implemented.";
       UNREACHABLE();

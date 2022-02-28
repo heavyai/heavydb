@@ -51,6 +51,8 @@ ExtArgumentType get_column_arg_elem_type(const ExtArgumentType ext_arg_column_ty
       return ExtArgumentType::Bool;
     case ExtArgumentType::ColumnTextEncodingDict:
       return ExtArgumentType::TextEncodingDict;
+    case ExtArgumentType::ColumnTimestamp:
+      return ExtArgumentType::Timestamp;
     default:
       UNREACHABLE();
   }
@@ -375,10 +377,18 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         default:
           UNREACHABLE();
       }
+    case kTIMESTAMP:
+      if (arg_type.is_timestamp()) {
+        if (arg_type.get_precision() != 9) {
+          return -1;
+        }
+        penalty_score += 1000;
+        return 1;
+      }
+      break;
       /* Not implemented types:
          kCHAR
          kTIME
-         kTIMESTAMP
          kDATE
          kINTERVAL_DAY_TIME
          kINTERVAL_YEAR_MONTH

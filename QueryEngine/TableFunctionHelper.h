@@ -87,6 +87,7 @@ inline bool is_ext_arg_type_column(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ColumnDouble:
     case ExtArgumentType::ColumnBool:
     case ExtArgumentType::ColumnTextEncodingDict:
+    case ExtArgumentType::ColumnTimestamp:
       return true;
 
     default:
@@ -150,6 +151,7 @@ inline bool is_ext_arg_type_scalar(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Double:
     case ExtArgumentType::Bool:
     case ExtArgumentType::TextEncodingNone:
+    case ExtArgumentType::Timestamp:
       return true;
 
     default:
@@ -163,6 +165,7 @@ inline bool is_ext_arg_type_scalar_integer(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Int16:
     case ExtArgumentType::Int32:
     case ExtArgumentType::Int64:
+    case ExtArgumentType::Timestamp:
       return true;
     default:
       return false;
