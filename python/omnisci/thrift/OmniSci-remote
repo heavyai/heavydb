@@ -94,7 +94,6 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('  TDetectResult detect_column_types(TSessionId session, string file_name, TCopyParams copy_params)')
     print('  void create_table(TSessionId session, string table_name, TRowDescriptor row_desc, TFileType file_type, TCreateParams create_params)')
     print('  void import_table(TSessionId session, string table_name, string file_name, TCopyParams copy_params)')
-    print('  void import_geo_table(TSessionId session, string table_name, string file_name, TCopyParams copy_params, TRowDescriptor row_desc, TCreateParams create_params)')
     print('  TImportStatus import_table_status(TSessionId session, string import_id)')
     print('  string get_first_geo_file_in_archive(TSessionId session, string archive_path, TCopyParams copy_params)')
     print('   get_all_files_in_archive(TSessionId session, string archive_path, TCopyParams copy_params)')

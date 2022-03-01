@@ -26,7 +26,7 @@ namespace import_export {
 
 class QueryExporter {
  public:
-  enum class FileType { kCSV, kGeoJSON, kGeoJSONL, kShapefile, kFlatGeobuf };
+  enum class FileType { kCSV };
   enum class FileCompression { kNone, kGZip, kZip };
   enum class ArrayNullHandling {
     kAbortWithWarning,

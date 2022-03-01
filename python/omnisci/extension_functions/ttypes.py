@@ -39,11 +39,7 @@ class TExtArgumentType(object):
     ArrayFloat = 19
     ArrayDouble = 20
     ArrayBool = 21
-    GeoPoint = 22
-    GeoLineString = 23
     Cursor = 24
-    GeoPolygon = 25
-    GeoMultiPolygon = 26
     ColumnInt8 = 27
     ColumnInt16 = 28
     ColumnInt32 = 29
@@ -86,11 +82,7 @@ class TExtArgumentType(object):
         19: "ArrayFloat",
         20: "ArrayDouble",
         21: "ArrayBool",
-        22: "GeoPoint",
-        23: "GeoLineString",
         24: "Cursor",
-        25: "GeoPolygon",
-        26: "GeoMultiPolygon",
         27: "ColumnInt8",
         28: "ColumnInt16",
         29: "ColumnInt32",
@@ -134,11 +126,7 @@ class TExtArgumentType(object):
         "ArrayFloat": 19,
         "ArrayDouble": 20,
         "ArrayBool": 21,
-        "GeoPoint": 22,
-        "GeoLineString": 23,
         "Cursor": 24,
-        "GeoPolygon": 25,
-        "GeoMultiPolygon": 26,
         "ColumnInt8": 27,
         "ColumnInt16": 28,
         "ColumnInt32": 29,

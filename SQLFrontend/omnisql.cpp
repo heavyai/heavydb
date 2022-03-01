@@ -484,11 +484,6 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     }
     return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
   }
-  if (type_info.type == TDatumType::POINT || type_info.type == TDatumType::LINESTRING ||
-      type_info.type == TDatumType::POLYGON ||
-      type_info.type == TDatumType::MULTIPOLYGON) {
-    return datum.val.str_val;
-  }
   return scalar_datum_to_string(datum, type_info);
 }
 
@@ -529,13 +524,6 @@ TDatum columnar_val_to_datum(const TColumn& col,
       break;
     }
     case TDatumType::STR: {
-      datum.val.str_val = col.data.str_col[row_idx];
-      break;
-    }
-    case TDatumType::POINT:
-    case TDatumType::LINESTRING:
-    case TDatumType::POLYGON:
-    case TDatumType::MULTIPOLYGON: {
       datum.val.str_val = col.data.str_col[row_idx];
       break;
     }
@@ -1528,8 +1516,8 @@ int main(int argc, char** argv) {
       using Params = CommandResolutionChain<>::CommandTokenList;
 
       // clang-format off
-      auto resolution_status = CommandResolutionChain<>( line, "\\copygeo", 1, 4, CopyGeoCmd<>(context), "") // deprecated
-        ( "\\copy", 3, 3, [&](Params const& p) { success = copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
+      auto resolution_status = CommandResolutionChain<>
+        ( line, "\\copy", 3, 3, [&](Params const& p) { success = copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
         ( "\\ste", 2, 2, [&](Params const& p) { success = set_table_epoch(context, p[1] /* table_details */); } )
         ( "\\gte", 2, 2, [&](Params const& p) { success = get_table_epoch(context, p[1] /* table_details */); } )
         ( "\\export_dashboard", 3, 4, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name> <optional:dash_owner>" )

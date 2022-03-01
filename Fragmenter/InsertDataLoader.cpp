@@ -18,7 +18,6 @@
 #include <numeric>
 #include <vector>
 
-#include "Geospatial/Types.h"
 #include "InsertDataLoader.h"
 #include "TargetValueConvertersFactories.h"
 
@@ -50,7 +49,7 @@ size_t sizeOfRawColumn(const Catalog_Namespace::Catalog& cat,
                        const ColumnDescriptor* cd) {
   switch (cd->columnType.get_type()) {
     case kARRAY:
-      throw std::runtime_error("geo and array columns have variable length elements");
+      throw std::runtime_error("array columns have variable length elements");
     case kBOOLEAN:
     case kTINYINT:
     case kSMALLINT:

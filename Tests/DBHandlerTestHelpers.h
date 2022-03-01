@@ -73,11 +73,7 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
     EXPECT_TRUE(!datum_.is_null)
         << boost::format("At row: %d, column: %d") % row_ % column_;
     auto type = column_type_.col_type.type;
-    if (isGeo(type) && !datum_.val.arr_val.empty()) {
-      throw std::runtime_error{
-          "Test assertions on non-WKT Geospatial data type projections are currently not "
-          "supported"};
-    } else if (isDateOrTime(type)) {
+    if (isDateOrTime(type)) {
       auto type_info = SQLTypeInfo(getDatetimeSqlType(type),
                                    column_type_.col_type.precision,
                                    column_type_.col_type.scale);
@@ -116,10 +112,6 @@ class AssertValueEqualsVisitor : public boost::static_visitor<> {
   }
 
  private:
-  bool isGeo(const TDatumType::type type) const {
-    return (type == TDatumType::type::POINT || type == TDatumType::type::LINESTRING ||
-            type == TDatumType::type::POLYGON || type == TDatumType::type::MULTIPOLYGON);
-  }
 
   bool isDateOrTime(const TDatumType::type type) const {
     return (type == TDatumType::type::TIME || type == TDatumType::type::TIMESTAMP ||

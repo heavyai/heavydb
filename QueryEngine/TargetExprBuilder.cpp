@@ -92,10 +92,6 @@ bool is_simple_count(const TargetInfo& target_info) {
   return target_info.is_agg && target_info.agg_kind == kCOUNT && !target_info.is_distinct;
 }
 
-bool target_has_geo(const TargetInfo& target_info) {
-  return false;
-}
-
 }  // namespace
 
 void TargetExprCodegen::codegen(
@@ -139,7 +135,7 @@ void TargetExprCodegen::codegen(
   }
 
   llvm::Value* str_target_lv{nullptr};
-  if (target_lvs.size() == 3 && !target_has_geo(target_info)) {
+  if (target_lvs.size() == 3) {
     // none encoding string, pop the packed pointer + length since
     // it's only useful for IS NULL checks and assumed to be only
     // two components (pointer and length) for the purpose of projection
@@ -153,16 +149,8 @@ void TargetExprCodegen::codegen(
       target_lvs.push_back(target_lvs.front());
     }
   } else {
-    if (target_has_geo(target_info)) {
-      if (!target_info.is_agg && !varlen_projection) {
-        CHECK_EQ(static_cast<size_t>(2 * target_info.sql_type.get_physical_coord_cols()),
-                 target_lvs.size());
-        CHECK_EQ(agg_fn_names.size(), target_lvs.size());
-      }
-    } else {
-      CHECK(str_target_lv || (agg_fn_names.size() == target_lvs.size()));
-      CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
-    }
+    CHECK(str_target_lv || (agg_fn_names.size() == target_lvs.size()));
+    CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
   }
 
   int32_t slot_index = base_slot_index;
@@ -380,7 +368,7 @@ void TargetExprCodegen::codegenAggregate(
 
     const bool is_simple_count_target = is_simple_count(target_info);
     llvm::Value* str_target_lv{nullptr};
-    if (target_lvs.size() == 3 && !target_has_geo(target_info)) {
+    if (target_lvs.size() == 3) {
       // none encoding string
       str_target_lv = target_lvs.front();
     }

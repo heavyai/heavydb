@@ -175,9 +175,6 @@ inline TTypeInfo type_info_to_thrift(const SQLTypeInfo& ti) {
   thrift_ti.encoding = encoding_to_thrift(ti);
   thrift_ti.nullable = !ti.get_notnull();
   thrift_ti.is_array = ti.is_array();
-  // TODO: Properly serialize geospatial subtype. For now, the value in precision is the
-  // same as the value in scale; overload the precision field with the subtype of the
-  // geospatial type (currently kGEOMETRY or kGEOGRAPHY)
   thrift_ti.precision = ti.get_precision();
   thrift_ti.scale = ti.get_scale();
   thrift_ti.comp_param = ti.get_comp_param();
@@ -197,13 +194,6 @@ inline std::vector<TargetMetaInfo> target_meta_infos_from_thrift(
     target_meta_infos.emplace_back(col.col_name, type_info_from_thrift(col.col_type));
   }
   return target_meta_infos;
-}
-
-inline void fixup_geo_column_descriptor(TColumnType& col_type,
-                                        const SQLTypes subtype,
-                                        const int output_srid) {
-  col_type.col_type.precision = static_cast<int>(subtype);
-  col_type.col_type.scale = output_srid;
 }
 
 inline TColumnType target_meta_info_to_thrift(const TargetMetaInfo& target,
@@ -402,16 +392,8 @@ inline ExtArgumentType from_thrift(const TExtArgumentType::type& t) {
       return ExtArgumentType::ArrayDouble;
     case TExtArgumentType::ArrayBool:
       return ExtArgumentType::ArrayBool;
-    case TExtArgumentType::GeoPoint:
-      return ExtArgumentType::GeoPoint;
-    case TExtArgumentType::GeoLineString:
-      return ExtArgumentType::GeoLineString;
     case TExtArgumentType::Cursor:
       return ExtArgumentType::Cursor;
-    case TExtArgumentType::GeoPolygon:
-      return ExtArgumentType::GeoPolygon;
-    case TExtArgumentType::GeoMultiPolygon:
-      return ExtArgumentType::GeoMultiPolygon;
     case TExtArgumentType::ColumnInt8:
       return ExtArgumentType::ColumnInt8;
     case TExtArgumentType::ColumnInt16:
@@ -499,16 +481,8 @@ inline TExtArgumentType::type to_thrift(const ExtArgumentType& t) {
       return TExtArgumentType::ArrayDouble;
     case ExtArgumentType::ArrayBool:
       return TExtArgumentType::ArrayBool;
-    case ExtArgumentType::GeoPoint:
-      return TExtArgumentType::GeoPoint;
-    case ExtArgumentType::GeoLineString:
-      return TExtArgumentType::GeoLineString;
     case ExtArgumentType::Cursor:
       return TExtArgumentType::Cursor;
-    case ExtArgumentType::GeoPolygon:
-      return TExtArgumentType::GeoPolygon;
-    case ExtArgumentType::GeoMultiPolygon:
-      return TExtArgumentType::GeoMultiPolygon;
     case ExtArgumentType::ColumnInt8:
       return TExtArgumentType::ColumnInt8;
     case ExtArgumentType::ColumnInt16:

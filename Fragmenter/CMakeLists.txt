@@ -1,3 +1,3 @@
 add_library(Fragmenter InsertOrderFragmenter.cpp SortedOrderFragmenter.cpp UpdelStorage.cpp TargetValueConvertersFactories.cpp InsertDataLoader.cpp)
 
-target_link_libraries(Fragmenter Geospatial ${Boost_THREAD_LIBRARY})
+target_link_libraries(Fragmenter ${Boost_THREAD_LIBRARY})

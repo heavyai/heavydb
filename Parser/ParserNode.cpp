@@ -49,8 +49,6 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
-#include "Geospatial/Compression.h"
-#include "Geospatial/Types.h"
 #include "ImportExport/ImportUtils.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
@@ -4197,115 +4195,6 @@ void CopyTableStmt::execute(
           throw std::runtime_error("Array Delimiter must be a single character string.");
         }
         copy_params.array_delim = (*str_literal->get_stringval())[0];
-      } else if (boost::iequals(*p->get_name(), "lonlat")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Lonlat option must be a boolean.");
-        }
-        copy_params.lonlat = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "geo")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Geo option must be a boolean.");
-        }
-        copy_params.file_type = bool_from_string_literal(str_literal)
-                                    ? import_export::FileType::POLYGON
-                                    : import_export::FileType::DELIMITED;
-      } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'geo_coords_type' option must be a string");
-        }
-        const std::string* s = str_literal->get_stringval();
-        throw std::runtime_error("'geo_coords_type' option is not supported " + *s);
-      } else if (boost::iequals(*p->get_name(), "geo_coords_encoding")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'geo_coords_encoding' option must be a string");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (boost::iequals(*s, "none")) {
-          copy_params.geo_coords_encoding = kENCODING_NONE;
-          copy_params.geo_coords_comp_param = 0;
-        } else if (boost::iequals(*s, "compressed(32)")) {
-          copy_params.geo_coords_encoding = kENCODING_GEOINT;
-          copy_params.geo_coords_comp_param = 32;
-        } else {
-          throw std::runtime_error(
-              "Invalid string for 'geo_coords_encoding' option (must be 'NONE' or "
-              "'COMPRESSED(32)'): " +
-              *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "geo_coords_srid")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error("'geo_coords_srid' option must be an integer");
-        }
-        const int srid = int_literal->get_intval();
-        if (srid == 4326 || srid == 3857 || srid == 900913) {
-          copy_params.geo_coords_srid = srid;
-        } else {
-          throw std::runtime_error(
-              "Invalid value for 'geo_coords_srid' option (must be 4326, 3857, or "
-              "900913): " +
-              std::to_string(srid));
-        }
-      } else if (boost::iequals(*p->get_name(), "geo_layer_name")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("'geo_layer_name' option must be a string");
-        }
-        const std::string* layer_name = str_literal->get_stringval();
-        if (layer_name) {
-          copy_params.geo_layer_name = *layer_name;
-        } else {
-          throw std::runtime_error("Invalid value for 'geo_layer_name' option");
-        }
-      } else if (boost::iequals(*p->get_name(), "partitions")) {
-        if (copy_params.file_type == import_export::FileType::POLYGON) {
-          const auto partitions =
-              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-          CHECK(partitions);
-          const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
-          if (partitions_uc != "REPLICATED") {
-            throw std::runtime_error("PARTITIONS must be REPLICATED for geo COPY");
-          }
-          geo_copy_from_partitions_ = partitions_uc;
-        } else {
-          throw std::runtime_error("PARTITIONS option not supported for non-geo COPY: " +
-                                   *p->get_name());
-        }
-      } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("geo_assign_render_groups option must be a boolean.");
-        }
-        copy_params.geo_assign_render_groups = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "geo_explode_collections")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("geo_explode_collections option must be a boolean.");
-        }
-        copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
-      } else if (boost::iequals(*p->get_name(), "source_srid")) {
-        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
-        if (int_literal == nullptr) {
-          throw std::runtime_error("'source_srid' option must be an integer");
-        }
-        const int srid = int_literal->get_intval();
-        if (copy_params.file_type == import_export::FileType::DELIMITED) {
-          copy_params.source_srid = srid;
-        } else {
-          throw std::runtime_error(
-              "'source_srid' option can only be used on csv/tsv files");
-        }
       } else if (boost::iequals(*p->get_name(), "regex_path_filter")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -4340,75 +4229,56 @@ void CopyTableStmt::execute(
   }
 
   std::string tr;
-  if (copy_params.file_type == import_export::FileType::POLYGON) {
-    // geo import
-    // we do nothing here, except stash the parameters so we can
-    // do the import when we unwind to the top of the handler
-    geo_copy_from_file_name_ = file_path;
-    geo_copy_from_copy_params_ = copy_params;
-    was_geo_copy_from_ = true;
+  if (td) {
+    CHECK(td_with_lock);
 
-    // the result string
-    // @TODO simon.eves put something more useful in here
-    // except we really can't because we haven't done the import yet!
-    if (td) {
-      tr = std::string("Appending geo to table '") + *table_ + std::string("'...");
+    // regular import
+    auto importer = importer_factory(catalog, td, file_path, copy_params);
+    auto start_time = ::toString(std::chrono::system_clock::now());
+    auto executor =
+        Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
+    auto query_session = session.get_session_id();
+    auto query_str = "COPYING " + td->tableName;
+    if (g_enable_non_kernel_time_query_interrupt) {
+      executor->enrollQuerySession(query_session,
+                                   query_str,
+                                   start_time,
+                                   Executor::UNITARY_EXECUTOR_ID,
+                                   QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
+    }
+
+    ScopeGuard clearInterruptStatus = [executor, &query_session, &start_time] {
+      // reset the runtime query interrupt status
+      if (g_enable_non_kernel_time_query_interrupt) {
+        executor->clearQuerySessionStatus(query_session, start_time);
+      }
+    };
+    import_export::ImportStatus import_result;
+    auto ms = measure<>::execution([&]() { import_result = importer->import(&session); });
+    total_time += ms;
+    // results
+    if (!import_result.load_failed &&
+        import_result.rows_rejected > copy_params.max_reject) {
+      LOG(ERROR) << "COPY exited early due to reject records count during multi file "
+                    "processing ";
+      // if we have crossed the truncated load threshold
+      import_result.load_failed = true;
+      import_result.load_msg =
+          "COPY exited early due to reject records count during multi file "
+          "processing ";
+      success_ = false;
+    }
+    if (!import_result.load_failed) {
+      tr = std::string("Loaded: " + std::to_string(import_result.rows_completed) +
+                       " recs, Rejected: " + std::to_string(import_result.rows_rejected) +
+                       " recs in " + std::to_string((double)total_time / 1000.0) +
+                       " secs");
     } else {
-      tr = std::string("Creating table '") + *table_ +
-           std::string("' and importing geo...");
+      tr = std::string("Loader Failed due to : " + import_result.load_msg + " in " +
+                       std::to_string((double)total_time / 1000.0) + " secs");
     }
   } else {
-    if (td) {
-      CHECK(td_with_lock);
-
-      // regular import
-      auto importer = importer_factory(catalog, td, file_path, copy_params);
-      auto start_time = ::toString(std::chrono::system_clock::now());
-      auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
-      auto query_session = session.get_session_id();
-      auto query_str = "COPYING " + td->tableName;
-      if (g_enable_non_kernel_time_query_interrupt) {
-        executor->enrollQuerySession(query_session,
-                                     query_str,
-                                     start_time,
-                                     Executor::UNITARY_EXECUTOR_ID,
-                                     QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
-      }
-
-      ScopeGuard clearInterruptStatus = [executor, &query_session, &start_time] {
-        // reset the runtime query interrupt status
-        if (g_enable_non_kernel_time_query_interrupt) {
-          executor->clearQuerySessionStatus(query_session, start_time);
-        }
-      };
-      import_export::ImportStatus import_result;
-      auto ms =
-          measure<>::execution([&]() { import_result = importer->import(&session); });
-      total_time += ms;
-      // results
-      if (!import_result.load_failed &&
-          import_result.rows_rejected > copy_params.max_reject) {
-        LOG(ERROR) << "COPY exited early due to reject records count during multi file "
-                      "processing ";
-        // if we have crossed the truncated load threshold
-        import_result.load_failed = true;
-        import_result.load_msg =
-            "COPY exited early due to reject records count during multi file "
-            "processing ";
-        success_ = false;
-      }
-      if (!import_result.load_failed) {
-        tr = std::string(
-            "Loaded: " + std::to_string(import_result.rows_completed) +
-            " recs, Rejected: " + std::to_string(import_result.rows_rejected) +
-            " recs in " + std::to_string((double)total_time / 1000.0) + " secs");
-      } else {
-        tr = std::string("Loader Failed due to : " + import_result.load_msg + " in " +
-                         std::to_string((double)total_time / 1000.0) + " secs");
-      }
-    } else {
-      throw std::runtime_error("Table '" + *table_ + "' must exist before COPY FROM");
-    }
+    throw std::runtime_error("Table '" + *table_ + "' must exist before COPY FROM");
   }
 
   return_message.reset(new std::string(tr));
@@ -5116,18 +4986,8 @@ void ExportQueryStmt::parseOptions(
             boost::algorithm::to_lower_copy(*str_literal->get_stringval());
         if (file_type_str == "csv") {
           file_type = import_export::QueryExporter::FileType::kCSV;
-        } else if (file_type_str == "geojson") {
-          file_type = import_export::QueryExporter::FileType::kGeoJSON;
-        } else if (file_type_str == "geojsonl") {
-          file_type = import_export::QueryExporter::FileType::kGeoJSONL;
-        } else if (file_type_str == "shapefile") {
-          file_type = import_export::QueryExporter::FileType::kShapefile;
-        } else if (file_type_str == "flatgeobuf") {
-          file_type = import_export::QueryExporter::FileType::kFlatGeobuf;
         } else {
-          throw std::runtime_error(
-              "File Type option must be 'CSV', 'GeoJSON', 'GeoJSONL', "
-              "'Shapefile', or 'FlatGeobuf'");
+          throw std::runtime_error("File Type option must be 'CSV'");
         }
       } else if (boost::iequals(*p->get_name(), "layer_name")) {
         const StringLiteral* str_literal =

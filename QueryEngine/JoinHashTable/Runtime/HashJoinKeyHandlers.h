@@ -30,8 +30,6 @@
 #include "StringDictionary/StringDictionaryProxy.h"
 #endif
 
-#include "Geospatial/CompressionRuntime.h"
-
 #include <cmath>
 
 #include "Shared/funcannotations.h"
@@ -198,19 +196,10 @@ struct RangeKeyHandler {
                         KEY_BUFF_HANDLER f) const {
     double coords[2];
 
-    if (is_compressed_) {
-      coords[0] = Geospatial::decompress_longitude_coord_geoint32(
-          SUFFIX(fixed_width_int_decode_noinline)(
-              join_column_iterators->ptr(), /*byte_width=*/4, 0));
-      coords[1] = Geospatial::decompress_lattitude_coord_geoint32(
-          SUFFIX(fixed_width_int_decode_noinline)(
-              join_column_iterators->ptr(), /*byte_width=*/4, 1));
-    } else {
-      coords[0] =
-          SUFFIX(fixed_width_double_decode_noinline)(join_column_iterators->ptr(), 0);
-      coords[1] =
-          SUFFIX(fixed_width_double_decode_noinline)(join_column_iterators->ptr(), 1);
-    }
+    coords[0] =
+        SUFFIX(fixed_width_double_decode_noinline)(join_column_iterators->ptr(), 0);
+    coords[1] =
+        SUFFIX(fixed_width_double_decode_noinline)(join_column_iterators->ptr(), 1);
 
     const auto x_bucket_sz = bucket_sizes_for_dimension_[0];
     const auto y_bucket_sz = bucket_sizes_for_dimension_[1];

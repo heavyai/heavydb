@@ -46,8 +46,7 @@ inline size_t get_slots_for_geo_target(const TargetInfo& target_info,
   // Aggregates on geospatial types are serialized directly by rewriting the underlying
   // buffer. Even if separate varlen storage is valid, treat aggregates the same on
   // distributed and single node
-  if (target_info.is_varlen_projection ||
-      (separate_varlen_storage && !target_info.is_agg)) {
+  if (separate_varlen_storage && !target_info.is_agg) {
     return 1;
   } else {
     return 2 * target_info.sql_type.get_physical_coord_cols();

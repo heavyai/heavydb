@@ -239,13 +239,6 @@ struct ArraysConverterFactory {
   }
 };
 
-template <typename CONVERTER>
-struct GeoConverterFactory {
-  std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
-    return std::make_unique<CONVERTER>(param.cat, param.num_rows, param.target);
-  }
-};
-
 std::unique_ptr<TargetValueConverter> TargetValueConverterFactory::create(
     ConverterCreateParameter param) {
   static const std::map<SQLTypes,

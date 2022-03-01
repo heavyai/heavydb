@@ -1408,9 +1408,7 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
     CHECK(outer_geo_coord_array);
     CHECK(outer_geo_coord_array->isLocalAlloc());
     CHECK_EQ(outer_geo_coord_array->getElementCount(), 2);
-    auto elem_size = (outer_geo_ti.get_compression() == kENCODING_GEOINT)
-                         ? sizeof(int32_t)
-                         : sizeof(double);
+    auto elem_size = sizeof(double);
     CHECK_EQ(outer_geo_ti.get_size(), int(2 * elem_size));
     const auto outer_geo_constructed_lvs = code_generator.codegen(outer_geo, true, co);
     // CHECK_EQ(outer_geo_constructed_lvs.size(), size_t(2));     // Pointer and size
@@ -1428,16 +1426,10 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
 
     // Note that get_bucket_key_for_range_compressed will need to be specialized for
     // future compression schemes
-    auto bucket_key =
-        outer_geo_ti.get_compression() == kENCODING_GEOINT
-            ? executor_->cgen_state_->emitExternalCall(
-                  "get_bucket_key_for_range_compressed",
-                  get_int_type(64, LL_CONTEXT),
-                  {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])})
-            : executor_->cgen_state_->emitExternalCall(
-                  "get_bucket_key_for_range_double",
-                  get_int_type(64, LL_CONTEXT),
-                  {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])});
+    auto bucket_key = executor_->cgen_state_->emitExternalCall(
+        "get_bucket_key_for_range_double",
+        get_int_type(64, LL_CONTEXT),
+        {arr_ptr, LL_INT(i), LL_FP(inverse_bucket_sizes_for_dimension_[i])});
     const auto col_lv = LL_BUILDER.CreateSExt(
         bucket_key, get_int_type(key_component_width * 8, LL_CONTEXT));
     LL_BUILDER.CreateStore(col_lv, key_comp_dest_lv);

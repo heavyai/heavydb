@@ -46,12 +46,7 @@ _typeattr = {
     'DECIMAL': 'real',
     'DOUBLE': 'real',
     'STR': 'str',
-    'POINT': 'str',
-    'LINESTRING': 'str',
-    'POLYGON': 'str',
-    'MULTIPOLYGON': 'str',
     'TINYINT': 'int',
-    'GEOMETRY': 'str',
 }
 _thrift_types_to_values = T.TDatumType._NAMES_TO_VALUES
 _thrift_values_to_types = T.TDatumType._VALUES_TO_NAMES

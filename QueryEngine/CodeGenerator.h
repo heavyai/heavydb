@@ -130,11 +130,6 @@ class CodeGenerator {
     std::unique_ptr<DiamondCodegen> null_check;
   };
 
-  static ArrayLoadCodegen codegenGeoArrayLoadAndNullcheck(llvm::Value* byte_stream,
-                                                          llvm::Value* pos,
-                                                          const SQLTypeInfo& ti,
-                                                          CgenState* cgen_state);
-
  private:
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
@@ -216,37 +211,6 @@ class CodeGenerator {
 
   std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
                                              const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeoColumnVar(const Analyzer::GeoColumnVar*,
-                                                const bool fetch_columns,
-                                                const CompilationOptions& co);
-
-  std::vector<llvm::Value*> codegenGeoExpr(const Analyzer::GeoExpr*,
-                                           const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeoConstant(const Analyzer::GeoConstant*,
-                                               const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeoOperator(const Analyzer::GeoOperator*,
-                                               const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeoUOper(const Analyzer::GeoUOper*,
-                                            const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeoBinOper(const Analyzer::GeoBinOper*,
-                                              const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeosPredicateCall(const std::string&,
-                                                     std::vector<llvm::Value*>,
-                                                     const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeosConstructorCall(const std::string&,
-                                                       std::vector<llvm::Value*>,
-                                                       const CompilationOptions&);
-
-  std::vector<llvm::Value*> codegenGeoArgs(
-      const std::vector<std::shared_ptr<Analyzer::Expr>>&,
-      const CompilationOptions&);
 
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*,
                                    const CompilationOptions&);
@@ -476,8 +440,6 @@ class CodeGenerator {
   llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*,
                                           const std::vector<llvm::Value*>&);
 
-  llvm::Value* codegenCompression(const SQLTypeInfo& type_info);
-
   std::pair<llvm::Value*, llvm::Value*> codegenArrayBuff(llvm::Value* chunk,
                                                          llvm::Value* row_pos,
                                                          SQLTypes array_type,
@@ -489,60 +451,6 @@ class CodeGenerator {
                          llvm::Value* buffer_size,
                          llvm::Value* buffer_is_null,
                          std::vector<llvm::Value*>& output_args);
-
-  llvm::StructType* createPointStructType(const std::string& udf_func_name,
-                                          size_t param_num);
-
-  void codegenGeoPointArgs(const std::string& udf_func_name,
-                           size_t param_num,
-                           llvm::Value* point_buf,
-                           llvm::Value* point_size,
-                           llvm::Value* compression,
-                           llvm::Value* input_srid,
-                           llvm::Value* output_srid,
-                           std::vector<llvm::Value*>& output_args);
-
-  llvm::StructType* createLineStringStructType(const std::string& udf_func_name,
-                                               size_t param_num);
-
-  void codegenGeoLineStringArgs(const std::string& udf_func_name,
-                                size_t param_num,
-                                llvm::Value* line_string_buf,
-                                llvm::Value* line_string_size,
-                                llvm::Value* compression,
-                                llvm::Value* input_srid,
-                                llvm::Value* output_srid,
-                                std::vector<llvm::Value*>& output_args);
-
-  llvm::StructType* createPolygonStructType(const std::string& udf_func_name,
-                                            size_t param_num);
-
-  void codegenGeoPolygonArgs(const std::string& udf_func_name,
-                             size_t param_num,
-                             llvm::Value* polygon_buf,
-                             llvm::Value* polygon_size,
-                             llvm::Value* ring_sizes_buf,
-                             llvm::Value* num_rings,
-                             llvm::Value* compression,
-                             llvm::Value* input_srid,
-                             llvm::Value* output_srid,
-                             std::vector<llvm::Value*>& output_args);
-
-  llvm::StructType* createMultiPolygonStructType(const std::string& udf_func_name,
-                                                 size_t param_num);
-
-  void codegenGeoMultiPolygonArgs(const std::string& udf_func_name,
-                                  size_t param_num,
-                                  llvm::Value* polygon_coords,
-                                  llvm::Value* polygon_coords_size,
-                                  llvm::Value* ring_sizes_buf,
-                                  llvm::Value* ring_sizes,
-                                  llvm::Value* polygon_bounds,
-                                  llvm::Value* polygon_bounds_sizes,
-                                  llvm::Value* compression,
-                                  llvm::Value* input_srid,
-                                  llvm::Value* output_srid,
-                                  std::vector<llvm::Value*>& output_args);
 
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(
       const Analyzer::FunctionOper*,

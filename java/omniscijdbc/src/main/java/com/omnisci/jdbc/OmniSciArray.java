@@ -57,10 +57,6 @@ public class OmniSciArray implements java.sql.Array {
         checkClass(elements_class, Double.class);
         break;
       case STR:
-      case POINT:
-      case LINESTRING:
-      case POLYGON:
-      case MULTIPOLYGON:
         checkClass(elements_class, String.class);
         break;
       default:
@@ -172,10 +168,6 @@ public class OmniSciArray implements java.sql.Array {
             real_values[i] = (Double) elements[i];
             break;
           case STR:
-          case POINT:
-          case LINESTRING:
-          case POLYGON:
-          case MULTIPOLYGON:
             is_string = true;
             string_values[i] = (String) elements[i];
             break;
@@ -212,10 +204,6 @@ public class OmniSciArray implements java.sql.Array {
     } else {
       switch (type) {
         case STR:
-        case POINT:
-        case LINESTRING:
-        case POLYGON:
-        case MULTIPOLYGON:
         case TIME:
         case TIMESTAMP:
         case DATE: {

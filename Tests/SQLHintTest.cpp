@@ -71,17 +71,10 @@ void createTable() {
   QR::get()->runDDLStatement(
       "CREATE TABLE SQL_HINT_DUMMY(key int, ts1 timestamp(0) encoding fixed(32), ts2 "
       "timestamp(0) encoding fixed(32), str1 TEXT ENCODING DICT(16));");
-  QR::get()->runDDLStatement(
-      "CREATE TABLE geospatial_test(id INT, p POINT, l LINESTRING, poly POLYGON);");
-  QR::get()->runDDLStatement(
-      "CREATE TABLE geospatial_inner_join_test(id INT, p POINT, l LINESTRING, poly "
-      "POLYGON);");
 }
 
 void dropTable() {
   QR::get()->runDDLStatement("DROP TABLE IF EXISTS SQL_HINT_DUMMY;");
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_test;");
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS geospatial_inner_join_test;");
 }
 
 TEST(kCpuMode, ForceToCPUMode) {

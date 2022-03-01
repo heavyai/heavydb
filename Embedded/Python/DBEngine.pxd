@@ -78,12 +78,7 @@ cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase::ColumnType':
     cdef ColumnType BOOL
     cdef ColumnType INTERVAL_DAY_TIME
     cdef ColumnType INTERVAL_YEAR_MONTH
-    cdef ColumnType POINT
-    cdef ColumnType LINESTRING
-    cdef ColumnType POLYGON
-    cdef ColumnType MULTIPOLYGON
     cdef ColumnType TINYINT
-    cdef ColumnType GEOMETRY
     cdef ColumnType UNKNOWN
 
 
@@ -94,5 +89,4 @@ cdef extern from "DBETypes.h" namespace 'EmbeddedDatabase::ColumnEncoding':
     cdef ColumnEncoding DIFF
     cdef ColumnEncoding DICT
     cdef ColumnEncoding SPARSE
-    cdef ColumnEncoding GEOINT
     cdef ColumnEncoding DATE_IN_DAYS

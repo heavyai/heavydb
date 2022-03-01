@@ -22,9 +22,6 @@
 #ifndef _IMPORTER_H_
 #define _IMPORTER_H_
 
-#include <gdal.h>
-#include <ogrsf_frmts.h>
-
 #include <atomic>
 #include <boost/filesystem.hpp>
 #include <boost/noncopyable.hpp>
@@ -326,19 +323,11 @@ class Importer : public DataStreamSink, public AbstractImporter {
   static std::vector<std::string> gdalGetAllFilesInArchive(
       const std::string& archive_path,
       const CopyParams& copy_params);
-  enum class GeoFileLayerContents { EMPTY, GEO, NON_GEO, UNSUPPORTED_GEO };
-  struct GeoFileLayerInfo {
-    GeoFileLayerInfo(const std::string& name_, GeoFileLayerContents contents_)
-        : name(name_), contents(contents_) {}
-    std::string name;
-    GeoFileLayerContents contents;
-  };
   Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }
   void checkpoint(const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs);
   auto getLoader() const { return loader.get(); }
 
  private:
-  static void setGDALAuthorizationTokens(const CopyParams& copy_params);
   std::string import_id;
   size_t file_size;
   size_t max_threads;

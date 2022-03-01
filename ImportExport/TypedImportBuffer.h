@@ -187,8 +187,6 @@ class TypedImportBuffer : boost::noncopyable {
 
   void addString(const std::string_view v) { string_buffer_->emplace_back(v); }
 
-  void addGeoString(const std::string_view v) { geo_string_buffer_->emplace_back(v); }
-
   void addArray(const ArrayDatum& v) { array_buffer_->push_back(v); }
 
   std::vector<std::string>& addStringArray() {
@@ -289,8 +287,6 @@ class TypedImportBuffer : boost::noncopyable {
   }
 
   std::vector<std::string>* getStringBuffer() const { return string_buffer_; }
-
-  std::vector<std::string>* getGeoStringBuffer() const { return geo_string_buffer_; }
 
   std::vector<ArrayDatum>* getArrayBuffer() const { return array_buffer_; }
 
@@ -439,7 +435,6 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<float>* float_buffer_;
     std::vector<double>* double_buffer_;
     std::vector<std::string>* string_buffer_;
-    std::vector<std::string>* geo_string_buffer_;
     std::vector<ArrayDatum>* array_buffer_;
     std::vector<std::vector<std::string>>* string_array_buffer_;
   };

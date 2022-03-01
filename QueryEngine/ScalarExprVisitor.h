@@ -48,10 +48,6 @@ class ScalarExprVisitor {
     if (bin_oper) {
       return visitBinOper(bin_oper);
     }
-    const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
-    if (geo_expr) {
-      return visitGeoExpr(geo_expr);
-    }
     const auto in_values = dynamic_cast<const Analyzer::InValues*>(expr);
     if (in_values) {
       return visitInValues(in_values);
@@ -125,14 +121,6 @@ class ScalarExprVisitor {
     if (array) {
       return visitArrayOper(array);
     }
-    const auto geo_uop = dynamic_cast<const Analyzer::GeoUOper*>(expr);
-    if (geo_uop) {
-      return visitGeoUOper(geo_uop);
-    }
-    const auto geo_binop = dynamic_cast<const Analyzer::GeoBinOper*>(expr);
-    if (geo_binop) {
-      return visitGeoBinOper(geo_binop);
-    }
     const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
     if (datediff) {
       return visitDatediffExpr(datediff);
@@ -177,15 +165,6 @@ class ScalarExprVisitor {
     T result = defaultResult();
     result = aggregateResult(result, visit(bin_oper->get_left_operand()));
     result = aggregateResult(result, visit(bin_oper->get_right_operand()));
-    return result;
-  }
-
-  virtual T visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const {
-    T result = defaultResult();
-    const auto geo_expr_children = geo_expr->getChildExprs();
-    for (const auto expr : geo_expr_children) {
-      result = aggregateResult(result, visit(expr));
-    }
     return result;
   }
 
@@ -291,25 +270,6 @@ class ScalarExprVisitor {
     T result = defaultResult();
     for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
       result = aggregateResult(result, visit(array_expr->getElement(i)));
-    }
-    return result;
-  }
-
-  virtual T visitGeoUOper(const Analyzer::GeoUOper* geo_expr) const {
-    T result = defaultResult();
-    for (const auto& arg : geo_expr->getArgs0()) {
-      result = aggregateResult(result, visit(arg.get()));
-    }
-    return result;
-  }
-
-  virtual T visitGeoBinOper(const Analyzer::GeoBinOper* geo_expr) const {
-    T result = defaultResult();
-    for (const auto& arg : geo_expr->getArgs0()) {
-      result = aggregateResult(result, visit(arg.get()));
-    }
-    for (const auto& arg : geo_expr->getArgs1()) {
-      result = aggregateResult(result, visit(arg.get()));
     }
     return result;
   }

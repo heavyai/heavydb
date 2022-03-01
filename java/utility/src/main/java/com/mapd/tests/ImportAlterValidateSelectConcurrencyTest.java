@@ -150,15 +150,6 @@ public class ImportAlterValidateSelectConcurrencyTest {
             logger.info(logPrefix + " VALIDATE " + sql);
             user.sqlValidate(sql);
 
-            if (threadId == 3) {
-              logger.info(logPrefix + " IMPORT GEO TABLE");
-              user.import_geo_table(geoTableName,
-                      geo_file_path,
-                      copy_params,
-                      new java.util.ArrayList<TColumnType>(),
-                      new TCreateParams());
-            }
-
             sql = "SELECT * FROM " + geoTableName + " LIMIT 2;";
             logger.info(logPrefix + " " + sql);
             user.runSql(sql);

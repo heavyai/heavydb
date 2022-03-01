@@ -250,7 +250,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
   auto bucket_sizes_gpu = transfer_vector_of_flat_objects_to_gpu(
       inverse_bucket_sizes_for_dimension, allocator);
 
-  const auto key_handler = RangeKeyHandler(isInnerColCompressed(),
+  const auto key_handler = RangeKeyHandler(false,
                                            inverse_bucket_sizes_for_dimension.size(),
                                            join_columns_gpu,
                                            bucket_sizes_gpu);
@@ -334,7 +334,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
       join_bucket_info[0].inverse_bucket_sizes_for_dimension.size();
 
   auto key_handler =
-      RangeKeyHandler(isInnerColCompressed(),
+      RangeKeyHandler(false,
                       key_component_count,
                       &join_columns[0],
                       join_bucket_info[0].inverse_bucket_sizes_for_dimension.data());
@@ -443,7 +443,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
                                       columns_per_device.front().join_columns,
                                       columns_per_device.front().join_column_types,
                                       columns_per_device.front().join_buckets,
-                                      isInnerColCompressed(),
+                                      false,
                                       thread_count);
 
     for (int i = 1; i < thread_count; ++i) {
@@ -497,7 +497,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
           data_mgr.getCudaMgr()->zeroDeviceMem(
               row_counts_buffer, row_counts_buffer_sz, device_id);
           const auto key_handler =
-              RangeKeyHandler(isInnerColCompressed(),
+              RangeKeyHandler(false,
                               bucket_sizes_for_dimension.size(),
                               join_columns_gpu,
                               reinterpret_cast<double*>(bucket_sizes_gpu));

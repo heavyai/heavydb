@@ -57,7 +57,6 @@ class RelAlgTranslator {
       , input_to_nest_level_(input_to_nest_level)
       , join_types_(join_types)
       , now_(now)
-      , generated_geos_ops_(false)
       , just_explain_(just_explain) {}
 
   std::shared_ptr<Analyzer::Expr> translateScalarRex(const RexScalar* rex) const;
@@ -67,8 +66,6 @@ class RelAlgTranslator {
       const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
 
   static std::shared_ptr<Analyzer::Expr> translateLiteral(const RexLiteral*);
-
-  bool generated_geos_ops() { return generated_geos_ops_; }
 
  private:
   std::shared_ptr<Analyzer::Expr> translateScalarSubquery(const RexSubQuery*) const;
@@ -148,67 +145,11 @@ class RelAlgTranslator {
 
   Analyzer::ExpressionPtrVector translateFunctionArgs(const RexFunctionOperator*) const;
 
-  std::shared_ptr<Analyzer::Expr> translateUnaryGeoFunction(
-      const RexFunctionOperator*) const;
-
-  std::shared_ptr<Analyzer::Expr> translateBinaryGeoFunction(
-      const RexFunctionOperator*) const;
-
-  std::shared_ptr<Analyzer::Expr> translateTernaryGeoFunction(
-      const RexFunctionOperator*) const;
-
-  std::shared_ptr<Analyzer::Expr> translateFunctionWithGeoArg(
-      const RexFunctionOperator*) const;
-
-  std::shared_ptr<Analyzer::Expr> translateGeoComparison(const RexOperator*) const;
-
-  std::shared_ptr<Analyzer::Expr> translateGeoProjection(const RexFunctionOperator*,
-                                                         SQLTypeInfo&,
-                                                         const bool with_bounds) const;
-
-  std::shared_ptr<Analyzer::Expr> translateUnaryGeoPredicate(
-      const RexFunctionOperator*,
-      SQLTypeInfo&,
-      const bool with_bounds) const;
-  std::shared_ptr<Analyzer::Expr> translateBinaryGeoPredicate(
-      const RexFunctionOperator*,
-      SQLTypeInfo&,
-      const bool with_bounds) const;
-
-  std::shared_ptr<Analyzer::Expr> translateBinaryGeoConstructor(
-      const RexFunctionOperator*,
-      SQLTypeInfo&,
-      const bool with_bounds) const;
-
-  std::shared_ptr<Analyzer::Expr> translateGeoOverlapsOper(const RexOperator*) const;
-
-  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArg(
-      const RexScalar* rex_scalar,
-      SQLTypeInfo& arg_ti,
-      const bool with_bounds,
-      const bool with_render_group,
-      const bool expand_geo_col,
-      const bool is_projection = false,
-      const bool use_geo_expressions = false,
-      const bool try_to_compress = false) const;
-
-  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoColumn(
-      const RexInput*,
-      SQLTypeInfo&,
-      const bool with_bounds,
-      const bool with_render_group,
-      const bool expand_geo_col) const;
-
-  std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoLiteral(const RexLiteral*,
-                                                                   SQLTypeInfo&,
-                                                                   bool) const;
-
   std::shared_ptr<const query_state::QueryState> query_state_;
   const Executor* executor_;
   const std::unordered_map<const RelAlgNode*, int> input_to_nest_level_;
   const std::vector<JoinType> join_types_;
   time_t now_;
-  mutable bool generated_geos_ops_;
   const bool just_explain_;
 };
 

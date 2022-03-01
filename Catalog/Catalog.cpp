@@ -323,10 +323,6 @@ void Catalog::updateFixlenArrayColumns() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::updateGeoColumns() {
-  UNREACHABLE();
-}
-
 void Catalog::updateFrontendViewSchema() {
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -928,7 +924,7 @@ void Catalog::buildMaps() {
     } else {
       cd->default_value = std::make_optional(sqliteConnector_.getData<string>(r, 16));
     }
-    cd->isGeoPhyCol = skip_physical_cols > 0;
+    CHECK_LE(skip_physical_cols, 0);
     ColumnKey columnKey(cd->tableId, to_upper(cd->columnName));
     columnDescriptorMap_[columnKey] = cd;
     ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -1857,9 +1853,7 @@ void Catalog::roll(const bool forward) {
       if (ncd) {
         // append columnId if its new and not phy geo
         if (vc.end() == std::find(vc.begin(), vc.end(), ncd->columnId)) {
-          if (!ncd->isGeoPhyCol) {
-            vc.push_back(ncd->columnId);
-          }
+          vc.push_back(ncd->columnId);
         }
       }
       tds.insert(td);
@@ -1887,11 +1881,6 @@ void Catalog::roll(const bool forward) {
       calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
     }
   }
-}
-
-void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
-                              list<ColumnDescriptor>& columns) {
-  UNREACHABLE();
 }
 
 void Catalog::createTable(
@@ -1981,9 +1970,7 @@ void Catalog::createTable(
           if (colId > 1) {
             colId += g_test_against_columnId_gap;
           }
-          if (!cd.isGeoPhyCol) {
-            td.columnIdBySpi_.push_back(colId);
-          }
+          td.columnIdBySpi_.push_back(colId);
         }
 
         using BindType = SqliteConnector::BindType;
@@ -2063,9 +2050,7 @@ void Catalog::createTable(
         if (colId > 1) {
           colId += g_test_against_columnId_gap;
         }
-        if (!cd.isGeoPhyCol) {
-          td.columnIdBySpi_.push_back(colId);
-        }
+        td.columnIdBySpi_.push_back(colId);
       }
       cd.tableId = td.tableId;
       cd.columnId = colId++;

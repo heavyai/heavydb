@@ -25,14 +25,8 @@ namespace import_export {
 QueryExporter::QueryExporter(const FileType file_type) : file_type_{file_type} {}
 
 std::unique_ptr<QueryExporter> QueryExporter::create(FileType file_type) {
-  switch (file_type) {
-    case FileType::kCSV:
-      return std::make_unique<QueryExporterCSV>();
-    case FileType::kGeoJSON:
-    case FileType::kGeoJSONL:
-    case FileType::kShapefile:
-    case FileType::kFlatGeobuf:
-      UNREACHABLE() << "QueryExporter::create GDAL files unsupported";
+  if (file_type == FileType::kCSV) {
+    return std::make_unique<QueryExporterCSV>();
   }
   CHECK(false);
   return nullptr;

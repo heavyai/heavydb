@@ -35,12 +35,7 @@ enum class ColumnType {
   BOOL = 10,
   INTERVAL_DAY_TIME = 11,
   INTERVAL_YEAR_MONTH = 12,
-  POINT = 13,
-  LINESTRING = 14,
-  POLYGON = 15,
-  MULTIPOLYGON = 16,
   TINYINT = 17,
-  GEOMETRY = 18,
   UNKNOWN = 19
 };
 
@@ -51,7 +46,6 @@ enum class ColumnEncoding {
   DIFF = 3,
   DICT = 4,
   SPARSE = 5,
-  GEOINT = 6,
   DATE_IN_DAYS = 7
 };
 

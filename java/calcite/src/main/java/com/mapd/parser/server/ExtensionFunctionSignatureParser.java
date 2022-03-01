@@ -247,18 +247,6 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Cursor")) {
       return ExtensionFunction.ExtArgumentType.Cursor;
     }
-    if (type_name.equals("GeoPoint")) {
-      return ExtensionFunction.ExtArgumentType.GeoPoint;
-    }
-    if (type_name.equals("GeoLineString")) {
-      return ExtensionFunction.ExtArgumentType.GeoLineString;
-    }
-    if (type_name.equals("GeoPolygon")) {
-      return ExtensionFunction.ExtArgumentType.GeoPolygon;
-    }
-    if (type_name.equals("GeoMultiPolygon")) {
-      return ExtensionFunction.ExtArgumentType.GeoMultiPolygon;
-    }
     if (type_name.equals("ColumnList<int8_t>") || type_name.equals("ColumnList<char>")) {
       return ExtensionFunction.ExtArgumentType.ColumnListInt8;
     }

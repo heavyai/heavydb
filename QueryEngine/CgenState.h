@@ -50,7 +50,6 @@ struct CgenState {
       , contains_left_deep_outer_join_(contains_left_deep_outer_join)
       , outer_join_match_found_per_level_(std::max(num_query_infos, size_t(1)) - 1)
       , needs_error_check_(false)
-      , needs_geos_(false)
       , query_func_(nullptr)
       , query_func_entry_ir_builder_(context_){};
 
@@ -61,7 +60,6 @@ struct CgenState {
       , ir_builder_(context_)
       , contains_left_deep_outer_join_(false)
       , needs_error_check_(false)
-      , needs_geos_(false)
       , query_func_(nullptr)
       , query_func_entry_ir_builder_(context_){};
 
@@ -167,21 +165,6 @@ struct CgenState {
             return getOrAddLiteral(int8_array_literal, device_id);
           }
           throw std::runtime_error("Unsupported literal array");
-        }
-        if (enc_type == kENCODING_GEOINT) {
-          if (ti.get_subtype() == kTINYINT) {
-            std::vector<int8_t> int8_array_literal;
-            for (const auto& value : constant->get_value_list()) {
-              const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-              CHECK(c);
-              int8_t i = c->get_constval().tinyintval;
-              int8_array_literal.push_back(i);
-            }
-            if (ti.get_comp_param() == 32) {
-              return getOrAddLiteral(std::make_pair(int8_array_literal, 32), device_id);
-            }
-            return getOrAddLiteral(int8_array_literal, device_id);
-          }
         }
         throw std::runtime_error("Encoded literal arrays are not supported");
       }
@@ -356,7 +339,6 @@ struct CgenState {
       array_load_cache_;  // byte stream to array info
   std::unordered_map<std::string, llvm::Value*> geo_target_cache_;
   bool needs_error_check_;
-  bool needs_geos_;
 
   llvm::Function* query_func_;
   llvm::IRBuilder<> query_func_entry_ir_builder_;

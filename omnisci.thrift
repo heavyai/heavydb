@@ -613,7 +613,6 @@ service OmniSci {
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TOmniSciException e)
   void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TFileType file_type=TFileType.DELIMITED, 5: TCreateParams create_params) throws (1: TOmniSciException e)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TOmniSciException e)
-  void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc, 6: TCreateParams create_params) throws (1: TOmniSciException e)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TOmniSciException e)
   list<string> get_all_files_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TOmniSciException e)
   # distributed

@@ -20,10 +20,6 @@ enum TDatumType {
   BOOL,
   INTERVAL_DAY_TIME,
   INTERVAL_YEAR_MONTH,
-  POINT,
-  LINESTRING,
-  POLYGON,
-  MULTIPOLYGON,
   TINYINT
 }
 
@@ -34,7 +30,6 @@ enum TEncodingType {
   DIFF,
   DICT,
   SPARSE,
-  GEOINT,
   DATE_IN_DAYS
 }
 

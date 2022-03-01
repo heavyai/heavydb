@@ -1477,29 +1477,11 @@ class CopyTableStmt : public DDLStmt {
 
   bool get_success() const { return success_; }
 
-  bool was_geo_copy_from() const { return was_geo_copy_from_; }
-
-  void get_geo_copy_from_payload(std::string& geo_copy_from_table,
-                                 std::string& geo_copy_from_file_name,
-                                 import_export::CopyParams& geo_copy_from_copy_params,
-                                 std::string& geo_copy_from_partitions) {
-    geo_copy_from_table = *table_;
-    geo_copy_from_file_name = geo_copy_from_file_name_;
-    geo_copy_from_copy_params = geo_copy_from_copy_params_;
-    geo_copy_from_partitions = geo_copy_from_partitions_;
-    was_geo_copy_from_ = false;
-  }
-
  private:
   std::unique_ptr<std::string> table_;
   std::unique_ptr<std::string> file_pattern_;
   bool success_;
   std::list<std::unique_ptr<NameValueAssign>> options_;
-
-  bool was_geo_copy_from_ = false;
-  std::string geo_copy_from_file_name_;
-  import_export::CopyParams geo_copy_from_copy_params_;
-  std::string geo_copy_from_partitions_;
 };
 
 /*

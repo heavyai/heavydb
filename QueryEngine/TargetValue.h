@@ -96,74 +96,9 @@ struct InternalTargetValue {
   }
 };
 
-struct GeoPointTargetValue {
-  std::shared_ptr<std::vector<double>> coords;
-
-  GeoPointTargetValue(const std::vector<double>& coords)
-      : coords(std::make_shared<std::vector<double>>(coords)) {}
-};
-
-struct GeoLineStringTargetValue {
-  std::shared_ptr<std::vector<double>> coords;
-
-  GeoLineStringTargetValue(const std::vector<double>& coords)
-      : coords(std::make_shared<std::vector<double>>(coords)) {}
-};
-
-struct GeoPolyTargetValue {
-  std::shared_ptr<std::vector<double>> coords;
-  std::shared_ptr<std::vector<int32_t>> ring_sizes;
-
-  GeoPolyTargetValue(const std::vector<double>& coords,
-                     const std::vector<int32_t>& ring_sizes)
-      : coords(std::make_shared<std::vector<double>>(coords))
-      , ring_sizes(std::make_shared<std::vector<int32_t>>(ring_sizes)) {}
-};
-
-struct GeoMultiPolyTargetValue {
-  std::shared_ptr<std::vector<double>> coords;
-  std::shared_ptr<std::vector<int32_t>> ring_sizes;
-  std::shared_ptr<std::vector<int32_t>> poly_rings;
-
-  GeoMultiPolyTargetValue(const std::vector<double>& coords,
-                          const std::vector<int32_t>& ring_sizes,
-                          const std::vector<int32_t>& poly_rings)
-      : coords(std::make_shared<std::vector<double>>(coords))
-      , ring_sizes(std::make_shared<std::vector<int32_t>>(ring_sizes))
-      , poly_rings(std::make_shared<std::vector<int32_t>>(poly_rings)) {}
-};
-
-struct GeoPointTargetValuePtr {
-  std::shared_ptr<VarlenDatum> coords_data;
-};
-
-struct GeoLineStringTargetValuePtr {
-  std::shared_ptr<VarlenDatum> coords_data;
-};
-
-struct GeoPolyTargetValuePtr {
-  std::shared_ptr<VarlenDatum> coords_data;
-  std::shared_ptr<VarlenDatum> ring_sizes_data;
-};
-
-struct GeoMultiPolyTargetValuePtr {
-  std::shared_ptr<VarlenDatum> coords_data;
-  std::shared_ptr<VarlenDatum> ring_sizes_data;
-  std::shared_ptr<VarlenDatum> poly_rings_data;
-};
-
 using NullableString = boost::variant<std::string, void*>;
 using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
 using ArrayTargetValue = boost::optional<std::vector<ScalarTargetValue>>;
-using GeoTargetValue = boost::optional<boost::variant<GeoPointTargetValue,
-                                                      GeoLineStringTargetValue,
-                                                      GeoPolyTargetValue,
-                                                      GeoMultiPolyTargetValue>>;
-using GeoTargetValuePtr = boost::variant<GeoPointTargetValuePtr,
-                                         GeoLineStringTargetValuePtr,
-                                         GeoPolyTargetValuePtr,
-                                         GeoMultiPolyTargetValuePtr>;
-using TargetValue = boost::
-    variant<ScalarTargetValue, ArrayTargetValue, GeoTargetValue, GeoTargetValuePtr>;
+using TargetValue = boost::variant<ScalarTargetValue, ArrayTargetValue>;
 
 #endif  // QUERYENGINE_TARGETVALUE_H

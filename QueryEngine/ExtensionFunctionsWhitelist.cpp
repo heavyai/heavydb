@@ -167,14 +167,6 @@ std::string serialize_type(const ExtArgumentType type,
       return "{double*, i64, i8}*";
     case ExtArgumentType::ArrayBool:
       return "{i1*, i64, i8}*";
-    case ExtArgumentType::GeoPoint:
-      return "geo_point";
-    case ExtArgumentType::GeoLineString:
-      return "geo_linestring";
-    case ExtArgumentType::GeoPolygon:
-      return "geo_polygon";
-    case ExtArgumentType::GeoMultiPolygon:
-      return "geo_multi_polygon";
     case ExtArgumentType::Cursor:
       return "cursor";
     case ExtArgumentType::ColumnInt8:
@@ -423,14 +415,6 @@ std::string ExtensionFunctionsWhitelist::toStringSQL(const ExtArgumentType& sig_
       return "COLUMN<TEXT ENCODING DICT>";
     case ExtArgumentType::Cursor:
       return "CURSOR";
-    case ExtArgumentType::GeoPoint:
-      return "POINT";
-    case ExtArgumentType::GeoLineString:
-      return "LINESTRING";
-    case ExtArgumentType::GeoPolygon:
-      return "POLYGON";
-    case ExtArgumentType::GeoMultiPolygon:
-      return "MULTIPOLYGON";
     case ExtArgumentType::Void:
       return "VOID";
     case ExtArgumentType::TextEncodingNone:
@@ -597,18 +581,6 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "{i1*, i64, i8}*" || type_name == "{bool*, i64, i8}*") {
     return ExtArgumentType::ArrayBool;
-  }
-  if (type_name == "geo_point") {
-    return ExtArgumentType::GeoPoint;
-  }
-  if (type_name == "geo_linestring") {
-    return ExtArgumentType::GeoLineString;
-  }
-  if (type_name == "geo_polygon") {
-    return ExtArgumentType::GeoPolygon;
-  }
-  if (type_name == "geo_multi_polygon") {
-    return ExtArgumentType::GeoMultiPolygon;
   }
   if (type_name == "cursor") {
     return ExtArgumentType::Cursor;

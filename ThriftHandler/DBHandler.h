@@ -32,7 +32,6 @@
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "Geospatial/Transforms.h"
 #include "ImportExport/Importer.h"
 #include "ImportExport/RenderGroupAnalyzer.h"
 #include "LockMgr/LockMgr.h"
@@ -455,12 +454,6 @@ class DBHandler : public OmniSciIf {
                     const std::string& table_name,
                     const std::string& file_name,
                     const TCopyParams& copy_params) override;
-  void import_geo_table(const TSessionId& session,
-                        const std::string& table_name,
-                        const std::string& file_name,
-                        const TCopyParams& copy_params,
-                        const TRowDescriptor& row_desc,
-                        const TCreateParams& create_params) override;
   void import_table_status(TImportStatus& _return,
                            const TSessionId& session,
                            const std::string& import_id) override;
@@ -901,39 +894,6 @@ class DBHandler : public OmniSciIf {
   const std::string& udf_filename_;
   const std::string& clang_path_;
   const std::vector<std::string>& clang_options_;
-
-  struct GeoCopyFromState {
-    std::string geo_copy_from_table;
-    std::string geo_copy_from_file_name;
-    import_export::CopyParams geo_copy_from_copy_params;
-    std::string geo_copy_from_partitions;
-  };
-
-  struct GeoCopyFromSessions {
-    std::unordered_map<std::string, GeoCopyFromState> was_geo_copy_from;
-    std::mutex geo_copy_from_mutex;
-
-    std::optional<GeoCopyFromState> operator()(const std::string& session_id) {
-      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
-      auto itr = was_geo_copy_from.find(session_id);
-      if (itr == was_geo_copy_from.end()) {
-        return std::nullopt;
-      }
-      return itr->second;
-    }
-
-    void add(const std::string& session_id, const GeoCopyFromState& state) {
-      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
-      const auto ret = was_geo_copy_from.insert(std::make_pair(session_id, state));
-      CHECK(ret.second);
-    }
-
-    void remove(const std::string& session_id) {
-      std::lock_guard<std::mutex> map_lock(geo_copy_from_mutex);
-      was_geo_copy_from.erase(session_id);
-    }
-  };
-  GeoCopyFromSessions geo_copy_from_sessions;
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;

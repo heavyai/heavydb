@@ -111,15 +111,6 @@ public class MapdTestClient {
     client.import_table(sessionId, table_name, file_name, copy_params);
   }
 
-  public void import_geo_table(String table_name,
-          String file_name,
-          TCopyParams copy_params,
-          java.util.List<TColumnType> row_desc,
-          TCreateParams create_params) throws Exception {
-    client.import_geo_table(
-            sessionId, table_name, file_name, copy_params, row_desc, create_params);
-  }
-
   public List<String> get_users() throws Exception {
     return client.get_users(sessionId);
   }

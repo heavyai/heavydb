@@ -50,12 +50,7 @@ cdef class PyColumnType:
         <int>BOOL : "BOOL",
         <int>INTERVAL_DAY_TIME : "INTERVAL_DAY_TIME",
         <int>INTERVAL_YEAR_MONTH : "INTERVAL_YEAR_MONTH",
-        <int>POINT : "POINT",
-        <int>LINESTRING : "LINESTRING",
-        <int>POLYGON : "POLYGON",
-        <int>MULTIPOLYGON : "MULTIPOLYGON",
         <int>TINYINT : "TINYINT",
-        <int>GEOMETRY : "GEOMETRY",
         <int>UNKNOWN : "UNKNOWN"}
     return c[<int>self.c_column_type]
 
@@ -78,7 +73,6 @@ cdef class PyColumnEncoding:
         <int>DIFF : "DIFF",
         <int>DICT : "DICT",
         <int>SPARSE : "SPARSE",
-        <int>GEOINT : "GEOINT",
         <int>DATE_IN_DAYS : "DATE_IN_DAYS"}
     return c[<int>self.c_column_enc]
 

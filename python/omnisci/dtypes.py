@@ -31,11 +31,6 @@ BINARY = DataType([])
 STRING = DataType(
     [
         T.STR,
-        T.POINT,
-        T.LINESTRING,
-        T.POLYGON,
-        T.MULTIPOLYGON,
-        T.GEOMETRY,
     ]
 )
 NUMBER = DataType(

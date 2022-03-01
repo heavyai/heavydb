@@ -149,14 +149,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
     var_length->setName(literal_name + "_length");
 
     return {var_start, var_start_address, var_length};
-  } else if (type_info.is_array() &&
-             (enc_type == kENCODING_NONE || enc_type == kENCODING_GEOINT)) {
-    if (enc_type == kENCODING_NONE) {
-      CHECK_EQ(kENCODING_NONE, type_info.get_compression());
-    } else if (enc_type == kENCODING_GEOINT) {
-      CHECK_EQ(kENCODING_GEOINT, type_info.get_compression());
-      CHECK_EQ(kTINYINT, type_info.get_subtype());
-    }
+  } else if (type_info.is_array() && enc_type == kENCODING_NONE) {
+    CHECK_EQ(kENCODING_NONE, type_info.get_compression());
 
     auto off_and_len_ptr = cgen_state_->query_func_entry_ir_builder_.CreateBitCast(
         lit_buf_start,
@@ -239,8 +233,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
     return {placeholder0, placeholder1, placeholder2};
   }
 
-  if (type_info.is_array() &&
-      (enc_type == kENCODING_NONE || enc_type == kENCODING_GEOINT)) {
+  if (type_info.is_array() && enc_type == kENCODING_NONE) {
     CHECK_EQ(literal_loads.size(), 2u);
 
     llvm::Value* var_start_address = literal_loads[0];

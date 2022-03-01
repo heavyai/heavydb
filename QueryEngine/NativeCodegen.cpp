@@ -465,10 +465,6 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     return cached_code;
   }
 
-  if (cgen_state_->needs_geos_) {
-    throw std::runtime_error("GEOS is disabled in this build");
-  }
-
   auto execution_engine =
       CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
   auto cpu_compilation_context =
@@ -783,10 +779,6 @@ declare i64* @get_bin_from_k_heap_int32_t(i64*, i32, i32, i32, i1, i1, i1, i32, 
 declare i64* @get_bin_from_k_heap_int64_t(i64*, i32, i32, i32, i1, i1, i1, i64, i64);
 declare i64* @get_bin_from_k_heap_float(i64*, i32, i32, i32, i1, i1, i1, float, float);
 declare i64* @get_bin_from_k_heap_double(i64*, i32, i32, i32, i1, i1, i1, double, double);
-declare double @decompress_x_coord_geoint(i32);
-declare double @decompress_y_coord_geoint(i32);
-declare i32 @compress_x_coord_geoint(double);
-declare i32 @compress_y_coord_geoint(double);
 )" + gen_array_any_all_sigs() +
     gen_translate_null_key_sigs();
 

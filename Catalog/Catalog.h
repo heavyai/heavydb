@@ -128,8 +128,6 @@ class Catalog final {
    */
   ~Catalog();
 
-  static void expandGeoColumn(const ColumnDescriptor& cd,
-                              std::list<ColumnDescriptor>& columns);
   void createTable(TableDescriptor& td,
                    const std::list<ColumnDescriptor>& columns,
                    const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
@@ -394,7 +392,6 @@ class Catalog final {
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
   void updateFixlenArrayColumns();
-  void updateGeoColumns();
   void updateFrontendViewSchema();
   void updateLinkSchema();
   void updateFrontendViewAndLinkUsers();

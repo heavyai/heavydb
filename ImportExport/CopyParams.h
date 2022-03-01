@@ -72,17 +72,6 @@ struct CopyParams {
   size_t retry_wait;
   size_t batch_size;
   size_t buffer_size;
-  // geospatial params
-  bool lonlat;
-  EncodingType geo_coords_encoding;
-  int32_t geo_coords_comp_param;
-  SQLTypes geo_coords_type;
-  int32_t geo_coords_srid;
-  bool sanitize_column_names;
-  std::string geo_layer_name;
-  bool geo_assign_render_groups;
-  bool geo_explode_collections;
-  int32_t source_srid;
   std::optional<std::string> regex_path_filter;
   std::optional<std::string> file_sort_order_by;
   std::optional<std::string> file_sort_regex;
@@ -104,15 +93,7 @@ struct CopyParams {
       , retry_count(100)
       , retry_wait(5)
       , batch_size(1000)
-      , buffer_size(kImportFileBufferSize)
-      , lonlat(true)
-      , geo_coords_encoding(kENCODING_GEOINT)
-      , geo_coords_comp_param(32)
-      , geo_coords_srid(4326)
-      , sanitize_column_names(true)
-      , geo_assign_render_groups(true)
-      , geo_explode_collections(false)
-      , source_srid(0) {}
+      , buffer_size(kImportFileBufferSize) {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
@@ -131,14 +112,6 @@ struct CopyParams {
       , retry_count(retries)
       , retry_wait(wait)
       , batch_size(b)
-      , buffer_size(kImportFileBufferSize)
-      , lonlat(true)
-      , geo_coords_encoding(kENCODING_GEOINT)
-      , geo_coords_comp_param(32)
-      , geo_coords_srid(4326)
-      , sanitize_column_names(true)
-      , geo_assign_render_groups(true)
-      , geo_explode_collections(false)
-      , source_srid(0) {}
+      , buffer_size(kImportFileBufferSize) {}
 };
 }  // namespace import_export

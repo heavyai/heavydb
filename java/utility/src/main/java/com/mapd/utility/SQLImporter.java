@@ -625,37 +625,9 @@ public class SQLImporter {
         case java.sql.Types.CHAR:
         case java.sql.Types.LONGVARCHAR:
         case java.sql.Types.LONGNVARCHAR:
-          match = (dstType == TDatumType.STR || dstType == TDatumType.POINT
-                  || dstType == TDatumType.POLYGON || dstType == TDatumType.MULTIPOLYGON
-                  || dstType == TDatumType.LINESTRING);
+          match = (dstType == TDatumType.STR);
           break;
         case java.sql.Types.OTHER:
-          // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because
-          // it makes no difference for OmniSciDB at the moment
-          Db_vendor_types.GisType gisType =
-                  vendor_types.find_gis_type(otherdb_conn, srcColumns, i);
-          if (gisType.srid != dstScale) {
-            match = false;
-            break;
-          }
-          switch (dstType) {
-            case POINT:
-              match = gisType.type.equalsIgnoreCase("POINT");
-              break;
-            case LINESTRING:
-              match = gisType.type.equalsIgnoreCase("LINESTRING");
-              break;
-            case POLYGON:
-              match = gisType.type.equalsIgnoreCase("POLYGON");
-              break;
-            case MULTIPOLYGON:
-              match = gisType.type.equalsIgnoreCase("MULTIPOLYGON");
-              break;
-            default:
-              LOGGER.error("Column type " + JDBCType.valueOf(srcType).getName()
-                      + " not Supported");
-              exit(1);
-          }
           break;
         default:
           LOGGER.error("Column type " + JDBCType.valueOf(srcType).getName()

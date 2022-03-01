@@ -50,10 +50,6 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
                                        visit(bin_oper->get_right_operand()));
   }
 
-  RetType visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const override {
-    return geo_expr->deep_copy();
-  }
-
   RetType visitInValues(const Analyzer::InValues* in_values) const override {
     const auto& value_list = in_values->get_value_list();
     std::list<RetType> new_list;
@@ -151,32 +147,6 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     const auto& type_info = array_expr->get_type_info();
     return makeExpr<Analyzer::ArrayExpr>(
         type_info, args_copy, array_expr->isNull(), array_expr->isLocalAlloc());
-  }
-
-  RetType visitGeoUOper(const Analyzer::GeoUOper* geo_expr) const override {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args0_copy;
-    for (const auto& arg : geo_expr->getArgs0()) {
-      args0_copy.push_back(visit(arg.get()));
-    }
-    const auto& ti0 = geo_expr->getTypeInfo0();
-    const auto& type_info = geo_expr->get_type_info();
-    return makeExpr<Analyzer::GeoUOper>(geo_expr->getOp(), type_info, ti0, args0_copy);
-  }
-
-  RetType visitGeoBinOper(const Analyzer::GeoBinOper* geo_expr) const override {
-    std::vector<std::shared_ptr<Analyzer::Expr>> args0_copy;
-    for (const auto& arg : geo_expr->getArgs0()) {
-      args0_copy.push_back(visit(arg.get()));
-    }
-    std::vector<std::shared_ptr<Analyzer::Expr>> args1_copy;
-    for (const auto& arg : geo_expr->getArgs1()) {
-      args1_copy.push_back(visit(arg.get()));
-    }
-    const auto& ti0 = geo_expr->getTypeInfo0();
-    const auto& ti1 = geo_expr->getTypeInfo1();
-    const auto& type_info = geo_expr->get_type_info();
-    return makeExpr<Analyzer::GeoBinOper>(
-        geo_expr->getOp(), type_info, ti0, ti1, args0_copy, args1_copy);
   }
 
   RetType visitWindowFunction(

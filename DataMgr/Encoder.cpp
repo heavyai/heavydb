@@ -192,9 +192,6 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
       }
       break;
     }
-    case kENCODING_GEOINT: {
-      return 0;
-    }
     default: {
       return 0;
       break;

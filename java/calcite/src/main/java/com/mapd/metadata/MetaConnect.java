@@ -92,10 +92,6 @@ public class MetaConnect {
   private static final int KARRAY = 15;
   private static final int KINTERVAL_DAY_TIME = 16;
   private static final int KINTERVAL_YEAR_MONTH = 17;
-  private static final int KPOINT = 18;
-  private static final int KLINESTRING = 19;
-  private static final int KPOLYGON = 20;
-  private static final int KMULTIPOLYGON = 21;
   private static final int KTINYINT = 22;
 
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
@@ -399,24 +395,11 @@ public class MetaConnect {
   }
 
   public static final int get_physical_cols(int type) {
-    switch (type) {
-      case KPOINT:
-        return 1; // coords
-      case KLINESTRING:
-        return 2; // coords, bounds
-      case KPOLYGON:
-        return 4; // coords, ring_sizes, bounds, render_group
-      case KMULTIPOLYGON:
-        return 5; // coords, ring_sizes, poly_rings, bounds, render_group
-      default:
-        break;
-    }
     return 0;
   }
 
   public static final boolean is_geometry(int type) {
-    return type == KPOINT || type == KLINESTRING || type == KPOLYGON
-            || type == KMULTIPOLYGON;
+    return false;
   }
 
   private TTableDetails get_table_detail_SQL(String tableName) {
@@ -808,14 +791,6 @@ public class MetaConnect {
         return TDatumType.INTERVAL_DAY_TIME;
       case KINTERVAL_YEAR_MONTH:
         return TDatumType.INTERVAL_YEAR_MONTH;
-      case KPOINT:
-        return TDatumType.POINT;
-      case KLINESTRING:
-        return TDatumType.LINESTRING;
-      case KPOLYGON:
-        return TDatumType.POLYGON;
-      case KMULTIPOLYGON:
-        return TDatumType.MULTIPOLYGON;
       default:
         return null;
     }

@@ -62,11 +62,7 @@ public class ExtensionFunction {
     ColumnFloat,
     ColumnDouble,
     ColumnBool,
-    GeoPoint,
-    GeoLineString,
     Cursor,
-    GeoPolygon,
-    GeoMultiPolygon,
     TextEncodingNone,
     TextEncodingDict,
     ColumnListInt8,
@@ -238,16 +234,8 @@ public class ExtensionFunction {
         return "column_bool";
       case ColumnTextEncodingDict:
         return "column_text_encoding_dict";
-      case GeoPoint:
-        return "geo_point";
       case Cursor:
         return "cursor";
-      case GeoLineString:
-        return "geo_linestring";
-      case GeoPolygon:
-        return "geo_polygon";
-      case GeoMultiPolygon:
-        return "geo_multi_polygon";
       case TextEncodingNone:
         return "text_encoding_none";
       case TextEncodingDict:
@@ -405,11 +393,6 @@ public class ExtensionFunction {
       case ArrayDouble:
       case ArrayBool:
         return SqlTypeName.ARRAY;
-      case GeoPoint:
-      case GeoLineString:
-      case GeoPolygon:
-      case GeoMultiPolygon:
-        return SqlTypeName.GEOMETRY;
       case Cursor:
         return SqlTypeName.CURSOR;
       case TextEncodingNone:

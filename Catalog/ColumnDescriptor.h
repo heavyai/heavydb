@@ -40,7 +40,6 @@ struct ColumnDescriptor {
   bool isSystemCol;
   bool isVirtualCol;
   std::string virtualExpr;
-  bool isGeoPhyCol{false};
   std::optional<std::string> default_value;
 
   ColumnDescriptor() : isSystemCol(false), isVirtualCol(false) {}
@@ -55,9 +54,6 @@ struct ColumnDescriptor {
       , columnType(columnType)
       , isSystemCol(false)
       , isVirtualCol(false) {}
-  ColumnDescriptor(const bool isGeoPhyCol) : ColumnDescriptor() {
-    this->isGeoPhyCol = isGeoPhyCol;
-  }
 
   std::string toString() const {
     return ::typeName(this) + "(tableId=" + ::toString(tableId) +

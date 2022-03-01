@@ -91,48 +91,6 @@ void compare_array(const std::vector<T>& a,
   }
 }
 
-struct GeoTargetComparator {
-  static void compare(const GeoPointTargetValue& a,
-                      const GeoPointTargetValue& b,
-                      const double tol = -1.) {
-    compare_array(*a.coords, *b.coords, tol);
-  }
-  static void compare(const GeoLineStringTargetValue& a,
-                      const GeoLineStringTargetValue& b,
-                      const double tol = -1.) {
-    compare_array(*a.coords, *b.coords, tol);
-  }
-  static void compare(const GeoPolyTargetValue& a,
-                      const GeoPolyTargetValue& b,
-                      const double tol = -1.) {
-    compare_array(*a.coords, *b.coords, tol);
-    compare_array(*a.ring_sizes, *b.ring_sizes);
-  }
-  static void compare(const GeoMultiPolyTargetValue& a,
-                      const GeoMultiPolyTargetValue& b,
-                      const double tol = -1.) {
-    compare_array(*a.coords, *b.coords, tol);
-    compare_array(*a.ring_sizes, *b.ring_sizes);
-    compare_array(*a.poly_rings, *b.poly_rings);
-  }
-};
-
-template <class T>
-T g(const TargetValue& r) {
-  auto geo_r = boost::get<GeoTargetValue>(&r);
-  CHECK(geo_r);
-  CHECK(geo_r->is_initialized());
-  return boost::get<T>(geo_r->get());
-}
-
-template <class T>
-void compare_geo_target(const TargetValue& r,
-                        const T& geo_truth_target,
-                        const double tol = -1.) {
-  const auto geo_value = g<T>(r);
-  GeoTargetComparator::compare(geo_value, geo_truth_target, tol);
-}
-
 template <class T>
 T v(const TargetValue& r) {
   auto scalar_r = boost::get<ScalarTargetValue>(&r);

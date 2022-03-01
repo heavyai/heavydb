@@ -45,12 +45,7 @@ class TDatumType(object):
     BOOL = 10
     INTERVAL_DAY_TIME = 11
     INTERVAL_YEAR_MONTH = 12
-    POINT = 13
-    LINESTRING = 14
-    POLYGON = 15
-    MULTIPOLYGON = 16
     TINYINT = 17
-    GEOMETRY = 18
 
     _VALUES_TO_NAMES = {
         0: "SMALLINT",
@@ -66,12 +61,7 @@ class TDatumType(object):
         10: "BOOL",
         11: "INTERVAL_DAY_TIME",
         12: "INTERVAL_YEAR_MONTH",
-        13: "POINT",
-        14: "LINESTRING",
-        15: "POLYGON",
-        16: "MULTIPOLYGON",
         17: "TINYINT",
-        18: "GEOMETRY",
     }
 
     _NAMES_TO_VALUES = {
@@ -88,12 +78,7 @@ class TDatumType(object):
         "BOOL": 10,
         "INTERVAL_DAY_TIME": 11,
         "INTERVAL_YEAR_MONTH": 12,
-        "POINT": 13,
-        "LINESTRING": 14,
-        "POLYGON": 15,
-        "MULTIPOLYGON": 16,
         "TINYINT": 17,
-        "GEOMETRY": 18,
     }
 
 
@@ -104,7 +89,6 @@ class TEncodingType(object):
     DIFF = 3
     DICT = 4
     SPARSE = 5
-    GEOINT = 6
     DATE_IN_DAYS = 7
 
     _VALUES_TO_NAMES = {
@@ -114,7 +98,6 @@ class TEncodingType(object):
         3: "DIFF",
         4: "DICT",
         5: "SPARSE",
-        6: "GEOINT",
         7: "DATE_IN_DAYS",
     }
 
@@ -125,7 +108,6 @@ class TEncodingType(object):
         "DIFF": 3,
         "DICT": 4,
         "SPARSE": 5,
-        "GEOINT": 6,
         "DATE_IN_DAYS": 7,
     }
 

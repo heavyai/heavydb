@@ -30,114 +30,11 @@
 
 #define CALCITEPORT 3279
 
-static const std::array<std::string, 3> SampleGeoFileNames{"us-states.json",
-                                                           "us-counties.json",
-                                                           "countries.json"};
-static const std::array<std::string, 3> SampleGeoTableNames{"omnisci_states",
-                                                            "omnisci_counties",
-                                                            "omnisci_countries"};
-
 bool g_enable_thrift_logs{false};
-
-static void loadGeo(std::string base_path) {
-  TSessionId session_id{};
-  SystemParameters system_parameters{};
-  AuthMetadata auth_metadata{};
-  std::string udf_filename{};
-  std::string udf_compiler_path{};
-  std::vector<std::string> udf_compiler_options{};
-  std::vector<LeafHostInfo> db_leaves{};
-  std::vector<LeafHostInfo> string_leaves{};
-
-  // Whitelist root path for tests by default
-  ddl_utils::FilePathWhitelist::clear();
-  ddl_utils::FilePathWhitelist::initialize(base_path, "[\"/\"]", "[\"/\"]");
-
-  // Based on default values observed from starting up an OmniSci DB server.
-  const bool allow_multifrag{true};
-  const bool jit_debug{false};
-  const bool intel_jit_profile{false};
-  const bool read_only{false};
-  const bool allow_loop_joins{false};
-  const bool enable_rendering{false};
-  const bool renderer_use_vulkan_driver{false};
-  const bool enable_auto_clear_render_mem{false};
-  const int render_oom_retry_threshold{0};
-  const size_t render_mem_bytes{500000000};
-  const size_t max_concurrent_render_sessions{500};
-  const bool render_compositor_use_last_gpu{false};
-  const size_t reserved_gpu_mem{134217728};
-  const size_t num_reader_threads{0};
-  const bool legacy_syntax{true};
-  const int idle_session_duration{60};
-  const int max_session_duration{43200};
-  const bool enable_runtime_udf_registration{false};
-  system_parameters.omnisci_server_port = -1;
-  system_parameters.calcite_port = 3280;
-
-  system_parameters.aggregator = false;
-
-  File_Namespace::DiskCacheLevel cache_level{File_Namespace::DiskCacheLevel::fsi};
-  File_Namespace::DiskCacheConfig disk_cache_config{
-      File_Namespace::DiskCacheConfig::getDefaultPath(std::string(base_path)),
-      cache_level};
-
-  auto db_handler = std::make_unique<DBHandler>(db_leaves,
-                                                string_leaves,
-                                                base_path,
-                                                allow_multifrag,
-                                                jit_debug,
-                                                intel_jit_profile,
-                                                read_only,
-                                                allow_loop_joins,
-                                                enable_rendering,
-                                                renderer_use_vulkan_driver,
-                                                enable_auto_clear_render_mem,
-                                                render_oom_retry_threshold,
-                                                render_mem_bytes,
-                                                max_concurrent_render_sessions,
-                                                reserved_gpu_mem,
-                                                render_compositor_use_last_gpu,
-                                                num_reader_threads,
-                                                auth_metadata,
-                                                system_parameters,
-                                                legacy_syntax,
-                                                idle_session_duration,
-                                                max_session_duration,
-                                                enable_runtime_udf_registration,
-                                                udf_filename,
-                                                udf_compiler_path,
-                                                udf_compiler_options,
-                                                disk_cache_config,
-                                                false);
-  db_handler->internal_connect(session_id, OMNISCI_ROOT_USER, OMNISCI_DEFAULT_DB);
-
-  // Execute on CPU by default
-  db_handler->set_execution_mode(session_id, TExecuteMode::CPU);
-  TQueryResult res;
-
-  const size_t num_samples = SampleGeoFileNames.size();
-  for (size_t i = 0; i < num_samples; i++) {
-    const std::string table_name = SampleGeoTableNames[i];
-    const std::string file_name = SampleGeoFileNames[i];
-
-    const auto file_path = boost::filesystem::path(
-        omnisci::get_root_abs_path() + "/ThirdParty/geo_samples/" + file_name);
-    if (!boost::filesystem::exists(file_path)) {
-      throw std::runtime_error(
-          "Unable to populate geo sample data. File does not exist: " +
-          file_path.string());
-    }
-    std::string sql_string =
-        "COPY " + table_name + " FROM '" + file_path.string() + "' WITH (GEO='true');";
-    db_handler->sql_execute(res, session_id, sql_string, true, "", -1, -1);
-  }
-}
 
 int main(int argc, char* argv[]) {
   std::string base_path;
   bool force = false;
-  bool skip_geo = false;
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -146,8 +43,7 @@ int main(int argc, char* argv[]) {
       po::value<std::string>(&base_path)->required(),
       "Directory path to OmniSci catalogs")("force,f",
                                             "Force overwriting of existing OmniSci "
-                                            "instance")("skip-geo",
-                                                        "Skip inserting sample geo data");
+                                            "instance");
 
   desc.add_options()("enable-thrift-logs",
                      po::value<bool>(&g_enable_thrift_logs)
@@ -175,9 +71,6 @@ int main(int argc, char* argv[]) {
     }
     if (vm.count("force")) {
       force = true;
-    }
-    if (vm.count("skip-geo")) {
-      skip_geo = true;
     }
     po::notify(vm);
   } catch (boost::program_options::error& e) {
@@ -254,10 +147,6 @@ int main(int argc, char* argv[]) {
     g_base_path = base_path;
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
-
-    if (!skip_geo) {
-      loadGeo(base_path);
-    }
 
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";

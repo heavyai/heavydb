@@ -222,7 +222,6 @@ enum EncodingType {
   kENCODING_DIFF = 3,          // Differential encoding
   kENCODING_DICT = 4,          // Dictionary encoding
   kENCODING_SPARSE = 5,        // Null encoding for sparse columns
-  kENCODING_GEOINT = 6,        // Encoding coordinates as intergers
   kENCODING_DATE_IN_DAYS = 7,  // Date encoding in days
   kENCODING_LAST = 8
 };
@@ -828,7 +827,6 @@ class SQLTypeInfo {
             return sizeof(int32_t);
           case kENCODING_FIXED:
           case kENCODING_SPARSE:
-          case kENCODING_GEOINT:
             return comp_param / 8;
           case kENCODING_RL:
           case kENCODING_DIFF:

@@ -1951,10 +1951,6 @@ bool sameTypeInfo(std::vector<TargetMetaInfo> const& lhs,
   return false;
 }
 
-bool isGeometry(TargetMetaInfo const& target_meta_info) {
-  return false;
-}
-
 ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_union,
                                              const RaExecutionSequence& seq,
                                              const CompilationOptions& co,
@@ -1968,9 +1964,6 @@ ExecutionResult RelAlgExecutor::executeUnion(const RelLogicalUnion* logical_unio
   // Will throw a std::runtime_error if types don't match.
   logical_union->checkForMatchingMetaInfoTypes();
   logical_union->setOutputMetainfo(logical_union->getInput(0)->getOutputMetainfo());
-  if (boost::algorithm::any_of(logical_union->getOutputMetainfo(), isGeometry)) {
-    throw std::runtime_error("UNION does not support subqueries with geo-columns.");
-  }
   // Only Projections and Aggregates from a UNION are supported for now.
   query_dag_->eachNode([logical_union](RelAlgNode const* node) {
     if (node->hasInput(logical_union) &&
@@ -2023,8 +2016,7 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
                                          tuple_type_component.get_type_info(),
                                          SQLTypeInfo(kNULLT, false),
                                          false,
-                                         false,
-                                         /*is_varlen_projection=*/false});
+                                         false});
   }
 
   std::shared_ptr<ResultSet> rs{
@@ -2255,9 +2247,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
         const auto is_null = col_cv->get_is_null();
         const auto size = cd->columnType.get_size();
         const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
-        // POINT coords: [un]compressed coords always need to be encoded, even if NULL
-        const auto is_point_coords = (cd->isGeoPhyCol && elem_ti.get_type() == kTINYINT);
-        if (is_null && !is_point_coords) {
+        if (is_null) {
           if (size > 0) {
             // NULL fixlen array: NULL_ARRAY sentinel followed by NULL sentinels
             if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {

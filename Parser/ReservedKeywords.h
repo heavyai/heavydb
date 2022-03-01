@@ -41,18 +41,13 @@ static std::set<std::string> reserved_keywords{
     "EDITOR",
     "FIRST",
     "FOUND",
-    "GEOMETRY",   // geo type
     "IF",
     "ILIKE",
     "LAST",
     "LENGTH",
-    "LINESTRING",    // geo type
-    "MULTIPOLYGON",  // geo type
     "NOW",
     "NULLX",
     "OPTION",
-    "POINT",    // geo type
-    "POLYGON",  // geo type
     "PRIVILEGES",
     "PUBLIC",
     "RENAME",

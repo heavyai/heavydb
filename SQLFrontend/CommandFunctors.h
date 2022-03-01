@@ -204,12 +204,6 @@ class CmdStringUtilities {
 
 StandardCommand(Status, { ContextOps::get_status(cmdContext(), output_stream); });
 
-StandardCommand(CopyGeo, {
-  std::cout << "Error: The \\copygeo command is deprecated. Use: COPY <table> FROM "
-               "'<file>' WITH (geo='true');"
-            << std::endl;
-});
-
 StandardCommand(RoleList, {
   cmdContext().privs_user_name.clear();
   cmdContext().privs_user_name = p[1];  // User name is the first parameter
@@ -549,16 +543,6 @@ StandardCommand(GetOptimizedSchema, {
                               std::to_string(get_optimal_size(
                                   context, table_name, p.col_name, p.col_type.type)) +
                               ")");
-      } else if (p.col_type.type == TDatumType::POINT ||
-                 p.col_type.type == TDatumType::LINESTRING ||
-                 p.col_type.type == TDatumType::POLYGON ||
-                 p.col_type.type == TDatumType::MULTIPOLYGON) {
-        if (p.col_type.scale == 4326) {
-          encoding = (p.col_type.encoding == 0
-                          ? " ENCODING NONE"
-                          : " ENCODING " + thrift_to_encoding_name(p.col_type) + "(" +
-                                std::to_string(p.col_type.comp_param) + ")");
-        }
       } else {
         int opt_size = get_optimal_size(context, table_name, p.col_name, p.col_type.type);
         encoding =

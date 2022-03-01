@@ -161,8 +161,6 @@ ColumnEncoding sqlToColumnEncoding(const EncodingType& type) {
       return ColumnEncoding::DICT;
     case kENCODING_SPARSE:
       return ColumnEncoding::SPARSE;
-    case kENCODING_GEOINT:
-      return ColumnEncoding::GEOINT;
     case kENCODING_DATE_IN_DAYS:
       return ColumnEncoding::DATE_IN_DAYS;
     default:

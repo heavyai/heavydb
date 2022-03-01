@@ -24,8 +24,6 @@
 
 #include <arrow/api.h>
 #include <arrow/io/api.h>
-#include <gdal.h>
-#include <ogrsf_frmts.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/filesystem.hpp>
@@ -53,9 +51,6 @@
 #include "Archive/PosixFileArchive.h"
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
-#include "Geospatial/Compression.h"
-#include "Geospatial/Transforms.h"
-#include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/ErrorHandling.h"
@@ -95,38 +90,6 @@ inline auto get_filesize(const std::string& file_path) {
   return ec ? 0 : filesize;
 }
 
-namespace {
-
-struct OGRDataSourceDeleter {
-  void operator()(OGRDataSource* datasource) {
-    if (datasource) {
-      GDALClose(datasource);
-    }
-  }
-};
-using OGRDataSourceUqPtr = std::unique_ptr<OGRDataSource, OGRDataSourceDeleter>;
-
-struct OGRFeatureDeleter {
-  void operator()(OGRFeature* feature) {
-    if (feature) {
-      OGRFeature::DestroyFeature(feature);
-    }
-  }
-};
-using OGRFeatureUqPtr = std::unique_ptr<OGRFeature, OGRFeatureDeleter>;
-
-struct OGRSpatialReferenceDeleter {
-  void operator()(OGRSpatialReference* ref) {
-    if (ref) {
-      OGRSpatialReference::DestroySpatialReference(ref);
-    }
-  }
-};
-using OGRSpatialReferenceUqPtr =
-    std::unique_ptr<OGRSpatialReference, OGRSpatialReferenceDeleter>;
-
-}  // namespace
-
 // For logging std::vector<std::string> row.
 namespace boost {
 namespace log {
@@ -147,7 +110,6 @@ using FieldNameToIndexMapType = std::map<std::string, size_t>;
 using ColumnNameToSourceNameMapType = std::map<std::string, std::string>;
 using ColumnIdToRenderGroupAnalyzerMapType =
     std::map<int, std::shared_ptr<RenderGroupAnalyzer>>;
-using FeaturePtrVector = std::vector<OGRFeatureUqPtr>;
 
 #define DEBUG_TIMING false
 #define DEBUG_RENDER_GROUP_ANALYZER 0
@@ -400,15 +362,7 @@ ArrayDatum ImporterUtils::composeNullArray(const SQLTypeInfo& ti) {
 
 ArrayDatum ImporterUtils::composeNullPointCoords(const SQLTypeInfo& coords_ti,
                                                  const SQLTypeInfo& geo_ti) {
-  if (geo_ti.get_compression() == kENCODING_GEOINT) {
-    CHECK(geo_ti.get_comp_param() == 32);
-    std::vector<double> null_point_coords = {NULL_ARRAY_DOUBLE, NULL_DOUBLE};
-    auto compressed_null_coords = Geospatial::compress_coords(null_point_coords, geo_ti);
-    const size_t len = compressed_null_coords.size();
-    int8_t* buf = (int8_t*)checked_malloc(len);
-    memcpy(buf, compressed_null_coords.data(), len);
-    return ArrayDatum(len, buf, false);
-  }
+  UNREACHABLE();  
   auto modified_ti = coords_ti;
   modified_ti.set_subtype(kDOUBLE);
   return import_export::ImporterUtils::composeNullArray(modified_ti);
@@ -763,10 +717,6 @@ void TypedImportBuffer::pop_value() {
   }
 }
 
-struct GeoImportException : std::runtime_error {
-  using std::runtime_error::runtime_error;
-};
-
 // appends (streams) a slice of Arrow array of values (RHS) to TypedImportBuffer (LHS)
 template <typename DATA_TYPE>
 size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
@@ -778,7 +728,6 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
   auto data =
       std::make_unique<DataBuffer<DATA_TYPE>>(cd, array, buffer, bad_rows_tracker);
   auto f_value_getter = value_getter(array, cd, bad_rows_tracker);
-  std::function<void(const int64_t)> f_add_geo_phy_cols = [&](const int64_t row) {};
   auto f_mark_a_bad_row = [&](const auto row) {
     std::unique_lock<std::mutex> lck(bad_rows_tracker->mutex);
     bad_rows_tracker->rows.insert(row - slice_range.first);
@@ -787,9 +736,6 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
   for (size_t row = slice_range.first; row < slice_range.second; ++row) {
     try {
       *data << (array.IsNull(row) ? nullptr : f_value_getter(array, row));
-      f_add_geo_phy_cols(row);
-    } catch (GeoImportException&) {
-      f_mark_a_bad_row(row);
     } catch (ArrowImporterException&) {
       // trace bad rows of each column; otherwise rethrow.
       if (bad_rows_tracker) {
@@ -1486,64 +1432,6 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
   }
 }
 
-bool importGeoFromLonLat(double lon,
-                         double lat,
-                         std::vector<double>& coords,
-                         SQLTypeInfo& ti) {
-  if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon)) {
-    return false;
-  }
-  if (ti.transforms()) {
-    Geospatial::GeoPoint pt{std::vector<double>{lon, lat}};
-    if (!pt.transform(ti)) {
-      return false;
-    }
-    pt.getColumns(coords);
-    return true;
-  }
-  coords.push_back(lon);
-  coords.push_back(lat);
-  return true;
-}
-
-namespace {
-
-std::tuple<int, SQLTypes, std::string> explode_collections_step1(
-    const std::list<const ColumnDescriptor*>& col_descs) {
-  // validate the columns
-  // for now we can only explode into a single destination column
-  // which must be of the child type (POINT)
-  int collection_col_idx = -1;
-  int col_idx = 0;
-  std::string collection_col_name;
-  SQLTypes collection_child_type = kNULLT;
-  for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
-    auto const& cd = *cd_it;
-    for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
-      ++cd_it;
-    }
-    col_idx++;
-  }
-  if (collection_col_idx < 0) {
-    throw std::runtime_error(
-        "Explode Collections: Failed to find a supported column type to explode "
-        "into");
-  }
-  return std::make_tuple(collection_col_idx, collection_child_type, collection_col_name);
-}
-
-int64_t explode_collections_step2(
-    OGRGeometry* ogr_geometry,
-    SQLTypes collection_child_type,
-    const std::string& collection_col_name,
-    size_t row_or_feature_idx,
-    std::function<void(OGRGeometry*)> execute_import_lambda) {
-  CHECK(false) << "Unsupported geo child type " << collection_child_type;
-  return -1;
-}
-
-}  // namespace
-
 static ImportStatus import_thread_delimited(
     int thread_id,
     Importer* importer,
@@ -1632,7 +1520,7 @@ static ImportStatus import_thread_delimited(
       // lambda for importing a row (perhaps multiple times if exploding a collection)
       //
 
-      auto execute_import_row = [&](OGRGeometry* import_geometry) {
+      auto execute_import_row = [&]() {
         size_t import_idx = 0;
         size_t col_idx = 0;
         try {
@@ -1681,33 +1569,9 @@ static ImportStatus import_thread_delimited(
         }
       };  // End of lambda
 
-      if (copy_params.geo_explode_collections) {
-        // explode and import
-        auto const [collection_col_idx, collection_child_type, collection_col_name] =
-            explode_collections_step1(col_descs);
-        // pull out the collection WKT or WKB hex
-        CHECK_LT(collection_col_idx, (int)row.size()) << "column index out of range";
-        auto const& collection_geo_string = row[collection_col_idx];
-        // convert to OGR
-        OGRGeometry* ogr_geometry = nullptr;
-        ScopeGuard destroy_ogr_geometry = [&] {
-          if (ogr_geometry) {
-            OGRGeometryFactory::destroyGeometry(ogr_geometry);
-          }
-        };
-        ogr_geometry = Geospatial::GeoTypesFactory::createOGRGeometry(
-            std::string(collection_geo_string));
-        // do the explode and import
-        us = explode_collections_step2(ogr_geometry,
-                                       collection_child_type,
-                                       collection_col_name,
-                                       first_row_index_this_buffer + row_index_plus_one,
-                                       execute_import_row);
-      } else {
-        // import non-collection row just once
-        us = measure<std::chrono::microseconds>::execution(
-            [&] { execute_import_row(nullptr); });
-      }
+      // import non-collection row just once
+      us = measure<std::chrono::microseconds>::execution(
+          [&] { execute_import_row(); });
 
       if (thread_import_status.load_failed) {
         break;
@@ -1733,12 +1597,6 @@ static ImportStatus import_thread_delimited(
 
   return thread_import_status;
 }
-
-class ColumnNotGeoError : public std::runtime_error {
- public:
-  ColumnNotGeoError(const std::string& column_name)
-      : std::runtime_error("Column '" + column_name + "' is not a geo column") {}
-};
 
 bool Loader::loadNoCheckpoint(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
@@ -2166,6 +2024,7 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
       type = kFLOAT;
     }
   }
+
 
   // check for time types
   if (type == kTEXT) {
@@ -3325,164 +3184,6 @@ std::vector<Catalog_Namespace::TableEpochInfo> Loader::getTableEpochs() const {
 void Loader::setTableEpochs(
     const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs) {
   getCatalog().setTableEpochs(getCatalog().getCurrentDB().dbId, table_epochs);
-}
-
-/* static */
-void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
-  // for now we only support S3
-  // @TODO generalize CopyParams to have a dictionary of GDAL tokens
-  // only set if non-empty to allow GDAL defaults to persist
-  // explicitly clear if empty to revert to default and not reuse a previous session's
-  // keys
-  if (copy_params.s3_region.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_REGION to '" << copy_params.s3_region << "'";
-#endif
-    CPLSetConfigOption("AWS_REGION", copy_params.s3_region.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_REGION";
-#endif
-    CPLSetConfigOption("AWS_REGION", nullptr);
-  }
-  if (copy_params.s3_endpoint.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_S3_ENDPOINT to '" << copy_params.s3_endpoint << "'";
-#endif
-    CPLSetConfigOption("AWS_S3_ENDPOINT", copy_params.s3_endpoint.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_S3_ENDPOINT";
-#endif
-    CPLSetConfigOption("AWS_S3_ENDPOINT", nullptr);
-  }
-  if (copy_params.s3_access_key.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_ACCESS_KEY_ID to '" << copy_params.s3_access_key
-              << "'";
-#endif
-    CPLSetConfigOption("AWS_ACCESS_KEY_ID", copy_params.s3_access_key.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_ACCESS_KEY_ID";
-#endif
-    CPLSetConfigOption("AWS_ACCESS_KEY_ID", nullptr);
-  }
-  if (copy_params.s3_secret_key.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_SECRET_ACCESS_KEY to '" << copy_params.s3_secret_key
-              << "'";
-#endif
-    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", copy_params.s3_secret_key.c_str());
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_SECRET_ACCESS_KEY";
-#endif
-    CPLSetConfigOption("AWS_SECRET_ACCESS_KEY", nullptr);
-  }
-
-#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
-  // if we haven't set keys, we need to disable signed access
-  if (copy_params.s3_access_key.size() || copy_params.s3_secret_key.size()) {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Clearing AWS_NO_SIGN_REQUEST";
-#endif
-    CPLSetConfigOption("AWS_NO_SIGN_REQUEST", nullptr);
-  } else {
-#if DEBUG_AWS_AUTHENTICATION
-    LOG(INFO) << "GDAL: Setting AWS_NO_SIGN_REQUEST to 'YES'";
-#endif
-    CPLSetConfigOption("AWS_NO_SIGN_REQUEST", "YES");
-  }
-#endif
-}
-
-void gdalGatherFilesInArchiveRecursive(const std::string& archive_path,
-                                       std::vector<std::string>& files) {
-  // prepare to gather subdirectories
-  std::vector<std::string> subdirectories;
-
-  // get entries
-  char** entries = VSIReadDir(archive_path.c_str());
-  if (!entries) {
-    LOG(WARNING) << "Failed to get file listing at archive: " << archive_path;
-    return;
-  }
-
-  // force scope
-  {
-    // request clean-up
-    ScopeGuard entries_guard = [&] { CSLDestroy(entries); };
-
-    // check all the entries
-    int index = 0;
-    while (true) {
-      // get next entry, or drop out if there isn't one
-      char* entry_c = entries[index++];
-      if (!entry_c) {
-        break;
-      }
-      std::string entry(entry_c);
-
-      // ignore '.' and '..'
-      if (entry == "." || entry == "..") {
-        continue;
-      }
-
-      // build the full path
-      std::string entry_path = archive_path + std::string("/") + entry;
-
-      // is it a file or a sub-folder
-      VSIStatBufL sb;
-      int result = VSIStatExL(entry_path.c_str(), &sb, VSI_STAT_NATURE_FLAG);
-      if (result < 0) {
-        break;
-      }
-
-      if (VSI_ISDIR(sb.st_mode)) {
-        // a directory that ends with .gdb could be a Geodatabase bundle
-        // arguably dangerous to decide this purely by name, but any further
-        // validation would be very complex especially at this scope
-        if (boost::iends_with(entry_path, ".gdb")) {
-          // add the directory as if it was a file and don't recurse into it
-          files.push_back(entry_path);
-        } else {
-          // add subdirectory to be recursed into
-          subdirectories.push_back(entry_path);
-        }
-      } else {
-        // add this file
-        files.push_back(entry_path);
-      }
-    }
-  }
-
-  // recurse into each subdirectories we found
-  for (const auto& subdirectory : subdirectories) {
-    gdalGatherFilesInArchiveRecursive(subdirectory, files);
-  }
-}
-
-/* static */
-std::vector<std::string> Importer::gdalGetAllFilesInArchive(
-    const std::string& archive_path,
-    const CopyParams& copy_params) {
-  // set authorization tokens
-  setGDALAuthorizationTokens(copy_params);
-
-  // prepare to gather files
-  std::vector<std::string> files;
-
-  // gather the files recursively
-  gdalGatherFilesInArchiveRecursive(archive_path, files);
-
-  // convert to relative paths inside archive
-  for (auto& file : files) {
-    file.erase(0, archive_path.size() + 1);  // remove archive_path and the slash
-  }
-
-  // done
-  return files;
 }
 
 std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(

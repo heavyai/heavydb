@@ -112,19 +112,6 @@ class RangeJoinHashTable final : public OverlapsJoinHashTable {
                                                    llvm::Value*);
 
  private:
-  inline bool isInnerColCompressed() const {
-    return range_expr_->get_left_operand()->get_type_info().get_compression() ==
-           kENCODING_GEOINT;
-  }
-
-  inline bool isProbeCompressed() const {
-    const auto& inner_outer_pair = getInnerOuterPairs()[0];
-    const auto outer_col = inner_outer_pair.second;
-    const auto outer_col_ti = outer_col->get_type_info();
-
-    return outer_col_ti.get_compression() == kENCODING_GEOINT;
-  }
-
   const Analyzer::RangeOper* range_expr_;
   std::shared_ptr<Analyzer::ColumnVar> inner_col_expr_;
   const double bucket_threshold_{std::numeric_limits<double>::max()};

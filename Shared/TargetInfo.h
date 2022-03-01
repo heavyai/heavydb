@@ -36,15 +36,6 @@ inline const Analyzer::AggExpr* cast_to_agg_expr(
   return dynamic_cast<const Analyzer::AggExpr*>(target_expr.get());
 }
 
-inline bool target_expr_has_varlen_projection(const Analyzer::Expr* target_expr) {
-  return !(dynamic_cast<const Analyzer::GeoExpr*>(target_expr) == nullptr);
-}
-
-inline bool target_expr_has_varlen_projection(
-    const std::shared_ptr<Analyzer::Expr> target_expr) {
-  return !(dynamic_cast<const Analyzer::GeoExpr*>(target_expr.get()) == nullptr);
-}
-
 struct TargetInfo {
   bool is_agg;
   SQLAgg agg_kind;
@@ -52,7 +43,6 @@ struct TargetInfo {
   SQLTypeInfo agg_arg_type;
   bool skip_null_val;
   bool is_distinct;
-  bool is_varlen_projection;
 #ifndef __CUDACC__
  public:
   inline std::string toString() const {
@@ -63,9 +53,6 @@ struct TargetInfo {
     result += "agg_arg_type=" + agg_arg_type.to_string() + ", ";
     result += "skip_null_val=" + std::string(skip_null_val ? "true" : "false") + ", ";
     result += "is_distinct=" + std::string(is_distinct ? "true" : "false") + ")";
-    result +=
-        "is_varlen_projection=" + std::string(is_varlen_projection ? "true" : "false") +
-        ")";
     return result;
   }
 #endif
@@ -94,7 +81,6 @@ inline TargetInfo get_target_info(const PointerType target_expr,
   const auto agg_expr = cast_to_agg_expr(target_expr);
   bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
-    const bool is_varlen_projection = target_expr_has_varlen_projection(target_expr);
     auto target_ti = target_expr ? get_logical_type_info(target_expr->get_type_info())
                                  : SQLTypeInfo(kBIGINT, notnull);
     return {false,
@@ -102,8 +88,7 @@ inline TargetInfo get_target_info(const PointerType target_expr,
             target_ti,
             SQLTypeInfo(kNULLT, false),
             false,
-            false,
-            is_varlen_projection};
+            false};
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();
@@ -114,7 +99,6 @@ inline TargetInfo get_target_info(const PointerType target_expr,
             kCOUNT,
             SQLTypeInfo(bigint_count ? kBIGINT : kINT, notnull),
             SQLTypeInfo(kNULLT, false),
-            false,
             false,
             false};
   }
@@ -134,8 +118,7 @@ inline TargetInfo get_target_info(const PointerType target_expr,
                                     : agg_arg_ti,
             agg_arg_ti,
             !agg_arg_ti.get_notnull(),
-            is_distinct,
-            false};
+            is_distinct};
   }
 
   return {
@@ -146,8 +129,7 @@ inline TargetInfo get_target_info(const PointerType target_expr,
           : agg_expr->get_type_info(),
       agg_arg_ti,
       agg_type == kCOUNT && agg_arg_ti.is_varlen() ? false : !agg_arg_ti.get_notnull(),
-      is_distinct,
-      false};
+      is_distinct};
 }
 
 inline bool is_distinct_target(const TargetInfo& target_info) {

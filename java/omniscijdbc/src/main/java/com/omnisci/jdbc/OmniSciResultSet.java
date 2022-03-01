@@ -164,11 +164,6 @@ class OmniSciResultSet implements java.sql.ResultSet {
         return getDate(columnIndex).toString();
       case BOOL:
         return getBoolean(columnIndex) ? "1" : "0";
-      case POINT:
-      case LINESTRING:
-      case POLYGON:
-      case MULTIPOLYGON:
-        return (String) getObject(columnIndex);
       default:
         throw new AssertionError(type.name());
     }
@@ -571,10 +566,6 @@ class OmniSciResultSet implements java.sql.ResultSet {
         case DOUBLE:
           return this.rowSet.columns.get(columnIndex - 1).data.real_col.get(offset);
         case STR:
-        case POINT:
-        case LINESTRING:
-        case POLYGON:
-        case MULTIPOLYGON:
           return this.rowSet.columns.get(columnIndex - 1).data.str_col.get(offset);
         default:
           throw new AssertionError(rowDesc.get(columnIndex - 1).col_type.type.name());
@@ -1344,10 +1335,6 @@ class OmniSciResultSet implements java.sql.ResultSet {
           }
           break;
         case STR:
-        case POINT:
-        case LINESTRING:
-        case POLYGON:
-        case MULTIPOLYGON:
           elements = new String[size];
           for (int i = 0; i < size; ++i) {
             elements[i] = rowSet.columns.get(columnIndex - 1)

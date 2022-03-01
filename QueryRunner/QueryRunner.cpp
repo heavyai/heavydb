@@ -20,7 +20,6 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
 #include "DistributedLoader.h"
-#include "Geospatial/Transforms.h"
 #include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
 #include "Parser/ParserWrapper.h"

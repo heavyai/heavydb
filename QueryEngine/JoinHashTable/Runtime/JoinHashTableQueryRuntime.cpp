@@ -18,7 +18,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "Geospatial/CompressionRuntime.h"
 #include "QueryEngine/CompareKeysInl.h"
 #include "QueryEngine/MurmurHash.h"
 
@@ -114,16 +113,8 @@ FORCE_INLINE DEVICE int64_t
 get_bucket_key_for_range_compressed_impl(const int8_t* range,
                                          const size_t range_component_index,
                                          const double bucket_size) {
-  const auto range_ptr = reinterpret_cast<const int32_t*>(range);
-  if (range_component_index % 2 == 0) {
-    return get_bucket_key_for_value_impl(
-        Geospatial::decompress_longitude_coord_geoint32(range_ptr[range_component_index]),
-        bucket_size);
-  } else {
-    return get_bucket_key_for_value_impl(
-        Geospatial::decompress_lattitude_coord_geoint32(range_ptr[range_component_index]),
-        bucket_size);
-  }
+  assert(false);
+  return -1;
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t

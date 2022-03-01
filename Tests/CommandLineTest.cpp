@@ -129,7 +129,6 @@ TEST_F(InitDBTest, Help) {
   --data arg                            Directory path to OmniSci catalogs
   -f [ --force ]                        Force overwriting of existing OmniSci 
                                         instance
-  --skip-geo                            Skip inserting sample geo data
   --enable-thrift-logs [=arg(=1)] (=0)  Enable writing messages directly from 
                                         thrift to stdout/stderr.
 

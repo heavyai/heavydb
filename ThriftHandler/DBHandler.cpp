@@ -42,9 +42,6 @@
 #include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DistributedHandler.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
-#include "Geospatial/Compression.h"
-#include "Geospatial/Transforms.h"
-#include "Geospatial/Types.h"
 #include "ImportExport/ImportUtils.h"
 #include "ImportExport/Importer.h"
 #include "LockMgr/LockMgr.h"
@@ -1210,10 +1207,6 @@ void DBHandler::sql_execute(TQueryResult& _return,
   stdlog.appendNameValuePairs("nonce", nonce);
   auto timer = DEBUG_TIMER(__func__);
   try {
-    ScopeGuard reset_was_geo_copy_from = [this, &session_ptr] {
-      geo_copy_from_sessions.remove(session_ptr->get_session_id());
-    };
-
     if (first_n >= 0 && at_most_n >= 0) {
       THROW_MAPD_EXCEPTION(
           std::string("At most one of first_n and at_most_n can be set"));
@@ -1245,7 +1238,6 @@ void DBHandler::sql_execute(TQueryResult& _return,
                         at_most_n,
                         use_calcite);
     }
-    _return.total_time_ms += process_geo_copy_from(session);
     std::string debug_json = timer.stopAndGetJson();
     if (!debug_json.empty()) {
       _return.__set_debug(std::move(debug_json));
@@ -1288,10 +1280,6 @@ void DBHandler::sql_execute(ExecutionResult& _return,
   auto timer = DEBUG_TIMER(__func__);
 
   try {
-    ScopeGuard reset_was_geo_copy_from = [this, &session_ptr] {
-      geo_copy_from_sessions.remove(session_ptr->get_session_id());
-    };
-
     if (first_n >= 0 && at_most_n >= 0) {
       THROW_MAPD_EXCEPTION(
           std::string("At most one of first_n and at_most_n can be set"));
@@ -1306,7 +1294,7 @@ void DBHandler::sql_execute(ExecutionResult& _return,
                                   use_calcite);
     });
 
-    _return.setExecutionTime(total_time_ms + process_geo_copy_from(session));
+    _return.setExecutionTime(total_time_ms);
 
     stdlog.appendNameValuePairs(
         "execution_time_ms",
@@ -1326,21 +1314,6 @@ void DBHandler::sql_execute(ExecutionResult& _return,
       THROW_MAPD_EXCEPTION(e.what());
     }
   }
-}
-
-int64_t DBHandler::process_geo_copy_from(const TSessionId& session_id) {
-  int64_t total_time_ms(0);
-  // if the SQL statement we just executed was a geo COPY FROM, the import
-  // parameters were captured, and this flag set, so we do the actual import here
-  if (auto geo_copy_from_state = geo_copy_from_sessions(session_id)) {
-    // import_geo_table() calls create_table() which calls this function to
-    // do the work, so reset the flag now to avoid executing this part a
-    // second time at the end of that, which would fail as the table was
-    // already created! Also reset the flag with a ScopeGuard on exiting
-    // this function any other way, such as an exception from the code above!
-    geo_copy_from_sessions.remove(session_id);
-  }
-  return total_time_ms;
 }
 
 void DBHandler::sql_execute_df(TDataFrame& _return,
@@ -2714,7 +2687,7 @@ void check_valid_column_names(const std::list<const ColumnDescriptor*>& descs,
 }
 
 // Return vector of IDs mapping column descriptors to the list of comumn names.
-// The size of the vector is the number of actual columns (geophisical columns excluded).
+// The size of the vector is the number of actual columns.
 // ID is either a position in column_names matching the descriptor, or -1 if the column
 // is missing from the column_names
 std::vector<int> column_ids_by_names(const std::list<const ColumnDescriptor*>& descs,
@@ -2723,29 +2696,25 @@ std::vector<int> column_ids_by_names(const std::list<const ColumnDescriptor*>& d
   if (column_names.empty()) {
     int col_idx = 0;
     for (const auto& cd : descs) {
-      if (!cd->isGeoPhyCol) {
-        desc_to_column_ids.push_back(col_idx);
-        ++col_idx;
-      }
+      desc_to_column_ids.push_back(col_idx);
+      ++col_idx;
     }
   } else {
     for (const auto& cd : descs) {
-      if (!cd->isGeoPhyCol) {
-        bool found = false;
-        for (size_t j = 0; j < column_names.size(); ++j) {
-          if (to_lower(cd->columnName) == to_lower(column_names[j])) {
-            found = true;
-            desc_to_column_ids.push_back(j);
-            break;
-          }
+      bool found = false;
+      for (size_t j = 0; j < column_names.size(); ++j) {
+        if (to_lower(cd->columnName) == to_lower(column_names[j])) {
+          found = true;
+          desc_to_column_ids.push_back(j);
+          break;
         }
-        if (!found) {
-          if (!cd->columnType.get_notnull()) {
-            desc_to_column_ids.push_back(-1);
-          } else {
-            THROW_MAPD_EXCEPTION("Column '" + cd->columnName +
-                                 "' cannot be omitted due to NOT NULL constraint");
-          }
+      }
+      if (!found) {
+        if (!cd->columnType.get_notnull()) {
+          desc_to_column_ids.push_back(-1);
+        } else {
+          THROW_MAPD_EXCEPTION("Column '" + cd->columnName +
+                               "' cannot be omitted due to NOT NULL constraint");
         }
       }
     }
@@ -2764,21 +2733,12 @@ void DBHandler::fillMissingBuffers(
     size_t num_rows,
     const std::string& table_name,
     bool assign_render_groups) {
-  size_t skip_physical_cols = 0;
   size_t col_idx = 0, import_idx = 0;
   for (const auto& cd : cds) {
-    if (skip_physical_cols > 0) {
-      CHECK(cd->isGeoPhyCol);
-      skip_physical_cols--;
-      continue;
-    }
     if (desc_id_to_column_id[import_idx] == -1) {
       import_buffers[col_idx]->addDefaultValues(cd, num_rows);
-      col_idx++;
-    } else {
-      col_idx++;
-      col_idx += skip_physical_cols;
     }
+    col_idx++;
     import_idx++;
   }
 }
@@ -2883,9 +2843,7 @@ DBHandler::prepare_loader_generic(
   if (column_names.empty()) {
     // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
     //               Subtracting 1 (rowid) until TableDescriptor is updated.
-    auto geo_physical_cols = std::count_if(
-        col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
-    const auto num_table_cols = static_cast<size_t>(td->nColumns) - geo_physical_cols - 1;
+    const auto num_table_cols = static_cast<size_t>(td->nColumns) - 1;
     if (num_cols != num_table_cols) {
       throw std::runtime_error("Number of columns to load (" + std::to_string(num_cols) +
                                ") does not match number of columns in table " +
@@ -2992,13 +2950,7 @@ void DBHandler::load_table_binary_columnar_internal(
   size_t import_idx = 0;  // index into the TColumn vector being loaded
   size_t col_idx = 0;     // index into column description vector
   try {
-    size_t skip_physical_cols = 0;
     for (auto cd : loader->get_column_descs()) {
-      if (skip_physical_cols > 0) {
-        CHECK(cd->isGeoPhyCol);
-        skip_physical_cols--;
-        continue;
-      }
       auto mapped_idx = desc_id_to_column_id[import_idx];
       if (mapped_idx != -1) {
         size_t col_rows = import_buffers[col_idx]->add_values(cd, cols[mapped_idx]);
@@ -3009,11 +2961,9 @@ void DBHandler::load_table_binary_columnar_internal(
               << col_idx << " has " << col_rows << " rows";
           THROW_MAPD_EXCEPTION(oss.str());
         }
-        // Advance to the next column in the table
-        col_idx++;
-      } else {
-        col_idx++;
       }
+      // Advance to the next column in the table
+      col_idx++;
       // Advance to the next column of values being loaded
       import_idx++;
     }
@@ -3182,11 +3132,7 @@ void DBHandler::load_table(const TSessionId& session,
       try {
         size_t skip_physical_cols = 0;
         for (auto cd : col_descs) {
-          if (skip_physical_cols > 0) {
-            CHECK(cd->isGeoPhyCol);
-            skip_physical_cols--;
-            continue;
-          }
+          CHECK_LE(skip_physical_cols, 0);
           auto mapped_idx = desc_id_to_column_id[import_idx];
           if (mapped_idx != -1) {
             import_buffers[col_idx]->add_value(cd,
@@ -3206,18 +3152,12 @@ void DBHandler::load_table(const TSessionId& session,
         THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
       }
     }
-    // do batch filling of geo columns separately
     if (rows.size() != 0) {
       const auto& row = rows[0];
       size_t col_idx = 0;  // index into column description vector
       try {
         size_t import_idx = 0;
-        size_t skip_physical_cols = 0;
         for (size_t i = 0; i < col_descs.size(); ++i) {
-          if (skip_physical_cols > 0) {
-            skip_physical_cols--;
-            continue;
-          }
           col_idx++;
           import_idx++;
         }
@@ -3354,7 +3294,6 @@ import_export::CopyParams DBHandler::thrift_to_copyparams(const TCopyParams& cp)
                            std::to_string((int)cp.file_type));
       break;
   }
-  copy_params.sanitize_column_names = cp.sanitize_column_names;
   return copy_params;
 }
 
@@ -3397,7 +3336,6 @@ TCopyParams DBHandler::copyparams_to_thrift(const import_export::CopyParams& cp)
       copy_params.file_type = TFileType::DELIMITED;
       break;
   }
-  copy_params.sanitize_column_names = cp.sanitize_column_names;
   return copy_params;
 }
 
@@ -3474,7 +3412,6 @@ void DBHandler::detect_column_types(TDetectResult& _return,
     }
 
     if (copy_params.file_type == import_export::FileType::POLYGON) {
-      // check for geo file
       THROW_MAPD_EXCEPTION("File POLYGON isn't supprted: " + file_path.string());
     } else {
       // check for regular file
@@ -3505,11 +3442,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         SQLTypeInfo ti(t, false, encodingType);
         col.col_type.type = type_to_thrift(ti);
         col.col_type.encoding = encoding_to_thrift(ti);
-        if (copy_params.sanitize_column_names) {
-          col.col_name = ImportHelpers::sanitize_name(headers[col_idx]);
-        } else {
-          col.col_name = headers[col_idx];
-        }
+        col.col_name = headers[col_idx];
         col.is_reserved_keyword = ImportHelpers::is_reserved_name(col.col_name);
         _return.row_set.row_desc[col_idx] = col;
       }
@@ -4137,10 +4070,6 @@ void DBHandler::create_table(const TSessionId& session,
 
   auto rds = rd;
 
-  // no longer need to manually add the poly column for a TFileType::POLYGON table
-  // a column of the correct geo type has already been added
-  // @TODO simon.eves rename TFileType::POLYGON to TFileType::GEO or something!
-
   std::string stmt{"CREATE TABLE " + table_name};
   std::vector<std::string> col_stmts;
 
@@ -4177,8 +4106,7 @@ void DBHandler::create_table(const TSessionId& session,
     if (thrift_to_encoding(col.col_type.encoding) != kENCODING_NONE) {
       col_stmt.append(" ENCODING " + thrift_to_encoding_name(col.col_type));
       if (thrift_to_encoding(col.col_type.encoding) == kENCODING_DICT ||
-          thrift_to_encoding(col.col_type.encoding) == kENCODING_FIXED ||
-          thrift_to_encoding(col.col_type.encoding) == kENCODING_GEOINT) {
+          thrift_to_encoding(col.col_type.encoding) == kENCODING_FIXED) {
         col_stmt.append("(" + std::to_string(col.col_type.comp_param) + ")");
       }
     } else if (col.col_type.type == TDatumType::STR) {
@@ -4277,13 +4205,6 @@ void DBHandler::import_table(const TSessionId& session,
     THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
 }
-
-void DBHandler::import_geo_table(const TSessionId& session,
-                                 const std::string& table_name,
-                                 const std::string& file_name_in,
-                                 const TCopyParams& cp,
-                                 const TRowDescriptor& row_desc,
-                                 const TCreateParams& create_params) {}
 
 void DBHandler::import_table_status(TImportStatus& _return,
                                     const TSessionId& session,
@@ -4949,16 +4870,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                               ExecutionResult::SimpleResult,
                               import_stmt->get_success());
 
-      // get geo_copy_from info
-      if (import_stmt->was_geo_copy_from()) {
-        GeoCopyFromState geo_copy_from_state;
-        import_stmt->get_geo_copy_from_payload(
-            geo_copy_from_state.geo_copy_from_table,
-            geo_copy_from_state.geo_copy_from_file_name,
-            geo_copy_from_state.geo_copy_from_copy_params,
-            geo_copy_from_state.geo_copy_from_partitions);
-        geo_copy_from_sessions.add(session_ptr->get_session_id(), geo_copy_from_state);
-      }
       return;
     }
   } else if (pw.isCalcitePathPermissable(read_only_)) {
@@ -5481,8 +5392,6 @@ void DBHandler::insert_data(const TSessionId& session,
     insert_data.numRows = thrift_insert_data.num_rows;
     std::vector<std::unique_ptr<std::vector<std::string>>> none_encoded_string_columns;
     std::vector<std::unique_ptr<std::vector<ArrayDatum>>> array_columns;
-    SQLTypeInfo geo_ti{kNULLT,
-                       false};  // will be filled with the correct info if possible
     for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
       const int column_id = insert_data.columnIds[col_idx];
       DataBlockPtr p;
