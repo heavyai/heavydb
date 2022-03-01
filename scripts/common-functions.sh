@@ -208,6 +208,50 @@ function install_llvm() {
     popd
 }
 
+function install_llvm_12() {
+    VERS="12.0.0"
+    download https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-$VERS.tar.gz
+    rm -rf llvm-project-llvmorg-$VERS
+    extract llvmorg-$VERS.tar.gz
+
+    rm -rf build.llvm-$VERS
+    mkdir build.llvm-$VERS
+    pushd build.llvm-$VERS
+
+    LLVM_SHARED=""
+    if [ "$LLVM_BUILD_DYLIB" = "true" ]; then
+      LLVM_SHARED="-DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON"
+    fi
+
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on $LLVM_SHARED -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra;compiler-rt;libcxx;libcxxabi;lld;lldb" ../llvm-project-llvmorg-$VERS/llvm
+    makej
+    make install
+
+    popd
+}
+
+SPIRV_TRANSLATOR_VERSION=12.0.0
+
+function install_spirv_translator() {
+    VERS=${SPIRV_TRANSLATOR_VERSION}
+    download https://github.com/KhronosGroup/SPIRV-LLVM-Translator/archive/refs/tags/v${VERS}.tar.gz
+    BUILD_DIR="SPIRV-LLVM-Translator-${VERS}/build"
+
+    rm -rf SPIRV-LLVM-Translator-${VERS}
+    extract v$VERS.tar.gz
+    mkdir -p ${BUILD_DIR}
+
+    pushd ${BUILD_DIR}
+    cmake \
+          -DLLVM_DIR=${LLVM_HOME:-${PREFIX}} \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX .. \
+          -DLLVM_SPIRV_BUILD_EXTERNAL=YES
+    makej
+    make install
+    popd
+}
+
+
 PROJ_VERSION=7.2.1
 GDAL_VERSION=3.2.2
 

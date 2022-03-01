@@ -137,7 +137,9 @@ install_memkind
 # llvm
 # (see common-functions.sh)
 LLVM_BUILD_DYLIB=true
-install_llvm
+install_llvm_12
+
+install_spirv_translator
 
 # Geo Support
 install_gdal
