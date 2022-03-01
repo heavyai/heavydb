@@ -191,8 +191,18 @@ void ExecutionKernel::runImpl(Executor* executor,
   std::shared_ptr<FetchResult> fetch_result(new FetchResult);
   try {
     std::map<int, const TableFragments*> all_tables_fragments;
+    TableFragments streaming_table_fragment;
     QueryFragmentDescriptor::computeAllTablesFragments(
         all_tables_fragments, ra_exe_unit_, shared_context.getQueryInfos());
+
+    for (auto& qi : shared_context.getQueryInfos()) {
+      auto ti = executor->getSchemaProvider()->getTableInfo(qi.db_id, qi.table_id);
+      if (ti && ti->is_stream) {
+        auto table_meta = data_mgr->getTableMetadata(qi.db_id, qi.table_id);
+        streaming_table_fragment = table_meta.fragments;
+        all_tables_fragments[qi.table_id] = &streaming_table_fragment;
+      }
+    }
 
     *fetch_result = ra_exe_unit_.union_all
                         ? executor->fetchUnionChunks(column_fetcher,
@@ -346,7 +356,6 @@ void ExecutionKernel::runImpl(Executor* executor,
     return;
   }
 #endif  // HAVE_TBB
-
   if (eo.executor_type == ExecutorType::Native) {
     try {
       query_exe_context_owned =

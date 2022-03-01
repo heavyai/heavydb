@@ -17,9 +17,9 @@
 #ifndef QUERYENGINE_INPUTMETADATA_H
 #define QUERYENGINE_INPUTMETADATA_H
 
+#include "Fragmenter/Fragmenter.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"
-#include "Fragmenter/Fragmenter.h"
 
 #include <unordered_map>
 

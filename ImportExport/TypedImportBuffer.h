@@ -20,6 +20,7 @@
 
 class TColumn;
 class TDatum;
+class CopyParams;
 
 namespace arrow {
 

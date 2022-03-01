@@ -82,7 +82,7 @@ struct ExecutionOptions {
   double running_query_interrupt_freq;
   unsigned pending_query_interrupt_freq;
   ExecutorType executor_type = ExecutorType::Native;
-  const std::vector<size_t> outer_fragment_indices{};
+  std::vector<size_t> outer_fragment_indices{};
   bool multifrag_result = false;
   bool preserve_order = false;
 

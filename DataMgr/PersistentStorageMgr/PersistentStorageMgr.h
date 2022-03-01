@@ -77,6 +77,8 @@ class PersistentStorageMgr : public AbstractBufferMgr {
 
   void registerDataProvider(int schema_id, std::shared_ptr<AbstractBufferMgr>);
 
+  std::shared_ptr<AbstractBufferMgr> getDataProvider(int schema_id) const;
+
  protected:
   bool isForeignStorage(const ChunkKey& chunk_key) const;
   AbstractBufferMgr* getStorageMgrForTableKey(const ChunkKey& table_key) const;

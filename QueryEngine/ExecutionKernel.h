@@ -60,7 +60,7 @@ class SharedKernelContext {
 
   std::vector<uint64_t> all_frag_row_offsets_;
   std::mutex all_frag_row_offsets_mutex_;
-  const std::vector<InputTableInfo>& query_infos_;
+  std::vector<InputTableInfo> query_infos_;
   const RegisteredQueryHint query_hint_;
 
 #ifdef HAVE_TBB

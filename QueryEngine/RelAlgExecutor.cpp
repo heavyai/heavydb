@@ -17,6 +17,7 @@
 #include "RelAlgExecutor.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/MetadataPlaceholder.h"
+#include "ImportExport/ImportUtils.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/CalciteDeserializerUtils.h"
 #include "QueryEngine/CardinalityEstimator.h"
@@ -275,6 +276,194 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
     render_info->setForceNonInSituData();
   }
   return run_query(co_cpu);
+}
+
+std::pair<CompilationOptions, ExecutionOptions> RelAlgExecutor::handle_hint(
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    const RelAlgNode* body) {
+  ExecutionOptions eo_hint_applied = eo;
+  CompilationOptions co_hint_applied = co;
+  auto target_node = body;
+  if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
+    target_node = sort_body->getInput(0);
+  }
+  auto query_hints = getParsedQueryHint(target_node);
+  auto columnar_output_hint_enabled = false;
+  auto rowwise_output_hint_enabled = false;
+  if (query_hints) {
+    if (query_hints->isHintRegistered(QueryHint::kCpuMode)) {
+      VLOG(1) << "A user forces to run the query on the CPU execution mode";
+      co_hint_applied.device_type = ExecutorDeviceType::CPU;
+    }
+    if (query_hints->isHintRegistered(QueryHint::kColumnarOutput)) {
+      VLOG(1) << "A user forces the query to run with columnar output";
+      columnar_output_hint_enabled = true;
+    } else if (query_hints->isHintRegistered(QueryHint::kRowwiseOutput)) {
+      VLOG(1) << "A user forces the query to run with rowwise output";
+      rowwise_output_hint_enabled = true;
+    }
+  }
+  auto columnar_output_enabled = eo.output_columnar_hint ? !rowwise_output_hint_enabled
+                                                         : columnar_output_hint_enabled;
+  if (columnar_output_hint_enabled || rowwise_output_hint_enabled) {
+    LOG(INFO) << "Currently, we do not support applying query hint to change query "
+                 "output layout in distributed mode.";
+  }
+  eo_hint_applied.output_columnar_hint = columnar_output_enabled;
+  return std::make_pair(co_hint_applied, eo_hint_applied);
+}
+
+void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
+                                               const ExecutionOptions& eo) {
+  query_dag_->resetQueryExecutionState();
+  const auto& ra = query_dag_->getRootNode();
+  if (g_enable_dynamic_watchdog) {
+    executor_->resetInterrupt();
+  }
+  std::string query_session{""};
+  std::string query_str{"N/A"};
+  std::string query_submitted_time{""};
+  // gather necessary query's info
+  if (query_state_ != nullptr && query_state_->getConstSessionInfo() != nullptr) {
+    query_session = query_state_->getConstSessionInfo()->get_session_id();
+    query_str = query_state_->getQueryStr();
+    query_submitted_time = query_state_->getQuerySubmittedTime();
+  }
+
+  auto interruptable = !query_session.empty() && eo.allow_runtime_query_interrupt;
+  if (interruptable) {
+    // if we reach here, the current query which was waiting an idle executor
+    // within the dispatch queue is now scheduled to the specific executor
+    // (not UNITARY_EXECUTOR)
+    // so we update the query session's status with the executor that takes this query
+    std::tie(query_session, query_str) = executor_->attachExecutorToQuerySession(
+        query_session, query_str, query_submitted_time);
+
+    // now the query is going to be executed, so update the status as
+    // "RUNNING_QUERY_KERNEL"
+    executor_->updateQuerySessionStatus(
+        query_session,
+        query_submitted_time,
+        QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL);
+  }
+
+  // so it should do cleanup session info after finishing its execution
+  //  ScopeGuard clearQuerySessionInfo =
+  //      [this, &query_session, &interruptable, &query_submitted_time] {
+  //        // reset the runtime query interrupt status after the end of query execution
+  //        if (interruptable) {
+  //          // cleanup running session's info
+  //          executor_->clearQuerySessionStatus(query_session, query_submitted_time);
+  //        }
+  //      };
+
+  // now we acquire executor lock in here to make sure that this executor holds
+  // all necessary resources and at the same time protect them against other executor
+  auto lock = executor_->acquireExecuteMutex();
+
+  if (interruptable) {
+    // check whether this query session is "already" interrupted
+    // this case occurs when there is very short gap between being interrupted and
+    // taking the execute lock
+    // if so we have to remove "all" queries initiated by this session and we do in here
+    // without running the query
+    try {
+      executor_->checkPendingQueryStatus(query_session);
+    } catch (QueryExecutionError& e) {
+      if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+        throw std::runtime_error("Query execution has been interrupted (pending query)");
+      }
+      throw e;
+    } catch (...) {
+      throw std::runtime_error("Checking pending query status failed: unknown error");
+    }
+  }
+
+  //  ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
+  const auto col_descs = get_physical_inputs(&ra);
+  const auto phys_table_ids = get_physical_table_inputs(&ra);
+
+  decltype(temporary_tables_)().swap(temporary_tables_);
+  decltype(target_exprs_owned_)().swap(target_exprs_owned_);
+  decltype(left_deep_join_info_)().swap(left_deep_join_info_);
+
+  executor_->setDatabaseId(db_id_);
+  executor_->setSchemaProvider(schema_provider_);
+  executor_->setupCaching(col_descs, phys_table_ids);
+  executor_->temporary_tables_ = &temporary_tables_;
+
+  //   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
+  auto ed_seq = RaExecutionSequence(&ra);
+
+  if (getSubqueries().size() != 0) {
+    throw std::runtime_error("Streaming queries with subqueries are not supported yet");
+  }
+
+  if (ed_seq.size() != 1) {
+    throw std::runtime_error("Multistep streaming queries are not supported yet");
+  }
+
+  auto exec_desc_ptr = ed_seq.getDescriptor(0);
+  CHECK(exec_desc_ptr);
+  auto& exec_desc = *exec_desc_ptr;
+  const auto body = exec_desc.getBody();
+
+  const ExecutionOptions eo_work_unit{eo};
+
+  auto [co_hint_applied, eo_hint_applied] = handle_hint(co, eo_work_unit, body);
+
+  auto work_unit = createWorkUnitForStreaming(body, co, eo);
+
+  auto ra_exe_unit = work_unit.exe_unit;
+  ra_exe_unit.query_hint = RegisteredQueryHint::defaults();
+  auto candidate = query_dag_->getQueryHint(body);
+  if (candidate) {
+    ra_exe_unit.query_hint = *candidate;
+  }
+  auto column_cache = std::make_unique<ColumnCacheMap>();
+
+  auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
+
+  stream_execution_context_ = executor_->prepareStreamingExecution(
+      ra_exe_unit, co_hint_applied, eo_hint_applied, table_infos, *column_cache);
+
+  stream_execution_context_->column_cache = std::move(column_cache);
+  stream_execution_context_->is_agg = node_is_aggregate(body);
+}
+
+RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnitForStreaming(
+    const RelAlgNode* body,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo) {
+  if (const auto compound = dynamic_cast<const RelCompound*>(body)) {
+    return createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
+  }
+  if (const auto project = dynamic_cast<const RelProject*>(body)) {
+    auto work_unit =
+        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
+    CHECK(!project->isSimple());  // check if input table is not temporary
+    return work_unit;
+  }
+  if (const auto aggregate = dynamic_cast<const RelAggregate*>(body)) {
+    return createAggregateWorkUnit(
+        aggregate, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  }
+  if (const auto filter = dynamic_cast<const RelFilter*>(body)) {
+    return createFilterWorkUnit(
+        filter, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  }
+
+  throw std::runtime_error("that query type is not supported in streaming mode");
+}
+
+ResultSetPtr RelAlgExecutor::runOnBatch(const FragmentsPerTable& fragments) {
+  FragmentsList fl{fragments};
+  return executor_->runOnBatch(stream_execution_context_, fl);
+}
+
+ResultSetPtr RelAlgExecutor::finishStreamingExecution() {
+  return executor_->finishStreamExecution(stream_execution_context_);
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
@@ -749,44 +938,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.executor_type,
       step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
 
-  auto handle_hint = [co,
-                      eo_work_unit,
-                      body,
-                      this]() -> std::pair<CompilationOptions, ExecutionOptions> {
-    ExecutionOptions eo_hint_applied = eo_work_unit;
-    CompilationOptions co_hint_applied = co;
-    auto target_node = body;
-    if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
-      target_node = sort_body->getInput(0);
-    }
-    auto query_hints = getParsedQueryHint(target_node);
-    auto columnar_output_hint_enabled = false;
-    auto rowwise_output_hint_enabled = false;
-    if (query_hints) {
-      if (query_hints->isHintRegistered(QueryHint::kCpuMode)) {
-        VLOG(1) << "A user forces to run the query on the CPU execution mode";
-        co_hint_applied.device_type = ExecutorDeviceType::CPU;
-      }
-      if (query_hints->isHintRegistered(QueryHint::kColumnarOutput)) {
-        VLOG(1) << "A user forces the query to run with columnar output";
-        columnar_output_hint_enabled = true;
-      } else if (query_hints->isHintRegistered(QueryHint::kRowwiseOutput)) {
-        VLOG(1) << "A user forces the query to run with rowwise output";
-        rowwise_output_hint_enabled = true;
-      }
-    }
-    auto columnar_output_enabled = eo_work_unit.output_columnar_hint
-                                       ? !rowwise_output_hint_enabled
-                                       : columnar_output_hint_enabled;
-    if (columnar_output_hint_enabled || rowwise_output_hint_enabled) {
-      LOG(INFO) << "Currently, we do not support applying query hint to change query "
-                   "output layout in distributed mode.";
-    }
-    eo_hint_applied.output_columnar_hint = columnar_output_enabled;
-    return std::make_pair(co_hint_applied, eo_hint_applied);
-  };
-
-  auto hint_applied = handle_hint();
+  auto hint_applied = handle_hint(co, eo_work_unit, body);
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     exec_desc.setResult(executeCompound(

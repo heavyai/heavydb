@@ -82,6 +82,16 @@ class RelAlgExecutor {
                                      const bool just_explain_plan,
                                      RenderInfo* render_info);
 
+  // does preparational stuff and compiles kernels
+  void prepareStreamingExecution(const CompilationOptions& co,
+                                 const ExecutionOptions& eo);
+
+  // process batch
+  ResultSetPtr runOnBatch(const FragmentsPerTable& fragments);
+
+  // when the last batch has been send, invoke this function.
+  ResultSetPtr finishStreamingExecution();
+
   ExecutionResult executeRelAlgQueryWithFilterPushDown(const RaExecutionSequence& seq,
                                                        const CompilationOptions& co,
                                                        const ExecutionOptions& eo,
@@ -246,6 +256,15 @@ class RelAlgExecutor {
     const std::vector<size_t> left_deep_join_input_sizes;
   };
 
+  WorkUnit createWorkUnitForStreaming(const RelAlgNode* body,
+                                      const CompilationOptions& co,
+                                      const ExecutionOptions& eo);
+
+  std::pair<CompilationOptions, ExecutionOptions> handle_hint(
+      const CompilationOptions& co,
+      const ExecutionOptions& eo,
+      const RelAlgNode* body);
+
   struct TableFunctionWorkUnit {
     TableFunctionExecutionUnit exe_unit;
     const RelAlgNode* body;
@@ -377,6 +396,8 @@ class RelAlgExecutor {
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
 
   std::optional<std::function<void()>> post_execution_callback_;
+
+  std::shared_ptr<StreamExecutionContext> stream_execution_context_;
 
   friend class PendingExecutionClosure;
 };
