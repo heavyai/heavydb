@@ -432,14 +432,7 @@ void DBHandler::initialize(const bool is_new_db) {
     cpu_mode_only_ = true;
   }
 
-  switch (executor_device_type_) {
-    case ExecutorDeviceType::GPU:
-      LOG(INFO) << "Started in GPU mode" << std::endl;
-      break;
-    case ExecutorDeviceType::CPU:
-      LOG(INFO) << "Started in CPU mode" << std::endl;
-      break;
-  }
+  LOG(INFO) << "Started in " << executor_device_type_ << " mode.";
 
   try {
     g_base_path = base_data_path_;

@@ -1369,22 +1369,28 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE bn = null;", dt);
     c("SELECT COUNT(*) FROM test WHERE bn = b;", dt);
     ASSERT_EQ(19,
-              v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)));
+              v<int64_t>(run_simple_agg("SELECT rowid FROM test WHERE rowid = 19;", dt)))
+        << dt;
     ASSERT_EQ(
         static_cast<int64_t>(2 * g_num_rows),
-        v<int64_t>(run_simple_agg("SELECT MAX(rowid) - MIN(rowid) + 1 FROM test;", dt)));
+        v<int64_t>(run_simple_agg("SELECT MAX(rowid) - MIN(rowid) + 1 FROM test;", dt)))
+        << dt;
     ASSERT_EQ(
         15,
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)));
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 0;", dt)))
+        << dt;
     ASSERT_EQ(
         0,
-        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)));
-    ASSERT_EQ(5,
-              v<int64_t>(
-                  run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 0;", dt)));
-    ASSERT_EQ(20,
-              v<int64_t>(
-                  run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 7;", dt)));
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) = 7;", dt)))
+        << dt;
+    ASSERT_EQ(
+        5,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 0;", dt)))
+        << dt;
+    ASSERT_EQ(
+        20,
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE MOD(x, 7) <> 7;", dt)))
+        << dt;
     c("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt);
     c("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt);
     c("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt);
