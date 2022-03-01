@@ -1,15 +1,15 @@
-OmniSciDB (formerly MapD Core)
+HeavyDB (formerly OmniSciDB)
 ==============================
 
-OmniSciDB is an open source SQL-based, relational, columnar database engine that leverages the full performance and parallelism of modern hardware (both CPUs and GPUs) to enable querying of multi-billion row datasets in milliseconds, without the need for indexing, pre-aggregation, or downsampling.  OmniSciDB can be run on hybrid CPU/GPU systems (Nvidia GPUs are currently supported), as well as on CPU-only systems featuring X86, Power, and ARM (experimental support) architectures. To achieve maximum performance, OmniSciDB features multi-tiered caching of data between storage, CPU memory, and GPU memory, and an innovative Just-In-Time (JIT) query compilation framework.
+HeavyDB is an open source SQL-based, relational, columnar database engine that leverages the full performance and parallelism of modern hardware (both CPUs and GPUs) to enable querying of multi-billion row datasets in milliseconds, without the need for indexing, pre-aggregation, or downsampling.  HeavyDB can be run on hybrid CPU/GPU systems (Nvidia GPUs are currently supported), as well as on CPU-only systems featuring X86, Power, and ARM (experimental support) architectures. To achieve maximum performance, HeavyDB features multi-tiered caching of data between storage, CPU memory, and GPU memory, and an innovative Just-In-Time (JIT) query compilation framework.
 
-For usage info, see the [product documentation](https://docs.omnisci.com/latest/), and for more details about the system's internal architecture, check out the [developer documentation](https://omnisci.github.io/omniscidb/). Further technical discussion can be found on the [OmniSci Community Forum](https://community.omnisci.com).
+For usage info, see the [product documentation](https://docs.heavy.ai/), and for more details about the system's internal architecture, check out the [developer documentation](https://heavyai.github.io/heavydb/). Further technical discussion can be found on the [HEAVY.AI Community Forum](https://community.heavy.ai).
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
 # Downloads and Installation Instructions
 
-OmniSci provides pre-built binaries for Linux for stable releases of the project:
+HEAVY.AI provides pre-built binaries for Linux for stable releases of the project:
 
 | Distro | Package type | CPU/GPU | Repository | Docs |
 | --- | --- | --- | --- | --- |
@@ -22,7 +22,7 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 
 ***
 
-# Developing OmniSciDB: Table of Contents
+# Developing HeavyDB: Table of Contents
 
 - [Links](#links)
 - [License](#license)
@@ -36,14 +36,14 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 
 # Links
 
-- [Developer Documentation](https://omnisci.github.io/omniscidb/)
+- [Developer Documentation](https://heavyai.github.io/heavydb/)
 - [Doxygen-generated Documentation](http://doxygen.omnisci.com/)
-- [Product Documentation](https://docs.omnisci.com/latest/)
+- [Product Documentation](https://docs.heavy.ai/)
 - [Release Notes](https://docs.omnisci.com/latest/7_0_release.html)
-- [Community Forum](https://community.omnisci.com)
-- [OmniSci Homepage](https://www.omnisci.com)
-- [OmniSci Blog](https://www.omnisci.com/blog/)
-- [OmniSci Downloads](https://www.omnisci.com/platform/downloads/)
+- [Community Forum](https://community.heavy.ai)
+- [HEAVY.AI Homepage](https://www.heavy.ai)
+- [HEAVY.AI Blog](https://www.heavy.ai/blog/)
+- [HEAVY.AI Downloads](https://www.heavy.ai/platform/downloads/)
 
 # License
 
@@ -53,13 +53,13 @@ The repository includes a number of third party packages provided under separate
 
 # Contributing
 
-In order to clarify the intellectual property license granted with Contributions from any person or entity, OmniSci must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
+In order to clarify the intellectual property license granted with Contributions from any person or entity, HEAVY.AI must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
 
 # Building
 
-If this is your first time building OmniSciDB, install the dependencies mentioned in the [Dependencies](#dependencies) section below.
+If this is your first time building HeavyDB, install the dependencies mentioned in the [Dependencies](#dependencies) section below.
 
-OmniSciDB uses CMake for its build system.
+HeavyDB uses CMake for its build system.
 
     mkdir build
     cd build
@@ -89,7 +89,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 
 # Testing
 
-OmniSciDB uses [Google Test](https://github.com/google/googletest) as its main testing framework. Tests reside under the [Tests](Tests) directory.
+HeavyDB uses [Google Test](https://github.com/google/googletest) as its main testing framework. Tests reside under the [Tests](Tests) directory.
 
 The `sanity_tests` target runs the most common tests. If using Makefiles to build, the tests may be run using:
 
@@ -126,9 +126,9 @@ Finally run the tests:
 
 # Generating Packages
 
-OmniSciDB uses [CPack](https://cmake.org/cmake/help/latest/manual/cpack.1.html) to generate packages for distribution. Packages generated on CentOS with static linking enabled can be used on most other recent Linux distributions.
+HeavyDB uses [CPack](https://cmake.org/cmake/help/latest/manual/cpack.1.html) to generate packages for distribution. Packages generated on CentOS with static linking enabled can be used on most other recent Linux distributions.
 
-To generate packages on CentOS (assuming starting from top level of the omniscidb repository):
+To generate packages on CentOS (assuming starting from top level of the heavydb repository):
 
     mkdir build-package && cd build-package
     cmake -DPREFER_STATIC_LIBS=on -DCMAKE_BUILD_TYPE=release ..
@@ -143,13 +143,13 @@ The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, 
 
 # Using
 
-The [`startomnisci`](startomnisci) wrapper script may be used to start OmniSciDB in a testing environment. This script performs the following tasks:
+The [`startomnisci`](startomnisci) wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
 
 - initializes the `data` storage directory via `initdb`, if required
-- starts the main OmniSciDB server, `omnisci_server`
+- starts the main HeavyDB server, `omnisci_server`
 - offers to download and import a sample dataset, using the `insert_sample_data` script
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `omniscidb` repository, `startomnisci` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startomnisci` may be run by:
 
     ../startomnisci
 
@@ -161,7 +161,7 @@ Initialize the `data` storage directory. This command only needs to be run once.
 
     mkdir data && ./bin/initdb data
 
-Start the OmniSciDB server:
+Start the HeavyDB server:
 
     ./bin/omnisci_server
 
@@ -201,7 +201,7 @@ Note: the `clang-tidy` target uses the `run-clang-tidy.py` script provided with 
 
 # Dependencies
 
-OmniSciDB has the following dependencies:
+HeavyDB has the following dependencies:
 
 | Package | Min Version | Required |
 | ------- | ----------- | -------- |
@@ -218,7 +218,7 @@ OmniSciDB has the following dependencies:
 
 ## CentOS 7
 
-OmniSciDB requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
+HeavyDB requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
 
 Use the [scripts/mapd-deps-prebuilt.sh](scripts/mapd-deps-prebuilt.sh) build script to install prebuilt dependencies.
 
@@ -272,11 +272,11 @@ The [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) script is used to
 
 ## Ubuntu
 
-Most build dependencies required by OmniSciDB are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+Most build dependencies required by HeavyDB are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
 
 ### Ubuntu 16.04
 
-OmniSciDB requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory.
+HeavyDB requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory.
 
 ### Ubuntu 18.04
 
