@@ -546,6 +546,14 @@ TEST_F(DumpAndRestoreTest, CompressionOptions) {
   compression_test_clean(test_file_path);
 }
 
+TEST_F(DumpAndRestoreTest, PreRebrandTableDump) {
+  auto file_path =
+      boost::filesystem::canonical("../../Tests/Export/TableDump/pre_rebrand.gz")
+          .string();
+  run_ddl_statement("RESTORE TABLE test_table FROM '" + file_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table;", {1, 2, 3});
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 

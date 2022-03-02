@@ -231,6 +231,19 @@ void adjust_altered_table_files(const std::string& temp_data_dir,
   thread_controller.finish();
 }
 
+void rename_legacy_data_files(const std::string& table_data_dir) {
+  boost::filesystem::directory_iterator end_it;
+  for (boost::filesystem::directory_iterator it(table_data_dir); it != end_it; it++) {
+    auto constexpr old_data_extension{".mapd"};
+    if (boost::filesystem::is_regular_file(it->status()) &&
+        it->path().extension().string() == old_data_extension) {
+      auto new_path = it->path();
+      new_path.replace_extension(DATA_FILE_EXT);
+      boost::filesystem::rename(it->path(), new_path);
+    }
+  }
+}
+
 void rename_table_directories(const File_Namespace::GlobalFileMgr* global_file_mgr,
                               const std::string& temp_data_dir,
                               const std::vector<std::string>& target_paths,
@@ -249,6 +262,7 @@ void rename_table_directories(const File_Namespace::GlobalFileMgr* global_file_m
           throw std::runtime_error("Failed to rename file " + file_path + " to " +
                                    target_path + ": " + std::strerror(errno));
         }
+        rename_legacy_data_files(target_path);
       }
     }
   }
