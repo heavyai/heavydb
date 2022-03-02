@@ -58,6 +58,14 @@ inline V inline_null_array_value() {
   return inline_fp_null_array_value<V>();
 }
 
+int int_pow(int val, int power) {
+  int res = 1;
+  for (int i = 0; i < power; ++i) {
+    res *= val;
+  }
+  return res;
+}
+
 void convertBoolBitmapBufferWithNulls(int8_t* dst,
                                       const uint8_t* src,
                                       const uint8_t* bitmap,
@@ -443,6 +451,96 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArrayImpl(
   return std::make_shared<arrow::ChunkedArray>(list_array);
 }
 
+template <typename T, bool float_conversion>
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenDecimalArrayImpl(
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    int scale = 1) {
+  size_t elems_count = 0;
+  int32_t arrays_count = 0;
+  std::vector<int32_t> out_elem_offsets;
+  std::vector<int32_t> out_offset_offsets;
+  out_elem_offsets.reserve(arr->num_chunks());
+  out_offset_offsets.reserve(arr->num_chunks());
+
+  for (auto& chunk : arr->chunks()) {
+    auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
+    CHECK(chunk_list);
+
+    out_offset_offsets.push_back(arrays_count);
+    out_elem_offsets.push_back(static_cast<int32_t>(elems_count));
+
+    auto offset_data = chunk_list->data()->GetValues<uint32_t>(1);
+    arrays_count += chunk->length();
+    elems_count += offset_data[chunk->length()] - offset_data[0];
+  }
+
+  if (elems_count > std::numeric_limits<int32_t>::max()) {
+    throw std::runtime_error("Input arrow array is too big for conversion.");
+  }
+
+  auto offset_buf =
+      arrow::AllocateBuffer(sizeof(int32_t) * arr->length() + 1).ValueOrDie();
+  auto offset_ptr = reinterpret_cast<int32_t*>(offset_buf->mutable_data());
+
+  auto elem_buf = arrow::AllocateBuffer(sizeof(T) * elems_count).ValueOrDie();
+  auto elem_ptr = reinterpret_cast<T*>(elem_buf->mutable_data());
+
+  tbb::parallel_for(
+      tbb::blocked_range<int>(0, arr->num_chunks()),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int c = r.begin(); c != r.end(); ++c) {
+          auto elem_offset = out_elem_offsets[c];
+          auto offset_offset = out_offset_offsets[c];
+          auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(arr->chunk(c));
+          auto elem_array = chunk_list->values();
+          auto decimalArray =
+              std::dynamic_pointer_cast<arrow::Decimal128Array>(elem_array);
+          auto floatArray = std::dynamic_pointer_cast<arrow::DoubleArray>(elem_array);
+          auto offset_data = chunk_list->data()->GetValues<uint32_t>(1);
+
+          bool use_negative_offset = false;
+          for (int64_t i = 0; i < chunk_list->length(); ++i) {
+            offset_ptr[offset_offset++] =
+                use_negative_offset ? -elem_offset * sizeof(T) : elem_offset * sizeof(T);
+            if (chunk_list->IsNull(i)) {
+              use_negative_offset = true;
+            } else {
+              use_negative_offset = false;
+              auto offs = offset_data[i];
+              auto len = offset_data[i + 1] - offset_data[i];
+              for (uint32_t j = 0; j < len; ++j) {
+                if (elem_array->IsNull(offs + j)) {
+                  elem_ptr[elem_offset + j] = inline_null_value<T>();
+                } else if constexpr (float_conversion) {
+                  double val = floatArray->Value(offs + j);
+                  elem_ptr[elem_offset + j] = static_cast<int64_t>(val * scale);
+                } else {
+                  arrow::Decimal128 val(decimalArray->GetValue(offs + j));
+                  elem_ptr[elem_offset + j] = static_cast<int64_t>(val);
+                }
+              }
+              elem_offset += len;
+            }
+          }
+        }
+      });
+  auto last_chunk = arr->chunk(arr->num_chunks() - 1);
+  offset_ptr[arr->length()] = static_cast<int32_t>(
+      last_chunk->IsNull(last_chunk->length() - 1) ? -elems_count * sizeof(T)
+                                                   : elems_count * sizeof(T));
+
+  using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
+  using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+
+  auto elem_array = std::make_shared<ElemsArrayType>(elems_count, std::move(elem_buf));
+  auto list_array =
+      std::make_shared<arrow::ListArray>(arrow::list(std::make_shared<ElemsArrowType>()),
+                                         arr->length(),
+                                         std::move(offset_buf),
+                                         elem_array);
+  return std::make_shared<arrow::ChunkedArray>(list_array);
+}
+
 std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenStringArrayImpl(
     std::shared_ptr<arrow::ChunkedArray> arr,
     StringDictionary* dict) {
@@ -554,6 +652,19 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArray(
   } else if (elem_type.is_dict_encoded_string()) {
     CHECK_EQ(elem_type.get_size(), 4);
     return replaceNullValuesVarlenStringArrayImpl(arr, dict);
+  } else if (elem_type.is_decimal()) {
+    // Due to JSON parser limitation in Arrow 5.0 we might need to convert
+    // float64 do decimal.
+    bool float_conversion = list_type->value_type()->id() == arrow::Type::DOUBLE;
+    switch (elem_type.get_size()) {
+      case 8:
+        if (float_conversion) {
+          return replaceNullValuesVarlenDecimalArrayImpl<int64_t, true>(
+              arr, int_pow(10, elem_type.get_scale()));
+        } else {
+          return replaceNullValuesVarlenDecimalArrayImpl<int64_t, false>(arr);
+        }
+    }
   }
 
   throw std::runtime_error("Unsupported varlen array: "s + type.toString());
@@ -616,6 +727,74 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArrayImpl(
     elem_array = std::make_shared<ElemsArrayType>(total_length, std::move(elem_buf));
   }
 
+  return std::make_shared<arrow::ChunkedArray>(elem_array);
+}
+
+template <typename T, bool float_conversion>
+std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeDecimalArrayImpl(
+    std::shared_ptr<arrow::ChunkedArray> arr,
+    int list_size,
+    int scale = 1) {
+  int64_t total_length = 0;
+  std::vector<size_t> out_elem_offsets;
+  out_elem_offsets.reserve(arr->num_chunks());
+  for (auto& chunk : arr->chunks()) {
+    out_elem_offsets.push_back(total_length);
+    total_length += chunk->length() * list_size;
+  }
+
+  auto elem_buf = arrow::AllocateBuffer(sizeof(T) * total_length).ValueOrDie();
+  auto elem_ptr = reinterpret_cast<T*>(elem_buf->mutable_data());
+
+  auto null_array_value = inline_null_array_value<T>();
+  auto null_value = inline_null_value<T>();
+
+  tbb::parallel_for(
+      tbb::blocked_range<int>(0, arr->num_chunks()),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int c = r.begin(); c != r.end(); ++c) {
+          auto chunk_array = std::dynamic_pointer_cast<arrow::ListArray>(arr->chunk(c));
+          auto elem_array = chunk_array->values();
+          auto decimalArray =
+              std::dynamic_pointer_cast<arrow::Decimal128Array>(elem_array);
+          auto floatArray = std::dynamic_pointer_cast<arrow::DoubleArray>(elem_array);
+
+          auto dst_ptr = elem_ptr + out_elem_offsets[c];
+          for (int64_t i = 0; i < chunk_array->length(); ++i) {
+            if (chunk_array->IsNull(i)) {
+              dst_ptr[0] = null_array_value;
+              for (int j = 1; j < list_size; ++j) {
+                dst_ptr[j] = null_value;
+              }
+            } else {
+              // We add NULL elements if input array is too short and cut
+              // too long arrays.
+              auto offs = chunk_array->value_offset(i);
+              auto len = std::min(chunk_array->value_length(i), list_size);
+              for (int j = 0; j < len; ++j) {
+                if (elem_array->IsNull(offs + j)) {
+                  dst_ptr[j] = inline_null_value<T>();
+                } else if constexpr (float_conversion) {
+                  double val = floatArray->Value(offs + j);
+                  dst_ptr[j] = static_cast<int64_t>(val * scale);
+                } else {
+                  arrow::Decimal128 val(decimalArray->GetValue(offs + j));
+                  dst_ptr[j] = static_cast<int64_t>(val);
+                }
+              }
+              for (int j = len; j < list_size; ++j) {
+                dst_ptr[j] = null_value;
+              }
+            }
+            dst_ptr += list_size;
+          }
+        }
+      });
+
+  using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
+  using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+
+  auto elem_array = std::make_shared<ElemsArrayType>(total_length, std::move(elem_buf));
   return std::make_shared<arrow::ChunkedArray>(elem_array);
 }
 
@@ -719,6 +898,21 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArray(
   } else if (elem_type.is_dict_encoded_string()) {
     CHECK_EQ(elem_type.get_size(), 4);
     return replaceNullValuesFixedSizeStringArrayImpl(arr, list_size, dict);
+  } else if (elem_type.is_decimal()) {
+    // Due to JSON parser limitation in Arrow 5.0 we might need to convert
+    // float64 do decimal.
+    auto list_type = std::dynamic_pointer_cast<arrow::ListType>(arr->type());
+    bool float_conversion = list_type->value_type()->id() == arrow::Type::DOUBLE;
+    switch (elem_type.get_size()) {
+      case 8:
+        if (float_conversion) {
+          return replaceNullValuesFixedSizeDecimalArrayImpl<int64_t, true>(
+              arr, list_size, int_pow(10, elem_type.get_scale()));
+        } else {
+          return replaceNullValuesFixedSizeDecimalArrayImpl<int64_t, false>(arr,
+                                                                            list_size);
+        }
+    }
   }
 
   throw std::runtime_error("Unsupported fixed size array: "s + type.toString());
@@ -826,14 +1020,16 @@ std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
                                    std::to_string(type.get_precision()));
       }
     case kARRAY:
-      if (type.is_string_array()) {
-        return list(utf8());
-      } else if (type.is_fixlen_array()) {
-        // Arraw JSON parser doesn't support conversion to fixed size lists.
-        // So we use variable length lists in Arrow and then do the conversion.
-        return list(getArrowImportType(type.get_elem_type()));
+      if (IS_DECIMAL(type.get_subtype())) {
+        // Arrow 5.0 JSON parser doesn't support decimals. Use float64 instead
+        // and do the conversion on import. Due to precision problems imported
+        // data might not fully match the source data.
+        // TODO: change it after moving to Arrow 6.0
+        return list(float64());
       } else {
-        CHECK(type.is_varlen_array());
+        // Arrow JSON parser doesn't support conversion to fixed size lists.
+        // So we use variable length lists in Arrow in all cases and then do
+        // the conversion.
         return list(getArrowImportType(type.get_elem_type()));
       }
     case kINTERVAL_DAY_TIME:

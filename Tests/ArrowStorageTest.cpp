@@ -1463,6 +1463,52 @@ TEST_F(ArrowStorageTest, AppendJsonData_BoolArrays) {
                                               std::vector<int8_t>({-128})}));
 }
 
+TEST_F(ArrowStorageTest, AppendCsvData_Decimals) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  ArrowStorage::CsvParseOptions parse_options;
+  parse_options.header = false;
+  TableInfoPtr tinfo = storage.createTable("table1",
+                                           {{"d1", SQLTypeInfo(kDECIMAL, 10, 2, false)},
+                                            {"d2", SQLTypeInfo(kDECIMAL, 10, 4, false)}});
+  storage.appendCsvData("1.1,2.22", tinfo->table_id, parse_options);
+  storage.appendCsvData("1.11,2.2222", tinfo->table_id, parse_options);
+  storage.appendCsvData("1,2", tinfo->table_id, parse_options);
+  storage.appendCsvData(",", tinfo->table_id, parse_options);
+  checkData(storage,
+            tinfo->table_id,
+            4,
+            32'000'000,
+            std::vector<int64_t>({110, 111, 100, inline_null_value<int64_t>()}),
+            std::vector<int64_t>({22200, 22222, 20000, inline_null_value<int64_t>()}));
+}
+
+TEST_F(ArrowStorageTest, AppendJsonData_DecimalArrays) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  SQLTypeInfo decimal_3(kARRAY, 10, 2, false, kENCODING_NONE, 0, kDECIMAL);
+  decimal_3.set_size(3 * decimal_3.get_elem_type().get_size());
+  SQLTypeInfo decimal_any(kARRAY, 10, 4, false, kENCODING_NONE, 0, kDECIMAL);
+  TableInfoPtr tinfo =
+      storage.createTable("table1", {{"d1", decimal_3}, {"d2", decimal_any}});
+  storage.appendJsonData(R"___({"d1": [1.1, 2.2, 3.3], "d2": [1.11, 2.22, 3.33]}
+{"d1": [10.10, null, 30.30], "d2": null}
+{"d1": null, "d2": [10.1010, 20.2020, null]})___",
+                         tinfo->table_id);
+  checkData(storage,
+            tinfo->table_id,
+            3,
+            32'000'000,
+            std::vector<std::vector<int64_t>>(
+                {std::vector<int64_t>({110, 220, 330}),
+                 std::vector<int64_t>({1010, inline_null_value<int64_t>(), 3030}),
+                 std::vector<int64_t>({inline_null_array_value<int64_t>(),
+                                       inline_null_value<int64_t>(),
+                                       inline_null_value<int64_t>()})}),
+            std::vector<std::vector<int64_t>>(
+                {std::vector<int64_t>({11100, 22200, 33300}),
+                 std::vector<int64_t>({inline_null_array_value<int64_t>()}),
+                 std::vector<int64_t>({101010, 202020, inline_null_value<int64_t>()})}));
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
