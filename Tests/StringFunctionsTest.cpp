@@ -976,7 +976,7 @@ TEST_F(StringFunctionTest, RegexpSubstr2Args) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     auto result_set = sql(
-        "select regexp_substr(raw_email, '[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+') "
+        "select regexp_substr(raw_email, '[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+') "
         "from string_function_test_people order by id asc;",
         dt);
     std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -993,7 +993,7 @@ TEST_F(StringFunctionTest, RegexpSubstr3Args) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     auto result_set = sql(
-        "select regexp_substr(raw_email, '[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', "
+        "select regexp_substr(raw_email, '[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', "
         "20) from string_function_test_people order by id asc;",
         dt);
     std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1008,7 +1008,7 @@ TEST_F(StringFunctionTest, RegexpSubstr4Args) {
     SKIP_NO_GPU();
     {
       auto result_set = sql(
-          "select regexp_substr(raw_email, '[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', "
+          "select regexp_substr(raw_email, '[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', "
           "1, 2) from string_function_test_people order by id asc;",
           dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1018,7 +1018,7 @@ TEST_F(StringFunctionTest, RegexpSubstr4Args) {
     // Test negative wrapping
     {
       auto result_set = sql(
-          "select regexp_substr(raw_email, '[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', "
+          "select regexp_substr(raw_email, '[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', "
           "1, -1) from string_function_test_people order by id asc;",
           dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1039,7 +1039,7 @@ TEST_F(StringFunctionTest, RegexpSubstr5Or6Args) {
     {
       auto result_set =
           sql("select regexp_substr(raw_email, "
-              "'john[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', 1, 1, 'c') from "
+              "'john[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', 1, 1, 'c') from "
               "string_function_test_people order by id asc;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1050,7 +1050,7 @@ TEST_F(StringFunctionTest, RegexpSubstr5Or6Args) {
     {
       auto result_set =
           sql("select regexp_substr(raw_email, "
-              "'john[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', 1, 1, 'i') from "
+              "'john[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', 1, 1, 'i') from "
               "string_function_test_people order by id asc;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1065,7 +1065,7 @@ TEST_F(StringFunctionTest, RegexpSubstr5Or6Args) {
       // Get the email domain (second sub-match)
       auto result_set =
           sql("select regexp_substr(raw_email, "
-              "'([[:alnum:].-_]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'ce', 2) from "
+              "'([[:alnum:]._-]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'ce', 2) from "
               "string_function_test_people order by id asc;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1076,7 +1076,7 @@ TEST_F(StringFunctionTest, RegexpSubstr5Or6Args) {
       // Sub-match has no effect if extract ('e') is not specified
       auto result_set =
           sql("select regexp_substr(raw_email, "
-              "'([[:alnum:].-_]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'i', 2) from "
+              "'([[:alnum:]._-]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'i', 2) from "
               "string_function_test_people order by id asc;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1090,7 +1090,7 @@ TEST_F(StringFunctionTest, RegexpSubstr5Or6Args) {
     {
       EXPECT_ANY_THROW(
           sql("select regexp_substr(raw_email, "
-              "'([[:alnum:].-_]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'z', 2) from "
+              "'([[:alnum:]._-]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'z', 2) from "
               "string_function_test_people order by id asc;",
               dt));
     }
@@ -1098,7 +1098,7 @@ TEST_F(StringFunctionTest, RegexpSubstr5Or6Args) {
     {
       EXPECT_ANY_THROW(
           sql("select regexp_substr(raw_email, "
-              "'([[:alnum:].-_]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'e', 2) from "
+              "'([[:alnum:]._-]+)@([[:alnum:]]+.[[:alnum:]]+)', 1, 1, 'e', 2) from "
               "string_function_test_people order by id asc;",
               dt));
     }
@@ -1287,7 +1287,7 @@ TEST_F(StringFunctionTest, ChainedOperators) {
     {
       auto result_set =
           sql("select upper(split_part(split_part(regexp_substr(raw_email, "
-              "'[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', "
+              "'[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', "
               "1, -1), '@', -1), '.', 1)) as upper_domain from "
               "string_function_test_people order by id asc;",
               dt);
@@ -1298,10 +1298,10 @@ TEST_F(StringFunctionTest, ChainedOperators) {
     {
       auto result_set =
           sql("select lower(split_part(split_part(regexp_substr(raw_email, "
-              "'[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', "
+              "'[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', "
               "1, -1), '@', -1), '.', 2)), "
               "upper(split_part(split_part(regexp_substr(raw_email, "
-              "'[[:alnum:].-_]+@[[:alnum:]]+.[[:alnum:]]+', "
+              "'[[:alnum:]._-]+@[[:alnum:]]+.[[:alnum:]]+', "
               "1, -1), '@', -1), '.', 1)) as upper_domain from "
               "string_function_test_people where substring(replace(raw_email, 'com', "
               "'org') from -3 for 3) = 'org' order by id asc;",
@@ -1372,7 +1372,7 @@ TEST_F(StringFunctionTest, GroupBy) {
     {
       auto result_set = sql(
           "select regexp_substr(raw_email, "
-          "'([[:alnum:].-_]+)@([[:alnum:]]+).([[:alnum:]]+)', 1, 1, 'ie', 3) as tld, "
+          "'([[:alnum:]._-]+)@([[:alnum:]]+).([[:alnum:]]+)', 1, 1, 'ie', 3) as tld, "
           "count(*) as n from string_function_test_people group by tld order by tld asc;",
           dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{

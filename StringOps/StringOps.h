@@ -28,11 +28,12 @@
 #include <map>
 #include <memory>
 #include <optional>
-#include <regex>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include <boost/regex.hpp>
 
 namespace StringOps_Namespace {
 
@@ -79,10 +80,10 @@ struct StringOp {
   bool hasVarStringLiteral() const { return has_var_str_literal_; }
 
  protected:
-  static std::regex generateRegex(const std::string& op_name,
-                                  const std::string& regex_pattern,
-                                  const std::string& regex_params,
-                                  const bool supports_sub_matches);
+  static boost::regex generateRegex(const std::string& op_name,
+                                    const std::string& regex_pattern,
+                                    const std::string& regex_params,
+                                    const bool supports_sub_matches);
 
   const SqlStringOpKind op_kind_;
   const bool has_var_str_literal_{false};
@@ -326,14 +327,14 @@ struct RegexpSubstr : public StringOp {
   NullableStrType operator()(const std::string& str) const override;
 
  private:
-  static std::string get_sub_match(const std::smatch& match,
+  static std::string get_sub_match(const boost::smatch& match,
                                    const std::pair<bool, int64_t> sub_match_info);
 
   static std::pair<bool, int64_t> set_sub_match_info(const std::string& regex_pattern,
                                                      const int64_t sub_match_group_idx);
 
   const std::string regex_pattern_str_;
-  const std::regex regex_pattern_;
+  const boost::regex regex_pattern_;
   const int64_t start_pos_;
   const int64_t occurrence_;
   const std::pair<bool, int64_t> sub_match_info_;
@@ -361,11 +362,11 @@ struct RegexpReplace : public StringOp {
  private:
   static std::pair<size_t, size_t> get_nth_regex_match(const std::string& str,
                                                        const size_t start_pos,
-                                                       const std::regex& regex_pattern,
+                                                       const boost::regex& regex_pattern,
                                                        const int64_t occurrence);
 
   const std::string regex_pattern_str_;
-  const std::regex regex_pattern_;
+  const boost::regex regex_pattern_;
   const std::string replacement_;
   const int64_t start_pos_;
   const int64_t occurrence_;

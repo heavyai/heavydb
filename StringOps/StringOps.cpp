@@ -17,10 +17,10 @@
 #include "StringOps.h"
 namespace StringOps_Namespace {
 
-std::regex StringOp::generateRegex(const std::string& op_name,
-                                   const std::string& regex_pattern,
-                                   const std::string& regex_params,
-                                   const bool supports_sub_matches) {
+boost::regex StringOp::generateRegex(const std::string& op_name,
+                                     const std::string& regex_pattern,
+                                     const std::string& regex_params,
+                                     const bool supports_sub_matches) {
   bool is_case_sensitive = false;
   bool is_case_insensitive = false;
 
@@ -62,12 +62,14 @@ std::regex StringOp::generateRegex(const std::string& op_name,
                              "case-insensitivity ('i').");
   }
   if (is_case_insensitive) {
-    return std::regex(regex_pattern,
-                      std::regex_constants::extended | std::regex_constants::optimize |
-                          std::regex_constants::icase);
+    return boost::regex(regex_pattern,
+                        boost::regex_constants::extended |
+                            boost::regex_constants::optimize |
+                            boost::regex_constants::icase);
   } else {
-    return std::regex(regex_pattern,
-                      std::regex_constants::extended | std::regex_constants::optimize);
+    return boost::regex(
+        regex_pattern,
+        boost::regex_constants::extended | boost::regex_constants::optimize);
   }
 }
 
@@ -302,11 +304,11 @@ NullableStrType RegexpReplace::operator()(const std::string& str) const {
   if (occurrence_ == 0L) {
     std::string result;
     std::string::const_iterator replace_start(str.cbegin() + wrapped_start);
-    std::regex_replace(std::back_inserter(result),
-                       replace_start,
-                       str.cend(),
-                       regex_pattern_,
-                       replacement_);
+    boost::regex_replace(std::back_inserter(result),
+                         replace_start,
+                         str.cend(),
+                         regex_pattern_,
+                         replacement_);
     return str.substr(0UL, wrapped_start) + result;
   } else {
     const auto occurrence_match_pos = RegexpReplace::get_nth_regex_match(
@@ -322,11 +324,11 @@ NullableStrType RegexpReplace::operator()(const std::string& str) const {
     std::string::const_iterator replace_start(str.cbegin() + occurrence_match_pos.first);
     std::string::const_iterator replace_end(str.cbegin() + occurrence_match_pos.second);
     std::string replaced_match;
-    std::regex_replace(std::back_inserter(replaced_match),
-                       replace_start,
-                       replace_end,
-                       regex_pattern_,
-                       replacement_);
+    boost::regex_replace(std::back_inserter(replaced_match),
+                         replace_start,
+                         replace_end,
+                         regex_pattern_,
+                         replacement_);
     return str.substr(0UL, occurrence_match_pos.first) + replaced_match +
            str.substr(occurrence_match_pos.second, std::string::npos);
   }
@@ -335,15 +337,15 @@ NullableStrType RegexpReplace::operator()(const std::string& str) const {
 std::pair<size_t, size_t> RegexpReplace::get_nth_regex_match(
     const std::string& str,
     const size_t start_pos,
-    const std::regex& regex_pattern,
+    const boost::regex& regex_pattern,
     const int64_t occurrence) {
   std::vector<std::pair<size_t, size_t>> regex_match_positions;
   std::string::const_iterator search_start(str.cbegin() + start_pos);
-  std::smatch match;
+  boost::smatch match;
   int64_t match_idx = 0;
   size_t string_pos = start_pos;
-  while (std::regex_search(search_start, str.cend(), match, regex_pattern)) {
-    string_pos += match.position(0) + match.length(0);
+  while (boost::regex_search(search_start, str.cend(), match, regex_pattern)) {
+    string_pos += match.position(size_t(0)) + match.length(0);
     regex_match_positions.emplace_back(
         std::make_pair(string_pos - match.length(0), string_pos));
     if (match_idx++ == occurrence) {
@@ -372,8 +374,8 @@ NullableStrType RegexpSubstr::operator()(const std::string& str) const {
   // Apears std::regex_search does not support string_view?
   std::vector<std::string> regex_matches;
   std::string::const_iterator search_start(str.cbegin() + wrapped_start);
-  std::smatch match;
-  while (std::regex_search(search_start, str.cend(), match, regex_pattern_)) {
+  boost::smatch match;
+  while (boost::regex_search(search_start, str.cend(), match, regex_pattern_)) {
     if (match_idx++ == occurrence_) {
       if (sub_match_info_.first) {
         return RegexpSubstr::get_sub_match(match, sub_match_info_);
@@ -394,7 +396,7 @@ NullableStrType RegexpSubstr::operator()(const std::string& str) const {
   return regex_matches[wrapped_match];
 }
 
-std::string RegexpSubstr::get_sub_match(const std::smatch& match,
+std::string RegexpSubstr::get_sub_match(const boost::smatch& match,
                                         const std::pair<bool, int64_t> sub_match_info) {
   const int64_t num_sub_matches = match.size() - 1;
   const int64_t wrapped_sub_match = sub_match_info.second >= 0
