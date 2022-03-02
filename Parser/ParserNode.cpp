@@ -2327,18 +2327,19 @@ Literal* parse_insert_literal(const rapidjson::Value& literal) {
     CHECK(literal.HasMember("precision"));
     auto scale = json_i64(literal["scale"]);
     auto precision = json_i64(literal["precision"]);
-    auto* val = new std::string(json_str(literal["literal"]));
     if (scale == 0) {
-      auto int_val = std::stol(*val);
-      delete val;
+      auto int_val = std::stol(json_str(literal["literal"]));
       return new IntLiteral(int_val);
     } else if (precision > 18) {
-      auto dbl_val = std::stod(*val);
-      delete val;
+      auto dbl_val = std::stod(json_str(literal["literal"]));
       return new DoubleLiteral(dbl_val);
     } else {
+      auto* val = new std::string(json_str(literal["literal"]));
       return new FixedPtLiteral(val);
     }
+  } else if (type == "DOUBLE") {
+    auto dbl_val = std::stod(json_str(literal["literal"]));
+    return new DoubleLiteral(dbl_val);
   } else {
     CHECK(false) << "Unexpected calcite data type: " << type;
   }

@@ -865,6 +865,25 @@ TEST(Insert, IntArrayInsert) {
   }
 }
 
+TEST(Insert, ExponentDouble) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_with_exponent_double;");
+    EXPECT_NO_THROW(
+        run_ddl_statement("CREATE TABLE table_with_exponent_double (d DOUBLE);"));
+    vector<string> literals = {"1e10", "5.1e-15", "-1.9e-99", "12345e-123"};
+    for (auto l : literals) {
+      string insString = "INSERT INTO table_with_exponent_double VALUES (" + l + ");";
+      EXPECT_NO_THROW(run_multiple_agg(insString, dt));
+    }
+    for (auto l : literals) {
+      string selectString =
+          "SELECT COUNT(*) FROM table_with_exponent_double WHERE d = " + l + ";";
+      ASSERT_EQ(1, v<int64_t>(run_simple_agg(selectString, dt)));
+    }
+  }
+}
+
 TEST(Insert, DictBoundary) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
