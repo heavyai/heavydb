@@ -1862,6 +1862,145 @@ TEST_F(StringFunctionTest, SelectLowercaseNoneEncoded_MoreRowsThanWatchdogLimit)
   }
 }
 
+const char* postgres_osm_names = R"(
+    CREATE TABLE postgres_osm_names (
+      name TEXT,
+      name_none_encoded TEXT ENCODING NONE,
+      name_lower TEXT,
+      name_upper TEXT,
+      name_initcap TEXT,
+      name_reverse TEXT,
+      name_repeat_2 TEXT,
+      name_concat_comma TEXT,
+      comma_concat_name TEXT,
+      name_lpad_20 TEXT,
+      name_rpad_20 TEXT,
+      name_trib_abab TEXT,
+      name_ltrim_abab TEXT,
+      name_rtrim_abab TEXT,
+      name_substring_from_3_for_8 TEXT,
+      name_overlay_foobar_from_4_for_3 TEXT,
+      name_replace_il_eel TEXT,
+      name_split_part_space_2 TEXT);
+    )";
+
+// Todo(todd): Add more Postgres tests. Part of the issue is just
+// getting in the data correctly, for example, when we import anything
+// with leading or trailing spaces (i.e. the 'name_substring_from_3_for_8
+// column), our importer automatically drops the spaces, and there seems
+// no easy way in Postgres to force quoting everything.
+class PostgresStringFunctionTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    if (!reuse_test_data || !PostgresStringFunctionTest::test_data_loaded) {
+      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS postgres_osm_names;"));
+      ASSERT_NO_THROW(run_ddl_statement(postgres_osm_names));
+      const std::string import_file{"postgres_osm_names_ascii_1k.csv.gz"};
+      const auto load_str =
+          std::string("COPY " + PostgresStringFunctionTest::table_name_ + " FROM '" +
+                      "../../Tests/Import/datafiles/string_funcs/" + import_file +
+                      "' WITH (header='true');");
+      ASSERT_NO_THROW(run_ddl_statement(load_str));
+      const int64_t row_count = v<int64_t>(run_simple_agg(
+          "SELECT COUNT(*) FROM " + PostgresStringFunctionTest::table_name_ + ";",
+          ExecutorDeviceType::CPU));
+      EXPECT_EQ(row_count, PostgresStringFunctionTest::expected_row_count_);
+      PostgresStringFunctionTest::test_data_loaded = true;
+    }
+  }
+  void TearDown() override {
+    if (!reuse_test_data) {
+      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE postgres_osm_names;"));
+    }
+  }
+
+  static const std::string table_name_;
+  static const std::string orig_encoded_string_col_;
+  static const std::string orig_none_encoded_string_col_;
+  static const int64_t expected_row_count_;
+  static bool test_data_loaded;
+};
+
+const std::string PostgresStringFunctionTest::table_name_ = "postgres_osm_names";
+const std::string PostgresStringFunctionTest::orig_encoded_string_col_ = "name";
+const std::string PostgresStringFunctionTest::orig_none_encoded_string_col_ =
+    "name_none_encoded";
+const int64_t PostgresStringFunctionTest::expected_row_count_ = 1000L;
+
+bool PostgresStringFunctionTest::test_data_loaded = false;
+
+TEST_F(PostgresStringFunctionTest, Count) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_EQ(expected_row_count_,
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM " + PostgresStringFunctionTest::table_name_ + ";",
+                  dt)));
+  }
+}
+
+TEST_F(PostgresStringFunctionTest, Lower) {
+  for (auto string_col : {PostgresStringFunctionTest::orig_encoded_string_col_,
+                          PostgresStringFunctionTest::orig_none_encoded_string_col_}) {
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      EXPECT_EQ(expected_row_count_,
+                v<int64_t>(run_simple_agg(
+                    "SELECT COUNT(*) FROM " + PostgresStringFunctionTest::table_name_ +
+                        " WHERE LOWER(" + string_col + ") = name_lower;",
+                    dt)));
+      EXPECT_EQ(0L,
+                v<int64_t>(run_simple_agg(
+                    "SELECT COUNT(*) FROM " + PostgresStringFunctionTest::table_name_ +
+                        " WHERE LOWER(" + string_col + ") <> name_lower;",
+                    dt)));
+    }
+  }
+}
+
+TEST_F(PostgresStringFunctionTest, Upper) {
+  for (auto string_col : {PostgresStringFunctionTest::orig_encoded_string_col_,
+                          PostgresStringFunctionTest::orig_none_encoded_string_col_}) {
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      EXPECT_EQ(expected_row_count_,
+                v<int64_t>(run_simple_agg(
+                    "SELECT COUNT(*) FROM " + PostgresStringFunctionTest::table_name_ +
+                        " WHERE UPPER(" + string_col + ") = name_upper;",
+                    dt)));
+      EXPECT_EQ(0L,
+                v<int64_t>(run_simple_agg(
+                    "SELECT COUNT(*) FROM " + PostgresStringFunctionTest::table_name_ +
+                        " WHERE UPPER(" + string_col + ") <> name_upper;",
+                    dt)));
+    }
+  }
+}
+
+TEST_F(PostgresStringFunctionTest, InitCap) {
+  for (auto string_col : {PostgresStringFunctionTest::orig_encoded_string_col_,
+                          PostgresStringFunctionTest::orig_none_encoded_string_col_}) {
+    for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+      SKIP_NO_GPU();
+      // Postgres seems to have different rules for INITCAP than the ones we use following
+      // Snowflake, such as capitalizing letters after apostrophes (i.e. Smith'S), so
+      // so exclude these differences via additional SQL filters
+      EXPECT_EQ(
+          0L,
+          v<int64_t>(run_simple_agg(
+              "SELECT (SELECT COUNT(*) FROM " + PostgresStringFunctionTest::table_name_ +
+                  " where not name ilike '%''%' and not name ilike '%’%' and not name "
+                  "ilike '%–%') "
+                  " - (SELECT COUNT(*) FROM " +
+                  PostgresStringFunctionTest::table_name_ + " WHERE INITCAP(" +
+                  string_col +
+                  ") = name_initcap AND not name ilike '%''%' "
+                  " and not name ilike '%’%' and not name ilike '%–%');",
+              dt)));
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
