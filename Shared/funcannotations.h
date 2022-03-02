@@ -53,6 +53,9 @@
 #define ALWAYS_INLINE __attribute__((inline)) __attribute__((__visibility__("protected")))
 #elif defined(_MSC_VER)
 #define ALWAYS_INLINE __inline
+#elif defined(__GNUC__)
+// assume gcc means we are compiling host code, remove inlines
+#define ALWAYS_INLINE
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif
