@@ -30,6 +30,7 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
 
   struct TableOptions {
     TableOptions(){};
+    TableOptions(size_t fragment_size_) : fragment_size(fragment_size_){};
 
     size_t fragment_size = 32'000'000;
   };

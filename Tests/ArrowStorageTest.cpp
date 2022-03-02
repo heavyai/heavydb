@@ -1439,6 +1439,30 @@ TEST_F(ArrowStorageTest, AppendCsvData_BoolWithNulls_SingleChunk) {
             std::vector<int8_t>({1, 0, 1, 1, 0, -128, -128, -128}));
 }
 
+TEST_F(ArrowStorageTest, AppendJsonData_BoolArrays) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  SQLTypeInfo bool_3(kARRAY, kENCODING_NONE, 0, kBOOLEAN);
+  bool_3.set_size(3);
+  SQLTypeInfo bool_any(kARRAY, kENCODING_NONE, 0, kBOOLEAN);
+  TableInfoPtr tinfo = storage.createTable("table1", {{"b1", bool_3}, {"b2", bool_any}});
+  storage.appendJsonData("{\"b1\": [true, true, true], \"b2\": [true, false]}",
+                         tinfo->table_id);
+  storage.appendJsonData("{\"b1\": [false, false, false], \"b2\": [false, true]}",
+                         tinfo->table_id);
+  storage.appendJsonData("{\"b1\": [null, false, true], \"b2\": [null]}",
+                         tinfo->table_id);
+  checkData(storage,
+            tinfo->table_id,
+            3,
+            32'000'000,
+            std::vector<std::vector<int8_t>>({std::vector<int8_t>({1, 1, 1}),
+                                              std::vector<int8_t>({0, 0, 0}),
+                                              std::vector<int8_t>({-128, 0, 1})}),
+            std::vector<std::vector<int8_t>>({std::vector<int8_t>({1, 0}),
+                                              std::vector<int8_t>({0, 1}),
+                                              std::vector<int8_t>({-128})}));
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

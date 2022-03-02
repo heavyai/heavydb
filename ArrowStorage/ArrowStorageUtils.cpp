@@ -436,12 +436,19 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenArrayImpl(
       last_chunk->IsNull(last_chunk->length() - 1) ? -elems_count * sizeof(T)
                                                    : elems_count * sizeof(T));
 
-  using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
-  using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+  std::shared_ptr<arrow::Array> elem_array;
+  auto list_type = arr->type();
+  if constexpr (std::is_same_v<T, bool>) {
+    elem_array = std::make_shared<arrow::Int8Array>(elems_count, std::move(elem_buf));
+    list_type = arrow::list(arrow::int8());
+  } else {
+    using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
+    using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+    elem_array = std::make_shared<ElemsArrayType>(elems_count, std::move(elem_buf));
+  }
 
-  auto elem_array = std::make_shared<ElemsArrayType>(elems_count, std::move(elem_buf));
   auto list_array = std::make_shared<arrow::ListArray>(
-      arr->type(), arr->length(), std::move(offset_buf), elem_array);
+      list_type, arr->length(), std::move(offset_buf), elem_array);
   return std::make_shared<arrow::ChunkedArray>(list_array);
 }
 
@@ -530,10 +537,15 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesFixedSizeArrayImpl(
                       }
                     });
 
-  using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
-  using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+  std::shared_ptr<arrow::Array> elem_array;
+  if constexpr (std::is_same_v<T, bool>) {
+    elem_array = std::make_shared<arrow::Int8Array>(total_length, std::move(elem_buf));
+  } else {
+    using ElemsArrowType = typename arrow::CTypeTraits<T>::ArrowType;
+    using ElemsArrayType = typename arrow::TypeTraits<ElemsArrowType>::ArrayType;
+    elem_array = std::make_shared<ElemsArrayType>(total_length, std::move(elem_buf));
+  }
 
-  auto elem_array = std::make_shared<ElemsArrayType>(total_length, std::move(elem_buf));
   return std::make_shared<arrow::ChunkedArray>(elem_array);
 }
 
