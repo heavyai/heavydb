@@ -52,7 +52,6 @@
 #include "../SqliteConnector/SqliteConnector.h"
 #include "LeafHostInfo.h"
 
-#include "../Calcite/Calcite.h"
 #include "Shared/Restriction.h"
 #include "Shared/mapd_shared_mutex.h"
 

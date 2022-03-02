@@ -22,6 +22,7 @@
 #include <thread>
 #include <tuple>
 
+#include "../Calcite/Calcite.h"
 #include "../Catalog/Catalog.h"
 #include "../Catalog/DBObject.h"
 #include "../DataMgr/DataMgr.h"

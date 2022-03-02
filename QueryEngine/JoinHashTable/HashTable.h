@@ -16,6 +16,12 @@
 
 #pragma once
 
+#include <set>
+#include <tuple>
+#include <vector>
+
+#include "QueryEngine/CompilationOptions.h"
+
 enum class HashType : int { OneToOne, OneToMany, ManyToMany };
 
 struct DecodedJoinHashBufferEntry {

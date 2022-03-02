@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "CgenState.h"
-#include "OutputBufferInitialization.h"
+#include "QueryEngine/CgenState.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/OutputBufferInitialization.h"
 
 #include <llvm/IR/InstIterator.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>

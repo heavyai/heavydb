@@ -16,6 +16,9 @@
 
 #include "QueryEngine/JoinHashTable/HashTable.h"
 
+#include "Logger/Logger.h"
+#include "QueryEngine/RuntimeFunctions.h"
+
 namespace {
 
 namespace perfect_hash {

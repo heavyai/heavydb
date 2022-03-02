@@ -23,7 +23,6 @@
  */
 
 #include "Execute.h"
-#include "ParserNode.h"
 #include "QueryEngine/TargetValue.h"
 #include "ResultSet.h"
 #include "RuntimeFunctions.h"

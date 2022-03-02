@@ -45,6 +45,7 @@
 #include "QueryEngine/DynamicWatchdog.h"
 #include "QueryEngine/EquiJoinCondition.h"
 #include "QueryEngine/ErrorHandling.h"
+#include "QueryEngine/ExecutionKernel.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/GpuMemUtils.h"
@@ -1573,10 +1574,10 @@ ResultSetPtr Executor::finishStreamExecution(
     }
   }
   auto table = resultsUnion(*ctx->shared_context,
-                      ctx->ra_exe_unit,
-                      true, // always merge for now
-                      ctx->eo.preserve_order,
-                      order_map);
+                            ctx->ra_exe_unit,
+                            true,  // always merge for now
+                            ctx->eo.preserve_order,
+                            order_map);
   CHECK_EQ(table.getFragCount(), 1);
   return table[0];
 }

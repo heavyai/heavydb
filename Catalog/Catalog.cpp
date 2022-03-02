@@ -56,6 +56,7 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
 
+#include "Calcite/Calcite.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"

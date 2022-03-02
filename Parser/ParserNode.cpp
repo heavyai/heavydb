@@ -43,6 +43,7 @@
 #include <type_traits>
 #include <typeinfo>
 
+#include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/DataframeTableDescriptor.h"
 #include "Catalog/SharedDictionaryValidator.h"
