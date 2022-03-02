@@ -4877,3 +4877,11 @@ void RelAlgExecutor::prepareForeignTables() {
   const auto& ra = query_dag_->getRootNode();
   prepare_foreign_table_for_execution(ra, cat_);
 }
+
+std::unordered_set<int> RelAlgExecutor::getPhysicalTableIds() const {
+  return get_physical_table_inputs(&getRootRelAlgNode());
+}
+
+void RelAlgExecutor::prepareForSystemTableExecution(const CompilationOptions& co) const {
+  prepare_for_system_table_execution(getRootRelAlgNode(), cat_, co);
+}

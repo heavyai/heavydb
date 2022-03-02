@@ -39,9 +39,7 @@ void populate_import_buffers_for_storage_details(
     const std::vector<StorageDetails>& storage_details,
     std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
   for (const auto& storage_detail : storage_details) {
-    if (import_buffers.find("node") != import_buffers.end()) {
-      import_buffers["node"]->addString(storage_detail.node);
-    }
+    set_node_name(import_buffers);
     if (import_buffers.find("database_id") != import_buffers.end()) {
       import_buffers["database_id"]->addInt(storage_detail.database_id);
     }

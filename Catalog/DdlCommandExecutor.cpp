@@ -543,7 +543,8 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       ddl_command_ == "DROP_SERVER" || ddl_command_ == "CREATE_FOREIGN_TABLE" ||
       ddl_command_ == "DROP_FOREIGN_TABLE" || ddl_command_ == "CREATE_USER_MAPPING" ||
       ddl_command_ == "DROP_USER_MAPPING" || ddl_command_ == "ALTER_FOREIGN_TABLE" ||
-      ddl_command_ == "ALTER_SERVER" || ddl_command_ == "REFRESH_FOREIGN_TABLES") {
+      ddl_command_ == "ALTER_SERVER" || ddl_command_ == "REFRESH_FOREIGN_TABLES" ||
+      ddl_command_ == "ALTER_SYSTEM_CLEAR") {
     // group user/role/db commands
     execution_details.execution_location = ExecutionLocation::ALL_NODES;
     execution_details.aggregation_type = AggregationType::NONE;
@@ -560,7 +561,8 @@ DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails()
       execution_details.aggregation_type = AggregationType::NONE;
     }
 
-  } else if (ddl_command_ == "SHOW_TABLE_DETAILS") {
+  } else if (ddl_command_ == "SHOW_TABLE_DETAILS" ||
+             ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
     execution_details.execution_location = ExecutionLocation::LEAVES_ONLY;
     execution_details.aggregation_type = AggregationType::UNION;
   } else {

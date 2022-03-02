@@ -192,6 +192,10 @@ class RelAlgExecutor : private StorageIOFacility {
 
   void prepareForeignTable();
 
+  std::unordered_set<int> getPhysicalTableIds() const;
+
+  void prepareForSystemTableExecution(const CompilationOptions& co) const;
+
  private:
   void initializeParallelismHints();
 

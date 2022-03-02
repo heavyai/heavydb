@@ -28,6 +28,9 @@ constexpr const char* kDeletedValueIndicator{"<DELETED>"};
 std::string get_db_name(int32_t db_id);
 std::string get_table_name(int32_t db_id, int32_t table_id);
 
+void set_node_name(
+    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers);
+
 class InternalSystemDataWrapper : public ForeignDataWrapper {
  public:
   InternalSystemDataWrapper();

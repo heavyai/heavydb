@@ -2385,10 +2385,13 @@ void Catalog::createTable(
           const bool is_foreign_col =
               setColumnSharedDictionary(cd, cds, dds, td, shared_dict_defs);
           if (!is_foreign_col) {
-            // Do not persist string dictionaries for system tables, since system table
-            // content can be highly dynamic and string dictionaries are not currently
-            // vacuumed.
-            auto use_temp_dictionary = td.is_system_table;
+            // Ideally we would like to not persist string dictionaries for system tables,
+            // since system table content can be highly dynamic and string dictionaries
+            // are not currently vacuumed.  However, in distributed this causes issues
+            // when the cluster is out of sync (when the agg resets but leaves persist) so
+            // for the sake of testing we need to leave this as normal dictionaries until
+            // we solve the distributed issue.
+            auto use_temp_dictionary = false;  // td.is_system_table;
             setColumnDictionary(cd, dds, td, isLogicalTable, use_temp_dictionary);
           }
         }
@@ -5712,8 +5715,18 @@ void Catalog::recreateSystemTableIfUpdated(foreign_storage::ForeignTable& foreig
         auto it_1 = stored_columns.begin();
         auto it_2 = columns.begin();
         for (; it_1 != stored_columns.end() && it_2 != columns.end(); it_1++, it_2++) {
+          // Need a custom comparison here since we don't care if the dictionary comp
+          // param has changed (comp can change because the column was assigned a
+          // dictionary, whereas before it was just a compression number).
           if ((*it_1)->columnName != it_2->columnName ||
-              (*it_1)->columnType != it_2->columnType) {
+              (*it_1)->columnType.get_type() != it_2->columnType.get_type() ||
+              (*it_1)->columnType.get_subtype() != it_2->columnType.get_subtype() ||
+              (*it_1)->columnType.get_dimension() != it_2->columnType.get_dimension() ||
+              (*it_1)->columnType.get_scale() != it_2->columnType.get_scale() ||
+              (*it_1)->columnType.get_notnull() != it_2->columnType.get_notnull() ||
+              (*it_1)->columnType.get_compression() !=
+                  it_2->columnType.get_compression() ||
+              (*it_1)->columnType.get_size() != it_2->columnType.get_size()) {
             should_recreate = true;
             break;
           }

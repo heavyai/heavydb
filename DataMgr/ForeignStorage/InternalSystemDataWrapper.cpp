@@ -23,6 +23,7 @@
 #include "FsiChunkUtils.h"
 #include "ImportExport/Importer.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/distributed.h"
 #include "TextFileBufferParser.h"
 #include "UserMapping.h"
 
@@ -44,6 +45,18 @@ std::string get_table_name(int32_t db_id, int32_t table_id) {
     // It is possible for the table to be concurrently deleted while querying the system
     // table.
     return kDeletedValueIndicator;
+  }
+}
+
+void set_node_name(
+    std::map<std::string, import_export::TypedImportBuffer*>& import_buffers) {
+  if (import_buffers.find("node") != import_buffers.end()) {
+    if (dist::is_leaf_node()) {
+      std::string leaf_string{"Leaf " + to_string(g_distributed_leaf_idx)};
+      import_buffers["node"]->addString(leaf_string);
+    } else {
+      import_buffers["node"]->addString("Server");
+    }
   }
 }
 

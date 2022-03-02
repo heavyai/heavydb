@@ -1203,18 +1203,10 @@ class ShowDatabasesTest : public DBHandlerTestFixture {
 TEST_F(ShowDatabasesTest, DefaultDatabase) {
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
-  // clang-format off
-  if (isDistributedMode()) {
-    assertExpectedResult({"Database", "Owner"},
-                         {{shared::kDefaultDbName, shared::kRootUsername}},
-                         result);
-  } else {
-    assertExpectedResult({"Database", "Owner"},
-                         {{shared::kDefaultDbName, shared::kRootUsername},
-                          {"information_schema", shared::kRootUsername}},
-                     result);
-  }
-  // clang-format on
+  assertExpectedResult({"Database", "Owner"},
+                       {{shared::kDefaultDbName, shared::kRootUsername},
+                        {"information_schema", shared::kRootUsername}},
+                       result);
 }
 
 TEST_F(ShowDatabasesTest, UserCreatedDatabase) {
@@ -1266,24 +1258,12 @@ TEST_F(ShowDatabasesTest, AdminLoginAndOtherUserDatabases) {
 
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
-  // clang-format off
-  if (isDistributedMode()) {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{shared::kDefaultDbName, shared::kRootUsername},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  } else {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{shared::kDefaultDbName, shared::kRootUsername},
-         {"information_schema", shared::kRootUsername},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  }
-  // clang-format on
+  assertExpectedResult({"Database", "Owner"},
+                       {{shared::kDefaultDbName, shared::kRootUsername},
+                        {"information_schema", shared::kRootUsername},
+                        {"test_db_1", "test_user_1"},
+                        {"test_db_2", "test_user_2"}},
+                       result);
 }
 
 TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
@@ -1293,24 +1273,12 @@ TEST_F(ShowDatabasesTest, SuperUserLoginAndOtherUserDatabases) {
 
   TQueryResult result;
   sql(result, "SHOW DATABASES;");
-  // clang-format off
-  if (isDistributedMode()) {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{shared::kDefaultDbName, shared::kRootUsername},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  } else {
-    assertExpectedResult(
-        {"Database", "Owner"},
-        {{shared::kDefaultDbName, shared::kRootUsername},
-         {"information_schema", shared::kRootUsername},
-         {"test_db_1", "test_user_1"},
-         {"test_db_2", "test_user_2"}},
-        result);
-  }
-  // clang-format on
+  assertExpectedResult({"Database", "Owner"},
+                       {{shared::kDefaultDbName, shared::kRootUsername},
+                        {"information_schema", shared::kRootUsername},
+                        {"test_db_1", "test_user_1"},
+                        {"test_db_2", "test_user_2"}},
+                       result);
 }
 
 class ShowCreateTableTest : public DBHandlerTestFixture {
@@ -1636,9 +1604,6 @@ TEST_F(ShowCreateTableTest, DefaultColumnValues) {
 class SystemTablesShowCreateTableTest : public ShowCreateTableTest {
  protected:
   void SetUp() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test is not supported in distributed mode.";
-    }
     login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
   }
 };
@@ -1774,9 +1739,6 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
   }
 
   void SetUp() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test not supported in distributed mode.";
-    }
     DBHandlerTestFixture::SetUp();
     login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db");
     sql("DROP FOREIGN TABLE IF EXISTS " + foreign_table1 + ";");
@@ -1826,10 +1788,20 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
 TEST_F(ShowDiskCacheUsageTest, SingleTable) {
   sqlCreateBasicForeignTable(foreign_table1);
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  if (isDistributedMode()) {
+    sqlAndCompareResult(
+        "SHOW DISK CACHE USAGE;",
+        {{i(0), foreign_table1, empty_mgr_size}, {i(1), foreign_table1, empty_mgr_size}});
+  } else {
+    sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  }
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT * FROM " + foreign_table1 + ";");
@@ -1838,6 +1810,10 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleTables) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
   sqlCreateBasicForeignTable(foreign_table2);
   sqlCreateBasicForeignTable(foreign_table3);
@@ -1862,6 +1838,10 @@ TEST_F(ShowDiskCacheUsageTest, NoTablesFiltered) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleTablesFiltered) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
   sqlCreateBasicForeignTable(foreign_table2);
   sqlCreateBasicForeignTable(foreign_table3);
@@ -1890,10 +1870,20 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableEvicted) {
   sql("SELECT * FROM " + foreign_table1 + ";");
   sql("REFRESH FOREIGN TABLES " + foreign_table1 + " WITH (evict=true);");
 
-  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  if (isDistributedMode()) {
+    sqlAndCompareResult(
+        "SHOW DISK CACHE USAGE;",
+        {{i(0), foreign_table1, empty_mgr_size}, {i(1), foreign_table1, empty_mgr_size}});
+  } else {
+    sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
+  }
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT * FROM " + foreign_table1 + ";");
@@ -1904,6 +1894,10 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT COUNT(*) FROM " + foreign_table1 + ";");
@@ -1914,6 +1908,10 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sqlCreateBasicForeignTable(foreign_table1);
   sql("CREATE TABLE " + table1 + " (s TEXT);");
 
@@ -1926,6 +1924,10 @@ TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+  }
+
   sql("CREATE FOREIGN TABLE " + foreign_table1 +
       " (t TEXT, i INTEGER[]) SERVER default_local_parquet WITH "
       "(file_path = '" +
@@ -1939,6 +1941,13 @@ TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
 
 class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
  public:
+  void SetUp() override {
+    if (isDistributedMode()) {
+      GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
+    }
+    ShowDiskCacheUsageTest::SetUp();
+  }
+
   static void SetUpTestSuite() {
     ShowDiskCacheUsageTest::SetUpTestSuite();
     resetPersistentStorageMgr(File_Namespace::DiskCacheLevel::all);
@@ -2517,10 +2526,6 @@ TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
 }
 
 TEST_F(ShowTableDetailsTest, FsiTableSpecified) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Foreign tables are currently not supported in distributed mode";
-  }
-
   sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER default_local_delimited "
       "WITH "
       "(file_path = '" +
@@ -2634,37 +2639,28 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
 class SystemTablesTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {
-    if (!isDistributedMode()) {
-      DBHandlerTestFixture::SetUpTestSuite();
-      switchToAdmin();
-      createUser("test_user_1");
-      createUser("test_user_2");
-    }
+    DBHandlerTestFixture::SetUpTestSuite();
+    switchToAdmin();
+    createUser("test_user_1");
+    createUser("test_user_2");
   }
 
   static void TearDownTestSuite() {
-    if (!isDistributedMode()) {
-      switchToAdmin();
-      dropUser("test_user_1");
-      dropUser("test_user_2");
-      DBHandlerTestFixture::TearDownTestSuite();
-    }
+    switchToAdmin();
+    dropUser("test_user_1");
+    dropUser("test_user_2");
+    DBHandlerTestFixture::TearDownTestSuite();
   }
 
   void SetUp() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test is not supported in distributed mode.";
-    }
     resetDbObjectsAndPermissions();
     loginInformationSchema();
     g_enable_system_tables = true;
   }
 
   void TearDown() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Test is not supported in distributed mode.";
-    }
     switchToAdmin();
+    sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP TABLE IF EXISTS test_table_1;");
     sql("DROP TABLE IF EXISTS test_table_2;");
     dropUser("test_user_3");
@@ -2745,7 +2741,7 @@ class SystemTablesTest : public DBHandlerTestFixture {
     sql("DROP DATABASE IF EXISTS test_db_2;");
   }
 
-  int64_t getDbId(const std::string& db_name) {
+  int64_t getDbId(const std::string& db_name) const {
     auto& system_catalog = Catalog_Namespace::SysCatalog::instance();
     Catalog_Namespace::DBMetadata db_metadata;
     CHECK(system_catalog.getMetadataForDB(db_name, db_metadata));
@@ -2975,6 +2971,10 @@ TEST_F(SystemTablesTest, UsersSystemTable) {
 }
 
 TEST_F(SystemTablesTest, TablesSystemTable) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Test does not play well with tables left behind by ExecuteTest.";
+  }
+
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
@@ -3089,6 +3089,30 @@ TEST_F(SystemTablesTest, DashboardsSystemTable) {
                        {i(3), "test_db_1", i(1), "test_dashboard_3", getUserId(shared::kRootUsername),
                         shared::kRootUsername, last_updated_3, array({"test_table"})}});
   // clang-format on
+}
+
+TEST_F(SystemTablesTest, DashboardsSystemTableWithOtherTables) {
+  switchToAdmin();
+  sql("CREATE DATABASE test_db_1;");
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  createDashboard("test_dashboard_1");
+  auto last_updated_1 = getLastUpdatedTime("test_dashboard_1");
+
+  loginInformationSchema();
+  // Skip the shared::kDefaultDbName database, since it can contain dashboards
+  // created by other test suites.
+  if (isDistributedMode()) {
+    queryAndAssertException(
+        "SELECT count(*) FROM dashboards, users WHERE database_id <> " +
+            std::to_string(getDbId(shared::kDefaultDbName)) + ";",
+        "Queries involving the 'dashboards' system table with other tables is not yet "
+        "supported in distributed mode.");
+  } else {
+    sqlAndCompareResult("SELECT count(*) FROM dashboards, users WHERE database_id <> " +
+                            std::to_string(getDbId(shared::kDefaultDbName)) + ";",
+                        {{i(3)}});
+  }
 }
 
 TEST_F(SystemTablesTest, DatabasesSystemTable) {
@@ -3209,25 +3233,49 @@ TEST_F(SystemTablesTest, RolesSystemTable) {
 }
 
 TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Pinned buffers make these results unpredictable in distributed";
+  }
+
   initTestTableAndClearMemory();
 
   loginInformationSchema();
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+  if (isDistributedMode()) {
+    sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+                      {{"Leaf 0", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                        i(0), i(0), i(0)},
+                       {"Leaf 1", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                        i(0), i(0), i(0)}});
+  } else {
+    sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
                       {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
                         i(0), i(0), i(0)}});
+  }
   // clang-format on
-
   switchToAdmin();
   sql("ALTER SYSTEM CLEAR CPU MEMORY;");
   sql("SELECT * FROM test_table_1;");
 
   loginInformationSchema();
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
-                      {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
-                        getAllocatedCpuPageCount(), i(1),
-                        getAllocatedCpuPageCount() - 1}});
+  if (isDistributedMode()) {
+    // Since we can't actually check what the query allocated, we have to assume one slab.
+    int64_t slab_pages = getCpuBufferMgr()->getMaxSlabSize() / getCpuBufferMgr()->getPageSize();
+    // Since we don't actually know which node had query data, we can just omit the "node"
+    // column and sort the results by free_page_count.
+    sqlAndCompareResult(
+        "SELECT device_id, device_type, max_page_count, page_size, allocated_page_count, "
+        "used_page_count, free_page_count FROM memory_summary WHERE device_type = 'CPU' "
+        "ORDER BY free_page_count",
+        {{i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(), i(0), i(0), i(0)},
+         {i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(), slab_pages , i(1), slab_pages - 1}});
+  } else {
+    sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
+                        {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
+                          getAllocatedCpuPageCount(), i(1), getAllocatedCpuPageCount() - 1}});
+
+  }
   // clang-format on
 }
 
@@ -3235,6 +3283,13 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
+  if (isDistributedMode()) {
+    // We currenntly have no way of predicting or measuring which gpu on which node will
+    // be used for the query in distributed mode; therefore we can't accurately predict
+    // what the results should be.  Despite this, the testcase is valid.
+    GTEST_SKIP() << "Test results cannot be accurately predicted in distributed mode";
+  }
+
   initTestTableAndClearMemory();
 
   sql("ALTER SYSTEM CLEAR GPU MEMORY;");
@@ -3253,6 +3308,10 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
 }
 
 TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "Pinned buffers make these results unpredictable in distributed";
+  }
+
   initTestTableAndClearMemory();
 
   auto db_id = getDbId(shared::kDefaultDbName);
@@ -3266,20 +3325,39 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   sql("SELECT * FROM test_table_1;");
 
   loginInformationSchema();
+
   // clang-format off
-  sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU';",
-                      {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1", i(1), "i",
-                        array({db_id, table_id, i(1), i(0)}), i(0), "CPU", "USED", i(1),
-                        getCpuPageSize(), i(0), i(0), i(1)},
-                       {"Server", Null, Null, Null, Null, Null, Null, Null, i(0), "CPU",
-                        "FREE", getAllocatedCpuPageCount() - 1, getCpuPageSize(), i(0),
-                        i(1), i(0)}});
+  if (isDistributedMode()) {
+    int64_t slab_pages = getCpuBufferMgr()->getMaxSlabSize() / getCpuBufferMgr()->getPageSize();
+    sqlAndCompareResult(
+        "SELECT database_id, table_id, column_id, chunk_key, device_id, device_type, "
+        "memory_status, page_count, page_size, slab_id, start_page "
+        "FROM memory_details WHERE device_type = 'CPU' ORDER BY page_count;",
+        {{db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
+          i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0)},
+         {Null, Null, Null, Null,
+          i(0), "CPU", "FREE", slab_pages - 1, getCpuPageSize(), i(0), i(1)}});
+  } else {
+    sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU' ORDER BY page_count;",
+                        {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1",
+                          i(1), "i", array({db_id, table_id, i(1), i(0)}),
+                          i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0), i(1)},
+                          {"Server", Null, Null, Null, Null, Null, Null, Null,
+                          i(0), "CPU", "FREE", getAllocatedCpuPageCount() - 1,
+                          getCpuPageSize(), i(0), i(1), i(0)}});
+  }
   // clang-format on
 }
 
 TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
+  }
+  if (isDistributedMode()) {
+    // We currenntly have no way of predicting or measuring which gpu on which node will
+    // be used for the query in distributed mode; therefore we can't accurately predict
+    // what the results should be.  Despite this, the testcase is valid.
+    GTEST_SKIP() << "Test results cannot be accurately predicted in distributed mode";
   }
   initTestTableAndClearMemory();
 
@@ -3304,6 +3382,11 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
 }
 
 TEST_F(SystemTablesTest, SystemTablesJoin) {
+  if (isDistributedMode()) {
+    // Right now distributed joins must be performed on replicated tables, or tables that
+    // are sharded on the join key.  System tables fit into neither case at this time.
+    GTEST_SKIP() << "Join not supported on distributed system tables.";
+  }
   // clang-format off
   sqlAndCompareResult("SELECT databases.database_name, permissions.* "
                       "FROM permissions, databases "
@@ -3337,11 +3420,45 @@ struct StorageDetailsResult {
   int64_t total_metadata_page_count{PAGES_PER_METADATA_FILE};
   int64_t total_free_metadata_page_count{PAGES_PER_METADATA_FILE};
   int64_t total_dictionary_data_file_size{0};
+
+  std::vector<NullableTargetValue> asTargetValuesSkipNode() const {
+    return std::vector<NullableTargetValue>{database_id,
+                                            database_name,
+                                            table_id,
+                                            table_name,
+                                            epoch,
+                                            epoch_floor,
+                                            fragment_count,
+                                            shard_id,
+                                            data_file_count,
+                                            metadata_file_count,
+                                            total_data_file_size,
+                                            total_data_page_count,
+                                            total_free_data_page_count,
+                                            total_metadata_file_size,
+                                            total_metadata_page_count,
+                                            total_free_metadata_page_count,
+                                            total_dictionary_data_file_size};
+  }
 };
 
 class StorageDetailsSystemTableTest : public SystemTablesTest,
                                       public testing::WithParamInterface<int32_t> {
  protected:
+  // Can't use select * in distribued because we need to skip the node column (don't know
+  // which node will contain data and which will be empty).
+  std::string getDistributedSelect(
+      const std::string& order_by_col = "total_data_file_size") const {
+    return "SELECT database_id, database_name, table_id, table_name, epoch, epoch_floor, "
+           "fragment_count, shard_id, "
+           "data_file_count, metadata_file_count, total_data_file_size, "
+           "total_data_page_count, total_free_data_page_count, total_metadata_file_size, "
+           "total_metadata_page_count, total_free_metadata_page_count, "
+           "total_dictionary_data_file_size FROM storage_details WHERE database_id <> " +
+           std::to_string(getDbId(shared::kDefaultDbName)) + " ORDER BY table_id, " +
+           order_by_col + ";";
+  }
+
   void SetUp() override {
     SystemTablesTest::SetUp();
     switchToAdmin();
@@ -3383,7 +3500,7 @@ class StorageDetailsSystemTableTest : public SystemTablesTest,
     // created tables and tables created by other test suites.
     std::string query{"SELECT * FROM storage_details WHERE database_id <> " +
                       std::to_string(getDbId(shared::kDefaultDbName)) +
-                      " ORDER BY table_id;"};
+                      " ORDER BY table_id, node;"};
     SystemTablesTest::sqlAndCompareResult(query, target_values);
   }
 
@@ -3446,10 +3563,24 @@ TEST_F(StorageDetailsSystemTableTest, ShardedTable) {
   shard_2_result.total_data_page_count = 0;
   shard_2_result.total_free_data_page_count = 0;
   shard_2_result.total_dictionary_data_file_size = 0;
-  sqlAndCompareResult({shard_1_result, shard_2_result});
+
+  if (isDistributedMode()) {
+    ExpectedResult expected_result;
+    // Distributed shards don't know they are shards.
+    shard_2_result.shard_id = 0;
+    expected_result.emplace_back(shard_2_result.asTargetValuesSkipNode());
+    expected_result.emplace_back(shard_1_result.asTargetValuesSkipNode());
+    loginInformationSchema();
+    SystemTablesTest::sqlAndCompareResult(getDistributedSelect(), expected_result);
+  } else {
+    sqlAndCompareResult({shard_1_result, shard_2_result});
+  }
 }
 
 TEST_F(StorageDetailsSystemTableTest, MultipleFragments) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "The distribution of fragments between leaves is non-deterministic";
+  }
   sql("CREATE TABLE test_table (c1 INTEGER) WITH (fragment_size = 1);");
   const size_t row_count{5};
   for (size_t i = 0; i < row_count; i++) {
@@ -3457,9 +3588,9 @@ TEST_F(StorageDetailsSystemTableTest, MultipleFragments) {
   }
 
   std::string db_name{"test_db"};
-  auto db_id = getDbId(db_name);
+  auto db_id = getDbId("test_db");
   std::string table_name{"test_table"};
-  auto table_id = getTableId(table_name);
+  auto table_id = getTableId("test_table");
   StorageDetailsResult result;
   result.database_id = db_id;
   result.database_name = db_name;
@@ -3471,6 +3602,7 @@ TEST_F(StorageDetailsSystemTableTest, MultipleFragments) {
   result.epoch = row_count;
   result.epoch_floor = row_count - DEFAULT_MAX_ROLLBACK_EPOCHS;
   result.fragment_count = row_count;
+
   sqlAndCompareResult({result});
 }
 
@@ -3487,6 +3619,9 @@ TEST_F(StorageDetailsSystemTableTest, NonLocalTables) {
 }
 
 TEST_F(StorageDetailsSystemTableTest, SharedDictionary) {
+  if (isDistributedMode()) {
+    GTEST_SKIP() << "The distribution of fragments between leaves is non-deterministic";
+  }
   std::string table_1{"test_table_1"}, table_2{"test_table_2"};
   sql("CREATE TABLE " + table_1 + " (i INTEGER, t TEXT);");
   sql("INSERT INTO " + table_1 + " VALUES (1, 'abc');");
@@ -3555,7 +3690,23 @@ TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
     result.total_free_metadata_page_count -= 2;
     result.total_free_data_page_count -= 2;
   }
-  sqlAndCompareResult({result});
+  if (isDistributedMode()) {
+    // If we are in distributed mode, then only one leaf will have data and the other will
+    // be empty.  The order does not matter as the node column is not included in the
+    // query.
+    result.node = "";
+    // clang-format off
+    StorageDetailsResult leaf1_storage{
+        "", db_id, db_name, table_id, table_name, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    // clang-format on
+    ExpectedResult expected_result;
+    expected_result.emplace_back(leaf1_storage.asTargetValuesSkipNode());
+    expected_result.emplace_back(result.asTargetValuesSkipNode());
+    loginInformationSchema();
+    SystemTablesTest::sqlAndCompareResult(getDistributedSelect(), expected_result);
+  } else {
+    sqlAndCompareResult({result});
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(

@@ -106,6 +106,13 @@ using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::Sessi
 using PermissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
 using query_state::QueryStateProxy;
 
+namespace dbhandler {
+bool is_info_schema_db(const std::string& db_name);
+
+void check_not_info_schema_db(const std::string& db_name,
+                              bool throw_mapd_exception = false);
+}  // namespace dbhandler
+
 class TrackingProcessor : public OmniSciProcessor {
  public:
   TrackingProcessor(std::shared_ptr<OmniSciIf> handler, const bool check_origin)

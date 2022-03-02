@@ -37,6 +37,7 @@ constexpr void* Null = nullptr;
 constexpr int64_t Null_i = NULL_INT;
 
 using NullableTargetValue = boost::variant<TargetValue, void*>;
+using ExpectedResult = std::vector<std::vector<NullableTargetValue>>;
 namespace po = boost::program_options;
 
 extern size_t g_leaf_count;

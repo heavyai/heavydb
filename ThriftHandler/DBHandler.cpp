@@ -4557,14 +4557,13 @@ TDashboard DBHandler::get_dashboard_impl(
   return dashboard;
 }
 
-namespace {
+namespace dbhandler {
 bool is_info_schema_db(const std::string& db_name) {
   return (db_name == shared::kInfoSchemaDbName &&
           SysCatalog::instance().hasExecutedMigration(shared::kInfoSchemaMigrationName));
 }
 
-void check_not_info_schema_db(const std::string& db_name,
-                              bool throw_mapd_exception = false) {
+void check_not_info_schema_db(const std::string& db_name, bool throw_mapd_exception) {
   if (is_info_schema_db(db_name)) {
     std::string error_message{"Write requests/queries are not allowed in the " +
                               shared::kInfoSchemaDbName + " database."};
@@ -4575,7 +4574,7 @@ void check_not_info_schema_db(const std::string& db_name,
     }
   }
 }
-}  // namespace
+}  // namespace dbhandler
 
 int32_t DBHandler::create_dashboard(const TSessionId& session,
                                     const std::string& dashboard_name,
@@ -4588,7 +4587,7 @@ int32_t DBHandler::create_dashboard(const TSessionId& session,
   check_read_only("create_dashboard");
   auto& cat = session_ptr->getCatalog();
   if (!g_allow_system_dashboard_update) {
-    check_not_info_schema_db(cat.name(), true);
+    dbhandler::check_not_info_schema_db(cat.name(), true);
   }
 
   if (!session_ptr->checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType,
@@ -4635,7 +4634,7 @@ void DBHandler::replace_dashboard(const TSessionId& session,
   check_read_only("replace_dashboard");
   auto& cat = session_ptr->getCatalog();
   if (!g_allow_system_dashboard_update) {
-    check_not_info_schema_db(cat.name(), true);
+    dbhandler::check_not_info_schema_db(cat.name(), true);
   }
 
   if (!is_allowed_on_dashboard(
@@ -4676,7 +4675,7 @@ void DBHandler::delete_dashboards(const TSessionId& session,
   check_read_only("delete_dashboards");
   auto& cat = session_ptr->getCatalog();
   if (!g_allow_system_dashboard_update) {
-    check_not_info_schema_db(cat.name(), true);
+    dbhandler::check_not_info_schema_db(cat.name(), true);
   }
   // Checks will be performed in catalog
   try {
@@ -6206,7 +6205,7 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
 
   ParserWrapper pw{query_str};
   if (!pw.isCalcitePathPermissable(true)) {
-    check_not_info_schema_db(cat.name());
+    dbhandler::check_not_info_schema_db(cat.name());
   }
 
   if (pw.is_itas) {

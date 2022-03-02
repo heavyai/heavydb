@@ -385,6 +385,7 @@ class Executor {
            const std::string& debug_file);
 
   void clearCaches(bool runtime_only = false);
+
   std::string dumpCache() const;
 
   static void clearExternalCaches(bool for_update,

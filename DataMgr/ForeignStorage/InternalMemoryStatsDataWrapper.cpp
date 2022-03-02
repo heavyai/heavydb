@@ -43,9 +43,7 @@ void populate_import_buffers_for_memory_summary(
           used_page_count += memory_data.numPages;
         }
       }
-      if (import_buffers.find("node") != import_buffers.end()) {
-        import_buffers["node"]->addString("Server");
-      }
+      set_node_name(import_buffers);
       if (import_buffers.find("device_id") != import_buffers.end()) {
         import_buffers["device_id"]->addInt(device_id);
       }
@@ -101,9 +99,7 @@ void populate_import_buffers_for_memory_details(
     int32_t device_id{0};
     for (const auto& memory_info : memory_info_vector) {
       for (const auto& memory_data : memory_info.nodeMemoryData) {
-        if (import_buffers.find("node") != import_buffers.end()) {
-          import_buffers["node"]->addString("Server");
-        }
+        set_node_name(import_buffers);
         const auto& chunk_key = memory_data.chunk_key;
         if (import_buffers.find("database_id") != import_buffers.end()) {
           auto import_buffer = import_buffers["database_id"];
@@ -219,7 +215,9 @@ void InternalMemoryStatsDataWrapper::initializeObjectsForTable(
           if (memory_data.memStatus == Buffer_Namespace::MemStatus::FREE) {
             memory_data.chunk_key.clear();
           } else {
-            CHECK_GE(memory_data.chunk_key.size(), static_cast<size_t>(4));
+            if (is_table_chunk(memory_data.chunk_key)) {
+              CHECK_GE(memory_data.chunk_key.size(), static_cast<size_t>(4));
+            }
           }
         }
         row_count_ += memory_info.nodeMemoryData.size();

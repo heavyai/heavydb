@@ -25,6 +25,7 @@
 #include "ImportExport/Importer.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/distributed.h"
 
 namespace foreign_storage {
 InternalCatalogDataWrapper::InternalCatalogDataWrapper() : InternalSystemDataWrapper() {}
@@ -474,6 +475,27 @@ std::map<std::string, std::vector<std::string>> get_all_role_assignments() {
 void InternalCatalogDataWrapper::initializeObjectsForTable(
     const std::string& table_name) {
   row_count_ = 0;
+
+  // Dashboads are handled separately since they are only on the aggregator in
+  // distributed.  All others are only on the first leaf.
+  if (foreign_table_->tableName == Catalog_Namespace::DASHBOARDS_SYS_TABLE_NAME) {
+    if (dist::is_distributed() && !dist::is_aggregator()) {
+      // Only the aggregator can contain dashboards in distributed.
+      return;
+    }
+    dashboards_by_database_.clear();
+    dashboards_by_database_ = get_all_dashboards();
+    for (const auto& [db_id, dashboards] : dashboards_by_database_) {
+      row_count_ += dashboards.size();
+    }
+    return;
+  }
+
+  if (dist::is_distributed() && !dist::is_first_leaf()) {
+    // For every table except dashboards, only the first leaf returns information in
+    // distributed.
+    return;
+  }
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   if (foreign_table_->tableName == Catalog_Namespace::USERS_SYS_TABLE_NAME) {
     users_.clear();
@@ -484,12 +506,6 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
     tables_by_database_ = get_all_tables();
     for (const auto& [db_id, tables] : tables_by_database_) {
       row_count_ += tables.size();
-    }
-  } else if (foreign_table_->tableName == Catalog_Namespace::DASHBOARDS_SYS_TABLE_NAME) {
-    dashboards_by_database_.clear();
-    dashboards_by_database_ = get_all_dashboards();
-    for (const auto& [db_id, dashboards] : dashboards_by_database_) {
-      row_count_ += dashboards.size();
     }
   } else if (foreign_table_->tableName == Catalog_Namespace::PERMISSIONS_SYS_TABLE_NAME) {
     object_permissions_.clear();
