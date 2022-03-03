@@ -115,18 +115,23 @@ std::string convert_temporal_to_iso_format(const SQLTypeInfo& type_info,
     const auto len = shared::formatHMS(iso_str.data(), iso_str.length() + 1, unix_time);
     CHECK_EQ(len, iso_str.length());
   } else if (type_info.get_type() == kDATE) {
-    // Set a buffer size that can contain YYYY-mm-dd
-    iso_str.resize(10);
-    const auto len = shared::formatDate(iso_str.data(), iso_str.length() + 1, unix_time);
-    CHECK_EQ(len, iso_str.length());
+    // Set a buffer size that can contain YYYYYYYYYYYY-mm-dd (int64_t can represent up to
+    // 12 digit years)
+    iso_str.resize(18);
+    const size_t len =
+        shared::formatDate(iso_str.data(), iso_str.length() + 1, unix_time);
+    CHECK_GT(len, static_cast<size_t>(0));
+    iso_str.resize(len);
   } else if (type_info.get_type() == kTIMESTAMP) {
     auto precision = type_info.get_precision();
     // Set a buffer size that can contain the specified timestamp precision
-    // YYYY-mm-dd(10) T(1) HH:MM:SS(8) .(precision?) nnnnnnnnn(precision) Z(1)
-    iso_str.resize(10 + 1 + 8 + bool(precision) + precision + 1);
-    const auto len = shared::formatDateTime(
+    // YYYYYYYYYYYY-mm-dd(18) T(1) HH:MM:SS(8) .(precision?) nnnnnnnnn(precision) Z(1)
+    // (int64_t can represent up to 12 digit years with seconds precision)
+    iso_str.resize(18 + 1 + 8 + bool(precision) + precision + 1);
+    const size_t len = shared::formatDateTime(
         iso_str.data(), iso_str.length() + 1, unix_time, precision, true);
-    CHECK_EQ(len, iso_str.length());
+    CHECK_GT(len, static_cast<size_t>(0));
+    iso_str.resize(len);
   } else {
     UNREACHABLE() << "Unexpected column type: " << type_info.toString();
   }

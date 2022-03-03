@@ -3877,6 +3877,44 @@ TEST_F(GetTableDetailsTest, ManualRefresh) {
   assertExpectedTableDetails("test_table_3", TTableType::FOREIGN, &refresh_info);
 }
 
+TEST_F(GetTableDetailsTest, StartDateTimeWithLargeYear) {
+  std::string start_date_time{"999999-12-31T11:59:59Z"};
+  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER default_local_delimited "
+      "WITH (file_path = '" +
+      test_source_path +
+      "/1.csv', refresh_timing_type = 'scheduled', refresh_start_date_time = '" +
+      start_date_time + "', refresh_interval = '1H');");
+
+  TTableRefreshInfo refresh_info;
+  refresh_info.timing_type = TTableRefreshTimingType::SCHEDULED;
+  refresh_info.start_date_time = start_date_time;
+  refresh_info.interval_type = TTableRefreshIntervalType::HOUR;
+  refresh_info.interval_count = 1;
+  refresh_info.last_refresh_time = "";
+  refresh_info.next_refresh_time = start_date_time;
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+}
+
+TEST_F(GetTableDetailsTest, NonIsoInputStartDateTime) {
+  std::string non_iso_start_date_time{"9999-12-31 11:59:59"};
+  std::string iso_start_date_time{"9999-12-31T11:59:59Z"};
+  sql("CREATE FOREIGN TABLE test_table_4 (i INTEGER) SERVER default_local_delimited "
+      "WITH (file_path = '" +
+      test_source_path +
+      "/1.csv', refresh_timing_type = 'scheduled', refresh_start_date_time = '" +
+      non_iso_start_date_time + "', refresh_interval = '1H');");
+
+  // get_table_details should always return ISO date time strings
+  TTableRefreshInfo refresh_info;
+  refresh_info.timing_type = TTableRefreshTimingType::SCHEDULED;
+  refresh_info.start_date_time = iso_start_date_time;
+  refresh_info.interval_type = TTableRefreshIntervalType::HOUR;
+  refresh_info.interval_count = 1;
+  refresh_info.last_refresh_time = "";
+  refresh_info.next_refresh_time = iso_start_date_time;
+  assertExpectedTableDetails("test_table_4", TTableType::FOREIGN, &refresh_info);
+}
+
 int main(int argc, char** argv) {
   g_enable_table_functions = true;
   g_enable_dev_table_functions = true;

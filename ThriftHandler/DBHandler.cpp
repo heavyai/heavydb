@@ -66,6 +66,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/ArrowUtil.h"
+#include "Shared/DateTimeParser.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
@@ -2378,7 +2379,9 @@ TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
     const auto& start_date_time = foreign_table->getOption(
         foreign_storage::ForeignTable::REFRESH_START_DATE_TIME_KEY);
     CHECK(start_date_time.has_value());
-    refresh_info.start_date_time = start_date_time.value();
+    auto start_date_time_epoch = dateTimeParse<kTIMESTAMP>(start_date_time.value(), 0);
+    refresh_info.start_date_time =
+        shared::convert_temporal_to_iso_format({kTIMESTAMP}, start_date_time_epoch);
     const auto& interval =
         foreign_table->getOption(foreign_storage::ForeignTable::REFRESH_INTERVAL_KEY);
     CHECK(interval.has_value());
