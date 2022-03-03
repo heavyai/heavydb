@@ -274,19 +274,18 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
  protected:
-  void SetUp() override {
-    createDBHandler();
-    switchToAdmin();
-  }
+  friend class DBHandlerTestEnvironment;
 
-  static void SetUpTestSuite() { createDBHandler(); }
+  void SetUp() override { switchToAdmin(); }
+
+  void TearDown() override {}
+
+  static void SetUpTestSuite() {}
 
   static void TearDownTestSuite() {}
 
   static void createDBHandler() {
     if (!db_handler_) {
-      setupSignalHandler();
-
       // Whitelist root path for tests by default
       ddl_utils::FilePathWhitelist::clear();
       ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "[\"/\"]", "[\"/\"]");
@@ -362,7 +361,8 @@ class DBHandlerTestFixture : public testing::Test {
       db_handler_->set_execution_mode(session_id_, TExecuteMode::CPU);
     }
   }
-  void TearDown() override {}
+
+  static void destroyDBHandler() { db_handler_.reset(); }
 
   static void sql(const std::string& query) {
     TQueryResult result;
@@ -729,6 +729,21 @@ class DBHandlerTestFixture : public testing::Test {
  public:
   static std::string cluster_config_file_path_;
   static bool use_disk_cache_;
+};
+
+// https://google.github.io/googletest/advanced.html#global-set-up-and-tear-down
+class DBHandlerTestEnvironment : public ::testing::Environment {
+ public:
+  ~DBHandlerTestEnvironment() override {}
+
+  // Override this to define how to set up the environment.
+  void SetUp() override {
+    DBHandlerTestFixture::setupSignalHandler();
+    DBHandlerTestFixture::createDBHandler();
+  }
+
+  // Override this to define how to tear down the environment.
+  void TearDown() override { DBHandlerTestFixture::destroyDBHandler(); }
 };
 
 TSessionId DBHandlerTestFixture::session_id_{};

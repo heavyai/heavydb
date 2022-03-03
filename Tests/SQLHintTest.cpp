@@ -20,7 +20,6 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/DBObject.h"
-#include "DBHandlerTestHelpers.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryHint.h"
 #include "QueryRunner/QueryRunner.h"

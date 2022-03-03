@@ -1135,6 +1135,7 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

@@ -47,7 +47,6 @@ class TableTest : public DBHandlerTestFixture {
   inline static PersistentStorageMgr* psm_;
 
   static void SetUpTestSuite() {
-    use_disk_cache_ = true;
     DBHandlerTestFixture::SetUpTestSuite();
     cat_ = &getCatalog();
     ASSERT_NE(cat_, nullptr);
@@ -185,6 +184,7 @@ TEST_F(TableTest, RecoverCache_NonFSI) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+  DBHandlerTestFixture::use_disk_cache_ = true;
   g_enable_fsi = true;
 
   g_enable_data_recycler = false;
@@ -195,6 +195,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();

@@ -1166,6 +1166,7 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
