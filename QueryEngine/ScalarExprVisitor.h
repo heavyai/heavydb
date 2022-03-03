@@ -24,6 +24,7 @@ class ScalarExprVisitor {
  public:
   T visit(const Analyzer::Expr* expr) const {
     CHECK(expr);
+    visitBegin();
     const auto var = dynamic_cast<const Analyzer::Var*>(expr);
     if (var) {
       return visitVar(var);
@@ -157,7 +158,6 @@ class ScalarExprVisitor {
     if (range_join_oper) {
       return visitRangeJoinOper(range_join_oper);
     }
-
     return defaultResult();
   }
 
@@ -369,7 +369,10 @@ class ScalarExprVisitor {
 
   virtual T visitAggExpr(const Analyzer::AggExpr* agg) const {
     T result = defaultResult();
-    return aggregateResult(result, visit(agg->get_arg()));
+    if (agg->get_arg()) {
+      return aggregateResult(result, visit(agg->get_arg()));
+    }
+    return defaultResult();
   }
 
   virtual T visitRangeJoinOper(const Analyzer::RangeOper* range_oper) const {
@@ -383,6 +386,8 @@ class ScalarExprVisitor {
   virtual T aggregateResult(const T& aggregate, const T& next_result) const {
     return next_result;
   }
+
+  virtual void visitBegin() const {}
 
   virtual T defaultResult() const { return T{}; }
 };

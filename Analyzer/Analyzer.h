@@ -120,6 +120,9 @@ class Expr : public std::enable_shared_from_this<Expr> {
       std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
           colvar_set,
       bool include_agg) const {}
+
+  virtual size_t get_num_column_vars(const bool include_agg) const;
+
   /*
    * @brief rewrite_with_targetlist rewrite ColumnVar's in expression with entries in a
    * targetlist. targetlist expressions are expected to be only Var's or AggExpr's.
@@ -1537,7 +1540,21 @@ class StringOper : public Expr {
       bool include_agg) const override;
 
   bool hasNoneEncodedTextArg() const {
-    return args_.size() && args_[0]->get_type_info().is_none_encoded_string();
+    if (args_.empty()) {
+      return false;
+    }
+    const auto& arg0_ti = args_[0]->get_type_info();
+    if (!arg0_ti.is_string()) {
+      return false;
+    }
+    if (arg0_ti.is_none_encoded_string()) {
+      return true;
+    }
+    CHECK(arg0_ti.is_dict_encoded_string());
+    if (!arg0_ti.get_comp_param() == TRANSIENT_DICT_ID) {
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -1597,7 +1614,7 @@ class StringOper : public Expr {
   void check_operand_types(const size_t min_args,
                            const std::vector<OperandTypeFamily>& expected_type_families,
                            const std::vector<std::string>& arg_names,
-                           const bool dict_encoded_cols_only = false,
+                           const bool dict_encoded_cols_only = true,
                            const bool cols_first_arg_only = true) const;
 
   SqlStringOpKind kind_;
@@ -2632,5 +2649,6 @@ bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
 
 // Remove a cast operator if present.
 std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr>& expr);
+const Analyzer::Expr* remove_cast(const Analyzer::Expr* expr);
 
 #endif  // ANALYZER_H

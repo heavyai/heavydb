@@ -25,6 +25,7 @@
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgDagBuilder.h"
+#include "ScalarExprVisitor.h"
 #include "WindowContext.h"
 
 #include <future>
@@ -451,12 +452,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       CHECK_NE(kNULLT, target_ti.get_type());
       const auto& operand_ti = operand_expr->get_type_info();
       if (operand_ti.is_string() && target_ti.is_string()) {
-        if (operand_ti.is_none_encoded_string() && target_ti.is_dict_encoded_string()) {
-          has_none_encoded_string_cast_ = true;
-        }
-        if (operand_ti.is_dict_encoded_string() && target_ti.is_none_encoded_string()) {
-          has_none_encoded_string_cast_ = true;
-        }
         return operand_expr;
       }
       if (target_ti.is_time() ||
@@ -470,8 +465,31 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       if (!operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr->add_cast(target_ti);
       }
-
       return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
+    }
+    case kENCODE_TEXT: {
+      const auto& target_ti = rex_operator->getType();
+      CHECK_NE(kNULLT, target_ti.get_type());
+      const auto& operand_ti = operand_expr->get_type_info();
+      CHECK(operand_ti.is_string());
+      if (operand_ti.is_dict_encoded_string()) {
+        // No cast needed
+        return operand_expr;
+      }
+      if (operand_expr->get_num_column_vars(true) == 0UL) {
+        return operand_expr;
+      }
+      if (g_cluster) {
+        throw std::runtime_error(
+            "ENCODE_TEXT is not currently supported in distributed mode at this time.");
+      }
+      SQLTypeInfo casted_target_ti = operand_ti;
+      casted_target_ti.set_type(kTEXT);
+      casted_target_ti.set_compression(kENCODING_DICT);
+      casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
+      casted_target_ti.set_fixed_size();
+      return makeExpr<Analyzer::UOper>(
+          casted_target_ti, operand_expr->get_contains_agg(), kCAST, operand_expr);
     }
     case kNOT:
     case kISNULL: {
@@ -923,29 +941,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       rhs = translateScalarRex(rhs_op);
     }
     CHECK(rhs);
-    const auto old_lhs_ti = lhs->get_type_info();
-    const auto old_rhs_ti = rhs->get_type_info();
+
     // Pass in executor to get string proxy info if cast needed between
     // string columns
     lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs, executor_);
-    // const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(oper.get());
-    // CHECK(bin_oper);
-    auto types_are_string_casted = [](auto& old_ti, auto& new_ti) {
-      if (old_ti.is_string() && new_ti.is_string()) {
-        if (old_ti.is_none_encoded_string() != new_ti.is_none_encoded_string()) {
-          return true;
-        }
-      }
-      return false;
-    };
-    const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(lhs.get());
-    CHECK(bin_oper);
-    const auto& new_lhs_ti = bin_oper->get_left_operand()->get_type_info();
-    const auto& new_rhs_ti = bin_oper->get_right_operand()->get_type_info();
-    if (types_are_string_casted(old_lhs_ti, new_lhs_ti) ||
-        types_are_string_casted(old_rhs_ti, new_rhs_ti)) {
-      has_none_encoded_string_cast_ = true;
-    }
   }
   return lhs;
 }
@@ -1281,9 +1280,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   const auto str_arg = translateScalarRex(rex_function->getOperand(0));
-  if (str_arg->get_type_info().is_dict_encoded_string()) {
-    has_none_encoded_string_cast_ = true;
-  }
   return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(),
                                             rex_function->getName() == "CHAR_LENGTH"sv);
 }
@@ -1331,17 +1327,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
     throw std::runtime_error(oss.str());
   }
   const auto string_op_kind = ::name_to_string_op_kind(func_name);
-  const auto args = translateFunctionArgs(rex_function);
+  auto args = translateFunctionArgs(rex_function);
   // Used by watchdog later to gate queries based on
-  if (!args.empty() && args[0]->get_type_info().is_none_encoded_string()) {
-    // Note that we don't apply a cast to none-encoded strings as with
-    // current codegen that would wastefully require insertion of the casted
-    // id into the transient dictionary, then pulling it out, applying the
-    // string op(s), and re-inserting.
-    // That said, for the purposes of watchdog checking we consider any
-    // string function applied to a none-encoded string to involve a cast.
-
-    has_none_encoded_string_cast_ = true;
+  if (!args.empty() && !dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
+    const auto& arg0_ti = args[0]->get_type_info();
+    if (arg0_ti.is_none_encoded_string()) {
+      SQLTypeInfo casted_target_ti = arg0_ti;
+      casted_target_ti.set_type(kTEXT);
+      casted_target_ti.set_compression(kENCODING_DICT);
+      casted_target_ti.set_comp_param(TRANSIENT_DICT_ID);
+      casted_target_ti.set_fixed_size();
+      args[0] = makeExpr<Analyzer::UOper>(
+          casted_target_ti, args[0]->get_contains_agg(), kCAST, args[0]);
+    }
   }
 
   switch (string_op_kind) {

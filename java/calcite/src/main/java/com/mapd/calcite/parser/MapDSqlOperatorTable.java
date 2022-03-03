@@ -252,6 +252,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ST_Union());
     opTab.addOperator(new ST_Difference());
     opTab.addOperator(new CastToGeography());
+    opTab.addOperator(new EncodeText());
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
     opTab.addOperator(new ApproxMedian());
@@ -2156,6 +2157,23 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       assert opBinding.getOperandCount() == 1;
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class EncodeText extends SqlFunction {
+    EncodeText() {
+      super("ENCODE_TEXT",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.STRING),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      return opBinding.getOperandType(0);
     }
   }
 

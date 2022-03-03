@@ -53,6 +53,9 @@ extern "C" RUNTIME_EXPORT int32_t string_compress(const int64_t ptr_and_len,
                                                   const int64_t string_dict_handle) {
   std::string raw_str(reinterpret_cast<char*>(extract_str_ptr_noinline(ptr_and_len)),
                       extract_str_len_noinline(ptr_and_len));
+  if (raw_str.empty()) {
+    return inline_int_null_value<int32_t>();
+  }
   auto string_dict_proxy = reinterpret_cast<StringDictionaryProxy*>(string_dict_handle);
   return string_dict_proxy->getOrAddTransient(raw_str);
 }
@@ -170,7 +173,8 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   CHECK_GE(expr->getArity(), 1UL);
 
   const auto& expr_ti = expr->get_type_info();
-  const auto primary_arg = expr->getArg(0);
+  // Should probably CHECK we have a UOper cast to dict encoded to be consistent
+  const auto primary_arg = remove_cast(expr->getArg(0));
   CHECK(primary_arg->get_type_info().is_none_encoded_string());
 
   if (g_cluster) {
@@ -398,7 +402,6 @@ llvm::Value* CodeGenerator::codegenDictLike(
     // Todo(todd): Once string ops support non-string producting
     // operators (like like/ilike), like/ilike can be chained and
     // we can avoid the string translation
-    CHECK(dynamic_cast<const Analyzer::StringOper*>(dict_like_arg.get()));
     return nullptr;
   }
   const auto string_oper = dynamic_cast<const Analyzer::StringOper*>(dict_like_arg.get());

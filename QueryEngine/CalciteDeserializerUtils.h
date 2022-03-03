@@ -70,6 +70,9 @@ inline SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string("CAST")) {
     return kCAST;
   }
+  if (op_str == std::string("ENCODE_TEXT")) {
+    return kENCODE_TEXT;
+  }
   if (op_str == std::string("NOT")) {
     return kNOT;
   }

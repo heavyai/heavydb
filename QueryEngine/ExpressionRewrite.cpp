@@ -717,7 +717,8 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     if (parent_in_string_op_chain) {
       CHECK(in_string_op_chain_);
       CHECK(rewritten_args[0]->get_type_info().is_string());
-      CHECK(dynamic_cast<Analyzer::ColumnVar*>(rewritten_args[0].get()));
+      CHECK(
+          dynamic_cast<const Analyzer::ColumnVar*>(remove_cast(rewritten_args[0].get())));
       return rewritten_args[0]->deep_copy();
     } else {
       CHECK(!in_string_op_chain_);

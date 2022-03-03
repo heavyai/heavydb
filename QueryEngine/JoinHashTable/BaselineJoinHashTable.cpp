@@ -679,15 +679,6 @@ int BaselineJoinHashTable::initHashTableForDevice(
       hash_table = initHashTableOnCpuFromCache(hashtable_cache_key_,
                                                CacheItemType::BASELINE_HT,
                                                DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
-      if (device_id == 0) {
-        if (hash_table && device_id == 0) {
-          std::cout << "Found baseline hash table in cache for key: "
-                    << hashtable_cache_key_ << std::endl;
-        } else {
-          std::cout << "Did not find baseline hash table in cache for key: "
-                    << hashtable_cache_key_ << std::endl;
-        }
-      }
     }
 
     if (needs_dict_translation_ && !hash_table) {

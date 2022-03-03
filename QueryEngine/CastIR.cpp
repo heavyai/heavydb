@@ -276,8 +276,8 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   if (ti.get_compression() == kENCODING_NONE) {
     if (g_cluster) {
       throw std::runtime_error(
-          "Cast from dictionary-encoded string to none-encoded not supported for "
-          "distributed queries");
+          "Cast from dictionary-encoded string to none-encoded not "
+          "currently supported for distributed queries.");
     }
     // Removed watchdog check here in exchange for row cardinality based check in
     // RelAlgExecutor

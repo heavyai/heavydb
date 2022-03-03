@@ -1879,9 +1879,10 @@ size_t StringDictionary::buildDictionaryTranslationMap(
 
   tbb::task_arena limited_arena(thread_info.num_threads);
   std::vector<size_t> num_strings_not_translated_per_thread(thread_info.num_threads, 0UL);
+  constexpr bool short_circuit_empty_dictionary_translations{false};
   limited_arena.execute([&] {
     CHECK_LE(tbb::this_task_arena::max_concurrency(), thread_info.num_threads);
-    if (dest_dictionary_is_empty) {
+    if (short_circuit_empty_dictionary_translations && dest_dictionary_is_empty) {
       tbb::parallel_for(
           tbb::blocked_range<int32_t>(
               0,

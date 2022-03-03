@@ -430,7 +430,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
           // on translating
           const bool should_translate_strings =
               exprs_share_one_and_same_rte_idx(left_expr, right_expr);
-          if (should_translate_strings) {
+          if (should_translate_strings && (optype == kEQ || optype == kNE)) {
             CHECK(executor);
             // Make the type we're casting to the transient dictionary, if it exists,
             // otherwise the largest dictionary in terms of number of entries
@@ -440,6 +440,12 @@ std::shared_ptr<Analyzer::Expr> OperExpr::normalize(
             ti.set_fixed_size();
             ti.set_dict_intersection();
             expr_to_cast = expr_to_cast->add_cast(ti);
+          } else {  // Ordered comparison operator
+            // We do not currently support ordered (i.e. >, <=) comparisons between
+            // dictionary-encoded columns, and need to decompress when translation
+            // is turned off even for kEQ and KNE
+            left_expr = left_expr->decompress();
+            right_expr = right_expr->decompress();
           }
         } else {  // Ordered comparison operator
           // We do not currently support ordered (i.e. >, <=) comparisons between

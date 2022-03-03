@@ -1532,7 +1532,7 @@ TEST_F(StringFunctionTest, NoneEncodedGroupByNoStringOps) {
     // No string ops
     {
       auto result_set =
-          sql("select lang as g, count(*) as n from "
+          sql("select encode_text(lang) as g, count(*) as n from "
               "string_function_test_countries group by g order by g asc;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1548,7 +1548,7 @@ TEST_F(StringFunctionTest, NoneEncodedGroupByNullsNoStringOps) {
     // No string ops
     {
       auto result_set =
-          sql("select short_name as g, count(*) as n from "
+          sql("select encode_text(short_name) as g, count(*) as n from "
               "string_function_test_countries group by g order by g asc nulls last;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
@@ -1572,6 +1572,24 @@ TEST_F(StringFunctionTest, NoneEncodedGroupByStringOps) {
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"en", int64_t(3)},
                                                                       {"de", int64_t(1)}};
     }
+    // With inert wrapping of ENCODE_TEXT
+    {
+      auto result_set =
+          sql("select encode_text(lower(lang)) as g, count(*) as n from "
+              "string_function_test_countries group by g order by n desc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"en", int64_t(3)},
+                                                                      {"de", int64_t(1)}};
+    }
+    // With inner ENCODE_TEXT cast
+    {
+      auto result_set =
+          sql("select lower(encode_text(lang)) as g, count(*) as n from "
+              "string_function_test_countries group by g order by n desc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"en", int64_t(3)},
+                                                                      {"de", int64_t(1)}};
+    }
 
     {
       auto result_set =
@@ -1584,11 +1602,11 @@ TEST_F(StringFunctionTest, NoneEncodedGroupByStringOps) {
 
     // String ops with filter
     {
-      auto result_set =
-          sql("select initcap(last_name) as g, count(*) as n from "
-              "string_function_test_people where last_name <> upper(last_name) "
-              "group by g order by g asc;",
-              dt);
+      auto result_set = sql(
+          "select initcap(last_name) as g, count(*) as n from "
+          "string_function_test_people where encode_text(last_name) <> upper(last_name) "
+          "group by g order by g asc;",
+          dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"Banks", int64_t(1)}, {"Smith", int64_t(1)}, {"Wilson", int64_t(1)}};
     }
@@ -1616,7 +1634,7 @@ TEST_F(StringFunctionTest, NoneEncodedEncodedEquality) {
     // None encoded = encoded, no string ops
     {
       auto result_set =
-          sql("select short_name from string_function_test_countries where "
+          sql("select name from string_function_test_countries where "
               "name = short_name order by id asc;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"Canada"},
@@ -1683,23 +1701,34 @@ TEST_F(StringFunctionTest, NoneEncodedCaseStatementsNoStringOps) {
     SKIP_NO_GPU();
     // None-encoded + none-encoded, no string ops
     {
+      // Note if we don't project out the id column we get a
+      // ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED: Columnar conversion not
+      // supported for variable length types error
+      // Need to address this separately (precedes the string function work in
+      // master)
       auto result_set =
-          sql("select case when id <= 2 then short_name else lang end from "
+          sql("select id, case when id <= 2 then short_name else lang end from "
               "string_function_test_countries order by id asc;",
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
-          {""}, {"Canada"}, {"en"}, {"de"}};
+          {int64_t(1), ""},
+          {int64_t(2), "Canada"},
+          {int64_t(3), "en"},
+          {int64_t(4), "de"}};
       compare_result_set(expected_result_set, result_set);
     }
 
     // None-encoded + none-encoded + literal
     {
-      auto result_set =
-          sql("select case when id = 1 then 'USA' when id <= 3 then short_name else lang "
-              "end from string_function_test_countries order by id asc;",
-              dt);
+      auto result_set = sql(
+          "select id, case when id = 1 then 'USA' when id <= 3 then short_name else lang "
+          "end from string_function_test_countries order by id asc;",
+          dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
-          {"USA"}, {"Canada"}, {"UK"}, {"de"}};
+          {int64_t(1), "USA"},
+          {int64_t(2), "Canada"},
+          {int64_t(3), "UK"},
+          {int64_t(4), "de"}};
       compare_result_set(expected_result_set, result_set);
     }
 
@@ -1792,8 +1821,9 @@ TEST_F(StringFunctionTest, LowercaseNonTextColumn) {
       FAIL() << "An exception should have been thrown for this test case";
     } catch (const std::exception& e) {
       ASSERT_STREQ(
-          "Error instantiating LOWER operator. Expected text type for argument 1 "
-          "(operand).",
+          "Cannot CAST from INTEGER to TEXT",
+          //"Error instantiating LOWER operator. Expected text type for argument 1 "
+          //"(operand).",
           e.what());
     }
   }

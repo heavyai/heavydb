@@ -57,6 +57,14 @@ Query::~Query() {
   delete next_query;
 }
 
+size_t Expr::get_num_column_vars(const bool include_agg) const {
+  std::set<const Analyzer::ColumnVar*,
+           bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+      colvar_set(Analyzer::ColumnVar::colvar_comp);
+  collect_column_var(colvar_set, include_agg);
+  return colvar_set.size();
+}
+
 std::shared_ptr<Analyzer::Expr> ColumnVar::deep_copy() const {
   return makeExpr<ColumnVar>(type_info, table_id, column_id, rte_idx);
 }
@@ -711,16 +719,19 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
                              new_type_info.get_type_name());
   }
   // @TODO(wei) temporary restriction until executor can support this.
-  if (typeid(*this) != typeid(Constant) && new_type_info.is_string() &&
+  const bool has_non_literal_operands = get_num_column_vars(true) > 0UL;
+  if (has_non_literal_operands && new_type_info.is_string() &&
       new_type_info.get_compression() == kENCODING_DICT &&
       new_type_info.get_comp_param() <= TRANSIENT_DICT_ID) {
     if (type_info.is_string() && type_info.get_compression() != kENCODING_DICT) {
-      return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
+      throw std::runtime_error(
+          "Implict casts of TEXT ENCODING NONE to TEXT ENCODED DICT are not allowed "
+          "for non-literal arguments. Consider adding an explicit conversion to a "
+          "dictionary-encoded text type with ENCODE_TEXT(<none-encoded text arg>).");
     }
     throw std::runtime_error(
-        "Internal error: Cannot apply transient dictionary encoding to non-literal "
-        "expression "
-        "yet.");
+        "Internal error: Cannot apply transient dictionary encoding "
+        "to non-literal expression.");
   }
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
@@ -4120,4 +4131,12 @@ std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr
     return expr;
   }
   return uoper->get_own_operand();
+}
+
+const Analyzer::Expr* remove_cast(const Analyzer::Expr* expr) {
+  const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
+  if (!uoper || uoper->get_optype() != kCAST) {
+    return expr;
+  }
+  return uoper->get_operand();
 }

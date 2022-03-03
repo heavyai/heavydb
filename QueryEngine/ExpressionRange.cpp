@@ -686,7 +686,7 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
     string_op_infos.emplace_back(string_op_info);
   }
 
-  const auto string_oper_col_var_expr = string_oper_expr->getArg(0);
+  const auto string_oper_col_var_expr = remove_cast(string_oper_expr->getArg(0));
   CHECK(string_oper_col_var_expr);
   const auto string_oper_col_var =
       dynamic_cast<const Analyzer::ColumnVar*>(string_oper_col_var_expr);
@@ -842,6 +842,30 @@ ExpressionRange getExpressionRange(
     const auto sdp = executor->getStringDictionaryProxy(
         ti.get_comp_param(), executor->getRowSetMemoryOwner(), true);
     CHECK(sdp);
+    const auto colvar_operand =
+        dynamic_cast<const Analyzer::ColumnVar*>(u_expr->get_operand());
+    if (colvar_operand) {
+      const auto& colvar_ti = colvar_operand->get_type_info();
+      if (!(colvar_ti.is_none_encoded_string() &&
+            ti.get_comp_param() == TRANSIENT_DICT_ID)) {
+        VLOG(1)
+            << "Unable to determine expression range for dictionary encoded expression "
+            << u_expr->get_operand()->toString() << ", proceeding with invalid range.";
+        return ExpressionRange::makeInvalidRange();
+      }
+      CHECK_EQ(ti.get_comp_param(), TRANSIENT_DICT_ID);
+      CHECK_EQ(sdp->storageEntryCount(), 0UL);
+      const int64_t transient_entries = static_cast<int64_t>(sdp->transientEntryCount());
+      int64_t const tuples_upper_bound = static_cast<int64_t>(
+          std::accumulate(query_infos.cbegin(),
+                          query_infos.cend(),
+                          size_t(0),
+                          [](auto max, auto const& query_info) {
+                            return std::max(max, query_info.info.getNumTuples());
+                          }));
+      const int64_t conservative_range_min = -1L - transient_entries - tuples_upper_bound;
+      return ExpressionRange::makeIntRange(conservative_range_min, -2L, 0, true);
+    }
     const auto const_operand =
         dynamic_cast<const Analyzer::Constant*>(u_expr->get_operand());
     if (!const_operand) {

@@ -223,28 +223,6 @@ bool is_validate_or_explain_query(const ExecutionOptions& eo) {
   return eo.just_validate || eo.just_explain || eo.just_calcite_explain;
 }
 
-void check_none_encoded_string_cast_tuple_limit(
-    const std::vector<InputTableInfo>& query_infos) {
-  if (!g_enable_watchdog) {
-    return;
-  }
-  auto const tuples_upper_bound =
-      std::accumulate(query_infos.cbegin(),
-                      query_infos.cend(),
-                      size_t(0),
-                      [](auto max, auto const& query_info) {
-                        return std::max(max, query_info.info.getNumTuples());
-                      });
-  if (tuples_upper_bound > g_watchdog_none_encoded_string_translation_limit) {
-    std::ostringstream oss;
-    oss << "Query requires one or more casts between none-encoded and dictionary-encoded "
-        << "strings, and the estimated table size (" << tuples_upper_bound << " rows) "
-        << "exceeds the configured watchdog none-encoded string translation limit of "
-        << g_watchdog_none_encoded_string_translation_limit << " rows.";
-    throw std::runtime_error(oss.str());
-  }
-}
-
 class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> {
  public:
   std::vector<unsigned> visitLeftDeepInnerJoin(
@@ -261,6 +239,146 @@ class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> 
     return result;
   }
 };
+
+struct TextEncodingCastCounts {
+  size_t text_decoding_casts;
+  size_t text_encoding_casts;
+  TextEncodingCastCounts() : text_decoding_casts(0UL), text_encoding_casts(0UL) {}
+  TextEncodingCastCounts(const size_t text_decoding_casts,
+                         const size_t text_encoding_casts)
+      : text_decoding_casts(text_decoding_casts)
+      , text_encoding_casts(text_encoding_casts) {}
+};
+class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCounts> {
+ protected:
+  TextEncodingCastCounts visitUOper(const Analyzer::UOper* u_oper) const {
+    TextEncodingCastCounts result = defaultResult();
+    const bool disregard_cast_to_none_encoding = disregard_cast_to_none_encoding_;
+    result = aggregateResult(result, visit(u_oper->get_operand()));
+    if (u_oper->get_optype() != kCAST) {
+      return result;
+    }
+    const auto& operand_ti = u_oper->get_operand()->get_type_info();
+    const auto& casted_ti = u_oper->get_type_info();
+    if (!operand_ti.is_string() || !casted_ti.is_string()) {
+      return result;
+    }
+    const bool literals_only = u_oper->get_operand()->get_num_column_vars(true) == 0UL;
+    if (literals_only) {
+      return result;
+    }
+    if (operand_ti.is_none_encoded_string() && casted_ti.is_dict_encoded_string()) {
+      return aggregateResult(result, TextEncodingCastCounts(0UL, 1UL));
+    }
+    if (operand_ti.is_dict_encoded_string() && casted_ti.is_none_encoded_string()) {
+      if (!disregard_cast_to_none_encoding) {
+        return aggregateResult(result, TextEncodingCastCounts(1UL, 0UL));
+      } else {
+        return result;
+      }
+    }
+    return result;
+  }
+
+  TextEncodingCastCounts visitLikeExpr(const Analyzer::LikeExpr* like) const {
+    TextEncodingCastCounts result = defaultResult();
+    const auto u_oper = dynamic_cast<const Analyzer::UOper*>(like->get_arg());
+    if (u_oper && u_oper->get_optype() == kCAST) {
+      disregard_cast_to_none_encoding_ = true;
+      result = aggregateResult(result, visitUOper(u_oper));
+    } else {
+      result = aggregateResult(result, visit(like->get_arg()));
+    }
+    result = aggregateResult(result, visit(like->get_like_expr()));
+    if (like->get_escape_expr()) {
+      result = aggregateResult(result, visit(like->get_escape_expr()));
+    }
+    return result;
+  }
+
+  TextEncodingCastCounts aggregateResult(
+      const TextEncodingCastCounts& aggregate,
+      const TextEncodingCastCounts& next_result) const override {
+    auto result = aggregate;
+    result.text_decoding_casts += next_result.text_decoding_casts;
+    result.text_encoding_casts += next_result.text_encoding_casts;
+    return result;
+  }
+
+  void visitBegin() const override { disregard_cast_to_none_encoding_ = false; }
+
+  TextEncodingCastCounts defaultResult() const override {
+    return TextEncodingCastCounts();
+  }
+
+ private:
+  mutable bool disregard_cast_to_none_encoding_ = false;
+};
+
+TextEncodingCastCounts get_text_cast_counts(const RelAlgExecutionUnit& ra_exe_unit) {
+  TextEncodingCastCounts cast_counts;
+
+  auto check_node_for_text_casts = [&cast_counts](const Analyzer::Expr* expr) {
+    if (!expr) {
+      return;
+    }
+    TextEncodingCastCountVisitor visitor;
+    const auto this_node_cast_counts = visitor.visit(expr);
+    cast_counts.text_encoding_casts += this_node_cast_counts.text_encoding_casts;
+    cast_counts.text_decoding_casts += this_node_cast_counts.text_decoding_casts;
+  };
+
+  for (const auto& qual : ra_exe_unit.quals) {
+    check_node_for_text_casts(qual.get());
+  }
+  for (const auto& simple_qual : ra_exe_unit.simple_quals) {
+    check_node_for_text_casts(simple_qual.get());
+  }
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+    check_node_for_text_casts(groupby_expr.get());
+  }
+  for (const auto& target_expr : ra_exe_unit.target_exprs) {
+    check_node_for_text_casts(target_expr);
+  }
+  for (const auto& join_condition : ra_exe_unit.join_quals) {
+    for (const auto& join_qual : join_condition.quals) {
+      check_node_for_text_casts(join_qual.get());
+    }
+  }
+  return cast_counts;
+}
+
+void check_none_encoded_string_cast_tuple_limit(
+    const std::vector<InputTableInfo>& query_infos,
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  if (!g_enable_watchdog) {
+    return;
+  }
+  auto const tuples_upper_bound =
+      std::accumulate(query_infos.cbegin(),
+                      query_infos.cend(),
+                      size_t(0),
+                      [](auto max, auto const& query_info) {
+                        return std::max(max, query_info.info.getNumTuples());
+                      });
+  if (tuples_upper_bound <= g_watchdog_none_encoded_string_translation_limit) {
+    return;
+  }
+
+  const auto& text_cast_counts = get_text_cast_counts(ra_exe_unit);
+  const bool has_text_casts =
+      text_cast_counts.text_decoding_casts + text_cast_counts.text_encoding_casts > 0UL;
+
+  if (!has_text_casts) {
+    return;
+  }
+  std::ostringstream oss;
+  oss << "Query requires one or more casts between none-encoded and dictionary-encoded "
+      << "strings, and the estimated table size (" << tuples_upper_bound << " rows) "
+      << "exceeds the configured watchdog none-encoded string translation limit of "
+      << g_watchdog_none_encoded_string_translation_limit << " rows.";
+  throw std::runtime_error(oss.str());
+}
 
 }  // namespace
 
@@ -3264,6 +3382,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto timer = DEBUG_TIMER(__func__);
   auto query_exec_time_begin = timer_start();
 
+  const auto query_infos = get_table_infos(work_unit.exe_unit.input_descs, executor_);
+  check_none_encoded_string_cast_tuple_limit(query_infos, work_unit.exe_unit);
+
   auto co = co_in;
   auto eo = eo_in;
   ColumnCacheMap column_cache;
@@ -4066,10 +4187,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                               translator,
                                               eo.executor_type);
 
-  if (translator.hasNoneEncodedStringCast()) {
-    check_none_encoded_string_cast_tuple_limit(query_infos);
-  }
-
   auto query_hint = RegisteredQueryHint::defaults();
   if (query_dag_) {
     auto candidate = query_dag_->getQueryHint(compound);
@@ -4248,13 +4365,6 @@ std::list<std::shared_ptr<Analyzer::Expr>> RelAlgExecutor::makeJoinQuals(
     append_folded_cf_quals(join_condition_cf.quals);
     append_folded_cf_quals(join_condition_cf.simple_quals);
   }
-  if (g_enable_watchdog && translator.hasNoneEncodedStringCast()) {
-    std::ostringstream oss;
-    oss << "Join predicate requires one or more casts between none-encoded "
-        << "and dictionary-encoded strings, which is disallowed when query watchdog "
-        << "is enabled.";
-    throw std::runtime_error(oss.str());
-  }
   return combine_equi_join_conditions(join_condition_quals);
 }
 
@@ -4369,9 +4479,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
       target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
 
   const auto query_infos = get_table_infos(input_descs, executor_);
-  if (translator.hasNoneEncodedStringCast()) {
-    check_none_encoded_string_cast_tuple_limit(query_infos);
-  }
 
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
@@ -4456,9 +4563,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                               eo.just_explain);
   const auto target_exprs_owned =
       translate_scalar_sources(project, translator, eo.executor_type);
-  if (translator.hasNoneEncodedStringCast()) {
-    check_none_encoded_string_cast_tuple_limit(query_infos);
-  }
+
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_raw_pointers(target_exprs_owned);
@@ -4868,13 +4973,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
       get_inputs_meta(filter, translator, used_inputs_owned, input_to_nest_level);
   const auto filter_expr = translator.translateScalarRex(filter->getCondition());
   const auto query_infos = get_table_infos(input_descs, executor_);
-  if (translator.hasNoneEncodedStringCast()) {
-    check_none_encoded_string_cast_tuple_limit(query_infos);
-  }
 
   const auto qual = fold_expr(filter_expr.get());
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
+
   const auto target_exprs = get_raw_pointers(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
   const auto rewritten_qual = rewrite_expr(qual.get());

@@ -51,7 +51,8 @@ enum SQLOps {
   kUNNEST,
   kFUNCTION,
   kIN,
-  kOVERLAPS
+  kOVERLAPS,
+  kENCODE_TEXT
 };
 
 #define IS_COMPARISON(X)                                                          \
@@ -62,8 +63,9 @@ enum SQLOps {
   ((X) == kMINUS || (X) == kPLUS || (X) == kMULTIPLY || (X) == kDIVIDE || (X) == kMODULO)
 #define COMMUTE_COMPARISON(X) \
   ((X) == kLT ? kGT : (X) == kLE ? kGE : (X) == kGT ? kLT : (X) == kGE ? kLE : (X))
-#define IS_UNARY(X) \
-  ((X) == kNOT || (X) == kUMINUS || (X) == kISNULL || (X) == kEXISTS || (X) == kCAST)
+#define IS_UNARY(X)                                                                     \
+  ((X) == kNOT || (X) == kUMINUS || (X) == kISNULL || (X) == kEXISTS || (X) == kCAST || \
+   (X) == kENCODE_TEXT)
 #define IS_EQUIVALENCE(X) ((X) == kEQ || (X) == kBW_EQ || (X) == kOVERLAPS)
 
 enum SQLQualifier { kONE, kANY, kALL };
@@ -243,6 +245,8 @@ inline std::string toString(const SQLOps& op) {
       return "IN";
     case kOVERLAPS:
       return "OVERLAPS";
+    case kENCODE_TEXT:
+      return "ENCODE_TEXT";
   }
   LOG(FATAL) << "Invalid operation kind: " << op;
   return "";

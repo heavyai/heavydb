@@ -607,9 +607,13 @@ class SQLTypeInfo {
     // can always cast between the same type but different precision/scale/encodings
     if (type == new_type_info.get_type()) {
       return true;
-      // can always cast from or to string
-    } else if (is_string() || new_type_info.is_string()) {
+      // can always cast between strings
+    } else if (is_string() && new_type_info.is_string()) {
       return true;
+    } else if (is_string() && !new_type_info.is_string()) {
+      return false;
+    } else if (!is_string() && new_type_info.is_string()) {
+      return false;
       // can cast between numbers
     } else if (is_number() && new_type_info.is_number()) {
       return true;

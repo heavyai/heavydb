@@ -2243,11 +2243,17 @@ TEST(Select, Arrays) {
         std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
 
     const auto watchdog_state = g_enable_watchdog;
-    ScopeGuard reset_Watchdog_state = [&watchdog_state] {
+    const auto watchdog_none_encoded_translation_limit_state =
+        g_watchdog_none_encoded_string_translation_limit;
+    ScopeGuard reset_watchdog_state = [&watchdog_state,
+                                       &watchdog_none_encoded_translation_limit_state] {
       g_enable_watchdog = watchdog_state;
+      g_watchdog_none_encoded_string_translation_limit =
+          watchdog_none_encoded_translation_limit_state;
     };
 
     g_enable_watchdog = true;
+    g_watchdog_none_encoded_string_translation_limit = 2UL;
 
     // throw exception when comparing full array joins when watchdog is on
     EXPECT_THROW(run_simple_agg("SELECT COUNT(1) FROM array_test t1, array_test t2 WHERE "
@@ -2288,7 +2294,7 @@ TEST(Select, Arrays) {
     // translation maps, as well as much faster support for this class of queries
     // with watchdog off (distributed and single-node).
 
-    g_enable_watchdog = false;
+    g_watchdog_none_encoded_string_translation_limit = 1000UL;
 
     THROW_ON_AGGREGATOR(
         EXPECT_EQ(int64_t(190),
@@ -2963,8 +2969,13 @@ TEST(Select, CountDistinct) {
         c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
           dt));  // Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt),
+                 std::runtime_error);  // Strings must be dictionary-encoded
+                                       // for COUNT(DISTINCT).
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct real_str) FROM test;", dt));
+    SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct ENCODE_TEXT(real_str)) FROM test;",
+                         "SELECT COUNT(distinct real_str) FROM test;",
+                         dt));
   }
 }
 
@@ -3071,10 +3082,15 @@ TEST(Select, ApproxCountDistinct) {
       "'real_foo' GROUP BY str, real_str;",
       dt);
 
+    EXPECT_THROW(
+        run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(real_str) FROM test;", dt),
+        std::runtime_error);
+
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
-    SKIP_ON_AGGREGATOR(c("SELECT APPROX_COUNT_DISTINCT(distinct real_str) FROM test;",
-                         "SELECT COUNT(DISTINCT real_str) FROM test;",
-                         dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT APPROX_COUNT_DISTINCT(DISTINCT ENCODE_TEXT(real_str)) FROM test;",
+          "SELECT COUNT(DISTINCT real_str) FROM test;",
+          dt));
 
     EXPECT_THROW(run_multiple_agg("SELECT APPROX_COUNT_DISTINCT(x, 0) FROM test;", dt),
                  std::runtime_error);
@@ -3801,13 +3817,11 @@ TEST(Select, Case) {
           dt));
     }
 
-    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     SKIP_ON_AGGREGATOR(c(
         R"(SELECT CASE WHEN str = 'foo' THEN real_str WHEN str = 'bar' THEN 'b' ELSE null_str 
       END case_col, SUM(x) AS sum_x FROM test GROUP BY case_col ORDER BY case_col ASC NULLS FIRST,
       sum_x ASC NULLS FIRST;)",
         dt));
-
     c("SELECT y AS key0, SUM(CASE WHEN x > 7 THEN x / (x - 7) ELSE 99 END) FROM test "
       "GROUP BY key0 ORDER BY key0;",
       dt);
@@ -4382,18 +4396,24 @@ TEST(Select, StringCompare) {
     c("SELECT COUNT(*) FROM test WHERE 'bar' > shared_dict;", dt);
 
     const auto watchdog_state = g_enable_watchdog;
-    ScopeGuard reset_Watchdog_state = [&watchdog_state] {
+    const auto watchdog_none_encoded_translation_limit_state =
+        g_watchdog_none_encoded_string_translation_limit;
+    ScopeGuard reset_watchdog_state = [&watchdog_state,
+                                       &watchdog_none_encoded_translation_limit_state] {
       g_enable_watchdog = watchdog_state;
+      g_watchdog_none_encoded_string_translation_limit =
+          watchdog_none_encoded_translation_limit_state;
     };
 
     g_enable_watchdog = true;
+    g_watchdog_none_encoded_string_translation_limit = 2UL;
 
     EXPECT_THROW(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
                                 "test.shared_dict < test_inner.str",
                                 dt),
                  std::runtime_error);
 
-    g_enable_watchdog = false;
+    g_watchdog_none_encoded_string_translation_limit = 1000UL;
 
     THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test, test_inner WHERE "
@@ -10405,8 +10425,8 @@ TEST(Select, Subqueries) {
       "((SELECT COUNT(x) FROM test) - "
       "1)) FROM test;",
       dt);
-    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
-    SKIP_ON_AGGREGATOR(c("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt));
+    EXPECT_THROW(run_multiple_agg("SELECT * FROM (SELECT * FROM test LIMIT 5);", dt),
+                 std::runtime_error);
 
     EXPECT_THROW(run_simple_agg("SELECT AVG(SELECT x FROM test LIMIT 5) FROM test;", dt),
                  std::runtime_error);
@@ -12800,13 +12820,18 @@ TEST(Select, RuntimeFunctions) {
 TEST(Select, TextGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+
+    EXPECT_THROW(run_multiple_agg("select count(*) from (SELECT tnone, count(*) cc from "
+                                  "text_group_by_test group by tnone);",
+                                  dt),
+                 std::runtime_error);
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
-    SKIP_ON_AGGREGATOR(
-        ASSERT_EQ(static_cast<int64_t>(1),
-                  v<int64_t>(run_simple_agg("select count(*) from "
-                                            "(SELECT tnone, count(*) cc from "
-                                            "text_group_by_test group by tnone);",
-                                            dt))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg("select count(*) from "
+                                  "(SELECT ENCODE_TEXT(tnone), count(*) cc from "
+                                  "text_group_by_test group by ENCODE_TEXT(tnone));",
+                                  dt))));
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg("select count(*) from (SELECT tdict, count(*) cc "
                                         "from text_group_by_test group by tdict)",
@@ -12830,8 +12855,23 @@ TEST(Select, UnsupportedExtensions) {
 TEST(Select, UnsupportedSortOfIntermediateResult) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test ORDER BY x;", dt),
+                 std::runtime_error);
+
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
-    SKIP_ON_AGGREGATOR(c(R"(SELECT real_str FROM test ORDER BY x, real_str;)", dt));
+    // Note we don't compare to Sqlite reference answer as ordering only on
+    // x is not deterministic
+    SKIP_ON_AGGREGATOR(EXPECT_NO_THROW(
+        run_multiple_agg(R"(SELECT ENCODE_TEXT(real_str) FROM test ORDER BY x;)", dt)));
+
+    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test ORDER BY x, real_str;", dt),
+                 std::runtime_error);
+
+    // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
+    SKIP_ON_AGGREGATOR(
+        c(R"(SELECT ENCODE_TEXT(real_str) FROM test ORDER BY x, ENCODE_TEXT(real_str);)",
+          R"(SELECT real_str FROM test ORDER BY x, real_str;)",
+          dt));
   }
 }
 
@@ -22051,21 +22091,42 @@ TEST(Select, UnionAll) {
       " SELECT SUM(x), y, CAST(NULL AS SMALLINT) FROM test GROUP BY y"
       " ORDER BY y, z NULLS LAST;",
       dt);
+
     // Don't allow UNION of different types: z(SMALLINT) and CAST(NULL AS INT).
     EXPECT_THROW(run_multiple_agg("SELECT SUM(x), y, z FROM TEST GROUP BY y, z UNION ALL"
                                   " SELECT SUM(x), y, CAST(NULL AS INT)"
                                   " FROM test GROUP BY y;",
                                   dt),
                  std::runtime_error);
+    // The goal is that these should work. (Note they now do with
+    // application of explicit ENCODE_TEXT cast)
+
+    // Exception: Subqueries of a UNION must have exact same data types.
+    EXPECT_THROW(run_multiple_agg("SELECT str FROM test UNION ALL "
+                                  "SELECT real_str FROM test ORDER BY str;",
+                                  dt),
+                 std::runtime_error);
 
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     SKIP_ON_AGGREGATOR(
-        c("SELECT str FROM test UNION ALL SELECT real_str FROM test ORDER BY str;", dt));
+        c("SELECT str FROM test UNION ALL SELECT ENCODE_TEXT(real_str) FROM test ORDER "
+          "BY str;",
+          "SELECT str FROM test UNION ALL SELECT real_str FROM test ORDER BY str;",
+          dt));
+
+    // Exception: Columnar conversion not supported for variable length types
+    EXPECT_THROW(run_multiple_agg("SELECT real_str FROM test UNION ALL "
+                                  "SELECT real_str FROM test ORDER BY real_str;",
+                                  dt),
+                 std::runtime_error);
 
     // Will run if g_watchdog_none_encoded_string_translation_limit is >= num_rows
     SKIP_ON_AGGREGATOR(
-        c("SELECT real_str FROM test UNION ALL SELECT real_str FROM test ORDER BY "
-          "real_str;",
+        c("SELECT ENCODE_TEXT(real_str) t FROM test UNION ALL SELECT "
+          "ENCODE_TEXT(real_str) t "
+          "FROM test ORDER BY t;",
+          "SELECT real_str FROM test UNION ALL SELECT real_str "
+          "FROM test ORDER BY real_str;",
           dt));
   }
   g_enable_union = enable_union;
