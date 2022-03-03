@@ -251,14 +251,14 @@ class Bracket:
     def is_column(self):
         return self.name.rsplit("::", 1)[-1].startswith('Column') and not self.is_column_list()
 
-    def is_any_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1].endswith('TextEncodedDict')
+    def is_any_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1].endswith('TextEncodingDict')
 
-    def is_column_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodedDict'
+    def is_column_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnTextEncodingDict'
 
-    def is_column_list_text_encoded_dict(self):
-        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodedDict'
+    def is_column_list_text_encoding_dict(self):
+        return self.name.rsplit("::", 1)[-1] == 'ColumnListTextEncodingDict'
 
     def is_output_buffer_sizer(self):
         return self.name.rsplit("::", 1)[-1] in OutputBufferSizeTypes

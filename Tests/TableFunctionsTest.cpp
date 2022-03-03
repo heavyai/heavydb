@@ -1372,7 +1372,7 @@ TEST_F(TableFunctions, DictionaryWriteAccess) {
   }
 }
 
-TEST_F(TableFunctions, TextEncodedNoneLiteralArgs) {
+TEST_F(TableFunctions, TextEncodingNoneLiteralArgs) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     // Following tests ability to transform to std::string running on CPU (runs
