@@ -151,8 +151,7 @@ class Catalog final {
       TableDescriptor& td,
       const std::list<ColumnDescriptor>& columns,
       const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
-  int32_t createDashboard(DashboardDescriptor& vd,
-                          bool skip_system_role_creation = false);
+  int32_t createDashboard(DashboardDescriptor& vd);
   void replaceDashboard(DashboardDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
@@ -765,6 +764,8 @@ class Catalog final {
   std::string dumpCreateTableUnlocked(const TableDescriptor* td,
                                       bool multiline_formatting,
                                       bool dump_defaults) const;
+
+  bool isInfoSchemaDb() const;
 
   static constexpr const char* CATALOG_SERVER_NAME{"system_catalog_server"};
   static constexpr const char* MEMORY_STATS_SERVER_NAME{"system_memory_stats_server"};

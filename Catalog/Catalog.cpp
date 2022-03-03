@@ -3954,8 +3954,7 @@ void Catalog::renameColumn(const TableDescriptor* td,
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
-int32_t Catalog::createDashboard(DashboardDescriptor& vd,
-                                 bool skip_system_role_creation) {
+int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -4011,7 +4010,7 @@ int32_t Catalog::createDashboard(DashboardDescriptor& vd,
   addFrontendViewToMap(vd);
   sqlite_lock.unlock();
   write_lock.unlock();
-  if (!skip_system_role_creation) {
+  if (!isInfoSchemaDb()) {
     // NOTE(wamsi): Transactionally unsafe
     createOrUpdateDashboardSystemRole(
         vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
@@ -4089,9 +4088,11 @@ void Catalog::replaceDashboard(DashboardDescriptor& vd) {
   addFrontendViewToMapNoLock(vd);
   sqlite_lock.unlock();
   write_lock.unlock();
-  // NOTE(wamsi): Transactionally unsafe
-  createOrUpdateDashboardSystemRole(
-      vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
+  if (!isInfoSchemaDb()) {
+    // NOTE(wamsi): Transactionally unsafe
+    createOrUpdateDashboardSystemRole(
+        vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
+  }
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {
@@ -5473,10 +5474,14 @@ void Catalog::restoreOldOwnersInMemory(
 }
 
 void Catalog::conditionallyInitializeSystemObjects() {
-  if (g_enable_system_tables && name() == shared::kInfoSchemaDbName) {
+  if (g_enable_system_tables && isInfoSchemaDb()) {
     initializeSystemServers();
     initializeSystemTables();
   }
+}
+
+bool Catalog::isInfoSchemaDb() const {
+  return name() == shared::kInfoSchemaDbName;
 }
 
 void Catalog::initializeSystemServers() {
