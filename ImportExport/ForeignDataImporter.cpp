@@ -15,14 +15,22 @@
  */
 
 #include "ForeignDataImporter.h"
+
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+#include <filesystem>
+
+#include "Archive/S3Archive.h"
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
+#include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "DataMgr/ForeignStorage/ParquetImporter.h"
 #include "Importer.h"
 #include "Parser/ParserNode.h"
 #include "Shared/enable_assign_render_groups.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
+#include "Shared/scope.h"
 #include "UserMapping.h"
 
 extern bool g_enable_legacy_delimited_import;
@@ -32,6 +40,13 @@ extern bool g_enable_legacy_parquet_import;
 extern bool g_enable_fsi_regex_import;
 
 namespace {
+
+struct DownloadedObjectToProcess {
+  std::string object_key;
+  std::atomic<bool> is_downloaded;
+  std::string download_file_path;
+  std::string import_file_path;
+};
 
 std::string get_data_wrapper_type(const import_export::CopyParams& copy_params) {
   std::string data_wrapper_type;
@@ -234,6 +249,69 @@ import_export::ImportStatus import_foreign_data(
   return import_status;
 }
 
+size_t get_number_of_digits(const size_t number) {
+  return std::to_string(number).length();
+}
+
+std::tuple<std::string, import_export::CopyParams> get_local_copy_source_and_params(
+    const import_export::CopyParams& s3_copy_params,
+    std::vector<DownloadedObjectToProcess>& objects_to_process,
+    const size_t begin_object_index,
+    const size_t end_object_index) {
+  import_export::CopyParams local_copy_params = s3_copy_params;
+  // remove any members from `local_copy_params` that are only intended to be used at a
+  // higher level
+  local_copy_params.s3_access_key.clear();
+  local_copy_params.s3_secret_key.clear();
+  local_copy_params.s3_session_token.clear();
+  local_copy_params.s3_region.clear();
+  local_copy_params.s3_endpoint.clear();
+
+  local_copy_params.regex_path_filter = std::nullopt;
+  local_copy_params.file_sort_order_by = "PATHNAME";  // see comment below
+  local_copy_params.file_sort_regex = std::nullopt;
+
+  CHECK_GT(end_object_index, begin_object_index);
+  CHECK_LT(begin_object_index, objects_to_process.size());
+
+  size_t num_objects = end_object_index - begin_object_index;
+  auto& first_object = objects_to_process[begin_object_index];
+  std::string first_path = first_object.download_file_path;
+  std::string temp_dir = first_path + "_import";
+
+  if (!std::filesystem::create_directory(temp_dir)) {
+    throw std::runtime_error("failed to create temporary directory for import: " +
+                             temp_dir);
+  }
+
+  // construct a directory with files to import
+  //
+  // NOTE:
+  // * files are moved into `temp_dir` in the exact order that they appear in
+  // `objects_to_process`
+  //
+  // * the `PATHNAME` option is set for `file_sort_order_by` in order to
+  // guarantee that import occurs in the order specified by user, provided the
+  // data wrapper correctly supports the `PATHNAME` option
+  //
+  // * filenames are chosen such that they appear in lexicographical order by
+  // pathname, thus require padding by appropriate number of zeros
+  std::filesystem::path temp_dir_path{temp_dir};
+  size_t counter = 0;
+  size_t num_zero = get_number_of_digits(num_objects);
+  for (size_t i = begin_object_index; i < end_object_index; ++i) {
+    auto& object = objects_to_process[i];
+    std::filesystem::path old_path = object.download_file_path;
+    auto counter_str = std::to_string(counter++);
+    auto zero_padded_counter_str =
+        std::string(num_zero - counter_str.length(), '0') + counter_str;
+    auto new_path = (temp_dir_path / zero_padded_counter_str).string();
+    std::filesystem::rename(old_path, new_path);
+    object.import_file_path = new_path;
+  }
+  return {temp_dir, local_copy_params};
+}
+
 }  // namespace
 
 namespace import_export {
@@ -301,25 +379,27 @@ void ForeignDataImporter::finalize(
 const int32_t ForeignDataImporter::proxy_foreign_table_fragment_size_ = 2000000;
 
 ImportStatus ForeignDataImporter::importGeneral(
-    const Catalog_Namespace::SessionInfo* session_info) {
+    const Catalog_Namespace::SessionInfo* session_info,
+    const std::string& copy_from_source,
+    const CopyParams& copy_params) {
   auto& catalog = session_info->getCatalog();
 
-  CHECK(foreign_storage::is_valid_source_type(copy_params_));
+  CHECK(foreign_storage::is_valid_source_type(copy_params));
 
   // validate copy params before import in order to print user friendly messages
-  validate_copy_params(copy_params_);
+  validate_copy_params(copy_params);
 
   ImportStatus import_status;
   {
     auto [server, user_mapping, foreign_table] = create_proxy_fsi_objects(
-        copy_from_source_, copy_params_, catalog, table_, session_info);
+        copy_from_source, copy_params, catalog, table_, session_info);
 
     // set fragment size for proxy foreign table during import
     foreign_table->maxFragRows = proxy_foreign_table_fragment_size_;
 
     auto data_wrapper =
         foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
-            get_data_wrapper_type(copy_params_),
+            get_data_wrapper_type(copy_params),
             catalog.getDatabaseId(),
             foreign_table.get(),
             user_mapping.get());
@@ -336,14 +416,238 @@ ImportStatus ForeignDataImporter::importGeneral(
                                         table_,
                                         data_wrapper.get(),
                                         session_info,
-                                        copy_params_,
-                                        copy_from_source_);
+                                        copy_params,
+                                        copy_from_source);
 
   }  // this scope ensures that fsi proxy objects are destroyed proir to checkpointing
 
   finalize(*session_info, import_status, table_->tableId);
 
   return import_status;
+}
+
+ImportStatus ForeignDataImporter::importGeneral(
+    const Catalog_Namespace::SessionInfo* session_info) {
+  return importGeneral(session_info, copy_from_source_, copy_params_);
+}
+
+void ForeignDataImporter::setDefaultImportPath(const std::string& base_path) {
+  auto data_dir_path = boost::filesystem::canonical(base_path);
+  default_import_path_ = (data_dir_path / shared::kDefaultImportDirName).string();
+}
+
+ImportStatus ForeignDataImporter::importGeneralS3(
+    const Catalog_Namespace::SessionInfo* session_info) {
+  CHECK(foreign_storage::is_s3_uri(copy_from_source_));
+
+  if (!(copy_params_.source_type == SourceType::kDelimitedFile ||
+#if ENABLE_IMPORT_PARQUET
+        copy_params_.source_type == SourceType::kParquetFile ||
+#endif
+        copy_params_.source_type == SourceType::kRegexParsedFile)) {
+    throw std::runtime_error("Attempting to load S3 resource '" + copy_from_source_ +
+                             "' for unsupported 'source_type' (must be 'DELIMITED_FILE'"
+#if ENABLE_IMPORT_PARQUET
+                             ", 'PARQUET_FILE'"
+#endif
+                             " or 'REGEX_PARSED_FILE'");
+  }
+
+  shared::validate_sort_options(copy_params_.file_sort_order_by,
+                                copy_params_.file_sort_regex);
+
+#ifdef HAVE_AWS_S3
+
+  auto uuid = boost::uuids::random_generator()();
+  std::string base_path = "s3-import-" + boost::uuids::to_string(uuid);
+  auto import_path = std::filesystem::path(default_import_path_) / base_path;
+
+  auto s3_archive = std::make_unique<S3Archive>(copy_from_source_,
+                                                copy_params_.s3_access_key,
+                                                copy_params_.s3_secret_key,
+                                                copy_params_.s3_session_token,
+                                                copy_params_.s3_region,
+                                                copy_params_.s3_endpoint,
+                                                copy_params_.plain_text,
+                                                copy_params_.regex_path_filter,
+                                                copy_params_.file_sort_order_by,
+                                                copy_params_.file_sort_regex,
+                                                import_path);
+  s3_archive->init_for_read();
+
+  const auto bucket_name = s3_archive->url_part(4);
+
+  auto object_keys = s3_archive->get_objkeys();
+  std::vector<DownloadedObjectToProcess> objects_to_process(object_keys.size());
+  size_t object_count = 0;
+  for (const auto& objkey : object_keys) {
+    auto& object = objects_to_process[object_count++];
+    object.object_key = objkey;
+    object.is_downloaded = false;
+  }
+
+  // Ensure files & dirs are cleaned up, regardless of outcome
+  ScopeGuard cleanup_guard = [&] {
+    if (std::filesystem::exists(import_path)) {
+      std::filesystem::remove_all(import_path);
+    }
+  };
+
+  ImportStatus aggregate_import_status;
+  const int num_download_threads = copy_params_.s3_max_concurrent_downloads;
+
+  std::mutex communication_mutex;
+  bool continue_downloading = true;
+  bool download_exception_occured = false;
+
+  std::condition_variable files_download_condition;
+
+  auto is_downloading_finished = [&] {
+    std::unique_lock communication_lock(communication_mutex);
+    return !continue_downloading || download_exception_occured;
+  };
+
+  std::function<void(const std::vector<size_t>&)> download_objects =
+      [&](const std::vector<size_t>& partition) {
+        for (const auto& index : partition) {
+          DownloadedObjectToProcess& object = objects_to_process[index];
+          const std::string& obj_key = object.object_key;
+          if (is_downloading_finished()) {
+            return;
+          }
+          std::exception_ptr eptr;  // unused
+          std::string local_file_path;
+          std::string exception_what;
+          bool exception_occured = false;
+
+          try {
+            local_file_path = s3_archive->land(obj_key,
+                                               eptr,
+                                               false,
+                                               /*allow_named_pipe_use=*/false,
+                                               /*track_file_path=*/false);
+          } catch (const std::exception& e) {
+            exception_what = e.what();
+            exception_occured = true;
+          }
+
+          if (is_downloading_finished()) {
+            return;
+          }
+          if (exception_occured) {
+            {
+              std::unique_lock communication_lock(communication_mutex);
+              download_exception_occured = true;
+            }
+            files_download_condition.notify_all();
+            throw std::runtime_error("failed to fetch s3 object: '" + obj_key +
+                                     "': " + exception_what);
+          }
+
+          object.download_file_path = local_file_path;
+          object.is_downloaded =
+              true;  // this variable is atomic and therefore acts as a lock, it must be
+                     // set last to ensure no data race
+
+          files_download_condition.notify_all();
+        }
+      };
+
+  std::function<void()> import_local_files = [&]() {
+    for (size_t object_index = 0; object_index < object_count;) {
+      {
+        std::unique_lock communication_lock(communication_mutex);
+        files_download_condition.wait(
+            communication_lock,
+            [&download_exception_occured, object_index, &objects_to_process]() {
+              return objects_to_process[object_index].is_downloaded ||
+                     download_exception_occured;
+            });
+        if (download_exception_occured) {  // do not wait for object index if a download
+                                           // error has occured
+          return;
+        }
+      }
+
+      // find largest range of files to import
+      size_t end_object_index = object_count;
+      for (size_t i = object_index + 1; i < object_count; ++i) {
+        if (!objects_to_process[i].is_downloaded) {
+          end_object_index = i;
+          break;
+        }
+      }
+
+      ImportStatus local_import_status;
+      std::string local_import_dir;
+      try {
+        CopyParams local_copy_params;
+        std::tie(local_import_dir, local_copy_params) = get_local_copy_source_and_params(
+            copy_params_, objects_to_process, object_index, end_object_index);
+        local_import_status =
+            importGeneral(session_info, local_import_dir, local_copy_params);
+        // clean up temporary files
+        std::filesystem::remove_all(local_import_dir);
+      } catch (const std::exception& except) {
+        // replace all occurences of file names with the object keys for
+        // users
+        std::string what = except.what();
+
+        for (size_t i = object_index; i < end_object_index; ++i) {
+          auto& object = objects_to_process[i];
+          what = boost::regex_replace(what,
+                                      boost::regex{object.import_file_path},
+                                      bucket_name + "/" + object.object_key);
+        }
+        {
+          std::unique_lock communication_lock(communication_mutex);
+          continue_downloading = false;
+        }
+        // clean up temporary files
+        std::filesystem::remove_all(local_import_dir);
+        throw std::runtime_error(what);
+      }
+      aggregate_import_status += local_import_status;
+      import_export::Importer::set_import_status(copy_from_source_,
+                                                 aggregate_import_status);
+      if (aggregate_import_status.load_failed) {
+        {
+          std::unique_lock communication_lock(communication_mutex);
+          continue_downloading = false;
+        }
+        return;
+      }
+
+      object_index =
+          end_object_index;  // all objects in range [object_index,end_object_index)
+                             // correctly imported at this point in excecution, move onto
+                             // next range
+    }
+  };
+
+  std::vector<size_t> partition_range(object_count);
+  std::iota(partition_range.begin(), partition_range.end(), 0);
+  auto download_futures = foreign_storage::create_futures_for_workers(
+      partition_range, num_download_threads, download_objects);
+
+  auto import_future = std::async(std::launch::async, import_local_files);
+
+  for (auto& future : download_futures) {
+    future.wait();
+  }
+  import_future.get();  // may throw an exception
+
+  // get any remaining exceptions
+  for (auto& future : download_futures) {
+    future.get();
+  }
+  return aggregate_import_status;
+
+#else
+  throw std::runtime_error("AWS S3 support not available");
+
+  return {};
+#endif
 }
 
 #ifdef ENABLE_IMPORT_PARQUET
@@ -466,6 +770,9 @@ ImportStatus ForeignDataImporter::importParquet(
 
 ImportStatus ForeignDataImporter::import(
     const Catalog_Namespace::SessionInfo* session_info) {
+  if (foreign_storage::is_s3_uri(copy_from_source_)) {
+    return importGeneralS3(session_info);
+  }
   return importGeneral(session_info);
 }
 

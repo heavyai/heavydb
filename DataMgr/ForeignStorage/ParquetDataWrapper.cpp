@@ -534,23 +534,17 @@ void ParquetDataWrapper::populateChunkBuffers(const ChunkToBufferMap& required_b
         chunk_key[CHUNK_KEY_FRAGMENT_IDX]);
   }
 
-  auto hints_per_thread = partition_for_threads(col_frag_hints, g_max_import_threads);
-
-  std::vector<std::future<void>> futures;
-  for (const auto& hint_set : hints_per_thread) {
-    futures.emplace_back(std::async(std::launch::async, [&, hint_set, this] {
-      for (const auto& [col_id, frag_id] : hint_set) {
-        loadBuffersUsingLazyParquetChunkLoader(
-            col_id, frag_id, buffers_to_load, delete_buffer);
-      }
-    }));
-  }
+  std::function<void(const std::set<ForeignStorageMgr::ParallelismHint>&)> lambda =
+      [&, this](const std::set<ForeignStorageMgr::ParallelismHint>& hint_set) {
+        for (const auto& [col_id, frag_id] : hint_set) {
+          loadBuffersUsingLazyParquetChunkLoader(
+              col_id, frag_id, buffers_to_load, delete_buffer);
+        }
+      };
+  auto futures = create_futures_for_workers(col_frag_hints, g_max_import_threads, lambda);
 
   // We wait on all futures, then call get because we want all threads to have finished
   // before we propagate a potential exception.
-  for (auto& future : futures) {
-    future.wait();
-  }
   for (auto& future : futures) {
     future.wait();
   }

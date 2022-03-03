@@ -71,6 +71,20 @@ auto partition_for_threads(const std::vector<T>& items, size_t max_threads) {
   return items_by_thread;
 }
 
+template <typename Container>
+std::vector<std::future<void>> create_futures_for_workers(
+    const Container& items,
+    size_t max_threads,
+    std::function<void(const Container&)> lambda) {
+  auto items_per_thread = partition_for_threads(items, max_threads);
+  std::vector<std::future<void>> futures;
+  for (const auto& items : items_per_thread) {
+    futures.emplace_back(std::async(std::launch::async, lambda, items));
+  }
+
+  return futures;
+}
+
 const foreign_storage::ForeignTable& get_foreign_table_for_key(const ChunkKey& key);
 
 bool is_system_table_chunk_key(const ChunkKey& chunk_key);

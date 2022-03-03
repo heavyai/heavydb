@@ -23,6 +23,8 @@
 namespace foreign_storage {
 class UserMapping;
 
+bool is_s3_uri(const std::string& file_path);
+
 /**
  * Verify if `source_type` is valid.
  */

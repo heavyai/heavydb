@@ -31,12 +31,14 @@
 #include "Shared/SysDefinitions.h"
 #include "Shared/misc.h"
 
-namespace {
-
+namespace foreign_storage {
 bool is_s3_uri(const std::string& file_path) {
   const std::string s3_prefix = "s3://";
   return file_path.find(s3_prefix) != std::string::npos;
 }
+}  // namespace foreign_storage
+
+namespace {
 
 
 bool is_valid_data_wrapper(const std::string& data_wrapper_type) {

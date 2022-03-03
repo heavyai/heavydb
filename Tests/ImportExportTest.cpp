@@ -5336,6 +5336,8 @@ int main(int argc, char** argv) {
 
   logger::init(log_options);
 
+  import_export::ForeignDataImporter::setDefaultImportPath(BASE_PATH);
+
   int err{0};
   try {
     testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);

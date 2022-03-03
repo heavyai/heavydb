@@ -23,6 +23,7 @@
 
 #include "CommandLineOptions.h"
 #include "LeafHostInfo.h"
+#include "ImportExport/ForeignDataImporter.h"
 #include "MapDRelease.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
@@ -1112,6 +1113,7 @@ void CommandLineOptions::validate() {
                                                shared::kDataDirectoryName);
   ddl_utils::FilePathBlacklist::addToBlacklist(base_path + "/" +
                                                shared::kDefaultLogDirName);
+  import_export::ForeignDataImporter::setDefaultImportPath(base_path);
   g_enable_s3_fsi = false;
 
   if (!g_enable_legacy_delimited_import ||

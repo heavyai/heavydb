@@ -34,6 +34,8 @@ class ForeignDataImporter : public AbstractImporter {
    */
   ImportStatus import(const Catalog_Namespace::SessionInfo* session_info) override;
 
+  static void setDefaultImportPath(const std::string& base_path);
+
  protected:
   std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::DistributedConnector>
       connector_;
@@ -53,10 +55,16 @@ class ForeignDataImporter : public AbstractImporter {
 #endif
 
   ImportStatus importGeneral(const Catalog_Namespace::SessionInfo* session_info);
+  ImportStatus importGeneral(const Catalog_Namespace::SessionInfo* session_info,
+                             const std::string& copy_from_source,
+                             const CopyParams& copy_params);
+
+  ImportStatus importGeneralS3(const Catalog_Namespace::SessionInfo* session_info);
 
   std::string copy_from_source_;
   CopyParams copy_params_;
   const TableDescriptor* table_;
+  inline static std::string default_import_path_;
 
   const static int32_t proxy_foreign_table_fragment_size_;
 };

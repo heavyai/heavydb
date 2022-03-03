@@ -71,7 +71,8 @@ class S3Archive : public Archive {
             const bool plain_text,
             const std::optional<std::string>& regex_path_filter,
             const std::optional<std::string>& file_sort_order_by,
-            const std::optional<std::string>& file_sort_regex)
+            const std::optional<std::string>& file_sort_regex,
+            const std::string& s3_temp_dir_path = {})
       : S3Archive(url, plain_text) {
     this->s3_access_key = s3_access_key;
     this->s3_secret_key = s3_secret_key;
@@ -82,10 +83,14 @@ class S3Archive : public Archive {
     this->file_sort_order_by = file_sort_order_by;
     this->file_sort_regex = file_sort_regex;
 
-    // this must be local to heavydb not client
-    // or posix dir path accessible to heavydb
-    auto env_s3_temp_dir = getenv("TMPDIR");
-    s3_temp_dir = env_s3_temp_dir ? env_s3_temp_dir : "/tmp";
+    if (s3_temp_dir_path.empty()) {
+      // this must be local to heavydb not client
+      // or posix dir path accessible to heavydb
+      auto env_s3_temp_dir = getenv("TMPDIR");
+      s3_temp_dir = env_s3_temp_dir ? env_s3_temp_dir : "/tmp";
+    } else {
+      s3_temp_dir = s3_temp_dir_path;
+    }
   }
 
   ~S3Archive() override {
@@ -109,7 +114,9 @@ class S3Archive : public Archive {
 #ifdef HAVE_AWS_S3
   const std::string land(const std::string& objkey,
                          std::exception_ptr& teptr,
-                         const bool for_detection);
+                         const bool for_detection,
+                         const bool allow_named_pipe_use = true,
+                         const bool track_file_paths = true);
   void vacuum(const std::string& objkey);
 #else
   const std::string land(const std::string& objkey,

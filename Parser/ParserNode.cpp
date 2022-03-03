@@ -1161,6 +1161,20 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
           throw std::runtime_error("Option s3_endpoint must be a string.");
         }
         copy_params.s3_endpoint = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_max_concurrent_downloads")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error(
+              "'s3_max_concurrent_downloads' option must be an integer");
+        }
+        const int s3_max_concurrent_downloads = int_literal->get_intval();
+        if (s3_max_concurrent_downloads > 0) {
+          copy_params.s3_max_concurrent_downloads = s3_max_concurrent_downloads;
+        } else {
+          throw std::runtime_error(
+              "Invalid value for 's3_max_concurrent_downloads' option (must be > 0): " +
+              std::to_string(s3_max_concurrent_downloads));
+        }
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());

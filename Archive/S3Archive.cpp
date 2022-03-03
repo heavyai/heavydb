@@ -151,7 +151,9 @@ void S3Archive::init_for_read() {
 // land entirely to be imported... (avro?)
 const std::string S3Archive::land(const std::string& objkey,
                                   std::exception_ptr& teptr,
-                                  const bool for_detection) {
+                                  const bool for_detection,
+                                  const bool allow_named_pipe_use,
+                                  const bool track_file_paths) {
   // 7z file needs entire landing; other file types use a named pipe
   static std::atomic<int64_t> seqno(((int64_t)getpid() << 32) | time(0));
   // need a dummy ext b/c no-ext now indicate plain_text
@@ -163,6 +165,9 @@ const std::string S3Archive::land(const std::string& objkey,
 #ifdef ENABLE_IMPORT_PARQUET
   use_pipe = use_pipe && (nullptr == ext || 0 != strcmp(ext, ".parquet"));
 #endif
+  if (!allow_named_pipe_use) {  // override using a named pipe no matter the configuration
+    use_pipe = false;
+  }
   if (use_pipe) {
     if (mkfifo(file_path.c_str(), 0660) < 0) {
       throw std::runtime_error("failed to create named pipe '" + file_path +
@@ -269,7 +274,10 @@ const std::string S3Archive::land(const std::string& objkey,
     }
   }
 
-  file_paths.insert(std::pair<const std::string, const std::string>(objkey, file_path));
+  if (track_file_paths) {  // `file_paths` may be shared between threads, so is not
+                           // thread-safe
+    file_paths.insert(std::pair<const std::string, const std::string>(objkey, file_path));
+  }
   return file_path;
 }
 
