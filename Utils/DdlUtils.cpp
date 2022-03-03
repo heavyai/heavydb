@@ -24,6 +24,7 @@
 
 #include "rapidjson/document.h"
 
+#include "DataMgr/Encoder.h"
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ReservedKeywords.h"
 #include "Shared/file_path_util.h"

@@ -47,7 +47,6 @@ add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanT
 add_executable(ImportExportTest ImportExportTest.cpp)
 add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
 add_executable(AlterTableDdlTest AlterTableDdlTest.cpp)
-add_executable(UpdelStorageTest UpdelStorageTest.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
 add_executable(SpecialCharsTest SpecialCharsTest.cpp)
@@ -119,7 +118,6 @@ target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(AlterTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
@@ -202,7 +200,6 @@ endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
-add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
 add_test(ImportExportTest ImportExportTest ${TEST_ARGS})
 add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
 add_test(AlterTableDdlTest AlterTableDdlTest ${TEST_ARGS})
@@ -316,7 +313,6 @@ set(TEST_PROGRAMS
   ImportExportTest
   ArrowCsvForeignStorageTest
   AlterTableDdlTest
-  UpdelStorageTest
   ComputeMetadataTest
   BumpAllocatorTest
   SpecialCharsTest

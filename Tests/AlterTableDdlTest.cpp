@@ -27,7 +27,6 @@
 #include "Parser/parser.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
-#include "Shared/UpdelRoll.h"
 #include "Shared/scope.h"
 #include "Tests/TestHelpers.h"
 
@@ -277,12 +276,8 @@ class AlterColumnTest4 : public ::testing::Test {
     EXPECT_NO_THROW(run_ddl_statement("alter table t add d int;"););
     EXPECT_NO_THROW(run_ddl_statement("alter table t add e int;"););
     EXPECT_NO_THROW(run_ddl_statement("alter table t add f float;"););
-    EXPECT_NO_THROW(
-        run_query(
-            "insert into t values ('0', '0', 0, '0', '0', 0, 0);"););
-    EXPECT_NO_THROW(
-        run_query(
-            "insert into t values ('1', '1', 1, '1', '1', 1, 1);"););
+    EXPECT_NO_THROW(run_query("insert into t values ('0', '0', 0, '0', '0', 0, 0);"););
+    EXPECT_NO_THROW(run_query("insert into t values ('1', '1', 1, '1', '1', 1, 1);"););
     g_test_drop_column_rollback = false;
   }
   void TearDown() override { EXPECT_NO_THROW(run_ddl_statement("drop table t;");); }

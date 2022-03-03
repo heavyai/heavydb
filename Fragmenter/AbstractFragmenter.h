@@ -29,7 +29,6 @@
 
 #include "QueryEngine/TargetMetaInfo.h"
 #include "QueryEngine/TargetValue.h"
-#include "Shared/UpdelRoll.h"
 #include "Shared/sqltypes.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
@@ -177,49 +176,6 @@ class AbstractFragmenter {
 
   virtual size_t getNumRows() = 0;
   virtual void setNumRows(const size_t numTuples) = 0;
-
-  virtual std::optional<ChunkUpdateStats> updateColumn(
-      const Catalog_Namespace::Catalog* catalog,
-      const TableDescriptor* td,
-      const ColumnDescriptor* cd,
-      const int fragment_id,
-      const std::vector<uint64_t>& frag_offsets,
-      const std::vector<ScalarTargetValue>& rhs_values,
-      const SQLTypeInfo& rhs_type,
-      const Data_Namespace::MemoryLevel memory_level,
-      UpdelRoll& updel_roll) = 0;
-
-  virtual void updateColumns(const Catalog_Namespace::Catalog* catalog,
-                             const TableDescriptor* td,
-                             const int fragmentId,
-                             const std::vector<TargetMetaInfo> sourceMetaInfo,
-                             const std::vector<const ColumnDescriptor*> columnDescriptors,
-                             const RowDataProvider& sourceDataProvider,
-                             const size_t indexOffFragmentOffsetColumn,
-                             const Data_Namespace::MemoryLevel memoryLevel,
-                             UpdelRoll& updelRoll,
-                             Executor* executor) = 0;
-
-  virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                            const TableDescriptor* td,
-                            const ColumnDescriptor* cd,
-                            const int fragment_id,
-                            const std::vector<uint64_t>& frag_offsets,
-                            const ScalarTargetValue& rhs_value,
-                            const SQLTypeInfo& rhs_type,
-                            const Data_Namespace::MemoryLevel memory_level,
-                            UpdelRoll& updel_roll) = 0;
-
-  virtual void updateColumnMetadata(ColumnInfoPtr col_info,
-                                    FragmentInfo& fragment,
-                                    std::shared_ptr<Chunk_NS::Chunk> chunk,
-                                    const UpdateValuesStats& update_values_stats,
-                                    const SQLTypeInfo& rhs_type,
-                                    UpdelRoll& updel_roll) = 0;
-
-  virtual void updateMetadata(const Catalog_Namespace::Catalog* catalog,
-                              const MetaDataKey& key,
-                              UpdelRoll& updel_roll) = 0;
 
   virtual void dropColumns(const std::vector<int>& columnIds) = 0;
 

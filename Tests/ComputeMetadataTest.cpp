@@ -29,7 +29,6 @@
 #define BASE_PATH "./tmp"
 #endif
 
-extern bool g_enable_auto_metadata_update;
 namespace {
 
 #define ASSERT_METADATA(type, tag)                                   \
@@ -253,7 +252,7 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
 class MetadataUpdate : public DBHandlerTestFixture,
                        public testing::WithParamInterface<bool> {
  protected:
-  static void SetUpTestSuite() { g_enable_auto_metadata_update = false; }
+  static void SetUpTestSuite() {  }
 
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
@@ -362,11 +361,6 @@ INSTANTIATE_TEST_SUITE_P(ShardedAndNonShardedTable,
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-
-  // Disable automatic metadata update in order to ensure
-  // that metadata is not automatically updated for other
-  // tests that do and assert metadata updates.
-  g_enable_auto_metadata_update = false;
 
   int err{0};
   try {

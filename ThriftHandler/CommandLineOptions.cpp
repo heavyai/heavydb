@@ -767,11 +767,6 @@ void CommandLineOptions::fillAdvancedOptions() {
           ->default_value(g_enable_calcite_ddl_parser)
           ->implicit_value(true),
       "Enable using Calcite for supported DDL parsing when available.");
-  developer_desc.add_options()("enable-auto-metadata-update",
-                               po::value<bool>(&g_enable_auto_metadata_update)
-                                   ->default_value(g_enable_auto_metadata_update)
-                                   ->implicit_value(true),
-                               "Enable automatic metadata update.");
   developer_desc.add_options()(
       "parallel-top-min",
       po::value<size_t>(&g_parallel_top_min)->default_value(g_parallel_top_min),

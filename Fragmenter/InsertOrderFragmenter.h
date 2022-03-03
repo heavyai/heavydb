@@ -52,8 +52,6 @@ namespace Fragmenter_Namespace {
 
 class InsertOrderFragmenter : public AbstractFragmenter {
  public:
-  using ModifyTransactionTracker = UpdelRoll;
-
   InsertOrderFragmenter(
       const std::vector<int> chunkKeyPrefix,
       std::vector<Chunk_NS::Chunk>& chunkVec,
@@ -118,53 +116,6 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   inline std::string getFragmenterType() override { return fragmenterType_; }
   size_t getNumRows() override { return numTuples_; }
   void setNumRows(const size_t numTuples) override { numTuples_ = numTuples; }
-
-  std::optional<ChunkUpdateStats> updateColumn(
-      const Catalog_Namespace::Catalog* catalog,
-      const TableDescriptor* td,
-      const ColumnDescriptor* cd,
-      const int fragment_id,
-      const std::vector<uint64_t>& frag_offsets,
-      const std::vector<ScalarTargetValue>& rhs_values,
-      const SQLTypeInfo& rhs_type,
-      const Data_Namespace::MemoryLevel memory_level,
-      UpdelRoll& updel_roll) override;
-
-  void updateColumns(const Catalog_Namespace::Catalog* catalog,
-                     const TableDescriptor* td,
-                     const int fragmentId,
-                     const std::vector<TargetMetaInfo> sourceMetaInfo,
-                     const std::vector<const ColumnDescriptor*> columnDescriptors,
-                     const RowDataProvider& sourceDataProvider,
-                     const size_t indexOffFragmentOffsetColumn,
-                     const Data_Namespace::MemoryLevel memoryLevel,
-                     UpdelRoll& updelRoll,
-                     Executor* executor) override;
-
-  void updateColumn(const Catalog_Namespace::Catalog* catalog,
-                    const TableDescriptor* td,
-                    const ColumnDescriptor* cd,
-                    const int fragment_id,
-                    const std::vector<uint64_t>& frag_offsets,
-                    const ScalarTargetValue& rhs_value,
-                    const SQLTypeInfo& rhs_type,
-                    const Data_Namespace::MemoryLevel memory_level,
-                    UpdelRoll& updel_roll) override;
-
-  void updateColumnMetadata(ColumnInfoPtr col_info,
-                            FragmentInfo& fragment,
-                            std::shared_ptr<Chunk_NS::Chunk> chunk,
-                            const UpdateValuesStats& update_values_stats,
-                            const SQLTypeInfo& rhs_type,
-                            UpdelRoll& updel_roll) override;
-
-  void updateMetadata(const Catalog_Namespace::Catalog* catalog,
-                      const MetaDataKey& key,
-                      UpdelRoll& updel_roll) override;
-
-  auto getChunksForAllColumns(const TableDescriptor* td,
-                              const FragmentInfo& fragment,
-                              const Data_Namespace::MemoryLevel memory_level);
 
   void dropColumns(const std::vector<int>& columnIds) override;
 

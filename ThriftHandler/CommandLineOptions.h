@@ -204,7 +204,6 @@ extern bool g_enable_cpu_sub_tasks;
 extern size_t g_cpu_sub_task_size;
 extern bool g_enable_filter_function;
 extern size_t g_max_import_threads;
-extern bool g_enable_auto_metadata_update;
 extern bool g_allow_s3_server_privileges;
 extern bool g_read_only;
 extern bool g_enable_automatic_ir_metadata;
