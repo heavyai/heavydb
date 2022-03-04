@@ -33,6 +33,7 @@ add_executable(JSONTest JSONTest.cpp)
 endif()
 add_executable(DataRecyclerTest DataRecyclerTest.cpp)
 add_executable(DataMgrTest DataMgrTest.cpp)
+add_executable(ExplainTest ExplainTest.cpp)
 
 if(ENABLE_CUDA)
   message(DEBUG "Tests CUDA_COMPILATION_ARCH: ${CUDA_COMPILATION_ARCH}")
@@ -240,6 +241,7 @@ if(NOT MSVC)
 target_link_libraries(JSONTest gtest Logger Shared)
 endif()
 target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(ExplainTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -347,6 +349,7 @@ if(NOT MSVC)
 add_test(JSONTest JSONTest ${TEST_ARGS})
 endif()
 add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
+add_test(ExplainTest ExplainTest ${TEST_ARGS})
 
 if(ENABLE_SYSTEM_TFS)
   add_test(SystemTableFunctionsTest SystemTableFunctionsTest ${TEST_ARGS})
@@ -470,6 +473,8 @@ if(NOT MSVC)
 endif()
 list(APPEND TEST_PROGRAMS
   DataMgrTest)
+list(APPEND TEST_PROGRAMS
+  ExplainTest)
 
 if(NOT MSVC)
   list(APPEND TEST_PROGRAMS

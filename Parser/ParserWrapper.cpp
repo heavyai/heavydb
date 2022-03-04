@@ -148,6 +148,8 @@ ParserWrapper::~ParserWrapper() {}
 
 void ParserWrapper::initExplainType(std::string query_string) {
   // sets explain_type_ and caches a trimmed actual_query_
+  explain_type_ = ParserWrapper::ExplainType::None;
+
   if (boost::istarts_with(query_string, calcite_explain_str)) {
     actual_query_ = boost::trim_copy(query_string.substr(calcite_explain_str.size()));
     ParserWrapper inner{actual_query_};
@@ -184,8 +186,6 @@ void ParserWrapper::initExplainType(std::string query_string) {
       explain_type_ = ExplainType::IR;
     }
   }
-
-  explain_type_ = ParserWrapper::ExplainType::None;
 }
 
 ExplainInfo ParserWrapper::getExplainInfo() const {
