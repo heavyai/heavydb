@@ -151,14 +151,28 @@ void validate_shared_dictionary(
         "Column " + col_qualified_name +
         " shouldn't specify an encoding, it borrows it from the referenced column");
   }
-  const auto foreign_td =
-      catalog.getMetadataForTable(shared_dict_def->get_foreign_table());
-  if (!foreign_td && table_name->compare(shared_dict_def->get_foreign_table())) {
-    throw std::runtime_error("Table " + shared_dict_def->get_foreign_table() +
-                             " doesn't exist");
+
+  // NOTE(Misiu): Unfortunately we have overloaded the term "foreign table" here.  In
+  // SharedDictionaryDef the "foreign table" is a table that is sharing a dictionary
+  // which it did not create.  This is different from an FSI (HeavyConnect) "foreign
+  // table" which is a specific type of table who's data is stored outside of the database
+  // system. Currently string dictionaries have some unique handling in FSI (they are
+  // populated lazily) so we cannot share them with non-foreign (non-FSI) tables.
+  const auto foreign_table_name = shared_dict_def->get_foreign_table();
+  const auto foreign_td = catalog.getMetadataForTable(foreign_table_name);
+  if (!foreign_td && table_name->compare(foreign_table_name)) {
+    throw std::runtime_error("Table " + foreign_table_name + " doesn't exist");
   }
 
-  if (foreign_td) {
+  if (foreign_td) {                      // Dictionary is shared with another table
+    if (foreign_td->isForeignTable()) {  // FSI foreign table
+      // The 'create foreign table' syntax does not support sharing dictionaries, so we
+      // only have to worry about foreign tables being the target of sharing, not the
+      // source.
+      throw std::runtime_error(
+          "Attempting to share dictionary with foreign table " + foreign_table_name +
+          ".  Foreign table dictionaries cannot currently be shared.");
+    }
     const auto reference_columns =
         catalog.getAllColumnMetadataForTable(foreign_td->tableId, false, false, false);
     const auto reference_cd_ptr =

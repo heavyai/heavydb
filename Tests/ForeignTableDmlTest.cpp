@@ -6583,6 +6583,32 @@ TEST_F(PrefetchLimitTest, NoCacheFragmentOnly) {
                       textTableResults());
 }
 
+class TableInteractionTest : public ForeignTableTest {
+ protected:
+  inline static const std::string table_name{"table_1"};
+
+  void SetUp() override {
+    ForeignTableTest::SetUp();
+    sql("drop table if exists " + table_name + ";");
+    sql("drop foreign table if exists " + default_table_name + ";");
+  }
+
+  void TearDown() override {
+    sql("drop table if exists " + table_name + ";");
+    sql("drop foreign table if exists " + default_table_name + ";");
+    ForeignTableTest::TearDown();
+  }
+};
+
+TEST_F(TableInteractionTest, SharedDictionaryDisabled) {
+  sqlCreateForeignTable("(t TEXT, i INTEGER[])", "example_1", "csv");
+  queryAndAssertException(
+      "create table " + table_name + " (t text, shared dictionary (t) references " +
+          default_table_name + "(t));",
+      "Attempting to share dictionary with foreign table " + default_table_name +
+          ".  Foreign table dictionaries cannot currently be shared.");
+}
+
 int main(int argc, char** argv) {
   g_enable_fsi = true;
   g_enable_s3_fsi = true;
