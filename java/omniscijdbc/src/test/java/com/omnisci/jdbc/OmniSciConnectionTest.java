@@ -162,7 +162,7 @@ public class OmniSciConnectionTest {
       Connection conn = DriverManager.getConnection(url, pt);
     } catch (SQLException sq) {
       assertEquals(sq.getMessage(),
-              "No suitable driver found for jdbc:NOT_omnisci:localhost:6274:omnisci");
+              "No suitable driver found for jdbc:NOT_omnisci:localhost:6274:heavyai");
       return;
     }
     String err = "Connection should have thrown";
