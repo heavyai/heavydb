@@ -476,6 +476,8 @@ ExecutionResult DdlCommandExecutor::execute() {
     result = ShowDatabasesCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "SHOW_SERVERS") {
     result = ShowForeignServersCommand{*ddl_data_, session_ptr_}.execute();
+  } else if (ddl_command_ == "SHOW_TABLE_FUNCTIONS") {
+    result = ShowTableFunctionsCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "ALTER_SERVER") {
     result = AlterForeignServerCommand{*ddl_data_, session_ptr_}.execute();
   } else if (ddl_command_ == "ALTER_FOREIGN_TABLE") {
@@ -1390,6 +1392,88 @@ ExecutionResult ShowDatabasesCommand::execute() {
     logical_values.emplace_back(RelLogicalValues::RowValues{});
     logical_values.back().emplace_back(genLiteralStr(db_summary.dbName));
     logical_values.back().emplace_back(genLiteralStr(db_summary.dbOwnerName));
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+ShowTableFunctionsCommand::ShowTableFunctionsCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowTableFunctionsCommand::execute() {
+  // Get all table functions in the same way as OmniSql \t command
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::vector<TargetMetaInfo> label_infos;
+  std::vector<RelLogicalValues::RowValues> logical_values;
+
+  if (ddl_payload.HasMember("tfNames")) {
+    // label_infos -> column labels
+    label_infos.emplace_back("name", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("signature", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("input_names", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("input_types", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("output_names", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("output_types", SQLTypeInfo(kTEXT, true));
+    label_infos.emplace_back("CPU", SQLTypeInfo(kBOOLEAN, true));
+    label_infos.emplace_back("GPU", SQLTypeInfo(kBOOLEAN, true));
+    label_infos.emplace_back("runtime", SQLTypeInfo(kBOOLEAN, true));
+    label_infos.emplace_back("filter_table_transpose", SQLTypeInfo(kBOOLEAN, true));
+    // logical_values -> table data
+    for (const auto& tf_name_json : ddl_payload["tfNames"].GetArray()) {
+      std::string tf_name = tf_name_json.GetString();
+      auto tfs = table_functions::TableFunctionsFactory::get_table_funcs(tf_name);
+      for (table_functions::TableFunction& tf : tfs) {
+        logical_values.emplace_back(RelLogicalValues::RowValues{});
+        // Name
+        logical_values.back().emplace_back(genLiteralStr(tf.getName(true, false)));
+        // Signature
+        logical_values.back().emplace_back(genLiteralStr(
+            tf.getSignature(/*include_name*/ false, /*include_output*/ true)));
+        // Input argument names
+        logical_values.back().emplace_back(
+            genLiteralStr(tf.getArgNames(/* use_input_args */ true)));
+        // Input argument types
+        logical_values.back().emplace_back(
+            genLiteralStr(tf.getArgTypes(/* use_input_args */ true)));
+        // Output argument names
+        logical_values.back().emplace_back(
+            genLiteralStr(tf.getArgNames(/* use_input_args */ false)));
+        // Output argument types
+        logical_values.back().emplace_back(
+            genLiteralStr(tf.getArgTypes(/* use_input_args */ false)));
+        // CPU?
+        logical_values.back().emplace_back(genLiteralBoolean(tf.isCPU()));
+        // GPU?
+        logical_values.back().emplace_back(genLiteralBoolean(tf.isGPU()));
+        // Runtime?
+        logical_values.back().emplace_back(genLiteralBoolean(tf.isRuntime()));
+        // Implements filter_table_transpose?
+        logical_values.back().emplace_back(genLiteralBoolean(
+            !tf.getFunctionAnnotation("filter_table_function_transpose", "").empty()));
+      }
+    }
+  } else {
+    // label_infos -> column labels
+    for (const auto& label : {"UDTF"}) {
+      label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+    }
+
+    // logical_values -> table data
+    std::unordered_set<std::string> unique_names;
+    for (auto tf : table_functions::TableFunctionsFactory::get_table_funcs()) {
+      std::string name = tf.getName(true, true);
+      if (unique_names.find(name) == unique_names.end()) {
+        unique_names.emplace(name);
+        logical_values.emplace_back(RelLogicalValues::RowValues{});
+        logical_values.back().emplace_back(genLiteralStr(name));
+      }
+    }
   }
 
   // Create ResultSet

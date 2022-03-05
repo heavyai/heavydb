@@ -752,4 +752,7 @@ service OmniSci {
   # user-defined functions
   map<string, string> get_device_parameters(1: TSessionId session) throws (1: TOmniSciException e)
   void register_runtime_extension_functions(1: TSessionId session, 2: list<extension_functions.TUserDefinedFunction> udfs, 3: list<extension_functions.TUserDefinedTableFunction> udtfs, 4: map<string, string> device_ir_map) throws (1: TOmniSciException e)
+  list<string> get_table_function_names(1: TSessionId session) throws (1: TOmniSciException e)
+  list<string> get_runtime_table_function_names(1: TSessionId session) throws (1: TOmniSciException e)
+  list<extension_functions.TUserDefinedTableFunction> get_table_function_details(1: TSessionId session, 2: list<string> udtf_names) throws (1: TOmniSciException e)
 }

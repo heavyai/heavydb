@@ -236,37 +236,37 @@ public class ExtensionFunction {
       case PBool:
         return "i1*";
       case ArrayInt8:
-        return "{i8*, i64, i8}*";
+        return "Array<i8>";
       case ArrayInt16:
-        return "{i16*, i64, i8}*";
+        return "Array<i16>";
       case ArrayInt32:
-        return "{i32*, i64, i8}*";
+        return "Array<i32>";
       case ArrayInt64:
-        return "{i64*, i64, i8}*";
+        return "Array<i64>";
       case ArrayFloat:
-        return "{float*, i64, i8}*";
+        return "Array<float>";
       case ArrayDouble:
-        return "{double*, i64, i8}*";
+        return "Array<double>";
       case ArrayBool:
-        return "{i1*, i64, i8}*";
+        return "Array<bool>";
       case ColumnInt8:
-        return "column_int8";
+        return "Column<i8>";
       case ColumnInt16:
-        return "column_int16";
+        return "Column<i16>";
       case ColumnInt32:
-        return "column_int32";
+        return "Column<i32>";
       case ColumnInt64:
-        return "column_int64";
+        return "Column<i64>";
       case ColumnFloat:
-        return "column_float";
+        return "Column<float>";
       case ColumnDouble:
-        return "column_double";
+        return "Column<double>";
       case ColumnBool:
-        return "column_bool";
+        return "Column<bool>";
       case ColumnTextEncodingDict:
-        return "column_text_encoding_dict";
+        return "Column<TextEncodingDict>";
       case ColumnTimestamp:
-        return "column_timestamp";
+        return "Column<timestamp>";
       case GeoPoint:
         return "geo_point";
       case Cursor:
@@ -280,25 +280,25 @@ public class ExtensionFunction {
       case Timestamp:
         return "timestamp";
       case TextEncodingNone:
-        return "text_encoding_none";
+        return "TextEncodingNone";
       case TextEncodingDict:
-        return "text_encoding_dict";
+        return "TextEncodingDict";
       case ColumnListInt8:
-        return "column_list_int8";
+        return "ColumnList<i8>";
       case ColumnListInt16:
-        return "column_list_int16";
+        return "ColumnList<i16>";
       case ColumnListInt32:
-        return "column_list_int32";
+        return "ColumnList<i32>";
       case ColumnListInt64:
-        return "column_list_int64";
+        return "ColumnList<i64>";
       case ColumnListFloat:
-        return "column_list_float";
+        return "ColumnList<float>";
       case ColumnListDouble:
-        return "column_list_double";
+        return "ColumnList<double>";
       case ColumnListBool:
-        return "column_list_bool";
+        return "ColumnList<bool>";
       case ColumnListTextEncodingDict:
-        return "column_list_text_encoding_dict";
+        return "ColumnList<TextEncodingDict>";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;

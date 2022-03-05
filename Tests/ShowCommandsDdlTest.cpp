@@ -38,6 +38,8 @@
 
 extern bool g_enable_fsi;
 extern bool g_enable_system_tables;
+extern bool g_enable_table_functions;
+extern bool g_enable_dev_table_functions;
 
 std::string test_binary_file_path;
 std::string test_source_path;
@@ -2562,6 +2564,30 @@ TEST_F(ShowTableDetailsTest, ViewSpecified) {
                           "test_view. Table does not exist.");
 }
 
+class ShowTableFunctionsTest : public DBHandlerTestFixture {
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+};
+
+TEST_F(ShowTableFunctionsTest, TableFunctionNames) {
+  TQueryResult result;
+  sql(result, "SHOW TABLE FUNCTIONS;");
+  ASSERT_GT(getRowCount(result), size_t(0));
+}
+
+TEST_F(ShowTableFunctionsTest, TableFunctionDetails) {
+  TQueryResult result;
+  sql(result, "SHOW TABLE FUNCTIONS DETAILS row_copier;");
+  ASSERT_GT(getRowCount(result), size_t(0));
+}
+
+TEST_F(ShowTableFunctionsTest, NonExistentTableFunction) {
+  TQueryResult result;
+  sql(result, "SHOW TABLE FUNCTIONS DETAILS non_existent_udtf_;");
+  ASSERT_EQ(getRowCount(result), size_t(0));
+}
+
 class ShowQueriesTest : public DBHandlerTestFixture {
  public:
   static void SetUpTestSuite() {
@@ -3852,6 +3878,8 @@ TEST_F(GetTableDetailsTest, ManualRefresh) {
 }
 
 int main(int argc, char** argv) {
+  g_enable_table_functions = true;
+  g_enable_dev_table_functions = true;
   g_enable_fsi = true;
   g_enable_system_tables = true;
   TestHelpers::init_logger_stderr_only(argc, argv);

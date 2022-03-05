@@ -7383,6 +7383,32 @@ void DBHandler::register_runtime_extension_functions(
   Executor::update_after_registration(/*update_runtime_modules_only=*/true);
 }
 
+void DBHandler::get_table_function_names(std::vector<std::string>& _return,
+                                         const TSessionId& session) {
+  for (auto tf : table_functions::TableFunctionsFactory::get_table_funcs()) {
+    _return.emplace_back(tf.getName());
+  }
+}
+
+void DBHandler::get_runtime_table_function_names(std::vector<std::string>& _return,
+                                                 const TSessionId& session) {
+  for (auto tf :
+       table_functions::TableFunctionsFactory::get_table_funcs(/* is_runtime */ true)) {
+    _return.emplace_back(tf.getName(/* drop_suffix */ true, /* to_lower */ true));
+  }
+}
+
+void DBHandler::get_table_function_details(
+    std::vector<TUserDefinedTableFunction>& _return,
+    const TSessionId& session,
+    const std::vector<std::string>& udtf_names) {
+  for (const std::string& udtf_name : udtf_names) {
+    for (auto tf : table_functions::TableFunctionsFactory::get_table_funcs(udtf_name)) {
+      _return.emplace_back(ThriftSerializers::to_thrift(tf));
+    }
+  }
+}
+
 void DBHandler::convertResultSet(ExecutionResult& result,
                                  const Catalog_Namespace::SessionInfo& session_info,
                                  const std::string& query_state_str,

@@ -160,6 +160,15 @@ class ShowDatabasesCommand : public DdlCommand {
   ExecutionResult execute() override;
 };
 
+class ShowTableFunctionsCommand : public DdlCommand {
+ public:
+  ShowTableFunctionsCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute() override;
+};
+
 class ShowDiskCacheUsageCommand : public DdlCommand {
  public:
   ShowDiskCacheUsageCommand(

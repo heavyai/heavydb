@@ -99,7 +99,7 @@ input_id, name, fields, require
 
 # TODO: support `gpu`, `cpu`, `template` as function annotations
 SupportedFunctionAnnotations = '''
-filter_table_function_transpose
+filter_table_function_transpose, uses_manager
 '''.strip().replace(' ', '').split(',')
 
 translate_map = dict(
@@ -746,10 +746,6 @@ class AstPrinter(AstVisitor):
 class AstDebugger(AstTransformer):
     """Like AstPrinter but returns a node instead of a string
     """
-    def visit_udtf_node(self, udtf_node):
-        if udtf_node.name == 'ct_union_pushdown_projection__cpu_template':
-            print(udtf_node.accept(AstPrinter()))
-        return udtf_node
 
 
 def product_dict(**kwargs):
@@ -869,7 +865,6 @@ class FieldAnnotationTransformer(AstTransformer):
 
             if not isinstance(t.type, ComposedNode):
                 continue
-
 
             if t.type.is_cursor() and t.get_annotation('fields') is None:
                 fields = list(PrimitiveNode(a.get_annotation('name', 'field%s' % i)) for i, a in enumerate(t.type.inner))

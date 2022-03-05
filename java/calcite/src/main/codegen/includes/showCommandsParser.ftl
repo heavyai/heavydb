@@ -33,7 +33,9 @@ SqlDdl SqlCustomShow(Span s) :
         |
         LOOKAHEAD(1) show = SqlShowTables(s)
         |
-        LOOKAHEAD(1) show = SqlShowTableDetails(s)
+        LOOKAHEAD(2) show = SqlShowTableDetails(s)
+        |
+        LOOKAHEAD(2) show = SqlShowTableFunctions(s)
         |
         LOOKAHEAD(1) show = SqlShowDatabases(s)
         |
@@ -203,6 +205,36 @@ SqlDdl SqlShowTableDetails(Span s) :
     ]
     {
         return new SqlShowTableDetails(s.end(this), tableNames);
+    }
+}
+
+/*
+ * SHOW TABLE FUNCTIONS [ DETAILS <table_function_name>, <table_function_name>, ...]
+ */
+SqlDdl SqlShowTableFunctions(Span s) :
+{
+    SqlIdentifier tfName = null;
+    List<String> tfNames = null;
+}
+{
+    <TABLE> <FUNCTIONS>
+    [
+        <DETAILS>
+        tfName = CompoundIdentifier()
+        {
+            tfNames = new ArrayList<String>();
+            tfNames.add(tfName.toString());
+        }
+        (
+            <COMMA>
+            tfName = CompoundIdentifier()
+            {
+                tfNames.add(tfName.toString());
+            }
+        )*
+    ]
+    {
+        return new SqlShowTableFunctions(s.end(this), tfNames);
     }
 }
 
