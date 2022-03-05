@@ -192,6 +192,9 @@ CodeCacheAccessor<CpuCompilationContext> Executor::cpu_code_accessor(
 CodeCacheAccessor<GpuCompilationContext> Executor::gpu_code_accessor(
     Executor::code_cache_size,
     "gpu_code_cache");
+CodeCacheAccessor<CompilationContext> Executor::tf_code_accessor(
+    Executor::code_cache_size,
+    "tf_code_cache");
 
 namespace {
 // This function is notably different from that in RelAlgExecutor because it already
@@ -311,6 +314,7 @@ void Executor::reset(bool discard_runtime_modules_only) {
   s_stubs_accessor.clear();
   cpu_code_accessor.clear();
   gpu_code_accessor.clear();
+  tf_code_accessor.clear();
 
   if (discard_runtime_modules_only) {
     extension_modules_.erase(Executor::ExtModuleKinds::rt_udf_cpu_module);

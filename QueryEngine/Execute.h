@@ -1245,6 +1245,7 @@ class Executor {
   static CodeCacheAccessor<CpuCompilationContext> s_code_accessor;
   static CodeCacheAccessor<CpuCompilationContext> cpu_code_accessor;
   static CodeCacheAccessor<GpuCompilationContext> gpu_code_accessor;
+  static CodeCacheAccessor<CompilationContext> tf_code_accessor;
 
  private:
   static const size_t baseline_threshold{

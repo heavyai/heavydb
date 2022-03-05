@@ -393,12 +393,37 @@ void cast_column(llvm::Value* col_base_ptr,
   ir_builder.SetInsertPoint(for_end);
 }
 
+std::string exprsKey(const std::vector<Analyzer::Expr*>& exprs) {
+  std::string result;
+  for (const auto& expr : exprs) {
+    const auto& ti = expr->get_type_info();
+    result += ti.to_string() + ", ";
+  }
+  return result;
+}
+
 }  // namespace
 
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     const TableFunctionExecutionUnit& exe_unit,
     bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
+
+  // Here we assume that Executor::tf_code_accessor is cleared when a
+  // UDTF implementation is changed. TODO: Ideally, the key should
+  // contain a hash of an UDTF implementation string. This could be
+  // achieved by including the hash value to the prefix of the UDTF
+  // name, for instance.
+  CodeCacheKey key{exe_unit.table_func.getName(),
+                   exprsKey(exe_unit.input_exprs),
+                   exprsKey(exe_unit.target_exprs),
+                   std::to_string(emit_only_preflight_fn),
+                   std::to_string(co_.device_type == ExecutorDeviceType::GPU)};
+
+  auto cached_code = Executor::tf_code_accessor.get_or_wait(key);
+  if (cached_code) {
+    return *cached_code;
+  }
 
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
@@ -413,7 +438,9 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     CHECK(!emit_only_preflight_fn);
     generateGpuKernel();
   }
-  return finalize(emit_only_preflight_fn);
+
+  Executor::tf_code_accessor.put(key, std::move(finalize(emit_only_preflight_fn)));
+  return Executor::tf_code_accessor.get_value(key);
 }
 
 bool TableFunctionCompilationContext::passColumnsByValue(
@@ -831,8 +858,6 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
                                    cgen_state,
                                    llvm::Linker::Flags::OverrideFromSrc);
   }
-
-  // Add code to cache?
 
   LOG(IR) << (emit_only_preflight_fn ? "Pre Flight Function Entry Point IR\n"
                                      : "Table Function Entry Point IR\n")
