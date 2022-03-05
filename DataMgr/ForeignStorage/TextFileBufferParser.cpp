@@ -124,6 +124,7 @@ constexpr bool PROMOTE_POLYGON_TO_MULTIPOLYGON = true;
 
 bool set_coordinates_from_separate_lon_lat_columns(const std::string_view lon_str,
                                                    const std::string_view lat_str,
+                                                   SQLTypeInfo& ti,
                                                    std::vector<double>& coords,
                                                    const bool is_lon_lat_order) {
   double lon = std::atof(std::string(lon_str).c_str());
@@ -147,6 +148,16 @@ bool set_coordinates_from_separate_lon_lat_columns(const std::string_view lon_st
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon)) {
     return false;
   }
+
+  if (ti.transforms()) {
+    Geospatial::GeoPoint pt{std::vector<double>{lon, lat}};
+    if (!pt.transform(ti)) {
+      return false;
+    }
+    pt.getColumns(coords);
+    return true;
+  }
+
   coords.push_back(lon);
   coords.push_back(lat);
   return true;
@@ -257,15 +268,24 @@ void TextFileBufferParser::processGeoColumn(
   std::vector<int> poly_rings;
   int render_group = 0;
 
+  // prepare to transform from another SRID
+  SQLTypeInfo import_ti{col_ti};
+  if (import_ti.get_output_srid() == 4326) {
+    auto srid0 = copy_params.source_srid;
+    if (srid0 > 0) {
+      // srid0 -> 4326 transform is requested on import
+      import_ti.set_input_srid(srid0);
+    }
+  }
+
   if (!is_null && col_type == kPOINT && isCoordinateScalar(geo_string)) {
     if (!set_coordinates_from_separate_lon_lat_columns(
-            geo_string, row[import_idx], coords, copy_params.lonlat)) {
+            geo_string, row[import_idx], import_ti, coords, copy_params.lonlat)) {
       throw std::runtime_error("Cannot read lon/lat to insert into POINT column " +
                                cd->columnName);
     }
     ++import_idx;
   } else {
-    SQLTypeInfo import_ti{col_ti};
     if (is_null || geo_string.empty() || geo_string == "NULL") {
       Geospatial::GeoTypesFactory::getNullGeoColumns(import_ti,
                                                      coords,

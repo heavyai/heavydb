@@ -217,6 +217,10 @@ class ImportExportTestBase : public DBHandlerTestFixture {
       s3_secret_key = env;
     }
 
+    if (s3_region.empty()) {
+      s3_region = "us-west-1";
+    }
+
     return importTestCommon(
         string("COPY trips FROM '") + "s3://mapd-parquet-testdata/" + prefix + "/" +
             filename + "' WITH (header='true'" +
@@ -2341,11 +2345,13 @@ TEST_F(ImportTest, S3_Regex_path_filter_parquet_no_match) {
       TOmniSciException);
 }
 TEST_F(ImportTest, S3_Null_Prefix) {
-  EXPECT_THROW(sql("copy trips from 's3://omnisci_ficticiousbucket/';"),
+  EXPECT_THROW(sql("copy trips from 's3://omnisci_ficticiousbucket/' WITH "
+                   "(s3_region='us-west-1');"),
                TOmniSciException);
 }
 TEST_F(ImportTest, S3_Wildcard_Prefix) {
-  EXPECT_THROW(sql("copy trips from 's3://omnisci_ficticiousbucket/*';"),
+  EXPECT_THROW(sql("copy trips from 's3://omnisci_ficticiousbucket/*' WITH "
+                   "(s3_region='us-west-1');"),
                TOmniSciException);
 }
 #endif  // HAVE_AWS_S3
@@ -2757,11 +2763,20 @@ TEST_F(ImportTestGeo, CSV_Import_Max_Buffer_Resize_Less_Than_Row_Size) {
       boost::filesystem::path("../../Tests/Import/datafiles/geospatial.csv");
 
   std::string expected_error_message{
-      "Unable to find an end of line character after reading 170 characters. "
+      "Unable to find an end of line character after reading "};
+  // adapt value based on which importer we're testing as they have different buffer size
+  // management heuristics
+  if (g_enable_legacy_delimited_import) {
+    expected_error_message += "170";
+  } else {
+    expected_error_message += "169";
+  }
+  expected_error_message +=
+      " characters. "
       "Please ensure that the correct \"line_delimiter\" option is specified "
       "or update the \"buffer_size\" option appropriately. Row number: 10. "
       "First few characters in row: "
-      "\"POINT(9 9)\", \"LINESTRING(9 0, 18 18, 19 19)\", \"PO"};
+      "\"POINT(9 9)\", \"LINESTRING(9 0, 18 18, 19 19)\", \"PO";
   queryAndAssertException(
       "COPY geospatial FROM '" + file_path.string() + "' WITH (buffer_size = 80);",
       expected_error_message);
@@ -3252,7 +3267,8 @@ TEST_F(ImportTest, S3_GCS_One_gz_file) {
   EXPECT_TRUE(importTestCommon(
       std::string(
           "COPY trips FROM 's3://omnisci-importtest-data/trip-data/trip_data_9.gz' "
-          "WITH (header='true', s3_endpoint='storage.googleapis.com');"),
+          "WITH (header='true', s3_endpoint='storage.googleapis.com', "
+          "s3_region='us-west-1');"),
       100,
       1.0));
 }
@@ -3262,7 +3278,8 @@ TEST_F(ImportTestGeo, S3_GCS_One_geo_file) {
       "COPY geopatial FROM "
       "'s3://omnisci-importtest-data/geo-data/"
       "S_USA.Experimental_Area_Locations.gdb.zip' "
-      "WITH (source_type='geo_file', s3_endpoint='storage.googleapis.com');"));
+      "WITH (source_type='geo_file', s3_endpoint='storage.googleapis.com', "
+      "s3_region='us-west-1');"));
 }
 
 class ImportServerPrivilegeTest : public ImportExportTestBase {
@@ -3297,9 +3314,14 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
     ImportExportTestBase::TearDown();
   }
 
-  void importPublicBucket() {
+  void importPublicBucket(bool set_s3_region = true,
+                          std::string s3_region = "us-west-1") {
     std::string query_stmt =
-        "copy test_table_1 from 's3://omnisci-fsi-test-public/FsiDataFiles/0_255.csv';";
+        "copy test_table_1 from 's3://omnisci-fsi-test-public/FsiDataFiles/0_255.csv'";
+    if (set_s3_region) {
+      query_stmt += "WITH (s3_region='" + s3_region + "')";
+    }
+    query_stmt += ";";
     sql(query_stmt);
   }
 
@@ -3329,6 +3351,24 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
 TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials) {
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_NO_THROW(importPublicBucket());
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials_NoRegion) {
+  if (g_enable_legacy_delimited_import) {
+    // the no-region check is only in FSI
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_THROW(importPublicBucket(false, ""), TOmniSciException);
+}
+
+TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials_EmptyRegion) {
+  if (g_enable_legacy_delimited_import) {
+    // the empty-region check is only in FSI
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  EXPECT_THROW(importPublicBucket(true, ""), TOmniSciException);
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Private_without_credentials) {
@@ -3433,6 +3473,9 @@ class SortedImportTest
     }
 #endif
     options.emplace("HEADER", "true");
+    if (locality_ == "s3") {
+      options.emplace("s3_region", "us-west-1");
+    }
     return "COPY test_table_1 FROM '" + source_dir + "' WITH (" +
            options_to_string(options, false) + ");";
   }

@@ -200,6 +200,8 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
       foreign_table->options[RegexFileBufferParser::LINE_START_REGEX_KEY] =
           copy_params.line_start_regex;
     }
+    foreign_table->options[TextFileBufferParser::THREADS_KEY] =
+        std::to_string(copy_params.threads);
   }
 
   // setup data source options based on various criteria
@@ -247,8 +249,13 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     }
     foreign_table->options[CsvFileBufferParser::GEO_EXPLODE_COLLECTIONS_KEY] =
         bool_to_option_value(copy_params.geo_explode_collections);
-    foreign_table->options[CsvFileBufferParser::BUFFER_SIZE_KEY] =
+    foreign_table->options[CsvFileBufferParser::SOURCE_SRID_KEY] =
+        std::to_string(copy_params.source_srid);
+
+    foreign_table->options[TextFileBufferParser::BUFFER_SIZE_KEY] =
         std::to_string(copy_params.buffer_size);
+    foreign_table->options[TextFileBufferParser::THREADS_KEY] =
+        std::to_string(copy_params.threads);
   }
 
   foreign_table->initializeOptions();

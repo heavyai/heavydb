@@ -381,9 +381,18 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
   copy_params.geo_explode_collections =
       validate_and_get_bool_value(foreign_table, GEO_EXPLODE_COLLECTIONS_KEY)
           .value_or(copy_params.geo_explode_collections);
+  if (auto it = foreign_table->options.find(SOURCE_SRID_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.source_srid = std::stoi(it->second);
+  }
+
   if (auto it = foreign_table->options.find(BUFFER_SIZE_KEY);
       it != foreign_table->options.end()) {
     copy_params.buffer_size = std::stoi(it->second);
+  }
+  if (auto it = foreign_table->options.find(THREADS_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.threads = std::stoi(it->second);
   }
 
   return copy_params;

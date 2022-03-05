@@ -354,6 +354,10 @@ import_export::CopyParams RegexFileBufferParser::validateAndGetCopyParams(
       it != foreign_table->options.end()) {
     copy_params.buffer_size = std::stoi(it->second);
   }
+  if (auto it = foreign_table->options.find(THREADS_KEY);
+      it != foreign_table->options.end()) {
+    copy_params.threads = std::stoi(it->second);
+  }
   return copy_params;
 }
 

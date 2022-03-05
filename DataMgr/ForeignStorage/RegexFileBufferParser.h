@@ -58,7 +58,6 @@ class RegexFileBufferParser : public TextFileBufferParser {
 
   inline static const std::string LINE_REGEX_KEY = "LINE_REGEX";
   inline static const std::string LINE_START_REGEX_KEY = "LINE_START_REGEX";
-  inline static const std::string BUFFER_SIZE_KEY = "BUFFER_SIZE";
   inline static const std::string HEADER_KEY = "HEADER";
 
  private:
