@@ -673,6 +673,64 @@ void Catalog::updateFsiSchemas() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::renameLegacyDataWrappers() {
+  // TODO: Move common migration logic to a shared function.
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query(
+        "select name from sqlite_master WHERE type='table' AND "
+        "name='mapd_version_history'");
+    static const std::string migration_name{"rename_legacy_data_wrappers"};
+    if (sqliteConnector_.getNumRows() == 0) {
+      sqliteConnector_.query(
+          "CREATE TABLE mapd_version_history(version integer, migration_history text "
+          "unique)");
+    } else {
+      sqliteConnector_.query(
+          "select * from mapd_version_history where migration_history = "
+          "'" +
+          migration_name + "'");
+      if (sqliteConnector_.getNumRows() != 0) {
+        // Migration already done.
+        sqliteConnector_.query("END TRANSACTION");
+        return;
+      }
+    }
+    LOG(INFO) << "Executing " << migration_name << " migration.";
+
+    // Update legacy data wrapper names
+    using foreign_storage::DataWrapperType;
+    // clang-format off
+    std::map<std::string, std::string> old_to_new_wrapper_names{
+      {"OMNISCI_CSV", DataWrapperType::CSV},
+      {"OMNISCI_PARQUET", DataWrapperType::PARQUET},
+      {"OMNISCI_REGEX_PARSER", DataWrapperType::REGEX_PARSER},
+      {"OMNISCI_INTERNAL_CATALOG", DataWrapperType::INTERNAL_CATALOG},
+      {"INTERNAL_OMNISCI_MEMORY_STATS", DataWrapperType::INTERNAL_MEMORY_STATS},
+      {"INTERNAL_OMNISCI_STORAGE_STATS", DataWrapperType::INTERNAL_STORAGE_STATS}
+    };
+    // clang-format on
+
+    for (const auto& [old_wrapper_name, new_wrapper_name] : old_to_new_wrapper_names) {
+      sqliteConnector_.query_with_text_params(
+          "UPDATE omnisci_foreign_servers SET data_wrapper_type = ? WHERE "
+          "data_wrapper_type = ?",
+          std::vector<std::string>{new_wrapper_name, old_wrapper_name});
+    }
+
+    // Record migration.
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION), migration_name});
+    LOG(INFO) << migration_name << " migration completed.";
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void Catalog::updateCustomExpressionsSchema() {
   cat_sqlite_lock sqlite_lock(getObjForLock());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -933,6 +991,7 @@ void Catalog::CheckAndExecuteMigrations() {
   recordOwnershipOfObjectsInObjectPermissions();
   if (g_enable_fsi) {
     updateFsiSchemas();
+    renameLegacyDataWrappers();
   }
   updateCustomExpressionsSchema();
   updateDefaultColumnValues();

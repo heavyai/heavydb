@@ -586,6 +586,7 @@ class Catalog final {
   void updateFrontendViewsToDashboards();
   void updateCustomExpressionsSchema();
   void updateFsiSchemas();
+  void renameLegacyDataWrappers();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();

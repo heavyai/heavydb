@@ -25,6 +25,7 @@
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
+#include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 #include "Shared/SysDefinitions.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
@@ -418,6 +419,90 @@ TEST_F(SystemTableMigrationTest, PreExistingInformationSchemaDatabase) {
   g_enable_fsi = true;
   reinitializeSystemCatalog();
   ASSERT_FALSE(isInformationSchemaMigrationRecorded());
+}
+
+class LegacyDataWrapperMigrationTest : public FsiSchemaTest {
+ protected:
+  struct LegacyDataWrapperMapping {
+    std::string test_server_name;
+    std::string old_data_wrapper_name;
+    std::string new_data_wrapper_name;
+  };
+
+  void insertForeignServer(const std::string& server_name,
+                           const std::string& data_wrapper_type) {
+    cat_conn_.query_with_text_params(
+        "INSERT INTO omnisci_foreign_servers (name, data_wrapper_type, owner_user_id, "
+        "creation_time, options) VALUES (?, ?, ?, ?, ?)",
+        std::vector<std::string>{server_name,
+                                 data_wrapper_type,
+                                 shared::kRootUserIdStr,
+                                 std::to_string(std::time(nullptr)),
+                                 "{\"STORAGE_TYPE\":\"LOCAL_FILE\"}"});
+  }
+
+  void assertForeignServerCount(const std::string& server_name,
+                                const std::string& data_wrapper_type,
+                                size_t expected_count) {
+    cat_conn_.query_with_text_params(
+        "SELECT COUNT(*) FROM omnisci_foreign_servers WHERE name = ? AND "
+        "data_wrapper_type = ?",
+        std::vector<std::string>{server_name, data_wrapper_type});
+    ASSERT_EQ(cat_conn_.getNumRows(), static_cast<size_t>(1));
+    ASSERT_EQ(cat_conn_.getData<size_t>(0, 0), expected_count);
+  }
+
+  void clearMigration(const std::string& migration_name) {
+    cat_conn_.query_with_text_params(
+        "DELETE FROM mapd_version_history WHERE migration_history = ?",
+        std::vector<std::string>{migration_name});
+  }
+};
+
+TEST_F(LegacyDataWrapperMigrationTest, LegacyDataWrappersAreRenamed) {
+  g_enable_fsi = true;
+  initCatalog();
+  assertFsiTablesExist();
+
+  using foreign_storage::DataWrapperType;
+  // clang-format off
+  std::vector<LegacyDataWrapperMapping> legacy_data_wrapper_mappings{
+    LegacyDataWrapperMapping{"test_csv_server",
+                             "OMNISCI_CSV",
+                             DataWrapperType::CSV},
+    LegacyDataWrapperMapping{"test_parquet_server",
+                             "OMNISCI_PARQUET",
+                             DataWrapperType::PARQUET},
+    LegacyDataWrapperMapping{"test_regex_server",
+                             "OMNISCI_REGEX_PARSER",
+                             DataWrapperType::REGEX_PARSER},
+    LegacyDataWrapperMapping{"test_catalog_server",
+                             "OMNISCI_INTERNAL_CATALOG",
+                             DataWrapperType::INTERNAL_CATALOG},
+    LegacyDataWrapperMapping{"test_memory_stats_server",
+                             "INTERNAL_OMNISCI_MEMORY_STATS",
+                             DataWrapperType::INTERNAL_MEMORY_STATS},
+    LegacyDataWrapperMapping{"test_storage_stats_server",
+                             "INTERNAL_OMNISCI_STORAGE_STATS",
+                             DataWrapperType::INTERNAL_STORAGE_STATS}
+  };
+  // clang-format on
+
+  for (const auto& mapping : legacy_data_wrapper_mappings) {
+    // Insert foreign servers that use legacy data wrapper names
+    insertForeignServer(mapping.test_server_name, mapping.old_data_wrapper_name);
+
+    assertForeignServerCount(mapping.test_server_name, mapping.old_data_wrapper_name, 1);
+    assertForeignServerCount(mapping.test_server_name, mapping.new_data_wrapper_name, 0);
+  }
+
+  clearMigration("rename_legacy_data_wrappers");
+  initCatalog();
+  for (const auto& mapping : legacy_data_wrapper_mappings) {
+    // Assert that foreign servers now use the new data wrapper names
+    assertForeignServerCount(mapping.test_server_name, mapping.old_data_wrapper_name, 0);
+    assertForeignServerCount(mapping.test_server_name, mapping.new_data_wrapper_name, 1);
+  }
 }
 
 int main(int argc, char** argv) {
