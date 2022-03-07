@@ -15,6 +15,7 @@
  */
 
 #include "HashtableRecycler.h"
+#include "QueryEngine/Execute.h"
 
 extern bool g_is_test_env;
 extern bool g_use_hashtable_cache;
