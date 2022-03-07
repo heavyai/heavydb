@@ -41,6 +41,7 @@ Vulkan Memory Allocator | [MIT](https://github.com/GPUOpen-LibrariesAndSDKs/Vulk
 GLM | [MIT](https://github.com/g-truc/glm/blob/master/copying.txt) | Rendering support
 GLFW | [zlib](https://github.com/glfw/glfw/blob/master/LICENSE.md) | Rendering support
 STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Rendering support
+ImGui | [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt) | Rendering support
 --- | --- | --- |
 gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
 libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GDAL, KML import |

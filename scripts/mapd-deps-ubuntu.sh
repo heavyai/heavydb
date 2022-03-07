@@ -269,10 +269,17 @@ cmake \
     -DGLFW_BUILD_DOCS=OFF \
     ..
 
-make -j $(nproc)
-make install
-popd #build
-popd #glfw
+# ImGui
+VERS=1.87
+rm -rf imgui
+mkdir -p imgui
+pushd imgui
+download https://github.com/ocornut/imgui/archive/refs/tags/v${VERS}.tar.gz
+extract v${VERS}.tar.gz
+mkdir -p $PREFIX/include
+mkdir -p $PREFIX/include/imgui
+mv imgui-${VERS}/* $PREFIX/include/imgui
+popd #imgui
 
 # Vulkan
 # Custom tarball which excludes the spir-v toolchain
