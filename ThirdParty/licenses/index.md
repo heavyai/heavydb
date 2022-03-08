@@ -44,9 +44,11 @@ STB | [MIT](https://github.com/nothings/stb/blob/master/LICENSE) | Rendering sup
 ImGui | [MIT](https://github.com/ocornut/imgui/blob/master/LICENSE.txt) | Rendering support
 --- | --- | --- |
 gdal | [MIT](<http://svn.osgeo.org/gdal/trunk/gdal/LICENSE.TXT>) | GDAL, Geospatial import |
+hdf5 | [BSD](<https://github.com/HDFGroup/hdf5/blob/develop/COPYING>) | GDAL, netcdf import |
 libexpat | [MIT](<https://github.com/LuaDist/libexpat/blob/master/COPYING>) | GDAL, KML import |
 libkml | [BSD](<https://github.com/google/libkml/blob/master/LICENSE>) | GDAL, KML import |
 minizip | [zlib](<http://zlib.net/zlib_license.html>) | GDAL, zip support |
+netcdf-c | [BSD](<https://github.com/Unidata/netcdf-c/blob/main/COPYRIGHT>) | GDAL, netcdf import |
 pcre | [BSD](<http://www.pcre.org/licence.txt>) | GDAL, KML import |
 proj4 | [MIT](<http://proj4.org/license.html>) | GDAL, Geospatial reprojection |
 shapelib | [MIT](<http://shapelib.maptools.org/license.html>) | GDAL, Shapefile import |

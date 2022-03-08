@@ -208,8 +208,40 @@ function install_llvm() {
     popd
 }
 
-PROJ_VERSION=7.2.1
-GDAL_VERSION=3.2.2
+THRIFT_VERSION=0.15.0
+
+function install_thrift() {
+    # http://dlcdn.apache.org/thrift/$THRIFT_VERSION/thrift-$THRIFT_VERSION.tar.gz
+    download ${HTTP_DEPS}/thrift-$THRIFT_VERSION.tar.gz
+    extract thrift-$THRIFT_VERSION.tar.gz
+    pushd thrift-$THRIFT_VERSION
+    if [ "$TSAN" = "false" ]; then
+      THRIFT_CFLAGS="-fPIC"
+      THRIFT_CXXFLAGS="-fPIC"
+    elif [ "$TSAN" = "true" ]; then
+      THRIFT_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+      THRIFT_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+    fi
+    source /etc/os-release
+    if [ "$ID" == "ubuntu"  ] ; then
+      BOOST_LIBDIR=""
+    else
+      BOOST_LIBDIR="--with-boost-libdir=$PREFIX/lib"
+    fi
+    CFLAGS="$THRIFT_CFLAGS" CXXFLAGS="$THRIFT_CXXFLAGS" JAVA_PREFIX=$PREFIX/lib ./configure \
+        --prefix=$PREFIX \
+        --enable-libs=off \
+        --with-cpp \
+        --without-go \
+        --without-python \
+        $BOOST_LIBDIR
+    makej
+    make install
+    popd
+}
+
+PROJ_VERSION=8.2.1
+GDAL_VERSION=3.4.1
 
 function install_gdal() {
     # sqlite3
@@ -228,6 +260,18 @@ function install_gdal() {
     make install
     popd
 
+    # hdf5
+    download_make_install ${HTTP_DEPS}/hdf5-1.12.1.tar.gz "" "--enable-hl"
+
+    # netcdf
+    download https://github.com/Unidata/netcdf-c/archive/refs/tags/v4.8.1.tar.gz
+    tar xzvf v4.8.1.tar.gz
+    pushd netcdf-c-4.8.1
+    CPPFLAGS=-I${PREFIX}/include LDFLAGS=-L${PREFIX}/lib ./configure --prefix=$PREFIX
+    makej
+    make install
+    popd
+
     # proj
     download_make_install ${HTTP_DEPS}/proj-${PROJ_VERSION}.tar.gz "" "--disable-tiff"
 
@@ -235,9 +279,7 @@ function install_gdal() {
     download ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz
     extract gdal-${GDAL_VERSION}.tar.gz
     pushd gdal-${GDAL_VERSION}
-    patch -p0 frmts/grib/degrib/degrib/myerror.c $SCRIPTS_DIR/gdal-3.2.2_grib_thread_contention.patch
-    mv frmts/grib/degrib/degrib/myerror.c frmts/grib/degrib/degrib/myerror.cpp
-    ./configure --prefix=$PREFIX --without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal
+    ./configure --prefix=$PREFIX --without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal --with-netcdf=$PREFIX --with-blosc=$PREFIX
     makej
     make_install
     popd
@@ -466,3 +508,27 @@ function install_glm() {
   mkdir -p $PREFIX/include
   mv glm-${GLM_VERSION}/glm $PREFIX/include/
 }
+
+BLOSC_VERSION=1.21.1
+
+function install_blosc() {
+  wget --continue https://github.com/Blosc/c-blosc/archive/v${BLOSC_VERSION}.tar.gz
+  tar xvf v${BLOSC_VERSION}.tar.gz
+  BDIR="c-blosc-${BLOSC_VERSION}/build"
+  rm -rf "${BDIR}"
+  mkdir -p "${BDIR}"
+  pushd "${BDIR}"
+  cmake \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=${PREFIX} \
+      -DBUILD_BENCHMARKS=off \
+      -DBUILD_TESTS=off \
+      -DPREFER_EXTERNAL_SNAPPY=off \
+      -DPREFER_EXTERNAL_ZLIB=off \
+      -DPREFER_EXTERNAL_ZSTD=off \
+      ..
+  make -j $(nproc)
+  make install
+  popd
+}
+

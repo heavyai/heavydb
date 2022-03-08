@@ -194,31 +194,7 @@ VERS=7.75.0
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
 # thrift
-VERS=0.15.0
-# http://dlcdn.apache.org/thrift/$VERS/thrift-$VERS.tar.gz
-download ${HTTP_DEPS}/thrift-$VERS.tar.gz
-extract thrift-$VERS.tar.gz
-pushd thrift-$VERS
-if [ "$TSAN" = "false" ]; then
-  THRIFT_CFLAGS="-fPIC"
-  THRIFT_CXXFLAGS="-fPIC"
-elif [ "$TSAN" = "true" ]; then
-  THRIFT_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
-  THRIFT_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
-fi
-CFLAGS="$THRIFT_CFLAGS" CXXFLAGS="$THRIFT_CXXFLAGS" JAVA_PREFIX=$PREFIX/lib ./configure \
-    --prefix=$PREFIX \
-    --with-lua=no \
-    --with-python=no \
-    --with-php=no \
-    --with-ruby=no \
-    --with-qt4=no \
-    --with-qt5=no \
-    --with-java=no \
-    --with-boost-libdir=$PREFIX/lib
-makej
-make install
-popd
+install_thrift
 
 # librdkafka
 install_rdkafka static
@@ -234,17 +210,7 @@ VERS=3.52.15
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
 
 # c-blosc
-VERS=1.14.4
-download https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
-extract v$VERS.tar.gz
-BDIR="c-blosc-$VERS/build"
-rm -rf "$BDIR"
-mkdir -p "$BDIR"
-pushd "$BDIR"
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_BENCHMARKS=off -DBUILD_TESTS=off -DPREFER_EXTERNAL_SNAPPY=off -DPREFER_EXTERNAL_ZLIB=off -DPREFER_EXTERNAL_ZSTD=off ..
-makej
-make install
-popd
+install_blosc
 
 # Geo Support
 install_gdal

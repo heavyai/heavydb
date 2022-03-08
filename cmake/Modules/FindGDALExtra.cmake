@@ -31,6 +31,17 @@ if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
 endif()
 
+if(GDAL_CONFIG)
+  exec_program(${GDAL_CONFIG} ARGS --prefix OUTPUT_VARIABLE GDAL_CONFIG_PREFIX)
+else()
+  message(FATAL_ERROR "Failed to find gdal-config executable in PATH")
+endif()
+
+execute_process(COMMAND ${GDAL_CONFIG} --version
+  OUTPUT_VARIABLE GDAL_version_output
+  ERROR_VARIABLE GDAL_version_output
+  RESULT_VARIABLE GDAL_version_result)
+
 set(GDALExtra_LIBRARIES "")
 function(find_static_lib name)
   find_library(${name}_LIBRARY
@@ -54,6 +65,15 @@ if(PREFER_STATIC_LIBS)
   find_static_lib(PROJ proj)
   find_static_lib(SQLITE3 sqlite3)
   set(GDALExtra_LIBRARIES ${KMLDOM_LIBRARY} ${EXPAT_LIBRARY} ${KMLENGINE_LIBRARY} ${KMLBASE_LIBRARY} ${MINIZIP_LIBRARY} ${URIPARSER_LIBRARY} ${PROJ_LIBRARY} ${SQLITE3_LIBRARY})
+
+  if("${GDAL_version_output}" VERSION_GREATER_EQUAL "3.4.0")
+    find_static_lib(BLOSC blosc)
+    find_static_lib(HDF5 hdf5)
+    find_static_lib(HDF5_HL hdf5_hl)
+    find_static_lib(NETCDF netcdf)
+    list(APPEND GDALExtra_LIBRARIES  ${BLOSC_LIBRARY} ${NETCDF_LIBRARY} ${HDF5_LIBRARY} ${HDF5_HL_LIBRARY} ${HDF5_LIBRARY})
+  endif()
+
   if(APPLE)
     find_static_lib(ICONV iconv)
     list(APPEND GDALExtra_LIBRARIES ${ICONV_LIBRARY})

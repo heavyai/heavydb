@@ -139,6 +139,9 @@ install_memkind
 LLVM_BUILD_DYLIB=true
 install_llvm
 
+# c-blosc
+install_blosc
+
 # Geo Support
 install_gdal
 install_geos
@@ -146,46 +149,11 @@ install_geos
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
 
-VERS=0.15.0
-wget --continue http://dlcdn.apache.org/thrift/$VERS/thrift-$VERS.tar.gz
-tar xvf thrift-$VERS.tar.gz
-pushd thrift-$VERS
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
-    --with-lua=no \
-    --with-python=no \
-    --with-php=no \
-    --with-ruby=no \
-    --with-qt4=no \
-    --with-qt5=no \
-    --with-java=no \
-    --prefix=$PREFIX
-make -j $(nproc)
-make install
-popd
+# thrift
+install_thrift
 
 VERS=3.52.15
 CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
-
-#c-blosc
-VERS=1.14.4
-wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
-tar xvf v$VERS.tar.gz
-BDIR="c-blosc-$VERS/build"
-rm -rf "$BDIR"
-mkdir -p "$BDIR"
-pushd "$BDIR"
-cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DBUILD_BENCHMARKS=off \
-    -DBUILD_TESTS=off \
-    -DPREFER_EXTERNAL_SNAPPY=off \
-    -DPREFER_EXTERNAL_ZLIB=off \
-    -DPREFER_EXTERNAL_ZSTD=off \
-    ..
-make -j $(nproc)
-make install
-popd
 
 install_folly
 
