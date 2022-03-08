@@ -17,30 +17,25 @@
 #include "DynamicWatchdog.h"
 #include "Execute.h"
 
-void Executor::registerActiveModule(void* llvm_module, const int device_id) const {
+void Executor::registerActiveModule(void* module, const int device_id) {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
   CHECK_LT(device_id, max_gpu_count);
   gpu_active_modules_device_mask_ |= (1 << device_id);
-  gpu_active_modules_[device_id] = llvm_module;
-  VLOG(1) << "Executor " << executor_id_ << ", mask 0x" << std::hex
-          << gpu_active_modules_device_mask_ << ": Registered module " << llvm_module
-          << " on device " << std::to_string(device_id);
+  gpu_active_modules_[device_id] = module;
+  VLOG(1) << "Registered module " << module << " on device " << std::to_string(device_id);
 #endif
 }
 
-void Executor::unregisterActiveModule(void* llvm_module, const int device_id) const {
+void Executor::unregisterActiveModule(const int device_id) {
 #ifdef HAVE_CUDA
   std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
   CHECK_LT(device_id, max_gpu_count);
   if ((gpu_active_modules_device_mask_ & (1 << device_id)) == 0) {
     return;
   }
-  CHECK_EQ(gpu_active_modules_[device_id], llvm_module);
   gpu_active_modules_device_mask_ ^= (1 << device_id);
-  VLOG(1) << "Executor " << executor_id_ << ", mask 0x" << std::hex
-          << gpu_active_modules_device_mask_ << ": Unregistered module " << llvm_module
-          << " on device " << std::to_string(device_id);
+  VLOG(1) << "Unregistered module on device " << std::to_string(device_id);
 #endif
 }
 
@@ -103,8 +98,6 @@ void Executor::interrupt(const std::string& query_session,
     // population happens on CPU but select_query can be processed via GPU
     CHECK_GE(cuda_mgr->getDeviceCount(), 1);
     std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
-    VLOG(1) << "Executor " << executor_id_ << ": Interrupting Active Modules: mask 0x"
-            << std::hex << gpu_active_modules_device_mask_;
     CUcontext old_cu_context;
     checkCudaErrors(cuCtxGetCurrent(&old_cu_context));
     for (int device_id = 0; device_id < max_gpu_count; device_id++) {
@@ -118,10 +111,6 @@ void Executor::interrupt(const std::string& query_session,
                   << executor_id_;
           CPU_execution_mode = false;
         }
-        VLOG(1) << "Executor " << executor_id_ << ": Interrupting Active Modules: mask 0x"
-                << std::hex << gpu_active_modules_device_mask_ << " on device "
-                << std::to_string(device_id);
-
         cuda_mgr->setContext(device_id);
 
         // Create high priority non-blocking communication stream
@@ -223,14 +212,16 @@ void Executor::interrupt(const std::string& query_session,
 }
 
 void Executor::resetInterrupt() {
-#ifdef HAVE_CUDA
-  std::lock_guard<std::mutex> lock(gpu_active_modules_mutex_);
-#endif
   const auto allow_interrupt =
       g_enable_runtime_query_interrupt || g_enable_non_kernel_time_query_interrupt;
   if (g_enable_dynamic_watchdog) {
     dynamic_watchdog_init(static_cast<unsigned>(DW_RESET));
   } else if (allow_interrupt) {
+#ifdef HAVE_CUDA
+    for (int device_id = 0; device_id < max_gpu_count; device_id++) {
+      Executor::unregisterActiveModule(device_id);
+    }
+#endif
     VLOG(1) << "Reset interrupt flag for CPU execution kernel on Executor "
             << executor_id_;
     check_interrupt_init(static_cast<unsigned>(INT_RESET));

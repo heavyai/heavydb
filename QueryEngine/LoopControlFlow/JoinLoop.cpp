@@ -32,6 +32,7 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
                    const HoistedFiltersCallback& hoisted_filters,
                    const std::function<llvm::Value*(const std::vector<llvm::Value*>&,
                                                     llvm::Value*)>& is_deleted,
+                   const bool nested_loop_join,
                    const std::string& name)
     : kind_(kind)
     , type_(type)
@@ -40,6 +41,7 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
     , found_outer_matches_(found_outer_matches)
     , hoisted_filters_(hoisted_filters)
     , is_deleted_(is_deleted)
+    , nested_loop_join_(nested_loop_join)
     , name_(name) {
   CHECK(outer_condition_match == nullptr || type == JoinType::LEFT);
   CHECK_EQ(static_cast<bool>(found_outer_matches), (type == JoinType::LEFT));

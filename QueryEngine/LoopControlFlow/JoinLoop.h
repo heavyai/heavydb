@@ -70,6 +70,7 @@ class JoinLoop {
            const HoistedFiltersCallback& hoisted_filters,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
                                             llvm::Value*)>& is_deleted,
+           const bool nested_loop_join = false,
            const std::string& name = "");
 
   static llvm::BasicBlock* codegen(
@@ -81,6 +82,8 @@ class JoinLoop {
       CgenState* cgen_state);
 
   JoinLoopKind kind() const { return kind_; }
+
+  bool isNestedLoopJoin() const { return nested_loop_join_; }
 
  private:
   static std::pair<llvm::BasicBlock*, llvm::Value*> evaluateOuterJoinCondition(
@@ -117,5 +120,7 @@ class JoinLoop {
   const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
                                    llvm::Value*)>
       is_deleted_;
+  // true if the join loop is for nested loop join
+  const bool nested_loop_join_;
   const std::string name_;
 };

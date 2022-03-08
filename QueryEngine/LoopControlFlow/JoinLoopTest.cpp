@@ -162,6 +162,7 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
           nullptr,
           nullptr,
           nullptr,
+          false,
           "i" + std::to_string(i));
       ++cond_idx;
     } else {
@@ -179,6 +180,7 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
           nullptr,
           nullptr,
           nullptr,
+          false,
           "i" + std::to_string(i));
     }
   }

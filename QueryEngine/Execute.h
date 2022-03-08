@@ -567,8 +567,8 @@ class Executor {
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
       const std::vector<Analyzer::Expr*>& target_exprs) const;
 
-  void registerActiveModule(void* module, const int device_id) const;
-  void unregisterActiveModule(void* module, const int device_id) const;
+  static void registerActiveModule(void* module, const int device_id);
+  static void unregisterActiveModule(const int device_id);
   void interrupt(const QuerySessionId& query_session = "",
                  const QuerySessionId& interrupt_session = "");
   void resetInterrupt();
@@ -964,6 +964,7 @@ class Executor {
   void createErrorCheckControlFlow(llvm::Function* query_func,
                                    bool run_with_dynamic_watchdog,
                                    bool run_with_allowing_runtime_interrupt,
+                                   const std::vector<JoinLoop>& join_loops,
                                    ExecutorDeviceType device_type,
                                    const std::vector<InputTableInfo>& input_table_infos);
 

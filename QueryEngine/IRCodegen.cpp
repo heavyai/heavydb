@@ -623,7 +623,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
             /*hoisted_filters=*/hoisted_filters_cb,
-            /*is_deleted=*/is_deleted_cb);
+            /*is_deleted=*/is_deleted_cb,
+            /*nested_loop_join=*/false);
       } else if (auto range_join_table =
                      dynamic_cast<RangeJoinHashTable*>(current_level_hash_table.get())) {
         join_loops.emplace_back(
@@ -655,7 +656,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
             /* hoisted_filters= */ nullptr,  // <<! TODO
-            /* is_deleted= */ is_deleted_cb);
+            /* is_deleted= */ is_deleted_cb,
+            /*nested_loop_join=*/false);
       } else {
         join_loops.emplace_back(
             /*kind=*/JoinLoopKind::Set,
@@ -680,7 +682,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                 ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
                 : nullptr,
             /*hoisted_filters=*/hoisted_filters_cb,
-            /*is_deleted=*/is_deleted_cb);
+            /*is_deleted=*/is_deleted_cb,
+            /*nested_loop_join=*/false);
       }
       ++current_hash_table_idx;
     } else {
@@ -739,7 +742,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               ? std::function<void(llvm::Value*)>(found_outer_join_matches_cb)
               : nullptr,
           /*hoisted_filters=*/nullptr,
-          /*is_deleted=*/is_deleted_cb);
+          /*is_deleted=*/is_deleted_cb,
+          /*nested_loop_join=*/true);
     }
   }
   return join_loops;
@@ -1248,6 +1252,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                   createErrorCheckControlFlow(query_func,
                                               eo.with_dynamic_watchdog,
                                               eo.allow_runtime_query_interrupt,
+                                              join_loops,
                                               co.device_type,
                                               group_by_and_aggregate.query_infos_);
                 }
@@ -1291,6 +1296,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
             createErrorCheckControlFlow(query_func,
                                         eo.with_dynamic_watchdog,
                                         eo.allow_runtime_query_interrupt,
+                                        join_loops,
                                         co.device_type,
                                         group_by_and_aggregate.query_infos_);
           }

@@ -40,7 +40,8 @@ class DeviceKernel {
                       void** kernelParams) = 0;
 
   virtual void initializeDynamicWatchdog(bool could_interrupt, uint64_t cycle_budget) = 0;
-  virtual void initializeRuntimeInterrupter() = 0;
+  virtual void initializeRuntimeInterrupter(const int device_id) = 0;
+  virtual void resetRuntimeInterrupter(const int device_id) = 0;
 
   virtual std::unique_ptr<DeviceClock> make_clock() = 0;
 

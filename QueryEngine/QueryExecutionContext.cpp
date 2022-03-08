@@ -255,7 +255,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   }
 
   if (allow_runtime_interrupt && !render_allocator) {
-    kernel->initializeRuntimeInterrupter();
+    kernel->initializeRuntimeInterrupter(device_id);
   }
 
   auto kernel_params = prepareKernelParams(col_buffers,
@@ -536,6 +536,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   }
 
   if (g_enable_dynamic_watchdog || (allow_runtime_interrupt && !render_allocator)) {
+    if (allow_runtime_interrupt) {
+      kernel->resetRuntimeInterrupter(device_id);
+    }
     auto finishTime = finishClock->stop();
     VLOG(1) << "Device " << std::to_string(device_id)
             << ": launchGpuCode: finish: " << std::to_string(finishTime) << " ms";

@@ -1911,6 +1911,7 @@ void Executor::createErrorCheckControlFlow(
     llvm::Function* query_func,
     bool run_with_dynamic_watchdog,
     bool run_with_allowing_runtime_interrupt,
+    const std::vector<JoinLoop>& join_loops,
     ExecutorDeviceType device_type,
     const std::vector<InputTableInfo>& input_table_infos) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
@@ -2018,109 +2019,128 @@ void Executor::createErrorCheckControlFlow(
           err_lv = unified_err_lv;
         } else if (run_with_allowing_runtime_interrupt) {
           CHECK(pos);
-          llvm::Value* call_check_interrupt_lv = nullptr;
-          if (device_type == ExecutorDeviceType::GPU) {
-            // approximate how many times the %pos variable
-            // is increased --> the number of iteration
-            // here we calculate the # bit shift by considering grid/block/fragment sizes
-            // since if we use the fixed one (i.e., per 64-th increment)
-            // some CUDA threads cannot enter the interrupt checking block depending on
-            // the fragment size --> a thread may not take care of 64 threads if an outer
-            // table is not sufficiently large, and so cannot be interrupted
-            int32_t num_shift_by_gridDim = shared::getExpOfTwo(gridSize());
-            int32_t num_shift_by_blockDim = shared::getExpOfTwo(blockSize());
-            int64_t total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
-            uint64_t interrupt_checking_freq = 32;
-            auto freq_control_knob = g_running_query_interrupt_freq;
-            CHECK_GT(freq_control_knob, 0);
-            CHECK_LE(freq_control_knob, 1.0);
-            if (!input_table_infos.empty()) {
-              const auto& outer_table_info = *input_table_infos.begin();
-              auto num_outer_table_tuples = outer_table_info.info.getNumTuples();
-              if (outer_table_info.table_id < 0) {
-                auto* rs = (*outer_table_info.info.fragments.begin()).resultSet;
-                CHECK(rs);
-                num_outer_table_tuples = rs->entryCount();
-              } else {
-                auto num_frags = outer_table_info.info.fragments.size();
-                if (num_frags > 0) {
-                  num_outer_table_tuples =
-                      outer_table_info.info.fragments.begin()->getNumTuples();
-                }
-              }
-              if (num_outer_table_tuples > 0) {
-                // gridSize * blockSize --> pos_step (idx of the next row per thread)
-                // we additionally multiply two to pos_step since the number of
-                // dispatched blocks are double of the gridSize
-                // # tuples (of fragment) / pos_step --> maximum # increment (K)
-                // also we multiply 1 / freq_control_knob to K to control the frequency
-                // So, needs to check the interrupt status more frequently? make K smaller
-                auto max_inc = uint64_t(
-                    floor(num_outer_table_tuples / (gridSize() * blockSize() * 2)));
-                if (max_inc < 2) {
-                  // too small `max_inc`, so this correction is necessary to make
-                  // `interrupt_checking_freq` be valid (i.e., larger than zero)
-                  max_inc = 2;
-                }
-                auto calibrated_inc = uint64_t(floor(max_inc * (1 - freq_control_knob)));
-                interrupt_checking_freq =
-                    uint64_t(pow(2, shared::getExpOfTwo(calibrated_inc)));
-                // add the coverage when interrupt_checking_freq > K
-                // if so, some threads still cannot be branched to the interrupt checker
-                // so we manually use smaller but close to the max_inc as freq
-                if (interrupt_checking_freq > max_inc) {
-                  interrupt_checking_freq = max_inc / 2;
-                }
-                if (interrupt_checking_freq < 8) {
-                  // such small freq incurs too frequent interrupt status checking,
-                  // so we fixup to the minimum freq value at some reasonable degree
-                  interrupt_checking_freq = 8;
-                }
-              }
-            }
-            VLOG(1) << "Set the running query interrupt checking frequency: "
-                    << interrupt_checking_freq;
-            // check the interrupt flag for every interrupt_checking_freq-th iteration
-            llvm::Value* pos_shifted_per_iteration =
-                ir_builder.CreateLShr(pos, cgen_state_->llInt(total_num_shift));
-            auto interrupt_predicate =
-                ir_builder.CreateAnd(pos_shifted_per_iteration, interrupt_checking_freq);
-            call_check_interrupt_lv =
-                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                      interrupt_predicate,
-                                      cgen_state_->llInt(int64_t(0LL)));
+          llvm::Value* call_check_interrupt_lv{nullptr};
+          llvm::Value* interrupt_err_lv{nullptr};
+          llvm::BasicBlock* error_check_bb{nullptr};
+          llvm::BasicBlock* interrupt_check_bb{nullptr};
+          llvm::Instruction* check_interrupt_br_instr{nullptr};
+
+          auto has_loop_join = std::any_of(
+              join_loops.begin(), join_loops.end(), [](const JoinLoop& join_loop) {
+                return join_loop.isNestedLoopJoin();
+              });
+          auto codegen_interrupt_checker = [&]() {
+            error_check_bb = bb_it->splitBasicBlock(llvm::BasicBlock::iterator(br_instr),
+                                                    ".error_check");
+            check_interrupt_br_instr = &bb_it->back();
+
+            interrupt_check_bb = llvm::BasicBlock::Create(
+                cgen_state_->context_, ".interrupt_check", query_func, error_check_bb);
+            llvm::IRBuilder<> interrupt_checker_ir_builder(interrupt_check_bb);
+            auto detected_interrupt = interrupt_checker_ir_builder.CreateCall(
+                cgen_state_->module_->getFunction("check_interrupt"), {});
+            interrupt_err_lv = interrupt_checker_ir_builder.CreateSelect(
+                detected_interrupt,
+                cgen_state_->llInt(Executor::ERR_INTERRUPTED),
+                err_lv);
+            interrupt_checker_ir_builder.CreateBr(error_check_bb);
+          };
+          if (has_loop_join) {
+            codegen_interrupt_checker();
+            CHECK(interrupt_check_bb);
+            CHECK(check_interrupt_br_instr);
+            llvm::ReplaceInstWithInst(check_interrupt_br_instr,
+                                      llvm::BranchInst::Create(interrupt_check_bb));
+            ir_builder.SetInsertPoint(&br_instr);
+            err_lv = interrupt_err_lv;
           } else {
-            // CPU path: run interrupt checker for every 64th row
-            auto interrupt_predicate = ir_builder.CreateAnd(pos, uint64_t(0x3f));
-            call_check_interrupt_lv =
-                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-                                      interrupt_predicate,
-                                      cgen_state_->llInt(int64_t(0LL)));
+            if (device_type == ExecutorDeviceType::GPU) {
+              // approximate how many times the %pos variable
+              // is increased --> the number of iteration
+              // here we calculate the # bit shift by considering grid/block/fragment
+              // sizes since if we use the fixed one (i.e., per 64-th increment) some CUDA
+              // threads cannot enter the interrupt checking block depending on the
+              // fragment size --> a thread may not take care of 64 threads if an outer
+              // table is not sufficiently large, and so cannot be interrupted
+              int32_t num_shift_by_gridDim = shared::getExpOfTwo(gridSize());
+              int32_t num_shift_by_blockDim = shared::getExpOfTwo(blockSize());
+              int64_t total_num_shift = num_shift_by_gridDim + num_shift_by_blockDim;
+              uint64_t interrupt_checking_freq = 32;
+              auto freq_control_knob = g_running_query_interrupt_freq;
+              CHECK_GT(freq_control_knob, 0);
+              CHECK_LE(freq_control_knob, 1.0);
+              if (!input_table_infos.empty()) {
+                const auto& outer_table_info = *input_table_infos.begin();
+                auto num_outer_table_tuples =
+                    outer_table_info.info.getFragmentNumTuplesUpperBound();
+                if (num_outer_table_tuples > 0) {
+                  // gridSize * blockSize --> pos_step (idx of the next row per thread)
+                  // we additionally multiply two to pos_step since the number of
+                  // dispatched blocks are double of the gridSize
+                  // # tuples (of fragment) / pos_step --> maximum # increment (K)
+                  // also we multiply 1 / freq_control_knob to K to control the frequency
+                  // So, needs to check the interrupt status more frequently? make K
+                  // smaller
+                  auto max_inc = uint64_t(
+                      floor(num_outer_table_tuples / (gridSize() * blockSize() * 2)));
+                  if (max_inc < 2) {
+                    // too small `max_inc`, so this correction is necessary to make
+                    // `interrupt_checking_freq` be valid (i.e., larger than zero)
+                    max_inc = 2;
+                  }
+                  auto calibrated_inc =
+                      uint64_t(floor(max_inc * (1 - freq_control_knob)));
+                  interrupt_checking_freq =
+                      uint64_t(pow(2, shared::getExpOfTwo(calibrated_inc)));
+                  // add the coverage when interrupt_checking_freq > K
+                  // if so, some threads still cannot be branched to the interrupt checker
+                  // so we manually use smaller but close to the max_inc as freq
+                  if (interrupt_checking_freq > max_inc) {
+                    interrupt_checking_freq = max_inc / 2;
+                  }
+                  if (interrupt_checking_freq < 8) {
+                    // such small freq incurs too frequent interrupt status checking,
+                    // so we fixup to the minimum freq value at some reasonable degree
+                    interrupt_checking_freq = 8;
+                  }
+                }
+              }
+              VLOG(1) << "Set the running query interrupt checking frequency: "
+                      << interrupt_checking_freq;
+              // check the interrupt flag for every interrupt_checking_freq-th iteration
+              llvm::Value* pos_shifted_per_iteration =
+                  ir_builder.CreateLShr(pos, cgen_state_->llInt(total_num_shift));
+              auto interrupt_predicate = ir_builder.CreateAnd(pos_shifted_per_iteration,
+                                                              interrupt_checking_freq);
+              call_check_interrupt_lv =
+                  ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                        interrupt_predicate,
+                                        cgen_state_->llInt(int64_t(0LL)));
+            } else {
+              // CPU path: run interrupt checker for every 64th row
+              auto interrupt_predicate = ir_builder.CreateAnd(pos, uint64_t(0x3f));
+              call_check_interrupt_lv =
+                  ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                        interrupt_predicate,
+                                        cgen_state_->llInt(int64_t(0LL)));
+            }
+            codegen_interrupt_checker();
+            CHECK(call_check_interrupt_lv);
+            CHECK(interrupt_err_lv);
+            CHECK(interrupt_check_bb);
+            CHECK(error_check_bb);
+            CHECK(check_interrupt_br_instr);
+            llvm::ReplaceInstWithInst(
+                check_interrupt_br_instr,
+                llvm::BranchInst::Create(
+                    interrupt_check_bb, error_check_bb, call_check_interrupt_lv));
+            ir_builder.SetInsertPoint(&br_instr);
+            auto unified_err_lv = ir_builder.CreatePHI(err_lv->getType(), 2);
+
+            unified_err_lv->addIncoming(interrupt_err_lv, interrupt_check_bb);
+            unified_err_lv->addIncoming(err_lv, &*bb_it);
+            err_lv = unified_err_lv;
           }
-          CHECK(call_check_interrupt_lv);
-          auto error_check_bb = bb_it->splitBasicBlock(
-              llvm::BasicBlock::iterator(br_instr), ".error_check");
-          auto& check_interrupt_br_instr = bb_it->back();
-
-          auto interrupt_check_bb = llvm::BasicBlock::Create(
-              cgen_state_->context_, ".interrupt_check", query_func, error_check_bb);
-          llvm::IRBuilder<> interrupt_checker_ir_builder(interrupt_check_bb);
-          auto detected_interrupt = interrupt_checker_ir_builder.CreateCall(
-              cgen_state_->module_->getFunction("check_interrupt"), {});
-          auto interrupt_err_lv = interrupt_checker_ir_builder.CreateSelect(
-              detected_interrupt, cgen_state_->llInt(Executor::ERR_INTERRUPTED), err_lv);
-          interrupt_checker_ir_builder.CreateBr(error_check_bb);
-
-          llvm::ReplaceInstWithInst(
-              &check_interrupt_br_instr,
-              llvm::BranchInst::Create(
-                  interrupt_check_bb, error_check_bb, call_check_interrupt_lv));
-          ir_builder.SetInsertPoint(&br_instr);
-          auto unified_err_lv = ir_builder.CreatePHI(err_lv->getType(), 2);
-
-          unified_err_lv->addIncoming(interrupt_err_lv, interrupt_check_bb);
-          unified_err_lv->addIncoming(err_lv, &*bb_it);
-          err_lv = unified_err_lv;
         }
         if (!err_lv_returned_from_row_func) {
           err_lv_returned_from_row_func = err_lv;
@@ -2766,6 +2786,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       createErrorCheckControlFlow(query_func,
                                   eo.with_dynamic_watchdog,
                                   eo.allow_runtime_query_interrupt,
+                                  join_loops,
                                   co.device_type,
                                   group_by_and_aggregate.query_infos_);
     }

@@ -118,7 +118,7 @@ class NvidiaKernel : public DeviceKernel {
             << " ms\n";
   }
 
-  void initializeRuntimeInterrupter() override {
+  void initializeRuntimeInterrupter(const int device_id) override {
     CHECK(module_ptr);
     CUevent start, stop;
     cuEventCreate(&start, 0);
@@ -141,6 +141,11 @@ class NvidiaKernel : public DeviceKernel {
     VLOG(1) << "Device " << std::to_string(device_id)
             << ": launchGpuCode: runtime query interrupter init: "
             << std::to_string(milliseconds) << " ms";
+    Executor::registerActiveModule(module_ptr, device_id);
+  }
+
+  void resetRuntimeInterrupter(const int device_id) override {
+    Executor::unregisterActiveModule(device_id);
   }
 
   std::unique_ptr<DeviceClock> make_clock() override {
