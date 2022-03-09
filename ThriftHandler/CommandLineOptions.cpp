@@ -1074,7 +1074,7 @@ void CommandLineOptions::validate() {
     }
   }
   if (license_path.length() == 0) {
-    license_path = base_path + "/omnisci.license";
+    license_path = base_path + "/heavyai.license";
   }
 
   // add all parameters to be displayed on startup
