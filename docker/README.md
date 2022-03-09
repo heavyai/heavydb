@@ -27,7 +27,7 @@ which will assign the name `heavyai/heavyai` and the tag `v6.0.0` to the image.
 
 ### Image layout
 
-The data directory is at `/var/lib/heavyai/data`.
+The data directory is at `/var/lib/heavyai/storage`.
 
 The config file lives at `/var/lib/heavyai/heavy.conf`.
 

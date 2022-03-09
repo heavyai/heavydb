@@ -1,6 +1,6 @@
 # Build libglvnd for libGL, libEGL, libOpenGL
 # Not currently pulled in by nvidia-docker2
-FROM omnisci/nvidia_cudagl:11.0-devel-centos7
+FROM nvidia/cudagl:11.4.2-devel-centos7
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
