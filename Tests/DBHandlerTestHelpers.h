@@ -21,6 +21,7 @@
 #endif
 
 #include <gtest/gtest.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>
 #include <boost/format.hpp>
 #include <boost/optional.hpp>
@@ -91,7 +92,8 @@ void substitute_rdms_column_types(const std::string& dbms_type, std::string& typ
           {"redshift",
            {{make_regex("FLOAT"), "real"},
             {make_regex("DOUBLE"), "double precision"},
-            {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"}}}};
+            {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
+            {make_regex("TINYINT"), "smallint"}}}};
 
   if (const auto& dbms_it = substitutions_by_dbms.find(dbms_type);
       dbms_it != substitutions_by_dbms.end()) {
@@ -464,39 +466,64 @@ class DBHandlerTestFixture : public testing::Test {
   static const std::vector<LeafHostInfo>& getDbLeaves() { return db_leaves_; }
 
   template <typename Lambda>
-  void executeLambdaAndAssertException(Lambda lambda, const std::string& error_message) {
+  void executeLambdaAndAssertException(Lambda lambda,
+                                       const std::string& error_message,
+                                       const bool i_case = false) {
     try {
       lambda();
       FAIL() << "An exception should have been thrown for this test case.";
     } catch (const TOmniSciException& e) {
-      assertExceptionMessage(e, error_message);
+      assertExceptionMessage(e, error_message, i_case);
     } catch (const std::runtime_error& e) {
-      assertExceptionMessage(e, error_message);
+      assertExceptionMessage(e, error_message, i_case);
     }
   }
 
   void assertExceptionMessage(const TOmniSciException& e,
-                              const std::string& error_message) {
+                              const std::string& error_message,
+                              bool i_case = false) {
+    std::string actual_err = e.error_msg;
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+
     if (isDistributedMode()) {
       // In distributed mode, exception messages may be wrapped within
       // another thrift exception. In this case, do a substring check.
-      if (e.error_msg.find(error_message) == std::string::npos) {
+      if (actual_err.find(expected_err) == std::string::npos) {
         std::cerr << "recieved message: " << e.error_msg << "\n";
         std::cerr << "expected message: " << error_message << "\n";
       }
-      ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
+      ASSERT_TRUE(actual_err.find(expected_err) != std::string::npos);
     } else {
-      ASSERT_EQ(error_message, e.error_msg);
+      ASSERT_EQ(expected_err, actual_err);
     }
   }
 
   void assertExceptionMessage(const std::runtime_error& e,
-                              const std::string& error_message) {
-    ASSERT_EQ(error_message, e.what());
+                              const std::string& error_message,
+                              bool i_case = false) {
+    std::string actual_err = e.what();
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+    ASSERT_EQ(expected_err, actual_err);
   }
 
-  void assertExceptionMessage(const std::exception& e, const std::string& error_message) {
-    ASSERT_EQ(error_message, e.what());
+  void assertExceptionMessage(const std::exception& e,
+                              const std::string& error_message,
+                              bool i_case = false) {
+    std::string actual_err = e.what();
+    std::string expected_err = error_message;
+    if (i_case) {
+      boost::algorithm::to_lower(actual_err);
+      boost::algorithm::to_lower(expected_err);
+    }
+    ASSERT_EQ(expected_err, actual_err);
   }
 
   // sometime error message have non deterministic portions
@@ -525,8 +552,9 @@ class DBHandlerTestFixture : public testing::Test {
   }
 
   void queryAndAssertException(const std::string& sql_statement,
-                               const std::string& error_message) {
-    executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message);
+                               const std::string& error_message,
+                               const bool i_case = false) {
+    executeLambdaAndAssertException([&] { sql(sql_statement); }, error_message, i_case);
   }
 
   void queryAndAssertExceptionWithParam(

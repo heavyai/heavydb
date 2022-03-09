@@ -2035,7 +2035,7 @@ TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
     queryAndAssertException(
         "SELECT * FROM "s + default_table_name,
         "ODBC column contains values that are outside the range of the "
-        "OmniSci "
+        "database "
         "column type INTEGER. Min allowed value: -2147483647. Max allowed value: "
         "2147483647. Encountered value: -2147483648.");
   }
