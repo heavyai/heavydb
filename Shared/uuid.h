@@ -39,7 +39,7 @@ class UUID {
   // Constructors
   constexpr UUID() noexcept : data_({}) {}
 
-  // copy from value_type[16] (OpenGL / Vulkan)
+  // copy from value_type[16] (Vulkan)
   explicit UUID(const value_type (&arr)[16]) noexcept {
     std::copy(std::cbegin(arr), std::cend(arr), std::begin(data_));
   }

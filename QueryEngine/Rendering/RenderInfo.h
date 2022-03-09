@@ -71,18 +71,14 @@ class RenderInfo {
  private:
   enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
   InSituState
-      in_situ_data;  // Should be set to true if query results can be written directly
-                     // to CUDA-mapped opengl buffers for rendering. Should be set
-                     // to false otherwise, meaning results are written to CPU first,
-                     // and buffered back to GPU for rendering.
-                     // An alternative meaning is that when false, you've encountered
-                     // a non-projection query.
-                     // Can only be set once for the lifetime of the object.
+      in_situ_data;  // Should be set to true if query results can be written directly to
+                     // CUDA-mapped buffers for rendering. Should be set to false
+                     // otherwise, meaning results are written to CPU first, and buffered
+                     // back to GPU for rendering. An alternative meaning is that when
+                     // false, you've encountered a non-projection query. Can only be set
+                     // once for the lifetime of the object.
   bool force_non_in_situ_data;
-
-  enum class RendererBufferMode { CUDA, GL };
-  RendererBufferMode buffer_mode_;  // The Renderer buffer mode determines how query
-                                    // results are bused to the Rendering engine.
+  bool cuda_using_buffers_;
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;
