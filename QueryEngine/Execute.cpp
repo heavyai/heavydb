@@ -157,6 +157,7 @@ const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
 
 Executor::Executor(const ExecutorId executor_id,
                    Data_Namespace::DataMgr* data_mgr,
+                   BufferProvider* buffer_provider,
                    const size_t block_size_x,
                    const size_t grid_size_x,
                    const size_t max_gpu_slab_size,
@@ -172,12 +173,14 @@ Executor::Executor(const ExecutorId executor_id,
     , debug_file_(debug_file)
     , executor_id_(executor_id)
     , data_mgr_(data_mgr)
+    , buffer_provider_(buffer_provider)
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {}
 
 std::shared_ptr<Executor> Executor::getExecutor(
     const ExecutorId executor_id,
     Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const std::string& debug_dir,
     const std::string& debug_file,
     const SystemParameters& system_parameters) {
@@ -191,6 +194,7 @@ std::shared_ptr<Executor> Executor::getExecutor(
 
   auto executor = std::make_shared<Executor>(executor_id,
                                              data_mgr,
+                                             buffer_provider,
                                              system_parameters.cuda_block_size,
                                              system_parameters.cuda_grid_size,
                                              system_parameters.max_gpu_slab_size,
@@ -877,6 +881,7 @@ TemporaryTable Executor::resultsUnion(SharedKernelContext& shared_context,
                                        QueryMemoryDescriptor(),
                                        row_set_mem_owner_,
                                        data_mgr_,
+                                       buffer_provider_,
                                        db_id_,
                                        blockSize(),
                                        gridSize());
@@ -924,6 +929,7 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
                                        QueryMemoryDescriptor(),
                                        nullptr,
                                        data_mgr_,
+                                       buffer_provider_,
                                        db_id_,
                                        blockSize(),
                                        gridSize());
@@ -993,6 +999,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
                                                   query_mem_desc,
                                                   row_set_mem_owner,
                                                   data_mgr_,
+                                                  buffer_provider_,
                                                   db_id_,
                                                   blockSize(),
                                                   gridSize());
@@ -1752,6 +1759,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                      QueryMemoryDescriptor(),
                                      nullptr,
                                      data_mgr_,
+                                     buffer_provider_,
                                      db_id_,
                                      blockSize(),
                                      gridSize());
@@ -1856,6 +1864,7 @@ ResultSetPtr Executor::executeTableFunction(
         ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
         this->getRowSetMemoryOwner(),
         data_mgr_,
+        buffer_provider_,
         db_id_,
         this->blockSize(),
         this->gridSize());
@@ -2030,6 +2039,7 @@ ResultSetPtr build_row_for_empty_input(
                                         query_mem_desc,
                                         row_set_mem_owner,
                                         executor->getDataMgr(),
+                                        executor->getBufferProvider(),
                                         executor->getDatabaseId(),
                                         executor->blockSize(),
                                         executor->gridSize());
@@ -2177,6 +2187,7 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
                                                     top_query_mem_desc,
                                                     first_result_set->getRowSetMemOwner(),
                                                     data_mgr_,
+                                                    buffer_provider_,
                                                     db_id_,
                                                     blockSize(),
                                                     gridSize());
@@ -3046,6 +3057,7 @@ int32_t Executor::executePlanWithoutGroupBy(
           frag_offsets,
           0,
           data_mgr,
+          getBufferProvider(),
           blockSize(),
           gridSize(),
           device_id,
@@ -3302,6 +3314,7 @@ int32_t Executor::executePlanWithGroupBy(
           frag_offsets,
           ra_exe_unit_copy.union_all ? ra_exe_unit_copy.scan_limit : scan_limit,
           data_mgr,
+          getBufferProvider(),
           blockSize(),
           gridSize(),
           device_id,

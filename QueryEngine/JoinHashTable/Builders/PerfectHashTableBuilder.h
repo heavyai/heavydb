@@ -45,7 +45,7 @@ class PerfectJoinHashTableBuilder {
             : 2 * hash_entry_info.getNormalizedHashEntryCount() + join_column.num_elems;
     CHECK(!hash_table_);
     hash_table_ =
-        std::make_unique<PerfectHashTable>(executor->getDataMgr(),
+        std::make_unique<PerfectHashTable>(executor->getBufferProvider(),
                                            layout,
                                            ExecutorDeviceType::GPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
@@ -71,17 +71,20 @@ class PerfectJoinHashTableBuilder {
                           const int device_count,
                           const Executor* executor) {
     auto timer = DEBUG_TIMER(__func__);
-    auto data_mgr = executor->getDataMgr();
+    auto buffer_provider = executor->getBufferProvider();
     Data_Namespace::AbstractBuffer* gpu_hash_table_err_buff =
-        CudaAllocator::allocGpuAbstractBuffer(data_mgr, sizeof(int), device_id);
-    ScopeGuard cleanup_error_buff = [&data_mgr, gpu_hash_table_err_buff]() {
-      data_mgr->free(gpu_hash_table_err_buff);
+        CudaAllocator::allocGpuAbstractBuffer(buffer_provider, sizeof(int), device_id);
+    ScopeGuard cleanup_error_buff = [buffer_provider, gpu_hash_table_err_buff]() {
+      buffer_provider->free(gpu_hash_table_err_buff);
     };
     CHECK(gpu_hash_table_err_buff);
     auto dev_err_buff =
         reinterpret_cast<CUdeviceptr>(gpu_hash_table_err_buff->getMemoryPtr());
     int err{0};
-    copy_to_gpu(data_mgr, dev_err_buff, &err, sizeof(err), device_id);
+    buffer_provider->copyToDevice(reinterpret_cast<int8_t*>(dev_err_buff),
+                                  reinterpret_cast<const int8_t*>(&err),
+                                  sizeof(err),
+                                  device_id);
 
     CHECK(hash_table_);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
@@ -132,7 +135,10 @@ class PerfectJoinHashTableBuilder {
             type_info);
       }
     }
-    copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+    buffer_provider->copyFromDevice(reinterpret_cast<int8_t*>(&err),
+                                    reinterpret_cast<int8_t*>(dev_err_buff),
+                                    sizeof(err),
+                                    device_id);
     if (err) {
       if (layout == HashType::OneToOne) {
         throw NeedsOneToManyHash();
@@ -187,7 +193,7 @@ class PerfectJoinHashTableBuilder {
 
     CHECK(!hash_table_);
     hash_table_ =
-        std::make_unique<PerfectHashTable>(executor->getDataMgr(),
+        std::make_unique<PerfectHashTable>(executor->getBufferProvider(),
                                            hash_type,
                                            ExecutorDeviceType::CPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
@@ -275,7 +281,7 @@ class PerfectJoinHashTableBuilder {
     const auto& ti = inner_col->get_type_info();
     CHECK(!hash_table_);
     hash_table_ =
-        std::make_unique<PerfectHashTable>(executor->getDataMgr(),
+        std::make_unique<PerfectHashTable>(executor->getBufferProvider(),
                                            HashType::OneToMany,
                                            ExecutorDeviceType::CPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),

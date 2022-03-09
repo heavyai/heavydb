@@ -102,14 +102,15 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
            layout,
            top_n,
            start,
-           step] {
+           step,
+           this] {
             if (device_type == ExecutorDeviceType::GPU) {
               set_cuda_context(data_mgr, start);
             }
             strided_permutations[start] = (key_bytewidth == 4)
                                               ? baseline_sort<int32_t>(device_type,
                                                                        start,
-                                                                       data_mgr,
+                                                                       buffer_provider_,
                                                                        groupby_buffer,
                                                                        pod_oe,
                                                                        layout,
@@ -118,7 +119,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
                                                                        step)
                                               : baseline_sort<int64_t>(device_type,
                                                                        start,
-                                                                       data_mgr,
+                                                                       buffer_provider_,
                                                                        groupby_buffer,
                                                                        pod_oe,
                                                                        layout,
@@ -150,9 +151,9 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     permutation_ =
         (key_bytewidth == 4)
             ? baseline_sort<int32_t>(
-                  device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1)
+                  device_type, 0, buffer_provider_, groupby_buffer, pod_oe, layout, top_n, 0, 1)
             : baseline_sort<int64_t>(
-                  device_type, 0, data_mgr, groupby_buffer, pod_oe, layout, top_n, 0, 1);
+                  device_type, 0, buffer_provider_, groupby_buffer, pod_oe, layout, top_n, 0, 1);
   }
 }
 

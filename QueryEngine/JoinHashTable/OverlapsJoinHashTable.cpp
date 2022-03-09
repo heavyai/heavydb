@@ -193,8 +193,7 @@ std::vector<double> compute_bucket_sizes(
   else {
     // Note that we compute the bucket sizes using only a single GPU
     const int device_id = 0;
-    auto data_mgr = executor->getDataMgr();
-    CudaAllocator allocator(data_mgr, device_id);
+    CudaAllocator allocator(executor->getBufferProvider(), device_id);
     auto device_bucket_sizes_gpu =
         transfer_vector_of_flat_objects_to_gpu(bucket_sizes, allocator);
     auto join_column_gpu = transfer_flat_object_to_gpu(join_column, allocator);
@@ -581,11 +580,11 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   }
 
   std::vector<ColumnsForDevice> columns_per_device;
-  auto data_mgr = executor_->getDataMgr();
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
+      dev_buff_owners.emplace_back(
+          std::make_unique<CudaAllocator>(executor_->getBufferProvider(), device_id));
     }
   }
   const auto shard_count = shardCount();
@@ -977,6 +976,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
   }
 #ifdef HAVE_CUDA
   auto data_mgr = executor_->getDataMgr();
+  auto buffer_provider = executor_->getBufferProvider();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count_);
   for (auto& host_hll_buffer : host_hll_buffers) {
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -990,12 +990,13 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
          &columns_per_device,
          &count_distinct_desc,
          data_mgr,
+         buffer_provider,
          &host_hll_buffers,
          &emitted_keys_count_device_threads] {
-          CudaAllocator allocator(data_mgr, device_id);
+          CudaAllocator allocator(buffer_provider, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
-          data_mgr->getCudaMgr()->zeroDeviceMem(
+          buffer_provider->zeroDeviceMem(
               device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
@@ -1006,15 +1007,14 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
               columns_for_device.join_buckets[0].inverse_bucket_sizes_for_dimension;
           auto inverse_bucket_sizes_gpu =
               allocator.alloc(inverse_bucket_sizes_for_dimension.size() * sizeof(double));
-          copy_to_gpu(data_mgr,
-                      reinterpret_cast<CUdeviceptr>(inverse_bucket_sizes_gpu),
-                      inverse_bucket_sizes_for_dimension.data(),
+          buffer_provider->copyToDevice(inverse_bucket_sizes_gpu,
+                      reinterpret_cast<const int8_t*>(inverse_bucket_sizes_for_dimension.data()),
                       inverse_bucket_sizes_for_dimension.size() * sizeof(double),
                       device_id);
           const size_t row_counts_buffer_sz =
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator.alloc(row_counts_buffer_sz);
-          data_mgr->getCudaMgr()->zeroDeviceMem(
+          buffer_provider->zeroDeviceMem(
               row_counts_buffer, row_counts_buffer_sz, device_id);
           const auto key_handler =
               OverlapsKeyHandler(inverse_bucket_sizes_for_dimension.size(),
@@ -1030,21 +1030,21 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
               columns_for_device.join_columns[0].num_elems);
 
           auto& host_emitted_keys_count = emitted_keys_count_device_threads[device_id];
-          copy_from_gpu(data_mgr,
-                        &host_emitted_keys_count,
-                        reinterpret_cast<CUdeviceptr>(
-                            row_counts_buffer +
-                            (columns_per_device.front().join_columns[0].num_elems - 1) *
-                                sizeof(int32_t)),
-                        sizeof(int32_t),
-                        device_id);
+          buffer_provider->copyFromDevice(
+              reinterpret_cast<int8_t*>(&host_emitted_keys_count),
+              reinterpret_cast<const int8_t*>(
+                  row_counts_buffer +
+                  (columns_per_device.front().join_columns[0].num_elems - 1) *
+                      sizeof(int32_t)),
+              sizeof(int32_t),
+              device_id);
 
           auto& host_hll_buffer = host_hll_buffers[device_id];
-          copy_from_gpu(data_mgr,
-                        &host_hll_buffer[0],
-                        reinterpret_cast<CUdeviceptr>(device_hll_buffer),
-                        count_distinct_desc.bitmapPaddedSizeBytes(),
-                        device_id);
+          buffer_provider->copyFromDevice(
+              reinterpret_cast<int8_t*>(&host_hll_buffer[0]),
+              reinterpret_cast<const int8_t*>(device_hll_buffer),
+              count_distinct_desc.bitmapPaddedSizeBytes(),
+              device_id);
         }));
   }
   for (auto& child : approximate_distinct_device_threads) {
@@ -1298,8 +1298,7 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
   VLOG(1) << "Building overlaps join hash table on GPU.";
 
   BaselineJoinHashTableBuilder builder;
-  auto data_mgr = executor_->getDataMgr();
-  CudaAllocator allocator(data_mgr, device_id);
+  CudaAllocator allocator(executor_->getBufferProvider(), device_id);
   auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
@@ -1337,8 +1336,6 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::copyCpuHashTableToGpu(
     const size_t device_id) {
   CHECK_EQ(memory_level_, Data_Namespace::MemoryLevel::GPU_LEVEL);
 
-  auto data_mgr = executor_->getDataMgr();
-
   // copy hash table to GPU
   BaselineJoinHashTableBuilder gpu_builder;
   gpu_builder.allocateDeviceMemory(layout,
@@ -1355,8 +1352,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::copyCpuHashTableToGpu(
 
   CHECK_LE(cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
            gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-  copy_to_gpu(data_mgr,
-              reinterpret_cast<CUdeviceptr>(gpu_buffer_ptr),
+  auto buffer_provider = executor_->getBufferProvider();
+  buffer_provider->copyToDevice(gpu_buffer_ptr,
               cpu_hash_table->getCpuBuffer(),
               cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
               device_id);
@@ -1600,13 +1597,12 @@ std::string OverlapsJoinHashTable::toString(const ExecutorDeviceType device_type
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
     CHECK(executor_);
-    auto data_mgr = executor_->getDataMgr();
+    auto buffer_provider = executor_->getBufferProvider();
 
-    copy_from_gpu(data_mgr,
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    buffer_provider->copyFromDevice(buffer_copy.get(),
+                                    reinterpret_cast<const int8_t*>(buffer),
+                                    buffer_size,
+                                    device_id);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -1643,12 +1639,11 @@ std::set<DecodedJoinHashBufferEntry> OverlapsJoinHashTable::toSet(
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
     CHECK(executor_);
-    auto data_mgr = executor_->getDataMgr();
-    copy_from_gpu(data_mgr,
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    auto buffer_provider = executor_->getBufferProvider();
+    buffer_provider->copyFromDevice(buffer_copy.get(),
+                                    reinterpret_cast<const int8_t*>(buffer),
+                                    buffer_size,
+                                    device_id);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else

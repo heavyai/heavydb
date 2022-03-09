@@ -16,6 +16,7 @@
 #include "SchemaMgr/SimpleSchemaProvider.h"
 
 #include "ArrowTestHelpers.h"
+#include "DataMgr/DataMgrBufferProvider.h"
 #include "TestDataProvider.h"
 #include "TestHelpers.h"
 #include "TestRelAlgDagBuilder.h"
@@ -159,6 +160,7 @@ class NoCatalogRelAlgTest : public ::testing::Test {
 
     executor_ = std::make_shared<Executor>(0,
                                            data_mgr_.get(),
+                                           data_mgr_->getBufferProvider(),
                                            system_parameters.cuda_block_size,
                                            system_parameters.cuda_grid_size,
                                            system_parameters.max_gpu_slab_size,

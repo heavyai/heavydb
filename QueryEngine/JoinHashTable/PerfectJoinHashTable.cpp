@@ -283,11 +283,11 @@ void PerfectJoinHashTable::reify() {
   std::vector<ColumnsForDevice> columns_per_device;
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
   try {
-    auto data_mgr = executor_->getDataMgr();
+    auto buffer_provider = executor_->getBufferProvider();
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
       for (int device_id = 0; device_id < device_count_; ++device_id) {
         dev_buff_owners.emplace_back(
-            std::make_unique<CudaAllocator>(data_mgr, device_id));
+            std::make_unique<CudaAllocator>(buffer_provider, device_id));
       }
     }
     for (int device_id = 0; device_id < device_count_; ++device_id) {
@@ -545,9 +545,9 @@ int PerfectJoinHashTable::initHashTableForDevice(
     // but the query runs on GPU (join on dictionary encoded columns).
     if (memory_level_ == Data_Namespace::GPU_LEVEL) {
 #ifdef HAVE_CUDA
+      auto buffer_provider = executor_->getBufferProvider();
       const auto& ti = inner_col->get_type_info();
       CHECK(ti.is_string());
-      auto data_mgr = executor_->getDataMgr();
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
 
       PerfectJoinHashTableBuilder gpu_builder;
@@ -567,8 +567,7 @@ int PerfectJoinHashTable::initHashTableForDevice(
       // GPU size returns reserved size
       CHECK_LE(hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
                gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-      copy_to_gpu(data_mgr,
-                  reinterpret_cast<CUdeviceptr>(gpu_buffer_ptr),
+      buffer_provider->copyToDevice(gpu_buffer_ptr,
                   hash_table->getCpuBuffer(),
                   hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
                   device_id);
@@ -807,15 +806,15 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
   auto buffer_size = getJoinHashBufferSize(device_type, device_id);
   auto hash_table = getHashTableForDevice(device_id);
 #ifdef HAVE_CUDA
+  auto buffer_provider = executor_->getBufferProvider();
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(executor_->getDataMgr(),
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    buffer_provider->copyFromDevice(buffer_copy.get(),
+                                    reinterpret_cast<const int8_t*>(buffer),
+                                    buffer_size,
+                                    device_id);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -844,15 +843,15 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
   auto buffer_size = getJoinHashBufferSize(device_type, device_id);
   auto hash_table = getHashTableForDevice(device_id);
 #ifdef HAVE_CUDA
+  auto buffer_provider = executor_->getBufferProvider();
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(executor_->getDataMgr(),
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    buffer_provider->copyFromDevice(buffer_copy.get(),
+                                    reinterpret_cast<const int8_t*>(buffer),
+                                    buffer_size,
+                                    device_id);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else

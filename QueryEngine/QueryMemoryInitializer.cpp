@@ -385,6 +385,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                       ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
                       row_set_mem_owner_,
                       executor->getDataMgr(),
+                      executor->getBufferProvider(),
                       executor->getDatabaseId(),
                       executor->blockSize(),
                       executor->gridSize()));
@@ -465,6 +466,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                     ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
                     row_set_mem_owner_,
                     executor->getDataMgr(),
+                    executor->getBufferProvider(),
                     executor->getDatabaseId(),
                     executor->blockSize(),
                     executor->gridSize()));
@@ -1073,7 +1075,7 @@ GpuGroupByBuffers QueryMemoryInitializer::setupTableFunctionGpuBuffers(
 }
 
 void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t entry_count,
     const GpuGroupByBuffers& gpu_group_by_buffers,
@@ -1087,18 +1089,16 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
   int8_t* host_buffer = reinterpret_cast<int8_t*>(group_by_buffers_[0]);
   CHECK_LE(column_size, orig_column_size);
   if (orig_column_size == column_size) {
-    copy_from_gpu(data_mgr,
-                  host_buffer,
-                  reinterpret_cast<CUdeviceptr>(dev_buffer),
-                  column_size * num_columns,
-                  device_id);
+    buffer_provider->copyFromDevice(host_buffer,
+                                    reinterpret_cast<const int8_t*>(dev_buffer),
+                                    column_size * num_columns,
+                                    device_id);
   } else {
     for (size_t k = 0; k < num_columns; ++k) {
-      copy_from_gpu(data_mgr,
-                    host_buffer,
-                    reinterpret_cast<CUdeviceptr>(dev_buffer),
-                    column_size,
-                    device_id);
+      buffer_provider->copyFromDevice(host_buffer,
+                                      reinterpret_cast<const int8_t*>(dev_buffer),
+                                      column_size,
+                                      device_id);
       dev_buffer += orig_column_size;
       host_buffer += column_size;
     }
@@ -1171,7 +1171,7 @@ void QueryMemoryInitializer::compactProjectionBuffersCpu(
 
 void QueryMemoryInitializer::compactProjectionBuffersGpu(
     const QueryMemoryDescriptor& query_mem_desc,
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const GpuGroupByBuffers& gpu_group_by_buffers,
     const size_t projection_count,
     const int device_id) {
@@ -1182,7 +1182,7 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
   // copy the results from the main buffer into projection_buffer
   const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
   copy_projection_buffer_from_gpu_columnar(
-      data_mgr,
+      buffer_provider,
       gpu_group_by_buffers,
       query_mem_desc,
       reinterpret_cast<int8_t*>(group_by_buffers_[buffer_start_idx]),
@@ -1195,7 +1195,7 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
 }
 
 void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t entry_count,
     const GpuGroupByBuffers& gpu_group_by_buffers,
@@ -1215,7 +1215,7 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
     total_buff_size =
         query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU, entry_count);
   }
-  copy_group_by_buffers_from_gpu(data_mgr,
+  copy_group_by_buffers_from_gpu(buffer_provider,
                                  group_by_buffers_,
                                  total_buff_size,
                                  gpu_group_by_buffers.data,
@@ -1244,7 +1244,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetCpu(
 }
 
 void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const QueryMemoryDescriptor& query_mem_desc,
     const GpuGroupByBuffers& gpu_group_by_buffers,
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -1255,7 +1255,7 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
   const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
 
   const auto rows_copy = pick_top_n_rows_from_dev_heaps(
-      data_mgr,
+      buffer_provider,
       reinterpret_cast<int64_t*>(gpu_group_by_buffers.data),
       ra_exe_unit,
       query_mem_desc,

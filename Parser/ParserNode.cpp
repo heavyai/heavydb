@@ -47,6 +47,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/DataframeTableDescriptor.h"
 #include "Catalog/SharedDictionaryValidator.h"
+#include "DataMgr/DataMgrBufferProvider.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
@@ -1494,8 +1495,9 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Singleton inserts on views is not supported.");
   }
 
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &catalog.getDataMgr(),
+                                        catalog.getDataMgr().getBufferProvider());
   RelAlgExecutor ra_executor(
       executor.get(),
       &catalog,
@@ -2121,8 +2123,9 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &catalog.getDataMgr(),
+                                        catalog.getDataMgr().getBufferProvider());
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
@@ -2167,6 +2170,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      nullptr,
+                                                     nullptr,
                                                      -1,
                                                      0,
                                                      0),
@@ -2182,8 +2186,9 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &catalog.getDataMgr(),
+                                        catalog.getDataMgr().getBufferProvider());
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
@@ -2512,8 +2517,10 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
   size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
   auto query_session = session ? session->get_session_id() : "";
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &catalog.getDataMgr(),
+                                        catalog.getDataMgr().getBufferProvider())
+                      .get();
   std::string work_type_str = for_CTAS ? "CTAS" : "ITAS";
   try {
     for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
@@ -3368,8 +3375,10 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   auto schema_provider =
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog);
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &catalog.getDataMgr(),
+                                        catalog.getDataMgr().getBufferProvider())
+                      .get();
   executor->setSchemaProvider(schema_provider);
   const TableOptimizer optimizer(td, executor, schema_provider, catalog);
   optimizer.recomputeMetadata();
@@ -4236,8 +4245,10 @@ void CopyTableStmt::execute(
     // regular import
     auto importer = importer_factory(catalog, td, file_path, copy_params);
     auto start_time = ::toString(std::chrono::system_clock::now());
-    auto executor =
-        Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &catalog.getDataMgr()).get();
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                          &catalog.getDataMgr(),
+                                          catalog.getDataMgr().getBufferProvider())
+                        .get();
     auto query_session = session.get_session_id();
     auto query_str = "COPYING " + td->tableName;
     if (g_enable_non_kernel_time_query_interrupt) {

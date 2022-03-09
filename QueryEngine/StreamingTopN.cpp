@@ -55,7 +55,7 @@ size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
 
 #ifdef HAVE_CUDA
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const int64_t* dev_heaps_buffer,
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,
@@ -77,7 +77,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
       get_target_info(ra_exe_unit.target_exprs[oe_col_idx], g_bigint_count),
       -1};
   return pop_n_rows_from_merged_heaps_gpu(
-      data_mgr,
+      buffer_provider,
       dev_heaps_buffer,
       query_mem_desc.getBufferSizeBytes(
           ra_exe_unit, thread_count, ExecutorDeviceType::GPU),

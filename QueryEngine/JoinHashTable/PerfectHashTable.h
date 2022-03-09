@@ -25,12 +25,12 @@
 class PerfectHashTable : public HashTable {
  public:
   // CPU + GPU constructor
-  PerfectHashTable(Data_Namespace::DataMgr* data_mgr,
+  PerfectHashTable(BufferProvider* buffer_provider,
                    const HashType layout,
                    const ExecutorDeviceType device_type,
                    const size_t entry_count,
                    const size_t emitted_keys_count)
-      : data_mgr_(data_mgr)
+      : buffer_provider_(buffer_provider)
       , layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
@@ -44,8 +44,8 @@ class PerfectHashTable : public HashTable {
 
   ~PerfectHashTable() {
     if (gpu_hash_table_buff_) {
-      CHECK(data_mgr_);
-      data_mgr_->free(gpu_hash_table_buff_);
+      CHECK(buffer_provider_);
+      buffer_provider_->free(gpu_hash_table_buff_);
     }
   }
 
@@ -58,7 +58,7 @@ class PerfectHashTable : public HashTable {
     CHECK_GE(device_id, 0);
     CHECK(!gpu_hash_table_buff_);
     gpu_hash_table_buff_ = CudaAllocator::allocGpuAbstractBuffer(
-        data_mgr_, entries * sizeof(int32_t), device_id);
+        buffer_provider_, entries * sizeof(int32_t), device_id);
   }
 
   size_t getHashTableBufferSize(const ExecutorDeviceType device_type) const override {
@@ -86,7 +86,7 @@ class PerfectHashTable : public HashTable {
 
  private:
   Data_Namespace::AbstractBuffer* gpu_hash_table_buff_{nullptr};
-  Data_Namespace::DataMgr* data_mgr_;
+  BufferProvider* buffer_provider_;
   std::unique_ptr<int32_t[]> cpu_hash_table_buff_;
   size_t cpu_hash_table_buff_size_;
 

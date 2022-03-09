@@ -103,11 +103,12 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
   std::vector<ColumnsForDevice> columns_per_device;
   ;
 
-  auto data_mgr = executor_->getDataMgr();
+  auto buffer_provider = executor_->getBufferProvider();
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
+      dev_buff_owners.emplace_back(
+          std::make_unique<CudaAllocator>(buffer_provider, device_id));
     }
   }
   const auto shard_count = shardCount();
@@ -238,8 +239,7 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
   VLOG(1) << "Building range join hash table on GPU.";
 
   BaselineJoinHashTableBuilder builder;
-  auto data_mgr = executor_->getDataMgr();
-  CudaAllocator allocator(data_mgr, device_id);
+  CudaAllocator allocator(executor_->getBufferProvider(), device_id);
   auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
@@ -455,7 +455,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
                           num_keys_for_row.size() > 0 ? num_keys_for_row.back() : 0);
   }
 #ifdef HAVE_CUDA
-  auto data_mgr = executor_->getDataMgr();
+  auto buffer_provider = executor_->getBufferProvider();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count_);
   for (auto& host_hll_buffer : host_hll_buffers) {
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -468,14 +468,14 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
         [device_id,
          &columns_per_device,
          &count_distinct_desc,
-         data_mgr,
+         buffer_provider,
          &host_hll_buffers,
          &emitted_keys_count_device_threads,
          this] {
-          CudaAllocator allocator(data_mgr, device_id);
+          CudaAllocator allocator(buffer_provider, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
-          data_mgr->getCudaMgr()->zeroDeviceMem(
+          buffer_provider->zeroDeviceMem(
               device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
@@ -486,15 +486,15 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
               columns_for_device.join_buckets[0].inverse_bucket_sizes_for_dimension;
           auto bucket_sizes_gpu =
               allocator.alloc(bucket_sizes_for_dimension.size() * sizeof(double));
-          copy_to_gpu(data_mgr,
-                      reinterpret_cast<CUdeviceptr>(bucket_sizes_gpu),
-                      bucket_sizes_for_dimension.data(),
-                      bucket_sizes_for_dimension.size() * sizeof(double),
-                      device_id);
+          buffer_provider->copyToDevice(
+              bucket_sizes_gpu,
+              reinterpret_cast<const int8_t*>(bucket_sizes_for_dimension.data()),
+              bucket_sizes_for_dimension.size() * sizeof(double),
+              device_id);
           const size_t row_counts_buffer_sz =
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator.alloc(row_counts_buffer_sz);
-          data_mgr->getCudaMgr()->zeroDeviceMem(
+          buffer_provider->zeroDeviceMem(
               row_counts_buffer, row_counts_buffer_sz, device_id);
           const auto key_handler =
               RangeKeyHandler(false,
@@ -513,21 +513,21 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
               executor_->gridSize());
 
           auto& host_emitted_keys_count = emitted_keys_count_device_threads[device_id];
-          copy_from_gpu(data_mgr,
-                        &host_emitted_keys_count,
-                        reinterpret_cast<CUdeviceptr>(
-                            row_counts_buffer +
-                            (columns_per_device.front().join_columns[0].num_elems - 1) *
-                                sizeof(int32_t)),
-                        sizeof(int32_t),
-                        device_id);
+          buffer_provider->copyFromDevice(
+              reinterpret_cast<int8_t*>(&host_emitted_keys_count),
+              reinterpret_cast<const int8_t*>(
+                  row_counts_buffer +
+                  (columns_per_device.front().join_columns[0].num_elems - 1) *
+                      sizeof(int32_t)),
+              sizeof(int32_t),
+              device_id);
 
           auto& host_hll_buffer = host_hll_buffers[device_id];
-          copy_from_gpu(data_mgr,
-                        &host_hll_buffer[0],
-                        reinterpret_cast<CUdeviceptr>(device_hll_buffer),
-                        count_distinct_desc.bitmapPaddedSizeBytes(),
-                        device_id);
+          buffer_provider->copyFromDevice(
+              reinterpret_cast<int8_t*>(&host_hll_buffer[0]),
+              reinterpret_cast<const int8_t*>(device_hll_buffer),
+              count_distinct_desc.bitmapPaddedSizeBytes(),
+              device_id);
         }));
   }
   for (auto& child : approximate_distinct_device_threads) {

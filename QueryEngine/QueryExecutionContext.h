@@ -68,6 +68,7 @@ class QueryExecutionContext : boost::noncopyable {
       const std::vector<std::vector<uint64_t>>& frag_row_offsets,
       const int32_t scan_limit,
       Data_Namespace::DataMgr* data_mgr,
+      BufferProvider* buffer_provider,
       const unsigned block_size_x,
       const unsigned grid_size_x,
       const int device_id,
@@ -127,6 +128,7 @@ class QueryExecutionContext : boost::noncopyable {
       const uint32_t num_tables,
       const std::vector<int64_t>& join_hash_tables,
       Data_Namespace::DataMgr* data_mgr,
+      BufferProvider* buffer_provider,
       const int device_id,
       const bool hoist_literals,
       const bool is_group_by) const;

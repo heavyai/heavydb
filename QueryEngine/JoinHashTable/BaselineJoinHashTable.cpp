@@ -148,15 +148,13 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   CHECK(hash_table);
   auto buffer_size = hash_table->getHashTableBufferSize(device_type);
 #ifdef HAVE_CUDA
+  auto buffer_provider = executor_->getBufferProvider();
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(executor_->getDataMgr(),
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    buffer_provider->copyFromDevice(
+        buffer_copy.get(), reinterpret_cast<int8_t*>(buffer), buffer_size, device_id);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -189,15 +187,13 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
   CHECK(hash_table);
   auto buffer_size = hash_table->getHashTableBufferSize(device_type);
 #ifdef HAVE_CUDA
+  auto buffer_provider = executor_->getBufferProvider();
   std::unique_ptr<int8_t[]> buffer_copy;
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
-    copy_from_gpu(executor_->getDataMgr(),
-                  buffer_copy.get(),
-                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
-                  buffer_size,
-                  device_id);
+    buffer_provider->copyFromDevice(
+        buffer_copy.get(), reinterpret_cast<int8_t*>(buffer), buffer_size, device_id);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
 #else
@@ -243,11 +239,12 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     throw TooManyHashEntries();
   }
 
-  auto data_mgr = executor_->getDataMgr();
+  auto buffer_provider = executor_->getBufferProvider();
   std::vector<std::unique_ptr<CudaAllocator>> dev_buff_owners;
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
+      dev_buff_owners.emplace_back(
+          std::make_unique<CudaAllocator>(buffer_provider, device_id));
     }
   }
   std::vector<ColumnsForDevice> columns_per_device;
@@ -363,7 +360,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
     return std::make_pair(hll_size(hll_result, count_distinct_desc.bitmap_sz_bits), 0);
   }
 #ifdef HAVE_CUDA
-  auto data_mgr = executor_->getDataMgr();
+  auto buffer_provider = executor_->getBufferProvider();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count_);
   for (auto& host_hll_buffer : host_hll_buffers) {
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -375,12 +372,12 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
         [device_id,
          &columns_per_device,
          &count_distinct_desc,
-         data_mgr,
+         buffer_provider,
          &host_hll_buffers] {
-          CudaAllocator allocator(data_mgr, device_id);
+          CudaAllocator allocator(buffer_provider, device_id);
           auto device_hll_buffer =
               allocator.alloc(count_distinct_desc.bitmapPaddedSizeBytes());
-          data_mgr->getCudaMgr()->zeroDeviceMem(
+          buffer_provider->zeroDeviceMem(
               device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
@@ -403,11 +400,10 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
               columns_for_device.join_columns[0].num_elems);
 
           auto& host_hll_buffer = host_hll_buffers[device_id];
-          copy_from_gpu(data_mgr,
-                        &host_hll_buffer[0],
-                        reinterpret_cast<CUdeviceptr>(device_hll_buffer),
-                        count_distinct_desc.bitmapPaddedSizeBytes(),
-                        device_id);
+          buffer_provider->copyFromDevice(reinterpret_cast<int8_t*>(&host_hll_buffer[0]),
+                                          device_hll_buffer,
+                                          count_distinct_desc.bitmapPaddedSizeBytes(),
+                                          device_id);
         }));
   }
   for (auto& child : approximate_distinct_device_threads) {
@@ -634,9 +630,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
 
       const auto gpu_buff = gpu_target_hash_table->getGpuBuffer();
       CHECK(gpu_buff);
-      auto data_mgr = executor_->getDataMgr();
-      copy_to_gpu(data_mgr,
-                  reinterpret_cast<CUdeviceptr>(gpu_buff),
+      auto buffer_provider = executor_->getBufferProvider();
+      buffer_provider->copyToDevice(gpu_buff,
                   cpu_source_hash_table->getCpuBuffer(),
                   cpu_source_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
                   device_id);
@@ -649,8 +644,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
     BaselineJoinHashTableBuilder builder;
 
-    auto data_mgr = executor_->getDataMgr();
-    CudaAllocator allocator(data_mgr, device_id);
+    CudaAllocator allocator(executor_->getBufferProvider(), device_id);
     auto join_column_types_gpu =
         transfer_vector_of_flat_objects_to_gpu(join_column_types, allocator);
     auto join_columns_gpu =

@@ -31,7 +31,7 @@ class DataMgr;
 class ThrustAllocator;
 
 std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const int64_t* dev_heaps,
     const size_t heaps_size,
     const size_t n,

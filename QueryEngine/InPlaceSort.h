@@ -40,7 +40,7 @@ class DataMgr;
 void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>&,
                       const QueryMemoryDescriptor&,
                       const GpuGroupByBuffers&,
-                      Data_Namespace::DataMgr*,
+                      BufferProvider*,
                       const int);
 
 void sort_groups_cpu(int64_t* val_buff,

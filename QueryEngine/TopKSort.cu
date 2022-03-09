@@ -285,7 +285,7 @@ void reset_keys_in_row_buffer(
 }
 
 std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const int64_t* dev_heaps,
     const size_t heaps_size,
     const size_t n,
@@ -299,7 +299,7 @@ std::vector<int8_t> pop_n_rows_from_merged_heaps_gpu(
   const int8_t* rows_ptr = reinterpret_cast<const int8_t*>(dev_heaps) +
                            streaming_top_n::get_rows_offset_of_heaps(n, thread_count);
   const auto total_entry_count = n * thread_count;
-  ThrustAllocator thrust_allocator(data_mgr, device_id);
+  ThrustAllocator thrust_allocator(buffer_provider, device_id);
   auto d_indices = get_device_ptr<int32_t>(total_entry_count, thrust_allocator);
   thrust::sequence(
       thrust::device(thrust_allocator), d_indices, d_indices + total_entry_count);

@@ -177,6 +177,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   CHECK_LT(chosen_device_id, Executor::max_gpu_count);
 
   auto data_mgr = executor->getDataMgr();
+  auto buffer_provider = executor->getBufferProvider();
 
   // need to own them while query executes
   auto chunk_iterators_ptr = std::make_shared<std::list<ChunkIter>>();
@@ -186,7 +187,7 @@ void ExecutionKernel::runImpl(Executor* executor,
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
-    device_allocator = std::make_unique<CudaAllocator>(data_mgr, chosen_device_id);
+    device_allocator = std::make_unique<CudaAllocator>(buffer_provider, chosen_device_id);
   }
   std::shared_ptr<FetchResult> fetch_result(new FetchResult);
   try {

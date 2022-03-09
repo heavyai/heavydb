@@ -108,9 +108,9 @@ void apply_permutation_gpu(int64_t* val_buff,
 void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                       const QueryMemoryDescriptor& query_mem_desc,
                       const GpuGroupByBuffers& group_by_buffers,
-                      Data_Namespace::DataMgr* data_mgr,
+                      BufferProvider* buffer_provider,
                       const int device_id) {
-  ThrustAllocator alloc(data_mgr, device_id);
+  ThrustAllocator alloc(buffer_provider, device_id);
   CHECK_EQ(size_t(1), order_entries.size());
   const auto idx_buff = group_by_buffers.data -
                         align_to_int64(query_mem_desc.getEntryCount() * sizeof(int32_t));

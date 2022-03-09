@@ -19,6 +19,7 @@
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
+#include "DataMgr/DataMgrBufferProvider.h"
 #include "DistributedLoader.h"
 #include "ImportExport/CopyParams.h"
 #include "Logger/Logger.h"
@@ -329,7 +330,9 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
   const auto& cat = session_info_->getCatalog();
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
+                                        cat.getDataMgr().getBufferProvider());
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
@@ -352,7 +355,9 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
   const auto& cat = session_info_->getCatalog();
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
+                                        cat.getDataMgr().getBufferProvider());
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
@@ -423,7 +428,9 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, query_str);
   const auto& cat = session_info_->getCatalog();
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
+                                        cat.getDataMgr().getBufferProvider());
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state->createQueryStateProxy(),
@@ -601,9 +608,9 @@ std::shared_ptr<Executor> QueryRunner::getExecutor() const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   auto query_state = create_query_state(session_info_, "");
   auto stdlog = STDLOG(query_state);
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                            &Catalog_Namespace::SysCatalog::instance().getDataMgr());
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
+  auto executor = Executor::getExecutor(
+      Executor::UNITARY_EXECUTOR_ID, &data_mgr, data_mgr.getBufferProvider());
   return executor;
 }
 
@@ -634,7 +641,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
        &result,
        &running_query_check_freq,
        &pending_query_check_freq](const size_t worker_id) {
-        auto executor = Executor::getExecutor(worker_id, &cat.getDataMgr());
+        auto executor = Executor::getExecutor(
+            worker_id, &cat.getDataMgr(), cat.getDataMgr().getBufferProvider());
         CompilationOptions co = CompilationOptions::defaults(device_type);
         co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
 
@@ -674,7 +682,9 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
+                                        cat.getDataMgr().getBufferProvider());
   executor->enrollQuerySession(session_id,
                                query_str,
                                query_state->getQuerySubmittedTime(),
@@ -750,7 +760,9 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
     const bool with_filter_push_down) {
   auto const& query_state = query_state_proxy.getQueryState();
   const auto& cat = query_state.getConstSessionInfo()->getCatalog();
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
+                                        cat.getDataMgr().getBufferProvider());
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   co.explain_type = explain_type;
@@ -853,7 +865,8 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                                   &eo,
                                                   &query_state,
                                                   &result](const size_t worker_id) {
-        auto executor = Executor::getExecutor(worker_id, &cat.getDataMgr());
+        auto executor = Executor::getExecutor(
+            worker_id, &cat.getDataMgr(), cat.getDataMgr().getBufferProvider());
         // TODO The next line should be deleted since it overwrites co, but then
         // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
         // reset to its default values.
@@ -897,9 +910,10 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(
 
 ExtractedPlanDag QueryRunner::extractQueryPlanDag(const std::string& query_str) {
   auto query_dag_info = getQueryInfoForDataRecyclerTest(query_str);
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
   auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                            &Catalog_Namespace::SysCatalog::instance().getDataMgr())
+      Executor::getExecutor(
+          Executor::UNITARY_EXECUTOR_ID, &data_mgr, data_mgr.getBufferProvider())
           .get();
   auto extracted_dag_info =
       QueryPlanDagExtractor::extractQueryPlanDag(query_dag_info.root_node.get(),

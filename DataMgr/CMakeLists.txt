@@ -8,6 +8,7 @@ set(datamgr_source_files
     Allocators/ThrustAllocator.cpp
     Chunk/Chunk.cpp
     DataMgr.cpp
+    DataMgrBufferProvider.cpp
     Encoder.cpp
     StringNoneEncoder.cpp
     FileMgr/CachingFileMgr.cpp

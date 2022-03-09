@@ -32,7 +32,6 @@
 
 namespace Data_Namespace {
 class AbstractBuffer;
-class DataMgr;
 }  // namespace Data_Namespace
 
 class Allocator {

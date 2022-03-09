@@ -25,6 +25,8 @@
 #include "TestHelpers.h"
 #include "boost/filesystem.hpp"
 
+#include "DataMgr/DataMgrBufferProvider.h"
+
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
@@ -1628,8 +1630,9 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   TSessionId show_queries_cmd_session;
 
   login("u1", "u1", "omnisci", query_session);
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &getCatalog().getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &getCatalog().getDataMgr(),
+                                        getCatalog().getDataMgr().getBufferProvider());
   // mock the running query by just enrolling the meaningless query
   executor->enrollQuerySession(
       query_session, "MOCK_QUERY", "0", 0, QuerySessionStatus::RUNNING_QUERY_KERNEL);

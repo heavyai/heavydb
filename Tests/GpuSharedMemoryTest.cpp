@@ -207,6 +207,7 @@ std::vector<std::unique_ptr<ResultSet>> create_and_fill_input_result_sets(
                                                       query_mem_desc,
                                                       row_set_mem_owner,
                                                       nullptr,
+                                                      nullptr,
                                                       -1, /*fixme*/
                                                       0,
                                                       0));
@@ -230,6 +231,7 @@ create_and_init_output_result_sets(std::shared_ptr<RowSetMemoryOwner> row_set_me
                                                     query_mem_desc,
                                                     row_set_mem_owner,
                                                     nullptr,
+                                                    nullptr,
                                                     -1, /*fixme*/
                                                     0,
                                                     0);
@@ -242,6 +244,7 @@ create_and_init_output_result_sets(std::shared_ptr<RowSetMemoryOwner> row_set_me
                                                     ExecutorDeviceType::GPU,
                                                     query_mem_desc,
                                                     row_set_mem_owner,
+                                                    nullptr,
                                                     nullptr,
                                                     -1, /*fixme*/
                                                     0,

@@ -23,6 +23,8 @@
 #include "../QueryEngine/InputMetadata.h"
 #include "../QueryRunner/QueryRunner.h"
 
+#include "DataMgr/DataMgrBufferProvider.h"
+
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
@@ -74,8 +76,9 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   // make our own executor with a custom col ranges cache
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat->getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat->getDataMgr(),
+                                        cat->getDataMgr().getBufferProvider());
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());
@@ -174,8 +177,9 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   // make our own executor with a custom col ranges cache
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat->getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat->getDataMgr(),
+                                        cat->getDataMgr().getBufferProvider());
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());
@@ -263,8 +267,9 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   // make our own executor with a custom col ranges cache
   auto cat = QR::get()->getCatalog().get();
   CHECK(cat);
-  auto executor =
-      Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat->getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat->getDataMgr(),
+                                        cat->getDataMgr().getBufferProvider());
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());

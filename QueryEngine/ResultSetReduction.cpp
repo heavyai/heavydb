@@ -1019,6 +1019,7 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
                             query_mem_desc,
                             row_set_mem_owner,
                             result_rs->data_mgr_,
+                            result_rs->buffer_provider_,
                             db_id,
                             0,
                             0));

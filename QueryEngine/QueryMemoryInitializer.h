@@ -114,7 +114,7 @@ class QueryMemoryInitializer {
       const int device_id,
       const unsigned block_size_x,
       const unsigned grid_size_x);
-  void copyFromTableFunctionGpuBuffers(Data_Namespace::DataMgr* data_mgr,
+  void copyFromTableFunctionGpuBuffers(BufferProvider* buffer_provider,
                                        const QueryMemoryDescriptor& query_mem_desc,
                                        const size_t entry_count,
                                        const GpuGroupByBuffers& gpu_group_by_buffers,
@@ -123,7 +123,7 @@ class QueryMemoryInitializer {
                                        const unsigned grid_size_x);
 #endif
 
-  void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
+  void copyGroupByBuffersFromGpu(BufferProvider* buffer_provider,
                                  const QueryMemoryDescriptor& query_mem_desc,
                                  const size_t entry_count,
                                  const GpuGroupByBuffers& gpu_group_by_buffers,
@@ -206,7 +206,7 @@ class QueryMemoryInitializer {
   void compactProjectionBuffersCpu(const QueryMemoryDescriptor& query_mem_desc,
                                    const size_t projection_count);
   void compactProjectionBuffersGpu(const QueryMemoryDescriptor& query_mem_desc,
-                                   Data_Namespace::DataMgr* data_mgr,
+                                   BufferProvider* buffer_provider,
                                    const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const size_t projection_count,
                                    const int device_id);
@@ -214,7 +214,7 @@ class QueryMemoryInitializer {
   void applyStreamingTopNOffsetCpu(const QueryMemoryDescriptor& query_mem_desc,
                                    const RelAlgExecutionUnit& ra_exe_unit);
 
-  void applyStreamingTopNOffsetGpu(Data_Namespace::DataMgr* data_mgr,
+  void applyStreamingTopNOffsetGpu(BufferProvider* buffer_provider,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const RelAlgExecutionUnit& ra_exe_unit,

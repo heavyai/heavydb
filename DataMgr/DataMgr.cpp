@@ -50,10 +50,11 @@ DataMgr::DataMgr(const std::string& dataDir,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads,
                  const File_Namespace::DiskCacheConfig cache_config)
-    : cudaMgr_{std::move(cudaMgr)}
-    , dataDir_{dataDir}
-    , hasGpus_{false}
-    , reservedGpuMem_{reservedGpuMem} {
+    : cudaMgr_(std::move(cudaMgr))
+    , dataDir_(dataDir)
+    , hasGpus_(false)
+    , reservedGpuMem_(reservedGpuMem)
+    , buffer_provider_(std::make_unique<DataMgrBufferProvider>(this)) {
   if (useGpus) {
     if (cudaMgr_) {
       hasGpus_ = true;

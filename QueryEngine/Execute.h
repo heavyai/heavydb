@@ -37,6 +37,7 @@
 #include <llvm/Transforms/Utils/ValueMapper.h>
 #include <rapidjson/document.h>
 
+#include "BufferProvider/BufferProvider.h"
 #include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/BufferCompaction.h"
 #include "QueryEngine/CartesianProduct.h"
@@ -343,6 +344,7 @@ class Executor {
 
   Executor(const ExecutorId id,
            Data_Namespace::DataMgr* data_mgr,
+           BufferProvider* buffer_provider,
            const size_t block_size_x,
            const size_t grid_size_x,
            const size_t max_gpu_slab_size,
@@ -352,6 +354,7 @@ class Executor {
   static std::shared_ptr<Executor> getExecutor(
       const ExecutorId id,
       Data_Namespace::DataMgr* data_mgr,
+      BufferProvider* buffer_provider,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
       const SystemParameters& system_parameters = SystemParameters());
@@ -408,6 +411,11 @@ class Executor {
   Data_Namespace::DataMgr* getDataMgr() const {
     CHECK(data_mgr_);
     return data_mgr_;
+  }
+
+  BufferProvider* getBufferProvider() const {
+    CHECK(buffer_provider_);
+    return buffer_provider_;
   }
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
@@ -1040,6 +1048,7 @@ class Executor {
   SchemaProviderPtr schema_provider_;
   int db_id_ = -1;
   Data_Namespace::DataMgr* data_mgr_;
+  BufferProvider* buffer_provider_;
   const TemporaryTables* temporary_tables_;
   TableIdToNodeMap table_id_to_node_map_;
 

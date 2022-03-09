@@ -19,6 +19,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/CatalogSchemaProvider.h"
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/DataMgrBufferProvider.h"
 #include "QueryEngine/TableOptimizer.h"
 
 #include <gtest/gtest.h>
@@ -129,7 +130,9 @@ void run_op_per_fragment(const Catalog_Namespace::Catalog& catalog,
 
 void recompute_metadata(const TableDescriptor* td,
                         const Catalog_Namespace::Catalog& cat) {
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat.getDataMgr());
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                        &cat.getDataMgr(),
+                                        cat.getDataMgr().getBufferProvider());
   auto schema_provider = std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat);
   executor->setSchemaProvider(schema_provider);
   executor->setDatabaseId(cat.getDatabaseId());
@@ -252,7 +255,7 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
 class MetadataUpdate : public DBHandlerTestFixture,
                        public testing::WithParamInterface<bool> {
  protected:
-  static void SetUpTestSuite() {  }
+  static void SetUpTestSuite() {}
 
   void SetUp() override {
     DBHandlerTestFixture::SetUp();

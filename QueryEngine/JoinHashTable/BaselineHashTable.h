@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "BufferProvider/BufferProvider.h"
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "QueryEngine/CompilationOptions.h"
@@ -34,7 +35,7 @@ class BaselineHashTable : public HashTable {
       , gpu_hash_table_buff_(nullptr)
 #ifdef HAVE_CUDA
       , device_id_(0)
-      , data_mgr_(nullptr)
+      , buffer_provider_(nullptr)
 #endif
       , layout_(layout)
       , entry_count_(entry_count)
@@ -43,7 +44,7 @@ class BaselineHashTable : public HashTable {
   }
 
   // GPU constructor
-  BaselineHashTable(Data_Namespace::DataMgr* data_mgr,
+  BaselineHashTable(BufferProvider* buffer_provider,
                     HashType layout,
                     const size_t entry_count,
                     const size_t emitted_keys_count,
@@ -52,15 +53,15 @@ class BaselineHashTable : public HashTable {
       : gpu_hash_table_buff_(nullptr)
 #ifdef HAVE_CUDA
       , device_id_(device_id)
-      , data_mgr_(data_mgr)
+      , buffer_provider_(buffer_provider)
 #endif
       , layout_(layout)
       , entry_count_(entry_count)
       , emitted_keys_count_(emitted_keys_count) {
 #ifdef HAVE_CUDA
-    CHECK(data_mgr_);
-    gpu_hash_table_buff_ =
-        CudaAllocator::allocGpuAbstractBuffer(data_mgr_, hash_table_size, device_id_);
+    CHECK(buffer_provider_);
+    gpu_hash_table_buff_ = CudaAllocator::allocGpuAbstractBuffer(
+        buffer_provider_, hash_table_size, device_id_);
 #else
     UNREACHABLE();
 #endif
@@ -69,8 +70,8 @@ class BaselineHashTable : public HashTable {
   ~BaselineHashTable() {
 #ifdef HAVE_CUDA
     if (gpu_hash_table_buff_) {
-      CHECK(data_mgr_);
-      data_mgr_->free(gpu_hash_table_buff_);
+      CHECK(buffer_provider_);
+      buffer_provider_->free(gpu_hash_table_buff_);
     }
 #endif
   }
@@ -103,7 +104,7 @@ class BaselineHashTable : public HashTable {
 
 #ifdef HAVE_CUDA
   const size_t device_id_;
-  Data_Namespace::DataMgr* data_mgr_;
+  BufferProvider* buffer_provider_;
 #endif
 
   HashType layout_;

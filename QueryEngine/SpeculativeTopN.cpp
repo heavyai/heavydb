@@ -132,6 +132,7 @@ std::shared_ptr<ResultSet> SpeculativeTopNMap::asRows(
       query_mem_desc_rs,
       row_set_mem_owner,
       executor->getDataMgr(),
+      executor->getBufferProvider(),
       executor->getDatabaseId(),
       executor->blockSize(),
       executor->gridSize());

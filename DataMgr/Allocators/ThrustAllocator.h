@@ -30,16 +30,13 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Data_Namespace {
-class DataMgr;
-class AbstractBuffer;
-};  // namespace Data_Namespace
+#include "BufferProvider/BufferProvider.h"
 
 class ThrustAllocator {
  public:
   using value_type = int8_t;
-  ThrustAllocator(Data_Namespace::DataMgr* mgr, const int id)
-      : data_mgr_(mgr), device_id_(id) {}
+  ThrustAllocator(BufferProvider* buffer_provider, const int id)
+      : buffer_provider_(buffer_provider), device_id_(id) {}
   ~ThrustAllocator();
 
   int8_t* allocate(std::ptrdiff_t num_bytes);
@@ -47,12 +44,12 @@ class ThrustAllocator {
 
   int8_t* allocateScopedBuffer(std::ptrdiff_t num_bytes);
 
-  Data_Namespace::DataMgr* getDataMgr() const { return data_mgr_; }
+  BufferProvider* getBufferProvider() const { return buffer_provider_; }
 
   int getDeviceId() const { return device_id_; }
 
  private:
-  Data_Namespace::DataMgr* data_mgr_;
+  BufferProvider* buffer_provider_;
   const int device_id_;
   using PtrMapperType = std::unordered_map<int8_t*, Data_Namespace::AbstractBuffer*>;
   PtrMapperType raw_to_ab_ptr_;

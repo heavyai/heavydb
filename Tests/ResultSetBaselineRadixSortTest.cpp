@@ -229,6 +229,7 @@ void SortBaselineIntegersTestImpl(const bool desc) {
                                               query_mem_desc,
                                               row_set_mem_owner,
                                               nullptr,
+                                              nullptr,
                                               -1,
                                               0,
                                               0));
@@ -272,6 +273,7 @@ TEST(SortBaseline, Floats) {
                                                   query_mem_desc,
                                                   row_set_mem_owner,
                                                   nullptr,
+                                                  nullptr,
                                                   -1,
                                                   0,
                                                   0));
@@ -302,6 +304,7 @@ TEST(SortBaseline, FloatsNotNull) {
                                                   ExecutorDeviceType::CPU,
                                                   query_mem_desc,
                                                   row_set_mem_owner,
+                                                  nullptr,
                                                   nullptr,
                                                   -1,
                                                   0,

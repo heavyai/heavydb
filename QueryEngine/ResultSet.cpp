@@ -70,6 +70,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      Data_Namespace::DataMgr* data_mgr,
+                     BufferProvider* buffer_provider,
                      const int db_id_for_dict,
                      const unsigned block_size,
                      const unsigned grid_size)
@@ -85,6 +86,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , block_size_(block_size)
     , grid_size_(grid_size)
     , data_mgr_(data_mgr)
+    , buffer_provider_(buffer_provider)
     , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -101,6 +103,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
                      const QueryMemoryDescriptor& query_mem_desc,
                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      Data_Namespace::DataMgr* data_mgr,
+                     BufferProvider* buffer_provider,
                      const int db_id_for_dict,
                      const unsigned block_size,
                      const unsigned grid_size)
@@ -120,6 +123,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , frag_offsets_{frag_offsets}
     , consistent_frag_sizes_{consistent_frag_sizes}
     , data_mgr_(data_mgr)
+    , buffer_provider_(buffer_provider)
     , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -130,6 +134,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
                      const int device_id,
                      Data_Namespace::DataMgr* data_mgr,
+                     BufferProvider* buffer_provider,
                      const int db_id_for_dict)
     : device_type_(device_type)
     , device_id_(device_id)
@@ -137,6 +142,7 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , crt_row_buff_idx_(0)
     , estimator_(estimator)
     , data_mgr_(data_mgr)
+    , buffer_provider_(buffer_provider)
     , db_id_for_dict_(db_id_for_dict)
     , separate_varlen_storage_valid_(false)
     , just_explain_(false)
@@ -144,10 +150,10 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , cached_row_count_(uninitialized_cached_row_count) {
   if (device_type == ExecutorDeviceType::GPU) {
     device_estimator_buffer_ = CudaAllocator::allocGpuAbstractBuffer(
-        data_mgr_, estimator_->getBufferSize(), device_id_);
-    data_mgr->getCudaMgr()->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
-                                          estimator_->getBufferSize(),
-                                          device_id_);
+        buffer_provider_, estimator_->getBufferSize(), device_id_);
+    buffer_provider_->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
+                                    estimator_->getBufferSize(),
+                                    device_id_);
   } else {
     host_estimator_buffer_ =
         static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
@@ -491,11 +497,8 @@ void ResultSet::syncEstimatorBuffer() const {
       static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   CHECK(device_estimator_buffer_);
   auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
-  copy_from_gpu(data_mgr_,
-                host_estimator_buffer_,
-                reinterpret_cast<CUdeviceptr>(device_buffer_ptr),
-                estimator_->getBufferSize(),
-                device_id_);
+  buffer_provider_->copyFromDevice(
+      host_estimator_buffer_, device_buffer_ptr, estimator_->getBufferSize(), device_id_);
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {
@@ -611,7 +614,7 @@ void sort_onecol_cpu(int8_t* val_buff,
                      const SQLTypeInfo& type_info,
                      const size_t slot_width,
                      const Analyzer::OrderEntry& order_entry) {
-  if (type_info.is_integer()  || type_info.is_decimal()) {
+  if (type_info.is_integer() || type_info.is_decimal()) {
     switch (slot_width) {
       case 1:
         sort_on_cpu(reinterpret_cast<int8_t*>(val_buff), pv, order_entry);
@@ -702,8 +705,9 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
       if (is_not_lazy && slot_width > 0 && entry_ti.is_number()) {
         const size_t buf_size = query_mem_desc_.getEntryCount() * slot_width;
         // std::vector<int8_t> sortkey_val_buff(buf_size);
-	std::unique_ptr<int8_t[]> sortkey_val_buff(new int8_t[buf_size]);
-        copyColumnIntoBuffer(target_idx, reinterpret_cast<int8_t*>(&sortkey_val_buff[0]), buf_size);
+        std::unique_ptr<int8_t[]> sortkey_val_buff(new int8_t[buf_size]);
+        copyColumnIntoBuffer(
+            target_idx, reinterpret_cast<int8_t*>(&sortkey_val_buff[0]), buf_size);
         permutation_.resize(query_mem_desc_.getEntryCount());
         PermutationView pv(permutation_.data(), 0, permutation_.size());
         pv = initPermutationBuffer(pv, 0, permutation_.size());
@@ -1133,7 +1137,7 @@ void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
   auto timer = DEBUG_TIMER(__func__);
   const int device_id{0};
-  CudaAllocator cuda_allocator(data_mgr_, device_id);
+  CudaAllocator cuda_allocator(buffer_provider_, device_id);
   CHECK_GT(block_size_, 0);
   CHECK_GT(grid_size_, 0);
   std::vector<int64_t*> group_by_buffers(block_size_);
@@ -1153,9 +1157,9 @@ void ResultSet::radixSortOnGpu(
                                   /*has_varlen_output=*/false,
                                   /*insitu_allocator*=*/nullptr);
   inplace_sort_gpu(
-      order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr_, device_id);
+      order_entries, query_mem_desc_, dev_group_by_buffers, buffer_provider_, device_id);
   copy_group_by_buffers_from_gpu(
-      data_mgr_,
+      buffer_provider_,
       group_by_buffers,
       query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
       dev_group_by_buffers.data,

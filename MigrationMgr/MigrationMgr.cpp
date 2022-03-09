@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "Catalog/CatalogSchemaProvider.h"
+#include "DataMgr/DataMgrBufferProvider.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -110,7 +111,9 @@ void MigrationMgr::migrateDateInDaysMetadata(
         // TODO(adb): Could have the TableOptimizer get the Executor and avoid including
         // Execute.h
 
-        auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &cat->getDataMgr());
+        auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                              &cat->getDataMgr(),
+                                              cat->getDataMgr().getBufferProvider());
         auto schema_provider =
             std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat);
         executor->setSchemaProvider(schema_provider);

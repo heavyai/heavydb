@@ -44,7 +44,7 @@ class DataMgr;
 template <class K>
 std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
                                     const int device_id,
-                                    Data_Namespace::DataMgr* data_mgr,
+                                    BufferProvider* buffer_provider,
                                     const int8_t* groupby_buffer,
                                     const PodOrderEntry& oe,
                                     const GroupByBufferLayoutInfo& layout,

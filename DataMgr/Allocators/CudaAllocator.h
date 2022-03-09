@@ -31,28 +31,21 @@
 #include <Shared/nocuda.h>
 #endif
 
+#include "BufferProvider/BufferProvider.h"
 #include "DataMgr/Allocators/DeviceAllocator.h"
-
-namespace Data_Namespace {
-class AbstractBuffer;
-class DataMgr;
-}  // namespace Data_Namespace
 
 class RenderAllocator;
 
 class CudaAllocator : public DeviceAllocator {
  public:
-  CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id);
+  CudaAllocator(BufferProvider* buffer_provider, const int device_id);
 
   ~CudaAllocator() override;
 
   static Data_Namespace::AbstractBuffer* allocGpuAbstractBuffer(
-      Data_Namespace::DataMgr* data_mgr,
+      BufferProvider* buffer_provider,
       const size_t num_bytes,
       const int device_id);
-
-  static void freeGpuAbstractBuffer(Data_Namespace::DataMgr* data_mgr,
-                                    Data_Namespace::AbstractBuffer* ab);
 
   int8_t* alloc(const size_t num_bytes) override;
 
@@ -75,6 +68,6 @@ class CudaAllocator : public DeviceAllocator {
  private:
   std::vector<Data_Namespace::AbstractBuffer*> owned_buffers_;
 
-  Data_Namespace::DataMgr* data_mgr_;
+  BufferProvider* buffer_provider_;
   int device_id_;
 };

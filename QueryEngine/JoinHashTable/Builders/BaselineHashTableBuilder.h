@@ -487,7 +487,7 @@ class BaselineJoinHashTableBuilder {
             << " entries in the " << HashJoin::getHashTypeString(layout) << " buffer";
     VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
 
-    hash_table_ = std::make_unique<BaselineHashTable>(executor->getDataMgr(),
+    hash_table_ = std::make_unique<BaselineHashTable>(executor->getBufferProvider(),
                                                       layout,
                                                       keyspace_entry_count,
                                                       emitted_keys_count,
@@ -524,10 +524,13 @@ class BaselineJoinHashTableBuilder {
       CHECK(!emitted_keys_count);
       return 0;
     }
-    auto data_mgr = executor->getDataMgr();
-    CudaAllocator allocator(data_mgr, device_id);
+    auto buffer_provider = executor->getBufferProvider();
+    CudaAllocator allocator(buffer_provider, device_id);
     auto dev_err_buff = reinterpret_cast<CUdeviceptr>(allocator.alloc(sizeof(int)));
-    copy_to_gpu(data_mgr, dev_err_buff, &err, sizeof(err), device_id);
+    buffer_provider->copyToDevice(reinterpret_cast<int8_t*>(dev_err_buff),
+                                  reinterpret_cast<const int8_t*>(&err),
+                                  sizeof(err),
+                                  device_id);
     auto gpu_hash_table_buff = hash_table_->getGpuBuffer();
     CHECK(gpu_hash_table_buff);
     const bool for_semi_join =
@@ -565,7 +568,10 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+        buffer_provider->copyFromDevice(reinterpret_cast<int8_t*>(&err),
+                                        reinterpret_cast<const int8_t*>(dev_err_buff),
+                                        sizeof(err),
+                                        device_id);
         break;
       }
       case 8: {
@@ -579,7 +585,10 @@ class BaselineJoinHashTableBuilder {
             reinterpret_cast<int*>(dev_err_buff),
             key_handler_gpu,
             join_columns.front().num_elems);
-        copy_from_gpu(data_mgr, &err, dev_err_buff, sizeof(err), device_id);
+        buffer_provider->copyFromDevice(reinterpret_cast<int8_t*>(&err),
+                                        reinterpret_cast<const int8_t*>(dev_err_buff),
+                                        sizeof(err),
+                                        device_id);
         break;
       }
       default:

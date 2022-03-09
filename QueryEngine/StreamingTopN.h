@@ -62,7 +62,7 @@ class DataMgr;
 
 class QueryMemoryDescriptor;
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const int64_t* dev_heaps,
     const RelAlgExecutionUnit& ra_exe_unit,
     const QueryMemoryDescriptor& query_mem_desc,

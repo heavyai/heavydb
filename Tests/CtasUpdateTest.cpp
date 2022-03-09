@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
+#include "TestHelpers.h"
+
 #include <gtest/gtest.h>
 #include <ctime>
 #include <iostream>
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/DataMgrBufferProvider.h"
 #include "QueryEngine/ErrorHandling.h"
-#include "TestHelpers.h"
 
 #include <boost/locale/generator.hpp>
 
@@ -2277,8 +2279,9 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
     std::vector<QuerySessionStatus> query_status;
     auto start_time = std::chrono::system_clock::now();
     bool startITAS = false;
-    auto executor =
-        Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &getCatalog().getDataMgr());
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                          &getCatalog().getDataMgr(),
+                                          getCatalog().getDataMgr().getBufferProvider());
     while (!startITAS && !detect_time_out) {
       {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());
@@ -2386,8 +2389,9 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
     std::vector<QuerySessionStatus> query_status;
     auto start_time = std::chrono::system_clock::now();
     bool startCTAS = false;
-    auto executor =
-        Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID, &getCatalog().getDataMgr());
+    auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
+                                          &getCatalog().getDataMgr(),
+                                          getCatalog().getDataMgr().getBufferProvider());
     while (!startCTAS && !detect_time_out) {
       {
         mapd_shared_lock<mapd_shared_mutex> session_read_lock(executor->getSessionLock());

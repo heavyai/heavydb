@@ -45,7 +45,8 @@ class InValuesBitmap {
                  const int64_t null_val,
                  const Data_Namespace::MemoryLevel memory_level,
                  const int device_count,
-                 Data_Namespace::DataMgr* data_mgr);
+                 Data_Namespace::DataMgr* data_mgr,
+                 BufferProvider* buffer_provider);
   ~InValuesBitmap();
 
   llvm::Value* codegen(llvm::Value* needle, Executor* executor) const;
@@ -65,7 +66,7 @@ class InValuesBitmap {
   const int64_t null_val_;
   const Data_Namespace::MemoryLevel memory_level_;
   const int device_count_;
-  Data_Namespace::DataMgr* data_mgr_;
+  BufferProvider* buffer_provider_;
 };
 
 #endif  // QUERYENGINE_INVALUESBITMAP_H

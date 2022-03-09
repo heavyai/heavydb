@@ -103,18 +103,18 @@ thrust::device_ptr<T> get_device_copy_ptr(const thrust::host_vector<T>& host_vec
   const auto host_vec_bytes = host_vec.size() * sizeof(T);
   T* dev_ptr = reinterpret_cast<T*>(
       thrust_allocator.allocateScopedBuffer(align_to_int64(host_vec_bytes)));
-  copy_to_gpu(thrust_allocator.getDataMgr(),
-              reinterpret_cast<CUdeviceptr>(dev_ptr),
-              &host_vec[0],
-              host_vec_bytes,
-              thrust_allocator.getDeviceId());
+  auto buffer_provider = thrust_allocator.getBufferProvider();
+  buffer_provider->copyToDevice(reinterpret_cast<int8_t*>(dev_ptr),
+                                reinterpret_cast<const int8_t*>(&host_vec[0]),
+                                host_vec_bytes,
+                                thrust_allocator.getDeviceId());
   return thrust::device_ptr<T>(dev_ptr);
 }
 
 template <class K>
 std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
                                        const int device_id,
-                                       Data_Namespace::DataMgr* data_mgr,
+                                       BufferProvider* buffer_provider,
                                        const int8_t* groupby_buffer,
                                        const thrust::host_vector<int64_t>& oe_col_buffer,
                                        const PodOrderEntry& oe,
@@ -145,7 +145,7 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
 
   auto is_negative =
       float_argument_input ? [](const int64_t v) -> bool { return (v & (1 << 31)) != 0; }
-  : [](const int64_t v) -> bool { return v < 0; };
+                           : [](const int64_t v) -> bool { return v < 0; };
 
   for (size_t i = start; i < layout.entry_count; i += step, ++oe_col_buffer_idx) {
     if (!is_empty_entry<K>(i, groupby_buffer, layout.row_bytes) &&
@@ -164,7 +164,7 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
     }
   }
   std::vector<uint32_t> pos_result;
-  ThrustAllocator thrust_allocator(data_mgr, device_id);
+  ThrustAllocator thrust_allocator(buffer_provider, device_id);
   if (device_type == ExecutorDeviceType::GPU) {
     const auto dev_pos_idx_buff = get_device_copy_ptr(pos_idx_buff, thrust_allocator);
     const auto dev_pos_oe_col_buffer =
@@ -234,7 +234,7 @@ std::vector<uint32_t> baseline_sort_fp(const ExecutorDeviceType device_type,
 template <class K>
 std::vector<uint32_t> baseline_sort_int(const ExecutorDeviceType device_type,
                                         const int device_id,
-                                        Data_Namespace::DataMgr* data_mgr,
+                                        BufferProvider* buffer_provider,
                                         const int8_t* groupby_buffer,
                                         const thrust::host_vector<int64_t>& oe_col_buffer,
                                         const PodOrderEntry& oe,
@@ -262,7 +262,7 @@ std::vector<uint32_t> baseline_sort_int(const ExecutorDeviceType device_type,
     }
   }
   std::vector<uint32_t> notnull_result;
-  ThrustAllocator thrust_allocator(data_mgr, device_id);
+  ThrustAllocator thrust_allocator(buffer_provider, device_id);
   if (device_type == ExecutorDeviceType::GPU) {
     const auto dev_notnull_idx_buff =
         get_device_copy_ptr(notnull_idx_buff, thrust_allocator);
@@ -336,7 +336,7 @@ thrust::host_vector<int64_t> collect_order_entry_column(
 template <class K>
 std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
                                     const int device_id,
-                                    Data_Namespace::DataMgr* data_mgr,
+                                    BufferProvider* buffer_provider,
                                     const int8_t* groupby_buffer,
                                     const PodOrderEntry& oe,
                                     const GroupByBufferLayoutInfo& layout,
@@ -349,7 +349,7 @@ std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
   if (entry_ti.is_fp() || layout.oe_target_info.agg_kind == kAVG) {
     return baseline_sort_fp<K>(device_type,
                                device_id,
-                               data_mgr,
+                               buffer_provider,
                                groupby_buffer,
                                oe_col_buffer,
                                oe,
@@ -363,7 +363,7 @@ std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
   if ((oe.is_desc && oe.nulls_first) || (!oe.is_desc && !oe.nulls_first)) {
     return baseline_sort_int<K>(device_type,
                                 device_id,
-                                data_mgr,
+                                buffer_provider,
                                 groupby_buffer,
                                 oe_col_buffer,
                                 oe,
@@ -372,7 +372,7 @@ std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
                                 start,
                                 step);
   }
-  ThrustAllocator thrust_allocator(data_mgr, device_id);
+  ThrustAllocator thrust_allocator(buffer_provider, device_id);
   // Fastest path, no need to separate nulls away since they'll end up at the
   // right place as a side effect of how we're representing nulls.
   if (device_type == ExecutorDeviceType::GPU) {
@@ -412,7 +412,7 @@ std::vector<uint32_t> baseline_sort(const ExecutorDeviceType device_type,
 template std::vector<uint32_t> baseline_sort<int32_t>(
     const ExecutorDeviceType device_type,
     const int device_id,
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const int8_t* groupby_buffer,
     const PodOrderEntry& oe,
     const GroupByBufferLayoutInfo& layout,
@@ -423,7 +423,7 @@ template std::vector<uint32_t> baseline_sort<int32_t>(
 template std::vector<uint32_t> baseline_sort<int64_t>(
     const ExecutorDeviceType device_type,
     const int device_id,
-    Data_Namespace::DataMgr* data_mgr,
+    BufferProvider* buffer_provider,
     const int8_t* groupby_buffer,
     const PodOrderEntry& oe,
     const GroupByBufferLayoutInfo& layout,

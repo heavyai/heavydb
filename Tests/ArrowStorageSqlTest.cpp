@@ -13,11 +13,11 @@
  */
 
 #include "ArrowStorage/ArrowStorage.h"
+#include "Calcite/Calcite.h"
+#include "DataMgr/DataMgrBufferProvider.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
-#include "Calcite/Calcite.h"
-
 
 #include "gen-cpp/CalciteServer.h"
 
@@ -55,6 +55,7 @@ class ArrowStorageTestBase {
 
     executor_ = std::make_shared<Executor>(0,
                                            data_mgr_.get(),
+                                           data_mgr_->getBufferProvider(),
                                            system_parameters.cuda_block_size,
                                            system_parameters.cuda_grid_size,
                                            system_parameters.max_gpu_slab_size,
