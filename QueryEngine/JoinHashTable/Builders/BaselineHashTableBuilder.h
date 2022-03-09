@@ -207,7 +207,6 @@ template <typename SIZE,
 void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const SIZE* composite_key_dict,
                                                     const size_t hash_entry_count,
-                                                    const int32_t invalid_slot_val,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
@@ -216,7 +215,6 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
     fill_one_to_many_baseline_hash_table_on_device_32(buff,
                                                       composite_key_dict,
                                                       hash_entry_count,
-                                                      invalid_slot_val,
                                                       key_component_count,
                                                       key_handler,
                                                       num_elems);
@@ -234,34 +232,21 @@ template <typename SIZE,
 void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const SIZE* composite_key_dict,
                                                     const size_t hash_entry_count,
-                                                    const int32_t invalid_slot_val,
                                                     const size_t key_component_count,
                                                     const KEY_HANDLER* key_handler,
                                                     const size_t num_elems) {
   auto timer = DEBUG_TIMER(__func__);
   if constexpr (std::is_same<KEY_HANDLER, GenericKeyHandler>::value) {
-    fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                      composite_key_dict,
-                                                      hash_entry_count,
-                                                      invalid_slot_val,
-                                                      key_handler,
-                                                      num_elems);
+    fill_one_to_many_baseline_hash_table_on_device_64(
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   } else if constexpr (std::is_same<KEY_HANDLER, RangeKeyHandler>::value) {
-    range_fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                            composite_key_dict,
-                                                            hash_entry_count,
-                                                            invalid_slot_val,
-                                                            key_handler,
-                                                            num_elems);
+    range_fill_one_to_many_baseline_hash_table_on_device_64(
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   } else {
     static_assert(std::is_same<KEY_HANDLER, OverlapsKeyHandler>::value,
                   "Only Generic, Overlaps, and Range Key Handlers are supported.");
-    overlaps_fill_one_to_many_baseline_hash_table_on_device_64(buff,
-                                                               composite_key_dict,
-                                                               hash_entry_count,
-                                                               invalid_slot_val,
-                                                               key_handler,
-                                                               num_elems);
+    overlaps_fill_one_to_many_baseline_hash_table_on_device_64(
+        buff, composite_key_dict, hash_entry_count, key_handler, num_elems);
   }
 }
 
@@ -456,7 +441,6 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               join_columns,
               join_column_types,
@@ -474,7 +458,6 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               join_columns,
               join_column_types,
@@ -638,7 +621,6 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               key_handler_gpu,
               join_columns.front().num_elems);
@@ -651,7 +633,6 @@ class BaselineJoinHashTableBuilder {
               one_to_many_buff,
               composite_key_dict,
               keyspace_entry_count,
-              -1,
               key_component_count,
               key_handler_gpu,
               join_columns.front().num_elems);

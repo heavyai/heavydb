@@ -155,7 +155,6 @@ void SUFFIX(init_hash_join_buff_tbb)(int32_t* groups_buffer,
 
 template <typename HASHTABLE_FILLING_FUNC>
 DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
-                                     const int32_t invalid_slot_val,
                                      const JoinColumn join_column,
                                      const JoinColumnTypeInfo type_info,
                                      const int32_t* sd_inner_to_outer_translation_map,
@@ -222,7 +221,6 @@ DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(
   };
 
   return fill_hash_join_buff_impl(buff,
-                                  invalid_slot_val,
                                   join_column,
                                   type_info,
                                   sd_inner_to_outer_translation_map,
@@ -249,7 +247,6 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
   };
 
   return fill_hash_join_buff_impl(buff,
-                                  invalid_slot_val,
                                   join_column,
                                   type_info,
                                   sd_inner_to_outer_translation_map,
@@ -262,7 +259,6 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
 template <typename HASHTABLE_FILLING_FUNC>
 DEVICE int fill_hash_join_buff_sharded_impl(
     int32_t* buff,
-    const int32_t invalid_slot_val,
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info,
     const ShardInfo shard_info,
@@ -342,7 +338,6 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
   };
 
   return fill_hash_join_buff_sharded_impl(buff,
-                                          invalid_slot_val,
                                           join_column,
                                           type_info,
                                           shard_info,
@@ -378,7 +373,6 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(
   };
 
   return fill_hash_join_buff_sharded_impl(buff,
-                                          invalid_slot_val,
                                           join_column,
                                           type_info,
                                           shard_info,
@@ -698,7 +692,6 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
 
 template <typename SLOT_SELECTOR>
 DEVICE void count_matches_impl(int32_t* count_buff,
-                               const int32_t invalid_slot_val,
                                const JoinColumn join_column,
                                const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
@@ -747,7 +740,6 @@ DEVICE void count_matches_impl(int32_t* count_buff,
 }
 
 GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
-                                  const int32_t invalid_slot_val,
                                   const JoinColumn join_column,
                                   const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
@@ -762,7 +754,6 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
     return SUFFIX(get_hash_slot)(count_buff, elem, type_info.min_val);
   };
   count_matches_impl(count_buff,
-                     invalid_slot_val,
                      join_column,
                      type_info
 #ifndef __CUDACC__
@@ -778,7 +769,6 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
 
 GLOBAL void SUFFIX(count_matches_bucketized)(
     int32_t* count_buff,
-    const int32_t invalid_slot_val,
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
@@ -795,7 +785,6 @@ GLOBAL void SUFFIX(count_matches_bucketized)(
         count_buff, elem, type_info.min_val, bucket_normalization);
   };
   count_matches_impl(count_buff,
-                     invalid_slot_val,
                      join_column,
                      type_info
 #ifndef __CUDACC__
@@ -811,7 +800,6 @@ GLOBAL void SUFFIX(count_matches_bucketized)(
 
 GLOBAL void SUFFIX(count_matches_sharded)(
     int32_t* count_buff,
-    const int32_t invalid_slot_val,
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info,
     const ShardInfo shard_info
@@ -943,7 +931,6 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
 template <typename SLOT_SELECTOR>
 DEVICE void fill_row_ids_impl(int32_t* buff,
                               const int64_t hash_entry_count,
-                              const int32_t invalid_slot_val,
                               const JoinColumn join_column,
                               const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
@@ -1000,7 +987,6 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
 
 GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                                  const int64_t hash_entry_count,
-                                 const int32_t invalid_slot_val,
                                  const JoinColumn join_column,
                                  const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
@@ -1017,7 +1003,6 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
 
   fill_row_ids_impl(buff,
                     hash_entry_count,
-                    invalid_slot_val,
                     join_column,
                     type_info
 #ifndef __CUDACC__
@@ -1034,7 +1019,6 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
 GLOBAL void SUFFIX(fill_row_ids_bucketized)(
     int32_t* buff,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
@@ -1052,7 +1036,6 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(
   };
   fill_row_ids_impl(buff,
                     hash_entry_count,
-                    invalid_slot_val,
                     join_column,
                     type_info
 #ifndef __CUDACC__
@@ -1069,7 +1052,6 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(
 template <typename SLOT_SELECTOR>
 DEVICE void fill_row_ids_sharded_impl(int32_t* buff,
                                       const int64_t hash_entry_count,
-                                      const int32_t invalid_slot_val,
                                       const JoinColumn join_column,
                                       const JoinColumnTypeInfo type_info,
                                       const ShardInfo shard_info
@@ -1128,7 +1110,6 @@ DEVICE void fill_row_ids_sharded_impl(int32_t* buff,
 
 GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                                          const int64_t hash_entry_count,
-                                         const int32_t invalid_slot_val,
                                          const JoinColumn join_column,
                                          const JoinColumnTypeInfo type_info,
                                          const ShardInfo shard_info
@@ -1151,7 +1132,6 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
 
   fill_row_ids_impl(buff,
                     hash_entry_count,
-                    invalid_slot_val,
                     join_column,
                     type_info
 #ifndef __CUDACC__
@@ -1168,7 +1148,6 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
 GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
     int32_t* buff,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const JoinColumn join_column,
     const JoinColumnTypeInfo type_info,
     const ShardInfo shard_info
@@ -1194,7 +1173,6 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
 
   fill_row_ids_impl(buff,
                     hash_entry_count,
-                    invalid_slot_val,
                     join_column,
                     type_info
 #ifndef __CUDACC__
@@ -1212,7 +1190,6 @@ template <typename T, typename KEY_HANDLER>
 GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
                                           const T* composite_key_dict,
                                           const int64_t hash_entry_count,
-                                          const int32_t invalid_slot_val,
                                           const KEY_HANDLER* f,
                                           const int64_t num_elems
 #ifndef __CUDACC__
@@ -1240,7 +1217,6 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
   auto key_buff_handler = [composite_key_dict,
                            hash_entry_count,
                            pos_buff,
-                           invalid_slot_val,
                            count_buff,
                            id_buff,
                            key_size_in_bytes](const int64_t row_index,
@@ -1458,7 +1434,6 @@ void inclusive_scan(InputIterator first,
 template <typename COUNT_MATCHES_LAUNCH_FUNCTOR, typename FILL_ROW_IDS_LAUNCH_FUNCTOR>
 void fill_one_to_many_hash_table_impl(int32_t* buff,
                                       const int64_t hash_entry_count,
-                                      const int32_t invalid_slot_val,
                                       const JoinColumn& join_column,
                                       const JoinColumnTypeInfo& type_info,
                                       const int32_t* sd_inner_to_outer_translation_map,
@@ -1520,7 +1495,6 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
 
 void fill_one_to_many_hash_table(int32_t* buff,
                                  const HashEntryInfo hash_entry_info,
-                                 const int32_t invalid_slot_val,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
                                  const int32_t* sd_inner_to_outer_translation_map,
@@ -1528,7 +1502,6 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                  const unsigned cpu_thread_count) {
   auto timer = DEBUG_TIMER(__func__);
   auto launch_count_matches = [count_buff = buff + hash_entry_info.hash_entry_count,
-                               invalid_slot_val,
                                &join_column,
                                &type_info,
                                sd_inner_to_outer_translation_map,
@@ -1536,7 +1509,6 @@ void fill_one_to_many_hash_table(int32_t* buff,
                                                auto cpu_thread_count) {
     SUFFIX(count_matches)
     (count_buff,
-     invalid_slot_val,
      join_column,
      type_info,
      sd_inner_to_outer_translation_map,
@@ -1546,7 +1518,6 @@ void fill_one_to_many_hash_table(int32_t* buff,
   };
   auto launch_fill_row_ids = [hash_entry_count = hash_entry_info.hash_entry_count,
                               buff,
-                              invalid_slot_val,
                               &join_column,
                               &type_info,
                               sd_inner_to_outer_translation_map,
@@ -1555,7 +1526,6 @@ void fill_one_to_many_hash_table(int32_t* buff,
     SUFFIX(fill_row_ids)
     (buff,
      hash_entry_count,
-     invalid_slot_val,
      join_column,
      type_info,
      sd_inner_to_outer_translation_map,
@@ -1566,7 +1536,6 @@ void fill_one_to_many_hash_table(int32_t* buff,
 
   fill_one_to_many_hash_table_impl(buff,
                                    hash_entry_info.hash_entry_count,
-                                   invalid_slot_val,
                                    join_column,
                                    type_info,
                                    sd_inner_to_outer_translation_map,
@@ -1579,7 +1548,6 @@ void fill_one_to_many_hash_table(int32_t* buff,
 void fill_one_to_many_hash_table_bucketized(
     int32_t* buff,
     const HashEntryInfo hash_entry_info,
-    const int32_t invalid_slot_val,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info,
     const int32_t* sd_inner_to_outer_translation_map,
@@ -1590,7 +1558,6 @@ void fill_one_to_many_hash_table_bucketized(
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
   auto launch_count_matches = [bucket_normalization,
                                count_buff = buff + hash_entry_count,
-                               invalid_slot_val,
                                &join_column,
                                &type_info,
                                sd_inner_to_outer_translation_map,
@@ -1598,7 +1565,6 @@ void fill_one_to_many_hash_table_bucketized(
                                                auto cpu_thread_count) {
     SUFFIX(count_matches_bucketized)
     (count_buff,
-     invalid_slot_val,
      join_column,
      type_info,
      sd_inner_to_outer_translation_map,
@@ -1610,7 +1576,6 @@ void fill_one_to_many_hash_table_bucketized(
   auto launch_fill_row_ids = [bucket_normalization,
                               hash_entry_count,
                               buff,
-                              invalid_slot_val,
                               &join_column,
                               &type_info,
                               sd_inner_to_outer_translation_map,
@@ -1619,7 +1584,6 @@ void fill_one_to_many_hash_table_bucketized(
     SUFFIX(fill_row_ids_bucketized)
     (buff,
      hash_entry_count,
-     invalid_slot_val,
      join_column,
      type_info,
      sd_inner_to_outer_translation_map,
@@ -1631,7 +1595,6 @@ void fill_one_to_many_hash_table_bucketized(
 
   fill_one_to_many_hash_table_impl(buff,
                                    hash_entry_count,
-                                   invalid_slot_val,
                                    join_column,
                                    type_info,
                                    sd_inner_to_outer_translation_map,
@@ -1645,7 +1608,6 @@ template <typename COUNT_MATCHES_LAUNCH_FUNCTOR, typename FILL_ROW_IDS_LAUNCH_FU
 void fill_one_to_many_hash_table_sharded_impl(
     int32_t* buff,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const JoinColumn& join_column,
     const JoinColumnTypeInfo& type_info,
     const ShardInfo& shard_info,
@@ -1704,7 +1666,6 @@ void fill_one_to_many_hash_table_sharded_impl(
 
 void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                          const int64_t hash_entry_count,
-                                         const int32_t invalid_slot_val,
                                          const JoinColumn& join_column,
                                          const JoinColumnTypeInfo& type_info,
                                          const ShardInfo& shard_info,
@@ -1712,7 +1673,6 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                          const int32_t min_inner_elem,
                                          const unsigned cpu_thread_count) {
   auto launch_count_matches = [count_buff = buff + hash_entry_count,
-                               invalid_slot_val,
                                &join_column,
                                &type_info,
                                &shard_info
@@ -1723,7 +1683,6 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
 #endif
   ](auto cpu_thread_idx, auto cpu_thread_count) {
     return SUFFIX(count_matches_sharded)(count_buff,
-                                         invalid_slot_val,
                                          join_column,
                                          type_info,
                                          shard_info
@@ -1739,7 +1698,6 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
 
   auto launch_fill_row_ids = [buff,
                               hash_entry_count,
-                              invalid_slot_val,
                               &join_column,
                               &type_info,
                               &shard_info
@@ -1751,7 +1709,6 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
   ](auto cpu_thread_idx, auto cpu_thread_count) {
     return SUFFIX(fill_row_ids_sharded)(buff,
                                         hash_entry_count,
-                                        invalid_slot_val,
                                         join_column,
                                         type_info,
                                         shard_info
@@ -1766,7 +1723,6 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
 
   fill_one_to_many_hash_table_sharded_impl(buff,
                                            hash_entry_count,
-                                           invalid_slot_val,
                                            join_column,
                                            type_info,
                                            shard_info
@@ -1970,7 +1926,6 @@ void fill_one_to_many_baseline_hash_table(
     int32_t* buff,
     const T* composite_key_dict,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
@@ -2097,7 +2052,6 @@ void fill_one_to_many_baseline_hash_table(
           [buff,
            composite_key_dict,
            hash_entry_count,
-           invalid_slot_val,
            &join_column_per_key,
            &join_buckets_per_key,
            &is_geo_compressed,
@@ -2112,7 +2066,6 @@ void fill_one_to_many_baseline_hash_table(
             (buff,
              composite_key_dict,
              hash_entry_count,
-             invalid_slot_val,
              &key_handler,
              join_column_per_key[0].num_elems,
              cpu_thread_idx,
@@ -2124,7 +2077,6 @@ void fill_one_to_many_baseline_hash_table(
           [buff,
            composite_key_dict,
            hash_entry_count,
-           invalid_slot_val,
            &join_column_per_key,
            &join_buckets_per_key,
            cpu_thread_idx,
@@ -2137,7 +2089,6 @@ void fill_one_to_many_baseline_hash_table(
             (buff,
              composite_key_dict,
              hash_entry_count,
-             invalid_slot_val,
              &key_handler,
              join_column_per_key[0].num_elems,
              cpu_thread_idx,
@@ -2148,7 +2099,6 @@ void fill_one_to_many_baseline_hash_table(
                                          [buff,
                                           composite_key_dict,
                                           hash_entry_count,
-                                          invalid_slot_val,
                                           key_component_count,
                                           &join_column_per_key,
                                           &type_info_per_key,
@@ -2167,7 +2117,6 @@ void fill_one_to_many_baseline_hash_table(
                                            (buff,
                                             composite_key_dict,
                                             hash_entry_count,
-                                            invalid_slot_val,
                                             &key_handler,
                                             join_column_per_key[0].num_elems,
                                             cpu_thread_idx,
@@ -2185,7 +2134,6 @@ void fill_one_to_many_baseline_hash_table_32(
     int32_t* buff,
     const int32_t* composite_key_dict,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
@@ -2198,7 +2146,6 @@ void fill_one_to_many_baseline_hash_table_32(
   fill_one_to_many_baseline_hash_table<int32_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
-                                                invalid_slot_val,
                                                 key_component_count,
                                                 join_column_per_key,
                                                 type_info_per_key,
@@ -2214,7 +2161,6 @@ void fill_one_to_many_baseline_hash_table_64(
     int32_t* buff,
     const int64_t* composite_key_dict,
     const int64_t hash_entry_count,
-    const int32_t invalid_slot_val,
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
@@ -2227,7 +2173,6 @@ void fill_one_to_many_baseline_hash_table_64(
   fill_one_to_many_baseline_hash_table<int64_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
-                                                invalid_slot_val,
                                                 key_component_count,
                                                 join_column_per_key,
                                                 type_info_per_key,

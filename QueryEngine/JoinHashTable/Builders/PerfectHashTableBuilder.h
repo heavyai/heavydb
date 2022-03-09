@@ -127,7 +127,6 @@ class PerfectJoinHashTableBuilder {
           fill_one_to_many_hash_table_on_device_sharded(
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_entry_info,
-              hash_join_invalid_val,
               join_column,
               type_info,
               shard_info);
@@ -148,14 +147,12 @@ class PerfectJoinHashTableBuilder {
           fill_one_to_many_hash_table_on_device_bucketized(
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_entry_info,
-              hash_join_invalid_val,
               join_column,
               type_info);
         } else {
           fill_one_to_many_hash_table_on_device(
               reinterpret_cast<int32_t*>(gpu_hash_table_buff),
               hash_entry_info,
-              hash_join_invalid_val,
               join_column,
               type_info);
         }
@@ -336,7 +333,6 @@ class PerfectJoinHashTableBuilder {
         fill_one_to_many_hash_table_bucketized(
             cpu_hash_table_buff,
             hash_entry_info,
-            hash_join_invalid_val,
             join_column,
             {static_cast<size_t>(ti.get_size()),
              col_range.getIntMin(),
@@ -353,7 +349,6 @@ class PerfectJoinHashTableBuilder {
         fill_one_to_many_hash_table(
             cpu_hash_table_buff,
             hash_entry_info,
-            hash_join_invalid_val,
             join_column,
             {static_cast<size_t>(ti.get_size()),
              col_range.getIntMin(),
