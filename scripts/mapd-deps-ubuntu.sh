@@ -236,6 +236,10 @@ cmake \
     -DGLFW_BUILD_TESTS=OFF \
     -DGLFW_BUILD_DOCS=OFF \
     ..
+make -j $(nproc)
+make install
+popd #build
+popd #glfw
 
 # ImGui
 VERS=1.87
