@@ -117,7 +117,7 @@ class Cursor:
                 first_n=-1,
                 at_most_n=-1,
             )
-        except T.TOmniSciException as e:
+        except T.TDBException as e:
             raise _translate_exception(e) from e
         self._description = _extract_description(result.row_set.row_desc)
 

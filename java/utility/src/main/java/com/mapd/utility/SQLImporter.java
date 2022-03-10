@@ -470,8 +470,8 @@ public class SQLImporter {
     } catch (SQLException se) {
       LOGGER.error("SQLException - " + se.toString());
       se.printStackTrace();
-    } catch (TOmniSciException ex) {
-      LOGGER.error("TOmniSciException - " + ex.getError_msg());
+    } catch (TDBException ex) {
+      LOGGER.error("TDBException - " + ex.getError_msg());
       ex.printStackTrace();
     } catch (TException ex) {
       LOGGER.error("TException failed - " + ex.toString());
@@ -496,8 +496,8 @@ public class SQLImporter {
         if (session != null) {
           client.disconnect(session);
         }
-      } catch (TOmniSciException ex) {
-        LOGGER.error("TOmniSciException - in finalization " + ex.getError_msg());
+      } catch (TDBException ex) {
+        LOGGER.error("TDBException - in finalization " + ex.getError_msg());
         ex.printStackTrace();
       } catch (TException ex) {
         LOGGER.error("TException - in finalization" + ex.toString());
@@ -762,7 +762,7 @@ public class SQLImporter {
     } catch (TTransportException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(1);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("Connection failed - " + ex.getError_msg());
       exit(2);
     } catch (TException ex) {
@@ -780,7 +780,7 @@ public class SQLImporter {
     try {
       TTableDetails table_details = client.get_table_details(session, tName);
       row_descriptor = table_details.row_desc;
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("column check failed - " + ex.getError_msg());
       exit(3);
     } catch (TException ex) {
@@ -799,7 +799,7 @@ public class SQLImporter {
           return true;
         }
       }
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("Table check failed - " + ex.getError_msg());
       exit(3);
     } catch (TException ex) {
@@ -814,7 +814,7 @@ public class SQLImporter {
 
     try {
       TQueryResult sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       LOGGER.error("SQL Execute failed - " + ex.getError_msg());
       exit(1);
     } catch (TException ex) {

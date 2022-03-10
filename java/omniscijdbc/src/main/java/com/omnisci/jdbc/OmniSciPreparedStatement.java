@@ -17,7 +17,7 @@ package com.omnisci.jdbc;
 
 import com.omnisci.thrift.server.OmniSci;
 import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TStringRow;
 import com.omnisci.thrift.server.TStringValue;
 import com.omnisci.thrift.server.TTableDetails;
@@ -951,7 +951,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
       try {
         // send the batch
         client.load_table(session, insertTableName, rows, Arrays.asList(listOfFields));
-      } catch (TOmniSciException ex) {
+      } catch (TDBException ex) {
         throw new SQLException("executeBatch failed: " + ex.getError_msg());
       } catch (TException ex) {
         throw new SQLException("executeBatch failed: " + ex.toString());

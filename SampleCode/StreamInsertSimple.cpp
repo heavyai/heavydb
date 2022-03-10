@@ -73,7 +73,7 @@ void stream_insert(OmniSciClient& client,
     if (input_rows.size() >= INSERT_BATCH_SIZE) {
       try {
         client.load_table(session, table_name, input_rows, {});
-      } catch (TOmniSciException& e) {
+      } catch (TDBException& e) {
         std::cerr << e.error_msg << std::endl;
       }
       input_rows.clear();
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
     stream_insert(client, session, table_name, table_details.row_desc, delimiter);
     client.disconnect(session);  // disconnect from heavydb
     transport->close();          // close transport
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
     return 1;
   } catch (TException& te) {

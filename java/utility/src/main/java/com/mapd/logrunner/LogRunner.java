@@ -19,10 +19,10 @@ import com.omnisci.thrift.server.OmniSci;
 import com.omnisci.thrift.server.TColumn;
 import com.omnisci.thrift.server.TColumnData;
 import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TDBInfo;
 import com.omnisci.thrift.server.TDatum;
 import com.omnisci.thrift.server.TExecuteMode;
-import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TPixel;
 import com.omnisci.thrift.server.TQueryResult;
 import com.omnisci.thrift.server.TRenderResult;
@@ -142,14 +142,14 @@ public class LogRunner {
   }
 
   private String getSession(OmniSci.Client client)
-          throws TTransportException, TOmniSciException, TException {
+          throws TTransportException, TDBException, TException {
     String session = client.connect("mapd", "HyperInteractive", "mapd");
     logger.info("Connected session is " + session);
     return session;
   }
 
   private void closeSession(OmniSci.Client client, String session)
-          throws TOmniSciException, TException {
+          throws TDBException, TException {
     // Now disconnect
     logger.info("Trying to disconnect session " + session);
     client.disconnect(session);
@@ -270,7 +270,7 @@ public class LogRunner {
           logger.info("run query " + sl[1]);
           try {
             client.sql_execute(session, sl[1], true, null, -1, -1);
-          } catch (TOmniSciException ex1) {
+          } catch (TDBException ex1) {
             logger.error(
                     "Failed to execute " + sl[1] + " exception " + ex1.getError_msg());
           } catch (TException ex) {
@@ -307,7 +307,7 @@ public class LogRunner {
                     Boolean.TRUE,
                     Integer.parseInt(ss[11]),
                     null);
-          } catch (TOmniSciException ex1) {
+          } catch (TDBException ex1) {
             logger.error("Failed to execute get_result_row_for_pixel exception "
                     + ex1.getError_msg());
           } catch (TException ex) {

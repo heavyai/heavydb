@@ -27,10 +27,10 @@ import com.mapd.calcite.parser.MapDView;
 import com.mapd.common.SockTransportProperties;
 import com.omnisci.thrift.server.OmniSci;
 import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TDBInfo;
 import com.omnisci.thrift.server.TDatumType;
 import com.omnisci.thrift.server.TEncodingType;
-import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TTableDetails;
 import com.omnisci.thrift.server.TTypeInfo;
 
@@ -260,7 +260,7 @@ public class MetaConnect {
       MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       MAPDLOGGER.error(ex.getError_msg());
       throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
@@ -359,7 +359,7 @@ public class MetaConnect {
     } catch (TTransportException ex) {
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       MAPDLOGGER.error(ex.getError_msg());
       throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {
@@ -691,7 +691,7 @@ public class MetaConnect {
       } catch (TTransportException ex) {
         MAPDLOGGER.error(ex.toString());
         throw new RuntimeException(ex.toString());
-      } catch (TOmniSciException ex) {
+      } catch (TDBException ex) {
         MAPDLOGGER.error(ex.getError_msg());
         throw new RuntimeException(ex.getError_msg());
       } catch (TException ex) {
@@ -827,7 +827,7 @@ public class MetaConnect {
       MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       MAPDLOGGER.error(ex.getError_msg());
       throw new RuntimeException(ex.getError_msg());
     } catch (TException ex) {

@@ -151,7 +151,7 @@ bool copy_table(char const* filepath, char const* table, ClientContext& context)
       if (input_rows.size() >= LOAD_PATCH_SIZE) {
         try {
           context.client.load_table(context.session, table, input_rows, {});
-        } catch (TOmniSciException& e) {
+        } catch (TDBException& e) {
           std::cerr << e.error_msg << std::endl;
         }
         input_rows.clear();
@@ -160,7 +160,7 @@ bool copy_table(char const* filepath, char const* table, ClientContext& context)
     if (input_rows.size() > 0) {
       context.client.load_table(context.session, table, input_rows, {});
     }
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
     return false;
   } catch (TException& te) {
@@ -217,7 +217,7 @@ void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& cont
     }
     oss << ");";
     printf("\n%s\n", oss.str().c_str());
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error in detect_table: " << te.what() << std::endl;

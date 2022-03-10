@@ -19,9 +19,9 @@ import com.omnisci.thrift.server.OmniSci;
 import com.omnisci.thrift.server.TColumn;
 import com.omnisci.thrift.server.TColumnData;
 import com.omnisci.thrift.server.TColumnType;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TDBInfo;
 import com.omnisci.thrift.server.TDatum;
-import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TQueryResult;
 import com.omnisci.thrift.server.TRow;
 import com.omnisci.thrift.server.TRowSet;
@@ -173,7 +173,7 @@ public class ThriftTester {
       // Now disconnect
       logger.info("Trying to disconnect session " + session);
       client.disconnect(session);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       logger.error(ex.getError_msg());
       ex.printStackTrace();
     } catch (TException ex) {

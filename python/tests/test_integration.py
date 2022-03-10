@@ -10,12 +10,12 @@ import pytest
 from omnisci import connect, ProgrammingError, DatabaseError
 from omnisci.cursor import Cursor
 from omnisci._parsers import Description, ColumnDetails
-from omnisci.thrift.ttypes import TOmniSciException
+from omnisci.thrift.ttypes import TDBException
 
 # XXX: Make it hashable to silence warnings; see if this can be done upstream
 # This isn't a huge deal, but our testing context mangers for asserting
 # exceptions need hashability
-TOmniSciException.__hash__ = lambda x: id(x)
+TDBException.__hash__ = lambda x: id(x)
 omniscihost = os.environ.get('OMNISCI_HOST', 'localhost')
 
 

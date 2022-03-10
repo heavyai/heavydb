@@ -130,7 +130,7 @@ using Catalog_Namespace::SysCatalog;
 
 #define THROW_MAPD_EXCEPTION(errstr) \
   {                                  \
-    TOmniSciException ex;            \
+    TDBException ex;                 \
     ex.error_msg = errstr;           \
     LOG(ERROR) << ex.error_msg;      \
     throw ex;                        \
@@ -210,7 +210,7 @@ void DBHandler::expire_idle_sessions_unsafe(
     if (leaf_aggregator_.leafCount() > 0) {
       try {
         leaf_aggregator_.disconnect(session_id);
-      } catch (TOmniSciException& toe) {
+      } catch (TDBException& toe) {
         LOG(INFO) << " Problem disconnecting from leaves : " << toe.what();
       } catch (std::exception& e) {
         LOG(INFO)
@@ -1520,7 +1520,7 @@ void DBHandler::deallocate_df(const TSessionId& session,
   if (device_type == TDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     if (ipc_handle_to_dev_ptr_.count(df.df_handle) != size_t(1)) {
-      TOmniSciException ex;
+      TDBException ex;
       ex.error_msg = std::string(
           "Current data frame handle is not bookkept or been inserted "
           "twice");
@@ -1658,7 +1658,7 @@ void DBHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hint
     hints = just_whitelisted_keyword_hints(
         calcite_->getCompletionHints(session_info, visible_tables, sql, cursor));
   } catch (const std::exception& e) {
-    TOmniSciException ex;
+    TDBException ex;
     ex.error_msg = std::string(e.what());
     LOG(ERROR) << ex.error_msg;
     throw ex;
@@ -1726,7 +1726,7 @@ DBHandler::fill_column_names_by_table(std::vector<std::string>& table_names,
     TTableDetails table_details;
     try {
       get_table_details_impl(table_details, stdlog, *it, false, false);
-    } catch (const TOmniSciException& e) {
+    } catch (const TDBException& e) {
       // Remove the corrupted Table/View name from the list for further processing.
       it = table_names.erase(it);
       continue;
@@ -1753,7 +1753,7 @@ std::unordered_set<std::string> DBHandler::get_uc_compatible_table_names_by_colu
     TTableDetails table_details;
     try {
       get_table_details_impl(table_details, stdlog, *it, false, false);
-    } catch (const TOmniSciException& e) {
+    } catch (const TDBException& e) {
       // Remove the corrupted Table/View name from the list for further processing.
       it = table_names.erase(it);
       continue;
@@ -2910,7 +2910,7 @@ void DBHandler::set_execution_mode(const TSessionId& session,
     leaf_aggregator_.set_execution_mode(session, mode);
     try {
       DBHandler::set_execution_mode_nolock(session_it->second.get(), mode);
-    } catch (const TOmniSciException& e) {
+    } catch (const TDBException& e) {
       LOG(INFO) << "Aggregator failed to set execution mode: " << e.error_msg;
     }
     return;
@@ -3413,7 +3413,7 @@ using RecordBatchVector = std::vector<std::shared_ptr<arrow::RecordBatch>>;
   do {                               \
     ::arrow::Status _s = (s);        \
     if (UNLIKELY(!_s.ok())) {        \
-      TOmniSciException ex;          \
+      TDBException ex;               \
       ex.error_msg = _s.ToString();  \
       LOG(ERROR) << s.ToString();    \
       throw ex;                      \
@@ -5915,7 +5915,7 @@ void DBHandler::set_execution_mode_nolock(Catalog_Namespace::SessionInfo* sessio
   switch (mode) {
     case TExecuteMode::GPU:
       if (cpu_mode_only_) {
-        TOmniSciException e;
+        TDBException e;
         e.error_msg = "Cannot switch to GPU mode in a server started in CPU-only mode.";
         throw e;
       }

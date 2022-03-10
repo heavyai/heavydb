@@ -15,7 +15,7 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TDBException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -141,7 +141,7 @@ public class CtasItasSelectUpdelConcurrencyTest {
                 sql = "SELECT COUNT(*) FROM " + ctasTableName + ";";
                 logger.info(logPrefix + " VALIDATE " + sql);
                 user.sqlValidate(sql);
-              } catch (TOmniSciException e) {
+              } catch (TDBException e) {
                 if (e.getError_msg().indexOf("not found") != -1) {
                   Thread.sleep(1000);
                   ctas_table_created = false;

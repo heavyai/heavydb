@@ -1573,7 +1573,7 @@ class TDBInfo(object):
         return not (self == other)
 
 
-class TOmniSciException(TException):
+class TDBException(TException):
     """
     Attributes:
      - error_msg
@@ -1607,7 +1607,7 @@ class TOmniSciException(TException):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
             oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
             return
-        oprot.writeStructBegin('TOmniSciException')
+        oprot.writeStructBegin('TDBException')
         if self.error_msg is not None:
             oprot.writeFieldBegin('error_msg', TType.STRING, 1)
             oprot.writeString(self.error_msg.encode('utf-8') if sys.version_info[0] == 2 else self.error_msg)
@@ -6407,8 +6407,8 @@ TDBInfo.thrift_spec = (
     (1, TType.STRING, 'db_name', 'UTF8', None, ),  # 1
     (2, TType.STRING, 'db_owner', 'UTF8', None, ),  # 2
 )
-all_structs.append(TOmniSciException)
-TOmniSciException.thrift_spec = (
+all_structs.append(TDBException)
+TDBException.thrift_spec = (
     None,  # 0
     (1, TType.STRING, 'error_msg', 'UTF8', None, ),  # 1
 )

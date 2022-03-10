@@ -18,8 +18,8 @@ package com.mapd.tests;
 import com.omnisci.thrift.server.TColumnType;
 import com.omnisci.thrift.server.TCopyParams;
 import com.omnisci.thrift.server.TCreateParams;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TImportHeaderRow;
-import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TSourceType;
 
 import org.slf4j.Logger;
@@ -290,7 +290,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
           throws Exception {
     try {
       function.call();
-    } catch (TOmniSciException e) {
+    } catch (TDBException e) {
       if (e.error_msg.matches("(Table/View\\s+" + tableName
                   + ".+does not exist|.+Object\\s+'" + tableName + "'\\s+not found)")) {
         logger.info("Ignoring missing table error: " + e.error_msg);

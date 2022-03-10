@@ -17,8 +17,8 @@ package com.omnisci.jdbc;
 
 import com.mapd.common.SockTransportProperties;
 import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TOmniSciException;
 import com.omnisci.thrift.server.TServerStatus;
 
 import org.apache.thrift.TException;
@@ -455,7 +455,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
       throw new SQLException("Thrift transport connection failed - "
                       + OmniSciExceptionText.getExceptionDetail(ex),
               ex);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       throw new SQLException("Omnisci connection failed - "
                       + OmniSciExceptionText.getExceptionDetail(ex),
               ex);
@@ -528,7 +528,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
         client.disconnect(session);
       }
       closeConnection();
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       throw new SQLException("disconnect failed." + ex.getError_msg());
     } catch (TException ex) {
       throw new SQLException("disconnect failed." + ex.toString());
@@ -570,7 +570,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
         TServerStatus server_status = client.get_server_status(session);
         return server_status.read_only;
       }
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       throw new SQLException(
               "get_server_status failed during isReadOnly check." + ex.getError_msg());
     } catch (TException ex) {
@@ -804,7 +804,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
       client.get_server_status(session);
     } catch (TTransportException ex) {
       throw new SQLException("Connection failed - " + ex.toString());
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       throw new SQLException("Connection failed - " + ex.getError_msg());
     } catch (TException ex) {
       throw new SQLException("Connection failed - " + ex.toString());

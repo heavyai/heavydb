@@ -16,7 +16,7 @@
 package com.omnisci.jdbc;
 
 import com.omnisci.thrift.server.OmniSci;
-import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
@@ -95,7 +95,7 @@ public class OmniSciStatement implements java.sql.Statement {
     logger.debug("After OmniSciEscapeParser [" + afterSimpleParse + "]");
     try {
       sqlResult = client.sql_execute(session, afterSimpleParse + ";", true, null, -1, -1);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       throw new SQLException(
               "Query failed : " + OmniSciExceptionText.getExceptionDetail(ex));
     } catch (TException ex) {
@@ -115,7 +115,7 @@ public class OmniSciStatement implements java.sql.Statement {
       alternate_connection = connection.getAlternateConnection();
       // Note alternate_connection shares a session with original connection
       alternate_connection.client.interrupt(session, session);
-    } catch (TOmniSciException ttE) {
+    } catch (TDBException ttE) {
       throw new SQLException("Thrift transport connection failed - "
                       + OmniSciExceptionText.getExceptionDetail(ttE),
               ttE);
@@ -138,7 +138,7 @@ public class OmniSciStatement implements java.sql.Statement {
         sql = sql.replace('"', ' ');
       }
       sqlResult = client.sql_execute(session, sql + ";", true, null, -1, -1);
-    } catch (TOmniSciException ex) {
+    } catch (TDBException ex) {
       throw new SQLException("Query failed :  sql was '" + sql + "' "
                       + OmniSciExceptionText.getExceptionDetail(ex),
               ex);

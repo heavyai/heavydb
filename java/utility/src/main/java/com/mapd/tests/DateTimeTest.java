@@ -1,6 +1,6 @@
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.commons.math3.util.Pair;
@@ -692,7 +692,7 @@ public class DateTimeTest {
       }
 
       return r;
-    } catch (TOmniSciException e) {
+    } catch (TDBException e) {
       System.out.println("Query failed: " + sql + " -- " + e.getError_msg());
       return LocalDateTime.MIN;
 
@@ -713,7 +713,7 @@ public class DateTimeTest {
         throw new RuntimeException("Unsupported!");
       }
       return r;
-    } catch (TOmniSciException e) {
+    } catch (TDBException e) {
       System.out.println("Query failed: " + sql + " -- " + e.getError_msg());
       return Long.MIN_VALUE;
     } catch (Exception e) {
@@ -764,7 +764,7 @@ public class DateTimeTest {
 
     try {
       client.runSql(sqlUpdate);
-    } catch (TOmniSciException e) {
+    } catch (TDBException e) {
       System.out.println("Update failed: " + sqlUpdate + " " + e.getError_msg());
     }
   }

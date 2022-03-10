@@ -15,7 +15,7 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TOmniSciException;
+import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TQueryInfo;
 
 import org.checkerframework.checker.units.qual.A;
@@ -251,8 +251,8 @@ public class RuntimeInterruptConcurrencyTest {
                     logger.info(logPrefix + " Run SELECT query: " + queries[q]);
                     user.runSql(queries[q]);
                   } catch (Exception e2) {
-                    if (e2 instanceof TOmniSciException) {
-                      TOmniSciException ee = (TOmniSciException) e2;
+                    if (e2 instanceof TDBException) {
+                      TDBException ee = (TDBException) e2;
                       if (q == 2 && ee.error_msg.contains("ERR_INTERRUPTED")) {
                         interrupted = true;
                         logger.info(
@@ -285,8 +285,8 @@ public class RuntimeInterruptConcurrencyTest {
                           + "' WITH (geo='true');");
                   logger.info(logPrefix + " Run Import query");
                 } catch (Exception e2) {
-                  if (e2 instanceof TOmniSciException) {
-                    TOmniSciException ee = (TOmniSciException) e2;
+                  if (e2 instanceof TDBException) {
+                    TDBException ee = (TDBException) e2;
                     if (ee.error_msg.contains("error code 10")) {
                       interrupted = true;
                       logger.info(logPrefix + " Import query has been interrupted");

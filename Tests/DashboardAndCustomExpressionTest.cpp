@@ -836,7 +836,7 @@ TEST_F(DashboardBulkDeleteTest, SomeInvalidIDs) {
   try {
     db_handler->delete_dashboards(session_id, {db_id, 0});
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     assertExceptionMessage(e,
                            "Delete dashboard(s) failed with "
                            "error(s):\nDashboard id: 0 - Dashboard id does not exist");
@@ -858,7 +858,7 @@ TEST_F(DashboardBulkDeleteTest, NoDeleteDashboardPrivilege) {
   try {
     db_handler->delete_dashboards(unprivileged_session, {db_id_1, db_id_2});
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     assertExceptionMessage(
         e,
         "Delete dashboard(s) failed with error(s):\nDashboard id: " +
@@ -895,7 +895,7 @@ TEST_F(DashboardBulkDeleteTest, InvalidNoPrivilegeMix) {
   try {
     db_handler->delete_dashboards(non_super_session, {0, db_id});
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     assertExceptionMessage(
         e,
         std::string("Delete dashboard(s) failed with error(s):\n") +

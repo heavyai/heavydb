@@ -4533,7 +4533,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4559,7 +4559,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4585,7 +4585,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4611,7 +4611,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4637,7 +4637,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4663,7 +4663,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4689,7 +4689,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4715,7 +4715,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4741,7 +4741,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4767,7 +4767,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4793,7 +4793,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4819,7 +4819,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4845,7 +4845,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4871,7 +4871,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4897,7 +4897,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4923,7 +4923,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4949,7 +4949,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -4975,7 +4975,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5001,7 +5001,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5027,7 +5027,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5053,7 +5053,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5079,7 +5079,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5105,7 +5105,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5131,7 +5131,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5157,7 +5157,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5183,7 +5183,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5209,7 +5209,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5235,7 +5235,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5261,7 +5261,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5287,7 +5287,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5405,7 +5405,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5431,7 +5431,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5457,7 +5457,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5483,7 +5483,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5509,7 +5509,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5535,7 +5535,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5561,7 +5561,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5587,7 +5587,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5613,7 +5613,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5639,7 +5639,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5665,7 +5665,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5691,7 +5691,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5717,7 +5717,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5743,7 +5743,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5769,7 +5769,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5795,7 +5795,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5821,7 +5821,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5847,7 +5847,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5873,7 +5873,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5899,7 +5899,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5925,7 +5925,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5951,7 +5951,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -5977,7 +5977,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6003,7 +6003,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6029,7 +6029,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6055,7 +6055,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6081,7 +6081,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6107,7 +6107,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6133,7 +6133,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6159,7 +6159,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6185,7 +6185,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6211,7 +6211,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6237,7 +6237,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6263,7 +6263,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6289,7 +6289,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6315,7 +6315,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6341,7 +6341,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6367,7 +6367,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6393,7 +6393,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6419,7 +6419,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6445,7 +6445,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6471,7 +6471,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6497,7 +6497,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6523,7 +6523,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6549,7 +6549,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6575,7 +6575,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6601,7 +6601,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6627,7 +6627,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6653,7 +6653,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6679,7 +6679,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6705,7 +6705,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6731,7 +6731,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6757,7 +6757,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6783,7 +6783,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6809,7 +6809,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6835,7 +6835,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6861,7 +6861,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6887,7 +6887,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6913,7 +6913,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -6939,7 +6939,7 @@ class Processor(Iface, TProcessor):
             msg_type = TMessageType.REPLY
         except TTransport.TTransportException:
             raise
-        except TOmniSciException as e:
+        except TDBException as e:
             msg_type = TMessageType.REPLY
             result.e = e
         except TApplicationException as ex:
@@ -7073,7 +7073,7 @@ class connect_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -7114,7 +7114,7 @@ class connect_result(object):
 all_structs.append(connect_result)
 connect_result.thrift_spec = (
     (0, TType.STRING, 'success', 'UTF8', None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -7222,7 +7222,7 @@ class krb5_connect_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -7263,7 +7263,7 @@ class krb5_connect_result(object):
 all_structs.append(krb5_connect_result)
 krb5_connect_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TKrb5Session, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -7351,7 +7351,7 @@ class disconnect_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -7388,7 +7388,7 @@ class disconnect_result(object):
 all_structs.append(disconnect_result)
 disconnect_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -7488,7 +7488,7 @@ class switch_database_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -7525,7 +7525,7 @@ class switch_database_result(object):
 all_structs.append(switch_database_result)
 switch_database_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -7620,7 +7620,7 @@ class clone_session_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -7661,7 +7661,7 @@ class clone_session_result(object):
 all_structs.append(clone_session_result)
 clone_session_result.thrift_spec = (
     (0, TType.STRING, 'success', 'UTF8', None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -7757,7 +7757,7 @@ class get_server_status_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -7798,7 +7798,7 @@ class get_server_status_result(object):
 all_structs.append(get_server_status_result)
 get_server_status_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TServerStatus, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -7899,7 +7899,7 @@ class get_status_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -7943,7 +7943,7 @@ class get_status_result(object):
 all_structs.append(get_status_result)
 get_status_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TServerStatus, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -8039,7 +8039,7 @@ class get_hardware_info_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -8080,7 +8080,7 @@ class get_hardware_info_result(object):
 all_structs.append(get_hardware_info_result)
 get_hardware_info_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TClusterHardwareInfo, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -8180,7 +8180,7 @@ class get_tables_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -8224,7 +8224,7 @@ class get_tables_result(object):
 all_structs.append(get_tables_result)
 get_tables_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -8336,7 +8336,7 @@ class get_tables_for_database_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -8380,7 +8380,7 @@ class get_tables_for_database_result(object):
 all_structs.append(get_tables_for_database_result)
 get_tables_for_database_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -8480,7 +8480,7 @@ class get_physical_tables_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -8524,7 +8524,7 @@ class get_physical_tables_result(object):
 all_structs.append(get_physical_tables_result)
 get_physical_tables_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -8624,7 +8624,7 @@ class get_views_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -8668,7 +8668,7 @@ class get_views_result(object):
 all_structs.append(get_views_result)
 get_views_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -8769,7 +8769,7 @@ class get_tables_meta_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -8813,7 +8813,7 @@ class get_tables_meta_result(object):
 all_structs.append(get_tables_meta_result)
 get_tables_meta_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TTableMeta, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -8921,7 +8921,7 @@ class get_table_details_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -8962,7 +8962,7 @@ class get_table_details_result(object):
 all_structs.append(get_table_details_result)
 get_table_details_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TTableDetails, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -9082,7 +9082,7 @@ class get_table_details_for_database_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -9123,7 +9123,7 @@ class get_table_details_for_database_result(object):
 all_structs.append(get_table_details_for_database_result)
 get_table_details_for_database_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TTableDetails, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -9231,7 +9231,7 @@ class get_internal_table_details_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -9272,7 +9272,7 @@ class get_internal_table_details_result(object):
 all_structs.append(get_internal_table_details_result)
 get_internal_table_details_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TTableDetails, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -9392,7 +9392,7 @@ class get_internal_table_details_for_database_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -9433,7 +9433,7 @@ class get_internal_table_details_for_database_result(object):
 all_structs.append(get_internal_table_details_for_database_result)
 get_internal_table_details_for_database_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TTableDetails, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -9533,7 +9533,7 @@ class get_users_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -9577,7 +9577,7 @@ class get_users_result(object):
 all_structs.append(get_users_result)
 get_users_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -9678,7 +9678,7 @@ class get_databases_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -9722,7 +9722,7 @@ class get_databases_result(object):
 all_structs.append(get_databases_result)
 get_databases_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TDBInfo, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -9798,7 +9798,7 @@ class get_version_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -9839,7 +9839,7 @@ class get_version_result(object):
 all_structs.append(get_version_result)
 get_version_result.thrift_spec = (
     (0, TType.STRING, 'success', 'UTF8', None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -9927,7 +9927,7 @@ class start_heap_profile_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -9964,7 +9964,7 @@ class start_heap_profile_result(object):
 all_structs.append(start_heap_profile_result)
 start_heap_profile_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -10052,7 +10052,7 @@ class stop_heap_profile_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -10089,7 +10089,7 @@ class stop_heap_profile_result(object):
 all_structs.append(stop_heap_profile_result)
 stop_heap_profile_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -10184,7 +10184,7 @@ class get_heap_profile_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -10225,7 +10225,7 @@ class get_heap_profile_result(object):
 all_structs.append(get_heap_profile_result)
 get_heap_profile_result.thrift_spec = (
     (0, TType.STRING, 'success', 'UTF8', None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -10338,7 +10338,7 @@ class get_memory_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -10382,7 +10382,7 @@ class get_memory_result(object):
 all_structs.append(get_memory_result)
 get_memory_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TNodeMemoryInfo, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -10470,7 +10470,7 @@ class clear_cpu_memory_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -10507,7 +10507,7 @@ class clear_cpu_memory_result(object):
 all_structs.append(clear_cpu_memory_result)
 clear_cpu_memory_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -10595,7 +10595,7 @@ class clear_gpu_memory_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -10632,7 +10632,7 @@ class clear_gpu_memory_result(object):
 all_structs.append(clear_gpu_memory_result)
 clear_gpu_memory_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -10768,7 +10768,7 @@ class set_cur_session_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -10805,7 +10805,7 @@ class set_cur_session_result(object):
 all_structs.append(set_cur_session_result)
 set_cur_session_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -10941,7 +10941,7 @@ class invalidate_cur_session_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -10978,7 +10978,7 @@ class invalidate_cur_session_result(object):
 all_structs.append(invalidate_cur_session_result)
 invalidate_cur_session_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -11102,7 +11102,7 @@ class set_table_epoch_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -11139,7 +11139,7 @@ class set_table_epoch_result(object):
 all_structs.append(set_table_epoch_result)
 set_table_epoch_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -11251,7 +11251,7 @@ class set_table_epoch_by_name_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -11288,7 +11288,7 @@ class set_table_epoch_by_name_result(object):
 all_structs.append(set_table_epoch_by_name_result)
 set_table_epoch_by_name_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -11960,7 +11960,7 @@ class get_session_info_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -12001,7 +12001,7 @@ class get_session_info_result(object):
 all_structs.append(get_session_info_result)
 get_session_info_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TSessionInfo, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -12157,7 +12157,7 @@ class sql_execute_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -12198,7 +12198,7 @@ class sql_execute_result(object):
 all_structs.append(sql_execute_result)
 sql_execute_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TQueryResult, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -12354,7 +12354,7 @@ class sql_execute_df_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -12395,7 +12395,7 @@ class sql_execute_df_result(object):
 all_structs.append(sql_execute_df_result)
 sql_execute_df_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TDataFrame, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -12527,7 +12527,7 @@ class sql_execute_gdf_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -12568,7 +12568,7 @@ class sql_execute_gdf_result(object):
 all_structs.append(sql_execute_gdf_result)
 sql_execute_gdf_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TDataFrame, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -12693,7 +12693,7 @@ class deallocate_df_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -12730,7 +12730,7 @@ class deallocate_df_result(object):
 all_structs.append(deallocate_df_result)
 deallocate_df_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -12830,7 +12830,7 @@ class interrupt_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -12867,7 +12867,7 @@ class interrupt_result(object):
 all_structs.append(interrupt_result)
 interrupt_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -12980,7 +12980,7 @@ class sql_validate_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -13024,7 +13024,7 @@ class sql_validate_result(object):
 all_structs.append(sql_validate_result)
 sql_validate_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TColumnType, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -13149,7 +13149,7 @@ class get_completion_hints_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -13193,7 +13193,7 @@ class get_completion_hints_result(object):
 all_structs.append(get_completion_hints_result)
 get_completion_hints_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [omnisci.completion_hints.ttypes.TCompletionHint, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -13293,7 +13293,7 @@ class set_execution_mode_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -13330,7 +13330,7 @@ class set_execution_mode_result(object):
 all_structs.append(set_execution_mode_result)
 set_execution_mode_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -13474,7 +13474,7 @@ class render_vega_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -13515,7 +13515,7 @@ class render_vega_result(object):
 all_structs.append(render_vega_result)
 render_vega_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TRenderResult, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -13702,7 +13702,7 @@ class get_result_row_for_pixel_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -13743,7 +13743,7 @@ class get_result_row_for_pixel_result(object):
 all_structs.append(get_result_row_for_pixel_result)
 get_result_row_for_pixel_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TPixelTableRowResult, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -13851,7 +13851,7 @@ class create_custom_expression_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -13892,7 +13892,7 @@ class create_custom_expression_result(object):
 all_structs.append(create_custom_expression_result)
 create_custom_expression_result.thrift_spec = (
     (0, TType.I32, 'success', None, None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -13993,7 +13993,7 @@ class get_custom_expressions_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -14037,7 +14037,7 @@ class get_custom_expressions_result(object):
 all_structs.append(get_custom_expressions_result)
 get_custom_expressions_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TCustomExpression, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -14149,7 +14149,7 @@ class update_custom_expression_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -14186,7 +14186,7 @@ class update_custom_expression_result(object):
 all_structs.append(update_custom_expression_result)
 update_custom_expression_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -14306,7 +14306,7 @@ class delete_custom_expressions_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -14343,7 +14343,7 @@ class delete_custom_expressions_result(object):
 all_structs.append(delete_custom_expressions_result)
 delete_custom_expressions_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -14451,7 +14451,7 @@ class get_dashboard_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -14492,7 +14492,7 @@ class get_dashboard_result(object):
 all_structs.append(get_dashboard_result)
 get_dashboard_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TDashboard, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -14593,7 +14593,7 @@ class get_dashboards_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -14637,7 +14637,7 @@ class get_dashboards_result(object):
 all_structs.append(get_dashboards_result)
 get_dashboards_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TDashboard, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -14780,7 +14780,7 @@ class create_dashboard_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -14821,7 +14821,7 @@ class create_dashboard_result(object):
 all_structs.append(create_dashboard_result)
 create_dashboard_result.thrift_spec = (
     (0, TType.I32, 'success', None, None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -14981,7 +14981,7 @@ class replace_dashboard_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -15018,7 +15018,7 @@ class replace_dashboard_result(object):
 all_structs.append(replace_dashboard_result)
 replace_dashboard_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -15118,7 +15118,7 @@ class delete_dashboard_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -15155,7 +15155,7 @@ class delete_dashboard_result(object):
 all_structs.append(delete_dashboard_result)
 delete_dashboard_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -15296,7 +15296,7 @@ class share_dashboards_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -15333,7 +15333,7 @@ class share_dashboards_result(object):
 all_structs.append(share_dashboards_result)
 share_dashboards_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -15441,7 +15441,7 @@ class delete_dashboards_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -15478,7 +15478,7 @@ class delete_dashboards_result(object):
 all_structs.append(delete_dashboards_result)
 delete_dashboards_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -15643,7 +15643,7 @@ class share_dashboard_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -15680,7 +15680,7 @@ class share_dashboard_result(object):
 all_structs.append(share_dashboard_result)
 share_dashboard_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -15833,7 +15833,7 @@ class unshare_dashboard_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -15870,7 +15870,7 @@ class unshare_dashboard_result(object):
 all_structs.append(unshare_dashboard_result)
 unshare_dashboard_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -16011,7 +16011,7 @@ class unshare_dashboards_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -16048,7 +16048,7 @@ class unshare_dashboards_result(object):
 all_structs.append(unshare_dashboards_result)
 unshare_dashboards_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -16161,7 +16161,7 @@ class get_dashboard_grantees_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -16205,7 +16205,7 @@ class get_dashboard_grantees_result(object):
 all_structs.append(get_dashboard_grantees_result)
 get_dashboard_grantees_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TDashboardGrantees, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -16313,7 +16313,7 @@ class get_link_view_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -16354,7 +16354,7 @@ class get_link_view_result(object):
 all_structs.append(get_link_view_result)
 get_link_view_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TFrontendView, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -16473,7 +16473,7 @@ class create_link_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -16514,7 +16514,7 @@ class create_link_result(object):
 all_structs.append(create_link_result)
 create_link_result.thrift_spec = (
     (0, TType.STRING, 'success', 'UTF8', None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -16660,7 +16660,7 @@ class load_table_binary_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -16697,7 +16697,7 @@ class load_table_binary_result(object):
 all_structs.append(load_table_binary_result)
 load_table_binary_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -16843,7 +16843,7 @@ class load_table_binary_columnar_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -16880,7 +16880,7 @@ class load_table_binary_columnar_result(object):
 all_structs.append(load_table_binary_columnar_result)
 load_table_binary_columnar_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -17038,7 +17038,7 @@ class load_table_binary_columnar_polys_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -17075,7 +17075,7 @@ class load_table_binary_columnar_polys_result(object):
 all_structs.append(load_table_binary_columnar_polys_result)
 load_table_binary_columnar_polys_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -17199,7 +17199,7 @@ class load_table_binary_arrow_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -17236,7 +17236,7 @@ class load_table_binary_arrow_result(object):
 all_structs.append(load_table_binary_arrow_result)
 load_table_binary_arrow_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -17382,7 +17382,7 @@ class load_table_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -17419,7 +17419,7 @@ class load_table_result(object):
 all_structs.append(load_table_result)
 load_table_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -17540,7 +17540,7 @@ class detect_column_types_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -17581,7 +17581,7 @@ class detect_column_types_result(object):
 all_structs.append(detect_column_types_result)
 detect_column_types_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TDetectResult, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -17727,7 +17727,7 @@ class create_table_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -17764,7 +17764,7 @@ class create_table_result(object):
 all_structs.append(create_table_result)
 create_table_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -17889,7 +17889,7 @@ class import_table_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -17926,7 +17926,7 @@ class import_table_result(object):
 all_structs.append(import_table_result)
 import_table_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -18085,7 +18085,7 @@ class import_geo_table_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -18122,7 +18122,7 @@ class import_geo_table_result(object):
 all_structs.append(import_geo_table_result)
 import_geo_table_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -18230,7 +18230,7 @@ class import_table_status_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -18271,7 +18271,7 @@ class import_table_status_result(object):
 all_structs.append(import_table_status_result)
 import_table_status_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TImportStatus, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -18391,7 +18391,7 @@ class get_first_geo_file_in_archive_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -18432,7 +18432,7 @@ class get_first_geo_file_in_archive_result(object):
 all_structs.append(get_first_geo_file_in_archive_result)
 get_first_geo_file_in_archive_result.thrift_spec = (
     (0, TType.STRING, 'success', 'UTF8', None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -18557,7 +18557,7 @@ class get_all_files_in_archive_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -18601,7 +18601,7 @@ class get_all_files_in_archive_result(object):
 all_structs.append(get_all_files_in_archive_result)
 get_all_files_in_archive_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -18727,7 +18727,7 @@ class get_layers_in_geo_file_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -18771,7 +18771,7 @@ class get_layers_in_geo_file_result(object):
 all_structs.append(get_layers_in_geo_file_result)
 get_layers_in_geo_file_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TGeoFileLayerInfo, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -18878,7 +18878,7 @@ class query_get_outer_fragment_count_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -18919,7 +18919,7 @@ class query_get_outer_fragment_count_result(object):
 all_structs.append(query_get_outer_fragment_count_result)
 query_get_outer_fragment_count_result.thrift_spec = (
     (0, TType.I64, 'success', None, None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -19027,7 +19027,7 @@ class check_table_consistency_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -19068,7 +19068,7 @@ class check_table_consistency_result(object):
 all_structs.append(check_table_consistency_result)
 check_table_consistency_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TTableMeta, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -19232,7 +19232,7 @@ class start_query_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -19273,7 +19273,7 @@ class start_query_result(object):
 all_structs.append(start_query_result)
 start_query_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TPendingQuery, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -19394,7 +19394,7 @@ class execute_query_step_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -19435,7 +19435,7 @@ class execute_query_step_result(object):
 all_structs.append(execute_query_step_result)
 execute_query_step_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TStepResult, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -19581,7 +19581,7 @@ class broadcast_serialized_rows_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -19618,7 +19618,7 @@ class broadcast_serialized_rows_result(object):
 all_structs.append(broadcast_serialized_rows_result)
 broadcast_serialized_rows_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -19750,7 +19750,7 @@ class start_render_query_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -19791,7 +19791,7 @@ class start_render_query_result(object):
 all_structs.append(start_render_query_result)
 start_render_query_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TPendingRenderQuery, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -19949,7 +19949,7 @@ class execute_next_render_step_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -19990,7 +19990,7 @@ class execute_next_render_step_result(object):
 all_structs.append(execute_next_render_step_result)
 execute_next_render_step_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TRenderStepResult, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -20091,7 +20091,7 @@ class insert_data_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -20128,7 +20128,7 @@ class insert_data_result(object):
 all_structs.append(insert_data_result)
 insert_data_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -20228,7 +20228,7 @@ class checkpoint_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -20265,7 +20265,7 @@ class checkpoint_result(object):
 all_structs.append(checkpoint_result)
 checkpoint_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -20365,7 +20365,7 @@ class get_roles_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -20409,7 +20409,7 @@ class get_roles_result(object):
 all_structs.append(get_roles_result)
 get_roles_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -20522,7 +20522,7 @@ class get_db_objects_for_grantee_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -20566,7 +20566,7 @@ class get_db_objects_for_grantee_result(object):
 all_structs.append(get_db_objects_for_grantee_result)
 get_db_objects_for_grantee_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TDBObject, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -20691,7 +20691,7 @@ class get_db_object_privs_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -20735,7 +20735,7 @@ class get_db_object_privs_result(object):
 all_structs.append(get_db_object_privs_result)
 get_db_object_privs_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRUCT, [TDBObject, None], False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -20847,7 +20847,7 @@ class get_all_roles_for_user_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -20891,7 +20891,7 @@ class get_all_roles_for_user_result(object):
 all_structs.append(get_all_roles_for_user_result)
 get_all_roles_for_user_result.thrift_spec = (
     (0, TType.LIST, 'success', (TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -21010,7 +21010,7 @@ class has_role_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -21051,7 +21051,7 @@ class has_role_result(object):
 all_structs.append(has_role_result)
 has_role_result.thrift_spec = (
     (0, TType.BOOL, 'success', None, None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -21195,7 +21195,7 @@ class has_object_privilege_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -21236,7 +21236,7 @@ class has_object_privilege_result(object):
 all_structs.append(has_object_privilege_result)
 has_object_privilege_result.thrift_spec = (
     (0, TType.BOOL, 'success', None, None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -21356,7 +21356,7 @@ class set_license_key_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -21397,7 +21397,7 @@ class set_license_key_result(object):
 all_structs.append(set_license_key_result)
 set_license_key_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TLicenseInfo, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -21505,7 +21505,7 @@ class get_license_claims_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -21546,7 +21546,7 @@ class get_license_claims_result(object):
 all_structs.append(get_license_claims_result)
 get_license_claims_result.thrift_spec = (
     (0, TType.STRUCT, 'success', [TLicenseInfo, None], None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -21647,7 +21647,7 @@ class get_device_parameters_result(object):
                     iprot.skip(ftype)
             elif fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -21692,7 +21692,7 @@ class get_device_parameters_result(object):
 all_structs.append(get_device_parameters_result)
 get_device_parameters_result.thrift_spec = (
     (0, TType.MAP, 'success', (TType.STRING, 'UTF8', TType.STRING, 'UTF8', False), None, ),  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
 
@@ -21844,7 +21844,7 @@ class register_runtime_extension_functions_result(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.e = TOmniSciException()
+                    self.e = TDBException()
                     self.e.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -21881,7 +21881,7 @@ class register_runtime_extension_functions_result(object):
 all_structs.append(register_runtime_extension_functions_result)
 register_runtime_extension_functions_result.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'e', [TOmniSciException, None], None, ),  # 1
+    (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 fix_spec(all_structs)
 del all_structs
