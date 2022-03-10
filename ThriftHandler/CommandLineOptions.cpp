@@ -136,17 +136,17 @@ void CommandLineOptions::fillOptions() {
   if (!dist_v5_) {
     help_desc.add_options()(
         "data",
-        po::value<std::string>(&base_path)->required()->default_value("data"),
-        "Directory path to OmniSci data storage (catalogs, raw data, log files, etc).");
+        po::value<std::string>(&base_path)->required()->default_value("storage"),
+        "Directory path to HeavyDB data storage (catalogs, raw data, log files, etc).");
     positional_options.add("data", 1);
   }
   help_desc.add_options()("db-query-list",
                           po::value<std::string>(&db_query_file),
-                          "Path to file containing OmniSci warmup queries.");
+                          "Path to file containing HeavyDB warmup queries.");
   help_desc.add_options()(
       "exit-after-warmup",
       po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
-      "Exit after OmniSci warmup queries.");
+      "Exit after HeavyDB warmup queries.");
   help_desc.add_options()("dynamic-watchdog-time-limit",
                           po::value<unsigned>(&dynamic_watchdog_time_limit)
                               ->default_value(dynamic_watchdog_time_limit)
@@ -411,9 +411,9 @@ void CommandLineOptions::fillOptions() {
   help_desc.add_options()(
       "res-gpu-mem",
       po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
-      "Reduces GPU memory available to the OmniSci allocator by this amount. Used for "
+      "Reduces GPU memory available to the HeavyDB allocator by this amount. Used for "
       "compiled code cache and ancillary GPU functions and other processes that may also "
-      "be using the GPU concurrent with OmniSciDB.");
+      "be using the GPU concurrent with HeavyDB.");
 
   help_desc.add_options()("start-gpu",
                           po::value<int>(&system_parameters.start_gpu)
@@ -1011,7 +1011,7 @@ void addOptionalFileToBlacklist(std::string& filename) {
 void CommandLineOptions::validate_base_path() {
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   if (!boost::filesystem::exists(base_path)) {
-    throw std::runtime_error("OmniSci base directory does not exist at " + base_path);
+    throw std::runtime_error("HeavyDB base directory does not exist at " + base_path);
   }
 }
 
@@ -1019,7 +1019,7 @@ void CommandLineOptions::validate() {
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   const auto data_path = boost::filesystem::path(base_path) / shared::kDataDirectoryName;
   if (!boost::filesystem::exists(data_path)) {
-    throw std::runtime_error("OmniSci data directory does not exist at '" + base_path +
+    throw std::runtime_error("HeavyDB data directory does not exist at '" + base_path +
                              "'");
   }
 
@@ -1039,7 +1039,7 @@ void CommandLineOptions::validate() {
 #ifndef _WIN32
     if (lockf(pid_fd, F_TLOCK, 0) == -1) {
       heavyai::close(pid_fd);
-      auto err = std::string("Another OmniSci Server is using data directory ") +
+      auto err = std::string("Another HeavyDB server is using data directory ") +
                  base_path + ".";
       throw std::runtime_error(err);
     }
@@ -1079,7 +1079,7 @@ void CommandLineOptions::validate() {
   }
 
   // add all parameters to be displayed on startup
-  LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
+  LOG(INFO) << "HeavyDB started with data directory at '" << base_path << "'";
   if (vm.count("license-path")) {
     LOG(INFO) << "License key path set to '" << license_path << "'";
   }
@@ -1255,7 +1255,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       return 0;
     }
     if (vm.count("version")) {
-      std::cout << "OmniSci Version: " << MAPD_RELEASE << std::endl;
+      std::cout << "HeavyDB Version: " << MAPD_RELEASE << std::endl;
       return 0;
     }
     if (!g_enable_union) {
@@ -1412,8 +1412,8 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   LOG(INFO) << " Min GPU buffer pool slab size " << system_parameters.min_gpu_slab_size;
   LOG(INFO) << " Max GPU buffer pool slab size " << system_parameters.max_gpu_slab_size;
   LOG(INFO) << " calcite JVM max memory  " << system_parameters.calcite_max_mem;
-  LOG(INFO) << " OmniSci Server Port  " << system_parameters.omnisci_server_port;
-  LOG(INFO) << " OmniSci Calcite Port  " << system_parameters.calcite_port;
+  LOG(INFO) << " HeavyDB Server Port  " << system_parameters.omnisci_server_port;
+  LOG(INFO) << " HeavyDB Calcite Port  " << system_parameters.calcite_port;
   LOG(INFO) << " Enable Calcite view optimize "
             << system_parameters.enable_calcite_view_optimize;
   LOG(INFO) << " Allow Local Auth Fallback: "
