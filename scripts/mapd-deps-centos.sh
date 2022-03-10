@@ -315,5 +315,6 @@ if [ "$COMPRESS" = "true" ] ; then
     elif [ "$TSAN" = "true" ]; then
       TARBALL_TSAN="tsan-"
     fi
-    tar --use-compress-program=pxz -acvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
+    tar -cvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar -C $(dirname $PREFIX) $SUFFIX
+    pxz mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar
 fi
