@@ -26,7 +26,7 @@ import java.util.List;
  * @author michael
  */
 public final class MapDParserOptions {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParserOptions.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDParserOptions.class);
 
   private List<FilterPushDownInfo> filterPushDownInfo;
   private boolean legacySyntax;

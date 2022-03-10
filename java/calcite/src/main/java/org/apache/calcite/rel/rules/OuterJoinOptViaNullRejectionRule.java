@@ -71,7 +71,7 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
   //  they can make join cols to be null rejected
 
   public static Set<String> visitedJoinMemo = new HashSet<>();
-  final static Logger MAPDLOGGER =
+  final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(OuterJoinOptViaNullRejectionRule.class);
 
   public OuterJoinOptViaNullRejectionRule(RelBuilderFactory relBuilderFactory) {

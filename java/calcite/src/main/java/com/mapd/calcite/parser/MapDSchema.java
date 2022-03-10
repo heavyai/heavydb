@@ -29,7 +29,7 @@ import java.util.Set;
  * @author michael
  */
 public class MapDSchema implements Schema {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDSchema.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDSchema.class);
 
   final private MetaConnect metaConnect;
   private SockTransportProperties sock_transport_properties = null;

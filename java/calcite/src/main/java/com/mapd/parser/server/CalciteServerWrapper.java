@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 public class CalciteServerWrapper implements Runnable {
-  private final static Logger MAPDLOGGER =
+  private final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(CalciteServerWrapper.class);
   private final CalciteServerHandler handler;
   private final Processor processor;
@@ -91,7 +91,7 @@ public class CalciteServerWrapper implements Runnable {
       server = new TThreadPoolServer(
               new TThreadPoolServer.Args(serverTransport).processor(processor));
 
-      MAPDLOGGER.debug("Starting a threaded pool server... Listening on port "
+      HEAVYDBLOGGER.debug("Starting a threaded pool server... Listening on port "
               + calcitePort + " MapD on port " + mapDPort);
       handler.setServer(server);
       server.serve();
@@ -100,7 +100,7 @@ public class CalciteServerWrapper implements Runnable {
 
     } catch (Exception e) {
       e.printStackTrace();
-      MAPDLOGGER.error(" Calcite server Failed to start ");
+      HEAVYDBLOGGER.error(" Calcite server Failed to start ");
       shutdown = true;
     }
   }

@@ -26,7 +26,7 @@ import java.sql.Statement;
 import java.util.Random;
 
 class Worker implements Runnable {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(Worker.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(Worker.class);
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
   static final String DB_URL = "jdbc:omnisci:localhost:6274:omnisci";
@@ -52,7 +52,7 @@ class Worker implements Runnable {
       Class.forName(JDBC_DRIVER);
 
       // STEP 3: Open a connection
-      MAPDLOGGER.info(threadId + ": Connecting to database...");
+      HEAVYDBLOGGER.info(threadId + ": Connecting to database...");
       conn = DriverManager.getConnection(DB_URL, USER, PASS);
       stmt = conn.createStatement();
 
@@ -112,7 +112,7 @@ class Worker implements Runnable {
       rs = stmt.executeQuery(sql);
     } catch (SQLException se) {
       if (se.getMessage().contains("does not exist")) {
-        MAPDLOGGER.info(threadId + ": table not present");
+        HEAVYDBLOGGER.info(threadId + ": table not present");
         return;
       } else {
         throw se;
@@ -121,7 +121,7 @@ class Worker implements Runnable {
     while (rs.next()) {
       int sum = rs.getInt(1);
 
-      MAPDLOGGER.info(threadId + ": result " + sum);
+      HEAVYDBLOGGER.info(threadId + ": result " + sum);
     }
     rs.close();
   }

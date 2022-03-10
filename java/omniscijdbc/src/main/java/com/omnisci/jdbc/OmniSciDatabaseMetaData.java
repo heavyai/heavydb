@@ -45,7 +45,8 @@ import java.util.*;
  * @author michael
  */
 class OmniSciDatabaseMetaData implements DatabaseMetaData {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(OmniSciDatabaseMetaData.class);
+  final static Logger HEAVYDBLOGGER =
+          LoggerFactory.getLogger(OmniSciDatabaseMetaData.class);
 
   OmniSciConnection con = null;
   int databaseMajorVersion = 0;
@@ -72,80 +73,80 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean allProceduresAreCallable() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean allTablesAreSelectable() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public String getURL() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return con.url;
   }
 
   @Override
   public String getUserName() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return (String) con.cP.get(Options.user);
   }
 
   @Override
   public boolean isReadOnly() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean nullsAreSortedHigh() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean nullsAreSortedLow() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean nullsAreSortedAtStart() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean nullsAreSortedAtEnd() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public String getDatabaseProductName() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "OmniSciDB";
   }
 
   @Override
   public String getDatabaseProductVersion()
           throws SQLException { // logger.debug("Entered");
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return this.databaseVersion;
   }
 
   @Override
   public String getDriverName() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "OmniSciDB JDBC Driver";
   }
 
   @Override
   public String getDriverVersion() throws SQLException { // logger.debug("Entered");
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return OmniSciDriver.DriverVersion;
   }
 
@@ -161,622 +162,622 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean usesLocalFiles() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean usesLocalFilePerTable() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsMixedCaseIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean storesUpperCaseIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean storesLowerCaseIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean storesMixedCaseIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsMixedCaseQuotedIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean storesUpperCaseQuotedIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean storesLowerCaseQuotedIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean storesMixedCaseQuotedIdentifiers() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public String getIdentifierQuoteString() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return " ";
   }
 
   @Override
   public String getSQLKeywords() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "";
   }
 
   @Override
   public String getNumericFunctions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "ACOS(float), ACOS(number), ASIN, ATAN2, CEIL, COS, COT, DEGREES, EXP, FLOOR, LN, LOG, PI(), POWER, SQRT"
             + ", RADIANS, ROUND, SIN, TAN, ATAN, ABS, MOD SIGN, TRUNCATE";
   }
 
   @Override
   public String getStringFunctions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "CHAR_LENGTH, CHAR, KEY_FOR_STRING";
   }
 
   @Override
   public String getSystemFunctions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "";
   }
 
   @Override
   public String getTimeDateFunctions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     // return "NOW,CURDATE,SECOND,HOUR,YEAR,EXTRACT,QUARTER,WEEK,MONTH,DATETRUNC";
     return "DATE_TRUNC, NOW, EXTRACT";
   }
 
   @Override
   public String getSearchStringEscape() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "\\";
   }
 
   @Override
   public String getExtraNameCharacters() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "";
   }
 
   @Override
   public boolean supportsAlterTableWithAddColumn() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsAlterTableWithDropColumn() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsColumnAliasing() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean nullPlusNonNullIsNull() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsConvert() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsConvert(int fromType, int toType) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsTableCorrelationNames() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsDifferentTableCorrelationNames() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsExpressionsInOrderBy() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsOrderByUnrelated() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsGroupBy() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsGroupByUnrelated() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsGroupByBeyondSelect() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsLikeEscapeClause() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsMultipleResultSets() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsMultipleTransactions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsNonNullableColumns() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsMinimumSQLGrammar() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsCoreSQLGrammar() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsExtendedSQLGrammar() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsANSI92EntryLevelSQL() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsANSI92IntermediateSQL() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsANSI92FullSQL() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsIntegrityEnhancementFacility() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsOuterJoins() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsFullOuterJoins() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsLimitedOuterJoins() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public String getSchemaTerm() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "Database";
   }
 
   @Override
   public String getProcedureTerm() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "N/A";
   }
 
   @Override
   public String getCatalogTerm() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return "N/A";
   }
 
   @Override
   public boolean isCatalogAtStart() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public String getCatalogSeparator() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return ".";
   }
 
   @Override
   public boolean supportsSchemasInDataManipulation() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsSchemasInProcedureCalls() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsSchemasInTableDefinitions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsSchemasInIndexDefinitions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsSchemasInPrivilegeDefinitions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsCatalogsInDataManipulation() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsCatalogsInProcedureCalls() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsCatalogsInTableDefinitions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsCatalogsInIndexDefinitions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsCatalogsInPrivilegeDefinitions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsPositionedDelete() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsPositionedUpdate() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsSelectForUpdate() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsStoredProcedures() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsSubqueriesInComparisons() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsSubqueriesInExists() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsSubqueriesInIns() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsSubqueriesInQuantifieds() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
   @Override
   public boolean supportsCorrelatedSubqueries() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsUnion() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsUnionAll() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsOpenCursorsAcrossCommit() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsOpenCursorsAcrossRollback() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsOpenStatementsAcrossCommit() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsOpenStatementsAcrossRollback() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public int getMaxBinaryLiteralLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxCharLiteralLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxColumnNameLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxColumnsInGroupBy() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxColumnsInIndex() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxColumnsInOrderBy() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxColumnsInSelect() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxColumnsInTable() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxConnections() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxCursorNameLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxIndexLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxSchemaNameLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxProcedureNameLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxCatalogNameLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxRowSize() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public boolean doesMaxRowSizeIncludeBlobs() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public int getMaxStatementLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxStatements() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxTableNameLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxTablesInSelect() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getMaxUserNameLength() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getDefaultTransactionIsolation() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return Connection.TRANSACTION_NONE;
   }
 
   @Override
   public boolean supportsTransactions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsTransactionIsolationLevel(int level) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsDataDefinitionAndDataManipulationTransactions()
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsDataManipulationTransactionsOnly() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean dataDefinitionCausesTransactionCommit() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean dataDefinitionIgnoredInTransactions() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
@@ -784,7 +785,7 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
   public ResultSet getProcedures(
           String catalog, String schemaPattern, String procedureNamePattern)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return null;
     //    throw new UnsupportedOperationException("Not supported yet," + " line:" + new
     //    Throwable().getStackTrace()[0].
@@ -798,7 +799,7 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
           String schemaPattern,
           String procedureNamePattern,
           String columnNamePattern) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -856,7 +857,7 @@ SQLException - if a database access error occurs
   public ResultSet getTables(
           String catalog, String schemaPattern, String tableNamePattern, String[] types)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     List<String> tables;
     try {
@@ -947,7 +948,7 @@ SQLException - if a database access error occurs
 
   @Override
   public ResultSet getSchemas() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     List<TDBInfo> databases = null;
 
@@ -1002,13 +1003,13 @@ SQLException - if a database access error occurs
 
   @Override
   public ResultSet getCatalogs() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return getSchemas();
   }
 
   @Override
   public ResultSet getTableTypes() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     TTypeInfo strTTI =
             new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
@@ -1108,14 +1109,14 @@ each row is a column description Throws: SQLException - if a database access err
           String schemaPattern,
           String tableNamePattern,
           String columnNamePattern) throws SQLException {
-    MAPDLOGGER.debug("Entered");
-    MAPDLOGGER.debug("TablePattern " + tableNamePattern + " columnNamePattern "
+    HEAVYDBLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("TablePattern " + tableNamePattern + " columnNamePattern "
             + columnNamePattern);
     String modifiedTablePattern = tableNamePattern.replaceAll("%", ".*");
     String modifiedColumnPattern =
             (columnNamePattern == null) ? null : columnNamePattern.replaceAll("%", ".*");
 
-    MAPDLOGGER.debug("TablePattern " + tableNamePattern + " modifiedColumnPattern "
+    HEAVYDBLOGGER.debug("TablePattern " + tableNamePattern + " modifiedColumnPattern "
             + modifiedColumnPattern);
 
     // declare the columns in the result set
@@ -1248,7 +1249,7 @@ each row is a column description Throws: SQLException - if a database access err
   public ResultSet getColumnPrivileges(
           String catalog, String schema, String table, String columnNamePattern)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1339,12 +1340,12 @@ each row is a column description Throws: SQLException - if a database access err
   public ResultSet getTablePrivileges(
           String catalog, String schemaPattern, String tableNamePattern)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     String modifiedTablePattern =
             (tableNamePattern == null) ? null : tableNamePattern.replaceAll("%", ".*");
 
-    MAPDLOGGER.debug("TablePattern " + tableNamePattern + " modifiedTableNamePattern "
+    HEAVYDBLOGGER.debug("TablePattern " + tableNamePattern + " modifiedTableNamePattern "
             + modifiedTablePattern);
 
     // declare the columns in the result set
@@ -1398,7 +1399,7 @@ each row is a column description Throws: SQLException - if a database access err
   public ResultSet getBestRowIdentifier(
           String catalog, String schema, String table, int scope, boolean nullable)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1408,7 +1409,7 @@ each row is a column description Throws: SQLException - if a database access err
   @Override
   public ResultSet getVersionColumns(String catalog, String schema, String table)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1418,7 +1419,7 @@ each row is a column description Throws: SQLException - if a database access err
   @Override
   public ResultSet getPrimaryKeys(String catalog, String schema, String table)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     TTypeInfo strTTI =
             new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
@@ -1439,7 +1440,7 @@ each row is a column description Throws: SQLException - if a database access err
   @Override
   public ResultSet getImportedKeys(String catalog, String schema, String table)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     TTypeInfo strTTI =
             new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
@@ -1468,7 +1469,7 @@ each row is a column description Throws: SQLException - if a database access err
   @Override
   public ResultSet getExportedKeys(String catalog, String schema, String table)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     TTypeInfo strTTI =
             new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
@@ -1501,7 +1502,7 @@ each row is a column description Throws: SQLException - if a database access err
           String foreignCatalog,
           String foreignSchema,
           String foreignTable) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1561,7 +1562,7 @@ SQLException - if a database access error occurs
    */
   @Override
   public ResultSet getTypeInfo() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
 
     // declare the columns in the result set
     TTypeInfo strTTI =
@@ -1659,80 +1660,80 @@ SQLException - if a database access error occurs
           String table,
           boolean unique,
           boolean approximate) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return getEmptyResultSet();
   }
 
   @Override
   public boolean supportsResultSetType(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsResultSetConcurrency(int type, int concurrency)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean ownUpdatesAreVisible(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean ownDeletesAreVisible(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean ownInsertsAreVisible(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean othersUpdatesAreVisible(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean othersDeletesAreVisible(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean othersInsertsAreVisible(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean updatesAreDetected(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean deletesAreDetected(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean insertsAreDetected(int type) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsBatchUpdates() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return true;
   }
 
@@ -1740,7 +1741,7 @@ SQLException - if a database access error occurs
   public ResultSet getUDTs(
           String catalog, String schemaPattern, String typeNamePattern, int[] types)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1749,31 +1750,31 @@ SQLException - if a database access error occurs
 
   @Override
   public Connection getConnection() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return con;
   }
 
   @Override
   public boolean supportsSavepoints() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsNamedParameters() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsMultipleOpenResults() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsGetGeneratedKeys() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
@@ -1781,7 +1782,7 @@ SQLException - if a database access error occurs
   public ResultSet getSuperTypes(
           String catalog, String schemaPattern, String typeNamePattern)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1792,7 +1793,7 @@ SQLException - if a database access error occurs
   public ResultSet getSuperTables(
           String catalog, String schemaPattern, String tableNamePattern)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1804,7 +1805,7 @@ SQLException - if a database access error occurs
           String schemaPattern,
           String typeNamePattern,
           String attributeNamePattern) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1813,85 +1814,85 @@ SQLException - if a database access error occurs
 
   @Override
   public boolean supportsResultSetHoldability(int holdability) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public int getResultSetHoldability() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return ResultSet.CLOSE_CURSORS_AT_COMMIT;
   }
 
   @Override
   public int getDatabaseMajorVersion() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return this.databaseMajorVersion;
   }
 
   @Override
   public int getDatabaseMinorVersion() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return this.databaseMinorVersion;
   }
 
   @Override
   public int getJDBCMajorVersion() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getJDBCMinorVersion() throws SQLException { // logger.debug("Entered");
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public int getSQLStateType() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public boolean locatorsUpdateCopy() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean supportsStatementPooling() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public RowIdLifetime getRowIdLifetime() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return RowIdLifetime.ROWID_VALID_OTHER;
   }
 
   @Override
   public ResultSet getSchemas(String catalog, String schemaPattern) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return getSchemas();
   }
 
   @Override
   public boolean supportsStoredFunctionsUsingCallSyntax() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public boolean autoCommitFailureClosesAllResultSets() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public ResultSet getClientInfoProperties() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1902,7 +1903,7 @@ SQLException - if a database access error occurs
   public ResultSet getFunctions(
           String catalog, String schemaPattern, String functionNamePattern)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1914,7 +1915,7 @@ SQLException - if a database access error occurs
           String schemaPattern,
           String functionNamePattern,
           String columnNamePattern) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1926,7 +1927,7 @@ SQLException - if a database access error occurs
           String schemaPattern,
           String tableNamePattern,
           String columnNamePattern) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1935,19 +1936,19 @@ SQLException - if a database access error occurs
 
   @Override
   public boolean generatedKeyAlwaysReturned() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 
   @Override
   public <T> T unwrap(Class<T> iface) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return null;
   }
 
   @Override
   public boolean isWrapperFor(Class<?> iface) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return false;
   }
 }

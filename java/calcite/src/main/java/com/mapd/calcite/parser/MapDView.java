@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 
 public class MapDView extends MapDTable implements TranslatableTable {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDView.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDView.class);
   private final String viewSql;
   private SqlIdentifierCapturer accessObjects;
   private RelRoot viewRelRoot;
@@ -50,11 +50,11 @@ public class MapDView extends MapDTable implements TranslatableTable {
       viewRelRoot = mp.queryToRelNode(viewSql, parserOptions);
       accessObjects = mp.captureIdentifiers(viewSql, parserOptions.isLegacySyntax());
     } catch (SqlParseException e) {
-      MAPDLOGGER.error("error parsing view SQL: " + view_sql, e);
+      HEAVYDBLOGGER.error("error parsing view SQL: " + view_sql, e);
     } catch (ValidationException ex) {
-      MAPDLOGGER.error("error validating view SQL: " + view_sql, ex);
+      HEAVYDBLOGGER.error("error validating view SQL: " + view_sql, ex);
     } catch (RelConversionException ex) {
-      MAPDLOGGER.error("error doing Rel Conversion view SQL: " + view_sql, ex);
+      HEAVYDBLOGGER.error("error doing Rel Conversion view SQL: " + view_sql, ex);
     }
   }
 

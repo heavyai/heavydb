@@ -33,7 +33,7 @@ import java.util.function.Supplier;
  * @author michael
  */
 class CalciteParserFactory implements PoolableObjectFactory {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 
   private final String dataDir;
   private final Map<String, ExtensionFunction> extSigs;
@@ -94,7 +94,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
     if (mdp.getCallCount() < 1000) {
       return true;
     } else {
-      MAPDLOGGER.debug(" invalidating object due to max use count");
+      HEAVYDBLOGGER.debug(" invalidating object due to max use count");
       return false;
     }
   }

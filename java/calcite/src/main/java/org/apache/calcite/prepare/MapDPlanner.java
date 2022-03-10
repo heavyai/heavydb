@@ -70,7 +70,7 @@ public class MapDPlanner extends PlannerImpl {
   private List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
           new ArrayList<>();
   private List<Restriction> restrictions = null;
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDPlanner.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDPlanner.class);
 
   public MapDPlanner(FrameworkConfig config) {
     super(config);

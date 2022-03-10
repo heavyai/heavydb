@@ -93,7 +93,7 @@ public final class MapDParser {
   private static final EnumSet<SqlKind> ARRAY_VALUE =
           EnumSet.of(SqlKind.ARRAY_VALUE_CONSTRUCTOR);
 
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
   private final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable;
   private final String dataDir;
@@ -708,7 +708,7 @@ public final class MapDParser {
       node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
       node = planner.validate(node);
     } catch (Exception e) {
-      MAPDLOGGER.error("Error processing UPDATE rewrite, rewritten stmt was: "
+      HEAVYDBLOGGER.error("Error processing UPDATE rewrite, rewritten stmt was: "
               + select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
       throw e;
     }
@@ -928,9 +928,9 @@ public final class MapDParser {
     SqlNode parseR = null;
     try {
       parseR = planner.parse(sql);
-      MAPDLOGGER.debug(" node is \n" + parseR.toString());
+      HEAVYDBLOGGER.debug(" node is \n" + parseR.toString());
     } catch (SqlParseException ex) {
-      MAPDLOGGER.error("failed to parse SQL '" + sql + "' \n" + ex.toString());
+      HEAVYDBLOGGER.error("failed to parse SQL '" + sql + "' \n" + ex.toString());
       throw ex;
     }
 
@@ -1021,7 +1021,7 @@ public final class MapDParser {
   private SqlOrderBy desugar(SqlSelect select_node,
           SqlOrderBy order_by_node,
           RelDataTypeFactory typeFactory) {
-    MAPDLOGGER.debug("desugar: before: " + select_node.toString());
+    HEAVYDBLOGGER.debug("desugar: before: " + select_node.toString());
     desugarExpression(select_node.getFrom(), typeFactory);
     desugarExpression(select_node.getWhere(), typeFactory);
     SqlNodeList select_list = select_node.getSelectList();
@@ -1069,7 +1069,7 @@ public final class MapDParser {
               order_by_node.fetch);
     }
 
-    MAPDLOGGER.debug("desugar:  after: " + select_node.toString());
+    HEAVYDBLOGGER.debug("desugar:  after: " + select_node.toString());
     return new_order_by_node;
   }
 
@@ -1094,7 +1094,7 @@ public final class MapDParser {
   private SqlNode expand(final SqlNode node,
           final java.util.Map<String, SqlNode> id_to_expr,
           RelDataTypeFactory typeFactory) {
-    MAPDLOGGER.debug("expand: " + node.toString());
+    HEAVYDBLOGGER.debug("expand: " + node.toString());
     if (node instanceof SqlBasicCall) {
       SqlBasicCall node_call = (SqlBasicCall) node;
       SqlNode[] operands = node_call.getOperands();
@@ -1216,8 +1216,8 @@ public final class MapDParser {
     final SqlParserPos pos = proj_call.getParserPosition();
     SqlNode expanded_proj_call =
             expandVariance(pos, operand, biased, sqrt, flt, typeFactory);
-    MAPDLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
-    MAPDLOGGER.debug("to : " + expanded_proj_call.toString());
+    HEAVYDBLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
+    HEAVYDBLOGGER.debug("to : " + expanded_proj_call.toString());
     return expanded_proj_call;
   }
 
@@ -1331,8 +1331,8 @@ public final class MapDParser {
     final SqlParserPos pos = proj_call.getParserPosition();
     SqlNode expanded_proj_call =
             expandCovariance(pos, operand0, operand1, pop, flt, typeFactory);
-    MAPDLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
-    MAPDLOGGER.debug("to : " + expanded_proj_call.toString());
+    HEAVYDBLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
+    HEAVYDBLOGGER.debug("to : " + expanded_proj_call.toString());
     return expanded_proj_call;
   }
 
@@ -1437,8 +1437,8 @@ public final class MapDParser {
             null, pos, null, whenList1, thenList1, mulStddev);
     final SqlNode expanded_proj_call =
             SqlStdOperatorTable.DIVIDE.createCall(pos, covariance, denominator);
-    MAPDLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
-    MAPDLOGGER.debug("to : " + expanded_proj_call.toString());
+    HEAVYDBLOGGER.debug("Expanded select_list SqlCall: " + proj_call.toString());
+    HEAVYDBLOGGER.debug("to : " + expanded_proj_call.toString());
     return expanded_proj_call;
   }
 
@@ -1449,7 +1449,7 @@ public final class MapDParser {
       SqlNode node = parseSql(sql, legacy_syntax, planner);
       return captureIdentifiers(node);
     } catch (Exception | Error e) {
-      MAPDLOGGER.error("Error parsing sql: " + sql, e);
+      HEAVYDBLOGGER.error("Error parsing sql: " + sql, e);
       return new SqlIdentifierCapturer();
     }
   }
@@ -1460,7 +1460,7 @@ public final class MapDParser {
       capturer.scan(node);
       return capturer;
     } catch (Exception | Error e) {
-      MAPDLOGGER.error("Error parsing sql: " + node, e);
+      HEAVYDBLOGGER.error("Error parsing sql: " + node, e);
       return new SqlIdentifierCapturer();
     }
   }
@@ -1470,7 +1470,7 @@ public final class MapDParser {
   }
 
   public void updateMetaData(String schema, String table) {
-    MAPDLOGGER.debug("schema :" + schema + " table :" + table);
+    HEAVYDBLOGGER.debug("schema :" + schema + " table :" + table);
     MapDSchema mapd =
             new MapDSchema(dataDir, this, mapdPort, null, sock_transport_properties);
     mapd.updateMetaData(schema, table);

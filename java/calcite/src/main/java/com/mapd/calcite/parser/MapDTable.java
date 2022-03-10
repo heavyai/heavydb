@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 public class MapDTable implements Table {
   private static final AtomicLong VERSION_PROVIDER = new AtomicLong();
 
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDTable.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDTable.class);
   private final TTableDetails rowInfo;
   private final long version = VERSION_PROVIDER.incrementAndGet();
   private final HashSet<String> systemColumnNames;
@@ -58,7 +58,7 @@ public class MapDTable implements Table {
   public RelDataType getRowType(RelDataTypeFactory rdtf) {
     RelDataTypeFactory.Builder builder = rdtf.builder();
     for (TColumnType tct : rowInfo.getRow_desc()) {
-      MAPDLOGGER.debug("'" + tct.col_name + "'"
+      HEAVYDBLOGGER.debug("'" + tct.col_name + "'"
               + " \t" + tct.getCol_type().getEncoding() + " \t"
               + tct.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE) + " \t"
               + tct.getCol_type().nullable + " \t" + tct.getCol_type().is_array + " \t"
