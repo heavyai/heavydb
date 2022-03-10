@@ -185,10 +185,20 @@ Catalog::Catalog(const string& basePath,
     , sharedMutex_()
     , thread_holding_sqlite_lock()
     , thread_holding_write_lock() {
+  if (!g_enable_fsi) {
+    CHECK(!g_enable_system_tables) << "System tables require FSI to be enabled";
+    CHECK(!g_enable_s3_fsi) << "S3 FSI requires FSI to be enabled";
+  }
+
   if (!is_new_db) {
     CheckAndExecuteMigrations();
   }
+
   buildMaps();
+
+  if (g_enable_fsi) {
+    createDefaultServersIfNotExists();
+  }
   if (!is_new_db) {
     CheckAndExecuteMigrationsPostBuildMaps();
   }
@@ -1024,42 +1034,35 @@ std::string get_user_name_from_id(
 }
 }  // namespace
 
-void Catalog::buildMaps() {
-  // Get all user id to username mapping here in order to avoid making a call to
-  // SysCatalog (and attempting to acquire SysCatalog locks) while holding locks for this
-  // catalog.
-  const auto user_name_by_user_id = get_user_id_to_user_name_map();
-
-  cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
-
-  string dictQuery(
+void Catalog::buildDictionaryMapUnlocked() {
+  std::string dictQuery(
       "SELECT dictid, name, nbits, is_shared, refcount from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
-  size_t numRows = sqliteConnector_.getNumRows();
+  auto numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    int dictId = sqliteConnector_.getData<int>(r, 0);
-    std::string dictName = sqliteConnector_.getData<string>(r, 1);
-    int dictNBits = sqliteConnector_.getData<int>(r, 2);
-    bool is_shared = sqliteConnector_.getData<bool>(r, 3);
-    int refcount = sqliteConnector_.getData<int>(r, 4);
-    std::string fname = g_base_path + "/" + shared::kDataDirectoryName + "/DB_" +
-                        std::to_string(currentDB_.dbId) + "_DICT_" +
-                        std::to_string(dictId);
+    auto dictId = sqliteConnector_.getData<int>(r, 0);
+    auto dictName = sqliteConnector_.getData<string>(r, 1);
+    auto dictNBits = sqliteConnector_.getData<int>(r, 2);
+    auto is_shared = sqliteConnector_.getData<bool>(r, 3);
+    auto refcount = sqliteConnector_.getData<int>(r, 4);
+    auto fname = g_base_path + "/" + shared::kDataDirectoryName + "/DB_" +
+                 std::to_string(currentDB_.dbId) + "_DICT_" + std::to_string(dictId);
     DictRef dict_ref(currentDB_.dbId, dictId);
-    DictDescriptor* dd = new DictDescriptor(
+    auto dd = new DictDescriptor(
         dict_ref, dictName, dictNBits, is_shared, refcount, fname, false);
     dictDescriptorMapByRef_[dict_ref].reset(dd);
   }
+}
 
-  string tableQuery(
+void Catalog::buildTablesMapUnlocked() {
+  std::string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
       "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
       "sort_column_id, storage_type, max_rollback_epochs, is_system_table "
       "from mapd_tables");
   sqliteConnector_.query(tableQuery);
-  numRows = sqliteConnector_.getNumRows();
+  auto numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
     TableDescriptor* td;
     const auto& storage_type = sqliteConnector_.getData<string>(r, 17);
@@ -1108,14 +1111,10 @@ void Catalog::buildMaps() {
     tableDescriptorMap_[to_upper(td->tableName)] = td;
     tableDescriptorMapById_[td->tableId] = td;
   }
+}
 
-  if (g_enable_fsi) {
-    buildForeignServerMap();
-    createDefaultServersIfNotExists();
-    addForeignTableDetails();
-  }
-
-  string columnQuery(
+void Catalog::buildColumnsMapUnlocked() {
+  std::string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
       "is_notnull, compression, comp_param, "
       "size, chunks, is_systemcol, is_virtualcol, virtual_expr, is_deletedcol, "
@@ -1123,7 +1122,7 @@ void Catalog::buildMaps() {
       "mapd_columns ORDER BY tableid, "
       "columnid");
   sqliteConnector_.query(columnQuery);
-  numRows = sqliteConnector_.getNumRows();
+  auto numRows = sqliteConnector_.getNumRows();
   int32_t skip_physical_cols = 0;
   for (size_t r = 0; r < numRows; ++r) {
     ColumnDescriptor* cd = new ColumnDescriptor();
@@ -1165,32 +1164,38 @@ void Catalog::buildMaps() {
       tableDescriptorMapById_[cd->tableId]->columnIdBySpi_.push_back(cd->columnId);
     }
   }
+
   // sort columnIdBySpi_ based on columnId
   for (auto& tit : tableDescriptorMapById_) {
     std::sort(tit.second->columnIdBySpi_.begin(),
               tit.second->columnIdBySpi_.end(),
               [](const size_t a, const size_t b) -> bool { return a < b; });
   }
+}  // namespace Catalog_Namespace
 
-  string viewQuery("SELECT tableid, sql FROM mapd_views");
+void Catalog::updateViewsInMapUnlocked() {
+  std::string viewQuery("SELECT tableid, sql FROM mapd_views");
   sqliteConnector_.query(viewQuery);
-  numRows = sqliteConnector_.getNumRows();
+  auto numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    int32_t tableId = sqliteConnector_.getData<int>(r, 0);
-    TableDescriptor* td = tableDescriptorMapById_[tableId];
+    auto tableId = sqliteConnector_.getData<int>(r, 0);
+    auto td = tableDescriptorMapById_[tableId];
     td->viewSQL = sqliteConnector_.getData<string>(r, 1);
     td->fragmenter = nullptr;
   }
+}
 
-  string frontendViewQuery(
+void Catalog::buildDashboardsMapUnlocked(
+    const std::map<int32_t, std::string>& user_name_by_user_id) {
+  std::string frontendViewQuery(
       "SELECT id, state, name, image_hash, strftime('%Y-%m-%dT%H:%M:%SZ', update_time), "
       "userid, "
       "metadata "
       "FROM mapd_dashboards");
   sqliteConnector_.query(frontendViewQuery);
-  numRows = sqliteConnector_.getNumRows();
+  auto numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    std::shared_ptr<DashboardDescriptor> vd = std::make_shared<DashboardDescriptor>();
+    auto vd = std::make_shared<DashboardDescriptor>();
     vd->dashboardId = sqliteConnector_.getData<int>(r, 0);
     vd->dashboardState = sqliteConnector_.getData<string>(r, 1);
     vd->dashboardName = sqliteConnector_.getData<string>(r, 2);
@@ -1203,15 +1208,17 @@ void Catalog::buildMaps() {
         std::to_string(currentDB_.dbId), sqliteConnector_.getData<string>(r, 0));
     dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->dashboardName] = vd;
   }
+}
 
-  string linkQuery(
+void Catalog::buildLinksMapUnlocked() {
+  std::string linkQuery(
       "SELECT linkid, userid, link, view_state, strftime('%Y-%m-%dT%H:%M:%SZ', "
       "update_time), view_metadata "
       "FROM mapd_links");
   sqliteConnector_.query(linkQuery);
-  numRows = sqliteConnector_.getNumRows();
+  auto numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    LinkDescriptor* ld = new LinkDescriptor();
+    auto ld = new LinkDescriptor();
     ld->linkId = sqliteConnector_.getData<int>(r, 0);
     ld->userId = sqliteConnector_.getData<int>(r, 1);
     ld->link = sqliteConnector_.getData<string>(r, 2);
@@ -1221,21 +1228,22 @@ void Catalog::buildMaps() {
     linkDescriptorMap_[std::to_string(currentDB_.dbId) + ld->link] = ld;
     linkDescriptorMapById_[ld->linkId] = ld;
   }
+}
 
+void Catalog::buildLogicalToPhysicalMapUnlocked() {
   /* rebuild map linking logical tables to corresponding physical ones */
-  string logicalToPhysicalTableMapQuery(
+  std::string logicalToPhysicalTableMapQuery(
       "SELECT logical_table_id, physical_table_id "
       "FROM mapd_logical_to_physical");
   sqliteConnector_.query(logicalToPhysicalTableMapQuery);
-  numRows = sqliteConnector_.getNumRows();
+  auto numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    int32_t logical_tb_id = sqliteConnector_.getData<int>(r, 0);
-    int32_t physical_tb_id = sqliteConnector_.getData<int>(r, 1);
+    auto logical_tb_id = sqliteConnector_.getData<int>(r, 0);
+    auto physical_tb_id = sqliteConnector_.getData<int>(r, 1);
     const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
     if (physicalTableIt == logicalToPhysicalTableMapById_.end()) {
       /* add new entity to the map logicalToPhysicalTableMapById_ */
-      std::vector<int32_t> physicalTables;
-      physicalTables.push_back(physical_tb_id);
+      std::vector<int32_t> physicalTables{physical_tb_id};
       const auto it_ok =
           logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
       CHECK(it_ok.second);
@@ -1244,11 +1252,37 @@ void Catalog::buildMaps() {
       physicalTableIt->second.push_back(physical_tb_id);
     }
   }
-
-  buildCustomExpressionsMap();
 }
 
-void Catalog::buildCustomExpressionsMap() {
+// The catalog uses a series of maps to cache data that have been read from the sqlite
+// tables. Usually we update these maps whenever we write using sqlite, so this function
+// is responsible for initializing all of them based on the sqlite db state.
+void Catalog::buildMaps() {
+  // Get all user id to username mapping here in order to avoid making a call to
+  // SysCatalog (and attempting to acquire SysCatalog locks) while holding locks for this
+  // catalog.
+  const auto user_name_by_user_id = get_user_id_to_user_name_map();
+
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(getObjForLock());
+
+  buildDictionaryMapUnlocked();
+  buildTablesMapUnlocked();
+
+  if (g_enable_fsi) {
+    buildForeignServerMapUnlocked();
+    updateForeignTablesInMapUnlocked();
+  }
+
+  buildColumnsMapUnlocked();
+  updateViewsInMapUnlocked();
+  buildDashboardsMapUnlocked(user_name_by_user_id);
+  buildLinksMapUnlocked();
+  buildLogicalToPhysicalMapUnlocked();
+  buildCustomExpressionsMapUnlocked();
+}
+
+void Catalog::buildCustomExpressionsMapUnlocked() {
   sqliteConnector_.query(
       "SELECT id, name, expression_json, data_source_type, data_source_id, "
       "is_deleted "
@@ -2694,9 +2728,11 @@ void Catalog::createForeignServer(
 void Catalog::createForeignServerNoLocks(
     std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
     bool if_not_exists) {
+  const auto& name = foreign_server->name;
+
   sqliteConnector_.query_with_text_params(
       "SELECT name from omnisci_foreign_servers where name = ?",
-      std::vector<std::string>{foreign_server->name});
+      std::vector<std::string>{name});
 
   if (sqliteConnector_.getNumRows() == 0) {
     foreign_server->creation_time = std::time(nullptr);
@@ -2705,27 +2741,31 @@ void Catalog::createForeignServerNoLocks(
         "creation_time,  "
         "options) "
         "VALUES (?, ?, ?, ?, ?)",
-        std::vector<std::string>{foreign_server->name,
+        std::vector<std::string>{name,
                                  foreign_server->data_wrapper_type,
                                  std::to_string(foreign_server->user_id),
                                  std::to_string(foreign_server->creation_time),
                                  foreign_server->getOptionsAsJsonString()});
     sqliteConnector_.query_with_text_params(
         "SELECT id from omnisci_foreign_servers where name = ?",
-        std::vector<std::string>{foreign_server->name});
+        std::vector<std::string>{name});
     CHECK_EQ(sqliteConnector_.getNumRows(), size_t(1));
     foreign_server->id = sqliteConnector_.getData<int32_t>(0, 0);
     std::shared_ptr<foreign_storage::ForeignServer> foreign_server_shared =
         std::move(foreign_server);
-    CHECK(foreignServerMap_.find(foreign_server_shared->name) == foreignServerMap_.end())
+    CHECK(foreignServerMap_.find(name) == foreignServerMap_.end())
         << "Attempting to insert a foreign server into foreign server map that already "
            "exists.";
-    foreignServerMap_[foreign_server_shared->name] = foreign_server_shared;
+    foreignServerMap_[name] = foreign_server_shared;
     foreignServerMapById_[foreign_server_shared->id] = foreign_server_shared;
   } else if (!if_not_exists) {
     throw std::runtime_error{"A foreign server with name \"" + foreign_server->name +
                              "\" already exists."};
   }
+
+  const auto& server_it = foreignServerMap_.find(name);
+  CHECK(server_it != foreignServerMap_.end());
+  CHECK(foreignServerMapById_.find(server_it->second->id) != foreignServerMapById_.end());
 }
 
 const foreign_storage::ForeignServer* Catalog::getForeignServer(
@@ -4445,11 +4485,13 @@ std::string Catalog::generatePhysicalTableName(const std::string& logicalTableNa
   return (physicalTableName);
 }
 
-void Catalog::buildForeignServerMap() {
+void Catalog::buildForeignServerMapUnlocked() {
+  CHECK(g_enable_fsi);
   sqliteConnector_.query(
       "SELECT id, name, data_wrapper_type, options, owner_user_id, creation_time FROM "
       "omnisci_foreign_servers");
   auto num_rows = sqliteConnector_.getNumRows();
+
   for (size_t row = 0; row < num_rows; row++) {
     auto foreign_server = std::make_shared<foreign_storage::ForeignServer>(
         sqliteConnector_.getData<int>(row, 0),
@@ -4463,7 +4505,8 @@ void Catalog::buildForeignServerMap() {
   }
 }
 
-void Catalog::addForeignTableDetails() {
+void Catalog::updateForeignTablesInMapUnlocked() {
+  CHECK(g_enable_fsi);
   sqliteConnector_.query(
       "SELECT table_id, server_id, options, last_refresh_time, next_refresh_time from "
       "omnisci_foreign_tables");
@@ -4509,6 +4552,7 @@ void Catalog::setForeignServerProperty(const std::string& server_name,
 }
 
 void Catalog::createDefaultServersIfNotExists() {
+  CHECK(g_enable_fsi);
   foreign_storage::OptionsMap options;
   options[foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY] =
       foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE;

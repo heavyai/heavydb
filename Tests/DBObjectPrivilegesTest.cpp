@@ -31,7 +31,6 @@ using Catalog_Namespace::SysCatalog;
 using Catalog_Namespace::UserMetadata;
 
 extern size_t g_leaf_count;
-extern bool g_enable_fsi;
 std::string g_test_binary_file_path;
 
 namespace {
@@ -283,7 +282,6 @@ struct ServerObject : public DBHandlerTestFixture {
       LOG(INFO) << "Test fixture not supported in distributed mode.";
       return;
     }
-    g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
@@ -296,7 +294,6 @@ struct ServerObject : public DBHandlerTestFixture {
     }
     sql("DROP SERVER IF EXISTS test_server;");
     DBHandlerTestFixture::TearDown();
-    g_enable_fsi = false;
   }
 };
 
@@ -2921,7 +2918,6 @@ class GetDbObjectsForGranteeTest : public DBHandlerTestFixture {
   }
 
   void allOnDatabase(std::string privilege) {
-    g_enable_fsi = false;
     sql("GRANT " + privilege + " ON DATABASE " + shared::kDefaultDbName +
         " TO test_user;");
 
@@ -2976,7 +2972,6 @@ TEST(DefaultUser, RoleList) {
 class TablePermissionsTest : public DBHandlerTestFixture {
  protected:
   static void SetUpTestSuite() {
-    g_enable_fsi = true;
     createDBHandler();
     switchToAdmin();
     createTestUser();
@@ -3003,10 +2998,7 @@ class TablePermissionsTest : public DBHandlerTestFixture {
                                     exception);
   }
 
-  static void TearDownTestSuite() {
-    dropTestUser();
-    g_enable_fsi = false;
-  }
+  static void TearDownTestSuite() { dropTestUser(); }
 
   void SetUp() override { DBHandlerTestFixture::SetUp(); }
 
@@ -3466,7 +3458,6 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
       GTEST_SKIP();
       return;
     }
-    g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
     loginAdmin();
     dropServer();
@@ -3474,7 +3465,6 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
   }
 
   void TearDown() override {
-    g_enable_fsi = true;
     loginAdmin();
     dropServer();
     revokeTestUserServerPrivileges("test_user");
@@ -4401,7 +4391,6 @@ TEST(SyncUserWithRemoteProvider, IS_SUPER) {
 }
 
 int main(int argc, char* argv[]) {
-  g_enable_fsi = true;
   testing::InitGoogleTest(&argc, argv);
 
   namespace po = boost::program_options;
@@ -4447,6 +4436,5 @@ int main(int argc, char* argv[]) {
     LOG(ERROR) << e.what();
   }
   QR::reset();
-  g_enable_fsi = false;
   return err;
 }
