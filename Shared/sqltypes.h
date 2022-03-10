@@ -330,18 +330,10 @@ class SQLTypeInfo {
     }
     return get_size();
   }
-  inline int get_physical_cols() const {
-    return 0;
-  }
-  inline int get_physical_coord_cols() const {
-    return 0;
-  }
-  inline bool has_bounds() const {
-    return false;
-  }
-  inline bool has_render_group() const {
-    return false;
-  }
+  inline int get_physical_cols() const { return 0; }
+  inline int get_physical_coord_cols() const { return 0; }
+  inline bool has_bounds() const { return false; }
+  inline bool has_render_group() const { return false; }
   HOST DEVICE inline void set_type(SQLTypes t) { type = t; }
   HOST DEVICE inline void set_subtype(SQLTypes st) { subtype = st; }
   inline void set_dimension(int d) { dimension = d; }
@@ -932,14 +924,14 @@ class SQLTypeInfo {
   }
 };
 
+SQLTypes decimal_to_int_type(const SQLTypeInfo&);
+
+#ifndef __CUDACC__
 inline std::ostream& operator<<(std::ostream& os, const SQLTypeInfo& ti) {
   os << ti.toString();
   return os;
 }
 
-SQLTypes decimal_to_int_type(const SQLTypeInfo&);
-
-#ifndef __CUDACC__
 #include <string_view>
 
 Datum StringToDatum(std::string_view s, SQLTypeInfo& ti);
