@@ -38,7 +38,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class TestMapDServer {
-  private final static Logger MAPDLOGGER = LoggerFactory.getLogger(TestMapDServer.class);
+  private final static Logger HEAVYDBLOGGER =
+          LoggerFactory.getLogger(TestMapDServer.class);
   private final static int TEST_THREAD_COUNT = 2;
   private volatile int threadsRun = 0;
   private volatile boolean threadHadFailure = false;
@@ -72,7 +73,7 @@ public class TestMapDServer {
           }
           closeMapDConnection(conn);
         } catch (AssertionError x) {
-          MAPDLOGGER.error("error during Runnable");
+          HEAVYDBLOGGER.error("error during Runnable");
           threadHadFailure = true;
           ae = x;
         }

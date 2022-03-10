@@ -149,7 +149,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
   }
 
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDSqlOperatorTable.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDSqlOperatorTable.class);
 
   /**
    * Mock operator table for testing purposes. Contains the standard SQL operator

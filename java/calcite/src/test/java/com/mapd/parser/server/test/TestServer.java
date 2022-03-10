@@ -43,7 +43,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class TestServer {
-  private final static Logger MAPDLOGGER = LoggerFactory.getLogger(TestServer.class);
+  private final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(TestServer.class);
   private final static int TEST_THREAD_COUNT = 3;
   private volatile int threadsRun = 0;
   private volatile boolean threadHadFailure = false;
@@ -75,7 +75,7 @@ public class TestServer {
             randomCalciteCall();
           }
         } catch (AssertionError x) {
-          MAPDLOGGER.error("error during Runnable");
+          HEAVYDBLOGGER.error("error during Runnable");
           threadHadFailure = true;
           ae = x;
         }
@@ -268,7 +268,7 @@ public class TestServer {
       try {
         assertEquals(algebra.plan_result, result);
       } catch (AssertionError s) {
-        MAPDLOGGER.error("error during callCalciteCheck");
+        HEAVYDBLOGGER.error("error during callCalciteCheck");
         throw s;
       }
     } catch (TException x) {

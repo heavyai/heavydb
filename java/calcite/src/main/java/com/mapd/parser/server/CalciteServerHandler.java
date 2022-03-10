@@ -64,7 +64,7 @@ import java.util.Map;
  * @author michael
  */
 public class CalciteServerHandler implements CalciteServer.Iface {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
   private TServer server;
 
   private final int mapdPort;
@@ -103,7 +103,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     try {
       extSigs = ExtensionFunctionSignatureParser.parse(extensionFunctionsAstFile);
     } catch (IOException ex) {
-      MAPDLOGGER.error(
+      HEAVYDBLOGGER.error(
               "Could not load extension function signatures: " + ex.getMessage(), ex);
     }
     extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
@@ -113,7 +113,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         udfSigs = ExtensionFunctionSignatureParser.parseUdfAst(udfAstFile);
       }
     } catch (IOException ex) {
-      MAPDLOGGER.error("Could not load udf function signatures: " + ex.getMessage(), ex);
+      HEAVYDBLOGGER.error(
+              "Could not load udf function signatures: " + ex.getMessage(), ex);
     }
     udfSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfSigs);
 
@@ -131,7 +132,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
 
   @Override
   public void ping() throws TException {
-    MAPDLOGGER.debug("Ping hit");
+    HEAVYDBLOGGER.debug("Ping hit");
   }
 
   @Override
@@ -151,7 +152,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       parser.clearMemo();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      HEAVYDBLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
     List<Restriction> rests = null;
@@ -167,7 +168,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       }
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, rests);
-    MAPDLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
+    HEAVYDBLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
     parser.setUser(mapDUser);
     CURRENT_PARSER.set(parser);
@@ -229,7 +230,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       }
     } catch (SqlParseException ex) {
       String msg = "SQL Error: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      HEAVYDBLOGGER.error(msg);
       throw new InvalidParseRequest(-2, msg);
     } catch (org.apache.calcite.tools.ValidationException ex) {
       String msg = "SQL Error: " + ex.getMessage();
@@ -237,20 +238,20 @@ public class CalciteServerHandler implements CalciteServer.Iface {
               && (ex.getCause().getClass() == CalciteContextException.class)) {
         msg = "SQL Error: " + ex.getCause().getMessage();
       }
-      MAPDLOGGER.error(msg);
+      HEAVYDBLOGGER.error(msg);
       throw new InvalidParseRequest(-3, msg);
     } catch (CalciteContextException ex) {
       String msg = ex.getMessage();
-      MAPDLOGGER.error(msg);
+      HEAVYDBLOGGER.error(msg);
       throw new InvalidParseRequest(-6, msg);
     } catch (RelConversionException ex) {
       String msg = "Failed to generate relational algebra for query " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      HEAVYDBLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-5, msg);
     } catch (Throwable ex) {
-      MAPDLOGGER.error(ex.getClass().toString());
+      HEAVYDBLOGGER.error(ex.getClass().toString());
       String msg = ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      HEAVYDBLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-4, msg);
     } finally {
       CURRENT_PARSER.set(null);
@@ -259,7 +260,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         parserPool.returnObject(parser);
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
+        HEAVYDBLOGGER.error(msg, ex);
         throw new InvalidParseRequest(-7, msg);
       }
     }
@@ -276,7 +277,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   @Override
   public void shutdown() throws TException {
     // received request to shutdown
-    MAPDLOGGER.debug("Shutdown calcite java server");
+    HEAVYDBLOGGER.debug("Shutdown calcite java server");
     server.stop();
   }
 
@@ -301,7 +302,8 @@ public class CalciteServerHandler implements CalciteServer.Iface {
 
   @Override
   public void updateMetadata(String catalog, String table) throws TException {
-    MAPDLOGGER.debug("Received invalidation from server for " + catalog + " : " + table);
+    HEAVYDBLOGGER.debug(
+            "Received invalidation from server for " + catalog + " : " + table);
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;
@@ -309,7 +311,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      HEAVYDBLOGGER.error(msg, ex);
       return;
     }
     CURRENT_PARSER.set(parser);
@@ -319,11 +321,11 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       CURRENT_PARSER.set(null);
       try {
         // put parser object back in pool for others to use
-        MAPDLOGGER.debug("Returning object to pool");
+        HEAVYDBLOGGER.debug("Returning object to pool");
         parserPool.returnObject(parser);
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
+        HEAVYDBLOGGER.error(msg, ex);
       }
     }
   }
@@ -341,11 +343,11 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      HEAVYDBLOGGER.error(msg, ex);
       throw new TException(msg);
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, null);
-    MAPDLOGGER.debug("getCompletionHints was called User: " + user
+    HEAVYDBLOGGER.debug("getCompletionHints was called User: " + user
             + " Catalog: " + catalog + " sql: " + sql);
     parser.setUser(mapDUser);
     CURRENT_PARSER.set(parser);
@@ -355,7 +357,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       completion_result = parser.getCompletionHints(sql, cursor, visible_tables);
     } catch (Exception ex) {
       String msg = "Could not retrieve completion hints: " + ex.getMessage();
-      MAPDLOGGER.error(msg, ex);
+      HEAVYDBLOGGER.error(msg, ex);
       return new ArrayList<>();
     } finally {
       CURRENT_PARSER.set(null);
@@ -364,7 +366,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         parserPool.returnObject(parser);
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg, ex);
+        HEAVYDBLOGGER.error(msg, ex);
         throw new InvalidParseRequest(-4, msg);
       }
     }
@@ -402,7 +404,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       // Avoid overwritting compiled and Loadtime UDFs:
       for (String name : udfRTSigs.keySet()) {
         if (extSigs.containsKey(name)) {
-          MAPDLOGGER.error("Extension function `" + name
+          HEAVYDBLOGGER.error("Extension function `" + name
                   + "` exists. Skipping runtime extenension function with the same name.");
           udfRTSigs.remove(name);
         }
@@ -566,7 +568,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       case ColumnListTextEncodingDict:
         return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingDict;
       default:
-        MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
+        HEAVYDBLOGGER.error("toExtArgumentType: unknown type " + type);
         return null;
     }
   }

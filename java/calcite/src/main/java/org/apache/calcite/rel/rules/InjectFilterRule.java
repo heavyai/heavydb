@@ -39,7 +39,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
   // goal: customer entitlements first swipe
 
   public static Set<String> visitedMemo = new HashSet<>();
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(InjectFilterRule.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(InjectFilterRule.class);
   final List<Restriction> restrictions;
 
   public InjectFilterRule(Config config, List<Restriction> restrictions) {
@@ -87,7 +87,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       if (rest_database != null && !rest_database.isEmpty()
               && !rest_database.equals(query_database)) {
         // TODO(sy): Maybe remove the isEmpty() wildcarding in OmniSciDB 6.0.
-        MAPDLOGGER.debug("RLS row-level security restriction for database "
+        HEAVYDBLOGGER.debug("RLS row-level security restriction for database "
                 + rest_database + " ignored because this query is on database "
                 + query_database);
         continue;
@@ -98,7 +98,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       if (rest_table != null && !rest_table.isEmpty()
               && !rest_table.equals(query_table)) {
         // TODO(sy): Maybe remove the isEmpty() wildcarding in OmniSciDB 6.0.
-        MAPDLOGGER.debug("RLS row-level security restriction for table " + rest_table
+        HEAVYDBLOGGER.debug("RLS row-level security restriction for table " + rest_table
                 + " ignored because this query is on table " + query_table);
         continue;
       }
@@ -107,7 +107,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       RelDataTypeField field = table.getRowType().getField(
               restriction.getRestrictionColumn(), false, false);
       if (field == null) {
-        MAPDLOGGER.debug("RLS row-level security restriction for column "
+        HEAVYDBLOGGER.debug("RLS row-level security restriction for column "
                 + restriction.getRestrictionColumn()
                 + " ignored because column not present in query table " + query_table);
         continue;
@@ -115,13 +115,13 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
 
       // Generate the RLS row-level security filter for one Restriction.
       found = true;
-      MAPDLOGGER.debug(
+      HEAVYDBLOGGER.debug(
               "Scan is " + parentNode.toString() + " TABLE is " + table.toString());
-      MAPDLOGGER.debug("Column " + restriction.getRestrictionColumn()
+      HEAVYDBLOGGER.debug("Column " + restriction.getRestrictionColumn()
               + " exists in table " + table.getQualifiedName());
 
       for (String val : restriction.getRestrictionValues()) {
-        MAPDLOGGER.debug("Column is " + restriction.getRestrictionColumn()
+        HEAVYDBLOGGER.debug("Column is " + restriction.getRestrictionColumn()
                 + " literal is '" + val + "'");
         RexNode lit;
         if (SqlTypeName.NUMERIC_TYPES.indexOf(field.getType().getSqlTypeName()) == -1) {

@@ -40,7 +40,7 @@ import java.util.Properties;
 public class CalciteServerCaller {
   private SockTransportProperties client_skT = null;
   private SockTransportProperties server_skT = null;
-  private final static Logger MAPDLOGGER =
+  private final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(CalciteServerCaller.class);
   private CommandLine cmd = null;
 
@@ -125,7 +125,7 @@ public class CalciteServerCaller {
     try {
       cmd = parser.parse(options, args);
     } catch (ParseException ex) {
-      MAPDLOGGER.error(ex.getLocalizedMessage());
+      HEAVYDBLOGGER.error(ex.getLocalizedMessage());
       help(options);
       exit(0);
     }
@@ -149,7 +149,7 @@ public class CalciteServerCaller {
     try {
       p.load(getClass().getResourceAsStream("/log4j2.properties"));
     } catch (IOException ex) {
-      MAPDLOGGER.error(
+      HEAVYDBLOGGER.error(
               "Could not load log4j property file from resources " + ex.getMessage());
     }
     p.put("log.dir", dataDir); // overwrite "log.dir"
@@ -168,7 +168,7 @@ public class CalciteServerCaller {
           // properties it to get the trust store password
           trust_store_pw = properties.getProperty("ssl-trust-password");
           if (trust_store_pw == null) {
-            MAPDLOGGER.warn("Failed to load trust store password from config file ["
+            HEAVYDBLOGGER.warn("Failed to load trust store password from config file ["
                     + configuration_file + "] for trust store [" + trust_store + "]");
           }
         }
@@ -207,7 +207,7 @@ public class CalciteServerCaller {
         server_skT = SockTransportProperties.getUnecryptedServer();
       }
     } catch (Exception ex) {
-      MAPDLOGGER.error("Error opening SocketTransport. " + ex.getMessage());
+      HEAVYDBLOGGER.error("Error opening SocketTransport. " + ex.getMessage());
       exit(0);
     }
 
@@ -218,7 +218,7 @@ public class CalciteServerCaller {
         udfPath = Paths.get(udfName);
       }
     } catch (FileSystemNotFoundException ex1) {
-      MAPDLOGGER.error("Could not load udf file " + ex1.getMessage());
+      HEAVYDBLOGGER.error("Could not load udf file " + ex1.getMessage());
     }
 
     calciteServerWrapper = new CalciteServerWrapper(portNum,
@@ -268,7 +268,7 @@ public class CalciteServerCaller {
       }
       properties.load(new StringReader(sb.toString()));
     } catch (java.io.IOException iE) {
-      MAPDLOGGER.warn("Could not load configuration file [" + fileName
+      HEAVYDBLOGGER.warn("Could not load configuration file [" + fileName
               + "] to get keystore/truststore password. Error - " + iE.toString());
     }
     return properties;

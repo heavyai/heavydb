@@ -32,7 +32,7 @@ import java.util.Set;
  * @author alex
  */
 public class ExtensionFunction {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(ExtensionFunction.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(ExtensionFunction.class);
 
   public enum ExtArgumentType {
     Int8,
@@ -175,7 +175,7 @@ public class ExtensionFunction {
   }
 
   public String toJson(final String name) {
-    MAPDLOGGER.debug("Extensionfunction::toJson: " + name);
+    HEAVYDBLOGGER.debug("Extensionfunction::toJson: " + name);
     StringBuilder json_cons = new StringBuilder();
     json_cons.append("{");
     json_cons.append("\"name\":").append(dq(name)).append(",");
@@ -300,7 +300,7 @@ public class ExtensionFunction {
       case ColumnListTextEncodingDict:
         return "ColumnList<TextEncodingDict>";
     }
-    MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
+    HEAVYDBLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
     return null;
   }
@@ -404,7 +404,7 @@ public class ExtensionFunction {
       case ColumnTimestamp:
         return ExtArgumentType.Timestamp;
     }
-    MAPDLOGGER.error("getValueType: no value for type " + type);
+    HEAVYDBLOGGER.error("getValueType: no value for type " + type);
     assert false;
     return null;
   }
@@ -467,7 +467,7 @@ public class ExtensionFunction {
         return null;
     }
     Set<SqlTypeName> allSqlTypeNames = EnumSet.allOf(SqlTypeName.class);
-    MAPDLOGGER.error("toSqlTypeName: unknown type " + type + " to be mapped to {"
+    HEAVYDBLOGGER.error("toSqlTypeName: unknown type " + type + " to be mapped to {"
             + allSqlTypeNames + "}");
     assert false;
     return null;

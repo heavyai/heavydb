@@ -35,7 +35,7 @@ import java.util.logging.Logger;
  * @author michael
  */
 public class tester {
-  final static org.slf4j.Logger MAPDLOGGER = LoggerFactory.getLogger(tester.class);
+  final static org.slf4j.Logger HEAVYDBLOGGER = LoggerFactory.getLogger(tester.class);
 
   public static void main(String[] args) {
     final SqlStdOperatorTable stdOpTab = SqlStdOperatorTable.instance();
@@ -75,10 +75,10 @@ public class tester {
     } catch (RelConversionException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     }
-    MAPDLOGGER.error("Result was " + relR);
-    MAPDLOGGER.error("Result project() " + relR.project());
-    MAPDLOGGER.error("Result project() " + RelOptUtil.toString(relR.project()));
-    MAPDLOGGER.error("Json Version \n" + MapDSerializer.toString(relR.project()));
+    HEAVYDBLOGGER.error("Result was " + relR);
+    HEAVYDBLOGGER.error("Result project() " + relR.project());
+    HEAVYDBLOGGER.error("Result project() " + RelOptUtil.toString(relR.project()));
+    HEAVYDBLOGGER.error("Json Version \n" + MapDSerializer.toString(relR.project()));
 
     // now do with MapD parser
     Supplier<MapDSqlOperatorTable> operatorTable = new Supplier<MapDSqlOperatorTable>() {
@@ -92,7 +92,7 @@ public class tester {
 
     try {
       MapDParserOptions mdpo = new MapDParserOptions();
-      MAPDLOGGER.error("MapDParser result: \n" + mp.processSql("<<QUERY>>", mdpo));
+      HEAVYDBLOGGER.error("MapDParser result: \n" + mp.processSql("<<QUERY>>", mdpo));
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     } catch (ValidationException ex) {

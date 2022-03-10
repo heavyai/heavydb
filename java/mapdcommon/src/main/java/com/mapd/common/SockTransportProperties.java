@@ -32,7 +32,7 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
 public class SockTransportProperties {
-  final static org.slf4j.Logger MAPDLOGGER =
+  final static org.slf4j.Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(SockTransportProperties.class);
 
   /*
@@ -78,7 +78,7 @@ public class SockTransportProperties {
       String errStr = new String(
               "Invalid null parameter(s) used for getEncryptedServer. Both keyStoreName and keyStorePassword must be specified");
       RuntimeException rE = new RuntimeException(errStr);
-      MAPDLOGGER.error(errStr, rE);
+      HEAVYDBLOGGER.error(errStr, rE);
       throw(rE);
     }
     return new SockTransportProperties(TransportType.encryptedServer,
@@ -143,7 +143,7 @@ public class SockTransportProperties {
           } catch (Exception eX) {
             String err_str =
                     new String("Error loading key/trust store [" + store_name + "]");
-            MAPDLOGGER.error(err_str, eX);
+            HEAVYDBLOGGER.error(err_str, eX);
             throw(eX);
           }
           initializeAcceptedIssuers(trust_store);
@@ -154,7 +154,7 @@ public class SockTransportProperties {
         String errStr = new String(
                 "Invalid transportType [" + transportType + "] used in constructor");
         RuntimeException rE = new RuntimeException(errStr);
-        MAPDLOGGER.error(errStr, rE);
+        HEAVYDBLOGGER.error(errStr, rE);
         throw(rE);
       }
     }
@@ -178,7 +178,7 @@ public class SockTransportProperties {
         String errStr = new String(
                 "Invalid transportType [" + transportType + "] used in constructor");
         RuntimeException rE = new RuntimeException(errStr);
-        MAPDLOGGER.error(errStr, rE);
+        HEAVYDBLOGGER.error(errStr, rE);
         throw(rE);
     }
   }
@@ -219,7 +219,7 @@ public class SockTransportProperties {
         String errStr = new String("Invalid transportType [" + transportType
                 + "] used in openClientTransport");
         RuntimeException rE = new RuntimeException(errStr);
-        MAPDLOGGER.error(errStr, rE);
+        HEAVYDBLOGGER.error(errStr, rE);
         throw(rE);
     }
     return tTransport;
@@ -242,7 +242,7 @@ public class SockTransportProperties {
               + "] used in openClientTransport - ");
       errStr += ex.toString();
       RuntimeException rE = new RuntimeException(errStr);
-      MAPDLOGGER.error(errStr, rE);
+      HEAVYDBLOGGER.error(errStr, rE);
       throw(rE);
     }
     return tsocket;
@@ -255,7 +255,7 @@ public class SockTransportProperties {
       String errStr = new String("Invalid transportType [" + transportType
               + "] used in openHttpsClientTransport");
       RuntimeException rE = new RuntimeException(errStr);
-      MAPDLOGGER.error(errStr, rE);
+      HEAVYDBLOGGER.error(errStr, rE);
       throw(rE);
     }
     TTransport transport = null;
@@ -277,7 +277,7 @@ public class SockTransportProperties {
     } catch (Exception ex) {
       String err_str = new String("Exception:" + ex.getClass().getCanonicalName()
               + " thrown. Unable to create Secure socket for the HTTPS connection");
-      MAPDLOGGER.error(err_str, ex);
+      HEAVYDBLOGGER.error(err_str, ex);
       throw ex;
     }
 
@@ -290,7 +290,7 @@ public class SockTransportProperties {
       String errStr = new String("Invalid transportType [" + transportType
               + "] used in openHttpClientTransport");
       RuntimeException rE = new RuntimeException(errStr);
-      MAPDLOGGER.error(errStr, rE);
+      HEAVYDBLOGGER.error(errStr, rE);
       throw(rE);
     }
 
@@ -311,7 +311,7 @@ public class SockTransportProperties {
       String errStr = new String("Invalid transportType [" + transportType
               + "] used in openServerTransport");
       RuntimeException rE = new RuntimeException(errStr);
-      MAPDLOGGER.error(errStr, rE);
+      HEAVYDBLOGGER.error(errStr, rE);
       throw(rE);
     }
   }

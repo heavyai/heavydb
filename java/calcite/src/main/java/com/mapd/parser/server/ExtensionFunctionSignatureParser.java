@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
  * @author alex
  */
 class ExtensionFunctionSignatureParser {
-  final static Logger MAPDLOGGER =
+  final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(ExtensionFunctionSignatureParser.class);
   // Windows DE supports slightly different types sizes.
   private static String OS = System.getProperty("os.name").toLowerCase();
@@ -297,7 +297,7 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("ColumnList<TextEncodingDict>")) {
       return ExtensionFunction.ExtArgumentType.ColumnListTextEncodingDict;
     }
-    MAPDLOGGER.info(
+    HEAVYDBLOGGER.info(
             "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"
             + type_name + "`");
     // TODO: Return void for convenience. Consider sanitizing functions for supported

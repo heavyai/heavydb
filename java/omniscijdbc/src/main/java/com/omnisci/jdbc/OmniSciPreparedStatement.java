@@ -60,7 +60,7 @@ import java.util.regex.Pattern;
  * @author michael
  */
 class OmniSciPreparedStatement implements PreparedStatement {
-  final static Logger MAPDLOGGER =
+  final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(OmniSciPreparedStatement.class);
   public SQLWarning rootWarning = null;
 
@@ -90,12 +90,12 @@ class OmniSciPreparedStatement implements PreparedStatement {
   private boolean isClosed = false;
 
   OmniSciPreparedStatement(String sql, String session, OmniSciConnection connection) {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     currentSQL = sql;
     this.client = connection.client;
     this.session = session;
     this.stmt = new OmniSciStatement(session, connection);
-    MAPDLOGGER.debug("Prepared statement is " + currentSQL);
+    HEAVYDBLOGGER.debug("Prepared statement is " + currentSQL);
     // TODO in real life this needs to check if the ? is inside quotes before we assume it
     // a parameter
     brokenSQL = currentSQL.split("\\?", -1);
@@ -108,12 +108,12 @@ class OmniSciPreparedStatement implements PreparedStatement {
       // remove double quotes required for queries generated with " around all names like
       // kafka connect
       currentSQL = currentSQL.replaceAll("\"", " ");
-      MAPDLOGGER.debug("Insert Prepared statement is " + currentSQL);
+      HEAVYDBLOGGER.debug("Insert Prepared statement is " + currentSQL);
       isInsert = true;
       Matcher matcher = REGEX_PATTERN.matcher(currentSQL);
       while (matcher.find()) {
         insertTableName = matcher.group(1);
-        MAPDLOGGER.debug("Table name for insert is '" + insertTableName + "'");
+        HEAVYDBLOGGER.debug("Table name for insert is '" + insertTableName + "'");
       }
     }
   }
@@ -147,7 +147,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
     }
 
     qsql = qsql.replace(" WHERE 1=0", " LIMIT 1 ");
-    MAPDLOGGER.debug("Query is now " + qsql);
+    HEAVYDBLOGGER.debug("Query is now " + qsql);
     repCount = 0; // reset the parameters
     return qsql;
   }
@@ -161,7 +161,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   public ResultSet executeQuery() throws SQLException {
     if (isNewBatch) {
       String qsql = getQuery();
-      MAPDLOGGER.debug("executeQuery, sql=" + qsql);
+      HEAVYDBLOGGER.debug("executeQuery, sql=" + qsql);
       return stmt.executeQuery(qsql);
     }
     throw new UnsupportedOperationException("Not supported yet,"
@@ -172,7 +172,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int executeUpdate() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     executeQuery();
     // TODO: OmniSciDB supports updates, inserts and deletes, but
     // there is no way to get number of affected rows at the moment
@@ -181,14 +181,14 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setNull(int parameterIndex, int sqlType) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmIsNull[parameterIndex - 1] = true;
     repCount++;
   }
 
   @Override
   public void setBoolean(int parameterIndex, boolean x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = x ? "true" : "false";
     parmIsString[parameterIndex - 1] = false;
     parmIsNull[parameterIndex - 1] = false;
@@ -197,7 +197,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setByte(int parameterIndex, byte x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -206,7 +206,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setShort(int parameterIndex, short x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = Short.toString(x);
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
@@ -214,7 +214,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setInt(int parameterIndex, int x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = Integer.toString(x);
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
@@ -222,7 +222,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setLong(int parameterIndex, long x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = Long.toString(x);
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
@@ -230,7 +230,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setFloat(int parameterIndex, float x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = Float.toString(x);
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
@@ -238,7 +238,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setDouble(int parameterIndex, double x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = Double.toString(x);
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
@@ -246,7 +246,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setBigDecimal(int parameterIndex, BigDecimal x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = x.toString();
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
@@ -254,7 +254,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setString(int parameterIndex, String x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     // add extra ' if there are any in string
     x = x.replaceAll("'", "''");
     parmRep[parameterIndex - 1] = x;
@@ -265,7 +265,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setBytes(int parameterIndex, byte[] x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -274,7 +274,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setDate(int parameterIndex, Date x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = x.toString();
     parmIsString[parameterIndex - 1] = true;
     parmIsNull[parameterIndex - 1] = false;
@@ -283,7 +283,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setTime(int parameterIndex, Time x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = x.toString();
     parmIsString[parameterIndex - 1] = true;
     parmIsNull[parameterIndex - 1] = false;
@@ -292,7 +292,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setTimestamp(int parameterIndex, Timestamp x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] =
             x.toString(); // new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(x);
     parmIsString[parameterIndex - 1] = true;
@@ -303,7 +303,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setAsciiStream(int parameterIndex, InputStream x, int length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -313,7 +313,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setUnicodeStream(int parameterIndex, InputStream x, int length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -323,7 +323,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setBinaryStream(int parameterIndex, InputStream x, int length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -332,14 +332,14 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void clearParameters() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     // TODO MAT we will actually need to do something here one day
   }
 
   @Override
   public void setObject(int parameterIndex, Object x, int targetSqlType)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -348,7 +348,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setObject(int parameterIndex, Object x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -357,14 +357,14 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean execute() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     String tQuery = getQuery();
     return stmt.execute(tQuery);
   }
 
   @Override
   public void addBatch() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     if (isInsert) {
       // take the values and use stream inserter to add them
       if (isNewBatch) {
@@ -415,7 +415,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
         tsr.addToCols(tsv);
       }
       rows.add(tsr);
-      MAPDLOGGER.debug("addBatch, rows=" + rows.size());
+      HEAVYDBLOGGER.debug("addBatch, rows=" + rows.size());
     } else {
       throw new UnsupportedOperationException("addBatch only supported for insert, line:"
               + new Throwable().getStackTrace()[0].getLineNumber());
@@ -425,7 +425,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setCharacterStream(int parameterIndex, Reader reader, int length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -434,7 +434,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setRef(int parameterIndex, Ref x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -443,7 +443,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setBlob(int parameterIndex, Blob x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -452,7 +452,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setClob(int parameterIndex, Clob x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -461,7 +461,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setArray(int parameterIndex, Array x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     parmRep[parameterIndex - 1] = x.toString();
     parmIsNull[parameterIndex - 1] = false;
     repCount++;
@@ -469,7 +469,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public ResultSetMetaData getMetaData() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     if (!isSelect()) {
       return null;
     }
@@ -499,7 +499,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setDate(int parameterIndex, Date x, Calendar cal) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -508,7 +508,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setTime(int parameterIndex, Time x, Calendar cal) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -518,7 +518,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setTimestamp(int parameterIndex, Timestamp x, Calendar cal)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -528,7 +528,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setNull(int parameterIndex, int sqlType, String typeName)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -537,7 +537,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setURL(int parameterIndex, URL x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -546,7 +546,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public ParameterMetaData getParameterMetaData() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -555,7 +555,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setRowId(int parameterIndex, RowId x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -564,7 +564,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setNString(int parameterIndex, String value) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -574,7 +574,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setNCharacterStream(int parameterIndex, Reader value, long length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -583,7 +583,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setNClob(int parameterIndex, NClob value) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -593,7 +593,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setClob(int parameterIndex, Reader reader, long length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -603,7 +603,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setBlob(int parameterIndex, InputStream inputStream, long length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -613,7 +613,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setNClob(int parameterIndex, Reader reader, long length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -622,7 +622,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setSQLXML(int parameterIndex, SQLXML xmlObject) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -633,7 +633,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   public void setObject(
           int parameterIndex, Object x, int targetSqlType, int scaleOrLength)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -643,7 +643,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setAsciiStream(int parameterIndex, InputStream x, long length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -653,7 +653,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setBinaryStream(int parameterIndex, InputStream x, long length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -663,7 +663,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
   @Override
   public void setCharacterStream(int parameterIndex, Reader reader, long length)
           throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -672,7 +672,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setAsciiStream(int parameterIndex, InputStream x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -681,7 +681,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setBinaryStream(int parameterIndex, InputStream x) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -690,7 +690,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setCharacterStream(int parameterIndex, Reader reader) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -699,7 +699,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setNCharacterStream(int parameterIndex, Reader value) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -708,7 +708,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setClob(int parameterIndex, Reader reader) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -717,7 +717,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setBlob(int parameterIndex, InputStream inputStream) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -726,7 +726,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setNClob(int parameterIndex, Reader reader) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -735,7 +735,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public ResultSet executeQuery(String sql) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -744,7 +744,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int executeUpdate(String sql) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -753,7 +753,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void close() throws SQLException {
-    MAPDLOGGER.debug("close");
+    HEAVYDBLOGGER.debug("close");
     if (stmt != null) {
       // TODO MAT probably more needed here
       stmt.close();
@@ -764,7 +764,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int getMaxFieldSize() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -773,7 +773,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void setMaxFieldSize(int max) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -782,20 +782,20 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int getMaxRows() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return stmt.getMaxRows();
   }
 
   @Override
   public void setMaxRows(int max) throws SQLException {
-    MAPDLOGGER.debug("Entered");
-    MAPDLOGGER.debug("SetMaxRows to " + max);
+    HEAVYDBLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("SetMaxRows to " + max);
     stmt.setMaxRows(max);
   }
 
   @Override
   public void setEscapeProcessing(boolean enable) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -804,13 +804,13 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int getQueryTimeout() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return 0;
   }
 
   @Override
   public void setQueryTimeout(int seconds) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     SQLWarning warning = new SQLWarning(
             "Query timeouts are not supported.  Substituting a value of zero.");
     if (rootWarning == null)
@@ -821,7 +821,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void cancel() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -830,19 +830,19 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public SQLWarning getWarnings() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return rootWarning;
   }
 
   @Override
   public void clearWarnings() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     rootWarning = null;
   }
 
   @Override
   public void setCursorName(String name) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -851,7 +851,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean execute(String sql) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -860,25 +860,25 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public ResultSet getResultSet() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return stmt.getResultSet();
   }
 
   @Override
   public int getUpdateCount() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return stmt.getUpdateCount();
   }
 
   @Override
   public boolean getMoreResults() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return stmt.getMoreResults();
   }
 
   @Override
   public void setFetchDirection(int direction) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -887,20 +887,20 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int getFetchDirection() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return ResultSet.FETCH_FORWARD;
   }
 
   @Override
   public void setFetchSize(int rows) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     // TODO we need to chnage the model to allow smaller select chunks at the moment you
     // get everything
   }
 
   @Override
   public int getFetchSize() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -909,7 +909,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int getResultSetConcurrency() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -918,7 +918,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int getResultSetType() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -927,7 +927,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void addBatch(String sql) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -936,7 +936,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void clearBatch() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     if (rows != null) {
       rows.clear();
     }
@@ -947,7 +947,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
     checkClosed();
     int ret[] = null;
     if (rows != null) {
-      MAPDLOGGER.debug("executeBatch, rows=" + rows.size());
+      HEAVYDBLOGGER.debug("executeBatch, rows=" + rows.size());
       try {
         // send the batch
         client.load_table(session, insertTableName, rows, Arrays.asList(listOfFields));
@@ -967,13 +967,13 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public Connection getConnection() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return stmt.getConnection();
   }
 
   @Override
   public boolean getMoreResults(int current) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -982,7 +982,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public ResultSet getGeneratedKeys() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -991,7 +991,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int executeUpdate(String sql, int autoGeneratedKeys) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1000,7 +1000,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int executeUpdate(String sql, int[] columnIndexes) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1009,7 +1009,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int executeUpdate(String sql, String[] columnNames) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1018,7 +1018,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean execute(String sql, int autoGeneratedKeys) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1027,7 +1027,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean execute(String sql, int[] columnIndexes) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1036,7 +1036,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean execute(String sql, String[] columnNames) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1045,7 +1045,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public int getResultSetHoldability() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1054,13 +1054,13 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean isClosed() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     return isClosed;
   }
 
   @Override
   public void setPoolable(boolean poolable) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1069,7 +1069,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean isPoolable() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1078,7 +1078,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public void closeOnCompletion() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1087,7 +1087,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean isCloseOnCompletion() throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1096,7 +1096,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public <T> T unwrap(Class<T> iface) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()
@@ -1105,7 +1105,7 @@ class OmniSciPreparedStatement implements PreparedStatement {
 
   @Override
   public boolean isWrapperFor(Class<?> iface) throws SQLException {
-    MAPDLOGGER.debug("Entered");
+    HEAVYDBLOGGER.debug("Entered");
     throw new UnsupportedOperationException("Not supported yet,"
             + " line:" + new Throwable().getStackTrace()[0].getLineNumber()
             + " class:" + new Throwable().getStackTrace()[0].getClassName()

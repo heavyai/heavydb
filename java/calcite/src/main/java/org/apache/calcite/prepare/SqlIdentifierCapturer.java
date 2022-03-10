@@ -51,7 +51,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * used in a query.
  */
 public class SqlIdentifierCapturer {
-  final static Logger MAPDLOGGER = LoggerFactory.getLogger(SqlIdentifierCapturer.class);
+  final static Logger HEAVYDBLOGGER =
+          LoggerFactory.getLogger(SqlIdentifierCapturer.class);
 
   private static final Map<Class<?>, Set<Method>> GETTERS_CACHE =
           new ConcurrentHashMap<>();
