@@ -417,13 +417,34 @@ class Executor {
 
   void reset(bool discard_runtime_modules_only = false);
 
-  static void resetAllExecutors(bool discard_runtime_modules_only = false) {
-    mapd_unique_lock<mapd_shared_mutex> flush_lock(
-        execute_mutex_);  // don't want native code to vanish while executing
+  template <typename F>
+  static void registerExtensionFunctions(F register_extension_functions) {
+    // Don't want native code to vanish while executing:
+    mapd_unique_lock<mapd_shared_mutex> flush_lock(execute_mutex_);
+    // Blocks Executor::getExecutor:
     mapd_unique_lock<mapd_shared_mutex> lock(executors_cache_mutex_);
+    // Lock registration to avoid
+    // java.util.ConcurrentModificationException from calcite server
+    // when client registrations arrive too fast.  Also blocks
+    // Executor::get_rt_udf_module for retrieving runtime UDF/UDTF
+    // module until this registration has rebuild it via
+    // Executor::update_after_registration:
+    std::lock_guard<std::mutex> register_lock(
+        register_runtime_extension_functions_mutex_);
+
+    // Reset all executors:
     for (auto& executor_item : Executor::executors_) {
-      executor_item.second->reset(discard_runtime_modules_only);
+      executor_item.second->reset(/*discard_runtime_modules_only=*/true);
     }
+    // Call registration worker, see
+    // DBHandler::register_runtime_extension_functions for details. In
+    // short, updates Executor::extension_module_sources,
+    // table_functions::TableFunctionsFactory, and registers runtime
+    // extension functions with Calcite:
+    register_extension_functions();
+
+    // Update executors with registered LLVM modules:
+    update_after_registration(/*update_runtime_modules_only=*/true);
   }
 
   static std::shared_ptr<Executor> getExecutor(
@@ -467,7 +488,8 @@ class Executor {
         (is_gpu ? ExtModuleKinds::udf_gpu_module : ExtModuleKinds::udf_cpu_module));
   }
   const std::unique_ptr<llvm::Module>& get_rt_udf_module(bool is_gpu = false) const {
-    std::shared_lock lock(Executor::register_runtime_extension_functions_mutex_);
+    std::lock_guard<std::mutex> lock(
+        Executor::register_runtime_extension_functions_mutex_);
     return get_extension_module(
         (is_gpu ? ExtModuleKinds::rt_udf_gpu_module : ExtModuleKinds::rt_udf_cpu_module));
   }
@@ -1350,8 +1372,7 @@ class Executor {
   // Runtime extension function registration updates
   // extension_modules_ that needs to be kept blocked from codegen
   // until the update is complete.
-  static std::shared_mutex register_runtime_extension_functions_mutex_;
-
+  static std::mutex register_runtime_extension_functions_mutex_;
   static std::mutex kernel_mutex_;  // TODO: should this be executor-local mutex?
 
   friend class BaselineJoinHashTable;

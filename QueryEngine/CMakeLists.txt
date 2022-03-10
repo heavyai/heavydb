@@ -21,6 +21,7 @@ set(query_engine_source_files
     CastIR.cpp
     CgenState.cpp
     Codec.cpp
+    CodeCacheAccessor.cpp
     ColumnarResults.cpp
     ColumnFetcher.cpp
     ColumnIR.cpp

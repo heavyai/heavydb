@@ -4836,7 +4836,7 @@ std::mutex Executor::gpu_active_modules_mutex_;
 uint32_t Executor::gpu_active_modules_device_mask_{0x0};
 void* Executor::gpu_active_modules_[max_gpu_count];
 
-std::shared_mutex Executor::register_runtime_extension_functions_mutex_;
+std::mutex Executor::register_runtime_extension_functions_mutex_;
 std::mutex Executor::kernel_mutex_;
 
 QueryPlanDagCache Executor::query_plan_dag_cache_;

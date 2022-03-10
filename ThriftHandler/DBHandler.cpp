@@ -7316,74 +7316,57 @@ void DBHandler::register_runtime_extension_functions(
     THROW_MAPD_EXCEPTION("Runtime extension functions registration is disabled.");
   }
 
-  // Lock registration to avoid
-  // java.util.ConcurrentModificationException from calcite server
-  // when client registrations arrive too fast. Also blocks
-  // Executor::get_rt_udf_module for retrieving runtime UDF/UDTF
-  // module until this registration has rebuild it via
-  // Executor::update_after_registration:
-  std::unique_lock lock(Executor::register_runtime_extension_functions_mutex_);
+  Executor::registerExtensionFunctions([&]() {
+    auto it_cpu = device_ir_map.find(std::string{"cpu"});
+    auto it_gpu = device_ir_map.find(std::string{"gpu"});
+    if (it_cpu != device_ir_map.end() || it_gpu != device_ir_map.end()) {
+      if (it_cpu != device_ir_map.end()) {
+        Executor::extension_module_sources[Executor::ExtModuleKinds::rt_udf_cpu_module] =
+            it_cpu->second;
+      } else {
+        Executor::extension_module_sources.erase(
+            Executor::ExtModuleKinds::rt_udf_cpu_module);
+      }
+      if (it_gpu != device_ir_map.end()) {
+        Executor::extension_module_sources[Executor::ExtModuleKinds::rt_udf_gpu_module] =
+            it_gpu->second;
+      } else {
+        Executor::extension_module_sources.erase(
+            Executor::ExtModuleKinds::rt_udf_gpu_module);
+      }
+    } /* else avoid locking compilation if registration does not change
+         the rt_udf_cpu/gpu_module instances */
 
-  // TODO: add UDF registration permission scheme. Currently, UDFs are
-  // registered globally, that means that all users can use as well as
-  // overwrite UDFs that was created possibly by anoher user.
+    VLOG(1) << "Registering runtime UDTFs:\n";
 
-  Executor::resetAllExecutors(
-      /*discard_runtime_modules_only=*/true);  // includes execution lock
+    table_functions::TableFunctionsFactory::reset();
 
-  /* Parse LLVM/NVVM IR strings and store it as LLVM module. */
-  auto it_cpu = device_ir_map.find(std::string{"cpu"});
-  auto it_gpu = device_ir_map.find(std::string{"gpu"});
-  if (it_cpu != device_ir_map.end() || it_gpu != device_ir_map.end()) {
-    if (it_cpu != device_ir_map.end()) {
-      Executor::extension_module_sources[Executor::ExtModuleKinds::rt_udf_cpu_module] =
-          it_cpu->second;
-    } else {
-      Executor::extension_module_sources.erase(
-          Executor::ExtModuleKinds::rt_udf_cpu_module);
+    for (auto it = udtfs.begin(); it != udtfs.end(); it++) {
+      VLOG(1) << "UDTF name=" << it->name << std::endl;
+      table_functions::TableFunctionsFactory::add(
+          it->name,
+          table_functions::TableFunctionOutputRowSizer{
+              ThriftSerializers::from_thrift(it->sizerType),
+              static_cast<size_t>(it->sizerArgPos)},
+          ThriftSerializers::from_thrift(it->inputArgTypes),
+          ThriftSerializers::from_thrift(it->outputArgTypes),
+          ThriftSerializers::from_thrift(it->sqlArgTypes),
+          it->annotations,
+          /*is_runtime =*/true);
     }
-    if (it_gpu != device_ir_map.end()) {
-      Executor::extension_module_sources[Executor::ExtModuleKinds::rt_udf_gpu_module] =
-          it_gpu->second;
-    } else {
-      Executor::extension_module_sources.erase(
-          Executor::ExtModuleKinds::rt_udf_gpu_module);
-    }
-  } /* else avoid locking compilation if registration does not change
-       the rt_udf_cpu/gpu_module instances */
+    /* Register extension functions with Calcite server */
+    CHECK(calcite_);
+    auto udtfs_ = ThriftSerializers::to_thrift(
+        table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/true));
+    calcite_->setRuntimeExtensionFunctions(udfs, udtfs_, /*is_runtime =*/true);
 
-  VLOG(1) << "Registering runtime UDTFs:\n";
-
-  table_functions::TableFunctionsFactory::reset();
-
-  for (auto it = udtfs.begin(); it != udtfs.end(); it++) {
-    VLOG(1) << "UDTF name=" << it->name << std::endl;
-    table_functions::TableFunctionsFactory::add(
-        it->name,
-        table_functions::TableFunctionOutputRowSizer{
-            ThriftSerializers::from_thrift(it->sizerType),
-            static_cast<size_t>(it->sizerArgPos)},
-        ThriftSerializers::from_thrift(it->inputArgTypes),
-        ThriftSerializers::from_thrift(it->outputArgTypes),
-        ThriftSerializers::from_thrift(it->sqlArgTypes),
-        it->annotations,
-        /*is_runtime =*/true);
-  }
-
-  /* Register extension functions with Calcite server */
-  CHECK(calcite_);
-  auto udtfs_ = ThriftSerializers::to_thrift(
-      table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/true));
-  calcite_->setRuntimeExtensionFunctions(udfs, udtfs_, /*is_runtime =*/true);
-
-  /* Update the extension function whitelist */
-  std::string whitelist = calcite_->getRuntimeExtensionFunctionWhitelist();
-  VLOG(1) << "Registering runtime extension functions with CodeGen using whitelist:\n"
-          << whitelist;
-  ExtensionFunctionsWhitelist::clearRTUdfs();
-  ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
-
-  Executor::update_after_registration(/*update_runtime_modules_only=*/true);
+    /* Update the extension function whitelist */
+    std::string whitelist = calcite_->getRuntimeExtensionFunctionWhitelist();
+    VLOG(1) << "Registering runtime extension functions with CodeGen using whitelist:\n"
+            << whitelist;
+    ExtensionFunctionsWhitelist::clearRTUdfs();
+    ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
+  });
 }
 
 void DBHandler::get_table_function_names(std::vector<std::string>& _return,
