@@ -3111,7 +3111,7 @@ TEST(Select, ApproxMedianSanity) {
     } catch (std::runtime_error const& e) {
       EXPECT_EQ(std::string(e.what()),
                 "TException - service has thrown: "
-                "TOmniSciException(error_msg=APPROX_PERCENTILE/MEDIAN is not supported "
+                "TDBException(error_msg=APPROX_PERCENTILE/MEDIAN is not supported "
                 "in distributed mode at this time.)");
     } catch (...) {
       EXPECT_TRUE(false) << "std::runtime_error expected for approx_median query.";
@@ -22518,7 +22518,7 @@ TEST(Select, ParseIntegerExceptions) {
       } catch (std::runtime_error const& e) {
         if (g_aggregator) {
           EXPECT_EQ(e.what(),
-                    "TException - service has thrown: TOmniSciException(error_msg=" +
+                    "TException - service has thrown: TDBException(error_msg=" +
                         test.exception + ')');
         } else {
           EXPECT_EQ(e.what(), test.exception);

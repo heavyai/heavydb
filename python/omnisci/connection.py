@@ -9,7 +9,7 @@ from thrift.protocol import TBinaryProtocol, TJSONProtocol
 from thrift.transport import TSocket, TSSLSocket, THttpClient, TTransport
 from thrift.transport.TSocket import TTransportException
 from omnisci.thrift.OmniSci import Client
-from omnisci.thrift.ttypes import TOmniSciException
+from omnisci.thrift.ttypes import TDBException
 
 from .cursor import Cursor
 from .exceptions import _translate_exception, OperationalError
@@ -300,7 +300,7 @@ class Connection:
                     dbname = self._dbname
 
                 self._session = self._client.connect(user, password, dbname)
-        except TOmniSciException as e:
+        except TDBException as e:
             raise _translate_exception(e) from e
         except TTransportException:
             raise ValueError(
@@ -352,7 +352,7 @@ class Connection:
         if not self.sessionid and not self._closed:
             try:
                 self._client.disconnect(self._session)
-            except (TOmniSciException, AttributeError, TypeError):
+            except (TDBException, AttributeError, TypeError):
                 pass
         self._closed = 1
         self._rbc = None

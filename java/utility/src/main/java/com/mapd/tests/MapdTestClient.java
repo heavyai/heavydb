@@ -32,20 +32,20 @@ public class MapdTestClient {
   OmniSci.Client client;
   String sessionId;
 
-  public TServerStatus get_server_status() throws TOmniSciException, TException {
+  public TServerStatus get_server_status() throws TDBException, TException {
     return client.get_server_status(sessionId);
   }
 
-  public List<TServerStatus> get_status() throws TOmniSciException, TException {
+  public List<TServerStatus> get_status() throws TDBException, TException {
     return client.get_status(sessionId);
   }
 
-  public TClusterHardwareInfo get_hardware_info() throws TOmniSciException, TException {
+  public TClusterHardwareInfo get_hardware_info() throws TDBException, TException {
     return client.get_hardware_info(sessionId);
   }
 
   public List<TNodeMemoryInfo> get_memory(String memory_level)
-          throws TOmniSciException, TException {
+          throws TDBException, TException {
     return client.get_memory(sessionId, memory_level);
   }
 
@@ -58,7 +58,7 @@ public class MapdTestClient {
     return client.get_table_details_for_database(sessionId, tableName, databaseName);
   }
 
-  public List<TTableMeta> get_tables_meta() throws TOmniSciException, Exception {
+  public List<TTableMeta> get_tables_meta() throws TDBException, Exception {
     return client.get_tables_meta(sessionId);
   }
 

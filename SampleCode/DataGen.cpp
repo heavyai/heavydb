@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
     data_gen(table_details.row_desc, delimiter, num_rows);
     client.disconnect(session);  // disconnect from heavydb
     transport->close();          // close transport
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
     return 1;
   } catch (TException& te) {

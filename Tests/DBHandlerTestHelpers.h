@@ -472,14 +472,14 @@ class DBHandlerTestFixture : public testing::Test {
     try {
       lambda();
       FAIL() << "An exception should have been thrown for this test case.";
-    } catch (const TOmniSciException& e) {
+    } catch (const TDBException& e) {
       assertExceptionMessage(e, error_message, i_case);
     } catch (const std::runtime_error& e) {
       assertExceptionMessage(e, error_message, i_case);
     }
   }
 
-  void assertExceptionMessage(const TOmniSciException& e,
+  void assertExceptionMessage(const TDBException& e,
                               const std::string& error_message,
                               bool i_case = false) {
     std::string actual_err = e.error_msg;
@@ -534,14 +534,14 @@ class DBHandlerTestFixture : public testing::Test {
     try {
       lambda();
       FAIL() << "An exception should have been thrown for this test case.";
-    } catch (const TOmniSciException& e) {
+    } catch (const TDBException& e) {
       assertPartialExceptionMessage(e, error_message);
     } catch (const std::runtime_error& e) {
       assertPartialExceptionMessage(e, error_message);
     }
   }
 
-  void assertPartialExceptionMessage(const TOmniSciException& e,
+  void assertPartialExceptionMessage(const TDBException& e,
                                      const std::string& error_message) {
     ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
   }

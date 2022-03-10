@@ -4,7 +4,7 @@ Define exceptions as specified by the DB API 2.0 spec.
 Includes some helper methods for translating thrift
 exceptions to the ones defined here.
 """
-from omnisci.thrift.ttypes import TOmniSciException
+from omnisci.thrift.ttypes import TDBException
 
 
 class Warning(Exception):
@@ -57,7 +57,7 @@ def _translate_exception(e):
     exception.
     """
     # TODO: see if there's a way to get error codes, rather than relying msgs
-    if not isinstance(e, TOmniSciException):
+    if not isinstance(e, TDBException):
         return e
     if 'SQL Error' in e.error_msg:
         err = ProgrammingError

@@ -13,7 +13,7 @@ def catch_udf_support_disabled(mth):
         except Exception as msg:
             if type(
                 msg
-            ).__name__ == 'TOmniSciException' and msg.error_msg.startswith(
+            ).__name__ == 'TDBException' and msg.error_msg.startswith(
                 'Runtime UDF registration is disabled'
             ):
                 print('Ignoring `%s` failure' % (msg.error_msg))

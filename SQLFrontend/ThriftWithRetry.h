@@ -153,7 +153,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
             context.dash_return, context.session, context.dash_id);
         break;
     }
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
     return false;
   } catch (TException& te) {

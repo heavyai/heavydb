@@ -155,7 +155,7 @@ TEST_F(LoadTableTest, OmitNotNullableColumn) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING)};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column 'nns' cannot be omitted due to NOT NULL constraint)");
 }
 
@@ -178,7 +178,7 @@ TEST_F(LoadTableTest, DuplicateColumns) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column mp is mentioned multiple times)");
 }
 
@@ -190,7 +190,7 @@ TEST_F(LoadTableTest, UnexistingColumn) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV(MULTIPOLYGON), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column mp2 does not exist)");
 }
 
@@ -202,7 +202,7 @@ TEST_F(LoadTableTest, ColumnNumberMismatch) {
   row.cols = {getSV(MULTIPOLYGON), getSV(LINESTRING), getSV("nns")};
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Number of columns specified does not match the number of columns given (3 vs 4))");
 }
 
@@ -211,7 +211,7 @@ TEST_F(LoadTableTest, NoColumns) {
   auto& session = getDbHandlerAndSessionId().second;
   executeLambdaAndAssertException(
       [&]() { handler->load_table(session, "geo_load_test", {}, {}); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "No rows to insert)");
 }
 
@@ -308,7 +308,7 @@ TEST_F(LoadTableTest, BinaryOmitNotNullableColumnNoGeo) {
   row.cols = {i1_datum, s_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column 'nns' cannot be omitted due to NOT NULL constraint)");
 }
 
@@ -320,7 +320,7 @@ TEST_F(LoadTableTest, BinaryDuplicateColumnsNoGeo) {
   row.cols = {nns_datum, i1_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column i1 is mentioned multiple times)");
 }
 
@@ -332,7 +332,7 @@ TEST_F(LoadTableTest, BinaryUnexistingColumnNoGeo) {
   row.cols = {nns_datum, i1_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Column i2 does not exist)");
 }
 
@@ -344,7 +344,7 @@ TEST_F(LoadTableTest, BinaryColumnNumberMismatchNoGeo) {
   row.cols = {nns_datum, i1_datum};
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {row}, column_names); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "Number of columns specified does not match the number of columns given "
       "(2 vs 3))");
 }
@@ -354,7 +354,7 @@ TEST_F(LoadTableTest, BinaryNoColumns) {
   auto& session = getDbHandlerAndSessionId().second;
   executeLambdaAndAssertException(
       [&]() { handler->load_table_binary(session, "load_test", {}, {}); },
-      "TException - service has thrown: TOmniSciException(error_msg="
+      "TException - service has thrown: TDBException(error_msg="
       "No rows to insert)");
 }
 
@@ -815,7 +815,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -837,7 +837,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -857,7 +857,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailNoGeoColumns) {
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -879,7 +879,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
                                          getCopyParams(),
                                          row_descriptor,
                                          getCreateParams()),
-               TOmniSciException);
+               TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
 
@@ -974,7 +974,7 @@ TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_without_credentials) {
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(detectTable(PRIVATE_S3_FILE), TOmniSciException);
+  EXPECT_THROW(detectTable(PRIVATE_S3_FILE), TDBException);
 }
 
 TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
@@ -983,7 +983,7 @@ TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_invalid_specified_creden
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_THROW(detectTable(PRIVATE_S3_FILE, "invalid_access_key", "invalid_secret_key"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ThriftDetectServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
@@ -1071,7 +1071,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_without_credentials) {
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"), TOmniSciException);
+  EXPECT_THROW(importTable(PRIVATE_S3_FILE, "import_test_table"), TDBException);
 }
 
 TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
@@ -1083,7 +1083,7 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_invalid_specified_creden
                            "import_test_table",
                            "invalid_access_key",
                            "invalid_secret_key"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {

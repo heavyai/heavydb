@@ -67,7 +67,7 @@ TEST_F(ExplainTest, ExplainCmds) {
   //   the remainder sent to Calcite it should throw an exception
   //   because "nonexistant_table_name" does not exist
   EXPECT_THROW(sql("EXPLAIN PLAN SELECT COUNT(*) FROM nonexistant_table_name;"),
-               TOmniSciException);
+               TDBException);
 }
 
 int main(int argc, char** argv) {

@@ -397,7 +397,7 @@ TEST_F(ShowUserSessionsTest, PRIVILEGES_NONSUPERUSER) {
     std::string query{"SHOW USER SESSIONS;"};
     sql(result, query, usersession);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
         "SHOW USER SESSIONS failed, because it can only be executed by super "
         "user.",
@@ -602,20 +602,17 @@ TEST_F(ShowUserDetailsTest, AsNonSuper) {
 
   {
     TQueryResult result;
-    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user3;"),
-                 TOmniSciException);
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user3;"), TDBException);
   }
 
   {
     TQueryResult result;
-    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"),
-                 TOmniSciException);
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"), TDBException);
   }
 
   {
     TQueryResult result;
-    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super1;"),
-                 TOmniSciException);
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super1;"), TDBException);
   }
 }
 
@@ -651,31 +648,28 @@ TEST_F(ShowUserDetailsTest, AsSuper) {
 
   {
     TQueryResult result;
-    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user4;"),
-                 TOmniSciException);
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, user4;"), TDBException);
   }
 
   {
     TQueryResult result;
-    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"),
-                 TOmniSciException);
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, notauser;"), TDBException);
   }
 
   {
     TQueryResult result;
-    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super2;"),
-                 TOmniSciException);
+    EXPECT_THROW(sql(result, "SHOW USER DETAILS user1, user2, super2;"), TDBException);
   }
 }
 
 TEST_F(ShowUserDetailsTest, AllAsNonSuper) {
   login("user1", shared::kDefaultRootPasswd, "db1");
   TQueryResult result;
-  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS;"), TOmniSciException);
-  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1;"), TOmniSciException);
-  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1, super1;"), TOmniSciException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS;"), TDBException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1;"), TDBException);
+  EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1, super1;"), TDBException);
   EXPECT_THROW(sql(result, "SHOW ALL USER DETAILS user1, super1, notauser;"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ShowUserDetailsTest, AllAsSuper) {

@@ -2342,17 +2342,17 @@ TEST_F(ImportTest, S3_Regex_path_filter_parquet_no_match) {
   EXPECT_THROW(
       importTestS3(
           "trip.parquet", "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}),
-      TOmniSciException);
+      TDBException);
 }
 TEST_F(ImportTest, S3_Null_Prefix) {
   EXPECT_THROW(sql("copy trips from 's3://omnisci_ficticiousbucket/' WITH "
                    "(s3_region='us-west-1');"),
-               TOmniSciException);
+               TDBException);
 }
 TEST_F(ImportTest, S3_Wildcard_Prefix) {
   EXPECT_THROW(sql("copy trips from 's3://omnisci_ficticiousbucket/*' WITH "
                    "(s3_region='us-west-1');"),
-               TOmniSciException);
+               TDBException);
 }
 #endif  // HAVE_AWS_S3
 #endif  // ENABLE_IMPORT_PARQUET
@@ -2517,7 +2517,7 @@ TEST_F(ImportTest, Regex_path_filter_no_match) {
   EXPECT_THROW(
       importTestLocal(
           "trip_data_dir/csv", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?path"}}),
-      TOmniSciException);
+      TDBException);
 }
 
 // Sharding tests
@@ -2841,12 +2841,12 @@ TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Geometry) {
 
 TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Geography) {
   EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_type='geography'"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ImportTestGeo, Geo_CSV_Local_Type_Other) {
   EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_type='other'"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_NONE) {
@@ -2860,7 +2860,7 @@ TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_GEOINT32) {
 
 TEST_F(ImportTestGeo, Geo_CSV_Local_Encoding_Other) {
   EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_encoding='other'"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_LonLat) {
@@ -2873,7 +2873,7 @@ TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_Mercator) {
 
 TEST_F(ImportTestGeo, Geo_CSV_Local_SRID_Other) {
   EXPECT_THROW(importTestLocalGeo("geospatial.csv", ", geo_coords_srid=12345"),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ImportTestGeo, Geo_CSV_WKB) {
@@ -3260,7 +3260,7 @@ TEST_F(ImportTest, S3_Regex_path_filter_match) {
 TEST_F(ImportTest, S3_Regex_path_filter_no_match) {
   EXPECT_THROW(importTestS3Compressed(
                    "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ImportTest, S3_GCS_One_gz_file) {
@@ -3359,7 +3359,7 @@ TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials_NoRegion) {
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importPublicBucket(false, ""), TOmniSciException);
+  EXPECT_THROW(importPublicBucket(false, ""), TDBException);
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials_EmptyRegion) {
@@ -3368,7 +3368,7 @@ TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials_EmptyRegion) {
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importPublicBucket(true, ""), TOmniSciException);
+  EXPECT_THROW(importPublicBucket(true, ""), TDBException);
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Private_without_credentials) {
@@ -3376,7 +3376,7 @@ TEST_F(ImportServerPrivilegeTest, S3_Private_without_credentials) {
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importPrivateBucket(), TOmniSciException);
+  EXPECT_THROW(importPrivateBucket(), TDBException);
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Private_with_invalid_specified_credentials) {
@@ -3384,7 +3384,7 @@ TEST_F(ImportServerPrivilegeTest, S3_Private_with_invalid_specified_credentials)
     GTEST_SKIP();
   }
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
-  EXPECT_THROW(importPrivateBucket("invalid_key", "invalid_secret"), TOmniSciException);
+  EXPECT_THROW(importPrivateBucket("invalid_key", "invalid_secret"), TDBException);
 }
 
 TEST_F(ImportServerPrivilegeTest, S3_Private_with_valid_specified_credentials) {
@@ -4031,7 +4031,7 @@ TEST_F(ExportTest, InvalidFileType) {
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
   EXPECT_THROW(doExport(exp_file, "Fred", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, InvalidCompressionType) {
@@ -4040,7 +4040,7 @@ TEST_F(ExportTest, InvalidCompressionType) {
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
   EXPECT_THROW(doExport(exp_file, "", "Fred", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, CSV) {
@@ -4074,7 +4074,7 @@ TEST_F(ExportTest, CSV_InvalidName) {
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".jpg";
   EXPECT_THROW(doExport(exp_file, "CSV", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, CSV_Zip_Unimplemented) {
@@ -4083,7 +4083,7 @@ TEST_F(ExportTest, CSV_Zip_Unimplemented) {
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
     EXPECT_THROW(doExport(exp_file, "CSV", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-                 TOmniSciException);
+                 TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4094,7 +4094,7 @@ TEST_F(ExportTest, CSV_GZip_Unimplemented) {
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
     EXPECT_THROW(doExport(exp_file, "CSV", "GZip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-                 TOmniSciException);
+                 TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4138,7 +4138,7 @@ TEST_F(ExportTest, GeoJSON_InvalidName) {
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_geojson_" + geo_type + ".jpg";
   EXPECT_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, GeoJSON_Invalid_SRID) {
@@ -4147,7 +4147,7 @@ TEST_F(ExportTest, GeoJSON_Invalid_SRID) {
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
     EXPECT_THROW(doExport(exp_file, "GeoJSON", "", geo_type, WITH_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
+                 TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4174,7 +4174,7 @@ TEST_F(ExportTest, GeoJSON_Zip_Unimplemented) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
     EXPECT_THROW(
         doExport(exp_file, "GeoJSON", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
+        TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4239,7 +4239,7 @@ TEST_F(ExportTest, GeoJSONL_InvalidName) {
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".jpg";
   EXPECT_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, GeoJSONL_Invalid_SRID) {
@@ -4248,7 +4248,7 @@ TEST_F(ExportTest, GeoJSONL_Invalid_SRID) {
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
     EXPECT_THROW(doExport(exp_file, "GeoJSONL", "", geo_type, WITH_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
+                 TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4275,7 +4275,7 @@ TEST_F(ExportTest, GeoJSONL_Zip_Unimplemented) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
     EXPECT_THROW(
         doExport(exp_file, "GeoJSONL", "Zip", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
+        TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4339,7 +4339,7 @@ TEST_F(ExportTest, Shapefile_InvalidName) {
   std::string geo_type = "point";
   std::string shp_file = "query_export_test_shapefile_" + geo_type + ".jpg";
   EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, Shapefile_Invalid_SRID) {
@@ -4348,7 +4348,7 @@ TEST_F(ExportTest, Shapefile_Invalid_SRID) {
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
     EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
+                 TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4359,7 +4359,7 @@ TEST_F(ExportTest, Shapefile_RejectArrayColumns) {
   std::string geo_type = "point";
   std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
   EXPECT_THROW(doExport(shp_file, "Shapefile", "", geo_type, WITH_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, Shapefile_GZip_Unimplemented) {
@@ -4369,7 +4369,7 @@ TEST_F(ExportTest, Shapefile_GZip_Unimplemented) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
     EXPECT_THROW(
         doExport(shp_file, "Shapefile", "GZip", geo_type, NO_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
+        TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4381,7 +4381,7 @@ TEST_F(ExportTest, Shapefile_Zip_Unimplemented) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
     EXPECT_THROW(
         doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID),
-        TOmniSciException);
+        TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4421,7 +4421,7 @@ TEST_F(ExportTest, FlatGeobuf_InvalidName) {
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_fgb_" + geo_type + ".jpg";
   EXPECT_THROW(doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
@@ -4430,7 +4430,7 @@ TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".fgb";
     EXPECT_THROW(doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, INVALID_SRID),
-                 TOmniSciException);
+                 TDBException);
   };
   RUN_TEST_ON_ALL_GEO_TYPES();
 }
@@ -4439,7 +4439,7 @@ TEST_F(ExportTest, Array_Null_Handling_Default) {
   SKIP_ALL_ON_AGGREGATOR();
   EXPECT_THROW(doTestArrayNullHandling(
                    "query_export_test_array_null_handling_default.geojson", ""),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(ExportTest, Array_Null_Handling_Raw) {
@@ -4991,7 +4991,7 @@ TEST_F(RasterImportTest, ImportComputeAngleFailTest) {
                                 ", raster_point_compute_angle='true'",
                                 "SELECT raster_x, raster_y FROM raster;",
                                 {}),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(RasterImportTest, ImportComputeAngleTest) {
@@ -5016,7 +5016,7 @@ TEST_F(RasterImportTest, ImportSpecifiedBandsBadTest) {
                                 "raster_import_bands='bad,worse,terrible'",
                                 "",
                                 {}),
-               TOmniSciException);
+               TDBException);
 }
 
 TEST_F(RasterImportTest, ImportSpecifiedBandsRenameTest) {
@@ -5102,9 +5102,9 @@ class MetadataColumnsTest : public DBHandlerTestFixture {
 
   void testFail(const std::string& add_metadata_columns, const bool raster_only = false) {
     if (!raster_only) {
-      EXPECT_THROW(metadataColumnsTestGeo(add_metadata_columns), TOmniSciException);
+      EXPECT_THROW(metadataColumnsTestGeo(add_metadata_columns), TDBException);
     }
-    EXPECT_THROW(metadataColumnsTestRaster(add_metadata_columns), TOmniSciException);
+    EXPECT_THROW(metadataColumnsTestRaster(add_metadata_columns), TDBException);
   }
 };
 

@@ -1108,7 +1108,7 @@ TEST_P(NegativePrecisionOrDimensionTest, NegativePrecisionOrDimension) {
   try {
     sql(getCreateTableQuery(table_type, "test_table", "(col1 " + data_type + "(-1))"));
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     if (table_type == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
     }
@@ -1547,7 +1547,7 @@ TEST_P(CreateTableTest, InvalidSyntax) {
   try {
     sql(query);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     if (GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
       ASSERT_TRUE(e.error_msg.find("SQL Error") != std::string::npos);
     }
@@ -1560,7 +1560,7 @@ TEST_P(CreateTableTest, InvalidColumnDefinition) {
   try {
     sql(query);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     if (GetParam() == ddl_utils::TableType::TABLE) {
       ASSERT_TRUE(e.error_msg.find("Column definition for table test_table") !=
                   std::string::npos);

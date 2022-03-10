@@ -202,9 +202,9 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_NOSUPER) {
   try {
     sql(result, "ALTER SYSTEM CLEAR CPU MEMORY", user_session);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
-        "TException - service has thrown: TOmniSciException(error_msg=Superuser "
+        "TException - service has thrown: TDBException(error_msg=Superuser "
         "privilege is required to run clear_cpu_memory)",
         e.error_msg);
   }
@@ -212,18 +212,18 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_NOSUPER) {
   try {
     sql(result, "ALTER SYSTEM CLEAR GPU MEMORY", user_session);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
-        "TException - service has thrown: TOmniSciException(error_msg=Superuser "
+        "TException - service has thrown: TDBException(error_msg=Superuser "
         "privilege is required to run clear_gpu_memory)",
         e.error_msg);
   }
   try {
     sql(result, "ALTER SYSTEM CLEAR RENDER MEMORY", user_session);
     FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TOmniSciException& e) {
+  } catch (const TDBException& e) {
     ASSERT_EQ(
-        "TException - service has thrown: TOmniSciException(error_msg=Superuser "
+        "TException - service has thrown: TDBException(error_msg=Superuser "
         "privilege is required to run clear_render_memory)",
         e.error_msg);
   }

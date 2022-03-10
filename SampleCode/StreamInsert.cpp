@@ -108,7 +108,7 @@ void createConnection(ConnectionDetails con) {
     mytransport->open();  // open transport
     client->connect(
         session, con.user_name, con.passwd, con.db_name);  // connect to heavydb
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
@@ -119,7 +119,7 @@ void closeConnection() {
   try {
     client->disconnect(session);  // disconnect from heavydb
     mytransport->close();         // close transport
-  } catch (TOmniSciException& e) {
+  } catch (TDBException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
     std::cerr << "Thrift error: " << te.what() << std::endl;
@@ -153,7 +153,7 @@ void do_load(int& nrows,
                 << std::endl;
       // we successfully loaded the data, lets move on
       return;
-    } catch (TOmniSciException& e) {
+    } catch (TDBException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
       wait_disconnet_reconnnect_retry(tries, copy_params, conn_details);
     } catch (TException& te) {
