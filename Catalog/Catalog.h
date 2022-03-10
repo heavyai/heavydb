@@ -677,6 +677,16 @@ class Catalog final {
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
+  void buildDictionaryMapUnlocked();
+  void buildTablesMapUnlocked();
+  void buildColumnsMapUnlocked();
+  void updateViewsInMapUnlocked();
+  void buildDashboardsMapUnlocked(
+      const std::map<int32_t, std::string>& user_name_by_user_id);
+  void buildLinksMapUnlocked();
+  void buildLogicalToPhysicalMapUnlocked();
+  void updateForeignTablesInMapUnlocked();
+
   void gatherAdditionalInfo(std::vector<std::string>& additional_info,
                             std::set<std::string>& shared_dict_column_names,
                             const TableDescriptor* td) const;
@@ -688,8 +698,7 @@ class Catalog final {
   void renameTableDirectories(const std::string& temp_data_dir,
                               const std::vector<std::string>& target_paths,
                               const std::string& name_prefix) const;
-  void buildForeignServerMap();
-  void addForeignTableDetails();
+  void buildForeignServerMapUnlocked();
 
   void setForeignServerProperty(const std::string& server_name,
                                 const std::string& property,
@@ -727,7 +736,7 @@ class Catalog final {
   const Catalog* getObjForLock();
   void removeChunks(const int table_id) const;
 
-  void buildCustomExpressionsMap();
+  void buildCustomExpressionsMapUnlocked();
   std::unique_ptr<CustomExpression> getCustomExpressionFromConnector(size_t row);
 
   void restoreOldOwners(

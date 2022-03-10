@@ -63,7 +63,7 @@ using namespace std::string_literals;
 
 std::string g_base_path;
 bool g_enable_idp_temporary_users{true};
-bool g_enable_system_tables{false};
+bool g_enable_system_tables{true};
 
 extern bool g_enable_fsi;
 extern bool g_read_only;
@@ -194,7 +194,14 @@ void SysCatalog::init(const std::string& basePath,
     buildRoleMap();
     buildUserRoleMap();
     buildObjectDescriptorMap();
-    initializeInformationSchemaDb();
+    if (!is_new_db) {
+      // We don't want to create the information schema db during database initialization
+      // because we don't have the appropriate context to intialize the tables.  For
+      // instance if the server is intended to run in distributed mode, initializing the
+      // table as part of initdb will be missing information such as the location of the
+      // string dictionary server.
+      initializeInformationSchemaDb();
+    }
   }
 }
 

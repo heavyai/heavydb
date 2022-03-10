@@ -188,11 +188,14 @@ class FsiSchemaTest : public CatalogTest {
  protected:
   static void SetUpTestSuite() {
     g_enable_s3_fsi = true;
+    g_enable_fsi = true;
     CatalogTest::SetUpTestSuite();
   }
 
   void SetUp() override {
     g_enable_fsi = false;
+    g_enable_s3_fsi = false;
+    g_enable_system_tables = false;
     dropFsiTables();
   }
 
@@ -371,6 +374,8 @@ TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
 class SystemTableMigrationTest : public SysCatalogTest {
  protected:
   void SetUp() override {
+    g_enable_system_tables = true;
+    g_enable_fsi = true;
     dropInformationSchemaDb();
     deleteInformationSchemaMigration();
   }
