@@ -249,6 +249,7 @@ import_export::ImportStatus import_foreign_data(
   return import_status;
 }
 
+#ifdef HAVE_AWS_S3
 size_t get_number_of_digits(const size_t number) {
   return std::to_string(number).length();
 }
@@ -311,6 +312,7 @@ std::tuple<std::string, import_export::CopyParams> get_local_copy_source_and_par
   }
   return {temp_dir, local_copy_params};
 }
+#endif
 
 }  // namespace
 
