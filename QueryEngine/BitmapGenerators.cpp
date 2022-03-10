@@ -1,7 +1,7 @@
 #include "BitmapGenerators.h"
 #include <immintrin.h>
 
-
+#ifdef __AVX512F__
 size_t __attribute__((target("avx512bw", "avx512f"), optimize("no-tree-vectorize")))
 gen_null_bitmap_8(uint8_t* dst, const uint8_t* src, size_t size, const uint8_t null_val) {
   __m512i nulls_mask = _mm512_set1_epi8(reinterpret_cast<const int8_t&>(null_val));
@@ -104,7 +104,7 @@ gen_null_bitmap_64(uint8_t* dst,
 
   return null_count;
 }
-
+#endif
 
 template <typename TYPE>
 size_t gen_null_bitmap_default(uint8_t* dst,
