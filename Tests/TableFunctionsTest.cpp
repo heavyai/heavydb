@@ -18,6 +18,8 @@
 
 #include <gtest/gtest.h>
 
+#include "../Shared/DateTimeParser.h"
+
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "QueryRunner/QueryRunner.h"
@@ -1665,9 +1667,10 @@ void check_result_set_equality(const ResultSetPtr rows_1, const ResultSetPtr row
   }
 }
 
+template <typename T>
 void check_result_against_expected_result(
     const ResultSetPtr rows,
-    const std::vector<std::vector<int64_t>>& expected_result) {
+    const std::vector<std::vector<T>>& expected_result) {
   const size_t num_result_rows = rows->rowCount();
   ASSERT_EQ(num_result_rows, expected_result.size());
   const size_t num_result_cols = rows->colCount();
@@ -1677,7 +1680,7 @@ void check_result_against_expected_result(
     ASSERT_EQ(num_result_cols, expected_result_row.size());
     ASSERT_EQ(num_result_cols, row.size());
     for (size_t c = 0; c < num_result_cols; ++c) {
-      ASSERT_EQ(TestHelpers::v<int64_t>(row[c]), expected_result_row[c]);
+      ASSERT_EQ(TestHelpers::v<T>(row[c]), expected_result_row[c]);
     }
   }
 }
@@ -1698,11 +1701,11 @@ void print_result(const ResultSetPtr rows) {
 TEST_F(TableFunctions, TimestampTests) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    // TIMESTAMP columns which already have nanosecond precision
+    // extracting TIMESTAMP columns which already have nanosecond precision
     {
       const auto result = run_multiple_agg(
           "SELECT ns,us,ms,s,m,h,d,mo,y FROM "
-          "TABLE(ct_timestamp_count_metrics(cursor(SELECT t1 FROM "
+          "TABLE(ct_timestamp_extract(cursor(SELECT t1 FROM "
           "time_test)));",
           dt);
       ASSERT_EQ(result->rowCount(), size_t(3));
@@ -1715,12 +1718,67 @@ TEST_F(TableFunctions, TimestampTests) {
           std::vector<int64_t>({3003003003, 3003003, 3003, 3, 3, 3, 3, 3, 1973}));
       check_result_against_expected_result(result, expected_result_set);
     }
+    // truncating TIMESTAMP columns which already have nanosecond precision
+    {
+      const auto result = run_multiple_agg(
+          "SELECT us,ms,s,m,h,d,mo,y FROM "
+          "TABLE(ct_timestamp_truncate(cursor(SELECT t1 FROM "
+          "time_test)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(3));
+      std::vector<std::vector<int64_t>> expected_result_set;
+      std::vector<int64_t> vec1(result->colCount()), vec2(result->colCount()),
+          vec3(result->colCount());
+      std::vector<NullableString> vec_str1 =
+          std::vector<NullableString>({"1971-01-01 01:01:01.001001000",
+                                       "1971-01-01 01:01:01.001000000",
+                                       "1971-01-01 01:01:01.000000000",
+                                       "1971-01-01 01:01:00.000000000",
+                                       "1971-01-01 01:00:00.000000000",
+                                       "1971-01-01 00:00:00.000000000",
+                                       "1971-01-01 00:00:00.000000000",
+                                       "1971-01-01 00:00:00.000000000"});
+      std::vector<NullableString> vec_str2 =
+          std::vector<NullableString>({"1972-02-02 02:02:02.002002000",
+                                       "1972-02-02 02:02:02.002000000",
+                                       "1972-02-02 02:02:02.000000000",
+                                       "1972-02-02 02:02:00.000000000",
+                                       "1972-02-02 02:00:00.000000000",
+                                       "1972-02-02 00:00:00.000000000",
+                                       "1972-02-01 00:00:00.000000000",
+                                       "1972-01-01 00:00:00.000000000"});
+      std::vector<NullableString> vec_str3 =
+          std::vector<NullableString>({"1973-03-03 03:03:03.003003000",
+                                       "1973-03-03 03:03:03.003000000",
+                                       "1973-03-03 03:03:03.000000000",
+                                       "1973-03-03 03:03:00.000000000",
+                                       "1973-03-03 03:00:00.000000000",
+                                       "1973-03-03 00:00:00.000000000",
+                                       "1973-03-01 00:00:00.000000000",
+                                       "1973-01-01 00:00:00.000000000"});
+      std::transform(
+          vec_str1.begin(), vec_str1.end(), vec1.begin(), [](NullableString str) {
+            return dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(str), 9);
+          });
+      std::transform(
+          vec_str2.begin(), vec_str2.end(), vec2.begin(), [](NullableString str) {
+            return dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(str), 9);
+          });
+      std::transform(
+          vec_str3.begin(), vec_str3.end(), vec3.begin(), [](NullableString str) {
+            return dateTimeParse<kTIMESTAMP>(boost::lexical_cast<std::string>(str), 9);
+          });
+      expected_result_set.push_back(vec1);
+      expected_result_set.push_back(vec2);
+      expected_result_set.push_back(vec3);
+      check_result_against_expected_result(result, expected_result_set);
+    }
 
     // TIMESTAMP columns which require upcasting to nanosecond precision
     {
       const auto result = run_multiple_agg(
           "SELECT ns,us,ms,s,m,h,d,mo,y FROM "
-          "TABLE(ct_timestamp_count_metrics(cursor(SELECT t1 FROM "
+          "TABLE(ct_timestamp_extract(cursor(SELECT t1 FROM "
           "time_test_castable)));",
           dt);
       ASSERT_EQ(result->rowCount(), size_t(3));
@@ -1738,7 +1796,7 @@ TEST_F(TableFunctions, TimestampTests) {
     // enough range
     {
       EXPECT_THROW(run_multiple_agg("SELECT ns,us,ms,s,m,h,d,mo,y FROM "
-                                    "TABLE(ct_timestamp_count_metrics(cursor(SELECT t1 "
+                                    "TABLE(ct_timestamp_extract(cursor(SELECT t1 "
                                     "FROM time_test_uncastable)));",
                                     dt),
                    UserTableFunctionError);
