@@ -118,6 +118,24 @@ RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
   if (dynamic_cast<const Analyzer::CaseExpr*>(in_vals->get_arg())) {
     return ra_exe_unit_in;
   }
+  auto in_val_cv = dynamic_cast<const Analyzer::ColumnVar*>(in_vals->get_arg());
+  if (in_val_cv) {
+    auto it = std::find_if(
+        ra_exe_unit_in.groupby_exprs.begin(),
+        ra_exe_unit_in.groupby_exprs.end(),
+        [&in_val_cv](std::shared_ptr<Analyzer::Expr> groupby_expr) {
+          if (auto groupby_cv =
+                  std::dynamic_pointer_cast<Analyzer::ColumnVar>(groupby_expr)) {
+            return *in_val_cv == *groupby_cv.get();
+          }
+          return false;
+        });
+    if (it != ra_exe_unit_in.groupby_exprs.end()) {
+      // we do not need to deploy case-when rewriting when in_val cv is listed as groupby
+      // col i.e., ... WHERE v IN (SELECT DISTINCT v FROM ...)
+      return ra_exe_unit_in;
+    }
+  }
   auto case_expr = generateCaseForDomainValues(in_vals.get());
   return rewriteConstrainedByInImpl(ra_exe_unit_in, case_expr, in_vals.get());
 }

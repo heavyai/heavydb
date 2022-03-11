@@ -2024,6 +2024,17 @@ TEST(Select, GroupBy) {
     c("SELECT x, y, COUNT(x) FROM test GROUP BY x,y;", dt);
     c("SELECT x, y, COUNT(DISTINCT x) FROM test GROUP BY x,y;", dt);
   }
+
+  {
+    ScopeGuard reset_constrained_by_in_threshold =
+        [orig = g_constrained_by_in_threshold] { g_constrained_by_in_threshold = orig; };
+    g_constrained_by_in_threshold = 0;
+    // check case rewriting logic on In-argument with distinct qualifier
+    c("SELECT str FROM test_inner WHERE str IN (SELECT DISTINCT str FROM test_inner "
+      "where str = 'foo') group by str;",
+      ExecutorDeviceType::CPU);
+  }
+
   run_ddl_statement("DROP TABLE IF EXISTS count_distinct_rewrite;");
 }
 
