@@ -463,7 +463,7 @@ public class ExtensionFunction {
         return SqlTypeName.COLUMN_LIST;
       case Void:
         // some extension functions return void. these functions should be defined in
-        // MapDSqlOperatorTable and never have their definition set from the AST file
+        // HeavyDBSqlOperatorTable and never have their definition set from the AST file
         return null;
     }
     Set<SqlTypeName> allSqlTypeNames = EnumSet.allOf(SqlTypeName.class);

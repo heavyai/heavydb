@@ -15,9 +15,9 @@
  */
 package com.mapd.calcite.parser;
 
-import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
+import static com.mapd.calcite.parser.HeavyDBParser.CURRENT_PARSER;
 
-import com.mapd.calcite.parser.MapDParserOptions;
+import com.mapd.calcite.parser.HeavyDBParserOptions;
 import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.calcite.plan.RelOptTable;
@@ -36,17 +36,17 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 
-public class MapDView extends MapDTable implements TranslatableTable {
-  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDView.class);
+public class HeavyDBView extends HeavyDBTable implements TranslatableTable {
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBView.class);
   private final String viewSql;
   private SqlIdentifierCapturer accessObjects;
   private RelRoot viewRelRoot;
 
-  public MapDView(String view_sql, TTableDetails ri, MapDParser mp) {
+  public HeavyDBView(String view_sql, TTableDetails ri, HeavyDBParser mp) {
     super(ri);
     this.viewSql = view_sql;
     try {
-      MapDParserOptions parserOptions = new MapDParserOptions();
+      HeavyDBParserOptions parserOptions = new HeavyDBParserOptions();
       viewRelRoot = mp.queryToRelNode(viewSql, parserOptions);
       accessObjects = mp.captureIdentifiers(viewSql, parserOptions.isLegacySyntax());
     } catch (SqlParseException e) {

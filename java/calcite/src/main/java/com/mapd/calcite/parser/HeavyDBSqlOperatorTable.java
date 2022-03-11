@@ -102,7 +102,7 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
  *
  * @author michael
  */
-public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
+public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static final SqlArrayValueConstructorAllowingEmpty ARRAY_VALUE_CONSTRUCTOR =
           new SqlArrayValueConstructorAllowingEmpty();
 
@@ -149,7 +149,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
   }
 
-  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDSqlOperatorTable.class);
+  final static Logger HEAVYDBLOGGER =
+          LoggerFactory.getLogger(HeavyDBSqlOperatorTable.class);
 
   /**
    * Mock operator table for testing purposes. Contains the standard SQL operator
@@ -159,7 +160,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   private final ListSqlOperatorTable listOpTab;
 
   // ~ Constructors -----------------------------------------------------------
-  public MapDSqlOperatorTable(SqlOperatorTable parentTable) {
+  public HeavyDBSqlOperatorTable(SqlOperatorTable parentTable) {
     super(ImmutableList.of(parentTable, new CaseInsensitiveListSqlOperatorTable()));
     listOpTab = (ListSqlOperatorTable) tableList.get(1);
   }
@@ -174,7 +175,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   public static void addUDF(
-          MapDSqlOperatorTable opTab, final Map<String, ExtensionFunction> extSigs) {
+          HeavyDBSqlOperatorTable opTab, final Map<String, ExtensionFunction> extSigs) {
     // Don't use anonymous inner classes. They can't be instantiated
     // using reflection when we are deserializing from JSON.
     // opTab.addOperator(new RampFunction());
@@ -2707,4 +2708,4 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 }
 
-// End MapDSqlOperatorTable.java
+// End HeavyDBSqlOperatorTable.java

@@ -16,7 +16,7 @@
  */
 package org.apache.calcite.prepare;
 
-import com.mapd.calcite.parser.MapDTable;
+import com.mapd.calcite.parser.HeavyDBTable;
 
 import org.apache.calcite.adapter.java.JavaTypeFactory;
 import org.apache.calcite.rel.type.RelDataType;
@@ -84,7 +84,8 @@ class CalciteSqlValidator extends SqlValidatorImpl {
         SqlValidatorTable sqlValidatorTable =
                 scope.fullyQualify(columnId).namespace.getTable();
         if (sqlValidatorTable != null) {
-          MapDTable table = (MapDTable) sqlValidatorTable.unwrap(MapDTable.class);
+          HeavyDBTable table =
+                  (HeavyDBTable) sqlValidatorTable.unwrap(HeavyDBTable.class);
           return table.isSystemColumn(columnId.names.get(1));
         }
       }

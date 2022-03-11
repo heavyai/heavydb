@@ -19,8 +19,8 @@ package com.mapd.calcite.parser;
 import org.apache.calcite.rel.type.RelDataTypeSystemImpl;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-public class MapDTypeSystem extends RelDataTypeSystemImpl {
-  public MapDTypeSystem() {}
+public class HeavyDBTypeSystem extends RelDataTypeSystemImpl {
+  public HeavyDBTypeSystem() {}
 
   @Override
   public int getMaxPrecision(SqlTypeName typeName) {

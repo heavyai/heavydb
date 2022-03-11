@@ -15,8 +15,8 @@
  */
 package com.mapd.parser.server;
 
-import com.mapd.calcite.parser.MapDParser;
-import com.mapd.calcite.parser.MapDSqlOperatorTable;
+import com.mapd.calcite.parser.HeavyDBParser;
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable;
 import com.mapd.common.SockTransportProperties;
 
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
@@ -39,11 +39,11 @@ class CalciteParserFactory implements PoolableObjectFactory {
   private final Map<String, ExtensionFunction> extSigs;
   private final int mapdPort;
   private final SockTransportProperties socket_transport_properties;
-  private volatile MapDSqlOperatorTable tableOperator;
-  private final Supplier<MapDSqlOperatorTable> tableOperatorSupplier =
-          new Supplier<MapDSqlOperatorTable>() {
+  private volatile HeavyDBSqlOperatorTable tableOperator;
+  private final Supplier<HeavyDBSqlOperatorTable> tableOperatorSupplier =
+          new Supplier<HeavyDBSqlOperatorTable>() {
             @Override
-            public MapDSqlOperatorTable get() {
+            public HeavyDBSqlOperatorTable get() {
               return tableOperator;
             }
           };
@@ -70,15 +70,15 @@ class CalciteParserFactory implements PoolableObjectFactory {
   }
 
   public void updateOperatorTable() {
-    MapDSqlOperatorTable tableOperator =
-            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
-    MapDSqlOperatorTable.addUDF(tableOperator, extSigs);
+    HeavyDBSqlOperatorTable tableOperator =
+            new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
+    HeavyDBSqlOperatorTable.addUDF(tableOperator, extSigs);
     this.tableOperator = tableOperator;
   }
 
   @Override
   public Object makeObject() throws Exception {
-    MapDParser obj = new MapDParser(
+    HeavyDBParser obj = new HeavyDBParser(
             dataDir, tableOperatorSupplier, mapdPort, socket_transport_properties);
     return obj;
   }
@@ -90,7 +90,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   @Override
   public boolean validateObject(Object obj) {
-    MapDParser mdp = (MapDParser) obj;
+    HeavyDBParser mdp = (HeavyDBParser) obj;
     if (mdp.getCallCount() < 1000) {
       return true;
     } else {

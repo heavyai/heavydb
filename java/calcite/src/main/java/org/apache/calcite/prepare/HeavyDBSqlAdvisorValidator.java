@@ -31,8 +31,8 @@ import org.apache.calcite.util.Util;
 
 import java.util.List;
 
-class MapDSqlAdvisorValidator extends SqlAdvisorValidator {
-  MapDSqlAdvisorValidator(List<String> visibleTables,
+class HeavyDBSqlAdvisorValidator extends SqlAdvisorValidator {
+  HeavyDBSqlAdvisorValidator(List<String> visibleTables,
           SqlOperatorTable opTab,
           SqlValidatorCatalogReader catalogReader,
           RelDataTypeFactory typeFactory,

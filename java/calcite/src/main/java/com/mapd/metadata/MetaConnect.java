@@ -20,10 +20,10 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mapd.calcite.parser.MapDParser;
-import com.mapd.calcite.parser.MapDTable;
-import com.mapd.calcite.parser.MapDUser;
-import com.mapd.calcite.parser.MapDView;
+import com.mapd.calcite.parser.HeavyDBParser;
+import com.mapd.calcite.parser.HeavyDBTable;
+import com.mapd.calcite.parser.HeavyDBUser;
+import com.mapd.calcite.parser.HeavyDBView;
 import com.mapd.common.SockTransportProperties;
 import com.omnisci.thrift.server.OmniSci;
 import com.omnisci.thrift.server.TColumnType;
@@ -69,10 +69,10 @@ public class MetaConnect {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MetaConnect.class);
   private final String dataDir;
   private final String default_db;
-  private final MapDUser currentUser;
+  private final HeavyDBUser currentUser;
   private final int mapdPort;
   private Connection catConn;
-  private final MapDParser parser;
+  private final HeavyDBParser parser;
 
   private static final int KBOOLEAN = 1;
   private static final int KCHAR = 2;
@@ -106,21 +106,21 @@ public class MetaConnect {
 
   public MetaConnect(int mapdPort,
           String dataDir,
-          MapDUser currentMapDUser,
-          MapDParser parser,
+          HeavyDBUser currentHeavyDBUser,
+          HeavyDBParser parser,
           SockTransportProperties skT,
           String db) {
     this.dataDir = dataDir;
     if (db != null) {
       this.default_db = db;
     } else {
-      if (currentMapDUser != null) {
-        this.default_db = currentMapDUser.getDB();
+      if (currentHeavyDBUser != null) {
+        this.default_db = currentHeavyDBUser.getDB();
       } else {
         this.default_db = null;
       }
     }
-    this.currentUser = currentMapDUser;
+    this.currentUser = currentHeavyDBUser;
     this.mapdPort = mapdPort;
     this.parser = parser;
     this.sock_transport_properties = skT;
@@ -137,10 +137,10 @@ public class MetaConnect {
 
   public MetaConnect(int mapdPort,
           String dataDir,
-          MapDUser currentMapDUser,
-          MapDParser parser,
+          HeavyDBUser currentHeavyDBUser,
+          HeavyDBParser parser,
           SockTransportProperties skT) {
-    this(mapdPort, dataDir, currentMapDUser, parser, skT, null);
+    this(mapdPort, dataDir, currentHeavyDBUser, parser, skT, null);
   }
 
   public List<String> getDatabases() {
@@ -202,14 +202,14 @@ public class MetaConnect {
 
     if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
       HEAVYDBLOGGER.debug("Processing a table");
-      Table rTable = new MapDTable(td);
+      Table rTable = new HeavyDBTable(td);
       MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
               + " details " + rTable + " Not in buffer");
       return rTable;
     } else {
       HEAVYDBLOGGER.debug("Processing a view");
-      Table rTable = new MapDView(getViewSql(tableName), td, parser);
+      Table rTable = new HeavyDBView(getViewSql(tableName), td, parser);
       MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
               + " details " + rTable + " Not in buffer");
@@ -888,7 +888,7 @@ public class MetaConnect {
     for (List<String> keys : all) {
       if (keys.get(0).equals(schema.toUpperCase())) {
         Table ttable = MAPD_TABLE_DETAILS.get(keys);
-        if (ttable instanceof MapDView) {
+        if (ttable instanceof HeavyDBView) {
           HEAVYDBLOGGER.debug(
                   "removing view in schema " + keys.get(0) + " view " + keys.get(1));
           MAPD_TABLE_DETAILS.remove(keys);

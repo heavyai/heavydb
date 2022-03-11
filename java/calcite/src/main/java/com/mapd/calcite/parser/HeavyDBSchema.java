@@ -28,15 +28,15 @@ import java.util.Set;
  *
  * @author michael
  */
-public class MapDSchema implements Schema {
-  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDSchema.class);
+public class HeavyDBSchema implements Schema {
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBSchema.class);
 
   final private MetaConnect metaConnect;
   private SockTransportProperties sock_transport_properties = null;
-  public MapDSchema(String dataDir,
-          MapDParser mp,
+  public HeavyDBSchema(String dataDir,
+          HeavyDBParser mp,
           int mapdPort,
-          MapDUser mapdUser,
+          HeavyDBUser mapdUser,
           SockTransportProperties skT,
           String db) {
     System.setProperty(
@@ -48,10 +48,10 @@ public class MapDSchema implements Schema {
     metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp, skT, db);
   }
 
-  public MapDSchema(String dataDir,
-          MapDParser mp,
+  public HeavyDBSchema(String dataDir,
+          HeavyDBParser mp,
           int mapdPort,
-          MapDUser mapdUser,
+          HeavyDBUser mapdUser,
           SockTransportProperties skT) {
     this(dataDir, mp, mapdPort, mapdUser, skT, null);
   }

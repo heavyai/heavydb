@@ -48,16 +48,16 @@ public class RuntimeInterruptConcurrencyTest {
     return path_obj;
   }
 
-  private MapdTestClient getClient(String db, String username) {
+  private HeavyDBTestClient getClient(String db, String username) {
     try {
-      return MapdTestClient.getClient("localhost", 6274, db, username, "password");
+      return HeavyDBTestClient.getClient("localhost", 6274, db, username, "password");
     } catch (Exception e) {
       e.printStackTrace();
     }
     return null;
   }
 
-  private void cleanupUserAndDB(MapdTestClient su) {
+  private void cleanupUserAndDB(HeavyDBTestClient su) {
     try {
       su.runSql("DROP DATABASE db1;");
       su.runSql("DROP USER u0;");
@@ -97,8 +97,8 @@ public class RuntimeInterruptConcurrencyTest {
     Path geojson_table_path = getAbsolutePath(
             "../java/utility/src/main/java/com/mapd/tests/data/geogdal.geojson");
     try {
-      MapdTestClient dba =
-              MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+      HeavyDBTestClient dba =
+              HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
       dba.runSql("CREATE TABLE " + large_table + "(x int not null);");
       dba.runSql("CREATE TABLE " + small_table + "(x int not null);");
       dba.runSql("CREATE TABLE " + geo_table
@@ -192,7 +192,7 @@ public class RuntimeInterruptConcurrencyTest {
         // try to interrupt
         int tid = INTERRUPTER_TID;
         String logPrefix = "[" + tid + "]";
-        MapdTestClient interrupter = getClient(db, "interrupter");
+        HeavyDBTestClient interrupter = getClient(db, "interrupter");
         int check_empty_session_queue = 0;
         while (true) {
           try {
@@ -243,7 +243,7 @@ public class RuntimeInterruptConcurrencyTest {
             @Override
             public void run() {
               logger.info("Starting thread-" + tid);
-              final MapdTestClient user = getClient(db, user_name);
+              final HeavyDBTestClient user = getClient(db, user_name);
               for (int k = 0; k < 5; k++) {
                 boolean interrupted = false;
                 for (int q = 0; q < 3; q++) {
@@ -275,7 +275,7 @@ public class RuntimeInterruptConcurrencyTest {
             @Override
             public void run() {
               logger.info("Starting thread-" + tid);
-              final MapdTestClient user = getClient(db, user_name);
+              final HeavyDBTestClient user = getClient(db, user_name);
               for (int k = 0; k < 2; k++) {
                 boolean interrupted = false;
                 try {
@@ -312,8 +312,8 @@ public class RuntimeInterruptConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
     dba.runSql("DROP TABLE " + large_table + ";");
     dba.runSql("DROP TABLE " + small_table + ";");
     dba.runSql("DROP TABLE " + geo_table + ";");
@@ -334,7 +334,7 @@ public class RuntimeInterruptConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("RuntimeInterruptConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     cleanupUserAndDB(su);
     su.runSql("CREATE DATABASE db1;");

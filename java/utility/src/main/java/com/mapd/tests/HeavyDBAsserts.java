@@ -17,7 +17,7 @@ package com.mapd.tests;
 
 import com.omnisci.thrift.server.TDashboard;
 
-public class MapdAsserts {
+public class HeavyDBAsserts {
   public static interface TestRun { void run() throws Exception; }
 
   public static void assertEqual(Object a, Object b) {

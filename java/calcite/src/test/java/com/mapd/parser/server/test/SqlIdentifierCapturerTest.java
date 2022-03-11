@@ -5,11 +5,11 @@ import static org.junit.Assert.assertEquals;
 import static java.util.Arrays.asList;
 
 import com.google.common.collect.ImmutableList;
-import com.mapd.calcite.parser.MapDSqlOperatorTable;
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.linq4j.tree.Expression;
-import org.apache.calcite.prepare.MapDPlanner;
+import org.apache.calcite.prepare.HeavyDBPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.Function;
@@ -98,13 +98,13 @@ public class SqlIdentifierCapturerTest {
             Frameworks.newConfigBuilder()
                     .defaultSchema(rootSchema.add("omnisci", mapd))
                     .operatorTable(
-                            new MapDSqlOperatorTable(SqlStdOperatorTable.instance()))
+                            new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance()))
                     .parserConfig(SqlParser.configBuilder()
                                           .setUnquotedCasing(Casing.UNCHANGED)
                                           .setCaseSensitive(false)
                                           .build())
                     .build();
-    return new MapDPlanner(config);
+    return new HeavyDBPlanner(config);
   }
 
   public static ImmutableList<String> asImmutableList(String... vals) {

@@ -1,9 +1,9 @@
 package com.mapd.parser.extension.ddl;
 
-import com.mapd.calcite.parser.MapDSerializer;
+import com.mapd.calcite.parser.HeavyDBSerializer;
 
 public interface JsonSerializableDdl {
   default String toJsonString() {
-    return MapDSerializer.toJsonString(this);
+    return HeavyDBSerializer.toJsonString(this);
   }
 }

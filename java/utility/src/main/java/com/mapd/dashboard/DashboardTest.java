@@ -15,10 +15,10 @@
  */
 package com.mapd.dashboard;
 
-import static com.mapd.tests.MapdAsserts.shouldThrowException;
+import static com.mapd.tests.HeavyDBAsserts.shouldThrowException;
 
-import com.mapd.tests.MapdAsserts;
-import com.mapd.tests.MapdTestClient;
+import com.mapd.tests.HeavyDBAsserts;
+import com.mapd.tests.HeavyDBTestClient;
 import com.omnisci.thrift.server.TDBObject;
 import com.omnisci.thrift.server.TDBObjectType;
 
@@ -42,7 +42,7 @@ public class DashboardTest {
 
   void testUserRoles() throws Exception {
     logger.info("testUserRoles()");
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "omnisci", "admin", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
@@ -54,34 +54,34 @@ public class DashboardTest {
 
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");
-    MapdTestClient dba1 =
-            MapdTestClient.getClient("localhost", 6274, "db1", "bob", "password");
-    MapdTestClient dba2 =
-            MapdTestClient.getClient("localhost", 6274, "db2", "foo", "password");
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, "db2", "dba", "password");
-    MapdAsserts.assertEqual(0, dba1.get_users().size());
-    MapdAsserts.assertEqual(0, dba1.get_roles().size());
-    MapdAsserts.assertEqual(0, dba2.get_users().size());
-    MapdAsserts.assertEqual(0, dba2.get_roles().size());
-    MapdAsserts.assertEqual(5, dba.get_users().size());
-    MapdAsserts.assertEqual(1, dba.get_roles().size());
+    HeavyDBTestClient dba1 =
+            HeavyDBTestClient.getClient("localhost", 6274, "db1", "bob", "password");
+    HeavyDBTestClient dba2 =
+            HeavyDBTestClient.getClient("localhost", 6274, "db2", "foo", "password");
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, "db2", "dba", "password");
+    HeavyDBAsserts.assertEqual(0, dba1.get_users().size());
+    HeavyDBAsserts.assertEqual(0, dba1.get_roles().size());
+    HeavyDBAsserts.assertEqual(0, dba2.get_users().size());
+    HeavyDBAsserts.assertEqual(0, dba2.get_roles().size());
+    HeavyDBAsserts.assertEqual(5, dba.get_users().size());
+    HeavyDBAsserts.assertEqual(1, dba.get_roles().size());
 
     su.runSql("GRANT create dashboard on database db1 to jason;");
-    MapdAsserts.assertEqual(Arrays.asList("jason"), dba1.get_users());
-    MapdAsserts.assertEqual(0, dba1.get_roles().size());
-    MapdAsserts.assertEqual(0, dba2.get_users().size());
-    MapdAsserts.assertEqual(0, dba2.get_roles().size());
-    MapdAsserts.assertEqual(5, dba.get_users().size());
-    MapdAsserts.assertEqual(1, dba.get_roles().size());
+    HeavyDBAsserts.assertEqual(Arrays.asList("jason"), dba1.get_users());
+    HeavyDBAsserts.assertEqual(0, dba1.get_roles().size());
+    HeavyDBAsserts.assertEqual(0, dba2.get_users().size());
+    HeavyDBAsserts.assertEqual(0, dba2.get_roles().size());
+    HeavyDBAsserts.assertEqual(5, dba.get_users().size());
+    HeavyDBAsserts.assertEqual(1, dba.get_roles().size());
 
     su.runSql("GRANT create dashboard on database db1 to salesDept;");
-    MapdAsserts.assertEqual(Arrays.asList("jason"), dba1.get_users());
-    MapdAsserts.assertEqual(Arrays.asList("salesDept"), dba1.get_roles());
-    MapdAsserts.assertEqual(0, dba2.get_users().size());
-    MapdAsserts.assertEqual(0, dba2.get_roles().size());
-    MapdAsserts.assertEqual(5, dba.get_users().size());
-    MapdAsserts.assertEqual(1, dba.get_roles().size());
+    HeavyDBAsserts.assertEqual(Arrays.asList("jason"), dba1.get_users());
+    HeavyDBAsserts.assertEqual(Arrays.asList("salesDept"), dba1.get_roles());
+    HeavyDBAsserts.assertEqual(0, dba2.get_users().size());
+    HeavyDBAsserts.assertEqual(0, dba2.get_roles().size());
+    HeavyDBAsserts.assertEqual(5, dba.get_users().size());
+    HeavyDBAsserts.assertEqual(1, dba.get_roles().size());
 
     su.runSql("DROP DATABASE db1;");
     su.runSql("DROP DATABASE db2;");
@@ -95,7 +95,7 @@ public class DashboardTest {
   void testDbLevelDashboardPermissions() throws Exception {
     logger.info("testDbLevelDashboardPermissions()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "omnisci", "admin", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
@@ -106,60 +106,60 @@ public class DashboardTest {
 
     su.runSql("GRANT salesDept TO foo;");
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, "omnisci", "dba", "password");
-    MapdTestClient jason =
-            MapdTestClient.getClient("localhost", 6274, "omnisci", "jason", "password");
-    MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 6274, "omnisci", "foo", "password");
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, "omnisci", "dba", "password");
+    HeavyDBTestClient jason = HeavyDBTestClient.getClient(
+            "localhost", 6274, "omnisci", "jason", "password");
+    HeavyDBTestClient foo =
+            HeavyDBTestClient.getClient("localhost", 6274, "omnisci", "foo", "password");
 
-    MapdAsserts.assertEqual(
+    HeavyDBAsserts.assertEqual(
             0, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
-    MapdAsserts.assertEqual(
+    HeavyDBAsserts.assertEqual(
             0, foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
 
     su.runSql("GRANT CREATE DASHBOARD ON DATABASE omnisci TO jason;");
-    MapdAsserts.assertEqual(
+    HeavyDBAsserts.assertEqual(
             1, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
-    MapdAsserts.assertEqual(
+    HeavyDBAsserts.assertEqual(
             0, foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
 
     TDBObject obj =
             jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
 
     su.runSql("GRANT EDIT DASHBOARD ON DATABASE omnisci TO jason;");
     obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
 
     su.runSql("GRANT VIEW DASHBOARD ON DATABASE omnisci TO jason;");
     obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
 
     su.runSql("GRANT DELETE DASHBOARD ON DATABASE omnisci TO jason;");
     obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
 
     su.runSql("GRANT CREATE DASHBOARD ON DATABASE omnisci TO salesDept;");
-    MapdAsserts.assertEqual(
+    HeavyDBAsserts.assertEqual(
             1, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
-    MapdAsserts.assertEqual(
+    HeavyDBAsserts.assertEqual(
             1, foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
 
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
 
     su.runSql("GRANT EDIT DASHBOARD ON DATABASE omnisci TO salesDept;");
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
 
     su.runSql("GRANT VIEW DASHBOARD ON DATABASE omnisci TO salesDept;");
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
 
     su.runSql("GRANT DELETE DASHBOARD ON DATABASE omnisci TO salesDept;");
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
-    MapdAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
+    HeavyDBAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
 
     su.runSql("DROP USER foo;");
     su.runSql("DROP ROLE salesDept;");
@@ -170,7 +170,7 @@ public class DashboardTest {
   void testDashboards() throws Exception {
     logger.info("testDashboards()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "omnisci", "admin", "HyperInteractive");
 
     List<String> users = su.get_users();
@@ -184,14 +184,14 @@ public class DashboardTest {
 
     su.runSql("GRANT salesDept TO foo;");
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, "omnisci", "dba", "password");
-    MapdTestClient jason =
-            MapdTestClient.getClient("localhost", 6274, "omnisci", "jason", "password");
-    MapdTestClient bob =
-            MapdTestClient.getClient("localhost", 6274, "omnisci", "bob", "password");
-    MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 6274, "omnisci", "foo", "password");
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, "omnisci", "dba", "password");
+    HeavyDBTestClient jason = HeavyDBTestClient.getClient(
+            "localhost", 6274, "omnisci", "jason", "password");
+    HeavyDBTestClient bob =
+            HeavyDBTestClient.getClient("localhost", 6274, "omnisci", "bob", "password");
+    HeavyDBTestClient foo =
+            HeavyDBTestClient.getClient("localhost", 6274, "omnisci", "foo", "password");
 
     su.runSql("GRANT CREATE DASHBOARD ON DATABASE omnisci TO jason;");
 
@@ -204,28 +204,28 @@ public class DashboardTest {
     int for_sales = jason.create_dashboard("for_sales");
     int for_all = jason.create_dashboard("for_all");
 
-    MapdAsserts.assertEqual(0, bob.get_dashboards().size());
-    MapdAsserts.assertEqual(0, foo.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(0, bob.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(0, foo.get_dashboards().size());
 
-    MapdTestClient granter = jason;
+    HeavyDBTestClient granter = jason;
     granter.runSql("GRANT VIEW ON DASHBOARD " + for_bob + " TO bob;");
     granter.runSql("GRANT VIEW ON DASHBOARD " + for_sales + " TO salesDept;");
     granter.runSql("GRANT VIEW ON DASHBOARD " + for_all + " TO bob;");
     granter.runSql("GRANT VIEW ON DASHBOARD " + for_all + " TO salesDept;");
 
-    MapdAsserts.assertEqual(2, bob.get_dashboards().size());
-    MapdAsserts.assertEqual(2, foo.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(2, bob.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(2, foo.get_dashboards().size());
 
     shouldThrowException("bob should not be able to access for_sales",
             () -> bob.get_dashboard(for_sales));
     shouldThrowException(
             "foo should not be able to access for_bob", () -> foo.get_dashboard(for_bob));
 
-    MapdAsserts.assertEqual("for_bob", bob.get_dashboard(for_bob));
-    MapdAsserts.assertEqual("for_all", bob.get_dashboard(for_all));
+    HeavyDBAsserts.assertEqual("for_bob", bob.get_dashboard(for_bob));
+    HeavyDBAsserts.assertEqual("for_all", bob.get_dashboard(for_all));
 
-    MapdAsserts.assertEqual("for_sales", foo.get_dashboard(for_sales));
-    MapdAsserts.assertEqual("for_all", foo.get_dashboard(for_all));
+    HeavyDBAsserts.assertEqual("for_sales", foo.get_dashboard(for_sales));
+    HeavyDBAsserts.assertEqual("for_all", foo.get_dashboard(for_all));
 
     // check update
     shouldThrowException("bob can not edit for_bob",
@@ -248,11 +248,11 @@ public class DashboardTest {
     bob.replace_dashboard(for_bob, "for_bob2", "jason");
     foo.replace_dashboard(for_sales, "for_sales2", "jason");
 
-    MapdAsserts.assertEqual("for_bob2", bob.get_dashboard(for_bob));
-    MapdAsserts.assertEqual("for_all2", bob.get_dashboard(for_all));
+    HeavyDBAsserts.assertEqual("for_bob2", bob.get_dashboard(for_bob));
+    HeavyDBAsserts.assertEqual("for_all2", bob.get_dashboard(for_all));
 
-    MapdAsserts.assertEqual("for_sales2", foo.get_dashboard(for_sales));
-    MapdAsserts.assertEqual("for_all2", foo.get_dashboard(for_all));
+    HeavyDBAsserts.assertEqual("for_sales2", foo.get_dashboard(for_sales));
+    HeavyDBAsserts.assertEqual("for_all2", foo.get_dashboard(for_all));
 
     shouldThrowException(
             "foo can not delete for_bob", () -> foo.delete_dashboard(for_bob));
@@ -270,22 +270,22 @@ public class DashboardTest {
 
     jason.delete_dashboard(for_bob);
 
-    MapdAsserts.assertEqual(1, bob.get_dashboards().size());
-    MapdAsserts.assertEqual(2, foo.get_dashboards().size());
-    MapdAsserts.assertEqual("for_all2", bob.get_dashboard(for_all));
-    MapdAsserts.assertEqual("for_sales2", foo.get_dashboard(for_sales));
-    MapdAsserts.assertEqual("for_all2", foo.get_dashboard(for_all));
+    HeavyDBAsserts.assertEqual(1, bob.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(2, foo.get_dashboards().size());
+    HeavyDBAsserts.assertEqual("for_all2", bob.get_dashboard(for_all));
+    HeavyDBAsserts.assertEqual("for_sales2", foo.get_dashboard(for_sales));
+    HeavyDBAsserts.assertEqual("for_all2", foo.get_dashboard(for_all));
 
     jason.delete_dashboard(for_all);
 
-    MapdAsserts.assertEqual(0, bob.get_dashboards().size());
-    MapdAsserts.assertEqual(1, foo.get_dashboards().size());
-    MapdAsserts.assertEqual("for_sales2", foo.get_dashboard(for_sales));
+    HeavyDBAsserts.assertEqual(0, bob.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(1, foo.get_dashboards().size());
+    HeavyDBAsserts.assertEqual("for_sales2", foo.get_dashboard(for_sales));
 
     jason.delete_dashboard(for_sales);
 
-    MapdAsserts.assertEqual(0, bob.get_dashboards().size());
-    MapdAsserts.assertEqual(0, foo.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(0, bob.get_dashboards().size());
+    HeavyDBAsserts.assertEqual(0, foo.get_dashboards().size());
 
     su.runSql("DROP USER foo;");
     su.runSql("DROP ROLE salesDept;");

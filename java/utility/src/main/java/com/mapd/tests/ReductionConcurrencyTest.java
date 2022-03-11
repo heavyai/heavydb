@@ -77,8 +77,8 @@ public class ReductionConcurrencyTest {
             final String tableName = dbaUser + "_" + threadId + "_" + runId;
 
             try {
-              MapdTestClient user =
-                      MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+              HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                      "localhost", 6274, db, dbUser, dbPassword);
               user.runSql("DROP TABLE IF EXISTS " + tableName + ";");
               user.runSql("CREATE TABLE " + tableName
                       + "(x BIGINT, y INTEGER, z SMALLINT, a TINYINT, f FLOAT, d DOUBLE, deci DECIMAL(18,6), str TEXT ENCODING NONE) WITH (FRAGMENT_SIZE = "
@@ -164,7 +164,7 @@ public class ReductionConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("ReductionConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("DROP USER IF EXISTS dba;");
     su.runSql("DROP USER IF EXISTS bob;");

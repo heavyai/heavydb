@@ -25,9 +25,9 @@ import org.apache.calcite.sql.validate.SqlMonikerType;
 import java.util.ArrayList;
 import java.util.List;
 
-class MapDSqlAdvisor extends SqlAdvisor {
-  public MapDSqlAdvisor(
-          MapDSqlAdvisorValidator validator, SqlParser.Config parserConfig) {
+class HeavyDBSqlAdvisor extends SqlAdvisor {
+  public HeavyDBSqlAdvisor(
+          HeavyDBSqlAdvisorValidator validator, SqlParser.Config parserConfig) {
     super(validator, parserConfig);
     this.permissionsAwareValidator = validator;
   }
@@ -144,5 +144,5 @@ class MapDSqlAdvisor extends SqlAdvisor {
     return completionHintsWithPermissions;
   }
 
-  private MapDSqlAdvisorValidator permissionsAwareValidator;
+  private HeavyDBSqlAdvisorValidator permissionsAwareValidator;
 }

@@ -28,7 +28,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
-public class MapdTestClient {
+public class HeavyDBTestClient {
   OmniSci.Client client;
   String sessionId;
 
@@ -232,14 +232,14 @@ public class MapdTestClient {
     return tColumn;
   }
 
-  public static MapdTestClient getClient(
+  public static HeavyDBTestClient getClient(
           String host, int port, String db, String user, String password)
           throws Exception {
     TSocket transport = new TSocket(host, port);
     transport.open();
     TProtocol protocol = new TBinaryProtocol(transport);
     OmniSci.Client client = new OmniSci.Client(protocol);
-    MapdTestClient session = new MapdTestClient();
+    HeavyDBTestClient session = new HeavyDBTestClient();
     session.client = client;
     session.sessionId = client.connect(user, password, db);
     return session;
