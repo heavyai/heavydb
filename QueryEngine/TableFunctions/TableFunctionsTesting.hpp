@@ -1903,25 +1903,26 @@ const Column<int32_t>& input_arg2, const int32_t arg1, const int32_t arg2,
 
 // clang-format off
 /*
-  UDTF: ct_timestamp_count_metrics(TableFunctionManager, Column<Timestamp>) -> Column<int64_t> ns, Column<int64_t> us, Column<int64_t> ms, Column<int64_t> s, Column<int64_t> m, Column<int64_t> h, Column<int64_t> d, Column<int64_t> mo, Column<int64_t> y
+  UDTF: ct_timestamp_extract(TableFunctionManager, Column<Timestamp>) -> Column<int64_t> ns, Column<int64_t> us, Column<int64_t> ms, Column<int64_t> s, Column<int64_t> m, Column<int64_t> h, Column<int64_t> d, Column<int64_t> mo, Column<int64_t> y
   UDTF: ct_timestamp_add_offset(TableFunctionManager, Column<Timestamp>, Timestamp) -> Column<Timestamp>
   UDTF: ct_timestamp_column_list_input(TableFunctionManager, ColumnList<int64_t>, Column<Timestamp>) -> Column<Timestamp>
+  UDTF: ct_timestamp_truncate(TableFunctionManager, Column<Timestamp>) -> Column<Timestamp> y, Column<Timestamp> mo, Column<Timestamp> d, Column<Timestamp> h, Column<Timestamp> m, Column<Timestamp> s, Column<Timestamp> ms, Column<Timestamp> us
 */
 // clang-format on
 
 // Test table functions with Timestamp Column inputs
 // and Timestamp type helper functions
-EXTENSION_NOINLINE_HOST int32_t ct_timestamp_count_metrics(TableFunctionManager& mgr,
-                                                           const Column<Timestamp>& input,
-                                                           Column<int64_t>& ns,
-                                                           Column<int64_t>& us,
-                                                           Column<int64_t>& ms,
-                                                           Column<int64_t>& s,
-                                                           Column<int64_t>& m,
-                                                           Column<int64_t>& h,
-                                                           Column<int64_t>& d,
-                                                           Column<int64_t>& mo,
-                                                           Column<int64_t>& y) {
+EXTENSION_NOINLINE_HOST int32_t ct_timestamp_extract(TableFunctionManager& mgr,
+                                                     const Column<Timestamp>& input,
+                                                     Column<int64_t>& ns,
+                                                     Column<int64_t>& us,
+                                                     Column<int64_t>& ms,
+                                                     Column<int64_t>& s,
+                                                     Column<int64_t>& m,
+                                                     Column<int64_t>& h,
+                                                     Column<int64_t>& d,
+                                                     Column<int64_t>& mo,
+                                                     Column<int64_t>& y) {
   int size = input.size();
   mgr.set_output_row_size(size);
   for (int i = 0; i < size; ++i) {
@@ -1976,6 +1977,32 @@ ct_timestamp_column_list_input(TableFunctionManager& mgr,
   mgr.set_output_row_size(1);
   out[0] = 1;
   return 1;
+}
+
+EXTENSION_NOINLINE_HOST int32_t ct_timestamp_truncate(TableFunctionManager& mgr,
+                                                      const Column<Timestamp>& input,
+                                                      Column<Timestamp>& y,
+                                                      Column<Timestamp>& mo,
+                                                      Column<Timestamp>& d,
+                                                      Column<Timestamp>& h,
+                                                      Column<Timestamp>& m,
+                                                      Column<Timestamp>& s,
+                                                      Column<Timestamp>& ms,
+                                                      Column<Timestamp>& us) {
+  int size = input.size();
+  mgr.set_output_row_size(size);
+  for (int i = 0; i < size; ++i) {
+    y[i] = input[i].truncateToYear();
+    mo[i] = input[i].truncateToMonth();
+    d[i] = input[i].truncateToDay();
+    h[i] = input[i].truncateToHours();
+    m[i] = input[i].truncateToMinutes();
+    s[i] = input[i].truncateToSeconds();
+    ms[i] = input[i].truncateToMilliseconds();
+    us[i] = input[i].truncateToMicroseconds();
+  }
+
+  return size;
 }
 
 #endif  // ifndef __CUDACC__

@@ -21,6 +21,7 @@
 #include <stdexcept>
 #include <type_traits>
 
+#include "DateTruncate.h"
 #include "ExtractFromTime.h"
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
@@ -218,6 +219,38 @@ struct Timestamp {
 
   DEVICE ALWAYS_INLINE bool operator!=(const Timestamp& other) const {
     return !operator==(other);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToMicroseconds() const {
+    return Timestamp((time / kMilliSecsPerSec) * kMilliSecsPerSec);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToMilliseconds() const {
+    return Timestamp((time / kMicroSecsPerSec) * kMicroSecsPerSec);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToSeconds() const {
+    return Timestamp((time / kNanoSecsPerSec) * kNanoSecsPerSec);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToMinutes() const {
+    return Timestamp(DateTruncate(dtMINUTE, (time / kNanoSecsPerSec)) * kNanoSecsPerSec);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToHours() const {
+    return Timestamp(DateTruncate(dtHOUR, (time / kNanoSecsPerSec)) * kNanoSecsPerSec);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToDay() const {
+    return Timestamp(DateTruncate(dtDAY, (time / kNanoSecsPerSec)) * kNanoSecsPerSec);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToMonth() const {
+    return Timestamp(DateTruncate(dtMONTH, (time / kNanoSecsPerSec)) * kNanoSecsPerSec);
+  }
+
+  DEVICE ALWAYS_INLINE Timestamp truncateToYear() const {
+    return Timestamp(DateTruncate(dtYEAR, (time / kNanoSecsPerSec)) * kNanoSecsPerSec);
   }
 
   DEVICE ALWAYS_INLINE int64_t getNanoseconds() const {
