@@ -33,10 +33,10 @@
 #include <arrow/filesystem/filesystem.h>
 #endif  // HAVE_AWS_S3
 #include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
 
 #include "Shared/DateTimeParser.h"
 #include "Shared/StringTransform.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace shared {
 

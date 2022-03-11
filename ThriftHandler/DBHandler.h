@@ -50,6 +50,7 @@
 #include "QueryEngine/TableGenerations.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
+#include "Shared/clean_boost_regex.hpp"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
@@ -75,7 +76,6 @@
 #include <boost/none_t.hpp>
 #include <boost/optional.hpp>
 #include <boost/program_options.hpp>
-#include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
 #include <cmath>
 #include <csignal>
@@ -85,7 +85,6 @@
 #include <memory>
 #include <mutex>
 #include <random>
-#include <regex>
 #include <string>
 #include <thread>
 #include <typeinfo>

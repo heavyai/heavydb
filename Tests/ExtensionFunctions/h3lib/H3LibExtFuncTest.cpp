@@ -15,6 +15,10 @@
  */
 
 #include <curl/curl.h>
+
+// curl/curl.h > winsock2.h > windows.h
+#include "Shared/cleanup_global_namespace.h"
+
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/Importer.h"

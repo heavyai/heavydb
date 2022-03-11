@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
+#include <string>
 
 struct dict_ref_t {
   int32_t dbId;

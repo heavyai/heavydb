@@ -15,11 +15,9 @@
  */
 
 #include "RegexParserDataWrapper.h"
-
-#include <boost/regex.hpp>
-
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace foreign_storage {
 RegexParserDataWrapper::RegexParserDataWrapper()

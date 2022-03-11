@@ -89,7 +89,6 @@
 #include <boost/make_shared.hpp>
 #include <boost/process/search_path.hpp>
 #include <boost/program_options.hpp>
-#include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
 #include <chrono>
 #include <cmath>
@@ -99,7 +98,6 @@
 #include <map>
 #include <memory>
 #include <random>
-#include <regex>
 #include <string>
 #include <thread>
 #include <typeinfo>

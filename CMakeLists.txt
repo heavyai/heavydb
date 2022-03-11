@@ -454,6 +454,12 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(MSVC)
   option(ENABLE_NO_WINWARNINGS "disable most windows warnings" ON)
   add_compile_definitions("NOMINMAX")
+  add_compile_definitions("WIN32_LEAN_AND_MEAN")
+  # Fix for thrift_handler.lib(DBHandler.cpp.obj) : error LNK2038: mismatch detected for
+  # 'boost_log_abi': value 'v2_mt_nt6' doesn't match value 'v2_mt_nt62' in initdb.cpp.obj
+  # https://github.com/microsoft/vcpkg/discussions/22762
+  # If a future vcpkg release causes the reverse error message, then this line should be removed.
+  add_compile_definitions("BOOST_USE_WINAPI_VERSION=0x0601") #=BOOST_WINAPI_VERSION_WIN7
   if(ENABLE_NO_WINWARNINGS)
     add_compile_definitions("_STL_EXTRA_DISABLED_WARNINGS=4146 4242 4244 4267 4355 4365 4458 4624 4820 4996 5204 5219" "NOMINMAX")
     # disable 4702 unreachable code warning
@@ -883,7 +889,7 @@ list(APPEND MAPD_LIBRARIES Calcite)
 
 if(ENABLE_RENDERING)
   add_dependencies(QueryRenderer Parser)
-  list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
+  list(APPEND MAPD_LIBRARIES ${MAPD_RENDERING_LIBRARIES})
 endif()
 
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})

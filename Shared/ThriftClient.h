@@ -19,6 +19,8 @@
 #include <thrift/protocol/TProtocol.h>
 #include <thrift/transport/TSSLSocket.h>
 #include <string>
+// TProtocol.h > winsock2.h > windows.h
+#include "cleanup_global_namespace.h"
 
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::protocol;

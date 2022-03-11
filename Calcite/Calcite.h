@@ -26,7 +26,9 @@
 #include "gen-cpp/calciteserver_types.h"
 #include "gen-cpp/extension_functions_types.h"
 
-#include <thrift/transport/TTransport.h>
+// gen-cpp/calciteserver_types.h > thrift/Thrift.h >
+// thrift/transport/PlatformSocket.h > winsock2.h > windows.h
+#include "Shared/cleanup_global_namespace.h"
 
 #include <mutex>
 #include <string>

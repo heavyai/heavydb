@@ -25,7 +25,8 @@
 #include "Shared/ThriftConfig.h"
 #endif
 
-#include <boost/regex.hpp>
+#include "Shared/clean_boost_regex.hpp"
+
 #include <cstring>
 #include <iostream>
 #include <iterator>

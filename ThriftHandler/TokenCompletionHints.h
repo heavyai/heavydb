@@ -18,6 +18,8 @@
 #define THRIFTHANDLER_TOKENCOMPLETIONHINTS_H
 
 #include "gen-cpp/completion_hints_types.h"
+// completion_hints_types.h > Thrift.h > PlatformSocket.h > winsock2.h > windows.h
+#include "Shared/cleanup_global_namespace.h"
 
 #include <unordered_map>
 #include <unordered_set>

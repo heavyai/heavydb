@@ -24,11 +24,11 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
 
 #include "ImportExport/ExpressionParser.h"
 #include "Shared/DateTimeParser.h"
 #include "Shared/StringTransform.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace import_export {
 

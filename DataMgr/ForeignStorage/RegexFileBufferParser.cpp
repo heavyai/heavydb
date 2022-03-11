@@ -15,12 +15,10 @@
  */
 
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
-
-#include <boost/regex.hpp>
-
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/StringTransform.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace foreign_storage {
 namespace {

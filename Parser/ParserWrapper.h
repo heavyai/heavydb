@@ -24,9 +24,10 @@
 
 #pragma once
 
-#include <boost/regex.hpp>
 #include <string>
 #include <vector>
+
+#include "Shared/clean_boost_regex.hpp"
 
 struct ExplainInfo {
   bool explain;

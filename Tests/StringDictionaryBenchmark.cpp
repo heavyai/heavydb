@@ -27,6 +27,7 @@
 #define BASE_PATH2 "./tmp/dict2"
 #endif
 
+#include <algorithm>
 #include <filesystem>
 #include <random>
 #include <string>
@@ -52,11 +53,10 @@ std::string generate_random_str(std::mt19937& generator, const int64_t str_len) 
 std::vector<std::string> generate_random_strs(const size_t num_strings,
                                               const size_t num_unique_strings,
                                               const size_t str_len,
-                                              const uint64_t seed = 42) {
-  std::mt19937 rand_generator(seed);
+                                              std::mt19937& urbg) {
   std::vector<std::string> unique_strings(num_unique_strings);
   for (size_t string_idx = 0; string_idx < num_unique_strings; ++string_idx) {
-    unique_strings[string_idx] = generate_random_str(rand_generator, str_len);
+    unique_strings[string_idx] = generate_random_str(urbg, str_len);
   }
   std::vector<std::string> strings(num_strings);
   for (size_t string_idx = 0; string_idx < num_strings; ++string_idx) {
@@ -81,18 +81,21 @@ std::vector<std::string> append_strings_10M_10M_10_randomized;
 
 std::once_flag setup_flag;
 void global_setup() {
+  std::mt19937 urbg(1);  // Uniform Random Bit Generator
   TestHelpers::init_logger_stderr_only();
   create_directory_if_not_exists(BASE_PATH1);
   create_directory_if_not_exists(BASE_PATH2);
-  append_strings_10M_100K_10 = generate_random_strs(10000000, 100000, 10, 1);
-  append_strings_10M_1M_10 = generate_random_strs(10000000, 1000000, 10, 2);
-  append_strings_10M_10M_10 = generate_random_strs(10000000, 10000000, 10, 3);
+  append_strings_10M_100K_10 = generate_random_strs(10000000, 100000, 10, urbg);
+  append_strings_10M_1M_10 = generate_random_strs(10000000, 1000000, 10, urbg);
+  append_strings_10M_10M_10 = generate_random_strs(10000000, 10000000, 10, urbg);
   append_strings_10M_1M_10_randomized = append_strings_10M_1M_10;
-  std::random_shuffle(append_strings_10M_1M_10_randomized.begin(),
-                      append_strings_10M_1M_10_randomized.end());
+  std::shuffle(append_strings_10M_1M_10_randomized.begin(),
+               append_strings_10M_1M_10_randomized.end(),
+               urbg);
   append_strings_10M_10M_10_randomized = append_strings_10M_10M_10;
-  std::random_shuffle(append_strings_10M_10M_10_randomized.begin(),
-                      append_strings_10M_10M_10_randomized.end());
+  std::shuffle(append_strings_10M_10M_10_randomized.begin(),
+               append_strings_10M_10M_10_randomized.end(),
+               urbg);
 }
 
 class StringDictionaryFixture : public benchmark::Fixture {
