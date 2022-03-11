@@ -554,6 +554,21 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
 
   const ConstRexScalarPtrVector& getOrderKeys() const { return order_keys_; }
 
+  void replacePartitionKey(size_t offset,
+                           std::unique_ptr<const RexScalar>&& new_partition_key) {
+    CHECK_LT(offset, partition_keys_.size());
+    partition_keys_[offset] = std::move(new_partition_key);
+  }
+
+  void replaceOrderKey(size_t offset, std::unique_ptr<const RexScalar>&& new_order_key) {
+    CHECK_LT(offset, order_keys_.size());
+    order_keys_[offset] = std::move(new_order_key);
+  }
+
+  void replaceOperands(std::vector<std::unique_ptr<const RexScalar>>&& new_operands) {
+    operands_ = std::move(new_operands);
+  }
+
   const std::vector<SortField>& getCollation() const { return collation_; }
 
   const RexWindowBound& getLowerBound() const { return lower_bound_; }
@@ -932,6 +947,7 @@ class ModifyManipulationTarget {
   void setVarlenUpdateRequired(bool required) const {
     varlen_update_required_ = required;
   }
+  void forceRowwiseOutput() const { force_rowwise_output_ = true; }
 
   TableDescriptor const* getModifiedTableDescriptor() const { return table_descriptor_; }
   void setModifiedTableDescriptor(TableDescriptor const* td) const {
@@ -941,6 +957,7 @@ class ModifyManipulationTarget {
   auto const isUpdateViaSelect() const { return is_update_via_select_; }
   auto const isDeleteViaSelect() const { return is_delete_via_select_; }
   auto const isVarlenUpdateRequired() const { return varlen_update_required_; }
+  auto const isRowwiseOutputForced() const { return force_rowwise_output_; }
 
   void setTargetColumns(ColumnNameList const& target_columns) const {
     target_columns_ = target_columns;
@@ -963,6 +980,7 @@ class ModifyManipulationTarget {
   mutable bool varlen_update_required_ = false;
   mutable TableDescriptor const* table_descriptor_ = nullptr;
   mutable ColumnNameList target_columns_;
+  mutable bool force_rowwise_output_ = false;
 };
 
 class RelProject : public RelAlgNode, public ModifyManipulationTarget {

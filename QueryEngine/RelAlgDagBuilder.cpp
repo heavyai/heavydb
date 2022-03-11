@@ -122,6 +122,224 @@ class RexRebindReindexInputsVisitor : public RexRebindInputsVisitor {
   const std::unordered_map<unsigned, unsigned> mapping_;
 };
 
+class PushDownExpression : public RexVisitorBase<std::unique_ptr<const RexScalar>> {
+ public:
+  enum class WindowExprType { PARTITION_KEY, ORDER_KEY };
+  PushDownExpression(
+      std::shared_ptr<RelProject> new_project,
+      std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs_for_new_project,
+      std::vector<std::string>& fields_for_new_project,
+      std::unordered_map<size_t, size_t>& expr_offset_cache)
+      : new_project_(new_project)
+      , scalar_exprs_for_new_project_(scalar_exprs_for_new_project)
+      , fields_for_new_project_(fields_for_new_project)
+      , expr_offset_cache_(expr_offset_cache)
+      , found_case_expr_window_operand_(false)
+      , has_partition_expr_(false) {}
+
+  size_t pushDownExpressionImpl(const RexScalar* expr) const {
+    auto hash = expr->toHash();
+    auto it = expr_offset_cache_.find(hash);
+    auto new_offset = -1;
+    if (it == expr_offset_cache_.end()) {
+      CHECK(
+          expr_offset_cache_.emplace(hash, scalar_exprs_for_new_project_.size()).second);
+      new_offset = scalar_exprs_for_new_project_.size();
+      fields_for_new_project_.emplace_back("");
+      scalar_exprs_for_new_project_.emplace_back(deep_copier_.visit(expr));
+    } else {
+      // we already pushed down the same expression, so reuse it
+      new_offset = it->second;
+    }
+    return new_offset;
+  }
+
+  std::optional<size_t> getOffsetForPushedDownExpr(WindowExprType type,
+                                                   size_t expr_offset) const {
+    // given window expr offset and inner expr's offset,
+    // return a (push-downed) expression's offset from the new projection node
+    switch (type) {
+      case WindowExprType::PARTITION_KEY: {
+        auto it = pushed_down_partition_key_offset_.find(expr_offset);
+        CHECK(it != pushed_down_partition_key_offset_.end());
+        return it->second;
+      }
+      case WindowExprType::ORDER_KEY: {
+        auto it = pushed_down_order_key_offset_.find(expr_offset);
+        CHECK(it != pushed_down_order_key_offset_.end());
+        return it->second;
+      }
+      default:
+        UNREACHABLE();
+        return std::nullopt;
+    }
+  }
+
+  void pushDownExpressionInWindowFunction(
+      const RexWindowFunctionOperator* window_expr) const {
+    // step 1. push "all" target expressions of the window_func_project_node down to the
+    // new child projection
+    // each window expr is a separate target expression of the projection node
+    // and they have their own inner expression related to partition / order clauses
+    // so we capture their offsets to correctly rebind their input
+    pushed_down_window_operands_offset_.clear();
+    pushed_down_partition_key_offset_.clear();
+    pushed_down_order_key_offset_.clear();
+    for (size_t offset = 0; offset < window_expr->size(); ++offset) {
+      auto expr = window_expr->getOperand(offset);
+      auto literal_expr = dynamic_cast<const RexLiteral*>(expr);
+      auto case_expr = dynamic_cast<const RexCase*>(expr);
+      if (case_expr) {
+        // when columnar output is enabled, pushdown case expr can incur an issue
+        // during columnarization, so we record this and try to force rowwise-output
+        // until we fix the issue
+        // todo (yoonmin) : relax this
+        found_case_expr_window_operand_ = true;
+      }
+      if (!literal_expr) {
+        auto new_offset = pushDownExpressionImpl(expr);
+        pushed_down_window_operands_offset_.emplace(offset, new_offset);
+      }
+    }
+    size_t offset = 0;
+    for (const auto& partition_key : window_expr->getPartitionKeys()) {
+      auto new_offset = pushDownExpressionImpl(partition_key.get());
+      pushed_down_partition_key_offset_.emplace(offset, new_offset);
+      ++offset;
+    }
+    has_partition_expr_ = !window_expr->getPartitionKeys().empty();
+    offset = 0;
+    for (const auto& order_key : window_expr->getOrderKeys()) {
+      auto new_offset = pushDownExpressionImpl(order_key.get());
+      pushed_down_order_key_offset_.emplace(offset, new_offset);
+      ++offset;
+    }
+
+    // step 2. rebind projected targets of the window_func_project_node with the new
+    // project node
+    std::vector<std::unique_ptr<const RexScalar>> window_operands;
+    auto deconst_window_expr = const_cast<RexWindowFunctionOperator*>(window_expr);
+    for (size_t idx = 0; idx < window_expr->size(); ++idx) {
+      auto it = pushed_down_window_operands_offset_.find(idx);
+      if (it != pushed_down_window_operands_offset_.end()) {
+        auto new_input = std::make_unique<const RexInput>(new_project_.get(), it->second);
+        CHECK(new_input);
+        window_operands.emplace_back(std::move(new_input));
+      } else {
+        auto copied_expr = deep_copier_.visit(window_expr->getOperand(idx));
+        window_operands.emplace_back(std::move(copied_expr));
+      }
+    }
+    deconst_window_expr->replaceOperands(std::move(window_operands));
+
+    for (size_t idx = 0; idx < window_expr->getPartitionKeys().size(); ++idx) {
+      auto new_offset = getOffsetForPushedDownExpr(WindowExprType::PARTITION_KEY, idx);
+      CHECK(new_offset);
+      auto new_input = std::make_unique<const RexInput>(new_project_.get(), *new_offset);
+      CHECK(new_input);
+      deconst_window_expr->replacePartitionKey(idx, std::move(new_input));
+    }
+
+    for (size_t idx = 0; idx < window_expr->getOrderKeys().size(); ++idx) {
+      auto new_offset = getOffsetForPushedDownExpr(WindowExprType::ORDER_KEY, idx);
+      CHECK(new_offset);
+      auto new_input = std::make_unique<const RexInput>(new_project_.get(), *new_offset);
+      CHECK(new_input);
+      deconst_window_expr->replaceOrderKey(idx, std::move(new_input));
+    }
+  }
+
+  std::unique_ptr<const RexScalar> visitInput(const RexInput* rex_input) const override {
+    auto new_offset = pushDownExpressionImpl(rex_input);
+    CHECK_LT(new_offset, scalar_exprs_for_new_project_.size());
+    auto hash = rex_input->toHash();
+    auto it = expr_offset_cache_.find(hash);
+    CHECK(it != expr_offset_cache_.end());
+    CHECK_EQ(new_offset, it->second);
+    auto new_input = std::make_unique<const RexInput>(new_project_.get(), new_offset);
+    CHECK(new_input);
+    return new_input;
+  }
+
+  std::unique_ptr<const RexScalar> visitLiteral(
+      const RexLiteral* rex_literal) const override {
+    return deep_copier_.visit(rex_literal);
+  }
+
+  std::unique_ptr<const RexScalar> visitRef(const RexRef* rex_ref) const override {
+    return deep_copier_.visit(rex_ref);
+  }
+
+  std::unique_ptr<const RexScalar> visitSubQuery(
+      const RexSubQuery* rex_subquery) const override {
+    return deep_copier_.visit(rex_subquery);
+  }
+
+  std::unique_ptr<const RexScalar> visitCase(const RexCase* rex_case) const override {
+    std::vector<
+        std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
+        new_expr_pair_list;
+    std::unique_ptr<const RexScalar> new_else_expr;
+    for (size_t i = 0; i < rex_case->branchCount(); ++i) {
+      const auto when = rex_case->getWhen(i);
+      auto new_when = PushDownExpression::visit(when);
+      const auto then = rex_case->getThen(i);
+      auto new_then = PushDownExpression::visit(then);
+      new_expr_pair_list.emplace_back(std::move(new_when), std::move(new_then));
+    }
+    if (rex_case->getElse()) {
+      new_else_expr = deep_copier_.visit(rex_case->getElse());
+    }
+    auto new_case = std::make_unique<const RexCase>(new_expr_pair_list, new_else_expr);
+    return new_case;
+  }
+
+  std::unique_ptr<const RexScalar> visitOperator(
+      const RexOperator* rex_operator) const override {
+    const auto rex_window_func_operator =
+        dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
+    if (rex_window_func_operator) {
+      pushDownExpressionInWindowFunction(rex_window_func_operator);
+      return deep_copier_.visit(rex_operator);
+    } else {
+      std::unique_ptr<const RexOperator> new_operator{nullptr};
+      std::vector<std::unique_ptr<const RexScalar>> new_operands;
+      for (size_t i = 0; i < rex_operator->size(); ++i) {
+        const auto operand = rex_operator->getOperand(i);
+        auto new_operand = PushDownExpression::visit(operand);
+        new_operands.emplace_back(std::move(new_operand));
+      }
+      if (auto function_op = dynamic_cast<const RexFunctionOperator*>(rex_operator)) {
+        new_operator = std::make_unique<const RexFunctionOperator>(
+            function_op->getName(), new_operands, rex_operator->getType());
+      } else {
+        new_operator = std::make_unique<const RexOperator>(
+            rex_operator->getOperator(), new_operands, rex_operator->getType());
+      }
+      CHECK(new_operator);
+      return new_operator;
+    }
+  }
+
+  bool hasCaseExprAsWindowOperand() { return found_case_expr_window_operand_; }
+
+  bool hasPartitionExpression() { return has_partition_expr_; }
+
+ private:
+  std::unique_ptr<const RexScalar> defaultResult() const override { return nullptr; }
+
+  std::shared_ptr<RelProject> new_project_;
+  std::vector<std::unique_ptr<const RexScalar>>& scalar_exprs_for_new_project_;
+  std::vector<std::string>& fields_for_new_project_;
+  std::unordered_map<size_t, size_t>& expr_offset_cache_;
+  mutable bool found_case_expr_window_operand_;
+  mutable bool has_partition_expr_;
+  mutable std::unordered_map<size_t, size_t> pushed_down_window_operands_offset_;
+  mutable std::unordered_map<size_t, size_t> pushed_down_partition_key_offset_;
+  mutable std::unordered_map<size_t, size_t> pushed_down_order_key_offset_;
+  RexDeepCopyVisitor deep_copier_;
+};
+
 }  // namespace
 
 void RelProject::replaceInput(
@@ -2156,6 +2374,28 @@ void add_window_function_pre_project(
       continue;
     }
 
+    auto need_pushdown_generic_expr = [&window_func_project_node]() {
+      for (size_t i = 0; i < window_func_project_node->size(); ++i) {
+        const auto projected_target = window_func_project_node->getProjectAt(i);
+        if (auto window_expr =
+                dynamic_cast<const RexWindowFunctionOperator*>(projected_target)) {
+          for (const auto& partition_key : window_expr->getPartitionKeys()) {
+            auto partition_input = dynamic_cast<const RexInput*>(partition_key.get());
+            if (!partition_input) {
+              return true;
+            }
+          }
+          for (const auto& order_key : window_expr->getOrderKeys()) {
+            auto order_input = dynamic_cast<const RexInput*>(order_key.get());
+            if (!order_input) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    };
+
     const auto prev_node_itr = std::prev(node_itr);
     const auto prev_node = *prev_node_itr;
     CHECK(prev_node);
@@ -2186,44 +2426,68 @@ void add_window_function_pre_project(
     // query plans, i.e. filters before joins, and whether there is a more general
     // approach to solving this (will still need the preceding project node for
     // window functions preceded by filter nodes for correctness though)
+    // 3. when partition by / order by clauses have a general expression instead of
+    // referencing column
 
     if (!((always_add_project_if_first_project_is_window_expr &&
            project_node_counter == 1) ||
-          filter_node || has_multi_fragment_scan_input)) {
+          filter_node || has_multi_fragment_scan_input || need_pushdown_generic_expr())) {
       continue;
     }
 
-    RexInputSet inputs;
-    RexInputCollector input_collector;
-    for (size_t i = 0; i < window_func_project_node->size(); i++) {
-      auto new_inputs = input_collector.visit(window_func_project_node->getProjectAt(i));
-      inputs.insert(new_inputs.begin(), new_inputs.end());
+    std::unordered_map<size_t, size_t> expr_offset_cache;
+    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_for_new_project;
+    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_for_window_project;
+    std::vector<std::string> fields_for_window_project;
+    std::vector<std::string> fields_for_new_project;
+
+    // step 0. create new project node with an empty scalar expr to rebind target exprs
+    std::vector<std::unique_ptr<const RexScalar>> dummy_scalar_exprs;
+    std::vector<std::string> dummy_fields;
+    auto new_project =
+        std::make_shared<RelProject>(dummy_scalar_exprs, dummy_fields, prev_node);
+
+    // step 1 - 2
+    PushDownExpression visitor(new_project,
+                               scalar_exprs_for_new_project,
+                               fields_for_new_project,
+                               expr_offset_cache);
+    for (size_t i = 0; i < window_func_project_node->size(); ++i) {
+      auto projected_target = window_func_project_node->getProjectAt(i);
+      auto new_projection_target = visitor.visit(projected_target);
+      scalar_exprs_for_window_project.emplace_back(
+          std::move(new_projection_target.release()));
+    }
+    new_project->setExpressions(scalar_exprs_for_new_project);
+    new_project->setFields(std::move(fields_for_new_project));
+    bool has_groupby = false;
+    auto aggregate = std::dynamic_pointer_cast<RelAggregate>(prev_node);
+    if (aggregate) {
+      has_groupby = aggregate->getGroupByCount() > 0;
+    }
+    if (has_groupby && visitor.hasPartitionExpression()) {
+      // we currently may compute incorrect result with columnar output when
+      // 1) the window function has partition expression, and
+      // 2) a parent node of the window function projection node has group by expression
+      // so we force rowwise output (only) for the newly injected projection node
+      // to prevent computing incorrect query result
+      // todo (yoonmin) : relax this
+      VLOG(1) << "Query output overridden to row-wise format due to presence of a window "
+                 "function with partition expression and group-by expression.";
+      new_project->forceRowwiseOutput();
+    }
+    if (visitor.hasCaseExprAsWindowOperand()) {
+      // force rowwise output
+      VLOG(1) << "Query output overridden to row-wise format due to presence of a window "
+                 "function with a case statement as its operand.";
+      new_project->forceRowwiseOutput();
     }
 
-    // Note: Technically not required since we are mapping old inputs to new input
-    // indices, but makes the re-mapping of inputs easier to follow.
-    std::vector<RexInput> sorted_inputs(inputs.begin(), inputs.end());
-    std::sort(sorted_inputs.begin(),
-              sorted_inputs.end(),
-              [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
-
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
-    std::vector<std::string> fields;
-    std::unordered_map<unsigned, unsigned> old_index_to_new_index;
-    for (auto& input : sorted_inputs) {
-      CHECK_EQ(input.getSourceNode(), prev_node.get());
-      CHECK(old_index_to_new_index
-                .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
-                .second);
-      scalar_exprs.emplace_back(input.deepCopy());
-      fields.emplace_back("");
-    }
-
-    auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, prev_node);
+    // step 3. finalize
     propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
     node_list.insert(node_itr, new_project);
-    window_func_project_node->replaceInput(
-        prev_node, new_project, old_index_to_new_index);
+    window_func_project_node->replaceInput(prev_node, new_project);
+    window_func_project_node->setExpressions(scalar_exprs_for_window_project);
   }
 
   nodes.assign(node_list.begin(), node_list.end());

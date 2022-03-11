@@ -3241,7 +3241,8 @@ bool is_projection(const RelAlgExecutionUnit& ra_exe_unit) {
 }
 
 bool can_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
-                         const RenderInfo* render_info) {
+                         const RenderInfo* render_info,
+                         const RelAlgNode* body) {
   if (!is_projection(ra_exe_unit)) {
     return false;
   }
@@ -3256,6 +3257,11 @@ bool can_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
     // We don't currently support varlen columnar projections, so
     // return false if we find one
     if (target_expr->get_type_info().is_varlen()) {
+      return false;
+    }
+  }
+  if (auto top_project = dynamic_cast<const RelProject*>(body)) {
+    if (top_project->isRowwiseOutputForced()) {
       return false;
     }
   }
@@ -3465,7 +3471,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   // when output_columnar_hint is true here, it means either 1) columnar output
   // configuration is on or 2) a user hint is given but we have to disable it if some
   // requirements are not satisfied
-  if (can_output_columnar(ra_exe_unit, render_info)) {
+  if (can_output_columnar(ra_exe_unit, render_info, body)) {
     if (!eo.output_columnar_hint && should_output_columnar(ra_exe_unit)) {
       VLOG(1) << "Using columnar layout for projection as output size of "
               << ra_exe_unit.scan_limit << " rows exceeds threshold of "
