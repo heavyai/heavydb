@@ -127,7 +127,8 @@ class DateDaysEncoder : public Encoder {
   }
 
   void updateStatsEncoded(const int8_t* const dst_data,
-                          const size_t num_elements) override {
+                          const size_t num_elements,
+                          bool fixlen_array = false) override {
     const V* data = reinterpret_cast<const V*>(dst_data);
 
     std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
@@ -136,10 +137,12 @@ class DateDaysEncoder : public Encoder {
         [&](const auto& range, auto init) {
           auto [min, max, nulls] = init;
           for (size_t i = range.begin(); i < range.end(); i++) {
-            if (data[i] != std::numeric_limits<V>::min()) {
-              const T val = DateConverters::get_epoch_seconds_from_days(data[i]);
-              min = std::min(min, val);
-              max = std::max(max, val);
+            if (data[i] != inline_null_value<V>()) {
+              if (!fixlen_array || data[i] != inline_null_array_value<V>()) {
+                const T val = DateConverters::get_epoch_seconds_from_days(data[i]);
+                min = std::min(min, val);
+                max = std::max(max, val);
+              }
             } else {
               nulls = true;
             }

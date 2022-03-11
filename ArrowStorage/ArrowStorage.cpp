@@ -399,9 +399,12 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
           col_data[col_idx] = col_arr;
 
           bool compute_stats =
-              (col_type.get_type() != kTEXT && col_type.get_type() != kARRAY) ||
-              col_type.is_dict_encoded_string();
+              col_type.get_type() != kTEXT || col_type.is_dict_encoded_string();
           if (compute_stats) {
+            size_t elems_count = 1;
+            if (col_type.is_fixlen_array()) {
+              elems_count = col_type.get_size() / col_type.get_elem_type().get_size();
+            }
             // Compute stats for each fragment.
             threading::parallel_for(
                 threading::blocked_range(size_t(0), frag_count), [&](auto frag_range) {
@@ -422,10 +425,19 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
                     auto meta = std::make_shared<ChunkMetadata>();
                     meta->sqlType = col_type;
                     meta->numElements = frag.row_count;
-                    meta->numBytes = frag.row_count * col_type.get_size();
-                    computeStats(col_arr->Slice(frag.offset, frag.row_count),
-                                 col_type,
-                                 meta->chunkStats);
+                    if (col_type.is_fixlen_array()) {
+                      meta->numBytes = frag.row_count * col_type.get_size();
+                    } else if (col_type.is_varlen_array()) {
+                      meta->numBytes =
+                          computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
+                    } else {
+                      meta->numBytes = frag.row_count * col_type.get_size();
+                    }
+
+                    computeStats(
+                        col_arr->Slice(frag.offset, frag.row_count * elems_count),
+                        col_type,
+                        meta->chunkStats);
                     frag.metadata[col_idx] = meta;
                   }
                 });  // each fragment
@@ -441,16 +453,9 @@ void ArrowStorage::appendArrowTable(std::shared_ptr<arrow::Table> at, int table_
               auto meta = std::make_shared<ChunkMetadata>();
               meta->sqlType = col_type;
               meta->numElements = frag.row_count;
-              if (col_type.is_fixlen_array()) {
-                meta->numBytes = frag.row_count * col_type.get_size();
-              } else if (col_type.is_varlen_array()) {
-                meta->numBytes =
-                    computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
-              } else {
-                CHECK_EQ(col_type.get_type(), kTEXT);
-                meta->numBytes =
-                    computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
-              }
+              CHECK_EQ(col_type.get_type(), kTEXT);
+              meta->numBytes =
+                  computeTotalStringsLength(col_arr, frag.offset, frag.row_count);
               meta->chunkStats.has_nulls =
                   col_arr->Slice(frag.offset, frag.row_count)->null_count();
               frag.metadata[col_idx] = meta;
@@ -739,14 +744,33 @@ void ArrowStorage::compareSchemas(std::shared_ptr<arrow::Schema> lhs,
 void ArrowStorage::computeStats(std::shared_ptr<arrow::ChunkedArray> arr,
                                 SQLTypeInfo type,
                                 ChunkStats& stats) {
-  std::unique_ptr<Encoder> encoder(Encoder::Create(nullptr, type));
+  auto elem_type = type.is_array() ? type.get_elem_type() : type;
+  std::unique_ptr<Encoder> encoder(Encoder::Create(nullptr, elem_type));
   for (auto& chunk : arr->chunks()) {
-    encoder->updateStatsEncoded(
-        chunk->data()->GetValues<int8_t>(1, chunk->data()->offset * type.get_size()),
-        chunk->length());
+    if (type.is_varlen_array()) {
+      auto elem_size = elem_type.get_size();
+      auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
+      CHECK(chunk_list);
+      auto offs = std::abs(chunk_list->value_offset(0)) / elem_size;
+      auto len = std::abs(chunk_list->value_offset(chunk->length())) / elem_size - offs;
+      auto elems = chunk_list->values();
+      encoder->updateStatsEncoded(
+          elems->data()->GetValues<int8_t>(
+              1, (elems->data()->offset + offs) * type.get_size()),
+          len);
+    } else if (type.is_array()) {
+      encoder->updateStatsEncoded(chunk->data()->GetValues<int8_t>(
+                                      1, chunk->data()->offset * elem_type.get_size()),
+                                  chunk->length(),
+                                  true);
+    } else {
+      encoder->updateStatsEncoded(chunk->data()->GetValues<int8_t>(
+                                      1, chunk->data()->offset * elem_type.get_size()),
+                                  chunk->length());
+    }
   }
 
-  encoder->fillChunkStats(stats, type);
+  encoder->fillChunkStats(stats, elem_type);
 }
 
 std::shared_ptr<arrow::Table> ArrowStorage::parseCsvFile(

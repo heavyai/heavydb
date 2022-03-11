@@ -24,40 +24,6 @@ using namespace std::string_literals;
 
 namespace {
 
-template <
-    typename V,
-    std::enable_if_t<!std::is_same_v<V, bool> && std::is_integral<V>::value, int> = 0>
-inline V inline_null_value() {
-  return inline_int_null_value<V>();
-}
-
-template <typename V, std::enable_if_t<std::is_same_v<V, bool>, int> = 0>
-inline int8_t inline_null_value() {
-  return inline_int_null_value<int8_t>();
-}
-
-template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
-inline V inline_null_value() {
-  return inline_fp_null_value<V>();
-}
-
-template <
-    typename V,
-    std::enable_if_t<!std::is_same_v<V, bool> && std::is_integral<V>::value, int> = 0>
-inline V inline_null_array_value() {
-  return inline_int_null_array_value<V>();
-}
-
-template <typename V, std::enable_if_t<std::is_same_v<V, bool>, int> = 0>
-inline int8_t inline_null_array_value() {
-  return inline_int_null_array_value<int8_t>();
-}
-
-template <typename V, std::enable_if_t<std::is_floating_point<V>::value, int> = 0>
-inline V inline_null_array_value() {
-  return inline_fp_null_array_value<V>();
-}
-
 int int_pow(int val, int power) {
   int res = 1;
   for (int i = 0; i < power; ++i) {
@@ -474,7 +440,7 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValuesVarlenDecimalArrayImpl(
     elems_count += offset_data[chunk->length()] - offset_data[0];
   }
 
-  if (elems_count > std::numeric_limits<int32_t>::max()) {
+  if (elems_count > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw std::runtime_error("Input arrow array is too big for conversion.");
   }
 

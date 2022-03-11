@@ -23,8 +23,6 @@ constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 
 using namespace std::string_literals;
 
-using TestHelpers::inline_null_array_value;
-
 namespace {
 
 [[maybe_unused]] void dumpTableMeta(ArrowStorage& storage, int table_id) {
@@ -368,10 +366,21 @@ void checkChunkData(ArrowStorage& storage,
   size_t end_row = std::min(row_count, start_row + fragment_size);
   size_t frag_rows = end_row - start_row;
   size_t chunk_elems = 0;
+  T min = std::numeric_limits<T>::min();
+  T max = std::numeric_limits<T>::max();
+  bool has_nulls = false;
   for (size_t i = start_row; i < end_row; ++i) {
     if (expected[i].empty() || !col_info->type.is_varlen_array() ||
         expected[i].front() != inline_null_array_value<T>()) {
       chunk_elems += expected[i].size();
+    }
+    for (auto& val : expected[i]) {
+      if (val != inline_null_array_value<T>() && val != inline_null_value<T>()) {
+        min = std::min(min, val);
+        max = std::max(max, val);
+      } else if (val == inline_null_value<T>()) {
+        has_nulls = true;
+      }
     }
   }
   size_t chunk_size = chunk_elems * sizeof(T);
@@ -379,7 +388,9 @@ void checkChunkData(ArrowStorage& storage,
                  storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
                  frag_rows,
                  chunk_size,
-                 false);
+                 has_nulls,
+                 min,
+                 max);
   std::vector<T> expected_data(chunk_elems);
   std::vector<uint32_t> expected_offset(frag_rows + 1);
   uint32_t data_offset = 0;
@@ -426,6 +437,9 @@ void checkChunkData(ArrowStorage& storage,
   size_t end_row = std::min(row_count, start_row + fragment_size);
   size_t frag_rows = end_row - start_row;
   std::vector<int32_t> expected_ids;
+  int32_t min = std::numeric_limits<int32_t>::min();
+  int32_t max = std::numeric_limits<int32_t>::max();
+  bool has_nulls = false;
 
   // varlen string arrays are not yet supported.
   CHECK(col_info->type.is_fixlen_array());
@@ -443,8 +457,11 @@ void checkChunkData(ArrowStorage& storage,
       for (auto& val : expected[i]) {
         if (val == "<NULL>") {
           expected_ids.push_back(inline_int_null_value<int32_t>());
+          has_nulls = true;
         } else {
           expected_ids.push_back(dict.getIdOfString(val));
+          min = std::min(min, expected_ids.back());
+          max = std::max(max, expected_ids.back());
         }
       }
     }
@@ -455,7 +472,9 @@ void checkChunkData(ArrowStorage& storage,
                  storage.getColumnInfo(TEST_DB_ID, table_id, col_idx + 1)->type,
                  frag_rows,
                  chunk_size,
-                 false);
+                 has_nulls,
+                 min,
+                 max);
 
   checkFetchedData(storage, table_id, col_idx + 1, frag_idx + 1, expected_ids);
 }

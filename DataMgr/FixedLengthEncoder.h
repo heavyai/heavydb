@@ -117,7 +117,8 @@ class FixedLengthEncoder : public Encoder {
   }
 
   void updateStatsEncoded(const int8_t* const dst_data,
-                          const size_t num_elements) override {
+                          const size_t num_elements,
+                          bool fixlen_array = false) override {
     const V* data = reinterpret_cast<const V*>(dst_data);
 
     std::tie(dataMin, dataMax, has_nulls) = tbb::parallel_reduce(
@@ -126,10 +127,12 @@ class FixedLengthEncoder : public Encoder {
         [&](const auto& range, auto init) {
           auto [min, max, nulls] = init;
           for (size_t i = range.begin(); i < range.end(); i++) {
-            if (data[i] != std::numeric_limits<V>::min()) {
-              decimal_overflow_validator_.validate(data[i]);
-              min = std::min(min, data[i]);
-              max = std::max(max, data[i]);
+            if (data[i] != inline_null_value<V>()) {
+              if (!fixlen_array || data[i] != inline_null_array_value<V>()) {
+                decimal_overflow_validator_.validate(data[i]);
+                min = std::min(min, data[i]);
+                max = std::max(max, data[i]);
+              }
             } else {
               nulls = true;
             }

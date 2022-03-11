@@ -181,9 +181,11 @@ class Encoder {
    *
    * @param dst_data - the data with which to update statistics
    * @param num_elements - the number of elements to scan in the data
+   * @param fixlen_array - true if stats are computed for fixlen array
    */
   virtual void updateStatsEncoded(const int8_t* const dst_data,
-                                  const size_t num_elements) {
+                                  const size_t num_elements,
+                                  bool fixlen_array = false) {
     UNREACHABLE();
   }
 
