@@ -84,7 +84,7 @@ class SQLImporter_args {
     sb.append(
             "-su <other database user> -sp <other database user password> -ss <other database sql statement>\n");
     sb.append(
-            "-t <OmniSci target table> -b <transfer buffer size> -f <table fragment size>\n");
+            "-t <HEAVYAI target table> -b <transfer buffer size> -f <table fragment size>\n");
     sb.append("[-tr] [-adtf] [-nprg] -i <init commands file>\n");
     sb.append("\nSQLImporter -h | --help\n\n");
 
@@ -99,46 +99,46 @@ class SQLImporter_args {
   SQLImporter_args() {
     options.addOption("r", true, "Row Load Limit");
 
-    // OmniSci authentication options
+    // HEAVYAI authentication options
     options.addOption(Option.builder("h").desc("help message").longOpt("help").build());
     options.addOption(
-            Option.builder("u").hasArg().desc("OmniSci User").longOpt("user").build());
+            Option.builder("u").hasArg().desc("HEAVYAI User").longOpt("user").build());
     options.addOption(Option.builder("p")
                               .hasArg()
-                              .desc("OmniSci Password")
+                              .desc("HEAVYAI Password")
                               .longOpt("passwd")
                               .build());
-    // OmniSci transport options
+    // HEAVYAI transport options
     OptionGroup transport_grp = new OptionGroup();
     transport_grp.addOption(Option.builder()
-                                    .desc("use binary transport to connect to OmniSci ")
+                                    .desc("use binary transport to connect to HEAVYAI ")
                                     .longOpt("binary")
                                     .build());
     transport_grp.addOption(Option.builder()
-                                    .desc("use http transport to connect to OmniSci ")
+                                    .desc("use http transport to connect to HEAVYAI ")
                                     .longOpt("http")
                                     .build());
     transport_grp.addOption(Option.builder()
-                                    .desc("use https transport to connect to OmniSci ")
+                                    .desc("use https transport to connect to HEAVYAI ")
                                     .longOpt("https")
                                     .build());
     options.addOptionGroup(transport_grp);
 
-    // OmniSci database server details
+    // HEAVYAI database server details
     options.addOption(Option.builder("s")
                               .hasArg()
-                              .desc("OmniSci Server")
+                              .desc("HEAVYAI Server")
                               .longOpt("server")
                               .build());
     options.addOption(Option.builder("db")
                               .hasArg()
-                              .desc("OmniSci Database")
+                              .desc("HEAVYAI Database")
                               .longOpt("database")
                               .build());
     options.addOption(
-            Option.builder().hasArg().desc("OmniSci Port").longOpt("port").build());
+            Option.builder().hasArg().desc("HEAVYAI Port").longOpt("port").build());
 
-    // OmniSci server authentication options
+    // HEAVYAI server authentication options
     options.addOption(Option.builder()
                               .hasArg()
                               .desc("CA certificate trust store")
@@ -151,7 +151,7 @@ class SQLImporter_args {
                               .build());
     options.addOption(
             Option.builder()
-                    .desc("Insecure TLS - do not validate server OmniSci server credentials")
+                    .desc("Insecure TLS - do not validate server HEAVYAI server credentials")
                     .longOpt("insecure")
                     .build());
 
@@ -188,7 +188,7 @@ class SQLImporter_args {
 
     options.addOption(Option.builder("t")
                               .hasArg()
-                              .desc("OmniSci Target Table")
+                              .desc("HEAVYAI Target Table")
                               .longOpt("targetTable")
                               .required()
                               .build());
@@ -261,7 +261,7 @@ class SQLImporter_args {
         cmd = super.parse(options, strings);
         if (!cmd.hasOption("user") && !cmd.hasOption("client-cert")) {
           throw new MissingArgumentException(
-                  "Must supply either an OmniSci db user or a user certificate");
+                  "Must supply either an HEAVYAI db user or a user certificate");
         }
         // if user supplied must have password and visa versa
         if (cmd.hasOption("user") || cmd.hasOption("passwd")) {
@@ -389,7 +389,7 @@ public class SQLImporter {
 
       ResultSet rs = stmt.executeQuery(cmd.getOptionValue("sqlStmt"));
 
-      // check if table already exists and is compatible in OmniSci with the query
+      // check if table already exists and is compatible in HEAVYAI with the query
       // metadata
       ResultSetMetaData md = rs.getMetaData();
       checkMapDTable(conn, md);
