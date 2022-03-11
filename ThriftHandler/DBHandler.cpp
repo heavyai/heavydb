@@ -141,6 +141,12 @@ thread_local ClientProtocol TrackingProcessor::client_protocol;
 
 namespace {
 
+bool dashboard_exists(const Catalog_Namespace::Catalog& cat,
+                      const int32_t user_id,
+                      const std::string& dashboard_name) {
+  return (cat.getMetadataForDashboard(std::to_string(user_id), dashboard_name));
+}
+
 SessionMap::iterator get_session_from_map(const TSessionId& session,
                                           SessionMap& session_map) {
   auto session_it = session_map.find(session);
@@ -4587,6 +4593,7 @@ int32_t DBHandler::create_dashboard(const TSessionId& session,
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
+  CHECK(session_ptr);
   check_read_only("create_dashboard");
   auto& cat = session_ptr->getCatalog();
   if (!g_allow_system_dashboard_update) {
@@ -4598,9 +4605,7 @@ int32_t DBHandler::create_dashboard(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Not enough privileges to create a dashboard.");
   }
 
-  auto dash = cat.getMetadataForDashboard(
-      std::to_string(session_ptr->get_currentUser().userId), dashboard_name);
-  if (dash) {
+  if (dashboard_exists(cat, session_ptr->get_currentUser().userId, dashboard_name)) {
     THROW_MAPD_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
   }
 
@@ -4643,6 +4648,13 @@ void DBHandler::replace_dashboard(const TSessionId& session,
   if (!is_allowed_on_dashboard(
           *session_ptr, dashboard_id, AccessPrivileges::EDIT_DASHBOARD)) {
     THROW_MAPD_EXCEPTION("Not enough privileges to replace a dashboard.");
+  }
+
+  if (auto dash = cat.getMetadataForDashboard(
+          std::to_string(session_ptr->get_currentUser().userId), dashboard_name)) {
+    if (dash->dashboardId != dashboard_id) {
+      THROW_MAPD_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
+    }
   }
 
   DashboardDescriptor dd;
