@@ -20,6 +20,8 @@
 #include "../Shared/sqltypes.h"
 #include "Shared/types.h"
 
+#include <map>
+
 #include "Logger/Logger.h"
 
 struct ChunkStats {
@@ -161,6 +163,7 @@ struct ChunkMetadata {
   size_t numElements;
   ChunkStats chunkStats;
 
+#ifndef __CUDACC__
   std::string dump() const {
     auto type = sqlType.is_array() ? sqlType.get_elem_type() : sqlType;
     // Unencoded strings have no min/max.
@@ -184,6 +187,7 @@ struct ChunkMetadata {
   }
 
   std::string toString() const { return dump(); }
+#endif
 
   ChunkMetadata(const SQLTypeInfo& sql_type,
                 const size_t num_bytes,

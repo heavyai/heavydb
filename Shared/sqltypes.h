@@ -936,11 +936,12 @@ inline std::ostream& operator<<(std::ostream& os, const SQLTypeInfo& ti) {
 
 Datum StringToDatum(std::string_view s, SQLTypeInfo& ti);
 std::string DatumToString(Datum d, const SQLTypeInfo& ti);
+#endif
+
 bool DatumEqual(const Datum, const Datum, const SQLTypeInfo& ti);
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info);
-#endif
 
 #include "../QueryEngine/DateAdd.h"
 #include "../QueryEngine/DateTruncate.h"
