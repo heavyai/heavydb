@@ -68,8 +68,16 @@ class DashboardBasicTest : public BaseTestFixture {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
+    removeDashboards();
+  }
+
+  void TearDown() override {
+    removeDashboards();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  void removeDashboards() {
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-    // Remove any dashboards that may be left by previous tests
     std::vector<TDashboard> dashboards;
     db_handler->get_dashboards(dashboards, session_id);
     if (dashboards.size()) {
@@ -80,7 +88,6 @@ class DashboardBasicTest : public BaseTestFixture {
       db_handler->delete_dashboards(session_id, db_ids);
     }
   }
-  void TearDown() override { DBHandlerTestFixture::TearDown(); }
 
   inline static int32_t test_user_1_id;
 };
@@ -116,6 +123,37 @@ TEST_F(DashboardBasicTest, ReplaceWithTableChange) {
                                 "\"table\":\"omnisci_counties\"");
 
   db_handler->delete_dashboard(session_id, db_id);
+}
+
+TEST_F(DashboardBasicTest, DuplicateCreateDashboards) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  db_handler->create_dashboard(
+      session_id, "testdb", "state", "image", "\"table\":\"heavyai_us_states\"");
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, session_id = session_id]() {
+        db_handler->create_dashboard(
+            session_id, "testdb", "state", "image", "\"table\":\"heavyai_us_states\"");
+      },
+      "Dashboard with name: testdb already exists.");
+}
+
+TEST_F(DashboardBasicTest, DuplicateReplaceDashboards) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  db_handler->create_dashboard(
+      session_id, "testdb", "state", "image", "\"table\":\"heavyai_us_states\"");
+  auto db2_id = db_handler->create_dashboard(
+      session_id, "testdb2", "state", "image", "\"table\":\"heavyai_us_states\"");
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, session_id = session_id, db2_id = db2_id]() {
+        db_handler->replace_dashboard(session_id,
+                                      db2_id,
+                                      "testdb",
+                                      "test_user",
+                                      "state",
+                                      "image",
+                                      "\"table\":\"heavyai_us_states\"");
+      },
+      "Dashboard with name: testdb already exists.");
 }
 
 struct TestPermissions {
