@@ -5542,8 +5542,14 @@ ImportStatus Importer::importGDALRaster(
       true,
       metadata_column_infos);
 
-  // get the table columns
+  // get the table columns and count actual columns
   auto const& column_descs = loader->get_column_descs();
+  uint32_t num_table_cols{0u};
+  for (auto const* cd : column_descs) {
+    if (!cd->isGeoPhyCol) {
+      num_table_cols++;
+    }
+  }
 
   // how many bands do we have?
   auto num_bands = raster_importer.getNumBands();
@@ -5555,8 +5561,11 @@ ImportStatus Importer::importGDALRaster(
   auto num_expected_cols = num_bands;
   num_expected_cols += point_names_and_sql_types.size();
   num_expected_cols += metadata_column_infos.size();
-  if (num_expected_cols != column_descs.size()) {
-    throw std::runtime_error("Raster Import aborted. Band/Column count mismatch.");
+  if (num_expected_cols != num_table_cols) {
+    throw std::runtime_error(
+        "Raster Import aborted. Band/Column count mismatch (file requires " +
+        std::to_string(num_expected_cols) + ", table has " +
+        std::to_string(num_table_cols) + ")");
   }
 
   // validate the point column names and types

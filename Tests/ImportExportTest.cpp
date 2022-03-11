@@ -4979,6 +4979,15 @@ TEST_F(RasterImportTest, ImportGeoTIFFTest) {
       {{-83.222766892364277, 39.818764365787992, 287.54092407226562}}));
 }
 
+TEST_F(RasterImportTest, ImportGeoTIFFPointTest) {
+  ASSERT_NO_THROW(
+      importTestCommon(kGeoTIFF,
+                       ", raster_point_type='point'",
+                       "SELECT max(ST_X(raster_point)), max(ST_Y(raster_point)), "
+                       "max(band_1_1) FROM raster;",
+                       {{-83.222766883309362, 39.818764333528826, 287.54092407226562}}));
+}
+
 TEST_F(RasterImportTest, ImportGRIBTest) {
   ASSERT_NO_THROW(importTestCommon(kGRIB,
                                    "",
