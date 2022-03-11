@@ -21435,6 +21435,37 @@ TEST(Select, WindowFunctionComplexExpressions) {
           "ASC;";
       EXPECT_THROW(run_multiple_agg(query, dt), std::runtime_error);
     }
+    // check the case of window function with a generic expression
+    {
+      std::string query1 =
+          "SELECT x, PERCENT_RANK() OVER (PARTITION BY x+t ORDER BY x, "
+          "SUM(x)/NULLIF(SUM(f)/15, 0)) AS r1 "
+          "FROM " +
+          table_name + " GROUP BY x, t ORDER BY x ASC NULLS FIRST, r1 ASC NULLS FIRST";
+      c(query1, query1, dt);
+
+      std::string query2 =
+          "SELECT x, PERCENT_RANK() OVER (PARTITION BY x+1, t*t ORDER BY x, "
+          "SUM(x)/(AVG(x)+x+1)) as r1 "
+          "FROM " +
+          table_name + " GROUP BY x, t ORDER BY x ASC NULLS FIRST, r1 ASC NULLS FIRST";
+      c(query2, query2, dt);
+
+      std::string query3 =
+          "SELECT y, x - PERCENT_RANK() OVER (PARTITION BY x+1, t*t ORDER BY x, "
+          "SUM(x)/(AVG(x)+x+1)) as r1 "
+          "FROM " +
+          table_name + " GROUP BY x, y, t ORDER BY y ASC NULLS FIRST, r1 ASC NULLS FIRST";
+      c(query3, query3, dt);
+
+      std::string query4 =
+          "SELECT x, SUM(dd*t) AS v1, ROW_NUMBER() OVER (PARTITION BY x*t "
+          "ORDER BY SUM(f)) AS rn FROM " +
+          table_name +
+          " GROUP BY x, t ORDER BY x ASC NULLS FIRST, v1 ASC NULLS FIRST, rn ASC NULLS "
+          "FIRST";
+      c(query4, query4, dt);
+    }
   }
 }
 
