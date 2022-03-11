@@ -352,16 +352,18 @@ void cast_column(llvm::Value* col_base_ptr,
 
   // pre-header: load column ptr and size
   ir_builder.SetInsertPoint(for_pre);
-  llvm::StructType* col_struct_type = llvm::StructType::get(
-      ctx, {ir_builder.getInt64Ty()->getPointerTo(), ir_builder.getInt64Ty()});
+  llvm::Type* data_type = get_llvm_type_from_sql_column_type(orig_ti, ctx);
+  llvm::StructType* col_struct_type =
+      llvm::StructType::get(ctx, {data_type, ir_builder.getInt64Ty()});
   llvm::Value* struct_cast = ir_builder.CreateBitCast(
       col_base_ptr, col_struct_type->getPointerTo(), "col_struct." + index);
-  llvm::Value* gep_ptr =
-      ir_builder.CreateStructGEP(struct_cast, 0, "col_ptr_addr." + index);
-  llvm::Value* col_ptr = ir_builder.CreateLoad(gep_ptr, "col_ptr." + index);
+  llvm::Value* gep_ptr = ir_builder.CreateStructGEP(
+      col_struct_type, struct_cast, 0, "col_ptr_addr." + index);
+  llvm::Value* col_ptr = ir_builder.CreateLoad(data_type, gep_ptr, "col_ptr." + index);
   llvm::Value* gep_sz =
-      ir_builder.CreateStructGEP(struct_cast, 1, "col_sz_addr." + index);
-  llvm::Value* col_sz = ir_builder.CreateLoad(gep_sz, "col_sz." + index);
+      ir_builder.CreateStructGEP(col_struct_type, struct_cast, 1, "col_sz_addr." + index);
+  llvm::Value* col_sz =
+      ir_builder.CreateLoad(ir_builder.getInt64Ty(), gep_sz, "col_sz." + index);
   ir_builder.CreateBr(for_cond);
 
   // condition: check induction variable against loop predicate
