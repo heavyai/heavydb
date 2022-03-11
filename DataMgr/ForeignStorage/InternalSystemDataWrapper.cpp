@@ -31,8 +31,12 @@ namespace foreign_storage {
 std::string get_db_name(int32_t db_id) {
   Catalog_Namespace::DBMetadata db_metadata;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
-  CHECK(sys_catalog.getMetadataForDBById(db_id, db_metadata));
-  return db_metadata.dbName;
+  if (sys_catalog.getMetadataForDBById(db_id, db_metadata)) {
+    return db_metadata.dbName;
+  } else {
+    // Database has been deleted.
+    return kDeletedValueIndicator;
+  }
 }
 
 std::string get_table_name(int32_t db_id, int32_t table_id) {

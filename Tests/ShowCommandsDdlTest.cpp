@@ -2996,6 +2996,37 @@ TEST_F(SystemTablesTest, UsersSystemTable) {
   // clang-format on
 }
 
+TEST_F(SystemTablesTest, UsersSystemTableDeletedDatabase) {
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, i(1), shared::kDefaultDbName,
+        True},
+       {getUserId("test_user_2"), "test_user_2", False, i(1), shared::kDefaultDbName,
+        True}});
+  // clang-format on
+
+  switchToAdmin();
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + ";");
+  sql("CREATE USER test_user_3 (password = 'test_pass', default_db = '" + db_name +
+      "');");
+  sql("DROP DATABASE " + db_name + ";");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult(
+      "SELECT * FROM users ORDER BY user_name;",
+      {{getUserId(shared::kRootUsername), shared::kRootUsername, True, i(-1), Null, True},
+       {getUserId("test_user_1"), "test_user_1", False, getDbId(shared::kDefaultDbName),
+        shared::kDefaultDbName, True},
+       {getUserId("test_user_2"), "test_user_2", False, getDbId(shared::kDefaultDbName),
+        shared::kDefaultDbName, True},
+       {getUserId("test_user_3"), "test_user_3", False, i(-1), Null, True}});
+  // clang-format on
+}
+
 TEST_F(SystemTablesTest, TablesSystemTable) {
   if (isDistributedMode()) {
     GTEST_SKIP() << "Test does not play well with tables left behind by ExecuteTest.";
@@ -3082,6 +3113,40 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
   // clang-format on
 }
 
+TEST_F(SystemTablesTest, TablesSystemTableDeletedOwner) {
+  switchToAdmin();
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + ";");
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  sql("GRANT ALL ON DATABASE " + db_name + " TO " + user_name + ";");
+
+  login(user_name, "test_pass", db_name);
+  const std::string table_name{"test_table_1"};
+  std::string create_table_sql{"CREATE TABLE " + table_name + " (\n  i INTEGER);"};
+  sql(create_table_sql);
+  auto table_id = getTableId(table_name);
+  auto user_id = getUserId(user_name);
+
+  switchToAdmin();
+  dropUser(user_name);
+
+  loginInformationSchema();
+  // Skip the shared::kDefaultDbName database, since it can contain default
+  // created tables and tables created by other test suites.
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM tables WHERE database_id <> " +
+                      std::to_string(getDbId(shared::kDefaultDbName)) +
+                      " ORDER BY table_name;",
+                      {{getDbId(db_name), db_name, table_id, table_name,
+                        user_id, "<DELETED>",
+                        i(3), "DEFAULT", Null, i(DEFAULT_FRAGMENT_ROWS),
+                        i(DEFAULT_MAX_CHUNK_SIZE), i(DEFAULT_PAGE_SIZE),
+                        i(DEFAULT_MAX_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0),
+                        create_table_sql}});
+  // clang-format on
+}
+
 TEST_F(SystemTablesTest, DashboardsSystemTable) {
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
@@ -3141,6 +3206,33 @@ TEST_F(SystemTablesTest, DashboardsSystemTableWithOtherTables) {
   }
 }
 
+TEST_F(SystemTablesTest, DashboardsSystemTableDeletedOwner) {
+  switchToAdmin();
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + ";");
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  sql("GRANT ALL ON DATABASE " + db_name + " TO " + user_name + ";");
+
+  login(user_name, "test_pass", db_name);
+  const std::string dashboard_name{"test_dashboard_1"};
+  createDashboard(dashboard_name);
+  auto last_updated = getLastUpdatedTime(dashboard_name);
+  auto user_id = getUserId(user_name);
+  dropUser(user_name);
+
+  loginInformationSchema();
+  // Skip the shared::kDefaultDbName database, since it can contain dashboards
+  // created by other test suites.
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
+                      std::to_string(getDbId(shared::kDefaultDbName)) +
+                      " ORDER BY dashboard_name;",
+                      {{i(3), "test_db_1", i(1), dashboard_name, user_id, "<DELETED>",
+                        last_updated, array({"test_table"})}});
+  // clang-format on
+}
+
 TEST_F(SystemTablesTest, DatabasesSystemTable) {
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
@@ -3187,6 +3279,26 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
   // clang-format on
 }
 
+TEST_F(SystemTablesTest, DatabasesSystemTableDeletedOwner) {
+  switchToAdmin();
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + " (owner = '" + user_name + "');");
+  auto user_id = getUserId(user_name);
+  dropUser(user_name);
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM databases ORDER BY database_name;",
+                      {{getDbId(shared::kDefaultDbName), shared::kDefaultDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(shared::kInfoSchemaDbName), shared::kInfoSchemaDbName,
+                        getUserId(shared::kRootUsername), shared::kRootUsername},
+                       {getDbId(db_name), db_name, user_id, "<DELETED>"}});
+  // clang-format on
+}
+
 TEST_F(SystemTablesTest, PermissionsSystemTable) {
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
@@ -3211,6 +3323,41 @@ TEST_F(SystemTablesTest, PermissionsSystemTable) {
                         {"test_user_1", True, i(2), shared::kInfoSchemaDbName,
                         shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
                         shared::kRootUsername, "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
+  // clang-format on
+}
+
+TEST_F(SystemTablesTest, PermissionsSystemTableDeletedOwner) {
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
+                      {{"test_user_1", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})},
+                       {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
+                        shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
+                        shared::kRootUsername, "database", array({"access"})}});
+  // clang-format on
+
+  switchToAdmin();
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  const std::string db_name{"test_db_1"};
+  sql("CREATE DATABASE " + db_name + " (owner = '" + user_name + "');");
+  sql("GRANT ACCESS ON DATABASE " + db_name + " to test_user_1;");
+  auto user_id = getUserId(user_name);
+  dropUser(user_name);
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name, object_name;",
+                      {{"test_user_1", True, getDbId(shared::kInfoSchemaDbName),
+                        shared::kInfoSchemaDbName, shared::kInfoSchemaDbName, i(-1),
+                        getUserId(shared::kRootUsername), shared::kRootUsername,
+                        "database", array({"access"})},
+                       {"test_user_1", True, getDbId(db_name), db_name, db_name, i(-1),
+                        user_id, "<DELETED>", "database", array({"access"})},
                        {"test_user_2", True, i(2), shared::kInfoSchemaDbName,
                         shared::kInfoSchemaDbName, i(-1), getUserId(shared::kRootUsername),
                         shared::kRootUsername, "database", array({"access"})}});

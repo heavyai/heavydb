@@ -71,8 +71,12 @@ void populate_import_buffers_for_catalog_users(
 std::string get_user_name(int32_t user_id) {
   Catalog_Namespace::UserMetadata user_metadata;
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
-  CHECK(sys_catalog.getMetadataForUserById(user_id, user_metadata));
-  return user_metadata.userName;
+  if (sys_catalog.getMetadataForUserById(user_id, user_metadata)) {
+    return user_metadata.userName;
+  } else {
+    // User has been deleted.
+    return kDeletedValueIndicator;
+  }
 }
 
 std::string get_table_type(const TableDescriptor& td) {
