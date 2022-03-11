@@ -76,8 +76,8 @@ public class SelectUpdateDeleteDifferentTables {
             final String tableName = dbaUser + "_" + threadId + "_" + runId;
 
             try {
-              MapdTestClient user =
-                      MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+              HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                      "localhost", 6274, db, dbUser, dbPassword);
 
               user.runSql("CREATE TABLE " + tableName
                       + "(x BIGINT, y INTEGER, z SMALLINT, a TINYINT, f FLOAT, d DOUBLE, deci DECIMAL(18,6), str TEXT ENCODING NONE) WITH (FRAGMENT_SIZE = "
@@ -177,7 +177,7 @@ public class SelectUpdateDeleteDifferentTables {
   public void testConcurrency() throws Exception {
     logger.info("SelectUpdateDeleteDifferentTables()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");

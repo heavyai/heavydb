@@ -23,21 +23,21 @@ import java.util.List;
  *
  * @author michael
  */
-public class MapDUser {
+public class HeavyDBUser {
   private final String user;
   private final String catalog;
-  private final int mapDPort;
+  private final int port;
   private final String session;
   private final List<Restriction> restrictions;
 
-  public MapDUser(String user,
+  public HeavyDBUser(String user,
           String session,
           String catalog,
-          int mapDPort,
+          int port,
           List<Restriction> restrictions) {
     this.user = user;
     this.catalog = catalog;
-    this.mapDPort = mapDPort;
+    this.port = port;
     this.session = session;
     this.restrictions = restrictions;
   }
@@ -54,8 +54,8 @@ public class MapDUser {
     return user;
   }
 
-  public int getMapDPort() {
-    return mapDPort;
+  public int getPort() {
+    return port;
   }
 
   public String getSession() {

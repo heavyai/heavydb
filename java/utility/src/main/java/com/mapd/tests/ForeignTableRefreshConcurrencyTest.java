@@ -80,7 +80,7 @@ public class ForeignTableRefreshConcurrencyTest {
           final String thread_name = "F[" + tid + "]";
           try {
             logger.info("Starting manual foreign table refresh thread " + thread_name);
-            MapdTestClient user = MapdTestClient.getClient(
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
                     "localhost", 6274, db, userName, userPassword);
             for (int irun = 0; irun < num_runs; ++irun) {
               runSqlAsUser("SELECT * FROM test_foreign_table_manual_refresh_" + tid + ";",
@@ -111,7 +111,7 @@ public class ForeignTableRefreshConcurrencyTest {
           final String thread_name = "S[" + tid + "]";
           try {
             logger.info("Starting scheduled foreign table refresh thread " + thread_name);
-            MapdTestClient user = MapdTestClient.getClient(
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
                     "localhost", 6274, db, userName, userPassword);
             for (int irun = 0; irun < num_runs; ++irun) {
               runSqlAsUser(
@@ -141,7 +141,7 @@ public class ForeignTableRefreshConcurrencyTest {
           final String thread_name = "T[" + tid + "]";
           try {
             logger.info("Starting table join " + thread_name);
-            MapdTestClient user = MapdTestClient.getClient(
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
                     "localhost", 6274, db, userName, userPassword);
             for (int irun = 0; irun < num_runs; ++irun) {
               runSqlAsUser("SELECT * FROM test_table_" + tid
@@ -183,14 +183,14 @@ public class ForeignTableRefreshConcurrencyTest {
     }
   }
 
-  public void runSqlAsUser(String sql, MapdTestClient user, String logPrefix)
+  public void runSqlAsUser(String sql, HeavyDBTestClient user, String logPrefix)
           throws Exception {
     logger.info(logPrefix + " " + sql);
     user.runSql(sql);
   }
 
   private void createForeignTestTableScheduledRefresh(
-          MapdTestClient dba, String foreign_table_name) throws Exception {
+          HeavyDBTestClient dba, String foreign_table_name) throws Exception {
     dba.runSql("CREATE FOREIGN TABLE " + foreign_table_name + " "
             + "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
             + "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
@@ -204,7 +204,7 @@ public class ForeignTableRefreshConcurrencyTest {
   }
 
   private void createForeignTestTableManualRefresh(
-          MapdTestClient dba, String foreign_table_name) throws Exception {
+          HeavyDBTestClient dba, String foreign_table_name) throws Exception {
     dba.runSql("CREATE FOREIGN TABLE " + foreign_table_name + " "
             + "(b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
             + "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
@@ -214,7 +214,8 @@ public class ForeignTableRefreshConcurrencyTest {
             + "fragment_size = 2);");
   }
 
-  private void createTestTable(MapdTestClient dba, String table_name, Path copy_from_path)
+  private void createTestTable(
+          HeavyDBTestClient dba, String table_name, Path copy_from_path)
           throws Exception {
     dba.runSql("CREATE TABLE " + table_name
             + " (id INTEGER, str TEXT ENCODING DICT(32), x DOUBLE, y BIGINT) WITH (FRAGMENT_SIZE=1)");
@@ -223,7 +224,8 @@ public class ForeignTableRefreshConcurrencyTest {
   }
 
   private void createTestTables(
-          MapdTestClient dba, String table_name, Path copy_from_path) throws Exception {
+          HeavyDBTestClient dba, String table_name, Path copy_from_path)
+          throws Exception {
     createTestTable(dba, table_name + "_left", copy_from_path);
     createTestTable(dba, table_name + "_right", copy_from_path);
   }
@@ -231,7 +233,7 @@ public class ForeignTableRefreshConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("ForeignTableRefreshConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
 
     // initialize
@@ -245,7 +247,7 @@ public class ForeignTableRefreshConcurrencyTest {
     Path table_import_path = getAbsolutePath(
             "../java/utility/src/main/java/com/mapd/tests/data/simple_test.csv");
     Path foreign_server_path = getAbsolutePath("../Tests/FsiDataFiles/");
-    MapdTestClient dba = MapdTestClient.getClient(
+    HeavyDBTestClient dba = HeavyDBTestClient.getClient(
             "localhost", 6274, "db1", "admin", "HyperInteractive");
     dba.runSql("CREATE SERVER test_server "
             + "FOREIGN DATA WRAPPER delimited_file WITH (storage_type = 'LOCAL_FILE', "

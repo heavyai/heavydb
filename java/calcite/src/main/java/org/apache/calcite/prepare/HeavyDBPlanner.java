@@ -17,8 +17,8 @@
 package org.apache.calcite.prepare;
 
 import com.google.common.collect.ImmutableSet;
-import com.mapd.calcite.parser.MapDParserOptions;
-import com.mapd.calcite.parser.MapDSchema;
+import com.mapd.calcite.parser.HeavyDBParserOptions;
+import com.mapd.calcite.parser.HeavyDBSchema;
 import com.mapd.calcite.parser.ProjectProjectRemoveRule;
 
 import org.apache.calcite.config.CalciteConnectionConfig;
@@ -37,7 +37,7 @@ import org.apache.calcite.plan.volcano.VolcanoPlanner;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
-import org.apache.calcite.rel.externalize.MapDRelJsonReader;
+import org.apache.calcite.rel.externalize.HeavyDBRelJsonReader;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.*;
 import org.apache.calcite.rex.RexBuilder;
@@ -65,14 +65,14 @@ import java.util.Properties;
  * PlannerImpl, refactored now to use inheritance to minimize maintenance
  * efforts. Implementation of {@link org.apache.calcite.tools.Planner}.
  */
-public class MapDPlanner extends PlannerImpl {
+public class HeavyDBPlanner extends PlannerImpl {
   FrameworkConfig config;
-  private List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
+  private List<HeavyDBParserOptions.FilterPushDownInfo> filterPushDownInfo =
           new ArrayList<>();
   private List<Restriction> restrictions = null;
-  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDPlanner.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBPlanner.class);
 
-  public MapDPlanner(FrameworkConfig config) {
+  public HeavyDBPlanner(FrameworkConfig config) {
     super(config);
     this.config = config;
   }
@@ -150,12 +150,14 @@ public class MapDPlanner extends PlannerImpl {
     SqlValidator.Config validatorConfig = SqlValidator.Config.DEFAULT;
     validatorConfig = validatorConfig.withSqlConformance(SqlConformanceEnum.LENIENT);
 
-    MapDSqlAdvisorValidator advisor_validator = new MapDSqlAdvisorValidator(visibleTables,
-            config.getOperatorTable(),
-            createCatalogReader(),
-            getTypeFactory(),
-            validatorConfig);
-    SqlAdvisor advisor = new MapDSqlAdvisor(advisor_validator, config.getParserConfig());
+    HeavyDBSqlAdvisorValidator advisor_validator =
+            new HeavyDBSqlAdvisorValidator(visibleTables,
+                    config.getOperatorTable(),
+                    createCatalogReader(),
+                    getTypeFactory(),
+                    validatorConfig);
+    SqlAdvisor advisor =
+            new HeavyDBSqlAdvisor(advisor_validator, config.getParserConfig());
     String[] replaced = new String[1];
     int adjusted_cursor = cursor < 0 ? sql.length() : cursor;
     java.util.List<SqlMoniker> hints =
@@ -191,7 +193,7 @@ public class MapDPlanner extends PlannerImpl {
 
     final HepProgram program =
             HepProgram.builder().addRuleInstance(injectFilterRule).build();
-    HepPlanner prePlanner = MapDPlanner.getHepPlanner(program, false);
+    HepPlanner prePlanner = HeavyDBPlanner.getHepPlanner(program, false);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     return root.withRel(rootRelNode);
@@ -207,7 +209,7 @@ public class MapDPlanner extends PlannerImpl {
             filterPushDownInfo);
     final HepProgram program =
             HepProgram.builder().addRuleInstance(dynamicFilterJoinRule).build();
-    HepPlanner prePlanner = MapDPlanner.getHepPlanner(program, false);
+    HepPlanner prePlanner = HeavyDBPlanner.getHepPlanner(program, false);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     filterPushDownInfo.clear();
@@ -222,7 +224,7 @@ public class MapDPlanner extends PlannerImpl {
                                  .addRuleInstance(CoreRules.AGGREGATE_MERGE)
                                  .addRuleInstance(outerJoinOptRule)
                                  .build();
-    HepPlanner prePlanner = MapDPlanner.getHepPlanner(program, true);
+    HepPlanner prePlanner = HeavyDBPlanner.getHepPlanner(program, true);
     prePlanner.setRoot(root.rel);
     final RelNode rootRelNode = prePlanner.findBestExp();
     return root.withRel(rootRelNode);
@@ -233,17 +235,18 @@ public class MapDPlanner extends PlannerImpl {
     for (RelOptRule rule : rules) {
       programBuilder.addRuleInstance(rule);
     }
-    HepPlanner hepPlanner = MapDPlanner.getHepPlanner(programBuilder.build(), false);
+    HepPlanner hepPlanner = HeavyDBPlanner.getHepPlanner(programBuilder.build(), false);
     hepPlanner.setRoot(root.rel);
     return root.withRel(hepPlanner.findBestExp());
   }
 
-  public RelRoot optimizeRaQuery(String query, MapDSchema schema) throws IOException {
+  public RelRoot optimizeRaQuery(String query, HeavyDBSchema schema) throws IOException {
     ready();
     RexBuilder builder = new RexBuilder(getTypeFactory());
     RelOptCluster cluster = RelOptCluster.create(new VolcanoPlanner(), builder);
     CalciteCatalogReader catalogReader = createCatalogReader();
-    MapDRelJsonReader reader = new MapDRelJsonReader(cluster, catalogReader, schema);
+    HeavyDBRelJsonReader reader =
+            new HeavyDBRelJsonReader(cluster, catalogReader, schema);
 
     RelRoot relR = RelRoot.of(reader.read(query), SqlKind.SELECT);
 
@@ -266,7 +269,7 @@ public class MapDPlanner extends PlannerImpl {
   }
 
   public void setFilterPushDownInfo(
-          final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo) {
+          final List<HeavyDBParserOptions.FilterPushDownInfo> filterPushDownInfo) {
     this.filterPushDownInfo = filterPushDownInfo;
   }
 
@@ -275,4 +278,4 @@ public class MapDPlanner extends PlannerImpl {
   }
 }
 
-// End MapDPlanner.java
+// End HeavyDBPlanner.java

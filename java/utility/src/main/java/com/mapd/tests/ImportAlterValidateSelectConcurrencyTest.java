@@ -67,8 +67,8 @@ public class ImportAlterValidateSelectConcurrencyTest {
     final CyclicBarrier barrier = new CyclicBarrier(num_threads, new Runnable() {
       public void run() {
         try {
-          MapdTestClient dba =
-                  MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+          HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, dbaUser, dbaPassword);
           dba.runSql("CREATE TABLE " + csvTableName
                   + "(pt GEOMETRY(POINT), ls GEOMETRY(LINESTRING), faii INTEGER[2], fadc DECIMAL(5, 2)[2], fatx TEXT[] ENCODING DICT(32), fatx2 TEXT[2] ENCODING DICT(32)) WITH(FRAGMENT_SIZE = "
                   + fragment_size + ")");
@@ -127,8 +127,8 @@ public class ImportAlterValidateSelectConcurrencyTest {
           try {
             barrier.await();
 
-            MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbUser, dbPassword);
 
             if (threadId % 2 == 0) {
               logger.info(logPrefix + " IMPORT TABLE");
@@ -242,8 +242,8 @@ public class ImportAlterValidateSelectConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
     dba.runSql("DROP TABLE " + csvTableName + ";");
 
     for (Exception e : exceptions) {
@@ -256,7 +256,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
 
   public void testConcurrency() throws Exception {
     logger.info("ImportAlterValidateSelectConcurrencyTest()");
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     try {
       su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
@@ -300,13 +300,13 @@ public class ImportAlterValidateSelectConcurrencyTest {
     }
   }
 
-  private void logAndRunSql(String sql, MapdTestClient user, String logPrefix)
+  private void logAndRunSql(String sql, HeavyDBTestClient user, String logPrefix)
           throws Exception {
     logger.info(logPrefix + " " + sql);
     user.runSql(sql);
   }
 
-  private void loadTable(MapdTestClient user, String logPrefix) throws Exception {
+  private void loadTable(HeavyDBTestClient user, String logPrefix) throws Exception {
     logger.info(logPrefix + " Calling load_table API");
     List<List<String>> rows = new ArrayList<>();
     for (int i = 0; i < 5; i++) {
@@ -320,7 +320,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
     user.load_table(csvTableName, rows, new ArrayList<>());
   }
 
-  private void loadTableBinaryColumnar(MapdTestClient user, String logPrefix)
+  private void loadTableBinaryColumnar(HeavyDBTestClient user, String logPrefix)
           throws Exception {
     logger.info(logPrefix + " Calling load_table_binary_columnar API");
     List<List<Object>> columns = new ArrayList<>();
@@ -336,7 +336,7 @@ public class ImportAlterValidateSelectConcurrencyTest {
             csvTableName, columns, Arrays.asList("faii", "fatx", "fatx2"));
   }
 
-  private void loadTableBinaryColumnarPolys(MapdTestClient user, String logPrefix)
+  private void loadTableBinaryColumnarPolys(HeavyDBTestClient user, String logPrefix)
           throws Exception {
     logger.info(logPrefix + " Calling load_table_binary_columnar_polys API");
     List<List<Object>> columns = new ArrayList<>();
@@ -350,7 +350,8 @@ public class ImportAlterValidateSelectConcurrencyTest {
     user.load_table_binary_columnar_polys(geoTableName, columns, new ArrayList<>());
   }
 
-  private void getTableDetails(MapdTestClient user, String logPrefix) throws Exception {
+  private void getTableDetails(HeavyDBTestClient user, String logPrefix)
+          throws Exception {
     logger.info(logPrefix + " Calling get_table_details API");
     user.get_table_details(csvTableName);
     logger.info(logPrefix + " Calling get_table_details_for_database API");
@@ -362,7 +363,8 @@ public class ImportAlterValidateSelectConcurrencyTest {
             geoTableName);
   }
 
-  private void getTablesMetadata(MapdTestClient user, String logPrefix) throws Exception {
+  private void getTablesMetadata(HeavyDBTestClient user, String logPrefix)
+          throws Exception {
     logger.info(logPrefix + " Calling get_tables_meta API");
     user.get_tables_meta();
   }

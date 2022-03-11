@@ -67,8 +67,8 @@ public class CtasItasSelectUpdelConcurrencyTest {
     final CyclicBarrier barrier = new CyclicBarrier(num_threads, new Runnable() {
       public void run() {
         try {
-          MapdTestClient dba =
-                  MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+          HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, dbaUser, dbaPassword);
           dba.runSql("CREATE TABLE " + tableName
                   + "(x BIGINT, y INTEGER, z SMALLINT, a TINYINT, f FLOAT, d DOUBLE, deci DECIMAL(18,6), str TEXT ENCODING NONE) WITH (FRAGMENT_SIZE = "
                   + fragment_size + ")");
@@ -118,8 +118,8 @@ public class CtasItasSelectUpdelConcurrencyTest {
           try {
             barrier.await();
 
-            MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbUser, dbPassword);
 
             Random rand = new Random(tid);
 
@@ -198,8 +198,8 @@ public class CtasItasSelectUpdelConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
     dba.runSql("DROP TABLE " + tableName + ";");
 
     for (Exception e : exceptions) {
@@ -213,7 +213,7 @@ public class CtasItasSelectUpdelConcurrencyTest {
   public void testConcurrency() throws Exception {
     logger.info("CtasItasSelectUpdelConcurrencyTest()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
-import com.mapd.parser.hint.OmniSciHintStrategyTable;
+import com.mapd.parser.hint.HeavyDBHintStrategyTable;
 import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.calcite.avatica.util.Casing;
@@ -35,7 +35,7 @@ import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.hep.HepPlanner;
 import org.apache.calcite.plan.hep.HepProgramBuilder;
-import org.apache.calcite.prepare.MapDPlanner;
+import org.apache.calcite.prepare.HeavyDBPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
@@ -82,8 +82,8 @@ import java.util.stream.Stream;
  *
  * @author michael
  */
-public final class MapDParser {
-  public static final ThreadLocal<MapDParser> CURRENT_PARSER = new ThreadLocal<>();
+public final class HeavyDBParser {
+  public static final ThreadLocal<HeavyDBParser> CURRENT_PARSER = new ThreadLocal<>();
   private static final EnumSet<SqlKind> SCALAR =
           EnumSet.of(SqlKind.SCALAR_QUERY, SqlKind.SELECT);
   private static final EnumSet<SqlKind> EXISTS = EnumSet.of(SqlKind.EXISTS);
@@ -93,25 +93,25 @@ public final class MapDParser {
   private static final EnumSet<SqlKind> ARRAY_VALUE =
           EnumSet.of(SqlKind.ARRAY_VALUE_CONSTRUCTOR);
 
-  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDParser.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBParser.class);
 
-  private final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable;
+  private final Supplier<HeavyDBSqlOperatorTable> dbSqlOperatorTable;
   private final String dataDir;
 
   private int callCount = 0;
-  private final int mapdPort;
-  private MapDUser mapdUser;
+  private final int dbPort;
+  private HeavyDBUser dbUser;
   private SockTransportProperties sock_transport_properties = null;
 
   private static Map<String, Boolean> SubqueryCorrMemo = new ConcurrentHashMap<>();
 
-  public MapDParser(String dataDir,
-          final Supplier<MapDSqlOperatorTable> mapDSqlOperatorTable,
-          int mapdPort,
+  public HeavyDBParser(String dataDir,
+          final Supplier<HeavyDBSqlOperatorTable> dbSqlOperatorTable,
+          int dbPort,
           SockTransportProperties skT) {
     this.dataDir = dataDir;
-    this.mapDSqlOperatorTable = mapDSqlOperatorTable;
-    this.mapdPort = mapdPort;
+    this.dbSqlOperatorTable = dbSqlOperatorTable;
+    this.dbPort = dbPort;
     this.sock_transport_properties = skT;
   }
 
@@ -120,7 +120,7 @@ public final class MapDParser {
   }
 
   private static final Context MAPD_CONNECTION_CONTEXT = new Context() {
-    MapDTypeSystem myTypeSystem = new MapDTypeSystem();
+    HeavyDBTypeSystem myTypeSystem = new HeavyDBTypeSystem();
     CalciteConnectionConfig config = new CalciteConnectionConfigImpl(new Properties()) {
       {
         properties.put(CalciteConnectionProperty.CASE_SENSITIVE.camelName(),
@@ -153,7 +153,7 @@ public final class MapDParser {
     }
   };
 
-  private MapDPlanner getPlanner() {
+  private HeavyDBPlanner getPlanner() {
     return getPlanner(true, false);
   }
 
@@ -165,10 +165,10 @@ public final class MapDParser {
     }
 
     try {
-      MapDParser parser = new MapDParser(
-              dataDir, mapDSqlOperatorTable, mapdPort, sock_transport_properties);
-      MapDParserOptions options = new MapDParserOptions();
-      parser.setUser(mapdUser);
+      HeavyDBParser parser = new HeavyDBParser(
+              dataDir, dbSqlOperatorTable, dbPort, sock_transport_properties);
+      HeavyDBParserOptions options = new HeavyDBParserOptions();
+      parser.setUser(dbUser);
       parser.processSql(expression, options);
     } catch (Exception e) {
       // if we are not able to parse, then assume correlated
@@ -179,7 +179,7 @@ public final class MapDParser {
     return false;
   }
 
-  private MapDPlanner getPlanner(
+  private HeavyDBPlanner getPlanner(
           final boolean allowSubQueryExpansion, final boolean isWatchdogEnabled) {
     BiPredicate<SqlNode, SqlNode> expandPredicate = new BiPredicate<SqlNode, SqlNode>() {
       @Override
@@ -296,27 +296,23 @@ public final class MapDParser {
 
     // create the default schema
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
-    final MapDSchema defaultSchema =
-            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
-    final SchemaPlus defaultSchemaPlus = rootSchema.add(mapdUser.getDB(), defaultSchema);
+    final HeavyDBSchema defaultSchema =
+            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
+    final SchemaPlus defaultSchemaPlus = rootSchema.add(dbUser.getDB(), defaultSchema);
 
     // add the other potential schemas
     // this is where the systyem schema would be added
     final MetaConnect mc =
-            new MetaConnect(mapdPort, dataDir, mapdUser, this, sock_transport_properties);
+            new MetaConnect(dbPort, dataDir, dbUser, this, sock_transport_properties);
 
     // TODO MAT for this checkin we are not going to actually allow any additional schemas
     // Eveything should work and perform as it ever did
     if (false) {
       for (String db : mc.getDatabases()) {
-        if (!db.toUpperCase().equals(mapdUser.getDB().toUpperCase())) {
+        if (!db.toUpperCase().equals(dbUser.getDB().toUpperCase())) {
           rootSchema.add(db,
-                  new MapDSchema(dataDir,
-                          this,
-                          mapdPort,
-                          mapdUser,
-                          sock_transport_properties,
-                          db));
+                  new HeavyDBSchema(
+                          dataDir, this, dbPort, dbUser, sock_transport_properties, db));
         }
       }
     }
@@ -324,7 +320,7 @@ public final class MapDParser {
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
                     .defaultSchema(defaultSchemaPlus)
-                    .operatorTable(mapDSqlOperatorTable.get())
+                    .operatorTable(dbSqlOperatorTable.get())
                     .parserConfig(SqlParser.configBuilder()
                                           .setConformance(SqlConformanceEnum.LENIENT)
                                           .setUnquotedCasing(Casing.UNCHANGED)
@@ -341,54 +337,55 @@ public final class MapDParser {
                                     // allow as many as possible IN operator values
                                     .withInSubQueryThreshold(Integer.MAX_VALUE)
                                     .withHintStrategyTable(
-                                            OmniSciHintStrategyTable.HINT_STRATEGY_TABLE)
+                                            HeavyDBHintStrategyTable.HINT_STRATEGY_TABLE)
                                     .build())
 
                     .typeSystem(createTypeSystem())
                     .context(MAPD_CONNECTION_CONTEXT)
                     .build();
-    MapDPlanner planner = new MapDPlanner(config);
-    planner.setRestrictions(mapdUser.getRestrictions());
+    HeavyDBPlanner planner = new HeavyDBPlanner(config);
+    planner.setRestrictions(dbUser.getRestrictions());
     return planner;
   }
 
-  public void setUser(MapDUser mapdUser) {
-    this.mapdUser = mapdUser;
+  public void setUser(HeavyDBUser dbUser) {
+    this.dbUser = dbUser;
   }
 
   public Pair<String, SqlIdentifierCapturer> process(
-          String sql, final MapDParserOptions parserOptions)
+          String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
-    final MapDPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     String res = processSql(sqlNode, parserOptions);
     SqlIdentifierCapturer capture = captureIdentifiers(sqlNode);
     return new Pair<String, SqlIdentifierCapturer>(res, capture);
   }
 
-  public String optimizeRAQuery(String query, final MapDParserOptions parserOptions)
+  public String optimizeRAQuery(String query, final HeavyDBParserOptions parserOptions)
           throws IOException {
-    MapDSchema schema =
-            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
-    MapDPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    HeavyDBSchema schema =
+            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
+    HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot optRel = planner.optimizeRaQuery(query, schema);
     optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
-    return MapDSerializer.toString(optRel.project());
+    return HeavyDBSerializer.toString(optRel.project());
   }
 
-  public String processSql(String sql, final MapDParserOptions parserOptions)
+  public String processSql(String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
-    final MapDPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
 
     return processSql(sqlNode, parserOptions);
   }
 
-  public String processSql(final SqlNode sqlNode, final MapDParserOptions parserOptions)
+  public String processSql(
+          final SqlNode sqlNode, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
@@ -400,7 +397,7 @@ public final class MapDParser {
       return sqlNode.toString();
     }
 
-    final MapDPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
     planner.advanceToValidate();
 
     final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
@@ -410,30 +407,30 @@ public final class MapDParser {
       return RelOptUtil.toString(sqlRel.project());
     }
 
-    String res = MapDSerializer.toString(project);
+    String res = HeavyDBSerializer.toString(project);
 
     return res;
   }
 
-  public MapDPlanner.CompletionResult getCompletionHints(
+  public HeavyDBPlanner.CompletionResult getCompletionHints(
           String sql, int cursor, List<String> visible_tables) {
     return getPlanner().getCompletionHints(sql, cursor, visible_tables);
   }
 
   public HashSet<ImmutableList<String>> resolveSelectIdentifiers(
           SqlIdentifierCapturer capturer) {
-    MapDSchema schema =
-            new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+    HeavyDBSchema schema =
+            new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
     HashSet<ImmutableList<String>> resolved = new HashSet<ImmutableList<String>>();
 
     for (ImmutableList<String> names : capturer.selects) {
-      MapDTable table = (MapDTable) schema.getTable(names.get(0));
+      HeavyDBTable table = (HeavyDBTable) schema.getTable(names.get(0));
       if (null == table) {
         throw new RuntimeException("table/view not found: " + names.get(0));
       }
 
-      if (table instanceof MapDView) {
-        MapDView view = (MapDView) table;
+      if (table instanceof HeavyDBView) {
+        HeavyDBView view = (HeavyDBView) table;
         resolved.addAll(resolveSelectIdentifiers(view.getAccessedObjects()));
       } else {
         resolved.add(names);
@@ -558,7 +555,7 @@ public final class MapDParser {
           throws SqlParseException, ValidationException, RelConversionException {
     SqlIdentifier targetTable = (SqlIdentifier) update.getTargetTable();
     String targetTableName = targetTable.names.get(targetTable.names.size() - 1);
-    MapDPlanner planner = getPlanner();
+    HeavyDBPlanner planner = getPlanner();
     String dummySql = "DELETE FROM " + targetTableName;
     SqlNode dummyNode = planner.parse(dummySql);
     dummyNode = planner.validate(dummyNode);
@@ -567,7 +564,8 @@ public final class MapDParser {
     return dummyModify;
   }
 
-  private RelRoot rewriteUpdateAsSelect(SqlUpdate update, MapDParserOptions parserOptions)
+  private RelRoot rewriteUpdateAsSelect(
+          SqlUpdate update, HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     int correlatedQueriesCount[] = new int[1];
     SqlBasicVisitor<Void> correlatedQueriesCounter = new SqlBasicVisitor<Void>() {
@@ -602,9 +600,9 @@ public final class MapDParser {
         if (null != updateTargetTable && updateTargetTable instanceof SqlIdentifier) {
           SqlIdentifier targetTable = (SqlIdentifier) updateTargetTable;
           if (targetTable.names.size() == 2) {
-            final MetaConnect mc = new MetaConnect(mapdPort,
+            final MetaConnect mc = new MetaConnect(dbPort,
                     dataDir,
-                    mapdUser,
+                    dbUser,
                     this,
                     sock_transport_properties,
                     targetTable.names.get(0));
@@ -665,7 +663,7 @@ public final class MapDParser {
             }
           }
 
-          expression = new SqlBasicCall(MapDSqlOperatorTable.ARRAY_VALUE_CONSTRUCTOR,
+          expression = new SqlBasicCall(HeavyDBSqlOperatorTable.ARRAY_VALUE_CONSTRUCTOR,
                   values.toArray(new SqlNode[0]),
                   expression.getParserPosition());
         }
@@ -701,7 +699,7 @@ public final class MapDParser {
               null);
     }
 
-    MapDPlanner planner =
+    HeavyDBPlanner planner =
             getPlanner(allowSubqueryDecorrelation, parserOptions.isWatchdogEnabled());
     SqlNode node = null;
     try {
@@ -770,19 +768,19 @@ public final class MapDParser {
     return RelRoot.of(modify, SqlKind.UPDATE);
   }
 
-  RelRoot queryToRelNode(final String sql, final MapDParserOptions parserOptions)
+  RelRoot queryToRelNode(final String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
-    final MapDPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
+    final HeavyDBPlanner planner = getPlanner(true, parserOptions.isWatchdogEnabled());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     return convertSqlToRelNode(sqlNode, planner, parserOptions);
   }
 
   RelRoot convertSqlToRelNode(final SqlNode sqlNode,
-          final MapDPlanner mapDPlanner,
-          final MapDParserOptions parserOptions)
+          final HeavyDBPlanner HeavyDBPlanner,
+          final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     SqlNode node = sqlNode;
-    MapDPlanner planner = mapDPlanner;
+    HeavyDBPlanner planner = HeavyDBPlanner;
     boolean allowCorrelatedSubQueryExpansion = true;
     boolean patchUpdateToDelete = false;
     if (node.isA(DELETE)) {
@@ -843,15 +841,15 @@ public final class MapDParser {
     } else {
       // check to see if a view is involved in the query
       boolean foundView = false;
-      MapDSchema schema = new MapDSchema(
-              dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+      HeavyDBSchema schema =
+              new HeavyDBSchema(dataDir, this, dbPort, dbUser, sock_transport_properties);
       SqlIdentifierCapturer capturer = captureIdentifiers(sqlNode);
       for (ImmutableList<String> names : capturer.selects) {
-        MapDTable table = (MapDTable) schema.getTable(names.get(0));
+        HeavyDBTable table = (HeavyDBTable) schema.getTable(names.get(0));
         if (null == table) {
           throw new RuntimeException("table/view not found: " + names.get(0));
         }
-        if (table instanceof MapDView) {
+        if (table instanceof HeavyDBView) {
           foundView = true;
         }
       }
@@ -868,7 +866,7 @@ public final class MapDParser {
         builder.addRuleInstance(ProjectProjectRemoveRule.INSTANCE);
       }
     }
-    HepPlanner hepPlanner = MapDPlanner.getHepPlanner(builder.build(), true);
+    HepPlanner hepPlanner = HeavyDBPlanner.getHepPlanner(builder.build(), true);
     final RelNode root = relR.project();
     hepPlanner.setRoot(root);
     final RelNode newRel = hepPlanner.findBestExp();
@@ -1471,13 +1469,13 @@ public final class MapDParser {
 
   public void updateMetaData(String schema, String table) {
     HEAVYDBLOGGER.debug("schema :" + schema + " table :" + table);
-    MapDSchema mapd =
-            new MapDSchema(dataDir, this, mapdPort, null, sock_transport_properties);
-    mapd.updateMetaData(schema, table);
+    HeavyDBSchema db =
+            new HeavyDBSchema(dataDir, this, dbPort, null, sock_transport_properties);
+    db.updateMetaData(schema, table);
   }
 
   protected RelDataTypeSystem createTypeSystem() {
-    final MapDTypeSystem typeSystem = new MapDTypeSystem();
+    final HeavyDBTypeSystem typeSystem = new HeavyDBTypeSystem();
     return typeSystem;
   }
 

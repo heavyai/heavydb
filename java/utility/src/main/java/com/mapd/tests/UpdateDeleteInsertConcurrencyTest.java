@@ -80,8 +80,8 @@ public class UpdateDeleteInsertConcurrencyTest {
     final CyclicBarrier barrier = new CyclicBarrier(num_threads, new Runnable() {
       public void run() {
         try {
-          MapdTestClient dba =
-                  MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+          HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                  "localhost", 6274, db, dbaUser, dbaPassword);
           final String createPrefix =
                   useTemporaryTables_ ? "CREATE TEMPORARY TABLE " : "CREATE TABLE ";
           dba.runSql(createPrefix + tableName
@@ -131,8 +131,8 @@ public class UpdateDeleteInsertConcurrencyTest {
           try {
             barrier.await();
 
-            MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbUser, dbPassword);
 
             if (concurrentInserts) {
               for (int i = 0; i < num_rows / num_threads; i++) {
@@ -210,8 +210,8 @@ public class UpdateDeleteInsertConcurrencyTest {
       t.join();
     }
 
-    MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+    HeavyDBTestClient dba =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
     dba.runSql("DROP TABLE " + tableName + ";");
 
     for (Exception e : exceptions) {
@@ -230,7 +230,7 @@ public class UpdateDeleteInsertConcurrencyTest {
     if (useTemporaryTables_) {
       logger.info("Using temporary tables");
     }
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");

@@ -37,7 +37,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.mapd.calcite.parser.MapDSqlOperatorTable.ExtTableFunction;
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable.ExtTableFunction;
 
 import org.apache.calcite.avatica.util.Spaces;
 import org.apache.calcite.linq4j.Ord;

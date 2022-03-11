@@ -49,8 +49,8 @@ public class SelectCopyFromDeleteConcurrencyTest {
     test.testSelecyCopyFromConcurrency(shard_count);
   }
 
-  private void run_test(MapdTestClient dba,
-          MapdTestClient user,
+  private void run_test(HeavyDBTestClient dba,
+          HeavyDBTestClient user,
           String prefix,
           Path filepath,
           int shard_count,
@@ -131,9 +131,9 @@ public class SelectCopyFromDeleteConcurrencyTest {
         public void run() {
           try {
             final String username = threadId % 2 == 0 ? "alice" : "bob";
-            MapdTestClient dba = MapdTestClient.getClient(
+            HeavyDBTestClient dba = HeavyDBTestClient.getClient(
                     "localhost", 6274, "heavyai", "admin", "HyperInteractive");
-            MapdTestClient user = MapdTestClient.getClient(
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
                     "localhost", 6274, "heavyai", username, "password");
             final String prefix = "for_" + username + "_" + threadId + "_";
 
@@ -168,7 +168,7 @@ public class SelectCopyFromDeleteConcurrencyTest {
     logger.info("Using import file: " + input_file_path_.toString());
 
     // Use the default database for now
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER alice (password = 'password', is_super = 'false');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");

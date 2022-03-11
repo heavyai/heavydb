@@ -28,7 +28,8 @@ public class CatalogConcurrencyTest {
     test.testCatalogConcurrency();
   }
 
-  private void run_test(MapdTestClient dba, MapdTestClient user, String prefix, int max)
+  private void run_test(
+          HeavyDBTestClient dba, HeavyDBTestClient user, String prefix, int max)
           throws Exception {
     for (int i = 0; i < max; i++) {
       String tableName = "table_" + prefix + "_" + i;
@@ -39,7 +40,7 @@ public class CatalogConcurrencyTest {
       logger.info("[" + tid + "]"
               + "CREATE " + tableName);
       user.runSql("CREATE TABLE " + tableName + " (id text);");
-      MapdAsserts.assertEqual(true, null != dba.get_table_details(tableName));
+      HeavyDBAsserts.assertEqual(true, null != dba.get_table_details(tableName));
       logger.info("[" + tid + "]"
               + "INSERT INTO " + tableName);
       user.runSql("INSERT INTO " + tableName + " VALUES(1);");
@@ -48,13 +49,13 @@ public class CatalogConcurrencyTest {
       logger.info("[" + tid + "]"
               + "CREATE " + viewName);
       user.runSql("CREATE VIEW " + viewName + " AS SELECT * FROM " + tableName + ";");
-      MapdAsserts.assertEqual(true, null != dba.get_table_details(viewName));
+      HeavyDBAsserts.assertEqual(true, null != dba.get_table_details(viewName));
       dba.runSql("GRANT SELECT ON VIEW " + viewName + " TO bob;");
 
       logger.info("[" + tid + "]"
               + "CREATE " + dashName);
       int dash_id = user.create_dashboard(dashName);
-      MapdAsserts.assertEqual(true, null != dba.get_dashboard(dash_id));
+      HeavyDBAsserts.assertEqual(true, null != dba.get_dashboard(dash_id));
       dba.runSql("GRANT VIEW ON DASHBOARD " + dash_id + " TO bob;");
 
       dba.runSql("REVOKE VIEW ON DASHBOARD " + dash_id + " FROM bob;");
@@ -89,10 +90,10 @@ public class CatalogConcurrencyTest {
         @Override
         public void run() {
           try {
-            MapdTestClient dba =
-                    MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
-            MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+            HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbaUser, dbaPassword);
+            HeavyDBTestClient user = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbUser, dbPassword);
             run_test(dba, user, prefix, runs);
           } catch (Exception e) {
             logger.error("[" + Thread.currentThread().getId() + "]"
@@ -121,7 +122,7 @@ public class CatalogConcurrencyTest {
   public void testCatalogConcurrency() throws Exception {
     logger.info("testCatalogConcurrency()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");

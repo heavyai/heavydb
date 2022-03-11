@@ -669,7 +669,7 @@ public class DateTimeTest {
     }
   }
 
-  static LocalDateTime getDateTimeFromQuery(MapdTestClient client, String sql)
+  static LocalDateTime getDateTimeFromQuery(HeavyDBTestClient client, String sql)
           throws Exception {
     try {
       com.omnisci.thrift.server.TQueryResult res = client.runSql(sql);
@@ -702,7 +702,7 @@ public class DateTimeTest {
     }
   }
 
-  static long getLongFromQuery(MapdTestClient client, String sql) throws Exception {
+  static long getLongFromQuery(HeavyDBTestClient client, String sql) throws Exception {
     try {
       com.omnisci.thrift.server.TQueryResult res = client.runSql(sql);
       long r = -1;
@@ -723,7 +723,7 @@ public class DateTimeTest {
   }
 
   public static LocalDateTime testDateTrunc(
-          LocalDateTime d, DateTruncUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateTruncUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     if (!enc.isValid(d)) {
       return d;
@@ -743,12 +743,12 @@ public class DateTimeTest {
     return testDateTruncTable(d, f, client, enc);
   }
 
-  private static void updateValues(MapdTestClient client, LocalDateTime a, Encoding aEnc)
-          throws Exception {
+  private static void updateValues(
+          HeavyDBTestClient client, LocalDateTime a, Encoding aEnc) throws Exception {
     updateValues(client, a, aEnc, null, null);
   }
 
-  private static void updateValues(MapdTestClient client,
+  private static void updateValues(HeavyDBTestClient client,
           LocalDateTime a,
           Encoding aEnc,
           LocalDateTime b,
@@ -770,7 +770,7 @@ public class DateTimeTest {
   }
 
   public static LocalDateTime testDateTruncTable(
-          LocalDateTime d, DateTruncUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateTruncUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     updateValues(client, d, enc);
     String sql = "SELECT DATE_TRUNC('" + f.sqlToken + "', " + enc.toSqlColumn("a", d)
@@ -789,7 +789,7 @@ public class DateTimeTest {
   }
 
   public static void testDateExtract(
-          LocalDateTime d, DateExtractUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateExtractUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     String sql = "SELECT EXTRACT(" + f.sqlToken + " FROM " + enc.toSql(d) + ");";
     long r = getLongFromQuery(client, sql);
@@ -807,7 +807,7 @@ public class DateTimeTest {
   }
 
   public static void testDateExtractTable(
-          LocalDateTime d, DateExtractUnit f, MapdTestClient client, Encoding enc)
+          LocalDateTime d, DateExtractUnit f, HeavyDBTestClient client, Encoding enc)
           throws Exception {
     if (!enc.isValid(d)) {
       return;
@@ -832,7 +832,7 @@ public class DateTimeTest {
           LocalDateTime d0,
           LocalDateTime d1,
           DateDiffUnit f,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc0,
           Encoding enc1) throws Exception {
     String sql = "SELECT " + fn + "(" + f.sqlToken + ", " + enc0.toSql(d0) + ", "
@@ -856,7 +856,7 @@ public class DateTimeTest {
           LocalDateTime d0,
           LocalDateTime d1,
           DateDiffUnit f,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc0,
           Encoding enc1) throws Exception {
     if (!enc0.isValid(d0) || !enc1.isValid(d1)) {
@@ -883,7 +883,7 @@ public class DateTimeTest {
           LocalDateTime d,
           DateAddUnit f,
           long units,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc) throws Exception {
     String sql =
             "SELECT " + fn + "(" + f.sqlToken + ", " + units + ", " + enc.toSql(d) + ");";
@@ -905,7 +905,7 @@ public class DateTimeTest {
           LocalDateTime d,
           DateAddUnit f,
           long units,
-          MapdTestClient client,
+          HeavyDBTestClient client,
           Encoding enc) throws Exception {
     if (!enc.isValid(d)) {
       return;
@@ -938,9 +938,11 @@ public class DateTimeTest {
     addAllowed.remove(DateAddUnit.daWEEK);
   }
 
-  public static void testAdd(
-          LocalDateTime d, DateAddUnit f, long units, MapdTestClient client, Encoding enc)
-          throws Exception {
+  public static void testAdd(LocalDateTime d,
+          DateAddUnit f,
+          long units,
+          HeavyDBTestClient client,
+          Encoding enc) throws Exception {
     if (!addAllowed.contains(f)) {
       return;
     }
@@ -959,9 +961,11 @@ public class DateTimeTest {
     }
   }
 
-  public static void testSub(
-          LocalDateTime d, DateAddUnit f, long units, MapdTestClient client, Encoding enc)
-          throws Exception {
+  public static void testSub(LocalDateTime d,
+          DateAddUnit f,
+          long units,
+          HeavyDBTestClient client,
+          Encoding enc) throws Exception {
     if (!addAllowed.contains(f)) {
       return;
     }
@@ -1045,7 +1049,7 @@ public class DateTimeTest {
     }
   }
 
-  public static void createTestTable(MapdTestClient client) throws Exception {
+  public static void createTestTable(HeavyDBTestClient client) throws Exception {
     client.runSql("DROP TABLE IF EXISTS DateTimeTest;");
     String sqlCreate = "CREATE TABLE DateTimeTest(id int";
     String sqlInsert = "INSERT INTO DateTimeTest VALUES(0";
@@ -1078,7 +1082,7 @@ public class DateTimeTest {
     System.out.println("Seed: " + seed);
     Random r = new Random(seed);
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     LocalDateTime d0 = createRandomDateTime(r);
     LocalDateTime d1 = createRandomDateTime(r);

@@ -3,12 +3,12 @@
  */
 package com.mapd.calcite.planner;
 
-import com.mapd.calcite.parser.MapDParser;
-import com.mapd.calcite.parser.MapDParserOptions;
-import com.mapd.calcite.parser.MapDSchema;
-import com.mapd.calcite.parser.MapDSerializer;
-import com.mapd.calcite.parser.MapDSqlOperatorTable;
-import com.mapd.calcite.parser.MapDUser;
+import com.mapd.calcite.parser.HeavyDBParser;
+import com.mapd.calcite.parser.HeavyDBParserOptions;
+import com.mapd.calcite.parser.HeavyDBSchema;
+import com.mapd.calcite.parser.HeavyDBSerializer;
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable;
+import com.mapd.calcite.parser.HeavyDBUser;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptUtil;
@@ -40,8 +40,8 @@ public class tester {
   public static void main(String[] args) {
     final SqlStdOperatorTable stdOpTab = SqlStdOperatorTable.instance();
 
-    MapDUser mdu = new MapDUser("admin", "passwd", "omnisci", -1, null);
-    MapDSchema mapd = new MapDSchema("<<PATH_TO_DATA_DIR>>", null, -1, mdu, null);
+    HeavyDBUser mdu = new HeavyDBUser("admin", "passwd", "omnisci", -1, null);
+    HeavyDBSchema mapd = new HeavyDBSchema("<<PATH_TO_DATA_DIR>>", null, -1, mdu, null);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
@@ -78,21 +78,22 @@ public class tester {
     HEAVYDBLOGGER.error("Result was " + relR);
     HEAVYDBLOGGER.error("Result project() " + relR.project());
     HEAVYDBLOGGER.error("Result project() " + RelOptUtil.toString(relR.project()));
-    HEAVYDBLOGGER.error("Json Version \n" + MapDSerializer.toString(relR.project()));
+    HEAVYDBLOGGER.error("Json Version \n" + HeavyDBSerializer.toString(relR.project()));
 
     // now do with MapD parser
-    Supplier<MapDSqlOperatorTable> operatorTable = new Supplier<MapDSqlOperatorTable>() {
-      @Override
-      public MapDSqlOperatorTable get() {
-        return new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
-      }
-    };
-    MapDParser mp = new MapDParser("<<PATH_TO_DATA_DIR>>", operatorTable, -1, null);
+    Supplier<HeavyDBSqlOperatorTable> operatorTable =
+            new Supplier<HeavyDBSqlOperatorTable>() {
+              @Override
+              public HeavyDBSqlOperatorTable get() {
+                return new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
+              }
+            };
+    HeavyDBParser mp = new HeavyDBParser("<<PATH_TO_DATA_DIR>>", operatorTable, -1, null);
     mp.setUser(mdu);
 
     try {
-      MapDParserOptions mdpo = new MapDParserOptions();
-      HEAVYDBLOGGER.error("MapDParser result: \n" + mp.processSql("<<QUERY>>", mdpo));
+      HeavyDBParserOptions mdpo = new HeavyDBParserOptions();
+      HEAVYDBLOGGER.error("HeavyDBParser result: \n" + mp.processSql("<<QUERY>>", mdpo));
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     } catch (ValidationException ex) {

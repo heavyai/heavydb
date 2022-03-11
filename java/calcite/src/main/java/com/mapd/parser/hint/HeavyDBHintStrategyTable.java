@@ -5,7 +5,7 @@ import org.apache.calcite.rel.hint.HintStrategyTable;
 
 import java.util.ArrayList;
 
-public class OmniSciHintStrategyTable {
+public class HeavyDBHintStrategyTable {
   public static final HintStrategyTable HINT_STRATEGY_TABLE = createHintStrategies();
 
   private static HintStrategyTable createHintStrategies() {

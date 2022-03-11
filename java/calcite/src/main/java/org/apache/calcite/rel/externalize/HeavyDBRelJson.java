@@ -18,7 +18,7 @@ package org.apache.calcite.rel.externalize;
 
 import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.google.common.collect.ImmutableList;
-import com.mapd.calcite.parser.MapDSqlOperatorTable;
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable;
 
 import org.apache.calcite.avatica.AvaticaUtils;
 import org.apache.calcite.avatica.util.TimeUnitRange;
@@ -77,7 +77,7 @@ import java.util.Map;
  * Utilities for converting {@link org.apache.calcite.rel.RelNode} into JSON
  * format.
  */
-public class MapDRelJson {
+public class HeavyDBRelJson {
   private final Map<String, Constructor> constructorMap =
           new HashMap<String, Constructor>();
   private final JsonBuilder jsonBuilder;
@@ -89,7 +89,7 @@ public class MapDRelJson {
           "org.apache.calcite.adapter.enumerable.",
           "org.apache.calcite.adapter.jdbc.JdbcRules$");
 
-  public MapDRelJson(JsonBuilder jsonBuilder) {
+  public HeavyDBRelJson(JsonBuilder jsonBuilder) {
     this.jsonBuilder = jsonBuilder;
   }
 
@@ -375,7 +375,7 @@ public class MapDRelJson {
           map.put("operands", list);
           map.put("type", toJson(node.getType()));
           if (node instanceof RexSubQuery) {
-            final MapDRelJsonWriter subqueryWriter = new MapDRelJsonWriter();
+            final HeavyDBRelJsonWriter subqueryWriter = new HeavyDBRelJsonWriter();
             ((RexSubQuery) node).rel.explain(subqueryWriter);
             map.put("subquery", subqueryWriter.asJsonMap());
           }
@@ -527,9 +527,9 @@ public class MapDRelJson {
   private SqlOperator toOp(String op, Map<String, Object> map) {
     // TODO: build a map, for more efficient lookup
     // TODO: look up based on SqlKind
-    MapDSqlOperatorTable operatorTable =
-            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
-    MapDSqlOperatorTable.addUDF(operatorTable, null);
+    HeavyDBSqlOperatorTable operatorTable =
+            new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
+    HeavyDBSqlOperatorTable.addUDF(operatorTable, null);
     final List<SqlOperator> operatorList = operatorTable.getOperatorList();
     for (SqlOperator operator : operatorList) {
       if (operator.getName().equals(op)) {
@@ -557,9 +557,9 @@ public class MapDRelJson {
     String syntax = "FUNCTION";
     SqlKind sqlKind = SqlKind.valueOf(kind);
     SqlSyntax sqlSyntax = SqlSyntax.valueOf(syntax);
-    MapDSqlOperatorTable operatorTable =
-            new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
-    MapDSqlOperatorTable.addUDF(operatorTable, null);
+    HeavyDBSqlOperatorTable operatorTable =
+            new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance());
+    HeavyDBSqlOperatorTable.addUDF(operatorTable, null);
     final List<SqlOperator> operators = operatorTable.getOperatorList();
     List<String> names = new ArrayList<>();
     for (SqlOperator operator : operators) {

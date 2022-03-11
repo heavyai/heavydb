@@ -25,8 +25,8 @@ import java.util.List;
  *
  * @author michael
  */
-public final class MapDParserOptions {
-  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDParserOptions.class);
+public final class HeavyDBParserOptions {
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBParserOptions.class);
 
   private List<FilterPushDownInfo> filterPushDownInfo;
   private boolean legacySyntax;
@@ -34,7 +34,7 @@ public final class MapDParserOptions {
   private boolean isViewOptimizeEnabled;
   private boolean isWatchdogEnabled;
 
-  public MapDParserOptions(List<FilterPushDownInfo> inFilterPushDownInfo,
+  public HeavyDBParserOptions(List<FilterPushDownInfo> inFilterPushDownInfo,
           boolean inLegacySyntax,
           boolean inIsExplain,
           boolean inIsViewOptimzeEnabled,
@@ -46,7 +46,7 @@ public final class MapDParserOptions {
     isWatchdogEnabled = inWatchdogEnabled;
   }
 
-  public MapDParserOptions() {
+  public HeavyDBParserOptions() {
     filterPushDownInfo = new ArrayList<>();
     legacySyntax = true;
     isExplain = false;

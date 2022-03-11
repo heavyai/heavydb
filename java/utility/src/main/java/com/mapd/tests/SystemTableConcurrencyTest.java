@@ -118,7 +118,7 @@ public class SystemTableConcurrencyTest {
     threads[0] = new Thread(() -> {
       try {
         logger.info("Starting thread[0]");
-        MapdTestClient user = MapdTestClient.getClient(
+        HeavyDBTestClient user = HeavyDBTestClient.getClient(
                 "localhost", 6274, "heavyai", "admin", "HyperInteractive");
         barrier.await();
         logger.info("0 create dashboard \"dashboard_1\"");
@@ -143,7 +143,7 @@ public class SystemTableConcurrencyTest {
       threads[threadId] = new Thread(() -> {
         try {
           logger.info("Starting thread[" + threadId + "]");
-          MapdTestClient user = MapdTestClient.getClient(
+          HeavyDBTestClient user = HeavyDBTestClient.getClient(
                   "localhost", 6274, threadQueries.database, "admin", "HyperInteractive");
           barrier.await();
           for (final String query : threadQueries.queries) {
@@ -170,7 +170,7 @@ public class SystemTableConcurrencyTest {
     }
   }
 
-  private void runSqlAsUser(String sql, MapdTestClient user, int threadId)
+  private void runSqlAsUser(String sql, HeavyDBTestClient user, int threadId)
           throws Exception {
     logger.info(threadId + " " + sql);
     user.runSql(sql);

@@ -28,7 +28,7 @@ public class EagainConcurrencyTest {
     test.testCatalogConcurrency();
   }
 
-  private void run_test(MapdTestClient dba,
+  private void run_test(HeavyDBTestClient dba,
           String db,
           String dbUser,
           String dbPassword,
@@ -40,8 +40,8 @@ public class EagainConcurrencyTest {
 
     logger.info("[" + tid + "]"
             + "FIRST USER CONNECT");
-    MapdTestClient first_user =
-            MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+    HeavyDBTestClient first_user =
+            HeavyDBTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
 
     logger.info("[" + tid + "]"
             + "CREATE " + tableName);
@@ -59,8 +59,8 @@ public class EagainConcurrencyTest {
     for (int i = 0; i < max; i++) {
       logger.info("[" + tid + "]"
               + "USER CONNECT");
-      MapdTestClient user =
-              MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
+      HeavyDBTestClient user =
+              HeavyDBTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
 
       logger.info("[" + tid + "]"
               + "INSERT INTO " + tableName);
@@ -109,8 +109,8 @@ public class EagainConcurrencyTest {
         @Override
         public void run() {
           try {
-            MapdTestClient dba =
-                    MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
+            HeavyDBTestClient dba = HeavyDBTestClient.getClient(
+                    "localhost", 6274, db, dbaUser, dbaPassword);
             run_test(dba, db, dbUser, dbPassword, prefix, runs);
           } catch (Exception e) {
             logger.error("[" + Thread.currentThread().getId() + "]"
@@ -139,7 +139,7 @@ public class EagainConcurrencyTest {
   public void testCatalogConcurrency() throws Exception {
     logger.info("testCatalogConcurrency()");
 
-    MapdTestClient su = MapdTestClient.getClient(
+    HeavyDBTestClient su = HeavyDBTestClient.getClient(
             "localhost", 6274, "heavyai", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");

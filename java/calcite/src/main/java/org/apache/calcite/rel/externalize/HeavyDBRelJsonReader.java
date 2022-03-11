@@ -58,17 +58,17 @@ import java.util.Objects;
  *
  * @see org.apache.calcite.rel.RelInput
  */
-public class MapDRelJsonReader {
+public class HeavyDBRelJsonReader {
   private static final TypeReference<LinkedHashMap<String, Object>> TYPE_REF =
           new TypeReference<LinkedHashMap<String, Object>>() {};
 
   private final RelOptCluster cluster;
   private final RelOptSchema relOptSchema;
-  private final MapDRelJson relJson = new MapDRelJson(null);
+  private final HeavyDBRelJson relJson = new HeavyDBRelJson(null);
   private final Map<String, RelNode> relMap = new LinkedHashMap<>();
   private RelNode lastRel;
 
-  public MapDRelJsonReader(
+  public HeavyDBRelJsonReader(
           RelOptCluster cluster, RelOptSchema relOptSchema, Schema schema) {
     this.cluster = cluster;
     this.relOptSchema = relOptSchema;

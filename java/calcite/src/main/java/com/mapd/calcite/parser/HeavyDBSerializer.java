@@ -22,13 +22,13 @@ import com.mapd.parser.extension.ddl.DdlResponse;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 
 import org.apache.calcite.rel.RelNode;
-import org.apache.calcite.rel.externalize.MapDRelJsonWriter;
+import org.apache.calcite.rel.externalize.HeavyDBRelJsonWriter;
 
 /**
  *
  * @author michael
  */
-public class MapDSerializer {
+public class HeavyDBSerializer {
   private static final Gson gson;
 
   static {
@@ -39,7 +39,7 @@ public class MapDSerializer {
     if (rel == null) {
       return null;
     }
-    final MapDRelJsonWriter planWriter = new MapDRelJsonWriter();
+    final HeavyDBRelJsonWriter planWriter = new HeavyDBRelJsonWriter();
     rel.explain(planWriter);
     return planWriter.asString();
   }

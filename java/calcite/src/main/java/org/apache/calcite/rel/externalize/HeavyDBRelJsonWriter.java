@@ -36,11 +36,11 @@ import java.util.stream.Collectors;
  *
  * @see RelJsonReader
  */
-public class MapDRelJsonWriter implements RelWriter {
+public class HeavyDBRelJsonWriter implements RelWriter {
   // ~ Instance fields ----------------------------------------------------------
 
   private final EscapedStringJsonBuilder jsonBuilder;
-  private final MapDRelJson relJson;
+  private final HeavyDBRelJson relJson;
   private final Map<RelNode, String> relIdMap = new IdentityHashMap<RelNode, String>();
   private final List<Object> relList;
   private final List<Pair<String, Object>> values = new ArrayList<Pair<String, Object>>();
@@ -48,10 +48,10 @@ public class MapDRelJsonWriter implements RelWriter {
 
   // ~ Constructors -------------------------------------------------------------
 
-  public MapDRelJsonWriter() {
+  public HeavyDBRelJsonWriter() {
     jsonBuilder = new EscapedStringJsonBuilder();
     relList = jsonBuilder.list();
-    relJson = new MapDRelJson(jsonBuilder);
+    relJson = new HeavyDBRelJson(jsonBuilder);
   }
 
   // ~ Methods ------------------------------------------------------------------

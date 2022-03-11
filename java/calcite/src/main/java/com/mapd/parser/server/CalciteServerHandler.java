@@ -15,11 +15,11 @@
  */
 package com.mapd.parser.server;
 
-import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
+import static com.mapd.calcite.parser.HeavyDBParser.CURRENT_PARSER;
 
-import com.mapd.calcite.parser.MapDParser;
-import com.mapd.calcite.parser.MapDParserOptions;
-import com.mapd.calcite.parser.MapDUser;
+import com.mapd.calcite.parser.HeavyDBParser;
+import com.mapd.calcite.parser.HeavyDBParserOptions;
+import com.mapd.calcite.parser.HeavyDBUser;
 import com.mapd.common.SockTransportProperties;
 import com.omnisci.thrift.calciteserver.CalciteServer;
 import com.omnisci.thrift.calciteserver.InvalidParseRequest;
@@ -35,7 +35,7 @@ import com.omnisci.thrift.calciteserver.TRestriction;
 import com.omnisci.thrift.calciteserver.TUserDefinedFunction;
 import com.omnisci.thrift.calciteserver.TUserDefinedTableFunction;
 
-import org.apache.calcite.prepare.MapDPlanner;
+import org.apache.calcite.prepare.HeavyDBPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.rules.Restriction;
 import org.apache.calcite.runtime.CalciteContextException;
@@ -146,9 +146,9 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     long timer = System.currentTimeMillis();
     callCount++;
 
-    MapDParser parser;
+    HeavyDBParser parser;
     try {
-      parser = (MapDParser) parserPool.borrowObject();
+      parser = (HeavyDBParser) parserPool.borrowObject();
       parser.clearMemo();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
@@ -167,7 +167,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         rests.add(rest);
       }
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, rests);
+    HeavyDBUser mapDUser = new HeavyDBUser(user, session, catalog, mapdPort, rests);
     HEAVYDBLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
     parser.setUser(mapDUser);
@@ -191,13 +191,13 @@ public class CalciteServerHandler implements CalciteServer.Iface {
     TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
     try {
-      final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
+      final List<HeavyDBParserOptions.FilterPushDownInfo> filterPushDownInfo =
               new ArrayList<>();
       for (final TFilterPushDownInfo req : optimizationOption.filter_push_down_info) {
-        filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
+        filterPushDownInfo.add(new HeavyDBParserOptions.FilterPushDownInfo(
                 req.input_prev, req.input_start, req.input_next));
       }
-      MapDParserOptions parserOptions = new MapDParserOptions(filterPushDownInfo,
+      HeavyDBParserOptions parserOptions = new HeavyDBParserOptions(filterPushDownInfo,
               queryParsingOption.legacy_syntax,
               queryParsingOption.is_explain,
               optimizationOption.is_view_optimize,
@@ -306,9 +306,9 @@ public class CalciteServerHandler implements CalciteServer.Iface {
             "Received invalidation from server for " + catalog + " : " + table);
     long timer = System.currentTimeMillis();
     callCount++;
-    MapDParser parser;
+    HeavyDBParser parser;
     try {
-      parser = (MapDParser) parserPool.borrowObject();
+      parser = (HeavyDBParser) parserPool.borrowObject();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       HEAVYDBLOGGER.error(msg, ex);
@@ -338,21 +338,21 @@ public class CalciteServerHandler implements CalciteServer.Iface {
           String sql,
           int cursor) throws TException {
     callCount++;
-    MapDParser parser;
+    HeavyDBParser parser;
     try {
-      parser = (MapDParser) parserPool.borrowObject();
+      parser = (HeavyDBParser) parserPool.borrowObject();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       HEAVYDBLOGGER.error(msg, ex);
       throw new TException(msg);
     }
-    MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort, null);
+    HeavyDBUser mapDUser = new HeavyDBUser(user, session, catalog, mapdPort, null);
     HEAVYDBLOGGER.debug("getCompletionHints was called User: " + user
             + " Catalog: " + catalog + " sql: " + sql);
     parser.setUser(mapDUser);
     CURRENT_PARSER.set(parser);
 
-    MapDPlanner.CompletionResult completion_result;
+    HeavyDBPlanner.CompletionResult completion_result;
     try {
       completion_result = parser.getCompletionHints(sql, cursor, visible_tables);
     } catch (Exception ex) {

@@ -34,10 +34,10 @@ import java.util.stream.Collectors;
  *
  * @author michael
  */
-public class MapDTable implements Table {
+public class HeavyDBTable implements Table {
   private static final AtomicLong VERSION_PROVIDER = new AtomicLong();
 
-  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(MapDTable.class);
+  final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBTable.class);
   private final TTableDetails rowInfo;
   private final long version = VERSION_PROVIDER.incrementAndGet();
   private final HashSet<String> systemColumnNames;
@@ -46,7 +46,7 @@ public class MapDTable implements Table {
     return version;
   }
 
-  public MapDTable(TTableDetails ri) {
+  public HeavyDBTable(TTableDetails ri) {
     rowInfo = ri;
     systemColumnNames = rowInfo.row_desc.stream()
                                 .filter(row_desc -> row_desc.is_system)
