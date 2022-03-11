@@ -20,17 +20,17 @@
 #define BASE_PATH "./tmp"
 #endif
 
+#include "Catalog/Catalog.h"
+#include "QueryRunner/TestProcessSignalHandler.h"
+#include "Shared/clean_boost_regex.hpp"
+#include "ThriftHandler/DBHandler.h"
+
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/regex.hpp>
 #include <boost/format.hpp>
 #include <boost/optional.hpp>
 #include <boost/program_options.hpp>
-#include <boost/regex.hpp>
-
-#include "Catalog/Catalog.h"
-#include "QueryRunner/TestProcessSignalHandler.h"
-#include "ThriftHandler/DBHandler.h"
 
 constexpr int64_t True = 1;
 constexpr int64_t False = 0;

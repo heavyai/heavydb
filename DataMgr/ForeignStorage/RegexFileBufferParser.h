@@ -16,19 +16,8 @@
 
 #pragma once
 
-#if defined(_WIN32) && !defined(WIN32_LEAN_AND_MEAN)
-// boost/regex.hpp on win32 includes Windows.h
-// and we need to clean up macros such as ERROR and GetObject
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <boost/regex.hpp>
-
-#if defined(_WIN32) && defined(WIN32_LEAN_AND_MEAN)
-#include "Shared/cleanup_global_namespace.h"
-#undef WIN32_LEAN_AND_MEAN
-#endif
-
 #include "DataMgr/ForeignStorage/TextFileBufferParser.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace foreign_storage {
 class RegexFileBufferParser : public TextFileBufferParser {

@@ -18,10 +18,10 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/regex.hpp>
 
 #include "Logger/Logger.h"
 #include "Shared/StringTransform.h"
+#include "Shared/clean_boost_regex.hpp"
 
 namespace {
 

@@ -52,10 +52,22 @@
 #include <string>
 #include <thread>
 
-#ifdef _WIN32
-#if defined(ERROR) || defined(INFO) || defined(WARNING) || defined(FATAL)
-#include "Shared/cleanup_global_namespace.h"
-#endif
+#ifdef ERROR
+// A common way for this to occur is with a #include <windows.h> which globally defines a
+// number of macros, such as ERROR, that interferes with other headers. This may be
+// resolved by locating the new #include that directly or indirectly includes windows.h
+// (or something else that #defines ERROR) and placing a
+// #include "Shared/cleanup_global_namespace.h" after it.
+//
+// Q: Why not just #include "Shared/cleanup_global_namespace.h" here?
+//
+// A: Two reasons:
+//    * ERROR is not the only macro that windows.h defines, e.g. GetObject which
+//      interferes with rapidjson.
+//    * By not cleaning up the global macros at the source requires potential cleaning
+//      on a much larger scale: all places that call LOG(ERROR). (Due to header guards,
+//      #include "Logger.h" may not be included where it needs to in order to clean up.)
+#error "ERROR must not be globally defined during preprocessing."
 #endif
 
 namespace boost {

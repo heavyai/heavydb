@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,8 @@
  */
 #pragma once
 
-#ifdef _WIN32
-#include <Windows.h>
-#include "Shared/cleanup_global_namespace.h"
-#endif
+// If you need to include boost/regex.hpp, please include this file instead
+// so that the windows.h it includes is cleaned-up after. Otherwise macros
+// like GetObject are defined that interfere with rapidjson, etc.
+#include <boost/regex.hpp>
+#include "cleanup_global_namespace.h"

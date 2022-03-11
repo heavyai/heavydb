@@ -25,8 +25,8 @@
 #include "Regexp.h"
 
 #ifndef __CUDACC__
-#include <boost/regex.hpp>
 #include <stdexcept>
+#include "Shared/clean_boost_regex.hpp"
 #endif
 
 /*

@@ -299,8 +299,8 @@ NullableStrType SplitPart::operator()(const std::string& str) const {
 
 NullableStrType RegexpReplace::operator()(const std::string& str) const {
   const int64_t str_len = str.size();
-  const size_t wrapped_start = static_cast<size_t>(std::min(
-      start_pos_ >= 0 ? start_pos_ : std::max(str_len + start_pos_, 0L), str_len));
+  const int64_t pos = start_pos_ < 0 ? str_len + start_pos_ : start_pos_;
+  const size_t wrapped_start = std::clamp(pos, int64_t(0), str_len);
   if (occurrence_ == 0L) {
     std::string result;
     std::string::const_iterator replace_start(str.cbegin() + wrapped_start);
@@ -368,8 +368,8 @@ std::pair<size_t, size_t> RegexpReplace::get_nth_regex_match(
 
 NullableStrType RegexpSubstr::operator()(const std::string& str) const {
   const int64_t str_len = str.size();
-  const size_t wrapped_start = static_cast<size_t>(std::min(
-      start_pos_ >= 0 ? start_pos_ : std::max(str_len + start_pos_, 0L), str_len));
+  const int64_t pos = start_pos_ < 0 ? str_len + start_pos_ : start_pos_;
+  const size_t wrapped_start = std::clamp(pos, int64_t(0), str_len);
   int64_t match_idx = 0;
   // Apears std::regex_search does not support string_view?
   std::vector<std::string> regex_matches;

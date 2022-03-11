@@ -25,6 +25,9 @@
 #include <boost/filesystem.hpp>
 #include <boost/process.hpp>
 
+// boost/process.hpp > ... > boost/asio/detail/socket_types.hpp > winsock2.h > windows.h
+#include "Shared/cleanup_global_namespace.h"
+
 #include "Logger/Logger.h"
 #include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"

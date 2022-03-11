@@ -1,7 +1,7 @@
 #ifndef REGEX_SUPPORT_H
 #define REGEX_SUPPORT_H
 
-#include "boost/regex.hpp"
+#include "Shared/clean_boost_regex.hpp"
 
 template <typename COMMAND_LIST_TYPE,
           typename CONTEXT_TYPE,

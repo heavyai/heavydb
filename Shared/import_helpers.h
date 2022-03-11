@@ -17,10 +17,11 @@
 #ifndef IMPORT_HELPERS_H_
 #define IMPORT_HELPERS_H_
 
+#include "Shared/clean_boost_regex.hpp"
+
 #include <Parser/ReservedKeywords.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/regex.hpp>
 
 namespace ImportHelpers {
 

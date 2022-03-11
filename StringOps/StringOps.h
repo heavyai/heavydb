@@ -17,6 +17,7 @@
 #pragma once
 
 #include "Logger/Logger.h"
+#include "Shared/clean_boost_regex.hpp"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 #include "StringOpInfo.h"
@@ -32,8 +33,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-
-#include <boost/regex.hpp>
 
 namespace StringOps_Namespace {
 

@@ -24,7 +24,6 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/regex.hpp>
 #include <cstring>
 #include <iostream>
 #include <iterator>
@@ -33,6 +32,7 @@
 #include "Logger/Logger.h"
 #include "RowToColumnLoader.h"
 #include "Shared/ThriftClient.h"
+#include "Shared/clean_boost_regex.hpp"
 #include "Shared/sqltypes.h"
 
 #include <chrono>

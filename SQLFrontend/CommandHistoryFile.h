@@ -25,7 +25,6 @@
 #ifdef _WIN32
 using uid_t = int;
 #include <shlobj_core.h>
-#include "Shared/cleanup_global_namespace.h"
 #else
 #include <pwd.h>
 #include <unistd.h>

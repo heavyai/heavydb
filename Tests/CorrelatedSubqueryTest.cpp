@@ -1191,7 +1191,7 @@ TEST(Update, DISABLED_NonCorrelatedAllowed2) {
   }
 }
 
-TEST(DELETE, Correlated) {
+TEST(Delete, Correlated) {
   int factsCount = 13;
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
