@@ -23,7 +23,7 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 add_library(Catalog ${catalog_source_files})
-add_dependencies(Catalog Calcite StringDictionary mapd_thrift)
+add_dependencies(Catalog Calcite StringDictionary thrift_gen)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_subdirectory(ee)
