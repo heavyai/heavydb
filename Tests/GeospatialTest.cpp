@@ -2925,6 +2925,12 @@ int main(int argc, char** argv) {
 
   int err{0};
   try {
+    ScopeGuard resetFlag = [orig = g_allow_cpu_retry] {
+      // sample on varlen col on multi-fragmented table is now
+      // punt to cpu, so we turn cpu_retry on to properly perform the test
+      g_allow_cpu_retry = orig;
+    };
+    g_allow_cpu_retry = true;
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
