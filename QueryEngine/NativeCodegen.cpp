@@ -2670,6 +2670,35 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
         throw QueryMustRunOnCpu();
       }
     }
+
+    // we currently do not support varlen projection based on baseline groupby when
+    // 1) target table is multi-fragmented and 2) multiple gpus are involved for query
+    // processing in this case, we punt the query to cpu to avoid server crash
+    for (const auto expr : ra_exe_unit.target_exprs) {
+      if (auto gby_expr = dynamic_cast<Analyzer::AggExpr*>(expr)) {
+        bool has_multiple_gpus = cuda_mgr ? cuda_mgr->getDeviceCount() > 1 : false;
+        if (gby_expr->get_aggtype() == SQLAgg::kSAMPLE && has_multiple_gpus &&
+            !g_leaf_count) {
+          std::set<const Analyzer::ColumnVar*,
+                   bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+              colvar_set(Analyzer::ColumnVar::colvar_comp);
+          gby_expr->collect_column_var(colvar_set, true);
+          for (const auto cv : colvar_set) {
+            if (cv->get_type_info().is_varlen()) {
+              const auto tbl_id = cv->get_table_id();
+              std::for_each(query_infos.begin(),
+                            query_infos.end(),
+                            [tbl_id](const InputTableInfo& input_table_info) {
+                              if (input_table_info.table_id == tbl_id &&
+                                  input_table_info.info.fragments.size() > 1) {
+                                throw QueryMustRunOnCpu();
+                              }
+                            });
+            }
+          }
+        }
+      }
+    }
   }
 
   // Read the module template and target either CPU or GPU
