@@ -109,6 +109,7 @@ if(ENABLE_L0)
   add_executable(SpirvExecuteTest SpirvExecuteTest.cpp)
   target_include_directories(SpirvExecuteTest PRIVATE ${LevelZero_INCLUDE_DIRS})
 
+  find_package(LLVMSPIRVLib REQUIRED COMPONENTS ${LLVMSPIRVLib_COMPONENTS})
   target_link_libraries(SpirvExecuteTest ${LevelZero_LIBRARY} ${EXECUTE_TEST_LIBS})
   target_link_libraries(SpirvExecuteTest LLVMSPIRVLib ${THRIFT_HANDLER_TEST_LIBRARIES})
   target_link_libraries(SpirvExecuteTest ${LLVMSPIRVLib_LIBRARY} ${THRIFT_HANDLER_TEST_LIBRARIES})
