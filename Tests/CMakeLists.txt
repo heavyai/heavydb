@@ -106,16 +106,16 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 if(ENABLE_L0)
-  add_executable(SpirvExecuteTest SpirvExecuteTest.cpp)
-  target_include_directories(SpirvExecuteTest PRIVATE ${LevelZero_INCLUDE_DIRS})
-  target_link_libraries(SpirvExecuteTest ${LevelZero_LIBRARIES} ${EXECUTE_TEST_LIBS})
-  target_link_libraries(SpirvExecuteTest L0Mgr)
+  add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)
+  target_include_directories(L0MgrExecuteTest PRIVATE ${LevelZero_INCLUDE_DIRS})
+  target_link_libraries(L0MgrExecuteTest ${LevelZero_LIBRARIES} ${EXECUTE_TEST_LIBS})
+  target_link_libraries(L0MgrExecuteTest L0Mgr)
 
   find_package(LLVMSPIRVLib REQUIRED COMPONENTS ${LLVMSPIRVLib_COMPONENTS})
-  target_include_directories(SpirvExecuteTest PRIVATE ${LLVMSPIRVLib_INCLUDE_DIRS})
-  target_link_libraries(SpirvExecuteTest ${LLVMSPIRVLib_LIBRARIES} ${THRIFT_HANDLER_TEST_LIBRARIES})
+  target_include_directories(L0MgrExecuteTest PRIVATE ${LLVMSPIRVLib_INCLUDE_DIRS})
+  target_link_libraries(L0MgrExecuteTest ${LLVMSPIRVLib_LIBRARIES} ${THRIFT_HANDLER_TEST_LIBRARIES})
 
-  add_test(SpirvExecuteTest SpirvExecuteTest ${TEST_ARGS})
+  add_test(L0MgrExecuteTest L0MgrExecuteTest ${TEST_ARGS})
 endif()
 
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
