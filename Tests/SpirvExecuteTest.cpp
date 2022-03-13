@@ -127,8 +127,8 @@ TEST_F(SPIRVExecuteTest, TranslateSimpleWithL0Manager) {
   ASSERT_EQ(b.data[1], 1);
   ASSERT_EQ(b.data[2], 2);
 
-  l0::freeDeviceMem(dA);
-  l0::freeDeviceMem(dB);
+  mgr->freeDeviceMem((int8_t*)dA);
+  mgr->freeDeviceMem((int8_t*)dB);
 }
 
 int main(int argc, char** argv) {
