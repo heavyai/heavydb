@@ -112,6 +112,7 @@ bool g_enable_window_functions{true};
 bool g_enable_table_functions{true};
 bool g_enable_dev_table_functions{false};
 bool g_enable_geo_ops_on_uncompressed_coords{true};
+bool g_enable_rf_prop_table_functions{true};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer

@@ -365,9 +365,15 @@ if(ENABLE_FOLLY)
 endif()
 
 option(ENABLE_SYSTEM_TFS "Enable system table functions" ON)
-option(ENABLE_RF_PROP_TFS "Enable RF Propagation module" OFF)
 option(ENABLE_POINT_CLOUD_TFS "Enable point cloud table functions" OFF)
 option(ENABLE_PDAL "Enable PDAL support" OFF)
+
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  # Clang will not complile these tests quickly enough to avoid timeout
+  option(ENABLE_RF_PROP_TFS "Enable RF Propagation module" OFF)
+else()
+  option(ENABLE_RF_PROP_TFS "Enable RF Propagation module" ON)
+endif()
 
 if (ENABLE_PDAL)
   find_package(PDAL REQUIRED)
@@ -397,6 +403,12 @@ if(ENABLE_SYSTEM_TFS)
 else()
   set(ENABLE_POINT_CLOUD_TFS OFF CACHE BOOL "Enable point cloud table functions" FORCE)
   set(ENABLE_RF_PROP_TFS OFF CACHE BOOL "Enable RF Propagation module" FORCE)
+endif()
+
+if(ENABLE_RF_PROP_TFS)
+  if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "ee")
+    set(ENABLE_RF_PROP_TFS OFF CACHE BOOL "Enable RF Propagation module" FORCE)
+  endif()
 endif()
 
 

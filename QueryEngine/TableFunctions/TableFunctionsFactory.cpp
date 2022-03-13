@@ -383,13 +383,11 @@ bool is_table_function_whitelisted(const std::string& function_name) {
       "tf_mandelbrot_cuda_float",
       "tf_geo_rasterize",
       "tf_geo_rasterize_slope",
-      "tf_rf_prop",
-      "tf_rf_prop_max_signal",
       "tf_point_cloud_metadata",
       "tf_load_point_cloud"};
 
-  return (whitelisted_table_functions.find(function_name) !=
-          whitelisted_table_functions.end());
+  return whitelisted_table_functions.find(function_name) !=
+         whitelisted_table_functions.end();
 }
 
 void TableFunctionsFactory::add(
@@ -417,9 +415,9 @@ void TableFunctionsFactory::add(
                           annotations,
                           is_runtime,
                           uses_manager);
+  const auto tf_name = tf.getName(true /* drop_suffix */, true /* lower */);
   if (!g_enable_dev_table_functions && !is_runtime &&
-      !is_table_function_whitelisted(
-          tf.getName(true /* drop_suffix */, true /* lower */))) {
+      !is_table_function_whitelisted(tf_name)) {
     return;
   }
   auto sig = tf.getSignature(/* include_name */ true, /* include_output */ false);

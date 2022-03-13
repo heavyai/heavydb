@@ -682,6 +682,7 @@ void CommandLineOptions::fillAdvancedOptions() {
                                    ->implicit_value(true),
                                "Enable dev (test or alpha) table functions. Also "
                                "requires --enable-table-functions to be turned on");
+
   developer_desc.add_options()(
       "enable-geo-ops-on-uncompressed-coords",
       po::value<bool>(&g_enable_geo_ops_on_uncompressed_coords)
