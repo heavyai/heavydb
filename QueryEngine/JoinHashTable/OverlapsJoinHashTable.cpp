@@ -975,7 +975,6 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
         static_cast<size_t>(num_keys_for_row.size() > 0 ? num_keys_for_row.back() : 0));
   }
 #ifdef HAVE_CUDA
-  auto data_mgr = executor_->getDataMgr();
   auto buffer_provider = executor_->getBufferProvider();
   std::vector<std::vector<uint8_t>> host_hll_buffers(device_count_);
   for (auto& host_hll_buffer : host_hll_buffers) {
@@ -989,7 +988,6 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
         [device_id,
          &columns_per_device,
          &count_distinct_desc,
-         data_mgr,
          buffer_provider,
          &host_hll_buffers,
          &emitted_keys_count_device_threads] {
@@ -1007,10 +1005,11 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
               columns_for_device.join_buckets[0].inverse_bucket_sizes_for_dimension;
           auto inverse_bucket_sizes_gpu =
               allocator.alloc(inverse_bucket_sizes_for_dimension.size() * sizeof(double));
-          buffer_provider->copyToDevice(inverse_bucket_sizes_gpu,
-                      reinterpret_cast<const int8_t*>(inverse_bucket_sizes_for_dimension.data()),
-                      inverse_bucket_sizes_for_dimension.size() * sizeof(double),
-                      device_id);
+          buffer_provider->copyToDevice(
+              inverse_bucket_sizes_gpu,
+              reinterpret_cast<const int8_t*>(inverse_bucket_sizes_for_dimension.data()),
+              inverse_bucket_sizes_for_dimension.size() * sizeof(double),
+              device_id);
           const size_t row_counts_buffer_sz =
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator.alloc(row_counts_buffer_sz);
@@ -1353,10 +1352,11 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::copyCpuHashTableToGpu(
   CHECK_LE(cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
            gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
   auto buffer_provider = executor_->getBufferProvider();
-  buffer_provider->copyToDevice(gpu_buffer_ptr,
-              cpu_hash_table->getCpuBuffer(),
-              cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
-              device_id);
+  buffer_provider->copyToDevice(
+      gpu_buffer_ptr,
+      cpu_hash_table->getCpuBuffer(),
+      cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
+      device_id);
   return gpu_hash_table;
 }
 
