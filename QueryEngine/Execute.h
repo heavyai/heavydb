@@ -458,6 +458,7 @@ class Executor {
                                  const ExecutionOptions& options,
                                  RenderInfo* render_info,
                                  const bool has_cardinality_estimation,
+                                 DataProvider* data_provider,
                                  ColumnCacheMap& column_cache);
 
   void addTransientStringLiterals(
@@ -535,6 +536,7 @@ class Executor {
                                   const InputTableInfo& table_info,
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo,
+                                  DataProvider* data_provider,
                                   PerFragmentCallBack& cb,
                                   const std::set<size_t>& fragment_indexes_param);
 
@@ -548,7 +550,8 @@ class Executor {
   ResultSetPtr executeTableFunction(const TableFunctionExecutionUnit exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
                                     const CompilationOptions& co,
-                                    const ExecutionOptions& eo);
+                                    const ExecutionOptions& eo,
+                                    DataProvider* data_provider);
 
   ExecutorDeviceType getDeviceTypeForTargets(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -749,6 +752,7 @@ class Executor {
                                      std::shared_ptr<RowSetMemoryOwner>,
                                      RenderInfo* render_info,
                                      const bool has_cardinality_estimation,
+                                     DataProvider* data_provider,
                                      ColumnCacheMap& column_cache);
 
   std::shared_ptr<StreamExecutionContext> prepareStreamingExecution(
@@ -756,6 +760,7 @@ class Executor {
       const CompilationOptions& co,
       const ExecutionOptions& eo,
       const std::vector<InputTableInfo>& table_infos,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache);
 
   ResultSetPtr runOnBatch(std::shared_ptr<StreamExecutionContext> ctx,
@@ -776,13 +781,17 @@ class Executor {
       const size_t max_groups_buffer_entry_count,
       const int8_t crt_min_byte_width,
       const bool has_cardinality_estimation,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       RenderInfo* render_info = nullptr);
+
   std::vector<JoinLoop> buildJoinLoops(RelAlgExecutionUnit& ra_exe_unit,
                                        const CompilationOptions& co,
                                        const ExecutionOptions& eo,
                                        const std::vector<InputTableInfo>& query_infos,
+                                       DataProvider* data_provider,
                                        ColumnCacheMap& column_cache);
+
   // Create a callback which hoists left hand side filters above the join for left
   // joins, eliminating extra computation of the probe and matches if the row does not
   // pass the filters
@@ -799,6 +808,7 @@ class Executor {
       RelAlgExecutionUnit& ra_exe_unit,
       const CompilationOptions& co,
       const std::vector<InputTableInfo>& query_infos,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       std::vector<std::string>& fail_reasons);
   void redeclareFilterFunction();
@@ -842,6 +852,7 @@ class Executor {
       const MemoryLevel memory_level,
       const JoinType join_type,
       const HashType preferred_hash_type,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       const HashTableBuildDagMap& hashtable_build_dag_map,
       const RegisteredQueryHint& query_hint,
@@ -907,16 +918,22 @@ class Executor {
   TableGenerations computeTableGenerations(std::unordered_set<int> phys_table_ids);
 
  public:
-  void setupCaching(const std::unordered_set<InputColDescriptor>& col_descs,
+  void setupCaching(DataProvider* data_provider,
+                    const std::unordered_set<InputColDescriptor>& col_descs,
                     const std::unordered_set<int>& phys_table_ids);
+
   void setColRangeCache(const AggregatedColRange& aggregated_col_range) {
     agg_col_range_cache_ = aggregated_col_range;
   }
+
   ExecutorId getExecutorId() const { return executor_id_; };
+
   QuerySessionId& getCurrentQuerySession(mapd_shared_lock<mapd_shared_mutex>& read_lock);
+
   QuerySessionStatus::QueryStatus getQuerySessionStatus(
       const QuerySessionId& candidate_query_session,
       mapd_shared_lock<mapd_shared_mutex>& read_lock);
+
   bool checkCurrentQuerySession(const std::string& candidate_query_session,
                                 mapd_shared_lock<mapd_shared_mutex>& read_lock);
   void invalidateRunningQuerySession(mapd_unique_lock<mapd_shared_mutex>& write_lock);

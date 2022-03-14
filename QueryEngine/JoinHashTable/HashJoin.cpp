@@ -73,6 +73,7 @@ JoinColumn HashJoin::fetchJoinColumn(
                                                            /*thread_idx=*/0,
                                                            chunks_owner,
                                                            malloc_owner,
+                                                           data_provider_,
                                                            *column_cache);
     if (effective_memory_level == Data_Namespace::GPU_LEVEL) {
       CHECK(dev_buff_owner);
@@ -238,6 +239,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     const JoinType join_type,
     const HashType preferred_hash_type,
     const int device_count,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -254,6 +256,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          join_type,
                                                          preferred_hash_type,
                                                          device_count,
+                                                         data_provider,
                                                          column_cache,
                                                          executor,
                                                          hashtable_build_dag_map,
@@ -267,6 +270,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                           join_type,
                                                           preferred_hash_type,
                                                           device_count,
+                                                          data_provider,
                                                           column_cache,
                                                           executor,
                                                           hashtable_build_dag_map,
@@ -283,6 +287,7 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                            join_type,
                                                            preferred_hash_type,
                                                            device_count,
+                                                           data_provider,
                                                            column_cache,
                                                            executor,
                                                            hashtable_build_dag_map,
@@ -390,7 +395,9 @@ class AllColumnVarsVisitor
   }
 };
 
-void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* executor) {
+void setupSyntheticCaching(DataProvider* data_provider,
+                           std::set<const Analyzer::ColumnVar*> cvs,
+                           Executor* executor) {
   std::unordered_set<int> phys_table_ids;
   for (auto cv : cvs) {
     phys_table_ids.insert(cv->get_table_id());
@@ -401,7 +408,7 @@ void setupSyntheticCaching(std::set<const Analyzer::ColumnVar*> cvs, Executor* e
     col_descs.emplace(InputColDescriptor{cv->get_column_info(), cv->get_rte_idx()});
   }
 
-  executor->setupCaching(col_descs, phys_table_ids);
+  executor->setupCaching(data_provider, col_descs, phys_table_ids);
 }
 
 std::vector<InputTableInfo> getSyntheticInputTableInfo(
@@ -436,6 +443,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor) {
   auto a1 = getSyntheticColumnVar(table1, column1, 0, executor);
@@ -446,7 +454,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
   std::set<const Analyzer::ColumnVar*> cvs =
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
-  setupSyntheticCaching(cvs, executor);
+  setupSyntheticCaching(data_provider, cvs, executor);
   RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
@@ -455,6 +463,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           JoinType::INNER,
                                           preferred_hash_type,
                                           device_count,
+                                          data_provider,
                                           column_cache,
                                           executor,
                                           {},
@@ -469,12 +478,13 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor) {
   std::set<const Analyzer::ColumnVar*> cvs =
       AllColumnVarsVisitor().visit(qual_bin_oper.get());
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
-  setupSyntheticCaching(cvs, executor);
+  setupSyntheticCaching(data_provider, cvs, executor);
   RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
 
   auto hash_table = HashJoin::getInstance(qual_bin_oper,
@@ -483,6 +493,7 @@ std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
                                           JoinType::INNER,
                                           preferred_hash_type,
                                           device_count,
+                                          data_provider,
                                           column_cache,
                                           executor,
                                           {},
@@ -496,6 +507,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor) {
   std::set<const Analyzer::ColumnVar*> cvs;
@@ -504,7 +516,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
     cvs.insert(cv.begin(), cv.end());
   }
   auto query_infos = getSyntheticInputTableInfo(cvs, executor);
-  setupSyntheticCaching(cvs, executor);
+  setupSyntheticCaching(data_provider, cvs, executor);
   RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
   std::shared_ptr<HashJoin> hash_table;
   std::string error_msg;
@@ -516,6 +528,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
                                                         JoinType::INNER,
                                                         preferred_hash_type,
                                                         device_count,
+                                                        data_provider,
                                                         column_cache,
                                                         executor,
                                                         {},

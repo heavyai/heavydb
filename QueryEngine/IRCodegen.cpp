@@ -530,6 +530,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     const std::vector<InputTableInfo>& query_infos,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(buildJoinLoops);
   AUTOMATIC_IR_METADATA(cgen_state_.get());
@@ -545,6 +546,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                                    ra_exe_unit,
                                    co,
                                    query_infos,
+                                   data_provider,
                                    column_cache,
                                    fail_reasons);
     const auto found_outer_join_matches_cb =
@@ -871,6 +873,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
     RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co,
     const std::vector<InputTableInfo>& query_infos,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     std::vector<std::string>& fail_reasons) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
@@ -904,6 +907,7 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
                                                     : MemoryLevel::CPU_LEVEL,
           current_level_join_conditions.type,
           HashType::OneToOne,
+          data_provider,
           column_cache,
           ra_exe_unit.hash_table_build_plan_dag,
           ra_exe_unit.query_hint,

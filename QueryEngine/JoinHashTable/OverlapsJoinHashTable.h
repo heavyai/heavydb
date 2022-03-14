@@ -27,6 +27,7 @@ class OverlapsJoinHashTable : public HashJoin {
                         const JoinType join_type,
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
+                        DataProvider* data_provider,
                         ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs,
@@ -34,7 +35,8 @@ class OverlapsJoinHashTable : public HashJoin {
                         QueryPlan query_plan_dag,
                         HashtableCacheMetaInfo hashtable_cache_meta_info,
                         const TableIdToNodeMap& table_id_to_node_map)
-      : condition_(condition)
+      : HashJoin(data_provider)
+      , condition_(condition)
       , join_type_(join_type)
       , query_infos_(query_infos)
       , memory_level_(memory_level)
@@ -60,6 +62,7 @@ class OverlapsJoinHashTable : public HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const JoinType join_type,
       const int device_count,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,

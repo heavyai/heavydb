@@ -22,6 +22,7 @@
 #include <iostream>
 #include <memory>
 #include "AbstractBuffer.h"
+#include "Shared/InlineNullValues.h"
 #include "Encoder.h"
 
 #include <Shared/DatumFetchers.h>

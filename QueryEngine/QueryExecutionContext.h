@@ -127,7 +127,6 @@ class QueryExecutionContext : boost::noncopyable {
       const std::vector<int32_t>& error_codes,
       const uint32_t num_tables,
       const std::vector<int64_t>& join_hash_tables,
-      Data_Namespace::DataMgr* data_mgr,
       BufferProvider* buffer_provider,
       const int device_id,
       const bool hoist_literals,

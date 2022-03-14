@@ -199,7 +199,9 @@ void ExecutionKernel::runImpl(Executor* executor,
     for (auto& qi : shared_context.getQueryInfos()) {
       auto ti = executor->getSchemaProvider()->getTableInfo(qi.db_id, qi.table_id);
       if (ti && ti->is_stream) {
-        auto table_meta = data_mgr->getTableMetadata(qi.db_id, qi.table_id);
+        auto data_provider = column_fetcher.getDataProvider();
+        CHECK(data_provider);
+        auto table_meta = data_provider->getTableMetadata(qi.db_id, qi.table_id);
         streaming_table_fragment = table_meta.fragments;
         all_tables_fragments[qi.table_id] = &streaming_table_fragment;
       }

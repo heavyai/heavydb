@@ -14,6 +14,7 @@
 
 #include "Calcite/Calcite.h"
 #include "DataMgr/DataMgrBufferProvider.h"
+#include "DataMgr/DataMgrDataProvider.h"
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
@@ -162,6 +163,8 @@ class NoCatalogSqlTest : public ::testing::Test {
 
     SystemParameters system_parameters;
     data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
+    data_provider_ = std::make_shared<DataMgrDataProvider>(data_mgr_.get());
+
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
                                  std::make_shared<TestDataProvider>(schema_provider_));
@@ -196,8 +199,8 @@ class NoCatalogSqlTest : public ::testing::Test {
         calcite_->process("admin", "test_db", pg_shim(sql), schema_json).plan_result;
     auto dag = std::make_unique<RelAlgDagBuilder>(
         query_ra, TEST_DB_ID, schema_provider_, nullptr);
-    auto ra_executor =
-        RelAlgExecutor(executor_.get(), TEST_DB_ID, schema_provider_, std::move(dag));
+    auto ra_executor = RelAlgExecutor(
+        executor_.get(), TEST_DB_ID, schema_provider_, data_provider_, std::move(dag));
     return ra_executor.executeRelAlgQuery(
         CompilationOptions(), ExecutionOptions(), false, nullptr);
   }
@@ -208,7 +211,8 @@ class NoCatalogSqlTest : public ::testing::Test {
         calcite_->process("admin", "test_db", pg_shim(sql), schema_json).plan_result;
     auto dag = std::make_unique<RelAlgDagBuilder>(
         query_ra, TEST_DB_ID, schema_provider_, nullptr);
-    return RelAlgExecutor(executor_.get(), TEST_DB_ID, schema_provider_, std::move(dag));
+    return RelAlgExecutor(
+        executor_.get(), TEST_DB_ID, schema_provider_, data_provider_, std::move(dag));
   }
 
   TestDataProvider& getDataProvider() {
@@ -220,12 +224,14 @@ class NoCatalogSqlTest : public ::testing::Test {
  protected:
   static std::shared_ptr<DataMgr> data_mgr_;
   static SchemaProviderPtr schema_provider_;
+  static DataProviderPtr data_provider_;
   static std::shared_ptr<Executor> executor_;
   static std::shared_ptr<Calcite> calcite_;
 };
 
 std::shared_ptr<DataMgr> NoCatalogSqlTest::data_mgr_;
 SchemaProviderPtr NoCatalogSqlTest::schema_provider_;
+DataProviderPtr NoCatalogSqlTest::data_provider_;
 std::shared_ptr<Executor> NoCatalogSqlTest::executor_;
 std::shared_ptr<Calcite> NoCatalogSqlTest::calcite_;
 

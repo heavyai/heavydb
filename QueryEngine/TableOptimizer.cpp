@@ -17,6 +17,7 @@
 #include "TableOptimizer.h"
 
 #include "Analyzer/Analyzer.h"
+#include "DataMgr/DataMgrDataProvider.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
@@ -25,9 +26,14 @@
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
+                               DataProviderPtr data_provider,
                                SchemaProviderPtr schema_provider,
                                const Catalog_Namespace::Catalog& cat)
-    : td_(td), executor_(executor), schema_provider_(schema_provider), cat_(cat) {
+    : td_(td)
+    , executor_(executor)
+    , data_provider_(data_provider)
+    , schema_provider_(schema_provider)
+    , cat_(cat) {
   CHECK(td);
 }
 namespace {
@@ -127,14 +133,15 @@ void TableOptimizer::recomputeMetadata() const {
   table_descriptors.push_back(td_);
 
   auto& data_mgr = cat_.getDataMgr();
+  auto data_provider = std::make_shared<DataMgrDataProvider>(&data_mgr);
 
   // acquire write lock on table data
   auto data_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(cat_, td_->tableName);
 
   for (const auto td : table_descriptors) {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
-    executor_->row_set_mem_owner_ =
-        std::make_shared<RowSetMemoryOwner>(ROW_SET_SIZE, /*num_threads=*/1);
+    executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
+        data_provider.get(), ROW_SET_SIZE, /*num_threads=*/1);
     executor_->setSchemaProvider(schema_provider_);
 
     const auto table_id = td->tableId;
@@ -250,8 +257,13 @@ void TableOptimizer::recomputeColumnMetadata(
             std::make_pair(fragment_info.fragmentId, chunk_metadata->chunkStats));
       };
 
-  executor_->executeWorkUnitPerFragment(
-      ra_exe_unit, table_infos[0], co, eo, compute_metadata_callback, fragment_indexes);
+  executor_->executeWorkUnitPerFragment(ra_exe_unit,
+                                        table_infos[0],
+                                        co,
+                                        eo,
+                                        data_provider_.get(),
+                                        compute_metadata_callback,
+                                        fragment_indexes);
 
   auto* fragmenter = td->fragmenter.get();
   CHECK(fragmenter);

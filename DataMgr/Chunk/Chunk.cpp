@@ -20,7 +20,9 @@
  */
 
 #include "DataMgr/Chunk/Chunk.h"
+
 #include "DataMgr/ArrayNoneEncoder.h"
+#include "DataMgr/DataMgr.h"
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "DataMgr/StringNoneEncoder.h"
 

@@ -808,9 +808,8 @@ TargetValue build_string_array_target_value(
         } else {
           values.emplace_back(
               NullableString(row_set_mem_owner
-                                 ->getOrAddStringDictProxy(
-                                     db_id, dict_id, /*with_generation=*/false, data_mgr)
-                                 ->getString(string_id)));
+                                 ->getOrAddStringDictProxy(db_id, dict_id, /*with_generation=*/false)
+                  ->getString(string_id)));
         }
       }
     }
@@ -1369,8 +1368,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
                   ? row_set_mem_owner_->getOrAddStringDictProxy(
                         db_id_for_dict_,
                         chosen_type.get_comp_param(),
-                        /*with_generation=*/false,
-                        data_mgr_)
+                        /*with_generation=*/false)
                   : row_set_mem_owner_->getStringDictProxy(
                         chosen_type.get_comp_param());  // unit tests bypass the catalog
       }

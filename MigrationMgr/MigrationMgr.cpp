@@ -24,6 +24,7 @@
 
 #include "Catalog/CatalogSchemaProvider.h"
 #include "DataMgr/DataMgrBufferProvider.h"
+#include "DataMgr/DataMgrDataProvider.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -114,16 +115,19 @@ void MigrationMgr::migrateDateInDaysMetadata(
         auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                               &cat->getDataMgr(),
                                               cat->getDataMgr().getBufferProvider());
+        auto data_provider = std::make_shared<DataMgrDataProvider>(&cat->getDataMgr());
         auto schema_provider =
             std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat);
         executor->setSchemaProvider(schema_provider);
+
         auto table_desc_itr = table_descriptors_by_id.find(id_names.first);
         if (table_desc_itr == table_descriptors_by_id.end()) {
           throw std::runtime_error("Table descriptor does not exist for table " +
                                    id_names.second[0] + " does not exist.");
         }
         auto td = table_desc_itr->second;
-        TableOptimizer optimizer(td, executor.get(), schema_provider, *cat);
+        TableOptimizer optimizer(
+            td, executor.get(), data_provider, schema_provider, *cat);
         optimizer.recomputeMetadata();
 
         sqlite.query_with_text_params(

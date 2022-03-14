@@ -45,6 +45,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const JoinType join_type,
     const HashType preferred_hash_type,
     const int device_count,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -69,6 +70,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                 join_type,
                                 query_infos,
                                 memory_level,
+                                data_provider,
                                 column_cache,
                                 executor,
                                 inner_outer_pairs,
@@ -116,6 +118,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const JoinType join_type,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor,
     const std::vector<InnerOuter>& inner_outer_pairs,
@@ -123,7 +126,8 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     QueryPlanHash hashtable_cache_key,
     HashtableCacheMetaInfo hashtable_cache_meta_info,
     const TableIdToNodeMap& table_id_to_node_map)
-    : condition_(condition)
+    : HashJoin(data_provider)
+    , condition_(condition)
     , join_type_(join_type)
     , query_infos_(query_infos)
     , memory_level_(memory_level)

@@ -17,6 +17,7 @@
 #pragma once
 
 #include "DataMgr/Allocators/DeviceAllocator.h"
+#include "DataProvider/DataProvider.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/Descriptors/QueryFragmentDescriptor.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
@@ -48,7 +49,9 @@ using MergedChunk = std::pair<AbstractBuffer*, AbstractBuffer*>;
 
 class ColumnFetcher {
  public:
-  ColumnFetcher(Executor* executor, const ColumnCacheMap& column_cache);
+  ColumnFetcher(Executor* executor,
+                DataProvider* data_provider,
+                const ColumnCacheMap& column_cache);
 
   //! Gets one chunk's pointer and element count on either CPU or GPU.
   static std::pair<const int8_t*, size_t> getOneColumnFragment(
@@ -60,6 +63,7 @@ class ColumnFetcher {
       DeviceAllocator* device_allocator,
       const size_t thread_idx,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache);
 
   //! Creates a JoinColumn struct containing an array of JoinChunk structs.
@@ -73,6 +77,7 @@ class ColumnFetcher {
       const size_t thread_idx,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       std::vector<std::shared_ptr<void>>& malloc_owner,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache);
 
   const int8_t* getOneTableColumnFragment(
@@ -102,7 +107,7 @@ class ColumnFetcher {
                                    const size_t thread_idx) const;
 
   const int8_t* linearizeColumnFragments(
-    ColumnInfoPtr col_info,
+      ColumnInfoPtr col_info,
       const std::map<int, const TableFragments*>& all_tables_fragments,
       std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
       std::list<ChunkIter>& chunk_iter_holder,
@@ -114,11 +119,12 @@ class ColumnFetcher {
   void freeTemporaryCpuLinearizedIdxBuf();
   void freeLinearizedBuf();
 
+  DataProvider* getDataProvider() const { return data_provider_; }
+
  private:
   static const int8_t* transferColumnIfNeeded(
       const ColumnarResults* columnar_results,
       const int col_id,
-      Data_Namespace::DataMgr* data_mgr,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_id,
       DeviceAllocator* device_allocator);
@@ -178,6 +184,7 @@ class ColumnFetcher {
                                    const size_t thread_idx) const;
 
   Executor* executor_;
+  DataProvider* data_provider_;
   mutable std::mutex columnar_fetch_mutex_;
   mutable std::mutex varlen_chunk_fetch_mutex_;
   mutable std::mutex linearization_mutex_;

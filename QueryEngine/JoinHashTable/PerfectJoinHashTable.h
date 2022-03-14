@@ -57,6 +57,7 @@ class PerfectJoinHashTable : public HashJoin {
       const JoinType join_type,
       const HashType preferred_hash_type,
       const int device_count,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -158,13 +159,15 @@ class PerfectJoinHashTable : public HashJoin {
                        const JoinType join_type,
                        const HashType preferred_hash_type,
                        const ExpressionRange& col_range,
+                       DataProvider* data_provider,
                        ColumnCacheMap& column_cache,
                        Executor* executor,
                        const int device_count,
                        QueryPlanHash hashtable_cache_key,
                        HashtableCacheMetaInfo hashtable_cache_meta_info,
                        const TableIdToNodeMap& table_id_to_node_map)
-      : qual_bin_oper_(qual_bin_oper)
+      : HashJoin(data_provider)
+      , qual_bin_oper_(qual_bin_oper)
       , join_type_(join_type)
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
       , query_infos_(query_infos)

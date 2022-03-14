@@ -27,6 +27,7 @@
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/DataMgr.h"
+#include "DataProvider/DataProvider.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "Shared/quantile.h"
@@ -45,8 +46,10 @@ class ResultSet;
  */
 class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
  public:
-  RowSetMemoryOwner(const size_t arena_block_size, const size_t num_kernel_threads = 0)
-      : arena_block_size_(arena_block_size) {
+  RowSetMemoryOwner(DataProvider* data_provider,
+                    const size_t arena_block_size,
+                    const size_t num_kernel_threads = 0)
+      : data_provider_(data_provider), arena_block_size_(arena_block_size) {
     for (size_t i = 0; i < num_kernel_threads + 1; i++) {
       allocators_.emplace_back(std::make_unique<Arena>(arena_block_size));
     }
@@ -141,8 +144,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   StringDictionaryProxy* getOrAddStringDictProxy(const int db_id,
                                                  const int dict_id_in,
-                                                 const bool with_generation,
-                                                 const Data_Namespace::DataMgr* data_mgr);
+                                                 const bool with_generation);
 
   void addLiteralStringDictProxy(
       std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy) {
@@ -180,7 +182,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   }
 
   std::shared_ptr<RowSetMemoryOwner> cloneStrDictDataOnly() {
-    auto rtn = std::make_shared<RowSetMemoryOwner>(arena_block_size_, /*num_kernels=*/1);
+    auto rtn = std::make_shared<RowSetMemoryOwner>(
+        data_provider_, arena_block_size_, /*num_kernels=*/1);
     rtn->str_dict_proxy_owned_ = str_dict_proxy_owned_;
     rtn->lit_str_dict_proxy_ = lit_str_dict_proxy_;
     return rtn;
@@ -216,7 +219,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
   std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
   std::vector<std::unique_ptr<quantile::TDigest>> t_digests_;
 
-  size_t arena_block_size_;  // for cloning
+  DataProvider* data_provider_;  // for metadata lookups
+  size_t arena_block_size_;      // for cloning
   std::vector<std::unique_ptr<Arena>> allocators_;
 
   mutable std::mutex state_mutex_;

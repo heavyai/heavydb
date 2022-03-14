@@ -2413,6 +2413,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const size_t max_groups_buffer_entry_guess,
                           const int8_t crt_min_byte_width,
                           const bool has_cardinality_estimation,
+                          DataProvider* data_provider,
                           ColumnCacheMap& column_cache,
                           RenderInfo* render_info) {
   auto timer = DEBUG_TIMER(__func__);
@@ -2578,8 +2579,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   preloadFragOffsets(ra_exe_unit.input_descs, query_infos);
   RelAlgExecutionUnit body_execution_unit = ra_exe_unit;
-  const auto join_loops =
-      buildJoinLoops(body_execution_unit, co, eo, query_infos, column_cache);
+  const auto join_loops = buildJoinLoops(
+      body_execution_unit, co, eo, query_infos, data_provider, column_cache);
 
   plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   for (auto& simple_qual : ra_exe_unit.simple_quals) {

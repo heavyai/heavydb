@@ -102,6 +102,7 @@
 #include <arrow/ipc/api.h>
 
 #include "Shared/ArrowUtil.h"
+#include "DataMgr/DataMgrDataProvider.h"
 
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_parquet_import_fsi;
@@ -4420,8 +4421,10 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
       jit_debug_ ? "/tmp" : "",
       jit_debug_ ? "mapdquery" : "",
       system_parameters_);
+  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
   RelAlgExecutor ra_executor(executor.get(),
                              &cat,
+                             data_provider,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = {executor_device_type,
@@ -4493,8 +4496,10 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         system_parameters_);
+  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
   RelAlgExecutor ra_executor(executor.get(),
                              &cat,
+                             data_provider,
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = {executor_device_type,
@@ -5054,9 +5059,11 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
                                               "",
                                               "",
                                               system_parameters_);
+        auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
         auto schema_provider =
             std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat);
-        const TableOptimizer optimizer(td, executor.get(), schema_provider, cat);
+        const TableOptimizer optimizer(
+            td, executor.get(), data_provider, schema_provider, cat);
         optimizer.recomputeMetadata();
       }));
       return;

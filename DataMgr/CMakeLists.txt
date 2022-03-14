@@ -9,6 +9,7 @@ set(datamgr_source_files
     Chunk/Chunk.cpp
     DataMgr.cpp
     DataMgrBufferProvider.cpp
+    DataMgrDataProvider.cpp
     Encoder.cpp
     StringNoneEncoder.cpp
     FileMgr/CachingFileMgr.cpp

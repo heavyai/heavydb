@@ -48,6 +48,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         max_groups_buffer_entry_guess,
         crt_min_byte_width,
         has_cardinality_estimation,
+        column_fetcher.getDataProvider(),
         column_fetcher.columnarized_table_cache_,
         render_info);
   } catch (const CompilationRetryNoLazyFetch&) {
@@ -65,6 +66,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
                                   max_groups_buffer_entry_guess,
                                   crt_min_byte_width,
                                   has_cardinality_estimation,
+                                  column_fetcher.getDataProvider(),
                                   column_fetcher.columnarized_table_cache_,
                                   render_info);
   }

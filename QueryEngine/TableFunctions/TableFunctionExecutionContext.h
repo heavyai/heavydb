@@ -37,6 +37,7 @@ class TableFunctionExecutionContext {
   ResultSetPtr execute(const TableFunctionExecutionUnit& exe_unit,
                        const std::vector<InputTableInfo>& table_infos,
                        const TableFunctionCompilationContext* compilation_context,
+                       DataProvider* data_provider,
                        const ColumnFetcher& column_fetcher,
                        const ExecutorDeviceType device_type,
                        Executor* executor);

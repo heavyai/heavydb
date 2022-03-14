@@ -45,7 +45,6 @@ class InValuesBitmap {
                  const int64_t null_val,
                  const Data_Namespace::MemoryLevel memory_level,
                  const int device_count,
-                 Data_Namespace::DataMgr* data_mgr,
                  BufferProvider* buffer_provider);
   ~InValuesBitmap();
 

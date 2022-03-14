@@ -76,6 +76,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const JoinType join_type,
     const int device_count,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,

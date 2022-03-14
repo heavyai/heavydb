@@ -247,9 +247,7 @@ class DataMgr {
 
   Fragmenter_Namespace::TableInfo getTableMetadata(int db_id, int table_id) const;
 
-    BufferProvider* getBufferProvider() const {
-      return buffer_provider_.get();
-    }
+  BufferProvider* getBufferProvider() const { return buffer_provider_.get(); }
 
  private:
   void populateMgrs(const SystemParameters& system_parameters,

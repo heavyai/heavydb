@@ -118,6 +118,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
     const TableFunctionExecutionUnit& exe_unit,
     const std::vector<InputTableInfo>& table_infos,
     const TableFunctionCompilationContext* compilation_context,
+    DataProvider* data_provider,
     const ColumnFetcher& column_fetcher,
     const ExecutorDeviceType device_type,
     Executor* executor) {
@@ -160,6 +161,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           device_allocator.get(),
           /*thread_idx=*/0,
           chunks_owner,
+          data_provider,
           column_fetcher.columnarized_table_cache_);
       // We use the number of entries in the first column to be the number of rows to base
       // the output off of (optionally depending on the sizing parameter)

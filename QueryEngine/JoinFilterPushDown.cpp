@@ -99,8 +99,16 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
   try {
     ColumnCacheMap column_cache;
-    filtered_result = executor_->executeWorkUnit(
-        one, true, table_infos, ra_exe_unit, co, eo, nullptr, false, column_cache);
+    filtered_result = executor_->executeWorkUnit(one,
+                                                 true,
+                                                 table_infos,
+                                                 ra_exe_unit,
+                                                 co,
+                                                 eo,
+                                                 nullptr,
+                                                 false,
+                                                 data_provider_.get(),
+                                                 column_cache);
   } catch (...) {
     return {false, 1.0, 0};
   }
@@ -176,7 +184,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
     // Dispatch the subqueries first
     for (auto subquery : subqueries) {
       // Execute the subquery and cache the result.
-      RelAlgExecutor ra_executor(executor_, cat_, schema_provider_);
+      RelAlgExecutor ra_executor(executor_, cat_, schema_provider_, data_provider_);
       const auto subquery_ra = subquery->getRelAlg();
       CHECK(subquery_ra);
       RaExecutionSequence subquery_seq(subquery_ra);

@@ -104,11 +104,13 @@ class RelLeftDeepTreeIdsCollector : public RelAlgVisitor<std::vector<unsigned>> 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                const Catalog_Namespace::Catalog* cat,
                                SchemaProviderPtr schema_provider,
+                               DataProviderPtr data_provider,
                                std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
     , cat_(cat)
     , db_id_(cat->getDatabaseId())
     , schema_provider_(schema_provider)
+    , data_provider_(data_provider)
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
@@ -116,17 +118,20 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                int db_id,
                                SchemaProviderPtr schema_provider,
+                               DataProviderPtr data_provider,
                                std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
     , cat_(nullptr)
     , db_id_(db_id)
     , schema_provider_(schema_provider)
+    , data_provider_(data_provider)
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                const Catalog_Namespace::Catalog* cat,
+                               DataProviderPtr data_provider,
                                const std::string& query_ra,
                                std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
@@ -138,12 +143,14 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
           std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat),
           nullptr))
     , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
+    , data_provider_(data_provider)
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
 
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                const Catalog_Namespace::Catalog* cat,
+                               DataProviderPtr data_provider,
                                std::unique_ptr<RelAlgDag> query_dag,
                                std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
@@ -151,6 +158,7 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
     , db_id_(cat->getDatabaseId())
     , query_dag_(std::move(query_dag))
     , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
+    , data_provider_(data_provider)
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
@@ -158,6 +166,7 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
 RelAlgExecutor::RelAlgExecutor(Executor* executor,
                                int db_id,
                                SchemaProviderPtr schema_provider,
+                               DataProviderPtr data_provider,
                                std::unique_ptr<RelAlgDag> query_dag,
                                std::shared_ptr<const query_state::QueryState> query_state)
     : executor_(executor)
@@ -165,6 +174,7 @@ RelAlgExecutor::RelAlgExecutor(Executor* executor,
     , db_id_(db_id)
     , query_dag_(std::move(query_dag))
     , schema_provider_(std::make_shared<RelAlgSchemaProvider>(query_dag_->getRootNode()))
+    , data_provider_(data_provider)
     , query_state_(std::move(query_state))
     , now_(0)
     , queue_time_ms_(0) {}
@@ -190,7 +200,7 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
-  executor_->setupCaching(col_descs, phys_table_ids);
+  executor_->setupCaching(data_provider_.get(), col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_seq = RaExecutionSequence(&ra);
@@ -390,7 +400,7 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
 
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
-  executor_->setupCaching(col_descs, phys_table_ids);
+  executor_->setupCaching(data_provider_.get(), col_descs, phys_table_ids);
   executor_->temporary_tables_ = &temporary_tables_;
 
   //   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
@@ -425,8 +435,12 @@ void RelAlgExecutor::prepareStreamingExecution(const CompilationOptions& co,
 
   auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-  stream_execution_context_ = executor_->prepareStreamingExecution(
-      ra_exe_unit, co_hint_applied, eo_hint_applied, table_infos, *column_cache);
+  stream_execution_context_ = executor_->prepareStreamingExecution(ra_exe_unit,
+                                                                   co_hint_applied,
+                                                                   eo_hint_applied,
+                                                                   table_infos,
+                                                                   data_provider_.get(),
+                                                                   *column_cache);
 
   stream_execution_context_->column_cache = std::move(column_cache);
   stream_execution_context_->is_agg = node_is_aggregate(body);
@@ -554,7 +568,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setDatabaseId(db_id_);
   executor_->setSchemaProvider(schema_provider_);
-  executor_->setupCaching(col_descs, phys_table_ids);
+  executor_->setupCaching(data_provider_.get(), col_descs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_seq = RaExecutionSequence(&ra);
@@ -621,7 +635,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(executor_, db_id_, schema_provider_, query_state_);
+    RelAlgExecutor ra_executor(
+        executor_, db_id_, schema_provider_, data_provider_, query_state_);
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
@@ -762,8 +777,8 @@ void RelAlgExecutor::prepareLeafExecution(
     executor_->resetInterrupt();
   }
   queue_time_ms_ = timer_stop(clock_begin);
-  executor_->row_set_mem_owner_ =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
+  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
+      data_provider_.get(), Executor::getArenaBlockSize(), cpu_threads());
   executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
@@ -1771,9 +1786,10 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                          {}};
 
   try {
-    result = {executor_->executeTableFunction(
-                  table_func_work_unit.exe_unit, table_infos, co, eo),
-              body->getOutputMetainfo()};
+    result = {
+        executor_->executeTableFunction(
+            table_func_work_unit.exe_unit, table_infos, co, eo, data_provider_.get()),
+        body->getOutputMetainfo()};
   } catch (const QueryExecutionError& e) {
     handlePersistentError(e.getErrorCode());
     CHECK(e.getErrorCode() == Executor::ERR_OUT_OF_GPU_MEM);
@@ -1883,6 +1899,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                               memory_level,
                                               JoinType::INVALID,  // for window function
                                               HashType::OneToMany,
+                                              data_provider_.get(),
                                               column_cache_map,
                                               ra_exe_unit.hash_table_build_plan_dag,
                                               ra_exe_unit.query_hint,
@@ -1919,6 +1936,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                             nullptr,
                                             /*thread_idx=*/0,
                                             chunks_owner,
+                                            data_provider_.get(),
                                             column_cache_map);
 
     CHECK_EQ(join_col_elem_count, elem_count);
@@ -2810,6 +2828,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          eo,
                                          render_info,
                                          has_cardinality_estimation,
+                                         data_provider_.get(),
                                          column_cache),
               targets_meta};
     } catch (const QueryExecutionError& e) {
@@ -2906,6 +2925,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_u
                                    eo,
                                    nullptr,
                                    false,
+                                   data_provider_.get(),
                                    column_cache);
   } catch (const foreign_storage::ForeignStorageException& error) {
     throw error;
@@ -3023,6 +3043,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            eo_no_multifrag,
                                            nullptr,
                                            true,
+                                           data_provider_.get(),
                                            column_cache),
                 targets_meta};
       result.setQueueTime(queue_time_ms);
@@ -3060,6 +3081,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                            eo_no_multifrag,
                                            nullptr,
                                            true,
+                                           data_provider_.get(),
                                            column_cache),
                 targets_meta};
     } catch (const QueryExecutionError& e) {

@@ -40,7 +40,6 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const int64_t null_val,
                                const Data_Namespace::MemoryLevel memory_level,
                                const int device_count,
-                               Data_Namespace::DataMgr* data_mgr,
                                BufferProvider* buffer_provider)
     : rhs_has_null_(false)
     , null_val_(null_val)
@@ -96,10 +95,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
       gpu_buffers_.emplace_back(CudaAllocator::allocGpuAbstractBuffer(
           buffer_provider, bitmap_sz_bytes, device_id));
       auto gpu_bitset = gpu_buffers_.back()->getMemoryPtr();
-      buffer_provider->copyToDevice(gpu_bitset,
-                                    cpu_bitset,
-                                    bitmap_sz_bytes,
-                                    device_id);
+      buffer_provider->copyToDevice(gpu_bitset, cpu_bitset, bitmap_sz_bytes, device_id);
       bitsets_.push_back(gpu_bitset);
     }
     free(cpu_bitset);

@@ -242,17 +242,16 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
-  return row_set_mem_owner->getOrAddStringDictProxy(
-      db_id_, dict_id_in, with_generation, data_mgr_);
+  return row_set_mem_owner->getOrAddStringDictProxy(db_id_, dict_id_in, with_generation);
 }
 
 StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
     const int db_id,
     const int dict_id_in,
-    const bool with_generation,
-    const Data_Namespace::DataMgr* data_mgr) {
+    const bool with_generation) {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
-  const auto dd = data_mgr->getDictMetadata(db_id, dict_id);
+  CHECK(data_provider_);
+  const auto dd = data_provider_->getDictMetadata(db_id, dict_id);
   if (dd) {
     CHECK(dd->stringDict);
     CHECK_LE(dd->dictNBits, 32);
@@ -1408,6 +1407,7 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                          const ExecutionOptions& eo,
                                          RenderInfo* render_info,
                                          const bool has_cardinality_estimation,
+                                         DataProvider* data_provider,
                                          ColumnCacheMap& column_cache) {
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
 
@@ -1431,6 +1431,7 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                       row_set_mem_owner_,
                                       render_info,
                                       has_cardinality_estimation,
+                                      data_provider,
                                       column_cache);
     result.setKernelQueueTime(kernel_queue_time_ms_);
     result.addCompilationQueueTime(compilation_queue_time_ms_);
@@ -1450,6 +1451,7 @@ TemporaryTable Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                             row_set_mem_owner_,
                             render_info,
                             has_cardinality_estimation,
+                            data_provider,
                             column_cache);
     result.setKernelQueueTime(kernel_queue_time_ms_);
     result.addCompilationQueueTime(compilation_queue_time_ms_);
@@ -1465,6 +1467,7 @@ std::shared_ptr<StreamExecutionContext> Executor::prepareStreamingExecution(
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     const std::vector<InputTableInfo>& query_infos,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache) {
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
 
@@ -1473,7 +1476,8 @@ std::shared_ptr<StreamExecutionContext> Executor::prepareStreamingExecution(
 
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
 
-  auto column_fetcher = std::make_unique<ColumnFetcher>(this, column_cache);
+  auto column_fetcher =
+      std::make_unique<ColumnFetcher>(this, data_provider, column_cache);
 
   query_mem_desc_owned = query_comp_desc_owned->compile(-1,
                                                         crt_min_byte_width,
@@ -1600,6 +1604,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     RenderInfo* render_info,
     const bool has_cardinality_estimation,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
@@ -1615,7 +1620,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
   do {
     SharedKernelContext shared_context(query_infos);
-    ColumnFetcher column_fetcher(this, column_cache);
+    ColumnFetcher column_fetcher(this, data_provider, column_cache);
     ScopeGuard scope_guard = [&column_fetcher] {
       column_fetcher.freeLinearizedBuf();
       column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
@@ -1770,6 +1775,7 @@ void Executor::executeWorkUnitPerFragment(
     const InputTableInfo& table_info,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
+    DataProvider* data_provider,
     PerFragmentCallBack& cb,
     const std::set<size_t>& fragment_indexes_param) {
   ColumnCacheMap column_cache;
@@ -1777,7 +1783,7 @@ void Executor::executeWorkUnitPerFragment(
   std::vector<InputTableInfo> table_infos{table_info};
   SharedKernelContext kernel_context(table_infos);
 
-  ColumnFetcher column_fetcher(this, column_cache);
+  ColumnFetcher column_fetcher(this, data_provider, column_cache);
   auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
   {
@@ -1849,7 +1855,8 @@ ResultSetPtr Executor::executeTableFunction(
     const TableFunctionExecutionUnit exe_unit,
     const std::vector<InputTableInfo>& table_infos,
     const CompilationOptions& co,
-    const ExecutionOptions& eo) {
+    const ExecutionOptions& eo,
+    DataProvider* data_provider) {
   INJECT_TIMER(Exec_executeTableFunction);
 
   if (eo.just_validate) {
@@ -1875,7 +1882,7 @@ ResultSetPtr Executor::executeTableFunction(
   ColumnCacheMap column_cache;  // Note: if we add retries to the table function
                                 // framework, we may want to move this up a level
 
-  ColumnFetcher column_fetcher(this, column_cache);
+  ColumnFetcher column_fetcher(this, data_provider, column_cache);
 
   TableFunctionCompilationContext compilation_context;
   {
@@ -1886,8 +1893,13 @@ ResultSetPtr Executor::executeTableFunction(
   }
 
   TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
-  return exe_context.execute(
-      exe_unit, table_infos, &compilation_context, column_fetcher, co.device_type, this);
+  return exe_context.execute(exe_unit,
+                             table_infos,
+                             &compilation_context,
+                             data_provider,
+                             column_fetcher,
+                             co.device_type,
+                             this);
 }
 
 ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {
@@ -3430,6 +3442,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const MemoryLevel memory_level,
     const JoinType join_type,
     const HashType preferred_hash_type,
+    DataProvider* data_provider,
     ColumnCacheMap& column_cache,
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint,
@@ -3444,6 +3457,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                      join_type,
                                      preferred_hash_type,
                                      deviceCountForMemoryLevel(memory_level),
+                                     data_provider,
                                      column_cache,
                                      this,
                                      hashtable_build_dag_map,
@@ -3838,10 +3852,11 @@ TableGenerations Executor::computeTableGenerations(
   return table_generations;
 }
 
-void Executor::setupCaching(const std::unordered_set<InputColDescriptor>& col_descs,
+void Executor::setupCaching(DataProvider* data_provider,
+                            const std::unordered_set<InputColDescriptor>& col_descs,
                             const std::unordered_set<int>& phys_table_ids) {
-  row_set_mem_owner_ =
-      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), cpu_threads());
+  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
+      data_provider, Executor::getArenaBlockSize(), cpu_threads());
   row_set_mem_owner_->setDictionaryGenerations(
       computeStringDictionaryGenerations(col_descs));
   agg_col_range_cache_ = computeColRangesCache(col_descs);

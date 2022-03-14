@@ -1218,7 +1218,7 @@ size_t ResultSet::getLimit() const {
 std::shared_ptr<const std::vector<std::string>> ResultSet::getStringDictionaryPayloadCopy(
     const int dict_id) const {
   const auto sdp = row_set_mem_owner_->getOrAddStringDictProxy(
-      db_id_for_dict_, dict_id, /*with_generation=*/false, data_mgr_);
+      db_id_for_dict_, dict_id, /*with_generation=*/false);
   CHECK(sdp);
   return sdp->getDictionary()->copyStrings();
 }

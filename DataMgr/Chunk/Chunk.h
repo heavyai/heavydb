@@ -27,15 +27,19 @@
 
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/ChunkMetadata.h"
-#include "DataMgr/DataMgr.h"
 #include "SchemaMgr/ColumnInfo.h"
 #include "Shared/sqltypes.h"
 #include "Shared/toString.h"
 #include "Utils/ChunkIter.h"
 
 using Data_Namespace::AbstractBuffer;
-using Data_Namespace::DataMgr;
 using Data_Namespace::MemoryLevel;
+
+namespace Data_Namespace {
+class DataMgr;
+}
+
+using Data_Namespace::DataMgr;
 
 namespace Chunk_NS {
 

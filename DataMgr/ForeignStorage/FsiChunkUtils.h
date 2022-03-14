@@ -18,6 +18,7 @@
 
 #include <map>
 
+#include "Catalog/ColumnDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/ChunkMetadata.h"
 

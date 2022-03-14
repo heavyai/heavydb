@@ -28,6 +28,7 @@
 #include "Catalog/DBObject.h"
 #include "DataMgr/DataMgr.h"
 #include "DataMgr/DataMgrBufferProvider.h"
+#include "DataMgr/DataMgrDataProvider.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
@@ -98,6 +99,8 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
   executor->setDatabaseId(catalog->getDatabaseId());
 
+  auto data_provider = std::make_shared<DataMgrDataProvider>(&catalog->getDataMgr());
+
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
@@ -113,6 +116,7 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                         memory_level,
                                         HashType::OneToOne,
                                         device_count,
+                                        data_provider.get(),
                                         column_cache,
                                         executor.get());
 }
@@ -129,6 +133,8 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
   executor->setDatabaseId(catalog->getDatabaseId());
 
+  auto data_provider = std::make_shared<DataMgrDataProvider>(&catalog->getDataMgr());
+
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
@@ -137,8 +143,13 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
 
   ColumnCacheMap column_cache;
 
-  return HashJoin::getSyntheticInstance(
-      op, memory_level, HashType::OneToOne, device_count, column_cache, executor.get());
+  return HashJoin::getSyntheticInstance(op,
+                                        memory_level,
+                                        HashType::OneToOne,
+                                        device_count,
+                                        data_provider.get(),
+                                        column_cache,
+                                        executor.get());
 }
 
 std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
@@ -154,6 +165,8 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
   executor->setDatabaseId(catalog->getDatabaseId());
 
+  auto data_provider = std::make_shared<DataMgrDataProvider>(&catalog->getDataMgr());
+
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
@@ -166,6 +179,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
                                         memory_level,
                                         HashType::OneToOne,
                                         device_count,
+                                        data_provider.get(),
                                         column_cache,
                                         executor.get());
 }

@@ -17,6 +17,7 @@
 #ifndef QUERYENGINE_INPUTMETADATA_H
 #define QUERYENGINE_INPUTMETADATA_H
 
+#include "DataProvider/DataProvider.h"
 #include "Fragmenter/Fragmenter.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/RelAlgExecutionUnit.h"

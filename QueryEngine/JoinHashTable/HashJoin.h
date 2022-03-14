@@ -23,6 +23,7 @@
 
 #include "Analyzer/Analyzer.h"
 #include "DataMgr/Allocators/ThrustAllocator.h"
+#include "DataProvider/DataProvider.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
@@ -177,6 +178,7 @@ class HashJoin {
       const JoinType join_type,
       const HashType preferred_hash_type,
       const int device_count,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
@@ -192,6 +194,7 @@ class HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -201,6 +204,7 @@ class HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -209,6 +213,7 @@ class HashJoin {
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
+      DataProvider* data_provider,
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -283,9 +288,12 @@ class HashJoin {
       const Executor* executor);
 
  protected:
+  HashJoin(DataProvider* data_provider) : data_provider_(data_provider) {}
+
   virtual size_t getComponentBufferSize() const noexcept = 0;
 
   std::vector<std::shared_ptr<HashTable>> hash_tables_for_device_;
+  DataProvider* data_provider_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DecodedJoinHashBufferEntry& e);
