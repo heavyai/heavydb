@@ -65,12 +65,12 @@ const std::vector<std::shared_ptr<L0Device>>& L0Driver::devices() const {
 }
 
 std::vector<std::shared_ptr<L0Driver>> get_drivers() {
-  zeInit(0);
+  L0_SAFE_CALL(zeInit(0));
   uint32_t driver_count = 0;
-  zeDriverGet(&driver_count, nullptr);
+  L0_SAFE_CALL(zeDriverGet(&driver_count, nullptr));
 
   std::vector<ze_driver_handle_t> handles(driver_count);
-  zeDriverGet(&driver_count, handles.data());
+  L0_SAFE_CALL(zeDriverGet(&driver_count, handles.data()));
 
   std::vector<std::shared_ptr<L0Driver>> result(driver_count);
   for (int i = 0; i < driver_count; i++) {
@@ -151,7 +151,7 @@ std::unique_ptr<L0CommandList> L0Device::create_command_list() const {
       0  // flags
   };
   ze_command_list_handle_t res;
-  zeCommandListCreate(ctx(), device_, &desc, &res);
+  L0_SAFE_CALL(zeCommandListCreate(ctx(), device_, &desc, &res));
   return std::make_unique<L0CommandList>(res);
 }
 
@@ -238,7 +238,7 @@ std::shared_ptr<L0Kernel> L0Module::create_kernel(const char* name,
 
 L0Kernel::L0Kernel(ze_kernel_handle_t handle, uint32_t x, uint32_t y, uint32_t z)
     : handle_(handle), group_size_({x, y, z}) {
-  zeKernelSetGroupSize(handle_, x, y, z);
+  L0_SAFE_CALL(zeKernelSetGroupSize(handle_, x, y, z));
 }
 
 ze_group_count_t& L0Kernel::group_size() {
