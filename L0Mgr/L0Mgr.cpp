@@ -187,16 +187,9 @@ std::shared_ptr<L0Module> L0Device::create_module(uint8_t* code,
   if (log) {
     size_t logSize = 0;
     L0_SAFE_CALL(zeModuleBuildLogGetString(buildlog, &logSize, nullptr));
-    std::vector<char> strLog(logSize);
+    std::string strLog(logSize, ' ');
     L0_SAFE_CALL(zeModuleBuildLogGetString(buildlog, &logSize, strLog.data()));
-    std::fstream out;
-    out.open("log.txt", std::ios::app);
-    if (!out.good()) {
-      std::cerr << "Unable to open log file.\n";
-    } else {
-      out << std::string(strLog.begin(), strLog.end());
-      out.close();
-    }
+    LOG(INFO) << "L0 module build log: " << strLog;
   }
   if (status) {
     throw l0::L0Exception(status);
