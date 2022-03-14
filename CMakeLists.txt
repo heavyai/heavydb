@@ -465,6 +465,7 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
 if(MSVC)
   option(ENABLE_NO_WINWARNINGS "disable most windows warnings" ON)
+  add_compile_definitions("_USE_MATH_DEFINES") # M_PI https://stackoverflow.com/q/6563810/2700898
   add_compile_definitions("NOMINMAX")
   add_compile_definitions("WIN32_LEAN_AND_MEAN")
   # Fix for thrift_handler.lib(DBHandler.cpp.obj) : error LNK2038: mismatch detected for
