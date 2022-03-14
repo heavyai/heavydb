@@ -133,11 +133,9 @@ class ArrowResultSet {
 
   size_t rowCount() const;
 
-  static void deallocateArrowResultBuffer(
-      const ArrowResult& result,
-      const ExecutorDeviceType device_type,
-      const size_t device_id,
-      std::shared_ptr<Data_Namespace::DataMgr>& data_mgr);
+  static void deallocateArrowResultBuffer(const ArrowResult& result,
+                                          const ExecutorDeviceType device_type,
+                                          const size_t device_id);
 
  private:
   void resultSetArrowLoopback(
@@ -182,14 +180,12 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
 class ArrowResultSetConverter {
  public:
   ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
-                          const std::shared_ptr<Data_Namespace::DataMgr> data_mgr,
                           const ExecutorDeviceType device_type,
                           const int32_t device_id,
                           const std::vector<std::string>& col_names,
                           const int32_t first_n,
                           const ArrowTransport transport_method)
       : results_(results)
-      , data_mgr_(data_mgr)
       , device_type_(device_type)
       , device_id_(device_id)
       , col_names_(col_names)
@@ -244,7 +240,6 @@ class ArrowResultSetConverter {
       ColumnBuilder& column_builder) const;
 
   std::shared_ptr<ResultSet> results_;
-  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_ = nullptr;
   ExecutorDeviceType device_type_ = ExecutorDeviceType::GPU;
   int32_t device_id_ = 0;
   std::vector<std::string> col_names_;

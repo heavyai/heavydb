@@ -1354,8 +1354,7 @@ std::shared_ptr<arrow::Schema> ArrowResultSetConverter::makeSchema() const {
 void ArrowResultSet::deallocateArrowResultBuffer(
     const ArrowResult& result,
     const ExecutorDeviceType device_type,
-    const size_t device_id,
-    std::shared_ptr<Data_Namespace::DataMgr>& data_mgr) {
+    const size_t device_id) {
 #ifndef _MSC_VER
   // CPU buffers skip the sm handle, serializing the entire RecordBatch to df.
   // Remove shared memory on sysmem
