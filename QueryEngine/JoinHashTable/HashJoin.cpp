@@ -805,11 +805,12 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
   if (lhs_ti.is_string() && (static_cast<bool>(lhs_cast) != static_cast<bool>(rhs_cast) ||
                              (lhs_cast && lhs_cast->get_optype() != kCAST) ||
                              (rhs_cast && rhs_cast->get_optype() != kCAST))) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail(
+        "Cannot use hash join for given expression (non-cast unary operator)");
   }
   // Casts to decimal are not suported.
   if (lhs_ti.is_decimal() && (lhs_cast || rhs_cast)) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail("Cannot use hash join for given expression (cast to decimal)");
   }
   auto lhs_col = lhs_cast
                      ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
@@ -850,7 +851,9 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
   auto inner_string_op_infos = process_string_op_infos(rhs_string_oper, rhs_col, rhs_ti);
 
   if (!lhs_col && !rhs_col) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail(
+        "Cannot use hash join for given expression (both lhs and rhs are invalid)",
+        InnerQualDecision::UNKNOWN);
   }
 
   const Analyzer::ColumnVar* inner_col{nullptr};
@@ -858,12 +861,17 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
   auto outer_ti = lhs_ti;
   auto inner_ti = rhs_ti;
   const Analyzer::Expr* outer_expr{lhs};
+  InnerQualDecision inner_qual_decision = InnerQualDecision::UNKNOWN;
   if (!lhs_col || (rhs_col && lhs_col->get_rte_idx() < rhs_col->get_rte_idx())) {
+    inner_qual_decision = InnerQualDecision::RHS;
     inner_col = rhs_col;
     outer_col = lhs_col;
   } else {
+    inner_qual_decision = InnerQualDecision::LHS;
     if (lhs_col && lhs_col->get_rte_idx() == 0) {
-      throw HashJoinFail("Cannot use hash join for given expression");
+      throw HashJoinFail(
+          "Cannot use hash join for given expression (lhs' rte idx is zero)",
+          inner_qual_decision);
     }
     inner_col = lhs_col;
     outer_col = rhs_col;
@@ -872,7 +880,8 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
     outer_expr = rhs;
   }
   if (!inner_col) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail("Cannot use hash join for given expression (invalid inner col)",
+                       inner_qual_decision);
   }
   if (!outer_col) {
     // check whether outer_col is a constant, i.e., inner_col = K;
@@ -880,14 +889,17 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
     if (outer_constant_col) {
       throw HashJoinFail(
           "Cannot use hash join for given expression: try to join with a constant "
-          "value");
+          "value",
+          inner_qual_decision);
     }
     MaxRangeTableIndexVisitor rte_idx_visitor;
     int outer_rte_idx = rte_idx_visitor.visit(outer_expr);
     // The inner column candidate is not actually inner; the outer
     // expression contains columns which are at least as deep.
     if (inner_col->get_rte_idx() <= outer_rte_idx) {
-      throw HashJoinFail("Cannot use hash join for given expression");
+      throw HashJoinFail(
+          "Cannot use hash join for given expression (inner's rte <= outer's rte)",
+          inner_qual_decision);
     }
   }
   // We need to fetch the actual type information from the catalog since Analyzer
@@ -905,7 +917,7 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
   // Casts from decimal are not supported.
   if ((inner_col_real_ti.is_decimal() || outer_col_ti.is_decimal()) &&
       (lhs_cast || rhs_cast)) {
-    throw HashJoinFail("Cannot use hash join for given expression");
+    throw HashJoinFail("Cannot use hash join for given expression (cast from decimal)");
   }
   if (is_overlaps_join) {
     if (!inner_col_real_ti.is_array()) {
@@ -947,7 +959,6 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
                                    normalized_inner_ti.get_type_name() + " and " +
                                    normalized_outer_ti.get_type_name()));
   }
-
   return std::make_pair(std::make_pair(normalized_inner_col, normalized_outer_col),
                         std::make_pair(inner_string_op_infos, outer_string_op_infos));
 }

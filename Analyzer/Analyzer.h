@@ -200,6 +200,7 @@ class ColumnVar : public Expr {
   int get_table_id() const { return table_id; }
   int get_column_id() const { return column_id; }
   int get_rte_idx() const { return rte_idx; }
+  void set_rte_idx(int new_rte_idx) { rte_idx = new_rte_idx; }
   EncodingType get_compression() const { return type_info.get_compression(); }
   int get_comp_param() const { return type_info.get_comp_param(); }
   void check_group_by(
