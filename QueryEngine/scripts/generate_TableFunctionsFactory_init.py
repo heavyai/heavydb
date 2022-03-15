@@ -1967,6 +1967,20 @@ namespace table_functions {
 
 std::once_flag init_flag;
 
+#if defined(__clang__)
+#define NO_OPT_ATTRIBUTE __attribute__((optnone))
+
+#elif defined(__GNUC__) || defined(__GNUG__)
+#define NO_OPT_ATTRIBUTE __attribute((optimize("O0")))
+
+#elif defined(_MSC_VER)
+#define NO_OPT_ATTRIBUTE
+
+#endif
+
+#if defined(_MSC_VER)
+#pragma optimize("", off)
+#endif
 void TableFunctionsFactory::init() {
   if (!g_enable_table_functions) {
     return;
@@ -1977,10 +1991,13 @@ void TableFunctionsFactory::init() {
     return;
   }
 
-  std::call_once(init_flag, []() {
+  std::call_once(init_flag, []() NO_OPT_ATTRIBUTE {
     %s
   });
 }
+#if defined(_MSC_VER)
+#pragma optimize("", on)
+#endif
 
 // conditional check functions
 %s
