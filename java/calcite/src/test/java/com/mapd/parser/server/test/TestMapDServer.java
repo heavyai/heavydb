@@ -19,7 +19,7 @@ package com.mapd.parser.server.test;
 import static org.junit.Assert.*;
 
 import com.mapd.parser.server.CalciteServerWrapper;
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TQueryResult;
 
@@ -111,12 +111,12 @@ public class TestMapDServer {
   private ConnInfo createMapDConnection() {
     String session = null;
     TTransport transport = null;
-    OmniSci.Client client = null;
+    Heavy.Client client = null;
     try {
       transport = new TSocket("localhost", 6274);
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
-      client = new OmniSci.Client(protocol);
+      client = new Heavy.Client(protocol);
       session = client.connect("admin", "HyperInteractive", "omnisci");
     } catch (TException x) {
       fail("Exception on create occurred " + x.toString());
@@ -150,9 +150,9 @@ public class TestMapDServer {
   private static class ConnInfo {
     public String session;
     public TTransport transport;
-    public OmniSci.Client client;
+    public Heavy.Client client;
 
-    private ConnInfo(String session, TTransport transport, OmniSci.Client client) {
+    private ConnInfo(String session, TTransport transport, Heavy.Client client) {
       this.session = session;
       this.transport = transport;
       this.client = client;

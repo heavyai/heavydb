@@ -46,7 +46,7 @@
 
 // include files for Thrift and MapD Thrift Services
 #include "CopyParams.h"
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 #include "gen-cpp/heavy_types.h"
 
 using namespace ::apache::thrift;
@@ -81,7 +81,7 @@ class RowToColumnLoader {
 
   TRowDescriptor row_desc_;
 
-  std::shared_ptr<OmniSciClient> client_;
+  std::shared_ptr<HeavyClient> client_;
   TSessionId session_;
 
   void createConnection(const ThriftClientConnection& con);

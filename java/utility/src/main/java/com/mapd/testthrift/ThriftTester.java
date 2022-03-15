@@ -15,7 +15,7 @@
  */
 package com.mapd.testthrift;
 
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TColumn;
 import com.omnisci.thrift.server.TColumnData;
 import com.omnisci.thrift.server.TColumnType;
@@ -68,7 +68,7 @@ public class ThriftTester {
       // TProtocol protocol = new TJSONProtocol(transport);
       // TProtocol protocol = new TProtocol(transport);
 
-      OmniSci.Client client = new OmniSci.Client(protocol);
+      Heavy.Client client = new Heavy.Client(protocol);
 
       String session = null;
 

@@ -24,7 +24,7 @@
 #pragma once
 
 #include "Shared/SystemParameters.h"
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 class DBHandler;
 

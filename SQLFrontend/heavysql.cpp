@@ -63,7 +63,7 @@
 #include "Shared/base64.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/misc.h"
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 #include "include/linenoise.h"
 
@@ -613,7 +613,7 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
           context->server_host, context->port, ca_cert_name);
       protocol2 = std::shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
     }
-    OmniSciClient c2(protocol2);
+    HeavyClient c2(protocol2);
     ClientContext context2(*transport2, c2);
 
     context2.db_name = context->db_name;
@@ -1245,7 +1245,7 @@ int main(int argc, char** argv) {
     transport = connMgr->open_buffered_client_transport(server_host, port, ca_cert_name);
     protocol = std::shared_ptr<TProtocol>(new TBinaryProtocol(transport));
   }
-  OmniSciClient c(protocol);
+  HeavyClient c(protocol);
   ClientContext context(*transport, c);
   g_client_context_ptr = &context;
 

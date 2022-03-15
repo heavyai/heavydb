@@ -15,7 +15,7 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TQueryResult;
 
@@ -38,7 +38,7 @@ public class HeavyAIStatement implements java.sql.Statement {
   public SQLWarning rootWarning = null;
 
   private String session;
-  private OmniSci.Client client;
+  private Heavy.Client client;
   private HeavyAIConnection connection;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;

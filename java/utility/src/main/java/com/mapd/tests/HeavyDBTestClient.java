@@ -16,7 +16,7 @@
 package com.mapd.tests;
 
 import com.omnisci.thrift.server.*;
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -29,7 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 
 public class HeavyDBTestClient {
-  OmniSci.Client client;
+  Heavy.Client client;
   String sessionId;
 
   public TServerStatus get_server_status() throws TDBException, TException {
@@ -238,7 +238,7 @@ public class HeavyDBTestClient {
     TSocket transport = new TSocket(host, port);
     transport.open();
     TProtocol protocol = new TBinaryProtocol(transport);
-    OmniSci.Client client = new OmniSci.Client(protocol);
+    Heavy.Client client = new Heavy.Client(protocol);
     HeavyDBTestClient session = new HeavyDBTestClient();
     session.client = client;
     session.sessionId = client.connect(user, password, db);

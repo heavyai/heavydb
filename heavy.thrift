@@ -641,7 +641,7 @@ struct TLeafInfo {
   2: i32 num_leaves;
 }
 
-service OmniSci {
+service Heavy {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TDBException e)
   TKrb5Session krb5_connect(1: string inputToken, 2: string dbname) throws (1: TDBException e)

@@ -15,7 +15,7 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TColumnType;
 import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TStringRow;
@@ -73,7 +73,7 @@ class HeavyAIPreparedStatement implements PreparedStatement {
   private String listOfFields[];
   private int repCount;
   private String session;
-  private OmniSci.Client client;
+  private Heavy.Client client;
   private HeavyAIStatement stmt = null;
   private boolean isInsert = false;
   private boolean isNewBatch = true;
