@@ -4,7 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <thread>
-#include "gen-cpp/omnisci_types.h"
+#include "gen-cpp/heavy_types.h"
 
 template <typename SERVICE_ENUM, typename CLIENT_CONTEXT>
 bool thrift_with_retry(SERVICE_ENUM which_service,

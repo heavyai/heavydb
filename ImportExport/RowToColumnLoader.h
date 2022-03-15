@@ -47,7 +47,7 @@
 // include files for Thrift and MapD Thrift Services
 #include "CopyParams.h"
 #include "gen-cpp/OmniSci.h"
-#include "gen-cpp/omnisci_types.h"
+#include "gen-cpp/heavy_types.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;

@@ -4,7 +4,7 @@
 External API
 ==================================
 
-OmniSciDB uses Apache's Thrift software framework for all external client communication.  The open source clients shipped with the repository include OmniSci's `heavysql` command line process, JDBC driver and SQLImporter utility.  For a full list of Thrift enabled clients supported by OmniSci see Table :ref:`omnisci-open-source-clients` below. The full list of thrift API methods can be found in the `omnisci.thrift` file in the root of the OmniSciDB source directory.
+OmniSciDB uses Apache's Thrift software framework for all external client communication.  The open source clients shipped with the repository include OmniSci's `heavysql` command line process, JDBC driver and SQLImporter utility.  For a full list of Thrift enabled clients supported by OmniSci see Table :ref:`omnisci-open-source-clients` below. The full list of thrift API methods can be found in the `heavy.thrift` file in the root of the OmniSciDB source directory.
 
 All internal communication between the discrete processes within OmniSciDB also use the Thrift communication framework.  For example, communications between OmniSciDB and Apache Calcite are facilitated via Thrift.
 
@@ -13,7 +13,7 @@ All internal communication between the discrete processes within OmniSciDB also 
 Design
 #######
 
-OmniSci has developed a rich set of Thrift based API calls.  The bindings for the these calls can be found in the file `omnisci.thrift` in the open source repository.
+OmniSci has developed a rich set of Thrift based API calls.  The bindings for the these calls can be found in the file `heavy.thrift` in the open source repository.
 
 The classes generated from the Thrift bindings include `OmniSciProcessor`, `OmniSciClient` and `OmniSciIf`. The OmniSci code sitting 'behind' these classes can be found in the class `DBHandler`, in the file `ThriftHandler/DBhandler.(cpp/h)`.
 
