@@ -1439,8 +1439,7 @@ void DBHandler::deallocate_df(const TSessionId& session,
   ArrowResultSet::deallocateArrowResultBuffer(
       result,
       device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU,
-      device_id,
-      data_mgr_);
+      device_id);
 }
 
 void DBHandler::sql_validate(TRowDescriptor& _return,
@@ -4541,7 +4540,6 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
   const auto rs = result.getRows();
   const auto converter =
       std::make_unique<ArrowResultSetConverter>(rs,
-                                                data_mgr_,
                                                 results_device_type,
                                                 device_id,
                                                 getTargetNames(result.getTargetsMeta()),
