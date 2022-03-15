@@ -1344,12 +1344,12 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool sample_ratio(
   return (row_offset * 2654435761) % 4294967296 < threshold;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket(
-    const double target_value,
-    const double lower_bound,
-    const double upper_bound,
-    const double scale_factor,
-    const int32_t partition_count) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
+width_bucket(const double target_value,
+             const double lower_bound,
+             const double upper_bound,
+             const double scale_factor,
+             const int32_t partition_count) {
   if (target_value < lower_bound) {
     return 0;
   } else if (target_value >= upper_bound) {
@@ -1358,12 +1358,12 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket(
   return ((target_value - lower_bound) * scale_factor) + 1;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_reversed(
-    const double target_value,
-    const double lower_bound,
-    const double upper_bound,
-    const double scale_factor,
-    const int32_t partition_count) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
+width_bucket_reversed(const double target_value,
+                      const double lower_bound,
+                      const double upper_bound,
+                      const double scale_factor,
+                      const int32_t partition_count) {
   if (target_value > lower_bound) {
     return 0;
   } else if (target_value <= upper_bound) {
@@ -1372,13 +1372,13 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_reversed(
   return ((lower_bound - target_value) * scale_factor) + 1;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE double width_bucket_nullable(
-    const double target_value,
-    const double lower_bound,
-    const double upper_bound,
-    const double scale_factor,
-    const int32_t partition_count,
-    const double null_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+width_bucket_nullable(const double target_value,
+                      const double lower_bound,
+                      const double upper_bound,
+                      const double scale_factor,
+                      const int32_t partition_count,
+                      const double null_val) {
   if (target_value == null_val) {
     return INT32_MIN;
   }
@@ -1386,13 +1386,13 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE double width_bucket_nullable(
       target_value, lower_bound, upper_bound, scale_factor, partition_count);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE double width_bucket_reversed_nullable(
-    const double target_value,
-    const double lower_bound,
-    const double upper_bound,
-    const double scale_factor,
-    const int32_t partition_count,
-    const double null_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int32_t
+width_bucket_reversed_nullable(const double target_value,
+                               const double lower_bound,
+                               const double upper_bound,
+                               const double scale_factor,
+                               const int32_t partition_count,
+                               const double null_val) {
   if (target_value == null_val) {
     return INT32_MIN;
   }
@@ -1403,26 +1403,26 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE double width_bucket_reversed_nullable(
 // width_bucket with no out-of-bound check version which can be called
 // if we can assure the input target_value expr always resides in the valid range
 // (so we can also avoid null checking)
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_no_oob_check(
-    const double target_value,
-    const double lower_bound,
-    const double scale_factor) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
+width_bucket_no_oob_check(const double target_value,
+                          const double lower_bound,
+                          const double scale_factor) {
   return ((target_value - lower_bound) * scale_factor) + 1;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_reversed_no_oob_check(
-    const double target_value,
-    const double lower_bound,
-    const double scale_factor) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
+width_bucket_reversed_no_oob_check(const double target_value,
+                                   const double lower_bound,
+                                   const double scale_factor) {
   return ((lower_bound - target_value) * scale_factor) + 1;
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_expr(
-    const double target_value,
-    const bool reversed,
-    const double lower_bound,
-    const double upper_bound,
-    const int32_t partition_count) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
+width_bucket_expr(const double target_value,
+                  const bool reversed,
+                  const double lower_bound,
+                  const double upper_bound,
+                  const int32_t partition_count) {
   if (reversed) {
     return width_bucket_reversed(target_value,
                                  lower_bound,
@@ -1437,13 +1437,13 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_expr(
                       partition_count);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_expr_nullable(
-    const double target_value,
-    const bool reversed,
-    const double lower_bound,
-    const double upper_bound,
-    const int32_t partition_count,
-    const double null_val) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
+width_bucket_expr_nullable(const double target_value,
+                           const bool reversed,
+                           const double lower_bound,
+                           const double upper_bound,
+                           const int32_t partition_count,
+                           const double null_val) {
   if (target_value == null_val) {
     return INT32_MIN;
   }
@@ -1451,12 +1451,12 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_expr_nullable
       target_value, reversed, lower_bound, upper_bound, partition_count);
 }
 
-extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE double width_bucket_expr_no_oob_check(
-    const double target_value,
-    const bool reversed,
-    const double lower_bound,
-    const double upper_bound,
-    const int32_t partition_count) {
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t
+width_bucket_expr_no_oob_check(const double target_value,
+                               const bool reversed,
+                               const double lower_bound,
+                               const double upper_bound,
+                               const int32_t partition_count) {
   if (reversed) {
     return width_bucket_reversed_no_oob_check(
         target_value, lower_bound, partition_count / (lower_bound - upper_bound));

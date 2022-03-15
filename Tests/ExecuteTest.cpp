@@ -2491,9 +2491,9 @@ TEST(Select, ConstantWidthBucketExpr) {
               v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.1, 2, 3, 100);", dt)));
     EXPECT_EQ(
         int64_t(11),
-        v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.11, 2.1, 2.2, 100);", dt)));
+        v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.1105, 2.1, 2.2, 100);", dt)));
     EXPECT_EQ(int64_t(91),
-              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.1, 3, 2, 100);", dt)));
+              v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.095, 3, 2, 100);", dt)));
     EXPECT_EQ(
         int64_t(95),
         v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(2.156789, 3, 2.11, 100);", dt)));
@@ -2505,6 +2505,9 @@ TEST(Select, ConstantWidthBucketExpr) {
               v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(-0.1, -2, 2, 100);", dt)));
     EXPECT_EQ(int64_t(53),
               v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(-0.1, 2, -2, 100);", dt)));
+    EXPECT_EQ(
+        int64_t(100),
+        v<int64_t>(run_simple_agg("SELECT WIDTH_BUCKET(99.999997, 0, 100, 100);", dt)));
 
     for (auto& col : col_names) {
       auto queries = test_queries(col);
