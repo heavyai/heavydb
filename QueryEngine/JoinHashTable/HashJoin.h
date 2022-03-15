@@ -49,9 +49,23 @@ class TableMustBeReplicated : public std::runtime_error {
                            "' must be replicated.") {}
 };
 
+enum class InnerQualDecision { IGNORE = 0, UNKNOWN, LHS, RHS };
+
+#ifndef __CUDACC__
+inline std::ostream& operator<<(std::ostream& os, InnerQualDecision const decision) {
+  constexpr char const* strings[]{"IGNORE", "UNKNOWN", "LHS", "RHS"};
+  return os << strings[static_cast<int>(decision)];
+}
+#endif
+
 class HashJoinFail : public std::runtime_error {
  public:
-  HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
+  HashJoinFail(const std::string& err_msg)
+      : std::runtime_error(err_msg), inner_qual_decision(InnerQualDecision::UNKNOWN) {}
+  HashJoinFail(const std::string& err_msg, InnerQualDecision qual_decision)
+      : std::runtime_error(err_msg), inner_qual_decision(qual_decision) {}
+
+  InnerQualDecision inner_qual_decision;
 };
 
 class NeedsOneToManyHash : public HashJoinFail {

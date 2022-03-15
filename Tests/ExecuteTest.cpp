@@ -10753,6 +10753,66 @@ TEST(Select, Joins_EmptyTable) {
   }
 }
 
+TEST(Select, Joins_AvoidLoopJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  auto drop_tables = []() {
+    run_ddl_statement("DROP TABLE IF EXISTS LTA;");
+    run_ddl_statement("DROP TABLE IF EXISTS LTB;");
+  };
+  auto create_and_populate_tables = []() {
+    run_ddl_statement("CREATE TABLE LTA (a1 INT, a2 INT);");
+    run_ddl_statement("CREATE TABLE LTB (b1 INT, b2 INT);");
+    run_multiple_agg("INSERT INTO LTA VALUES(1, 1);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO LTA VALUES(2, 2);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO LTB VALUES(1, 1);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO LTB VALUES(1, 1);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO LTB VALUES(1, 1);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO LTB VALUES(2, 2);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO LTB VALUES(2, 2);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO LTB VALUES(2, 2);", ExecutorDeviceType::CPU);
+  };
+  drop_tables();
+  create_and_populate_tables();
+  ScopeGuard reset_flag = [orig = g_trivial_loop_join_threshold] {
+    g_trivial_loop_join_threshold = orig;
+  };
+  g_trivial_loop_join_threshold = 0;
+  std::vector<std::string> join_conditions{
+      "WIDTH_BUCKET(a1, 0, 1, 1) -1 = b1",
+      "b1 = WIDTH_BUCKET(a1, 0, 1, 1) -1",
+      "WIDTH_BUCKET(b1, 0, 1, 1) -1 = a1",
+      "a1 = WIDTH_BUCKET(b1, 0, 1, 1) -1",
+  };
+  auto perform_test =
+      [](ExecutorDeviceType dt, const std::string& query, int64_t expected_res) {
+        EXPECT_EQ(expected_res, v<int64_t>(run_simple_agg(query, dt)));
+        if (dt == ExecutorDeviceType::CPU) {
+          auto num_cached_ht =
+              QR::get()->getNumberOfCachedItem(
+                  QueryRunner::CacheItemStatus::ALL, CacheItemType::PERFECT_HT, false) +
+              QR::get()->getNumberOfCachedItem(
+                  QueryRunner::CacheItemStatus::ALL, CacheItemType::BASELINE_HT, false);
+          // if we execute the join via hash join on CPU, we keep it to the cache
+          EXPECT_GE(num_cached_ht, static_cast<size_t>(1)) << query;
+        }
+        QR::get()->clearCpuMemory();
+      };
+  std::string query_prefix{"SELECT COUNT(1) FROM "};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (auto tables : {"LTA, LTB ", "LTB, LTA "}) {
+      for (auto join_condition : join_conditions) {
+        perform_test(dt, query_prefix + tables + "WHERE " + join_condition + ";", 6);
+        perform_test(
+            dt, query_prefix + tables + "WHERE " + join_condition + " AND a2 = b2;", 3);
+        perform_test(
+            dt, query_prefix + tables + "WHERE a2 = b2 AND " + join_condition + ";", 3);
+      }
+    }
+  }
+  drop_tables();
+}
+
 TEST(Select, Joins_Fragmented_SelfJoin_And_LoopJoin) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
