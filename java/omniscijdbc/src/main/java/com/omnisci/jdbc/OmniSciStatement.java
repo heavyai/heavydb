@@ -15,7 +15,7 @@
  */
 package com.omnisci.jdbc;
 
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TQueryResult;
 
@@ -39,8 +39,8 @@ public class OmniSciStatement implements java.sql.Statement {
   public SQLWarning rootWarning = null;
 
   private String session;
-  private OmniSci.Client client;
-  private OmniSciConnection connection;
+  private Heavy.Client client;
+  private HeavyAIConnection connection;
   private ResultSet currentRS = null;
   private TQueryResult sqlResult = null;
   private int maxRows; // add limit to unlimited queries

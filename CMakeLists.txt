@@ -767,8 +767,8 @@ if(DISABLE_CONCURRENCY)
 endif()
 
 set(gen_cpp_files
-    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
+    ${CMAKE_BINARY_DIR}/gen-cpp/Heavy.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/Heavy.h
     ${CMAKE_BINARY_DIR}/gen-cpp/heavy_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
@@ -953,7 +953,7 @@ set_target_properties(heavydb PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEF
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/heavy.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/Heavy.java
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
@@ -1152,7 +1152,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/Heavy.java
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml

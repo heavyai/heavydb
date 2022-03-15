@@ -16,7 +16,7 @@
 package com.omnisci.jdbc;
 
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TDatumType;
 import com.omnisci.thrift.server.TServerStatus;
@@ -323,7 +323,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
    */
 
   protected String session = null;
-  protected OmniSci.Client client = null;
+  protected Heavy.Client client = null;
   protected String catalog;
   protected TTransport transport;
   protected SQLWarning warnings;
@@ -346,7 +346,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
     // Now over write the old connection.
     try {
       TProtocol protocol = omniSciConnection.manageConnection();
-      omniSciConnection.client = new OmniSci.Client(protocol);
+      omniSciConnection.client = new Heavy.Client(protocol);
     } catch (java.lang.Exception jE) {
       throw new SQLException("Error creating new connection "
                       + OmniSciExceptionText.getExceptionDetail(jE),
@@ -448,7 +448,7 @@ public class OmniSciConnection implements java.sql.Connection, Cloneable {
     this.cP = new Connection_properties(url, base_properties);
     try {
       TProtocol protocol = manageConnection();
-      client = new OmniSci.Client(protocol);
+      client = new Heavy.Client(protocol);
       setSession(this.cP.getProperty(Options.pkiauth));
       catalog = (String) this.cP.getProperty(Options.db_name);
     } catch (TTransportException ex) {

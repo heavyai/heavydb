@@ -25,7 +25,7 @@ import com.mapd.calcite.parser.HeavyDBTable;
 import com.mapd.calcite.parser.HeavyDBUser;
 import com.mapd.calcite.parser.HeavyDBView;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TColumnType;
 import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TDBInfo;
@@ -242,7 +242,7 @@ public class MetaConnect {
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      OmniSci.Client client = new OmniSci.Client(protocol);
+      Heavy.Client client = new Heavy.Client(protocol);
       List<String> tablesList =
               client.get_tables_for_database(currentUser.getSession(), default_db);
       Set<String> ts = new HashSet<String>(tablesList.size());
@@ -349,7 +349,7 @@ public class MetaConnect {
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      OmniSci.Client client = new OmniSci.Client(protocol);
+      Heavy.Client client = new Heavy.Client(protocol);
       TTableDetails td = client.get_internal_table_details_for_database(
               currentUser.getSession(), tableName, default_db);
       transport.close();
@@ -681,7 +681,7 @@ public class MetaConnect {
         if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
 
-        OmniSci.Client client = new OmniSci.Client(protocol);
+        Heavy.Client client = new Heavy.Client(protocol);
         TTableDetails td = client.get_table_details_for_database(
                 currentUser.getSession(), tableName, default_db);
         transport.close();
@@ -814,7 +814,7 @@ public class MetaConnect {
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
-      OmniSci.Client client = new OmniSci.Client(protocol);
+      Heavy.Client client = new Heavy.Client(protocol);
 
       List<TDBInfo> dbList = client.get_databases(currentUser.getSession());
       for (TDBInfo dbInfo : dbList) {

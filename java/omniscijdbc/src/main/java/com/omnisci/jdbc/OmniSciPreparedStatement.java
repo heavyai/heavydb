@@ -15,7 +15,7 @@
  */
 package com.omnisci.jdbc;
 
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TColumnType;
 import com.omnisci.thrift.server.TDBException;
 import com.omnisci.thrift.server.TStringRow;
@@ -73,8 +73,8 @@ class OmniSciPreparedStatement implements PreparedStatement {
   private String listOfFields[];
   private int repCount;
   private String session;
-  private OmniSci.Client client;
-  private OmniSciStatement stmt = null;
+  private Heavy.Client client;
+  private HeavyAIStatement stmt = null;
   private boolean isInsert = false;
   private boolean isNewBatch = true;
   private boolean[] parmIsString = null;

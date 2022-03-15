@@ -90,7 +90,7 @@
 #include <typeinfo>
 #include <unordered_map>
 
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 #include "gen-cpp/extension_functions_types.h"
 
 using namespace std::string_literals;
@@ -112,10 +112,10 @@ void check_not_info_schema_db(const std::string& db_name,
                               bool throw_mapd_exception = false);
 }  // namespace dbhandler
 
-class TrackingProcessor : public OmniSciProcessor {
+class TrackingProcessor : public HeavyProcessor {
  public:
-  TrackingProcessor(std::shared_ptr<OmniSciIf> handler, const bool check_origin)
-      : OmniSciProcessor(handler), check_origin_(check_origin) {}
+  TrackingProcessor(std::shared_ptr<HeavyIf> handler, const bool check_origin)
+      : HeavyProcessor(handler), check_origin_(check_origin) {}
 
   bool process(std::shared_ptr<::apache::thrift::protocol::TProtocol> in,
                std::shared_ptr<::apache::thrift::protocol::TProtocol> out,
@@ -149,7 +149,7 @@ class TrackingProcessor : public OmniSciProcessor {
       TrackingProcessor::client_address = "";
     }
 
-    return OmniSciProcessor::process(in, out, connectionContext);
+    return HeavyProcessor::process(in, out, connectionContext);
   }
 
   static thread_local std::string client_address;
@@ -163,7 +163,7 @@ namespace File_Namespace {
 struct DiskCacheConfig;
 }
 
-class DBHandler : public OmniSciIf {
+class DBHandler : public HeavyIf {
  public:
   DBHandler(const std::vector<LeafHostInfo>& db_leaves,
             const std::vector<LeafHostInfo>& string_leaves,

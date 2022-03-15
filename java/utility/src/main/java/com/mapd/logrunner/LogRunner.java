@@ -15,7 +15,7 @@
  */
 package com.mapd.logrunner;
 
-import com.omnisci.thrift.server.OmniSci;
+import com.omnisci.thrift.server.Heavy;
 import com.omnisci.thrift.server.TColumn;
 import com.omnisci.thrift.server.TColumnData;
 import com.omnisci.thrift.server.TColumnType;
@@ -93,7 +93,7 @@ public class LogRunner {
     //
     //    for (int i = 0; i < numberThreads; i++){
     //
-    OmniSci.Client client = getClient(args[0], Integer.valueOf(args[1]));
+    Heavy.Client client = getClient(args[0], Integer.valueOf(args[1]));
     String session = getSession(client);
     //      worker[i] = new myThread(client, session);
     //    }
@@ -126,7 +126,7 @@ public class LogRunner {
     }
   }
 
-  private OmniSci.Client getClient(String hostname, int port) throws TTransportException {
+  private Heavy.Client getClient(String hostname, int port) throws TTransportException {
     TTransport transport = null;
 
     // transport = new TSocket("localhost", 6274);
@@ -138,24 +138,24 @@ public class LogRunner {
     TProtocol protocol = new TJSONProtocol(transport);
     // TProtocol protocol = new TProtocol(transport);
 
-    return new OmniSci.Client(protocol);
+    return new Heavy.Client(protocol);
   }
 
-  private String getSession(OmniSci.Client client)
+  private String getSession(Heavy.Client client)
           throws TTransportException, TDBException, TException {
     String session = client.connect("mapd", "HyperInteractive", "mapd");
     logger.info("Connected session is " + session);
     return session;
   }
 
-  private void closeSession(OmniSci.Client client, String session)
+  private void closeSession(Heavy.Client client, String session)
           throws TDBException, TException {
     // Now disconnect
     logger.info("Trying to disconnect session " + session);
     client.disconnect(session);
   }
 
-  private void theRest(OmniSci.Client client, String session) throws TException {
+  private void theRest(Heavy.Client client, String session) throws TException {
     // lets fetch databases from mapd
     List<TDBInfo> dbs = client.get_databases(session);
 
@@ -240,10 +240,10 @@ public class LogRunner {
 
   public class myThread implements Runnable {
     private String str;
-    private OmniSci.Client client;
+    private Heavy.Client client;
     private String session;
 
-    myThread(String str1, OmniSci.Client client1, String session1) {
+    myThread(String str1, Heavy.Client client1, String session1) {
       str = str1;
       client = client1;
       session = session1;

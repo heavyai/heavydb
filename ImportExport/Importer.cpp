@@ -78,7 +78,7 @@
 #include "Shared/thread_count.h"
 #include "Utils/ChunkAccessorTable.h"
 
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 #ifdef _WIN32
 #include <fcntl.h>

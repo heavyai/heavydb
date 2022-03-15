@@ -34,7 +34,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -46,7 +46,7 @@ const size_t INSERT_BATCH_SIZE = 10000;
 
 // reads tab-delimited rows from std::cin and load them to
 // table_name in batches of size INSERT_BATCH_SIZE until done
-void stream_insert(OmniSciClient& client,
+void stream_insert(HeavyClient& client,
                    const TSessionId session,
                    const std::string& table_name,
                    const TRowDescriptor& row_desc,
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 #endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  OmniSciClient client(protocol);
+  HeavyClient client(protocol);
   TSessionId session;
   try {
     transport->open();                                    // open transport

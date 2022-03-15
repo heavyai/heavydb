@@ -23,7 +23,7 @@
 #include "LeafHostInfo.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/TargetMetaInfo.h"
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 #include "Logger/Logger.h"
 

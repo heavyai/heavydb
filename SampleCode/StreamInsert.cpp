@@ -41,7 +41,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -84,7 +84,7 @@ struct ConnectionDetails {
 bool print_error_data = false;
 bool print_transformation = false;
 
-std::shared_ptr<OmniSciClient> client;
+std::shared_ptr<HeavyClient> client;
 TSessionId session;
 std::shared_ptr<apache::thrift::transport::TTransport> mytransport;
 
@@ -104,7 +104,7 @@ void createConnection(ConnectionDetails con) {
 #endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport));
 
-  client.reset(new OmniSciClient(protocol));
+  client.reset(new HeavyClient(protocol));
   try {
     mytransport->open();  // open transport
     client->connect(

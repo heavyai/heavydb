@@ -45,7 +45,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -209,7 +209,7 @@ int main(int argc, char** argv) {
   std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
 #endif
   std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  OmniSciClient client(protocol);
+  HeavyClient client(protocol);
   TSessionId session;
   try {
     transport->open();                                    // open transport

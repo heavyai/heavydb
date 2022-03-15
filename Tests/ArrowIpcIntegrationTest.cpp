@@ -51,10 +51,10 @@ using namespace std::literals;
 #include "Shared/ThriftClient.h"
 #include "Shared/scope.h"
 
-#include "gen-cpp/OmniSci.h"
+#include "gen-cpp/Heavy.h"
 
 TSessionId g_session_id;
-std::shared_ptr<OmniSciClient> g_client;
+std::shared_ptr<HeavyClient> g_client;
 
 #ifdef HAVE_CUDA
 bool g_cpu_only{false};
@@ -790,7 +790,7 @@ int main(int argc, char* argv[]) {
     auto transport = conn_mgr->open_buffered_client_transport(host, port, cert);
     transport->open();
     auto protocol = std::make_shared<TBinaryProtocol>(transport);
-    g_client = std::make_shared<OmniSciClient>(protocol);
+    g_client = std::make_shared<HeavyClient>(protocol);
 
     g_client->connect(g_session_id, user, pwd, db);
 
