@@ -19,6 +19,7 @@
 #include "ArrowStorage/ArrowStorage.h"
 #include "Calcite/Calcite.h"
 #include "DataMgr/DataMgr.h"
+#include "DataMgr/DataMgrDataProvider.h"
 #include "DistributedLoader.h"
 #include "ImportExport/Importer.h"
 #include "Parser/parser.h"
@@ -391,6 +392,7 @@ class ExecuteTestBase {
 
     executor_ = std::make_shared<Executor>(0,
                                            data_mgr_.get(),
+                                           data_mgr_->getBufferProvider(),
                                            system_parameters.cuda_block_size,
                                            system_parameters.cuda_grid_size,
                                            system_parameters.max_gpu_slab_size,
@@ -730,7 +732,7 @@ class ExecuteTestBase {
   static void import_array_test(const std::string& table_name) {
     CHECK_EQ(size_t(0), g_array_test_row_count % 4);
     auto tinfo = storage_->getTableInfo(TEST_DB_ID, table_name);
-    ASSERT(tinfo);
+    ASSERT_TRUE(tinfo);
     auto col_infos = storage_->listColumns(*tinfo);
     /*
         auto& cat = QR::get()->getSession()->getCatalog();
@@ -1173,8 +1175,9 @@ class ExecuteTestBase {
     execution_time_ += measure<std::chrono::microseconds>::execution([&]() {
       auto dag =
           std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
-      auto ra_executor =
-          RelAlgExecutor(executor_.get(), TEST_DB_ID, storage_, std::move(dag));
+      auto data_provider = std::make_shared<DataMgrDataProvider>(data_mgr_.get());
+      auto ra_executor = RelAlgExecutor(
+          executor_.get(), TEST_DB_ID, storage_, data_provider, std::move(dag));
       res = ra_executor.executeRelAlgQuery(co, eo, false, nullptr);
     });
 
