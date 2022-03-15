@@ -3,7 +3,7 @@
 #include "../SQLFrontend/MetaClientContext.h"
 #include "../SQLFrontend/ThriftOps.h"
 #include "../Shared/StringTransform.h"
-#include "../gen-cpp/omnisci_types.h"
+#include "../gen-cpp/heavy_types.h"
 #include "gtest/gtest.h"
 
 #include <boost/interprocess/sync/file_lock.hpp>

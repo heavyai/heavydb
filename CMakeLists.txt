@@ -769,7 +769,7 @@ endif()
 set(gen_cpp_files
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/OmniSci.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/omnisci_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/heavy_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
@@ -778,14 +778,14 @@ set(gen_cpp_files
 )
 add_custom_command(
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/heavy.thrift
     ${CMAKE_SOURCE_DIR}/common.thrift
     ${CMAKE_SOURCE_DIR}/completion_hints.thrift
     ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
   OUTPUT ${gen_cpp_files}
   COMMAND ${Thrift_EXECUTABLE}
-  ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/omnisci.thrift)
+  ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/heavy.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
 add_custom_target(thrift_gen DEPENDS ${gen_cpp_files})
@@ -951,13 +951,13 @@ add_executable(heavydb HeavyDB.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 set_target_properties(heavydb PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/heavy.thrift
     OUTPUT
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/OmniSci.java
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/omnisci.thrift)
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/heavy.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
@@ -1156,7 +1156,7 @@ add_custom_command(
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml
-    ${CMAKE_SOURCE_DIR}/omnisci.thrift
+    ${CMAKE_SOURCE_DIR}/heavy.thrift
     ${JAVA_POM}
     ${JAVA_SOURCES}
     ${JAVA_FTL}
@@ -1187,7 +1187,7 @@ if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine COMPONENT "exe")
 endif()
 install(FILES completion_hints.thrift DESTINATION "." COMPONENT "thrift")
-install(FILES omnisci.thrift DESTINATION "." COMPONENT "thrift")
+install(FILES heavy.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES common.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 install(FILES QueryEngine/extension_functions.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
