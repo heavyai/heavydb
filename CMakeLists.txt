@@ -947,7 +947,7 @@ endif()
 
 add_executable(initheavy initdb.cpp)
 
-add_executable(heavydb MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
+add_executable(heavydb HeavyDB.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 set_target_properties(heavydb PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
