@@ -74,6 +74,7 @@ extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
+extern bool g_enable_table_functions;
 
 extern size_t g_leaf_count;
 extern bool g_cluster;
@@ -10753,6 +10754,28 @@ TEST(Select, Joins_EmptyTable) {
     c("SELECT test.x, emptytab.x FROM test LEFT JOIN emptytab ON test.y = emptytab.y "
       "ORDER BY test.x ASC;",
       dt);
+  }
+}
+
+TEST(Select, Joins_FunctionOper) {
+  // The g_enable_table_functions flag (neccessary for generate_series)
+  // is turned on in main() (and is enabled by default)
+
+  SKIP_ALL_ON_AGGREGATOR();
+  // Todo(todd): table functions are not yet supported in distributed, but allow this to
+  // run distributed when support for that lands
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto query =
+          "with cte as (select geoToH3(cast(s as float), cast(s as float), 10) "
+          "as h3 from table(generate_series(-80, 80, 1)) as t(s)) "
+          "select count(*) as n from table(generate_series(-80, 80, 1)) "
+          "as ft(s), cte where geoToH3(cast(s as float), cast(s as float), 10) "
+          "= cte.h3;";
+      EXPECT_EQ(80 * 2 + 1, v<int64_t>(run_simple_agg(query, dt)));
+    }
   }
 }
 
@@ -24981,6 +25004,7 @@ int main(int argc, char** argv) {
   g_watchdog_none_encoded_string_translation_limit = 1000000UL;  // default
   g_enable_window_functions = true;
   g_enable_interop = false;
+  g_enable_table_functions = true;
 
   File_Namespace::DiskCacheConfig disk_cache_config{};
   if (vm.count("use-disk-cache")) {

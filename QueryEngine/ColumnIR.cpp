@@ -590,6 +590,9 @@ std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
           if (dynamic_cast<const Analyzer::StringOper*>(eq_left_op)) {
             return nullptr;
           }
+          if (dynamic_cast<const Analyzer::FunctionOper*>(eq_left_op)) {
+            return nullptr;
+          }
         }
         CHECK(eq_left_op_col);
         if (eq_left_op_col->get_rte_idx() != 0) {
