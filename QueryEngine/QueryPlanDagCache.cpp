@@ -96,19 +96,19 @@ size_t QueryPlanDagCache::getJoinColumnsInfoHash(const Analyzer::Expr* join_expr
   };
   auto hashed_join_col_info = EMPTY_HASHED_PLAN_DAG_KEY;
   if (target_side == JoinColumnSide::kQual) {
-    auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
+    auto qual_bin_oper = dynamic_cast<const Analyzer::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
     boost::hash_combine(hashed_join_col_info,
                         get_sorted_col_info(qual_bin_oper->get_left_operand()));
     boost::hash_combine(hashed_join_col_info,
                         get_sorted_col_info(qual_bin_oper->get_right_operand()));
   } else if (target_side == JoinColumnSide::kInner) {
-    auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
+    auto qual_bin_oper = dynamic_cast<const Analyzer::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
     boost::hash_combine(hashed_join_col_info,
                         get_sorted_col_info(qual_bin_oper->get_left_operand()));
   } else if (target_side == JoinColumnSide::kOuter) {
-    auto qual_bin_oper = reinterpret_cast<const Analyzer::BinOper*>(join_expr);
+    auto qual_bin_oper = dynamic_cast<const Analyzer::BinOper*>(join_expr);
     CHECK(qual_bin_oper);
     boost::hash_combine(hashed_join_col_info,
                         get_sorted_col_info(qual_bin_oper->get_right_operand()));
