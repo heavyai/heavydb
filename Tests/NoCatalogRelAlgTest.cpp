@@ -155,7 +155,6 @@ class NoCatalogRelAlgTest : public ::testing::Test {
 
     SystemParameters system_parameters;
     data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
-    data_provider_ = std::make_shared<DataMgrDataProvider>(data_mgr_.get());
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID,
                                  std::make_shared<TestDataProvider>(schema_provider_));
@@ -178,8 +177,11 @@ class NoCatalogRelAlgTest : public ::testing::Test {
   }
 
   ExecutionResult runRelAlgQuery(std::unique_ptr<RelAlgDag> dag) {
-    auto ra_executor = RelAlgExecutor(
-        executor_.get(), TEST_DB_ID, schema_provider_, data_provider_, std::move(dag));
+    auto ra_executor = RelAlgExecutor(executor_.get(),
+                                      TEST_DB_ID,
+                                      schema_provider_,
+                                      data_mgr_->getDataProvider(),
+                                      std::move(dag));
     return ra_executor.executeRelAlgQuery(
         CompilationOptions(), ExecutionOptions(), false, nullptr);
   }
@@ -193,13 +195,11 @@ class NoCatalogRelAlgTest : public ::testing::Test {
  protected:
   static std::shared_ptr<DataMgr> data_mgr_;
   static SchemaProviderPtr schema_provider_;
-  static DataProviderPtr data_provider_;
   static std::shared_ptr<Executor> executor_;
 };
 
 std::shared_ptr<DataMgr> NoCatalogRelAlgTest::data_mgr_;
 SchemaProviderPtr NoCatalogRelAlgTest::schema_provider_;
-DataProviderPtr NoCatalogRelAlgTest::data_provider_;
 std::shared_ptr<Executor> NoCatalogRelAlgTest::executor_;
 
 TEST_F(NoCatalogRelAlgTest, SelectSingleColumn) {
@@ -332,8 +332,11 @@ TEST_F(NoCatalogRelAlgTest, StreamingAggregate) {
     std::abort();
   }
 
-  auto ra_executor = RelAlgExecutor(
-      executor_.get(), TEST_DB_ID, schema_provider_, data_provider_, std::move(dag));
+  auto ra_executor = RelAlgExecutor(executor_.get(),
+                                    TEST_DB_ID,
+                                    schema_provider_,
+                                    data_mgr_->getDataProvider(),
+                                    std::move(dag));
 
   ra_executor.prepareStreamingExecution(CompilationOptions(), ExecutionOptions());
 
@@ -427,8 +430,11 @@ TEST_F(NoCatalogRelAlgTest, StreamingFilter) {
     std::abort();
   }
 
-  auto ra_executor = RelAlgExecutor(
-      executor_.get(), TEST_DB_ID, schema_provider_, data_provider_, std::move(dag));
+  auto ra_executor = RelAlgExecutor(executor_.get(),
+                                    TEST_DB_ID,
+                                    schema_provider_,
+                                    data_mgr_->getDataProvider(),
+                                    std::move(dag));
 
   ra_executor.prepareStreamingExecution(CompilationOptions(), ExecutionOptions());
 

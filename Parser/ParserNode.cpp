@@ -1499,12 +1499,11 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         &catalog.getDataMgr(),
                                         catalog.getDataMgr().getBufferProvider());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&catalog.getDataMgr());
   RelAlgExecutor ra_executor(
       executor.get(),
       &catalog,
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog),
-      data_provider);
+      catalog.getDataMgr().getDataProvider());
 
   ra_executor.executeSimpleInsert(query);
 }
@@ -2129,7 +2128,6 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         &catalog.getDataMgr(),
                                         catalog.getDataMgr().getBufferProvider());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&catalog.getDataMgr());
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
@@ -2145,7 +2143,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
           .plan_result;
   RelAlgExecutor ra_executor(executor.get(),
                              &catalog,
-                             data_provider,
+                             catalog.getDataMgr().getDataProvider(),
                              query_ra,
                              query_state_proxy.getQueryState().shared_from_this());
   CompilationOptions co = CompilationOptions::defaults(device_type);
@@ -2194,7 +2192,6 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         &catalog.getDataMgr(),
                                         catalog.getDataMgr().getBufferProvider());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&catalog.getDataMgr());
 
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
@@ -2210,7 +2207,8 @@ size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
           ->process(
               query_state_proxy, pg_shim(sql_query_string), {}, true, false, false, true)
           .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), &catalog, data_provider, query_ra);
+  RelAlgExecutor ra_executor(
+      executor.get(), &catalog, catalog.getDataMgr().getDataProvider(), query_ra);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
@@ -3380,7 +3378,6 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
   }
 
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&catalog.getDataMgr());
   auto schema_provider =
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&catalog);
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
@@ -3388,7 +3385,8 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                         catalog.getDataMgr().getBufferProvider())
                       .get();
   executor->setSchemaProvider(schema_provider);
-  const TableOptimizer optimizer(td, executor, data_provider, schema_provider, catalog);
+  const TableOptimizer optimizer(
+      td, executor, catalog.getDataMgr().getDataProvider(), schema_provider, catalog);
   optimizer.recomputeMetadata();
 }
 

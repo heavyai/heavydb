@@ -115,7 +115,6 @@ void MigrationMgr::migrateDateInDaysMetadata(
         auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                               &cat->getDataMgr(),
                                               cat->getDataMgr().getBufferProvider());
-        auto data_provider = std::make_shared<DataMgrDataProvider>(&cat->getDataMgr());
         auto schema_provider =
             std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat);
         executor->setSchemaProvider(schema_provider);
@@ -126,8 +125,11 @@ void MigrationMgr::migrateDateInDaysMetadata(
                                    id_names.second[0] + " does not exist.");
         }
         auto td = table_desc_itr->second;
-        TableOptimizer optimizer(
-            td, executor.get(), data_provider, schema_provider, *cat);
+        TableOptimizer optimizer(td,
+                                 executor.get(),
+                                 cat->getDataMgr().getDataProvider(),
+                                 schema_provider,
+                                 *cat);
         optimizer.recomputeMetadata();
 
         sqlite.query_with_text_params(

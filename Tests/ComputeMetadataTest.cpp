@@ -135,10 +135,10 @@ void recompute_metadata(const TableDescriptor* td,
                                         &cat.getDataMgr(),
                                         cat.getDataMgr().getBufferProvider());
   auto schema_provider = std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat);
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
   executor->setSchemaProvider(schema_provider);
   executor->setDatabaseId(cat.getDatabaseId());
-  TableOptimizer optimizer(td, executor.get(), data_provider, schema_provider, cat);
+  TableOptimizer optimizer(
+      td, executor.get(), cat.getDataMgr().getDataProvider(), schema_provider, cat);
   EXPECT_NO_THROW(optimizer.recomputeMetadata());
 }
 

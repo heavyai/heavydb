@@ -107,7 +107,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                                  eo,
                                                  nullptr,
                                                  false,
-                                                 data_provider_.get(),
+                                                 data_provider_,
                                                  column_cache);
   } catch (...) {
     return {false, 1.0, 0};

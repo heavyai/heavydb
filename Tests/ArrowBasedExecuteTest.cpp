@@ -1175,9 +1175,11 @@ class ExecuteTestBase {
     execution_time_ += measure<std::chrono::microseconds>::execution([&]() {
       auto dag =
           std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
-      auto data_provider = std::make_shared<DataMgrDataProvider>(data_mgr_.get());
-      auto ra_executor = RelAlgExecutor(
-          executor_.get(), TEST_DB_ID, storage_, data_provider, std::move(dag));
+      auto ra_executor = RelAlgExecutor(executor_.get(),
+                                        TEST_DB_ID,
+                                        storage_,
+                                        data_mgr_->getDataProvider(),
+                                        std::move(dag));
       res = ra_executor.executeRelAlgQuery(co, eo, false, nullptr);
     });
 

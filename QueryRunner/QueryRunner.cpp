@@ -334,7 +334,6 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         &cat.getDataMgr(),
                                         cat.getDataMgr().getBufferProvider());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
 
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
@@ -346,8 +345,8 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
                                       false,
                                       true)
                             .plan_result;
-  auto ra_executor =
-      RelAlgExecutor(executor.get(), &cat, data_provider, query_ra, query_state);
+  auto ra_executor = RelAlgExecutor(
+      executor.get(), &cat, cat.getDataMgr().getDataProvider(), query_ra, query_state);
   auto query_hints =
       ra_executor.getParsedQueryHint(ra_executor.getRootRelAlgNodeShPtr().get());
   return query_hints ? *query_hints : RegisteredQueryHint::defaults();
@@ -362,7 +361,6 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         &cat.getDataMgr(),
                                         cat.getDataMgr().getBufferProvider());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
 
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
@@ -374,8 +372,8 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
                                       false,
                                       true)
                             .plan_result;
-  auto ra_executor =
-      RelAlgExecutor(executor.get(), &cat, data_provider, query_ra, query_state);
+  auto ra_executor = RelAlgExecutor(
+      executor.get(), &cat, cat.getDataMgr().getDataProvider(), query_ra, query_state);
   auto query_hints = ra_executor.getParsedQueryHints();
   return query_hints ? query_hints : std::nullopt;
 }
@@ -424,8 +422,8 @@ std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat));
   executor->setDatabaseId(cat.getDatabaseId());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(executor->getDataMgr());
-  auto ra_executor = RelAlgExecutor(executor, &cat, data_provider, query_ra);
+  auto ra_executor =
+      RelAlgExecutor(executor, &cat, cat.getDataMgr().getDataProvider(), query_ra);
   auto root_node_shared_ptr = ra_executor.getRootRelAlgNodeShPtr();
   return ra_executor.getRelAlgTranslator(root_node_shared_ptr.get());
 }
@@ -439,7 +437,6 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         &cat.getDataMgr(),
                                         cat.getDataMgr().getBufferProvider());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
 
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
@@ -454,7 +451,8 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   executor->setSchemaProvider(
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(&cat));
   executor->setDatabaseId(cat.getDatabaseId());
-  auto ra_executor = RelAlgExecutor(executor.get(), &cat, data_provider, query_ra);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), &cat, cat.getDataMgr().getDataProvider(), query_ra);
   // note that we assume the test for data recycler that needs to have join_info
   // does not contain any ORDER BY clause; this is necessary to create work_unit
   // without actually performing the query
@@ -653,7 +651,6 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
        &pending_query_check_freq](const size_t worker_id) {
         auto executor = Executor::getExecutor(
             worker_id, &cat.getDataMgr(), cat.getDataMgr().getBufferProvider());
-        auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
 
         CompilationOptions co = CompilationOptions::defaults(device_type);
         co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
@@ -690,8 +687,11 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                    true)
                          .plan_result;
         }
-        auto ra_executor =
-            RelAlgExecutor(executor.get(), &cat, data_provider, query_ra, query_state);
+        auto ra_executor = RelAlgExecutor(executor.get(),
+                                          &cat,
+                                          cat.getDataMgr().getDataProvider(),
+                                          query_ra,
+                                          query_state);
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });
@@ -776,7 +776,6 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
                                         &cat.getDataMgr(),
                                         cat.getDataMgr().getBufferProvider());
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
 
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
@@ -805,7 +804,8 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                       false,
                                       true)
                             .plan_result;
-  auto ra_executor = RelAlgExecutor(executor.get(), &cat, data_provider, query_ra);
+  auto ra_executor =
+      RelAlgExecutor(executor.get(), &cat, cat.getDataMgr().getDataProvider(), query_ra);
   auto result = std::make_shared<ExecutionResult>(
       ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
   const auto& filter_push_down_requests = result->getPushedDownFilterInfo();
@@ -842,8 +842,8 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
                                        eo.allow_runtime_query_interrupt,
                                        eo.running_query_interrupt_freq,
                                        eo.pending_query_interrupt_freq};
-    auto new_ra_executor =
-        RelAlgExecutor(executor.get(), &cat, data_provider, new_query_ra);
+    auto new_ra_executor = RelAlgExecutor(
+        executor.get(), &cat, cat.getDataMgr().getDataProvider(), new_query_ra);
     return std::make_shared<ExecutionResult>(
         new_ra_executor.executeRelAlgQuery(co, eo_modified, false, nullptr));
   } else {
@@ -883,7 +883,6 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                                   &result](const size_t worker_id) {
         auto executor = Executor::getExecutor(
             worker_id, &cat.getDataMgr(), cat.getDataMgr().getBufferProvider());
-        auto data_provider = std::make_shared<DataMgrDataProvider>(&cat.getDataMgr());
 
         // TODO The next line should be deleted since it overwrites co, but then
         // NycTaxiTest.RunSelectsEncodingDictWhereGreater fails due to co not getting
@@ -901,7 +900,8 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
                                             g_enable_calcite_view_optimize,
                                             true)
                                   .plan_result;
-        auto ra_executor = RelAlgExecutor(executor.get(), &cat, data_provider, query_ra);
+        auto ra_executor = RelAlgExecutor(
+            executor.get(), &cat, cat.getDataMgr().getDataProvider(), query_ra);
         result = std::make_shared<ExecutionResult>(
             ra_executor.executeRelAlgQuery(co, eo, false, nullptr));
       });

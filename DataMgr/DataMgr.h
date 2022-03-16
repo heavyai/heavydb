@@ -28,6 +28,7 @@
 #include "BufferMgr/Buffer.h"
 #include "BufferMgr/BufferMgr.h"
 #include "DataMgr/DataMgrBufferProvider.h"
+#include "DataMgr/DataMgrDataProvider.h"
 #include "MemoryLevel.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
 #include "SchemaMgr/ColumnInfo.h"
@@ -249,6 +250,8 @@ class DataMgr {
 
   BufferProvider* getBufferProvider() const { return buffer_provider_.get(); }
 
+  DataProvider* getDataProvider() const { return data_provider_.get(); }
+
  private:
   void populateMgrs(const SystemParameters& system_parameters,
                     const size_t userSpecifiedNumReaderThreads,
@@ -270,6 +273,7 @@ class DataMgr {
   size_t reservedGpuMem_;
   std::mutex buffer_access_mutex_;
   std::unique_ptr<DataMgrBufferProvider> buffer_provider_;
+  std::unique_ptr<DataMgrDataProvider> data_provider_;
 };
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage&);

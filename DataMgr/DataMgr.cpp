@@ -54,7 +54,8 @@ DataMgr::DataMgr(const std::string& dataDir,
     , dataDir_(dataDir)
     , hasGpus_(false)
     , reservedGpuMem_(reservedGpuMem)
-    , buffer_provider_(std::make_unique<DataMgrBufferProvider>(this)) {
+    , buffer_provider_(std::make_unique<DataMgrBufferProvider>(this))
+    , data_provider_(std::make_unique<DataMgrDataProvider>(this)) {
   if (useGpus) {
     if (cudaMgr_) {
       hasGpus_ = true;

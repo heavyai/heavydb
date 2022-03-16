@@ -26,7 +26,7 @@
 
 TableOptimizer::TableOptimizer(const TableDescriptor* td,
                                Executor* executor,
-                               DataProviderPtr data_provider,
+                               DataProvider* data_provider,
                                SchemaProviderPtr schema_provider,
                                const Catalog_Namespace::Catalog& cat)
     : td_(td)
@@ -133,7 +133,6 @@ void TableOptimizer::recomputeMetadata() const {
   table_descriptors.push_back(td_);
 
   auto& data_mgr = cat_.getDataMgr();
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&data_mgr);
 
   // acquire write lock on table data
   auto data_lock = lockmgr::TableDataLockMgr::getWriteLockForTable(cat_, td_->tableName);
@@ -141,7 +140,7 @@ void TableOptimizer::recomputeMetadata() const {
   for (const auto td : table_descriptors) {
     ScopeGuard row_set_holder = [this] { executor_->row_set_mem_owner_ = nullptr; };
     executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>(
-        data_provider.get(), ROW_SET_SIZE, /*num_threads=*/1);
+        data_provider_, ROW_SET_SIZE, /*num_threads=*/1);
     executor_->setSchemaProvider(schema_provider_);
 
     const auto table_id = td->tableId;
@@ -261,7 +260,7 @@ void TableOptimizer::recomputeColumnMetadata(
                                         table_infos[0],
                                         co,
                                         eo,
-                                        data_provider_.get(),
+                                        data_provider_,
                                         compute_metadata_callback,
                                         fragment_indexes);
 

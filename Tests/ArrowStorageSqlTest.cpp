@@ -51,7 +51,6 @@ class ArrowStorageTestBase {
 
     SystemParameters system_parameters;
     data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
-    data_provider_ = std::make_shared<DataMgrDataProvider>(data_mgr_.get());
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
 
@@ -80,21 +79,23 @@ class ArrowStorageTestBase {
         calcite_->process("admin", "test_db", pg_shim(sql), schema_json).plan_result;
     auto dag =
         std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
-    auto ra_executor = RelAlgExecutor(
-        executor_.get(), TEST_DB_ID, storage_, data_provider_, std::move(dag));
+    auto ra_executor = RelAlgExecutor(executor_.get(),
+                                      TEST_DB_ID,
+                                      storage_,
+                                      data_mgr_->getDataProvider(),
+                                      std::move(dag));
     return ra_executor.executeRelAlgQuery(
         CompilationOptions(), ExecutionOptions(), false, nullptr);
   }
 
   static std::shared_ptr<DataMgr> data_mgr_;
-  static std::shared_ptr<DataMgrDataProvider> data_provider_;
   static std::shared_ptr<ArrowStorage> storage_;
   static std::shared_ptr<Executor> executor_;
   static std::shared_ptr<Calcite> calcite_;
 };
 
 std::shared_ptr<DataMgr> ArrowStorageTestBase::data_mgr_;
-std::shared_ptr<DataMgrDataProvider> ArrowStorageTestBase::data_provider_;
+
 std::shared_ptr<ArrowStorage> ArrowStorageTestBase::storage_;
 std::shared_ptr<Executor> ArrowStorageTestBase::executor_;
 std::shared_ptr<Calcite> ArrowStorageTestBase::calcite_;

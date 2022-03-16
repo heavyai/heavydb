@@ -84,8 +84,6 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());
 
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat->getDataMgr());
-
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
   auto cd = cat->getMetadataForColumn(td->tableId, "str");
@@ -99,7 +97,7 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   std::unordered_set<InputColDescriptor> col_descs{group_col_desc, filter_col_desc};
   std::unordered_set<int> phys_table_ids;
   phys_table_ids.insert(group_col_desc.getTableId());
-  executor->setupCaching(data_provider.get(), col_descs, phys_table_ids);
+  executor->setupCaching(cat->getDataMgr().getDataProvider(), col_descs, phys_table_ids);
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
@@ -146,7 +144,7 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                data_provider.get(),
+                                cat->getDataMgr().getDataProvider(),
                                 column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(1));
@@ -189,8 +187,6 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());
 
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat->getDataMgr());
-
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
   auto cd = cat->getMetadataForColumn(td->tableId, "str");
@@ -206,7 +202,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                            /*min=*/0,
                                            /*max=*/134217728,
                                            filter_col_desc,
-                                           data_provider.get(),
+                                           cat->getDataMgr().getDataProvider(),
                                            executor.get());
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
@@ -254,7 +250,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                data_provider.get(),
+                                cat->getDataMgr().getDataProvider(),
                                 column_cache),
       CardinalityEstimationRequired);
 
@@ -267,7 +263,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/true,
-                                data_provider.get(),
+                                cat->getDataMgr().getDataProvider(),
                                 column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(1));
@@ -287,8 +283,6 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
       std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
   executor->setDatabaseId(cat->getDatabaseId());
 
-  auto data_provider = std::make_shared<DataMgrDataProvider>(&cat->getDataMgr());
-
   auto td = cat->getMetadataForTable("high_cardinality_str");
   CHECK(td);
   auto cd = cat->getMetadataForColumn(td->tableId, "str");
@@ -304,7 +298,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                            /*min=*/0,
                                            /*max=*/134217728,
                                            filter_col_desc,
-                                           data_provider.get(),
+                                           cat->getDataMgr().getDataProvider(),
                                            executor.get());
 
   auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
@@ -344,7 +338,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                data_provider.get(),
+                                cat->getDataMgr().getDataProvider(),
                                 column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(2));

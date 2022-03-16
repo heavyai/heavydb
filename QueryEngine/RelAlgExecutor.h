@@ -53,31 +53,31 @@ class RelAlgExecutor {
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
                  SchemaProviderPtr schema_provider,
-                 DataProviderPtr data_provider,
+                 DataProvider* data_provider,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
                  int db_id,
                  SchemaProviderPtr schema_provider,
-                 DataProviderPtr data_provider,
+                 DataProvider* data_provider,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
-                 DataProviderPtr data_provider,
+                 DataProvider* data_provider,
                  const std::string& query_ra,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
                  const Catalog_Namespace::Catalog* cat,
-                 DataProviderPtr data_provider,
+                 DataProvider* data_provider,
                  std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
   RelAlgExecutor(Executor* executor,
                  int db_id,
                  SchemaProviderPtr schema_provider,
-                 DataProviderPtr data_provider,
+                 DataProvider* data_provider,
                  std::unique_ptr<RelAlgDag> query_dag,
                  std::shared_ptr<const query_state::QueryState> query_state = nullptr);
 
@@ -392,7 +392,7 @@ class RelAlgExecutor {
   int db_id_;
   std::unique_ptr<RelAlgDag> query_dag_;
   std::shared_ptr<SchemaProvider> schema_provider_;
-  std::shared_ptr<DataProvider> data_provider_;
+  DataProvider* data_provider_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;

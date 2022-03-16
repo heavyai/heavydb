@@ -35,7 +35,7 @@ class TableOptimizer {
  public:
   TableOptimizer(const TableDescriptor* td,
                  Executor* executor,
-                 DataProviderPtr data_provider,
+                 DataProvider* data_provider,
                  SchemaProviderPtr schema_provider,
                  const Catalog_Namespace::Catalog& cat);
 
@@ -65,7 +65,7 @@ class TableOptimizer {
 
   const TableDescriptor* td_;
   Executor* executor_;
-  DataProviderPtr data_provider_;
+  DataProvider* data_provider_;
   SchemaProviderPtr schema_provider_;
   const Catalog_Namespace::Catalog& cat_;
 
