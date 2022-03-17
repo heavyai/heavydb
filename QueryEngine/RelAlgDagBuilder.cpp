@@ -2231,6 +2231,10 @@ void separate_window_function_expressions(
 
     // map scalar expression index in the project node to window function ptr
     std::unordered_map<size_t, const RexScalar*> embedded_window_function_expressions;
+    std::vector<std::string> target_field_names;
+    std::copy(window_func_project_node->getFields().begin(),
+              window_func_project_node->getFields().end(),
+              std::back_inserter(target_field_names));
 
     // Iterate the target exprs of the project node and check for window function
     // expressions. If an embedded expression exists, save it in the
@@ -2307,10 +2311,8 @@ void separate_window_function_expressions(
 
       // Build the new project node and insert it into the list after the project node
       // containing the window function
-      auto new_project =
-          std::make_shared<RelProject>(new_scalar_exprs,
-                                       window_func_project_node->getFields(),
-                                       window_func_project_node);
+      auto new_project = std::make_shared<RelProject>(
+          new_scalar_exprs, target_field_names, window_func_project_node);
       propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
       node_list.insert(std::next(node_itr), new_project);
 
