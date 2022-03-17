@@ -767,6 +767,40 @@ TEST_F(StringFunctionTest, SplitPartNegativeIndex) {
   }
 }
 
+TEST_F(StringFunctionTest, SplitPartNonDelimiterMatch) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      auto result_set =
+          sql("select split_part(name, ' ', -1) from "
+              "string_function_test_countries order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"States"}, {"Canada"}, {"Kingdom"}, {"Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+
+    for (int64_t split_idx = 0; split_idx <= 1; ++split_idx) {
+      auto result_set = sql("select split_part(name, ' ', " + std::to_string(split_idx) +
+                                ") from "
+                                "string_function_test_countries order by id asc;",
+                            dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"United"}, {"Canada"}, {"United"}, {"Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select split_part(name, ' ', 2) from "
+              "string_function_test_countries order by id asc;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"States"}, {""}, {"Kingdom"}, {""}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
 TEST_F(StringFunctionTest, SplitPartLiteral) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

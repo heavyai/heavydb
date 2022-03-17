@@ -281,11 +281,18 @@ NullableStrType SplitPart::operator()(const std::string& str) const {
                              : str.find(delimiter_, delimiter_pos + delimiter_length_);
   } while (delimiter_pos != std::string::npos && ++delimiter_idx < split_part_);
 
+  if (delimiter_idx == 0UL && split_part_ == 1UL) {
+    // No delimiter was found, but the first match is requested, which here is
+    // the whole string
+    return str;
+  }
+
   if (delimiter_pos == std::string::npos &&
       (delimiter_idx < split_part_ - 1UL || delimiter_idx < 1UL)) {
     // split_part_ was out of range
     return NullableStrType();  // null string
   }
+
   if (reverse_) {
     const size_t substr_start =
         delimiter_pos == std::string::npos ? 0UL : delimiter_pos + delimiter_length_;
