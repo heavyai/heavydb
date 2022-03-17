@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ class HeavyAIType {
   protected int SqlDatetimeSub; // int => unused
   protected int numPrecRadix; // int => usually 2 or 10
 
-  void MapdType(String tn, int dt) {
+  void HeavyAIType(String tn, int dt) {
     typeName = tn;
     dataType = dt;
     precision = 10;

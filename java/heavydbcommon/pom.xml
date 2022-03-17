@@ -10,7 +10,7 @@
   </parent>
 
   <groupId>com.mapd</groupId>
-  <artifactId>mapdcommon</artifactId>
+  <artifactId>heavydbcommon</artifactId>
   <version>${omnisci.release.version}</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

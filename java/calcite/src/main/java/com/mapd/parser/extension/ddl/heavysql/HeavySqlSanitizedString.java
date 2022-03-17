@@ -1,15 +1,15 @@
-package com.mapd.parser.extension.ddl.omnisql;
+package com.mapd.parser.extension.ddl.heavysql;
 
 import org.apache.calcite.sql.SqlNode;
 
-public class OmniSqlSanitizedString {
+public class HeavySqlSanitizedString {
   private String string;
 
-  public OmniSqlSanitizedString(final String s) {
+  public HeavySqlSanitizedString(final String s) {
     this.string = sanitizeString(s);
   }
 
-  public OmniSqlSanitizedString(final SqlNode node) {
+  public HeavySqlSanitizedString(final SqlNode node) {
     this.string = sanitizeString(node.toString());
   }
 

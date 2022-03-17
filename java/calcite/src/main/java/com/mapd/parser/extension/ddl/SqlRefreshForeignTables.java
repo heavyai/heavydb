@@ -2,7 +2,7 @@ package com.mapd.parser.extension.ddl;
 import static java.util.Objects.requireNonNull;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisql.*;
+import com.mapd.parser.extension.ddl.heavysql.*;
 
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParserPos;
@@ -18,11 +18,11 @@ public class SqlRefreshForeignTables extends SqlDdl implements JsonSerializableD
   @Expose
   private List<String> tableNames;
   @Expose
-  private OmniSqlOptionsMap options;
+  private HeavySqlOptionsMap options;
 
   public SqlRefreshForeignTables(final SqlParserPos pos,
           final List<String> tableNames,
-          final OmniSqlOptionsMap optionsMap) {
+          final HeavySqlOptionsMap optionsMap) {
     super(OPERATOR, pos);
     this.command = OPERATOR.getName();
     this.tableNames = tableNames;

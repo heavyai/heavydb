@@ -143,7 +143,7 @@ public class HeavyAIDatabaseMetaDataTest {
     }
   }
 
-  private void set_omnisci() throws Exception {
+  private void set_heavyDB() throws Exception {
     Statement st = m_super_conn.createStatement();
     try {
       run_command(st, PROPERTIES.getProperty("drop_base_table1"));
@@ -196,9 +196,9 @@ public class HeavyAIDatabaseMetaDataTest {
   }
 
   @Test
-  public void tst02_omnisci_table() throws Exception {
+  public void tst02_heavyDB_table() throws Exception {
     // Get all of the tables in the base_db as super user
-    set_omnisci();
+    set_heavyDB();
     QueryStruct qS = new QueryStruct() {
       {
         D = "%";
@@ -212,9 +212,9 @@ public class HeavyAIDatabaseMetaDataTest {
   }
 
   @Test
-  public void tst03_omnisci_table() throws Exception {
+  public void tst03_heavyDB_table() throws Exception {
     // Get one specfic table in the base_db as super user
-    set_omnisci();
+    set_heavyDB();
     QueryStruct qS = new QueryStruct() {
       {
         D = "%";
@@ -230,9 +230,9 @@ public class HeavyAIDatabaseMetaDataTest {
   }
 
   @Test
-  public void tst04_omnisci_table() throws Exception {
+  public void tst04_heavyDB_table() throws Exception {
     // Get a specfic table in the base_db as super user with a wild card search
-    set_omnisci();
+    set_heavyDB();
     QueryStruct qS = new QueryStruct() {
       {
         D = PROPERTIES.getProperty("default_db");
@@ -356,7 +356,7 @@ public class HeavyAIDatabaseMetaDataTest {
   }
 
   @Test
-  public void tst10_omnisci_table() throws Exception {
+  public void tst10_heavyDB_table() throws Exception {
     // Get the two table in the user_db as super user using a wild card
     boolean extra_table = true;
     set_user1(extra_table); // create database and a single test table
@@ -531,7 +531,7 @@ public class HeavyAIDatabaseMetaDataTest {
 
   @Test
   public void getTables() throws Exception {
-    ArrayList<String> omni_sci2_tables = new ArrayList<String>() {
+    ArrayList<String> heavyDB_2_tables = new ArrayList<String>() {
       {
         add("test_base_table1");
         add("test_base_table2");
@@ -553,12 +553,12 @@ public class HeavyAIDatabaseMetaDataTest {
       }
     };
 
-    set_omnisci();
-    ResultSet omni_sci2_tables_result_set =
-            m_super_conn.getMetaData().getTables("omni_sci2", null, null, null);
-    ArrayList<String> actual_omni_sci2_tables =
-            getTablesFromResultSet(omni_sci2_tables_result_set);
-    assertEquals(omni_sci2_tables, actual_omni_sci2_tables);
+    set_heavyDB();
+    ResultSet heavyDB_2_tables_result_set =
+            m_super_conn.getMetaData().getTables("heavyDB_2", null, null, null);
+    ArrayList<String> actual_heavyDB_2_tables =
+            getTablesFromResultSet(heavyDB_2_tables_result_set);
+    assertEquals(heavyDB_2_tables, actual_heavyDB_2_tables);
 
     ResultSet system_tables_result_set =
             m_super_conn.getMetaData().getTables("information_schema", null, null, null);

@@ -3,7 +3,7 @@ package com.mapd.parser.extension.ddl;
 import static java.util.Objects.requireNonNull;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisql.*;
+import com.mapd.parser.extension.ddl.heavysql.*;
 
 import org.apache.calcite.sql.SqlCreate;
 import org.apache.calcite.sql.SqlIdentifier;
@@ -32,17 +32,17 @@ public class SqlCreateForeignTable extends SqlCreate implements JsonSerializable
   @Expose
   private String schemaName;
   @Expose
-  private List<OmniSqlColumn> columns;
+  private List<HeavySqlColumn> columns;
   @Expose
-  private OmniSqlOptionsMap options;
+  private HeavySqlOptionsMap options;
 
   public SqlCreateForeignTable(final SqlParserPos pos,
           final boolean ifNotExists,
           final SqlIdentifier tableName,
           final SqlIdentifier serverName,
-          final OmniSqlSanitizedString schemaName,
-          final List<OmniSqlColumn> columns,
-          final OmniSqlOptionsMap options) {
+          final HeavySqlSanitizedString schemaName,
+          final List<HeavySqlColumn> columns,
+          final HeavySqlOptionsMap options) {
     super(OPERATOR, pos, false, ifNotExists);
     requireNonNull(tableName);
     requireNonNull(serverName);

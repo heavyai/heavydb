@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -335,10 +335,10 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
     // Clones the orignal java connection object, and then reconnects
     // at the thrift layer - doesn't re-authenticate at the application
     // level.  Instead reuses the orignal connections session number.
-    logger.debug("OmniSciConnection clone");
-    HeavyAIConnection omniSciConnection = null;
+    logger.debug("HeavyAIConnection clone");
+    HeavyAIConnection dbConnection = null;
     try {
-      omniSciConnection = (HeavyAIConnection) super.clone();
+      dbConnection = (HeavyAIConnection) super.clone();
     } catch (CloneNotSupportedException eE) {
       throw new SQLException(
               "Error cloning connection [" + HeavyAIExceptionText.getExceptionDetail(eE),
@@ -346,14 +346,14 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
     }
     // Now over write the old connection.
     try {
-      TProtocol protocol = omniSciConnection.manageConnection();
-      omniSciConnection.client = new Heavy.Client(protocol);
+      TProtocol protocol = dbConnection.manageConnection();
+      dbConnection.client = new Heavy.Client(protocol);
     } catch (java.lang.Exception jE) {
       throw new SQLException("Error creating new connection "
                       + HeavyAIExceptionText.getExceptionDetail(jE),
               jE);
     }
-    return omniSciConnection;
+    return dbConnection;
   }
 
   // any java.lang.Exception thrown is caught downstream and converted
@@ -457,7 +457,7 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
                       + HeavyAIExceptionText.getExceptionDetail(ex),
               ex);
     } catch (TDBException ex) {
-      throw new SQLException("Omnisci connection failed - "
+      throw new SQLException("HEAVY.AI connection failed - "
                       + HeavyAIExceptionText.getExceptionDetail(ex),
               ex);
     } catch (TException ex) {
@@ -552,9 +552,9 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
 
   @Override
   public DatabaseMetaData getMetaData() throws SQLException { // logger.debug("Entered");
-    DatabaseMetaData mapDMetaData = new HeavyAIDatabaseMetaData(this);
+    DatabaseMetaData dbMetaData = new HeavyAIDatabaseMetaData(this);
 
-    return mapDMetaData;
+    return dbMetaData;
   }
 
   @Override
@@ -853,7 +853,7 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
     try {
       type = TDatumType.valueOf(typeName.toUpperCase());
     } catch (IllegalArgumentException ex) {
-      throw new SQLException("No matching omnisci type for " + typeName);
+      throw new SQLException("No matching heavyDB type for " + typeName);
     }
     return new HeavyAIArray(type, elements);
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,7 +86,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       String rest_database = restriction.getRestrictionDatabase();
       if (rest_database != null && !rest_database.isEmpty()
               && !rest_database.equals(query_database)) {
-        // TODO(sy): Maybe remove the isEmpty() wildcarding in OmniSciDB 6.0.
+        // TODO(sy): Maybe remove the isEmpty() wildcarding in HEAVY.AI 6.0.
         HEAVYDBLOGGER.debug("RLS row-level security restriction for database "
                 + rest_database + " ignored because this query is on database "
                 + query_database);
@@ -97,7 +97,7 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
       String rest_table = restriction.getRestrictionTable();
       if (rest_table != null && !rest_table.isEmpty()
               && !rest_table.equals(query_table)) {
-        // TODO(sy): Maybe remove the isEmpty() wildcarding in OmniSciDB 6.0.
+        // TODO(sy): Maybe remove the isEmpty() wildcarding in HEAVY.AI 6.0.
         HEAVYDBLOGGER.debug("RLS row-level security restriction for table " + rest_table
                 + " ignored because this query is on table " + query_table);
         continue;

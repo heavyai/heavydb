@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,46 +37,46 @@ public class CalciteServerWrapper implements Runnable {
   private final CalciteServerHandler handler;
   private final Processor processor;
   private TServer server;
-  private int mapDPort = 6274;
+  private int heavyDBPort = 6274;
   private String dataDir = ("data/");
   private int calcitePort = 6279;
   private boolean shutdown = false;
   private SockTransportProperties server_skT_;
 
   public CalciteServerWrapper() {
-    handler = new CalciteServerHandler(mapDPort, dataDir, null, null, "");
+    handler = new CalciteServerHandler(heavyDBPort, dataDir, null, null, "");
     processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
   }
 
   public CalciteServerWrapper(int calcitePort,
-          int mapDPort,
+          int heavyDBPort,
           String dataDir,
           String extensionFunctionsAstFile,
           SockTransportProperties client_skT,
           SockTransportProperties server_skT) {
     handler = new CalciteServerHandler(
-            mapDPort, dataDir, extensionFunctionsAstFile, client_skT, "");
+            heavyDBPort, dataDir, extensionFunctionsAstFile, client_skT, "");
     processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
-    this.mapDPort = mapDPort;
+    this.heavyDBPort = heavyDBPort;
     this.server_skT_ = server_skT;
   }
 
   public CalciteServerWrapper(int calcitePort,
-          int mapDPort,
+          int heavyDBPort,
           String dataDir,
           String extensionFunctionsAstFile,
           SockTransportProperties client_skT,
           SockTransportProperties server_skT,
           String userDefinedFunctionsFile) {
-    handler = new CalciteServerHandler(mapDPort,
+    handler = new CalciteServerHandler(heavyDBPort,
             dataDir,
             extensionFunctionsAstFile,
             client_skT,
             userDefinedFunctionsFile);
     processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
-    this.mapDPort = mapDPort;
+    this.heavyDBPort = heavyDBPort;
     this.server_skT_ = server_skT;
     try {
     } catch (Exception e) {
@@ -92,7 +92,7 @@ public class CalciteServerWrapper implements Runnable {
               new TThreadPoolServer.Args(serverTransport).processor(processor));
 
       HEAVYDBLOGGER.debug("Starting a threaded pool server... Listening on port "
-              + calcitePort + " MapD on port " + mapDPort);
+              + calcitePort + " HEAVY.AI on port " + heavyDBPort);
       handler.setServer(server);
       server.serve();
       // we have been told to shut down (only way to get to this piece of code

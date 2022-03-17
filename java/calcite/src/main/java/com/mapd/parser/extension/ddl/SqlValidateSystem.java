@@ -1,7 +1,7 @@
 package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciOptionsMap;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBOptionsMap;
 
 import org.apache.calcite.sql.SqlCreate;
 import org.apache.calcite.sql.SqlKind;
@@ -24,10 +24,10 @@ public class SqlValidateSystem extends SqlCreate implements JsonSerializableDdl 
   @Expose
   private String type;
   @Expose
-  private OmniSciOptionsMap options;
+  private HeavyDBOptionsMap options;
 
   public SqlValidateSystem(
-          final SqlParserPos pos, final String type, OmniSciOptionsMap withOptions) {
+          final SqlParserPos pos, final String type, HeavyDBOptionsMap withOptions) {
     super(OPERATOR, pos, false, false);
     this.command = OPERATOR.getName();
     this.type = type;

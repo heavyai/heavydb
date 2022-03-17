@@ -1,20 +1,20 @@
-package com.mapd.parser.extension.ddl.omnisci;
+package com.mapd.parser.extension.ddl.heavydb;
 
 import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlTypeNameSpec;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.util.Pair;
 
-public class OmniSciSqlDataTypeSpec extends SqlDataTypeSpec {
-  private final Pair<OmniSciEncoding, Integer> encoding;
+public class HeavyDBSqlDataTypeSpec extends SqlDataTypeSpec {
+  private final Pair<HeavyDBEncoding, Integer> encoding;
 
-  public OmniSciSqlDataTypeSpec(final SqlTypeNameSpec typeNameSpec, SqlParserPos pos) {
+  public HeavyDBSqlDataTypeSpec(final SqlTypeNameSpec typeNameSpec, SqlParserPos pos) {
     super(typeNameSpec, null, null, pos);
     this.encoding = null;
   }
 
-  public OmniSciSqlDataTypeSpec(
-          final SqlDataTypeSpec dataTypeSpec, Pair<OmniSciEncoding, Integer> encoding) {
+  public HeavyDBSqlDataTypeSpec(
+          final SqlDataTypeSpec dataTypeSpec, Pair<HeavyDBEncoding, Integer> encoding) {
     super(dataTypeSpec.getTypeNameSpec(),
             dataTypeSpec.getTimeZone(),
             dataTypeSpec.getNullable(),
@@ -22,15 +22,15 @@ public class OmniSciSqlDataTypeSpec extends SqlDataTypeSpec {
     this.encoding = encoding;
   }
 
-  public OmniSciSqlDataTypeSpec withEncoding(Pair<OmniSciEncoding, Integer> encoding) {
+  public HeavyDBSqlDataTypeSpec withEncoding(Pair<HeavyDBEncoding, Integer> encoding) {
     SqlDataTypeSpec dataTypeSpec = super.withNullable(getNullable());
-    return new OmniSciSqlDataTypeSpec(dataTypeSpec, encoding);
+    return new HeavyDBSqlDataTypeSpec(dataTypeSpec, encoding);
   }
 
   @Override
-  public OmniSciSqlDataTypeSpec withNullable(Boolean nullable) {
+  public HeavyDBSqlDataTypeSpec withNullable(Boolean nullable) {
     SqlDataTypeSpec dataTypeSpec = super.withNullable(nullable);
-    return new OmniSciSqlDataTypeSpec(dataTypeSpec, this.encoding);
+    return new HeavyDBSqlDataTypeSpec(dataTypeSpec, this.encoding);
   }
 
   public Integer getEncodingSize() {

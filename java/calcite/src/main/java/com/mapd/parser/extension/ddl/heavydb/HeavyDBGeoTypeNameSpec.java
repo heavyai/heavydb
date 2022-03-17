@@ -1,4 +1,4 @@
-package com.mapd.parser.extension.ddl.omnisci;
+package com.mapd.parser.extension.ddl.heavydb;
 
 import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.parser.SqlParserPos;
@@ -8,17 +8,17 @@ import org.apache.calcite.util.Pair;
 
 import java.util.Map;
 
-public class OmniSciGeoTypeNameSpec extends SqlBasicTypeNameSpec {
-  private OmniSciEncoding encodingType;
+public class HeavyDBGeoTypeNameSpec extends SqlBasicTypeNameSpec {
+  private HeavyDBEncoding encodingType;
   private Integer encodingSize;
-  private OmniSciGeo geoType;
+  private HeavyDBGeo geoType;
   private boolean isGeography;
   private Integer coordinateSystem;
 
-  public OmniSciGeoTypeNameSpec(OmniSciGeo geoType,
+  public HeavyDBGeoTypeNameSpec(HeavyDBGeo geoType,
           Integer coordinateSystem,
           boolean isGeography,
-          Pair<OmniSciEncoding, Integer> encodingInfo,
+          Pair<HeavyDBEncoding, Integer> encodingInfo,
           SqlParserPos pos) {
     super(SqlTypeName.GEOMETRY, pos);
     this.geoType = geoType;

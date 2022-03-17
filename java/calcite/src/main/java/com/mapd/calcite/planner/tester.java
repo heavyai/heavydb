@@ -1,6 +1,19 @@
 /*
- * Cool MapD License
+ * Copyright 2022 HEAVY.AI, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
+
 package com.mapd.calcite.planner;
 
 import com.mapd.calcite.parser.HeavyDBParser;
@@ -41,11 +54,12 @@ public class tester {
     final SqlStdOperatorTable stdOpTab = SqlStdOperatorTable.instance();
 
     HeavyDBUser mdu = new HeavyDBUser("admin", "passwd", "omnisci", -1, null);
-    HeavyDBSchema mapd = new HeavyDBSchema("<<PATH_TO_DATA_DIR>>", null, -1, mdu, null);
+    HeavyDBSchema dbSchema =
+            new HeavyDBSchema("<<PATH_TO_DATA_DIR>>", null, -1, mdu, null);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
-                    .defaultSchema(rootSchema.add("omnisci", mapd))
+                    .defaultSchema(rootSchema.add("omnisci", dbSchema))
                     .operatorTable(stdOpTab)
                     .parserConfig(SqlParser.configBuilder()
                                           .setConformance(SqlConformanceEnum.LENIENT)
@@ -80,7 +94,7 @@ public class tester {
     HEAVYDBLOGGER.error("Result project() " + RelOptUtil.toString(relR.project()));
     HEAVYDBLOGGER.error("Json Version \n" + HeavyDBSerializer.toString(relR.project()));
 
-    // now do with MapD parser
+    // now do with HeavyDB parser
     Supplier<HeavyDBSqlOperatorTable> operatorTable =
             new Supplier<HeavyDBSqlOperatorTable>() {
               @Override

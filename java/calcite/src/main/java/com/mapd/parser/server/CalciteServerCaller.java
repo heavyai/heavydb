@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,11 +79,11 @@ public class CalciteServerCaller {
                                            .longOpt("keystore_password")
                                            .build();
 
-    Option mapdPort = Option.builder("m")
-                              .hasArg()
-                              .desc("mapd port number")
-                              .longOpt("mapd_port")
-                              .build();
+    Option dbPort = Option.builder("m")
+                            .hasArg()
+                            .desc("HEAVY.AI port number")
+                            .longOpt("db_port")
+                            .build();
 
     Option data = Option.builder("d")
                           .hasArg()
@@ -112,7 +112,7 @@ public class CalciteServerCaller {
     options.addOption(port);
     options.addOption(data);
     options.addOption(extensions);
-    options.addOption(mapdPort);
+    options.addOption(dbPort);
     options.addOption(ssl_trust_store);
     options.addOption(ssl_trust_passwd);
     options.addOption(ssl_keystore);
@@ -131,7 +131,7 @@ public class CalciteServerCaller {
     }
 
     int portNum = Integer.valueOf(cmd.getOptionValue("port", "6279"));
-    int mapdPortNum = Integer.valueOf(cmd.getOptionValue("mapd_port", "6274"));
+    int dbPortNum = Integer.valueOf(cmd.getOptionValue("db_port", "6274"));
     String dataDir = cmd.getOptionValue("data", "data");
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
     String trust_store = cmd.getOptionValue("trust_store", "");
@@ -222,7 +222,7 @@ public class CalciteServerCaller {
     }
 
     calciteServerWrapper = new CalciteServerWrapper(portNum,
-            mapdPortNum,
+            dbPortNum,
             dataDir,
             extensionFunctionsAstFile.toString(),
             client_skT,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -468,7 +468,7 @@ public class HeavyDBRelJson {
                   cluster.getTypeFactory().createSqlType(sqlTypeName));
         }
 
-        // omnisci serializes numeric literals differently, we need more data
+        // HEAVY.AI serializes numeric literals differently, we need more data
         // then the number. So, we need to have a special case for that.
         if (literal instanceof Number) {
           final SqlTypeName targetTypeName =

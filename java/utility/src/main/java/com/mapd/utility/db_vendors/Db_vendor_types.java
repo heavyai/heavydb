@@ -32,7 +32,7 @@ abstract public class Db_vendor_types {
     if (connection_str.toLowerCase().contains("postgres"))
       return new com.mapd.utility.db_vendors.PostGis_types();
     else if (connection_str.toLowerCase().contains("omnisci"))
-      return new com.mapd.utility.db_vendors.OmniSciGeo_types();
+      return new com.mapd.utility.db_vendors.HeavyDBGeo_types();
     return new com.mapd.utility.db_vendors.Other_types();
   }
   public static String gis_type_to_str(GisType type) {
@@ -67,8 +67,8 @@ class Other_types extends com.mapd.utility.db_vendors.Db_vendor_types {
   }
 }
 
-class OmniSciGeo_types extends com.mapd.utility.db_vendors.Db_vendor_types {
-  protected OmniSciGeo_types() {}
+class HeavyDBGeo_types extends com.mapd.utility.db_vendors.Db_vendor_types {
+  protected HeavyDBGeo_types() {}
 
   public boolean isAutoCommitDisabledRequired() {
     return false;
@@ -120,7 +120,7 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     return true;
   }
 
-  // Map postgis geom types to OmniSci geom types
+  // Map postgis geom types to HeavyAI geom types
   static private Hashtable<String, String> extra_types = new Hashtable() {
     {
       put("point", "POINT");
@@ -198,7 +198,6 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
           String ref_column_name,
           String column_name,
           String table_name) throws SQLException {
-    String omnisci_type = null;
     Statement detail_st = conn.createStatement();
     // Select for a specific column name from the ref table.
     String select = "select type, srid from " + ref_table_name + " where "
