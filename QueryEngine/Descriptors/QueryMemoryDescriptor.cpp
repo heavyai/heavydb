@@ -309,6 +309,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
   switch (col_range_info.hash_type_) {
     case QueryDescriptionType::GroupByPerfectHash: {
       if (render_info) {
+        // TODO(croot): this can be removed now thanks to the more centralized
+        // NonInsituQueryClassifier code, but keeping it just in case
         render_info->setInSituDataIfUnset(false);
       }
       // keyless hash: whether or not group columns are stored at the beginning of the
@@ -364,6 +366,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     }
     case QueryDescriptionType::GroupByBaselineHash: {
       if (render_info) {
+        // TODO(croot): this can be removed now thanks to the more centralized
+        // NonInsituQueryClassifier code, but keeping it just in case
         render_info->setInSituDataIfUnset(false);
       }
       entry_count = shard_count
