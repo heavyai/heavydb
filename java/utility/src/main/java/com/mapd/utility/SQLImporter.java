@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -392,7 +392,7 @@ public class SQLImporter {
       // check if table already exists and is compatible in HEAVYAI with the query
       // metadata
       ResultSetMetaData md = rs.getMetaData();
-      checkMapDTable(conn, md);
+      checkDBTable(conn, md);
 
       timer = System.currentTimeMillis();
 
@@ -422,7 +422,7 @@ public class SQLImporter {
         bufferCount++;
         if (bufferCount == bufferSize) {
           bufferCount = 0;
-          // send the buffer to mapD
+          // send the buffer to HEAVY.AI
           if (assignRenderGroups) {
             client.load_table_binary_columnar_polys(
                     session, cmd.getOptionValue("targetTable"), cols, null, true);
@@ -441,7 +441,7 @@ public class SQLImporter {
         }
       }
       if (bufferCount > 0) {
-        // send the LAST buffer to mapD
+        // send the LAST buffer to HEAVY.AI
         if (assignRenderGroups) {
           client.load_table_binary_columnar_polys(
                   session, cmd.getOptionValue("targetTable"), cols, null, true);
@@ -540,22 +540,22 @@ public class SQLImporter {
     formatter.printHelp("SQLImporter", options);
   }
 
-  private void checkMapDTable(Connection otherdb_conn, ResultSetMetaData md)
+  private void checkDBTable(Connection otherdb_conn, ResultSetMetaData md)
           throws SQLException {
-    createMapDConnection();
+    createDBConnection();
     String tName = cmd.getOptionValue("targetTable");
 
     if (tableExists(tName)) {
       // check if we want to truncate
       if (cmd.hasOption("truncate")) {
-        executeMapDCommand("Drop table " + tName);
-        createMapDTable(otherdb_conn, md);
+        executeDBCommand("Drop table " + tName);
+        createDBTable(otherdb_conn, md);
       } else {
         List<TColumnType> columnInfo = getColumnInfo(tName);
         verifyColumnSignaturesMatch(otherdb_conn, columnInfo, md);
       }
     } else {
-      createMapDTable(otherdb_conn, md);
+      createDBTable(otherdb_conn, md);
     }
   }
 
@@ -682,7 +682,7 @@ public class SQLImporter {
     }
   }
 
-  private void createMapDTable(Connection otherdb_conn, ResultSetMetaData metaData) {
+  private void createDBTable(Connection otherdb_conn, ResultSetMetaData metaData) {
     StringBuilder sb = new StringBuilder();
     sb.append("Create table ").append(cmd.getOptionValue("targetTable")).append("(");
 
@@ -721,10 +721,10 @@ public class SQLImporter {
       exit(1);
     }
 
-    executeMapDCommand(sb.toString());
+    executeDBCommand(sb.toString());
   }
 
-  private void createMapDConnection() {
+  private void createDBConnection() {
     TTransport transport = null;
     TProtocol protocol = new TBinaryProtocol(transport);
     int port = Integer.valueOf(cmd.getOptionValue("port", "6274"));
@@ -809,7 +809,7 @@ public class SQLImporter {
     return false;
   }
 
-  private void executeMapDCommand(String sql) {
+  private void executeDBCommand(String sql) {
     LOGGER.info("Run Command - " + sql);
 
     try {

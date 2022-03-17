@@ -1,7 +1,7 @@
 package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciOptionsMap;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBOptionsMap;
 
 import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlKind;
@@ -26,12 +26,12 @@ public class SqlCopyTable extends SqlDdl implements JsonSerializableDdl {
   @Expose
   private String filePath;
   @Expose
-  private OmniSciOptionsMap options;
+  private HeavyDBOptionsMap options;
 
   public SqlCopyTable(final SqlParserPos pos,
           final String table,
           final String filePath,
-          OmniSciOptionsMap withOptions) {
+          HeavyDBOptionsMap withOptions) {
     super(OPERATOR, pos);
     this.command = OPERATOR.getName();
     this.table = table;

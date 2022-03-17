@@ -1,7 +1,7 @@
 package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisql.*;
+import com.mapd.parser.extension.ddl.heavysql.*;
 
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParserPos;

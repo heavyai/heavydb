@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ class HeavyAIDatabaseMetaData implements DatabaseMetaData {
       databaseMinorVersion = Integer.parseInt(vers[1]);
     } catch (NumberFormatException ex) {
       throw new SQLException(
-              "Non-numeric version returned from OmniSci server: " + ex.getMessage());
+              "Non-numeric version returned from HEVAY.AI server: " + ex.getMessage());
     }
   }
 
@@ -958,8 +958,8 @@ SQLException - if a database access error occurs
       throw new SQLException("get_database failed " + ex.toString());
     }
 
-    // process info from databses into the resultset, then place in regular return from
-    // MapD
+    // process info from databses into the resultset,
+    //    then place in regular return from HEAVY.AI
     TTypeInfo strTTI =
             new TTypeInfo(TDatumType.STR, TEncodingType.NONE, false, false, 0, 0, 0);
     TColumnType columns[] = {createTColumnType("TABLE_SCHEM", new TTypeInfo(strTTI)),

@@ -48,7 +48,7 @@ public class HeavyAIArrayTest {
     m_conn.close();
   }
 
-  // the test below makes sure that what we put into OmniSciArray
+  // the test below makes sure that what we put into HeavyDBSciArray
   // is exactly what we get both from getArray() and getResultSet() methods
   @Test
   public void create_and_read_array_test() throws Exception {

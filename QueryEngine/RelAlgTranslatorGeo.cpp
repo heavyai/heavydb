@@ -1105,9 +1105,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
   }
 
   // Accessors for poly bounds and render group for in-situ poly render queries
-  if (func_resolve(rex_function->getName(),
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "OmniSci_Geo_PolyBoundsPtr"sv)) {
+  if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyBoundsPtr"sv)) {
     SQLTypeInfo arg_ti;
     // get geo column plus bounds only (not expanded)
     auto geoargs =
@@ -1122,9 +1120,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     // done
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, geoargs);
-  } else if (func_resolve(rex_function->getName(),
-                          "MapD_GeoPolyRenderGroup"sv /* deprecated */,
-                          "OmniSci_Geo_PolyRenderGroup"sv)) {
+  } else if (func_resolve(rex_function->getName(), "HeavyDB_Geo_PolyRenderGroup"sv)) {
     SQLTypeInfo arg_ti;
     // get geo column plus render_group only (not expanded)
     auto geoargs =

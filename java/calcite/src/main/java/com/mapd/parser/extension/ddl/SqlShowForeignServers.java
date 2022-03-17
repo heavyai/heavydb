@@ -1,6 +1,6 @@
 package com.mapd.parser.extension.ddl;
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisql.*;
+import com.mapd.parser.extension.ddl.heavysql.*;
 
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParserPos;
@@ -28,7 +28,7 @@ public class SqlShowForeignServers extends SqlCustomDdl {
         filters = new ArrayList<>();
       }
 
-      OmniSqlSanitizedString sanitizedValue = new OmniSqlSanitizedString(value);
+      HeavySqlSanitizedString sanitizedValue = new HeavySqlSanitizedString(value);
       filters.add(new SqlFilter(attribute, sanitizedValue.toString(), operation, chain));
     }
 

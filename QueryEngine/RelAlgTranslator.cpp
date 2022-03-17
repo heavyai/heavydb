@@ -1718,10 +1718,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                    "ST_Perimeter"sv,
                    "ST_Area"sv,
                    "ST_SRID"sv,
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
-                   "OmniSci_Geo_PolyBoundsPtr"sv,
-                   "OmniSci_Geo_PolyRenderGroup"sv)) {
+                   "HeavyDB_Geo_PolyBoundsPtr"sv,
+                   "HeavyDB_Geo_PolyRenderGroup"sv)) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
   }

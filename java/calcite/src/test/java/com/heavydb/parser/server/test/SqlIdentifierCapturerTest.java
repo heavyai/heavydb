@@ -90,13 +90,13 @@ public class SqlIdentifierCapturerTest {
   }
 
   private Planner getPlanner() {
-    Schema mapd = new MockSchema() {
+    Schema heavydb = new MockSchema() {
 
     };
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
-                    .defaultSchema(rootSchema.add("omnisci", mapd))
+                    .defaultSchema(rootSchema.add("heavydb", heavydb))
                     .operatorTable(
                             new HeavyDBSqlOperatorTable(SqlStdOperatorTable.instance()))
                     .parserConfig(SqlParser.configBuilder()

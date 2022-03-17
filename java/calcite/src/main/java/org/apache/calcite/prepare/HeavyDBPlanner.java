@@ -61,7 +61,7 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * Customised version of the PlannerImpl for MapD. Used to be a copy of
+ * Customised version of the PlannerImpl for HEAVY.AI. Used to be a copy of
  * PlannerImpl, refactored now to use inheritance to minimize maintenance
  * efforts. Implementation of {@link org.apache.calcite.tools.Planner}.
  */

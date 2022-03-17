@@ -2,7 +2,7 @@ package com.mapd.parser.extension.ddl;
 import static java.util.Objects.requireNonNull;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisql.*;
+import com.mapd.parser.extension.ddl.heavysql.*;
 
 import org.apache.calcite.sql.*;
 import org.apache.calcite.sql.parser.SqlParserPos;
@@ -21,7 +21,7 @@ public class SqlKillQuery extends SqlDdl implements JsonSerializableDdl {
     super(OPERATOR, pos);
     requireNonNull(querySession);
     this.command = OPERATOR.getName();
-    OmniSqlSanitizedString sanitizedSession = new OmniSqlSanitizedString(querySession);
+    HeavySqlSanitizedString sanitizedSession = new HeavySqlSanitizedString(querySession);
     this.querySession = sanitizedSession.toString();
   }
 

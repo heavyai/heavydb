@@ -1073,7 +1073,7 @@ class ImportAndSelectTest
     EXPECT_NO_THROW(sql(copy_from_sql));
 
     TQueryResult result;
-    sql(result, "SELECT MAX(OmniSci_Geo_PolyRenderGroup(mpoly)) FROM import_test_new;");
+    sql(result, "SELECT MAX(HeavyDB_Geo_PolyRenderGroup(mpoly)) FROM import_test_new;");
     return result;
   }
 

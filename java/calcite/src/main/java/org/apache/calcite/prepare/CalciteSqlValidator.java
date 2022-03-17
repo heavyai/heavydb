@@ -99,7 +99,7 @@ class CalciteSqlValidator extends SqlValidatorImpl {
           RelDataType sourceRowType,
           RelDataType targetRowType,
           SqlNode query) {
-    // disabling assignment checking in calcite and instead letting omni-sci server
+    // disabling assignment checking in calcite and instead letting HEAVY.AI server
     // handle
   }
 }

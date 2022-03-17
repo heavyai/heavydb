@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ public final class HeavyDBParser {
     SubqueryCorrMemo.clear();
   }
 
-  private static final Context MAPD_CONNECTION_CONTEXT = new Context() {
+  private static final Context DB_CONNECTION_CONTEXT = new Context() {
     HeavyDBTypeSystem myTypeSystem = new HeavyDBTypeSystem();
     CalciteConnectionConfig config = new CalciteConnectionConfigImpl(new Properties()) {
       {
@@ -341,7 +341,7 @@ public final class HeavyDBParser {
                                     .build())
 
                     .typeSystem(createTypeSystem())
-                    .context(MAPD_CONNECTION_CONTEXT)
+                    .context(DB_CONNECTION_CONTEXT)
                     .build();
     HeavyDBPlanner planner = new HeavyDBPlanner(config);
     planner.setRestrictions(dbUser.getRestrictions());

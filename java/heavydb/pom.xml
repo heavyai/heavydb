@@ -7,7 +7,7 @@
   <packaging>jar</packaging>
   <repositories>
     <repository>
-      <id>MapD Dependencies</id>
+      <id>Mapd Dependencies</id>
       <url>https://dependencies.mapd.com/mvn/</url>
     </repository>
   </repositories>
@@ -34,7 +34,7 @@
     </dependency>
     <dependency>
       <groupId>com.mapd</groupId>
-      <artifactId>mapdcommon</artifactId>
+      <artifactId>heavydbcommon</artifactId>
       <version>${omnisci.release.version}</version>
     </dependency>
   </dependencies>

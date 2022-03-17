@@ -1,7 +1,7 @@
 package com.mapd.parser.extension.ddl;
 
 import com.google.gson.annotations.Expose;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciOptionsMap;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBOptionsMap;
 
 import org.apache.calcite.sql.SqlDdl;
 import org.apache.calcite.sql.SqlKind;
@@ -24,10 +24,10 @@ public class SqlOptimizeTable extends SqlDdl implements JsonSerializableDdl {
   @Expose
   private String tableName;
   @Expose
-  private OmniSciOptionsMap options;
+  private HeavyDBOptionsMap options;
 
   public SqlOptimizeTable(
-          final SqlParserPos pos, final String tableName, OmniSciOptionsMap withOptions) {
+          final SqlParserPos pos, final String tableName, HeavyDBOptionsMap withOptions) {
     super(OPERATOR, pos);
     this.command = OPERATOR.getName();
     this.tableName = tableName;

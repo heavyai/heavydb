@@ -1,4 +1,4 @@
-package com.mapd.parser.extension.ddl.omnisql;
+package com.mapd.parser.extension.ddl.heavysql;
 
 import static java.util.Objects.requireNonNull;
 
@@ -7,11 +7,11 @@ import com.google.gson.annotations.Expose;
 import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlDataTypeSpec;
 
-public class OmniSqlDataType extends OmniSqlJson {
+public class HeavySqlDataType extends HeavySqlJson {
   @Expose
   private String type;
   @Expose
-  private OmniSqlArray array;
+  private HeavySqlArray array;
   @Expose
   private Integer precision;
   @Expose
@@ -21,18 +21,17 @@ public class OmniSqlDataType extends OmniSqlJson {
   @Expose
   private Integer coordinateSystem;
   @Expose
-  private OmniSqlEncoding encoding;
+  private HeavySqlEncoding encoding;
 
-  public OmniSqlDataType(final SqlDataTypeSpec type,
+  public HeavySqlDataType(final SqlDataTypeSpec type,
           final boolean notNull,
-          final OmniSqlArray array,
-          final OmniSqlEncoding encoding) {
+          final HeavySqlArray array,
+          final HeavySqlEncoding encoding) {
     requireNonNull(type);
-    if (type.getTypeNameSpec() instanceof OmniSqlTypeNameSpec) {
-      OmniSqlTypeNameSpec omniSqlTypeNameSpec =
-              (OmniSqlTypeNameSpec) type.getTypeNameSpec();
-      this.type = omniSqlTypeNameSpec.getName();
-      this.coordinateSystem = omniSqlTypeNameSpec.getCoordinate();
+    if (type.getTypeNameSpec() instanceof HeavySqlTypeNameSpec) {
+      HeavySqlTypeNameSpec typeNameSpec = (HeavySqlTypeNameSpec) type.getTypeNameSpec();
+      this.type = typeNameSpec.getName();
+      this.coordinateSystem = typeNameSpec.getCoordinate();
     } else {
       this.type = type.getTypeName().toString();
     }
@@ -43,7 +42,7 @@ public class OmniSqlDataType extends OmniSqlJson {
       this.scale = typeNameSpec.getScale() == -1 ? null : typeNameSpec.getScale();
     }
     if (array != null) {
-      this.array = new OmniSqlArray(this.type, array.getSize());
+      this.array = new HeavySqlArray(this.type, array.getSize());
       this.type = "ARRAY";
     }
     this.notNull = notNull;

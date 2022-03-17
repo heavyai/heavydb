@@ -17,9 +17,9 @@
 package com.mapd.parser.extension.ddl;
 
 import com.google.common.collect.ImmutableList;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciGeoTypeNameSpec;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciSqlDataTypeSpec;
-import com.mapd.parser.extension.ddl.omnisci.OmniSciTypeNameSpec;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBGeoTypeNameSpec;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBSqlDataTypeSpec;
+import com.mapd.parser.extension.ddl.heavydb.HeavyDBTypeNameSpec;
 
 import org.apache.calcite.schema.ColumnStrategy;
 import org.apache.calcite.sql.SqlBasicTypeNameSpec;
@@ -48,14 +48,14 @@ public class SqlColumnDeclaration extends SqlCall {
           new SqlSpecialOperator("COLUMN_DECL", SqlKind.COLUMN_DECL);
 
   public final SqlIdentifier name;
-  public final OmniSciSqlDataTypeSpec dataType;
+  public final HeavyDBSqlDataTypeSpec dataType;
   public final SqlNode defaultValue;
   public final ColumnStrategy strategy;
 
   /** Creates a SqlColumnDeclaration; use {@link SqlDdlNodes#column}. */
   SqlColumnDeclaration(SqlParserPos pos,
           SqlIdentifier name,
-          OmniSciSqlDataTypeSpec dataType,
+          HeavyDBSqlDataTypeSpec dataType,
           SqlNode defaultValue,
           ColumnStrategy strategy) {
     super(pos);
@@ -120,16 +120,16 @@ public class SqlColumnDeclaration extends SqlCall {
     jsonBuilder.put(map, "encodingSize", dataType.getEncodingSize());
 
     SqlTypeNameSpec dataTypeSpec = dataType.getTypeNameSpec();
-    if (dataTypeSpec instanceof OmniSciGeoTypeNameSpec) {
-      map = ((OmniSciGeoTypeNameSpec) dataTypeSpec).toJsonMap(map);
+    if (dataTypeSpec instanceof HeavyDBGeoTypeNameSpec) {
+      map = ((HeavyDBGeoTypeNameSpec) dataTypeSpec).toJsonMap(map);
     } else {
       boolean isText = false;
-      if (dataTypeSpec instanceof OmniSciTypeNameSpec) {
-        OmniSciTypeNameSpec omniSciDataTypeSpec = (OmniSciTypeNameSpec) dataTypeSpec;
-        if (omniSciDataTypeSpec.getIsArray()) {
-          jsonBuilder.put(map, "arraySize", omniSciDataTypeSpec.getArraySize());
+      if (dataTypeSpec instanceof HeavyDBTypeNameSpec) {
+        HeavyDBTypeNameSpec heavyDBDataTypeSpec = (HeavyDBTypeNameSpec) dataTypeSpec;
+        if (heavyDBDataTypeSpec.getIsArray()) {
+          jsonBuilder.put(map, "arraySize", heavyDBDataTypeSpec.getArraySize());
         }
-        isText = omniSciDataTypeSpec.getIsText();
+        isText = heavyDBDataTypeSpec.getIsText();
       }
       jsonBuilder.put(
               map, "precision", ((SqlBasicTypeNameSpec) dataTypeSpec).getPrecision());

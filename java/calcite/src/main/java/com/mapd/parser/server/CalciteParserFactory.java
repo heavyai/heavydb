@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   private final String dataDir;
   private final Map<String, ExtensionFunction> extSigs;
-  private final int mapdPort;
+  private final int dbPort;
   private final SockTransportProperties socket_transport_properties;
   private volatile HeavyDBSqlOperatorTable tableOperator;
   private final Supplier<HeavyDBSqlOperatorTable> tableOperatorSupplier =
@@ -59,11 +59,11 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   public CalciteParserFactory(String dataDir,
           final Map<String, ExtensionFunction> extSigs,
-          int mapdPort,
+          int dbPort,
           SockTransportProperties skT) {
     this.dataDir = dataDir;
     this.extSigs = extSigs;
-    this.mapdPort = mapdPort;
+    this.dbPort = dbPort;
     this.socket_transport_properties = skT;
 
     updateOperatorTable();
@@ -79,7 +79,7 @@ class CalciteParserFactory implements PoolableObjectFactory {
   @Override
   public Object makeObject() throws Exception {
     HeavyDBParser obj = new HeavyDBParser(
-            dataDir, tableOperatorSupplier, mapdPort, socket_transport_properties);
+            dataDir, tableOperatorSupplier, dbPort, socket_transport_properties);
     return obj;
   }
 

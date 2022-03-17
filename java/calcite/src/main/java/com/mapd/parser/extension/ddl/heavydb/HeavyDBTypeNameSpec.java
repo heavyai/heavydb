@@ -1,4 +1,4 @@
-package com.mapd.parser.extension.ddl.omnisci;
+package com.mapd.parser.extension.ddl.heavydb;
 
 import static java.util.Objects.requireNonNull;
 
@@ -11,20 +11,20 @@ import org.apache.calcite.util.Pair;
 
 import java.util.TimeZone;
 
-public class OmniSciTypeNameSpec extends SqlBasicTypeNameSpec {
+public class HeavyDBTypeNameSpec extends SqlBasicTypeNameSpec {
   private boolean isText;
 
   private Integer arraySize = -1;
   private boolean isArray = false;
 
   // array type constructor
-  public OmniSciTypeNameSpec(
+  public HeavyDBTypeNameSpec(
           SqlTypeName typeName, boolean isText, Integer size, SqlParserPos pos) {
     this(typeName, isText, size, -1, -1, pos);
   }
 
   // decimal array type constructor
-  public OmniSciTypeNameSpec(SqlTypeName typeName,
+  public HeavyDBTypeNameSpec(SqlTypeName typeName,
           boolean isText,
           Integer size,
           Integer precision,
@@ -37,7 +37,7 @@ public class OmniSciTypeNameSpec extends SqlBasicTypeNameSpec {
   }
 
   // standalone text type constructor
-  public OmniSciTypeNameSpec(SqlTypeName typeName, boolean isText, SqlParserPos pos) {
+  public HeavyDBTypeNameSpec(SqlTypeName typeName, boolean isText, SqlParserPos pos) {
     super(typeName, pos);
     this.isText = isText;
   }

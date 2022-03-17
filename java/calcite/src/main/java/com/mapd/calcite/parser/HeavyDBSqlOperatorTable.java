@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -262,11 +262,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new MapDAvg());
     opTab.addOperator(new Sample());
     opTab.addOperator(new LastSample());
-    // MapD_Geo* are deprecated in place of the OmniSci_Geo_ varietals
-    opTab.addOperator(new MapD_GeoPolyBoundsPtr());
-    opTab.addOperator(new MapD_GeoPolyRenderGroup());
-    opTab.addOperator(new OmniSci_Geo_PolyBoundsPtr());
-    opTab.addOperator(new OmniSci_Geo_PolyRenderGroup());
+    opTab.addOperator(new HeavyDB_Geo_PolyBoundsPtr());
+    opTab.addOperator(new HeavyDB_Geo_PolyRenderGroup());
     opTab.addOperator(new convert_meters_to_pixel_width());
     opTab.addOperator(new convert_meters_to_pixel_height());
     opTab.addOperator(new is_point_in_view());
@@ -2504,13 +2501,10 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   //
   // Internal accessors for in-situ poly render queries
   //
-  // The MapD_* varietals are deprecated. The OmniSci_Geo_* ones should be used
-  // instead
-  //
 
-  static class MapD_GeoPolyBoundsPtr extends SqlFunction {
-    MapD_GeoPolyBoundsPtr() {
-      super("MapD_GeoPolyBoundsPtr",
+  static class HeavyDB_Geo_PolyBoundsPtr extends SqlFunction {
+    HeavyDB_Geo_PolyBoundsPtr() {
+      super("HeavyDB_Geo_PolyBoundsPtr",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
@@ -2526,45 +2520,9 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
-  static class MapD_GeoPolyRenderGroup extends SqlFunction {
-    MapD_GeoPolyRenderGroup() {
-      super("MapD_GeoPolyRenderGroup",
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.family(SqlTypeFamily.ANY),
-              SqlFunctionCategory.SYSTEM);
-    }
-
-    @Override
-    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.INTEGER);
-    }
-  }
-
-  static class OmniSci_Geo_PolyBoundsPtr extends SqlFunction {
-    OmniSci_Geo_PolyBoundsPtr() {
-      super("OmniSci_Geo_PolyBoundsPtr",
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.family(SqlTypeFamily.ANY),
-              SqlFunctionCategory.SYSTEM);
-    }
-
-    @Override
-    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      assert opBinding.getOperandCount() == 1;
-      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.BIGINT);
-    }
-  }
-
-  static class OmniSci_Geo_PolyRenderGroup extends SqlFunction {
-    OmniSci_Geo_PolyRenderGroup() {
-      super("OmniSci_Geo_PolyRenderGroup",
+  static class HeavyDB_Geo_PolyRenderGroup extends SqlFunction {
+    HeavyDB_Geo_PolyRenderGroup() {
+      super("HeavyDB_Geo_PolyRenderGroup",
               SqlKind.OTHER_FUNCTION,
               null,
               null,

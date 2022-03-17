@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,12 +86,12 @@ public class HeavyAIStatement implements java.sql.Statement {
       }
     }
 
-    logger.debug("Before OmniSciEscapeParser [" + sql + "]");
+    logger.debug("Before HeavyAIEscapeParser [" + sql + "]");
     // The order of these to SQL re-writes is important.
     // EscapeParse needs to come first.
     String afterEscapeParseSQL = HeavyAIEscapeParser.parse(sql);
     String afterSimpleParse = simplisticDateTransform(afterEscapeParseSQL);
-    logger.debug("After OmniSciEscapeParser [" + afterSimpleParse + "]");
+    logger.debug("After HeavyAIEscapeParser [" + afterSimpleParse + "]");
     try {
       sqlResult = client.sql_execute(session, afterSimpleParse + ";", true, null, -1, -1);
     } catch (TDBException ex) {

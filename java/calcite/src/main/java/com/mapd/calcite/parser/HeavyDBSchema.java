@@ -34,9 +34,9 @@ public class HeavyDBSchema implements Schema {
   final private MetaConnect metaConnect;
   private SockTransportProperties sock_transport_properties = null;
   public HeavyDBSchema(String dataDir,
-          HeavyDBParser mp,
-          int mapdPort,
-          HeavyDBUser mapdUser,
+          HeavyDBParser dbParser,
+          int dbPort,
+          HeavyDBUser dbUser,
           SockTransportProperties skT,
           String db) {
     System.setProperty(
@@ -45,15 +45,15 @@ public class HeavyDBSchema implements Schema {
             "saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty("saffron.default.collation.name",
             ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
-    metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp, skT, db);
+    metaConnect = new MetaConnect(dbPort, dataDir, dbUser, dbParser, skT, db);
   }
 
   public HeavyDBSchema(String dataDir,
-          HeavyDBParser mp,
-          int mapdPort,
-          HeavyDBUser mapdUser,
+          HeavyDBParser dbParser,
+          int dbPort,
+          HeavyDBUser dbUser,
           SockTransportProperties skT) {
-    this(dataDir, mp, mapdPort, mapdUser, skT, null);
+    this(dataDir, dbParser, dbPort, dbUser, skT, null);
   }
 
   @Override

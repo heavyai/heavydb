@@ -276,7 +276,7 @@ public class HeavyAIStatementTest {
       assertEquals(ts_time.toString(), "2018-11-08 12:00:00.0");
     }
 
-    // Test the simple date transformation in OmniSciStatment.
+    // Test the simple date transformation in HeavyDBStatment.
     String d_simple_quarter = "select quarter(Connection_start) as m_quarter from tester";
     rs = statement.executeQuery(d_simple_quarter);
     for (int i = 0; rs.next(); ++i) {

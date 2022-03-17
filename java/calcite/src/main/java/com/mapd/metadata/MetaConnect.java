@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ public class MetaConnect {
   private final String dataDir;
   private final String default_db;
   private final HeavyDBUser currentUser;
-  private final int mapdPort;
+  private final int dbPort;
   private Connection catConn;
   private final HeavyDBParser parser;
 
@@ -100,11 +100,11 @@ public class MetaConnect {
   private static final String CATALOG_DIR_NAME = "catalogs";
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
           new ConcurrentHashMap<>();
-  private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS =
+  private static volatile Map<List<String>, Table> DB_TABLE_DETAILS =
           new ConcurrentHashMap<>();
   private final SockTransportProperties sock_transport_properties;
 
-  public MetaConnect(int mapdPort,
+  public MetaConnect(int dbPort,
           String dataDir,
           HeavyDBUser currentHeavyDBUser,
           HeavyDBParser parser,
@@ -121,7 +121,7 @@ public class MetaConnect {
       }
     }
     this.currentUser = currentHeavyDBUser;
-    this.mapdPort = mapdPort;
+    this.dbPort = dbPort;
     this.parser = parser;
     this.sock_transport_properties = skT;
 
@@ -135,12 +135,12 @@ public class MetaConnect {
     }
   }
 
-  public MetaConnect(int mapdPort,
+  public MetaConnect(int dbPort,
           String dataDir,
           HeavyDBUser currentHeavyDBUser,
           HeavyDBParser parser,
           SockTransportProperties skT) {
-    this(mapdPort, dataDir, currentHeavyDBUser, parser, skT, null);
+    this(dbPort, dataDir, currentHeavyDBUser, parser, skT, null);
   }
 
   public List<String> getDatabases() {
@@ -191,7 +191,7 @@ public class MetaConnect {
   public Table getTable(String tableName) {
     List<String> dbTable =
             ImmutableList.of(default_db.toUpperCase(), tableName.toUpperCase());
-    Table cTable = MAPD_TABLE_DETAILS.get(dbTable);
+    Table cTable = DB_TABLE_DETAILS.get(dbTable);
     if (cTable != null) {
       HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
               + " details " + cTable);
@@ -203,14 +203,14 @@ public class MetaConnect {
     if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
       HEAVYDBLOGGER.debug("Processing a table");
       Table rTable = new HeavyDBTable(td);
-      MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
+      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
               + " details " + rTable + " Not in buffer");
       return rTable;
     } else {
       HEAVYDBLOGGER.debug("Processing a view");
       Table rTable = new HeavyDBView(getViewSql(tableName), td, parser);
-      MAPD_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
+      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
               + " details " + rTable + " Not in buffer");
       return rTable;
@@ -224,7 +224,7 @@ public class MetaConnect {
       return mSet;
     }
 
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
       connectToDBCatalog();
       Set<String> ts = getTables_SQL();
@@ -238,7 +238,7 @@ public class MetaConnect {
     try {
       TProtocol protocol = null;
       TTransport transport =
-              sock_transport_properties.openClientTransport("localhost", mapdPort);
+              sock_transport_properties.openClientTransport("localhost", dbPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
@@ -257,7 +257,7 @@ public class MetaConnect {
       return ts;
 
     } catch (TTransportException ex) {
-      HEAVYDBLOGGER.error("TTransportException on port [" + mapdPort + "]");
+      HEAVYDBLOGGER.error("TTransportException on port [" + dbPort + "]");
       HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TDBException ex) {
@@ -333,7 +333,7 @@ public class MetaConnect {
   }
 
   public TTableDetails get_table_details(String tableName) {
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
       connectToDBCatalog();
       TTableDetails td = get_table_detail_SQL(tableName);
@@ -345,7 +345,7 @@ public class MetaConnect {
       TProtocol protocol = null;
 
       TTransport transport =
-              sock_transport_properties.openClientTransport("localhost", mapdPort);
+              sock_transport_properties.openClientTransport("localhost", dbPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
@@ -666,7 +666,7 @@ public class MetaConnect {
 
   private String getViewSql(String tableName) {
     String sqlText;
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
       connectToDBCatalog();
       sqlText = getViewSqlViaSql(getTableId(tableName));
@@ -677,7 +677,7 @@ public class MetaConnect {
         TProtocol protocol = null;
 
         TTransport transport =
-                sock_transport_properties.openClientTransport("localhost", mapdPort);
+                sock_transport_properties.openClientTransport("localhost", dbPort);
         if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
 
@@ -790,12 +790,12 @@ public class MetaConnect {
     // as a user may not be able to see all schemas and this sets it for the life
     // of the server.
     // Proceeding this way as a WIP
-    if (mapdPort == 0) {
+    if (dbPort == 0) {
       // seems to be a condition that is expected
       // for FSI testing
       return;
     }
-    if (mapdPort == -1) {
+    if (dbPort == -1) {
       // use sql
       connectToCatalog("system_catalog"); // hardcoded sys catalog
       Set<String> dbNames = getDatabases_SQL();
@@ -810,7 +810,7 @@ public class MetaConnect {
     try {
       TProtocol protocol = null;
       TTransport transport =
-              sock_transport_properties.openClientTransport("localhost", mapdPort);
+              sock_transport_properties.openClientTransport("localhost", dbPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
@@ -824,7 +824,7 @@ public class MetaConnect {
       transport.close();
 
     } catch (TTransportException ex) {
-      HEAVYDBLOGGER.error("TTransportException on port [" + mapdPort + "]");
+      HEAVYDBLOGGER.error("TTransportException on port [" + dbPort + "]");
       HEAVYDBLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TDBException ex) {
@@ -869,29 +869,29 @@ public class MetaConnect {
     if (table.equals("")) {
       // Drop db and all tables
       // iterate through all and remove matching schema
-      Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
+      Set<List<String>> all = new HashSet<>(DB_TABLE_DETAILS.keySet());
       for (List<String> keys : all) {
         if (keys.get(0).equals(schema.toUpperCase())) {
           HEAVYDBLOGGER.debug(
                   "removing all for schema " + keys.get(0) + " table " + keys.get(1));
-          MAPD_TABLE_DETAILS.remove(keys);
+          DB_TABLE_DETAILS.remove(keys);
         }
       }
     } else {
       HEAVYDBLOGGER.debug("removing schema " + schema.toUpperCase() + " table "
               + table.toUpperCase());
-      MAPD_TABLE_DETAILS.remove(
+      DB_TABLE_DETAILS.remove(
               ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
     }
     // Invalidate views
-    Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
+    Set<List<String>> all = new HashSet<>(DB_TABLE_DETAILS.keySet());
     for (List<String> keys : all) {
       if (keys.get(0).equals(schema.toUpperCase())) {
-        Table ttable = MAPD_TABLE_DETAILS.get(keys);
+        Table ttable = DB_TABLE_DETAILS.get(keys);
         if (ttable instanceof HeavyDBView) {
           HEAVYDBLOGGER.debug(
                   "removing view in schema " + keys.get(0) + " view " + keys.get(1));
-          MAPD_TABLE_DETAILS.remove(keys);
+          DB_TABLE_DETAILS.remove(keys);
         }
       }
     }

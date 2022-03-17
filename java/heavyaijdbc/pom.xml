@@ -47,7 +47,7 @@
     </dependency>
     <dependency>
       <groupId>com.mapd</groupId>
-      <artifactId>mapdcommon</artifactId>
+      <artifactId>heavydbcommon</artifactId>
       <version>${omnisci.release.version}</version>
     </dependency>
     <dependency>

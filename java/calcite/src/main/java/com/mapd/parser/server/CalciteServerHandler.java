@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
   private TServer server;
 
-  private final int mapdPort;
+  private final int dbPort;
 
   private volatile long callCount;
 
@@ -90,12 +90,12 @@ public class CalciteServerHandler implements CalciteServer.Iface {
 
   // TODO MAT we need to merge this into common code base for these functions with
   // CalciteDirect since we are not deprecating this stuff yet
-  public CalciteServerHandler(int mapdPort,
+  public CalciteServerHandler(int dbPort,
           String dataDir,
           String extensionFunctionsAstFile,
           SockTransportProperties skT,
           String udfAstFile) {
-    this.mapdPort = mapdPort;
+    this.dbPort = dbPort;
     this.dataDir = dataDir;
 
     Map<String, ExtensionFunction> udfSigs = null;
@@ -124,7 +124,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       extSigs.putAll(udfSigs);
     }
 
-    calciteParserFactory = new CalciteParserFactory(dataDir, extSigs, mapdPort, skT);
+    calciteParserFactory = new CalciteParserFactory(dataDir, extSigs, dbPort, skT);
 
     // GenericObjectPool::setFactory is deprecated
     this.parserPool = new GenericObjectPool(calciteParserFactory);
@@ -167,10 +167,10 @@ public class CalciteServerHandler implements CalciteServer.Iface {
         rests.add(rest);
       }
     }
-    HeavyDBUser mapDUser = new HeavyDBUser(user, session, catalog, mapdPort, rests);
+    HeavyDBUser dbUser = new HeavyDBUser(user, session, catalog, dbPort, rests);
     HEAVYDBLOGGER.debug("process was called User: " + user + " Catalog: " + catalog
             + " sql: " + queryText);
-    parser.setUser(mapDUser);
+    parser.setUser(dbUser);
     CURRENT_PARSER.set(parser);
 
     // need to trim the sql string as it seems it is not trimed prior to here
@@ -346,10 +346,10 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       HEAVYDBLOGGER.error(msg, ex);
       throw new TException(msg);
     }
-    HeavyDBUser mapDUser = new HeavyDBUser(user, session, catalog, mapdPort, null);
+    HeavyDBUser dbUser = new HeavyDBUser(user, session, catalog, dbPort, null);
     HEAVYDBLOGGER.debug("getCompletionHints was called User: " + user
             + " Catalog: " + catalog + " sql: " + sql);
-    parser.setUser(mapDUser);
+    parser.setUser(dbUser);
     CURRENT_PARSER.set(parser);
 
     HeavyDBPlanner.CompletionResult completion_result;

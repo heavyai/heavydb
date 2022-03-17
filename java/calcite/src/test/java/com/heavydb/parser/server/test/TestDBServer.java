@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,9 +37,8 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class TestMapDServer {
-  private final static Logger HEAVYDBLOGGER =
-          LoggerFactory.getLogger(TestMapDServer.class);
+public class TestDBServer {
+  private final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(TestDBServer.class);
   private final static int TEST_THREAD_COUNT = 2;
   private volatile int threadsRun = 0;
   private volatile boolean threadHadFailure = false;
@@ -54,7 +53,7 @@ public class TestMapDServer {
       @Override
       public void run() {
         try {
-          ConnInfo conn = createMapDConnection();
+          ConnInfo conn = createDBConnection();
           Random r = new Random();
           int calCount = r.nextInt(9) + 1;
           int calls = 0;
@@ -63,15 +62,15 @@ public class TestMapDServer {
             System.out.println("i is " + i);
             // }
             if (calls > calCount) {
-              closeMapDConnection(conn);
-              conn = createMapDConnection();
+              closeDBConnection(conn);
+              conn = createDBConnection();
               calCount = r.nextInt(9) + 1;
               calls = 0;
             }
-            randomMapDCall(conn);
+            randomDBCall(conn);
             calls++;
           }
-          closeMapDConnection(conn);
+          closeDBConnection(conn);
         } catch (AssertionError x) {
           HEAVYDBLOGGER.error("error during Runnable");
           threadHadFailure = true;
@@ -95,7 +94,7 @@ public class TestMapDServer {
     }
   }
 
-  private void randomMapDCall(ConnInfo conn) {
+  private void randomDBCall(ConnInfo conn) {
     Random r = new Random();
     int aliasID = r.nextInt(100000) + 1000000;
     int limit = r.nextInt(20) + 1;
@@ -108,7 +107,7 @@ public class TestMapDServer {
             2202);
   }
 
-  private ConnInfo createMapDConnection() {
+  private ConnInfo createDBConnection() {
     String session = null;
     TTransport transport = null;
     Heavy.Client client = null;
@@ -138,7 +137,7 @@ public class TestMapDServer {
     }
   }
 
-  private void closeMapDConnection(ConnInfo conn) {
+  private void closeDBConnection(ConnInfo conn) {
     try {
       conn.client.disconnect(conn.session);
       conn.transport.close();
