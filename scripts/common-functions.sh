@@ -275,10 +275,12 @@ function install_gdal() {
     # proj
     download_make_install ${HTTP_DEPS}/proj-${PROJ_VERSION}.tar.gz "" "--disable-tiff"
 
-    # gdal (with patch for GRIB raster thread contention)
+    # gdal (with patch for memory leak in VSICurlClearCache)
     download ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz
     extract gdal-${GDAL_VERSION}.tar.gz
     pushd gdal-${GDAL_VERSION}
+    patch -p0 port/cpl_vsil_curl.cpp $SCRIPTS_DIR/gdal-3.4.1_memory_leak_fix_1.patch
+    patch -p0 port/cpl_vsil_curl_streaming.cpp $SCRIPTS_DIR/gdal-3.4.1_memory_leak_fix_2.patch
     ./configure --prefix=$PREFIX --without-geos --with-libkml=$PREFIX --with-proj=$PREFIX --with-libtiff=internal --with-libgeotiff=internal --with-netcdf=$PREFIX --with-blosc=$PREFIX
     makej
     make_install
