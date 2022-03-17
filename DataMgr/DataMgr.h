@@ -268,6 +268,7 @@ class DataMgr {
 
   std::vector<std::vector<AbstractBufferMgr*>> bufferMgrs_;
   std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr_;
+  std::unique_ptr<l0::L0Manager> l0Mgr_;
   std::string dataDir_;
   bool hasGpus_;
   size_t reservedGpuMem_;

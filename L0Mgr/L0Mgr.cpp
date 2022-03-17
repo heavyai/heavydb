@@ -331,4 +331,8 @@ void L0Manager::synchronizeDevices() const {
                                            std::numeric_limits<uint32_t>::max()));
   }
 }
+
+int L0Manager::getDeviceCount() const {
+  return 1;
+}
 }  // namespace l0

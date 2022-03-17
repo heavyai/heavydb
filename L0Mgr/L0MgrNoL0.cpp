@@ -116,4 +116,8 @@ void L0Manager::synchronizeDevices() const {
 const std::vector<std::shared_ptr<L0Driver>>& L0Manager::drivers() const {
   return drivers_;
 }
+
+int L0Manager::getDeviceCount() const {
+  CHECK(false);
+}
 }  // namespace l0
