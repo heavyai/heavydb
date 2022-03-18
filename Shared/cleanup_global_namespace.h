@@ -14,26 +14,10 @@
  * limitations under the License.
  */
 
-#ifdef max
-#undef max
-#endif
-
-#ifdef min
-#undef min
-#endif
-
-#ifdef OPTIONAL
-#undef OPTIONAL
-#endif
-
-#ifdef ERROR
 #undef ERROR
-#endif
-
-#ifdef GetObject
 #undef GetObject
-#endif
-
-#ifdef X509_NAME
+#undef IGNORE
+#undef max
+#undef min
+#undef OPTIONAL
 #undef X509_NAME
-#endif
