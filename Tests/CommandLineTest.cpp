@@ -99,7 +99,10 @@ class CommandLineTestcase {
     boost::erase_all(expected_std_out_, "\n");
     boost::erase_all(expected_std_err_, "\n");
 
-    ASSERT_EQ(returnCode, expected_return_code_);
+    ASSERT_EQ(returnCode, expected_return_code_)
+        << "std_out_string_(" << std_out_string_ << ") expected_std_out_("
+        << expected_std_out_ << ") std_err_string_(" << std_err_string_
+        << ") expected_std_err_(" << expected_std_err_ << ')';
     ASSERT_EQ(std_out_string_, expected_std_out_);
     ASSERT_EQ(std_err_string_, expected_std_err_);
   }
