@@ -111,8 +111,12 @@ class ColumnarResults {
   size_t num_rows_;
 
  private:
-  ColumnarResults(const size_t num_rows, const std::vector<SQLTypeInfo>& target_types)
-      : num_rows_(num_rows), target_types_(target_types) {}
+  ColumnarResults(const size_t num_rows,
+                  const std::vector<SQLTypeInfo>& target_types,
+                  const std::vector<size_t>& padded_target_sizes)
+      : num_rows_(num_rows)
+      , target_types_(target_types)
+      , padded_target_sizes_(padded_target_sizes) {}
   inline void writeBackCell(const TargetValue& col_val,
                             const size_t row_idx,
                             const size_t column_idx);
@@ -200,6 +204,7 @@ class ColumnarResults {
   // with minimal ussage of result set's iterator access
   size_t thread_idx_;
   std::shared_ptr<Executor> executor_;
+  std::vector<size_t> padded_target_sizes_;
 };
 
 using ColumnCacheMap =

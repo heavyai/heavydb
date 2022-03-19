@@ -41,6 +41,38 @@ inline int64_t fixed_encoding_nullable_val(const int64_t val,
   return val;
 }
 
+std::vector<size_t> get_padded_target_sizes(
+    const ResultSet& rows,
+    const std::vector<SQLTypeInfo>& target_types) {
+  const auto slot_for_target_indicies = rows.getSlotIndicesForTargetIndices();
+  std::vector<size_t> padded_target_sizes;
+
+  // We have to check that the result set is valid as one entry point
+  // to columnar results constructs effectively a fake result set.
+  // In these cases it should be safe to assume that we can use the type
+  // target widths
+  if (!rows.hasValidBuffer() ||
+      rows.getQueryMemDesc().getColCount() < target_types.size()) {
+    for (const auto& target_type : target_types) {
+      padded_target_sizes.emplace_back(target_type.get_size());
+    }
+    return padded_target_sizes;
+  }
+
+  // If here we have a valid result set, so use it's QMD padded widths
+  size_t col_idx{0UL};
+  for (const auto& slot_for_target_index : slot_for_target_indicies) {
+    // Lazy fetch columns will have 0 as a padded with, so use the type's
+    // logical width for those
+    const size_t padded_slot_width =
+        static_cast<size_t>(rows.getPaddedSlotWidthBytes(slot_for_target_index));
+    padded_target_sizes.emplace_back(
+        padded_slot_width == 0UL ? target_types[col_idx].get_size() : padded_slot_width);
+    col_idx++;
+  }
+  return padded_target_sizes;
+}
+
 }  // namespace
 
 ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -60,7 +92,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                ? true
                                : result_set::use_parallel_algorithms(rows))
     , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
-    , thread_idx_(thread_idx) {
+    , thread_idx_(thread_idx)
+    , padded_target_sizes_(get_padded_target_sizes(rows, target_types)) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
   executor_ = Executor::getExecutor(executor_id);
@@ -73,10 +106,11 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     if (is_varlen) {
       throw ColumnarConversionNotSupported();
     }
+    CHECK_EQ(padded_target_sizes_.size(), target_types.size());
     if (!isDirectColumnarConversionPossible() ||
         !rows.isZeroCopyColumnarConversionPossible(i)) {
-      column_buffers_[i] = row_set_mem_owner->allocate(
-          num_rows_ * target_types[i].get_size(), thread_idx_);
+      column_buffers_[i] =
+          row_set_mem_owner->allocate(num_rows_ * padded_target_sizes_[i], thread_idx_);
     }
   }
 
@@ -98,7 +132,8 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , target_types_{target_type}
     , parallel_conversion_(false)
     , direct_columnar_conversion_(false)
-    , thread_idx_(thread_idx) {
+    , thread_idx_(thread_idx)
+    , padded_target_sizes_(target_type.get_size()) {
   auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
       target_type.is_array() ||
@@ -129,7 +164,9 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
         return init + result->size();
       });
   std::unique_ptr<ColumnarResults> merged_results(
-      new ColumnarResults(total_row_count, sub_results[0]->target_types_));
+      new ColumnarResults(total_row_count,
+                          sub_results[0]->target_types_,
+                          sub_results[0]->padded_target_sizes_));
   const auto col_count = sub_results[0]->column_buffers_.size();
   const auto nonempty_it = std::find_if(
       sub_results.begin(),
@@ -139,7 +176,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
     return nullptr;
   }
   for (size_t col_idx = 0; col_idx < col_count; ++col_idx) {
-    const auto byte_width = (*nonempty_it)->getColumnType(col_idx).get_size();
+    const auto byte_width = merged_results->padded_target_sizes_[col_idx];
     auto write_ptr = row_set_mem_owner->allocate(byte_width * total_row_count);
     merged_results->column_buffers_.push_back(write_ptr);
     for (auto& rs : sub_results) {
@@ -147,7 +184,7 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
       if (!rs->size()) {
         continue;
       }
-      CHECK_EQ(byte_width, rs->getColumnType(col_idx).get_size());
+      CHECK_EQ(byte_width, rs->padded_target_sizes_[col_idx]);
       memcpy(write_ptr, rs->column_buffers_[col_idx], rs->size() * byte_width);
       write_ptr += rs->size() * byte_width;
     }
@@ -444,7 +481,7 @@ void ColumnarResults::copyAllNonLazyColumns(
       direct_copy_threads.push_back(std::async(
           std::launch::async,
           [&rows, this](const size_t column_index) {
-            const size_t column_size = num_rows_ * target_types_[column_index].get_size();
+            const size_t column_size = num_rows_ * padded_target_sizes_[column_index];
             rows.copyColumnIntoBuffer(
                 column_index, column_buffers_[column_index], column_size);
           },
