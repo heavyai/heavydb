@@ -205,6 +205,7 @@ class DBEngineImpl : public DBEngine {
                                                        QueryMemoryDescriptor(),
                                                        nullptr,
                                                        nullptr,
+                                                       nullptr,
                                                        0,
                                                        0,
                                                        0),
