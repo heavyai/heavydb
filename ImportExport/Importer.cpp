@@ -2383,7 +2383,7 @@ class ColumnNotGeoError : public std::runtime_error {
 static ImportStatus import_thread_shapefile(
     int thread_id,
     Importer* importer,
-    OGRSpatialReference* poGeographicSR,
+    OGRCoordinateTransformation* coordinate_transformation,
     const FeaturePtrVector& features,
     size_t firstFeature,
     size_t numFeatures,
@@ -2405,10 +2405,6 @@ static ImportStatus import_thread_shapefile(
 
   auto convert_timer = timer_start();
 
-  // we create this on the fly based on the first feature's SR
-  std::unique_ptr<OGRCoordinateTransformation> coordinate_transformation;
-  bool checked_transformation{false};
-
   // for all the features in this chunk...
   for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
     // ignore null features
@@ -2420,43 +2416,8 @@ static ImportStatus import_thread_shapefile(
     // for geodatabase, we need to consider features with no geometry
     // as we still want to create a table, even if it has no geo column
     OGRGeometry* pGeometry = features[iFeature]->GetGeometryRef();
-    if (pGeometry) {
-      // check if we need to make a CoordinateTransformation
-      // we assume that all features in this chunk will have
-      // the same source SR, so the CT will be valid for all
-      // transforming to a reusable CT is faster than to an SR
-      if (!checked_transformation) {
-        // get the SR of the incoming geo
-        auto geometry_sr = pGeometry->getSpatialReference();
-        // if the SR is non-null and non-empty and different from what we want
-        // we need to make a reusable CoordinateTransformation
-        if (geometry_sr &&
-#if GDAL_VERSION_MAJOR >= 3
-            !geometry_sr->IsEmpty() &&
-#endif
-            !geometry_sr->IsSame(poGeographicSR)) {
-          // validate the SR before trying to use it
-          if (geometry_sr->Validate() != OGRERR_NONE) {
-            throw std::runtime_error("Incoming geo has invalid Spatial Reference");
-          }
-          // create the OGRCoordinateTransformation that will be used for
-          // all the features in this chunk
-          if (coordinate_transformation == nullptr) {
-            coordinate_transformation.reset(
-                OGRCreateCoordinateTransformation(geometry_sr, poGeographicSR));
-            if (coordinate_transformation == nullptr) {
-              throw std::runtime_error(
-                  "Failed to create a GDAL CoordinateTransformation for incoming geo");
-            }
-          }
-        }
-        checked_transformation = true;
-      }
-
-      // if we have a transformation, use it
-      if (coordinate_transformation) {
-        pGeometry->transform(coordinate_transformation.get());
-      }
+    if (pGeometry && coordinate_transformation) {
+      pGeometry->transform(coordinate_transformation);
     }
 
     //
@@ -5383,6 +5344,10 @@ ImportStatus Importer::importGDALGeo(
   // make a features buffer for each thread
   std::vector<FeaturePtrVector> features(max_threads);
 
+  // make one of these for each thread, based on the first feature's SR
+  std::vector<std::unique_ptr<OGRCoordinateTransformation>> coordinate_transformations(
+      max_threads);
+
   // for each feature...
   size_t firstFeatureThisChunk = 0;
   while (firstFeatureThisChunk < numFeatures) {
@@ -5404,20 +5369,54 @@ ImportStatus Importer::importGDALGeo(
       features[thread_id].emplace_back(layer.GetNextFeature());
     }
 
+    // construct a coordinate transformation for each thread, if needed
+    // some features may not have geometry, so look for the first one that does
+    if (coordinate_transformations[thread_id] == nullptr) {
+      for (auto const& feature : features[thread_id]) {
+        auto const* geometry = feature->GetGeometryRef();
+        if (geometry) {
+          auto const* geometry_sr = geometry->getSpatialReference();
+          // if the SR is non-null and non-empty and different from what we want
+          // we need to make a reusable CoordinateTransformation
+          if (geometry_sr &&
+#if GDAL_VERSION_MAJOR >= 3
+              !geometry_sr->IsEmpty() &&
+#endif
+              !geometry_sr->IsSame(poGeographicSR.get())) {
+            // validate the SR before trying to use it
+            if (geometry_sr->Validate() != OGRERR_NONE) {
+              throw std::runtime_error("Incoming geo has invalid Spatial Reference");
+            }
+            // create the OGRCoordinateTransformation that will be used for
+            // all the features in this chunk
+            coordinate_transformations[thread_id].reset(
+                OGRCreateCoordinateTransformation(geometry_sr, poGeographicSR.get()));
+            if (coordinate_transformations[thread_id] == nullptr) {
+              throw std::runtime_error(
+                  "Failed to create a GDAL CoordinateTransformation for incoming geo");
+            }
+          }
+          // once we find at least one geometry with an SR, we're done
+          break;
+        }
+      }
+    }
+
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
     // call worker function directly
-    auto ret_import_status = import_thread_shapefile(0,
-                                                     this,
-                                                     poGeographicSR.get(),
-                                                     std::move(features[thread_id]),
-                                                     firstFeatureThisChunk,
-                                                     numFeaturesThisChunk,
-                                                     fieldNameToIndexMap,
-                                                     columnNameToSourceNameMap,
-                                                     columnIdToRenderGroupAnalyzerMap,
-                                                     session_info,
-                                                     executor.get(),
-                                                     metadata_column_infos);
+    auto ret_import_status =
+        import_thread_shapefile(0,
+                                this,
+                                coordinate_transformations[thread_id].get(),
+                                std::move(features[thread_id]),
+                                firstFeatureThisChunk,
+                                numFeaturesThisChunk,
+                                fieldNameToIndexMap,
+                                columnNameToSourceNameMap,
+                                columnIdToRenderGroupAnalyzerMap,
+                                session_info,
+                                executor.get(),
+                                metadata_column_infos);
     import_status += ret_import_status;
     import_status.rows_estimated = ((float)firstFeatureThisChunk / (float)numFeatures) *
                                    import_status.rows_completed;
@@ -5428,7 +5427,7 @@ ImportStatus Importer::importGDALGeo(
                                  import_thread_shapefile,
                                  thread_id,
                                  this,
-                                 poGeographicSR.get(),
+                                 coordinate_transformations[thread_id].get(),
                                  std::move(features[thread_id]),
                                  firstFeatureThisChunk,
                                  numFeaturesThisChunk,
