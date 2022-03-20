@@ -72,11 +72,12 @@ namespace {
  * ignore any element ID that is not in the dictionary corresponding to t1_s.x or is
  * outside the range of column t1_s.
  */
-inline int64_t translate_str_id_to_outer_dict(const int64_t elem,
-                                              const int64_t min_elem,
-                                              const int64_t max_elem,
-                                              const void* sd_inner_proxy,
-                                              const void* sd_outer_proxy) {
+[[maybe_unused]] inline int64_t translate_str_id_to_outer_dict(
+    const int64_t elem,
+    const int64_t min_elem,
+    const int64_t max_elem,
+    const void* sd_inner_proxy,
+    const void* sd_outer_proxy) {
   CHECK(sd_outer_proxy);
   const auto sd_inner_dict_proxy =
       static_cast<const StringDictionaryProxy*>(sd_inner_proxy);

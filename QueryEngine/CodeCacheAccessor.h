@@ -34,13 +34,13 @@ class CodeCacheAccessor {
       , evict_count_(0)
       , name_(std::move(name)) {}
 
-  // TODO: replace get_value/put with get_or_wait/put workflow.
+  // TODO: replace get_value/put with get_or_wait/swap workflow.
   CodeCacheVal<CompilationContext> get_value(const CodeCacheKey& key);
   void put(const CodeCacheKey& key, CodeCacheVal<CompilationContext>& value);
 
-  // get_or_wait and put should be used in pair.
+  // get_or_wait and swap should be used in pair.
   CodeCacheVal<CompilationContext>* get_or_wait(const CodeCacheKey& key);
-  void put(const CodeCacheKey& key, CodeCacheVal<CompilationContext>&& value);
+  void swap(const CodeCacheKey& key, CodeCacheVal<CompilationContext>&& value);
   void clear();
 
   void evictFractionEntries(const float fraction) {

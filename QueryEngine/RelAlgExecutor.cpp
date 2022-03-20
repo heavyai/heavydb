@@ -251,7 +251,7 @@ struct TextEncodingCastCounts {
 };
 class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCounts> {
  protected:
-  TextEncodingCastCounts visitUOper(const Analyzer::UOper* u_oper) const {
+  TextEncodingCastCounts visitUOper(const Analyzer::UOper* u_oper) const override {
     TextEncodingCastCounts result = defaultResult();
     const bool disregard_cast_to_none_encoding = disregard_cast_to_none_encoding_;
     result = aggregateResult(result, visit(u_oper->get_operand()));
@@ -280,7 +280,7 @@ class TextEncodingCastCountVisitor : public ScalarExprVisitor<TextEncodingCastCo
     return result;
   }
 
-  TextEncodingCastCounts visitLikeExpr(const Analyzer::LikeExpr* like) const {
+  TextEncodingCastCounts visitLikeExpr(const Analyzer::LikeExpr* like) const override {
     TextEncodingCastCounts result = defaultResult();
     const auto u_oper = dynamic_cast<const Analyzer::UOper*>(like->get_arg());
     if (u_oper && u_oper->get_optype() == kCAST) {

@@ -264,6 +264,6 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
   auto cpu_compilation_context = std::make_shared<CpuCompilationContext>(std::move(ee));
   cpu_compilation_context->setFunctionPointer(function);
   auto func_ptr = reinterpret_cast<StubGenerator::Stub>(cpu_compilation_context->func());
-  Executor::s_stubs_accessor.put(key, std::move(cpu_compilation_context));
+  Executor::s_stubs_accessor.swap(key, std::move(cpu_compilation_context));
   return func_ptr;
 }

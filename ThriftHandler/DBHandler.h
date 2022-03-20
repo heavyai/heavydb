@@ -574,20 +574,20 @@ class DBHandler : public HeavyIf {
     Returns a list of User-Defined Table Function names available
    */
   void get_table_function_names(std::vector<std::string>& _return,
-                                const TSessionId& session);
+                                const TSessionId& session) override;
 
   /*
     Returns a list of runtime User-Defined Table Function names available
    */
   void get_runtime_table_function_names(std::vector<std::string>& _return,
-                                        const TSessionId& session);
+                                        const TSessionId& session) override;
 
   /*
     Returns a list of User-Defined Table Function details
    */
   void get_table_function_details(std::vector<TUserDefinedTableFunction>& _return,
                                   const TSessionId& session,
-                                  const std::vector<std::string>& udtf_names);
+                                  const std::vector<std::string>& udtf_names) override;
 
   // end of sync block for HAHandler and mapd.thrift
 

@@ -87,7 +87,7 @@ CodeCacheVal<CompilationContext>* CodeCacheAccessor<CompilationContext>::get_or_
 }
 
 template <typename CompilationContext>
-void CodeCacheAccessor<CompilationContext>::put(
+void CodeCacheAccessor<CompilationContext>::swap(
     const CodeCacheKey& key,
     CodeCacheVal<CompilationContext>&& value) {
   std::lock_guard<std::mutex> lock(code_cache_mutex_);

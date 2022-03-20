@@ -457,7 +457,7 @@ std::vector<std::unique_ptr<const StringOp>> StringOps::genStringOpsFromOpInfos(
   std::vector<std::unique_ptr<const StringOp>> string_ops;
   string_ops.reserve(string_op_infos.size());
   for (const auto& string_op_info : string_op_infos) {
-    string_ops.emplace_back(std::move(gen_string_op(string_op_info)));
+    string_ops.emplace_back(gen_string_op(string_op_info));
   }
   return string_ops;
 }

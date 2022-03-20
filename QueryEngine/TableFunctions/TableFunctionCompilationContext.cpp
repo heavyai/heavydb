@@ -441,7 +441,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
     generateGpuKernel();
   }
 
-  Executor::tf_code_accessor.put(key, std::move(finalize(emit_only_preflight_fn)));
+  Executor::tf_code_accessor.swap(key, finalize(emit_only_preflight_fn));
   return Executor::tf_code_accessor.get_value(key);
 }
 

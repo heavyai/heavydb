@@ -1501,8 +1501,6 @@ class StringOper : public Expr {
     chained_string_op_exprs_ = other_string_oper->chained_string_op_exprs_;
   }
 
-  virtual void print() const { std::cout << toString(); }
-
   SqlStringOpKind get_kind() const { return kind_; }
 
   size_t getArity() const { return args_.size(); }
@@ -1552,10 +1550,7 @@ class StringOper : public Expr {
       return true;
     }
     CHECK(arg0_ti.is_dict_encoded_string());
-    if (!arg0_ti.get_comp_param() == TRANSIENT_DICT_ID) {
-      return false;
-    }
-    return true;
+    return arg0_ti.get_comp_param() == TRANSIENT_DICT_ID;
   }
 
   /**
