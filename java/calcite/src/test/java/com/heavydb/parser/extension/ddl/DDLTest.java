@@ -7,14 +7,15 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerHandler;
-import com.omnisci.thrift.calciteserver.TOptimizationOption;
-import com.omnisci.thrift.calciteserver.TPlanResult;
-import com.omnisci.thrift.calciteserver.TQueryParsingOption;
 
 import org.junit.Before;
 
 import java.io.FileReader;
 import java.util.ArrayList;
+
+import ai.heavy.thrift.calciteserver.TOptimizationOption;
+import ai.heavy.thrift.calciteserver.TPlanResult;
+import ai.heavy.thrift.calciteserver.TQueryParsingOption;
 
 public class DDLTest {
   protected String resourceDirPath;

@@ -15,21 +15,6 @@
  */
 package com.mapd.logrunner;
 
-import com.omnisci.thrift.server.Heavy;
-import com.omnisci.thrift.server.TColumn;
-import com.omnisci.thrift.server.TColumnData;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TDBInfo;
-import com.omnisci.thrift.server.TDatum;
-import com.omnisci.thrift.server.TExecuteMode;
-import com.omnisci.thrift.server.TPixel;
-import com.omnisci.thrift.server.TQueryResult;
-import com.omnisci.thrift.server.TRenderResult;
-import com.omnisci.thrift.server.TRow;
-import com.omnisci.thrift.server.TRowSet;
-import com.omnisci.thrift.server.TTableDetails;
-
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TJSONProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -54,6 +39,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
+
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TColumn;
+import ai.heavy.thrift.server.TColumnData;
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TDBInfo;
+import ai.heavy.thrift.server.TDatum;
+import ai.heavy.thrift.server.TExecuteMode;
+import ai.heavy.thrift.server.TPixel;
+import ai.heavy.thrift.server.TQueryResult;
+import ai.heavy.thrift.server.TRenderResult;
+import ai.heavy.thrift.server.TRow;
+import ai.heavy.thrift.server.TRowSet;
+import ai.heavy.thrift.server.TTableDetails;
 
 /**
  *
@@ -89,14 +89,14 @@ public class LogRunner {
     logger.info("In doWork here");
 
     int numberThreads = 3;
-    //    Runnable[] worker = new Runnable[numberThreads];
+    // Runnable[] worker = new Runnable[numberThreads];
     //
-    //    for (int i = 0; i < numberThreads; i++){
+    // for (int i = 0; i < numberThreads; i++){
     //
     Heavy.Client client = getClient(args[0], Integer.valueOf(args[1]));
     String session = getSession(client);
-    //      worker[i] = new myThread(client, session);
-    //    }
+    // worker[i] = new myThread(client, session);
+    // }
 
     logger.info("got session");
     try {
@@ -108,7 +108,8 @@ public class LogRunner {
               new ArrayBlockingQueue<Runnable>(15),
               new ThreadPoolExecutor.CallerRunsPolicy());
       while (true) {
-        // BufferedReader in = new BufferedReader(new FileReader("/data/logfiles/log1"));
+        // BufferedReader in = new BufferedReader(new
+        // FileReader("/data/logfiles/log1"));
         BufferedReader in = new BufferedReader(new FileReader(args[2]));
         String str;
         int current = 0;
@@ -192,7 +193,7 @@ public class LogRunner {
             null,
             -1,
             -1);
-    // client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
+    // client.send_sql_execute(session, "Select BRAND from ACV ;", true);
     // logger.info(" -- before query recv -- ");
     // TQueryResult sql_execute = client.recv_sql_execute();
 
@@ -257,7 +258,7 @@ public class LogRunner {
         String header = str.substring(0, logStart).trim();
 
         String[] headDet = header.split(" .");
-        // logger.info("header "+ header + " count " + headDet.length +  " detail " + det
+        // logger.info("header "+ header + " count " + headDet.length + " detail " + det
         // );
         if (headDet.length != 4 || headDet[0].equals("Log")) {
           return;
@@ -281,7 +282,7 @@ public class LogRunner {
 
         // get_result_row_for_pixel
         // :5pFFQUCKs17GLHOqI7ykK09U8mX7GnLF:widget_id:3:pixel.x:396:pixel.y:53:column_format:1
-        //:PixelRadius:2:table_col_names::points,dest,conv_4326_900913_x(dest_lon) as
+        // :PixelRadius:2:table_col_names::points,dest,conv_4326_900913_x(dest_lon) as
         // x,conv_4326_900913_y(dest_lat) as y,arrdelay as size
         if (det.contains("get_result_row_for_pixel :")) {
           logger.info("det " + det);

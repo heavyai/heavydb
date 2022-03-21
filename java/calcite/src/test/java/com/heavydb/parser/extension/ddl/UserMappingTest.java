@@ -3,10 +3,11 @@ package com.mapd.parser.extension.ddl;
 import static org.junit.Assert.assertEquals;
 
 import com.google.gson.JsonObject;
-import com.omnisci.thrift.calciteserver.InvalidParseRequest;
-import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.junit.Test;
+
+import ai.heavy.thrift.calciteserver.InvalidParseRequest;
+import ai.heavy.thrift.calciteserver.TPlanResult;
 
 public class UserMappingTest extends DDLTest {
   public UserMappingTest() {

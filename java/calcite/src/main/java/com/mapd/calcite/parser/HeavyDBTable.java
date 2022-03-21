@@ -8,10 +8,6 @@ package com.mapd.calcite.parser;
 import com.mapd.metadata.LinestringSqlType;
 import com.mapd.metadata.PointSqlType;
 import com.mapd.metadata.PolygonSqlType;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TTableDetails;
-import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.type.RelDataType;
@@ -29,6 +25,11 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TTableDetails;
+import ai.heavy.thrift.server.TTypeInfo;
 
 /**
  *
@@ -132,13 +133,13 @@ public class HeavyDBTable implements Table {
         return typeFactory.createSqlType(SqlTypeName.INTERVAL_YEAR_MONTH);
       case POINT:
         return typeFactory.createSqlType(SqlTypeName.ANY);
-        // return new PointSqlType();
+      // return new PointSqlType();
       case LINESTRING:
         return typeFactory.createSqlType(SqlTypeName.ANY);
-        // return new LinestringSqlType();
+      // return new LinestringSqlType();
       case POLYGON:
         return typeFactory.createSqlType(SqlTypeName.ANY);
-        // return new PolygonSqlType();
+      // return new PolygonSqlType();
       case MULTIPOLYGON:
         return typeFactory.createSqlType(SqlTypeName.ANY);
       default:

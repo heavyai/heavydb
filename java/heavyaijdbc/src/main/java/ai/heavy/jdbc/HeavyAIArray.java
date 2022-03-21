@@ -2,14 +2,14 @@ package ai.heavy.jdbc;
 
 import static java.lang.Math.toIntExact;
 
-import com.omnisci.thrift.server.*;
-
 import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Map;
+
+import ai.heavy.thrift.server.*;
 
 public class HeavyAIArray implements java.sql.Array {
   private TDatumType type;

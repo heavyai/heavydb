@@ -15,20 +15,6 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.TColumn;
-import com.omnisci.thrift.server.TColumnData;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDBInfo;
-import com.omnisci.thrift.server.TDBObject;
-import com.omnisci.thrift.server.TDBObjectType;
-import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TEncodingType;
-import com.omnisci.thrift.server.TQueryResult;
-import com.omnisci.thrift.server.TRowSet;
-import com.omnisci.thrift.server.TTableDetails;
-import com.omnisci.thrift.server.TTablePermissions;
-import com.omnisci.thrift.server.TTypeInfo;
-
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +25,20 @@ import java.sql.ResultSet;
 import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.util.*;
+
+import ai.heavy.thrift.server.TColumn;
+import ai.heavy.thrift.server.TColumnData;
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDBInfo;
+import ai.heavy.thrift.server.TDBObject;
+import ai.heavy.thrift.server.TDBObjectType;
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TEncodingType;
+import ai.heavy.thrift.server.TQueryResult;
+import ai.heavy.thrift.server.TRowSet;
+import ai.heavy.thrift.server.TTableDetails;
+import ai.heavy.thrift.server.TTablePermissions;
+import ai.heavy.thrift.server.TTypeInfo;
 
 /**
  *
@@ -67,7 +67,7 @@ class HeavyAIDatabaseMetaData implements DatabaseMetaData {
       databaseMinorVersion = Integer.parseInt(vers[1]);
     } catch (NumberFormatException ex) {
       throw new SQLException(
-              "Non-numeric version returned from HEVAY.AI server: " + ex.getMessage());
+              "Non-numeric version returned from HEAVY.AI server: " + ex.getMessage());
     }
   }
 
@@ -787,11 +787,11 @@ class HeavyAIDatabaseMetaData implements DatabaseMetaData {
           throws SQLException {
     HEAVYDBLOGGER.debug("Entered");
     return null;
-    //    throw new UnsupportedOperationException("Not supported yet," + " line:" + new
-    //    Throwable().getStackTrace()[0].
-    //            getLineNumber() + " class:" + new
-    //            Throwable().getStackTrace()[0].getClassName() + " method:" + new
-    //            Throwable(). getStackTrace()[0].getMethodName());
+    // throw new UnsupportedOperationException("Not supported yet," + " line:" + new
+    // Throwable().getStackTrace()[0].
+    // getLineNumber() + " class:" + new
+    // Throwable().getStackTrace()[0].getClassName() + " method:" + new
+    // Throwable(). getStackTrace()[0].getMethodName());
   }
 
   @Override
@@ -825,33 +825,49 @@ class HeavyAIDatabaseMetaData implements DatabaseMetaData {
   }
 
   /*
-Retrieves a description of the tables available in the given catalog. Only table
-descriptions matching the catalog, schema, table name and type criteria are returned. They
-are ordered by TABLE_TYPE, TABLE_CAT, TABLE_SCHEM and TABLE_NAME. Each table description
-has the following columns:
-
-TABLE_CAT String => table catalog (may be null)
-TABLE_SCHEM String => table schema (may be null)
-TABLE_NAME String => table name
-TABLE_TYPE String => table type. Typical types are "TABLE", "VIEW", "SYSTEM TABLE",
-"GLOBAL TEMPORARY", "LOCAL TEMPORARY", "ALIAS", "SYNONYM". REMARKS String => explanatory
-comment on the table TYPE_CAT String => the types catalog (may be null) TYPE_SCHEM String
-=> the types schema (may be null) TYPE_NAME String => type name (may be null)
-SELF_REFERENCING_COL_NAME String => name of the designated "identifier" column of a typed
-table (may be null) REF_GENERATION String => specifies how values in
-SELF_REFERENCING_COL_NAME are created. Values are "SYSTEM", "USER", "DERIVED". (may be
-null) Note: Some databases may not return information for all tables.
-
-Parameters:
-catalog - a catalog name; must match the catalog name as it is stored in the database; ""
-retrieves those without a catalog; null means that the catalog name should not be used to
-narrow the search schemaPattern - a schema name pattern; must match the schema name as it
-is stored in the database; "" retrieves those without a schema; null means that the schema
-name should not be used to narrow the search tableNamePattern - a table name pattern; must
-match the table name as it is stored in the database types - a list of table types, which
-must be from the list of table types returned from getTableTypes(),to include; null
-returns all types Returns: ResultSet - each row is a table description Throws:
-SQLException - if a database access error occurs
+   * Retrieves a description of the tables available in the given catalog. Only
+   * table
+   * descriptions matching the catalog, schema, table name and type criteria are
+   * returned. They
+   * are ordered by TABLE_TYPE, TABLE_CAT, TABLE_SCHEM and TABLE_NAME. Each table
+   * description
+   * has the following columns:
+   *
+   * TABLE_CAT String => table catalog (may be null)
+   * TABLE_SCHEM String => table schema (may be null)
+   * TABLE_NAME String => table name
+   * TABLE_TYPE String => table type. Typical types are "TABLE", "VIEW",
+   * "SYSTEM TABLE",
+   * "GLOBAL TEMPORARY", "LOCAL TEMPORARY", "ALIAS", "SYNONYM". REMARKS String =>
+   * explanatory
+   * comment on the table TYPE_CAT String => the types catalog (may be null)
+   * TYPE_SCHEM String
+   * => the types schema (may be null) TYPE_NAME String => type name (may be null)
+   * SELF_REFERENCING_COL_NAME String => name of the designated "identifier"
+   * column of a typed
+   * table (may be null) REF_GENERATION String => specifies how values in
+   * SELF_REFERENCING_COL_NAME are created. Values are "SYSTEM", "USER",
+   * "DERIVED". (may be
+   * null) Note: Some databases may not return information for all tables.
+   *
+   * Parameters:
+   * catalog - a catalog name; must match the catalog name as it is stored in the
+   * database; ""
+   * retrieves those without a catalog; null means that the catalog name should
+   * not be used to
+   * narrow the search schemaPattern - a schema name pattern; must match the
+   * schema name as it
+   * is stored in the database; "" retrieves those without a schema; null means
+   * that the schema
+   * name should not be used to narrow the search tableNamePattern - a table name
+   * pattern; must
+   * match the table name as it is stored in the database types - a list of table
+   * types, which
+   * must be from the list of table types returned from getTableTypes(),to
+   * include; null
+   * returns all types Returns: ResultSet - each row is a table description
+   * Throws:
+   * SQLException - if a database access error occurs
    */
   @Override
   public ResultSet getTables(
@@ -890,7 +906,7 @@ SQLException - if a database access error occurs
     Map<String, ArrayList<Boolean>> nullMap = new HashMap(columns.length);
 
     // create component to contain the meta data for the rows
-    // and create  a container to store the data and the nul indicators
+    // and create a container to store the data and the nul indicators
     List<TColumnType> rowDesc = new ArrayList(columns.length);
     for (TColumnType col : columns) {
       rowDesc.add(col);
@@ -931,7 +947,7 @@ SQLException - if a database access error occurs
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
     TQueryResult result = new TQueryResult(
-            rowSet, 0, 0, null, null, true, com.omnisci.thrift.server.TQueryType.UNKNOWN);
+            rowSet, 0, 0, null, null, true, ai.heavy.thrift.server.TQueryType.UNKNOWN);
 
     HeavyAIResultSet tab = new HeavyAIResultSet(result, "GetTables");
     return tab;
@@ -995,7 +1011,7 @@ SQLException - if a database access error occurs
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
     TQueryResult result = new TQueryResult(
-            rowSet, 0, 0, null, null, true, com.omnisci.thrift.server.TQueryType.UNKNOWN);
+            rowSet, 0, 0, null, null, true, ai.heavy.thrift.server.TQueryType.UNKNOWN);
 
     HeavyAIResultSet schemas = new HeavyAIResultSet(result, "getSchemas");
     return schemas;
@@ -1018,7 +1034,7 @@ SQLException - if a database access error occurs
     Map<String, HeavyAIData> dataMap = new HashMap(columns.length);
 
     // create component to contain the meta data for the rows
-    // and create  a container to store the data and the nul indicators
+    // and create a container to store the data and the nul indicators
     List<TColumnType> rowDesc = new ArrayList(columns.length);
     for (TColumnType col : columns) {
       rowDesc.add(col);
@@ -1040,7 +1056,7 @@ SQLException - if a database access error occurs
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
     TQueryResult result = new TQueryResult(
-            rowSet, 0, 0, null, null, true, com.omnisci.thrift.server.TQueryType.UNKNOWN);
+            rowSet, 0, 0, null, null, true, ai.heavy.thrift.server.TQueryType.UNKNOWN);
 
     HeavyAIResultSet tab = new HeavyAIResultSet(result, "getTableTypes");
 
@@ -1049,60 +1065,96 @@ SQLException - if a database access error occurs
   }
 
   /*
-  Retrieves a description of table columns available in the specified catalog.
-Only column descriptions matching the catalog, schema, table and column name criteria are
-returned. They are ordered by TABLE_CAT,TABLE_SCHEM, TABLE_NAME, and ORDINAL_POSITION.
-
-Each column description has the following columns:
-
-TABLE_CAT String => table catalog (may be null)
-TABLE_SCHEM String => table schema (may be null)
-TABLE_NAME String => table name
-COLUMN_NAME String => column name
-DATA_TYPE int => SQL type from java.sql.Types
-TYPE_NAME String => Data source dependent type name, for a UDT the type name is fully
-qualified COLUMN_SIZE int => column size. BUFFER_LENGTH is not used. DECIMAL_DIGITS int =>
-the number of fractional digits. Null is returned for data types where DECIMAL_DIGITS is
-not applicable. NUM_PREC_RADIX int => Radix (typically either 10 or 2) NULLABLE int => is
-NULL allowed. columnNoNulls - might not allow NULL values columnNullable - definitely
-allows NULL values columnNullableUnknown - nullability unknown REMARKS String => comment
-describing column (may be null) COLUMN_DEF String => default value for the column, which
-should be interpreted as a string when the value is enclosed in single quotes (may be
-null) SQL_DATA_TYPE int => unused SQL_DATETIME_SUB int => unused CHAR_OCTET_LENGTH int =>
-for char types the maximum number of bytes in the column ORDINAL_POSITION int => index of
-column in table (starting at 1) IS_NULLABLE String => ISO rules are used to determine the
-nullability for a column. YES --- if the column can include NULLs NO --- if the column
-cannot include NULLs empty string --- if the nullability for the column is unknown
-SCOPE_CATALOG String => catalog of table that is the scope of a reference attribute (null
-if DATA_TYPE isn't REF) SCOPE_SCHEMA String => schema of table that is the scope of a
-reference attribute (null if the DATA_TYPE isn't REF) SCOPE_TABLE String => table name
-that this the scope of a reference attribute (null if the DATA_TYPE isn't REF)
-SOURCE_DATA_TYPE short => source type of a distinct type or user-generated Ref type, SQL
-type from java.sql.Types (null if DATA_TYPE isn't DISTINCT or user-generated REF)
-IS_AUTOINCREMENT String => Indicates whether this column is auto incremented
-YES --- if the column is auto incremented
-NO --- if the column is not auto incremented
-empty string --- if it cannot be determined whether the column is auto incremented
-IS_GENERATEDCOLUMN String => Indicates whether this is a generated column
-YES --- if this a generated column
-NO --- if this not a generated column
-empty string --- if it cannot be determined whether this is a generated column
-The COLUMN_SIZE column specifies the column size for the given column. For numeric data,
-this is the maximum precision. For character data, this is the length in characters. For
-datetime datatypes, this is the length in characters of the String representation
-(assuming the maximum allowed precision of the fractional seconds component). For binary
-data, this is the length in bytes. For the ROWID datatype, this is the length in bytes.
-Null is returned for data types where the column size is not applicable.
-
-Parameters:
-catalog - a catalog name; must match the catalog name as it is stored in the database; ""
-retrieves those without a catalog; null means that the catalog name should not be used to
-narrow the search schemaPattern - a schema name pattern; must match the schema name as it
-is stored in the database; "" retrieves those without a schema; null means that the schema
-name should not be used to narrow the search tableNamePattern - a table name pattern; must
-match the table name as it is stored in the database columnNamePattern - a column name
-pattern; must match the column name as it is stored in the database Returns: ResultSet -
-each row is a column description Throws: SQLException - if a database access error occurs
+   * Retrieves a description of table columns available in the specified catalog.
+   * Only column descriptions matching the catalog, schema, table and column name
+   * criteria are
+   * returned. They are ordered by TABLE_CAT,TABLE_SCHEM, TABLE_NAME, and
+   * ORDINAL_POSITION.
+   *
+   * Each column description has the following columns:
+   *
+   * TABLE_CAT String => table catalog (may be null)
+   * TABLE_SCHEM String => table schema (may be null)
+   * TABLE_NAME String => table name
+   * COLUMN_NAME String => column name
+   * DATA_TYPE int => SQL type from java.sql.Types
+   * TYPE_NAME String => Data source dependent type name, for a UDT the type name
+   * is fully
+   * qualified COLUMN_SIZE int => column size. BUFFER_LENGTH is not used.
+   * DECIMAL_DIGITS int =>
+   * the number of fractional digits. Null is returned for data types where
+   * DECIMAL_DIGITS is
+   * not applicable. NUM_PREC_RADIX int => Radix (typically either 10 or 2)
+   * NULLABLE int => is
+   * NULL allowed. columnNoNulls - might not allow NULL values columnNullable -
+   * definitely
+   * allows NULL values columnNullableUnknown - nullability unknown REMARKS String
+   * => comment
+   * describing column (may be null) COLUMN_DEF String => default value for the
+   * column, which
+   * should be interpreted as a string when the value is enclosed in single quotes
+   * (may be
+   * null) SQL_DATA_TYPE int => unused SQL_DATETIME_SUB int => unused
+   * CHAR_OCTET_LENGTH int =>
+   * for char types the maximum number of bytes in the column ORDINAL_POSITION int
+   * => index of
+   * column in table (starting at 1) IS_NULLABLE String => ISO rules are used to
+   * determine the
+   * nullability for a column. YES --- if the column can include NULLs NO --- if
+   * the column
+   * cannot include NULLs empty string --- if the nullability for the column is
+   * unknown
+   * SCOPE_CATALOG String => catalog of table that is the scope of a reference
+   * attribute (null
+   * if DATA_TYPE isn't REF) SCOPE_SCHEMA String => schema of table that is the
+   * scope of a
+   * reference attribute (null if the DATA_TYPE isn't REF) SCOPE_TABLE String =>
+   * table name
+   * that this the scope of a reference attribute (null if the DATA_TYPE isn't
+   * REF)
+   * SOURCE_DATA_TYPE short => source type of a distinct type or user-generated
+   * Ref type, SQL
+   * type from java.sql.Types (null if DATA_TYPE isn't DISTINCT or user-generated
+   * REF)
+   * IS_AUTOINCREMENT String => Indicates whether this column is auto incremented
+   * YES --- if the column is auto incremented
+   * NO --- if the column is not auto incremented
+   * empty string --- if it cannot be determined whether the column is auto
+   * incremented
+   * IS_GENERATEDCOLUMN String => Indicates whether this is a generated column
+   * YES --- if this a generated column
+   * NO --- if this not a generated column
+   * empty string --- if it cannot be determined whether this is a generated
+   * column
+   * The COLUMN_SIZE column specifies the column size for the given column. For
+   * numeric data,
+   * this is the maximum precision. For character data, this is the length in
+   * characters. For
+   * datetime datatypes, this is the length in characters of the String
+   * representation
+   * (assuming the maximum allowed precision of the fractional seconds component).
+   * For binary
+   * data, this is the length in bytes. For the ROWID datatype, this is the length
+   * in bytes.
+   * Null is returned for data types where the column size is not applicable.
+   *
+   * Parameters:
+   * catalog - a catalog name; must match the catalog name as it is stored in the
+   * database; ""
+   * retrieves those without a catalog; null means that the catalog name should
+   * not be used to
+   * narrow the search schemaPattern - a schema name pattern; must match the
+   * schema name as it
+   * is stored in the database; "" retrieves those without a schema; null means
+   * that the schema
+   * name should not be used to narrow the search tableNamePattern - a table name
+   * pattern; must
+   * match the table name as it is stored in the database columnNamePattern - a
+   * column name
+   * pattern; must match the column name as it is stored in the database Returns:
+   * ResultSet -
+   * each row is a column description Throws: SQLException - if a database access
+   * error occurs
    */
   @Override
   public ResultSet getColumns(String catalog,
@@ -1154,7 +1206,7 @@ each row is a column description Throws: SQLException - if a database access err
     Map<String, HeavyAIData> dataMap = new HashMap(columns.length);
 
     // create component to contain the meta data for the rows
-    // and create  a container to store the data and the nul indicators
+    // and create a container to store the data and the nul indicators
     List<TColumnType> rowDesc = new ArrayList(columns.length);
     for (TColumnType col : columns) {
       rowDesc.add(col);
@@ -1239,7 +1291,7 @@ each row is a column description Throws: SQLException - if a database access err
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
     TQueryResult result = new TQueryResult(
-            rowSet, 0, 0, null, null, true, com.omnisci.thrift.server.TQueryType.UNKNOWN);
+            rowSet, 0, 0, null, null, true, ai.heavy.thrift.server.TQueryType.UNKNOWN);
 
     HeavyAIResultSet cols = new HeavyAIResultSet(result, "getColumns");
     return cols;
@@ -1260,7 +1312,8 @@ each row is a column description Throws: SQLException - if a database access err
     return new HeavyAIResultSet();
   }
 
-  // this method is needed to build an empty resultset with columns names and datatypes
+  // this method is needed to build an empty resultset with columns names and
+  // datatypes
   public ResultSet getEmptyResultSetWithDesc(TColumnType columns[])
           throws SQLException { // for compatibility and future
     Map<String, HeavyAIData> dataMap = new HashMap(columns.length);
@@ -1276,7 +1329,7 @@ each row is a column description Throws: SQLException - if a database access err
     }
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
     TQueryResult result = new TQueryResult(
-            rowSet, 0, 0, null, null, true, com.omnisci.thrift.server.TQueryType.UNKNOWN);
+            rowSet, 0, 0, null, null, true, ai.heavy.thrift.server.TQueryType.UNKNOWN);
     HeavyAIResultSet cols = new HeavyAIResultSet(result, "getColumns");
     return cols;
   }
@@ -1293,17 +1346,17 @@ each row is a column description Throws: SQLException - if a database access err
 
       // check if the table matches the input pattern
       for (TDBObject db_object : db_objects) {
-        //  If the user is a super user then the  objectName will be super
-        //  and needs to be changed to the table name.
+        // If the user is a super user then the objectName will be super
+        // and needs to be changed to the table name.
         if (db_object.objectName.equalsIgnoreCase("super")) {
           db_object.objectName = table;
         }
-        // A bunch of db objects come back.  Any with a different name throw away
+        // A bunch of db objects come back. Any with a different name throw away
         if (!db_object.objectName.equalsIgnoreCase(table)) {
           continue;
         }
 
-        // Create  set of table permissions based ont he db_object.  This seems to
+        // Create set of table permissions based ont he db_object. This seems to
         // be the only way - though being hardwired on the number of privs is not great.
         TTablePermissions tt = new TTablePermissions(db_object.privs.get(0),
                 db_object.privs.get(1),
@@ -1321,7 +1374,7 @@ each row is a column description Throws: SQLException - if a database access err
           if (x == false) {
             continue;
           }
-          // standardise the fieldName upper case and remove trailing '_'.  create_ =>
+          // standardise the fieldName upper case and remove trailing '_'. create_ =>
           // CREATE
           dataMap.get("PRIVILEGE")
                   .add(field.getFieldName().toUpperCase().replace("_", ""));
@@ -1374,7 +1427,7 @@ each row is a column description Throws: SQLException - if a database access err
     }
 
     // create component to contain the meta data for the rows
-    // and create  a container to store the data and the nul indicators
+    // and create a container to store the data and the nul indicators
     // List<TColumnType> rowDesc = new ArrayList(columns.length);
 
     List<TColumnType> rowDesc = new ArrayList(dataMap.size());
@@ -1389,7 +1442,7 @@ each row is a column description Throws: SQLException - if a database access err
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
     TQueryResult result = new TQueryResult(
-            rowSet, 0, 0, null, null, true, com.omnisci.thrift.server.TQueryType.UNKNOWN);
+            rowSet, 0, 0, null, null, true, ai.heavy.thrift.server.TQueryType.UNKNOWN);
 
     HeavyAIResultSet cols = new HeavyAIResultSet(result, "getPrivileges");
     return cols;
@@ -1510,55 +1563,67 @@ each row is a column description Throws: SQLException - if a database access err
   }
 
   /*
-  Retrieves a description of all the data types supported by this database. They are
-ordered by DATA_TYPE and then by how closely the data type maps to the corresponding JDBC
-SQL type. If the database supports SQL distinct types, then getTypeInfo() will return a
-single row with a TYPE_NAME of DISTINCT and a DATA_TYPE of Types.DISTINCT. If the database
-supports SQL structured types, then getTypeInfo() will return a single row with a
-TYPE_NAME of STRUCT and a DATA_TYPE of Types.STRUCT.
-
-If SQL distinct or structured types are supported, then information on the individual
-types may be obtained from the getUDTs() method.
-
-Each type description has the following columns:
-
-TYPE_NAME String => Type name
-DATA_TYPE int => SQL data type from java.sql.Types
-PRECISION int => maximum precision
-LITERAL_PREFIX String => prefix used to quote a literal (may be null)
-LITERAL_SUFFIX String => suffix used to quote a literal (may be null)
-CREATE_PARAMS String => parameters used in creating the type (may be null)
-NULLABLE short => can you use NULL for this type.
-typeNoNulls - does not allow NULL values
-typeNullable - allows NULL values
-typeNullableUnknown - nullability unknown
-CASE_SENSITIVE boolean=> is it case sensitive.
-SEARCHABLE short => can you use "WHERE" based on this type:
-typePredNone - No support
-typePredChar - Only supported with WHERE .. LIKE
-typePredBasic - Supported except for WHERE .. LIKE
-typeSearchable - Supported for all WHERE ..
-UNSIGNED_ATTRIBUTE boolean => is it unsigned.
-FIXED_PREC_SCALE boolean => can it be a money value.
-AUTO_INCREMENT boolean => can it be used for an auto-increment value.
-LOCAL_TYPE_NAME String => localized version of type name (may be null)
-MINIMUM_SCALE short => minimum scale supported
-MAXIMUM_SCALE short => maximum scale supported
-SQL_DATA_TYPE int => unused
-SQL_DATETIME_SUB int => unused
-NUM_PREC_RADIX int => usually 2 or 10
-The PRECISION column represents the maximum column size that the server supports for the
-given datatype. For numeric data, this is the maximum precision. For character data, this
-is the length in characters. For datetime datatypes, this is the length in characters of
-the String representation (assuming the maximum allowed precision of the fractional
-seconds component). For binary data, this is the length in bytes. For the ROWID datatype,
-this is the length in bytes. Null is returned for data types where the column size is not
-applicable.
-
-Returns:
-a ResultSet object in which each row is an SQL type description
-Throws:
-SQLException - if a database access error occurs
+   * Retrieves a description of all the data types supported by this database.
+   * They are
+   * ordered by DATA_TYPE and then by how closely the data type maps to the
+   * corresponding JDBC
+   * SQL type. If the database supports SQL distinct types, then getTypeInfo()
+   * will return a
+   * single row with a TYPE_NAME of DISTINCT and a DATA_TYPE of Types.DISTINCT. If
+   * the database
+   * supports SQL structured types, then getTypeInfo() will return a single row
+   * with a
+   * TYPE_NAME of STRUCT and a DATA_TYPE of Types.STRUCT.
+   *
+   * If SQL distinct or structured types are supported, then information on the
+   * individual
+   * types may be obtained from the getUDTs() method.
+   *
+   * Each type description has the following columns:
+   *
+   * TYPE_NAME String => Type name
+   * DATA_TYPE int => SQL data type from java.sql.Types
+   * PRECISION int => maximum precision
+   * LITERAL_PREFIX String => prefix used to quote a literal (may be null)
+   * LITERAL_SUFFIX String => suffix used to quote a literal (may be null)
+   * CREATE_PARAMS String => parameters used in creating the type (may be null)
+   * NULLABLE short => can you use NULL for this type.
+   * typeNoNulls - does not allow NULL values
+   * typeNullable - allows NULL values
+   * typeNullableUnknown - nullability unknown
+   * CASE_SENSITIVE boolean=> is it case sensitive.
+   * SEARCHABLE short => can you use "WHERE" based on this type:
+   * typePredNone - No support
+   * typePredChar - Only supported with WHERE .. LIKE
+   * typePredBasic - Supported except for WHERE .. LIKE
+   * typeSearchable - Supported for all WHERE ..
+   * UNSIGNED_ATTRIBUTE boolean => is it unsigned.
+   * FIXED_PREC_SCALE boolean => can it be a money value.
+   * AUTO_INCREMENT boolean => can it be used for an auto-increment value.
+   * LOCAL_TYPE_NAME String => localized version of type name (may be null)
+   * MINIMUM_SCALE short => minimum scale supported
+   * MAXIMUM_SCALE short => maximum scale supported
+   * SQL_DATA_TYPE int => unused
+   * SQL_DATETIME_SUB int => unused
+   * NUM_PREC_RADIX int => usually 2 or 10
+   * The PRECISION column represents the maximum column size that the server
+   * supports for the
+   * given datatype. For numeric data, this is the maximum precision. For
+   * character data, this
+   * is the length in characters. For datetime datatypes, this is the length in
+   * characters of
+   * the String representation (assuming the maximum allowed precision of the
+   * fractional
+   * seconds component). For binary data, this is the length in bytes. For the
+   * ROWID datatype,
+   * this is the length in bytes. Null is returned for data types where the column
+   * size is not
+   * applicable.
+   *
+   * Returns:
+   * a ResultSet object in which each row is an SQL type description
+   * Throws:
+   * SQLException - if a database access error occurs
    */
   @Override
   public ResultSet getTypeInfo() throws SQLException {
@@ -1595,7 +1660,7 @@ SQLException - if a database access error occurs
     Map<String, HeavyAIData> dataMap = new HashMap(columns.length);
 
     // create component to contain the meta data for the rows
-    // and create  a container to store the data and the nul indicators
+    // and create a container to store the data and the nul indicators
     List<TColumnType> rowDesc = new ArrayList(columns.length);
     for (TColumnType col : columns) {
       rowDesc.add(col);
@@ -1606,10 +1671,10 @@ SQLException - if a database access error occurs
     dataMap.get("TYPE_NAME").setNull(true); // String => Type name
     dataMap.get("DATA_TYPE").setNull(true); // int => SQL data type from java.sql.Types
     dataMap.get("PRECISION").setNull(true); // int => maximum precision
-    dataMap.get("LITERAL_PREFIX").setNull(true); //.setNull(true);// String => prefix used
-                                                 // to quote a literal (may be null)
-    dataMap.get("LITERAL_SUFFIX").setNull(true); //.setNull(true);// String => suffix used
-                                                 // to quote a literal (may be null)
+    dataMap.get("LITERAL_PREFIX").setNull(true); // .setNull(true);// String => prefix
+                                                 // used to quote a literal (may be null)
+    dataMap.get("LITERAL_SUFFIX").setNull(true); // .setNull(true);// String => suffix
+                                                 // used to quote a literal (may be null)
     dataMap.get("CREATE_PARAMS")
             .setNull(
                     true); // String => parameters used in creating the type (may be null)
@@ -1648,7 +1713,7 @@ SQLException - if a database access error occurs
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
     TQueryResult result = new TQueryResult(
-            rowSet, 0, 0, null, null, true, com.omnisci.thrift.server.TQueryType.UNKNOWN);
+            rowSet, 0, 0, null, null, true, ai.heavy.thrift.server.TQueryType.UNKNOWN);
 
     HeavyAIResultSet cols = new HeavyAIResultSet(result, "getTypeInfo");
     return cols;

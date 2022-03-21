@@ -25,14 +25,6 @@ import com.mapd.calcite.parser.HeavyDBTable;
 import com.mapd.calcite.parser.HeavyDBUser;
 import com.mapd.calcite.parser.HeavyDBView;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.server.Heavy;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TDBInfo;
-import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TEncodingType;
-import com.omnisci.thrift.server.TTableDetails;
-import com.omnisci.thrift.server.TTypeInfo;
 
 import org.apache.calcite.schema.Table;
 import org.apache.thrift.TException;
@@ -60,6 +52,15 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TDBInfo;
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TEncodingType;
+import ai.heavy.thrift.server.TTableDetails;
+import ai.heavy.thrift.server.TTypeInfo;
 
 /**
  *

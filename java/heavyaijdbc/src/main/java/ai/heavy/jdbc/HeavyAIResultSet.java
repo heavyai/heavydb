@@ -15,11 +15,6 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TQueryResult;
-import com.omnisci.thrift.server.TRowSet;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +27,11 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TQueryResult;
+import ai.heavy.thrift.server.TRowSet;
 
 /**
  *
@@ -1413,7 +1413,8 @@ class HeavyAIResultSet implements java.sql.ResultSet {
     return getArray(findColumnByName(columnLabel));
   }
 
-  // this method is used to add a TZ from Calendar; is TimeZone in the calendar isn't
+  // this method is used to add a TZ from Calendar; is TimeZone in the calendar
+  // isn't
   // specified it uses the local TZ
   private long getOffsetFromTZ(long actualmillis, Calendar cal, int precision) {
     long offset;

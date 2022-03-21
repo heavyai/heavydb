@@ -16,7 +16,6 @@
 package com.mapd.parser.server;
 
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.CalciteServer.Processor;
 
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
@@ -26,6 +25,8 @@ import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import ai.heavy.thrift.calciteserver.CalciteServer.Processor;
 
 /**
  *
@@ -45,7 +46,7 @@ public class CalciteServerWrapper implements Runnable {
 
   public CalciteServerWrapper() {
     handler = new CalciteServerHandler(heavyDBPort, dataDir, null, null, "");
-    processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
+    processor = new ai.heavy.thrift.calciteserver.CalciteServer.Processor(handler);
   }
 
   public CalciteServerWrapper(int calcitePort,
@@ -56,7 +57,7 @@ public class CalciteServerWrapper implements Runnable {
           SockTransportProperties server_skT) {
     handler = new CalciteServerHandler(
             heavyDBPort, dataDir, extensionFunctionsAstFile, client_skT, "");
-    processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
+    processor = new ai.heavy.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.heavyDBPort = heavyDBPort;
     this.server_skT_ = server_skT;
@@ -74,7 +75,7 @@ public class CalciteServerWrapper implements Runnable {
             extensionFunctionsAstFile,
             client_skT,
             userDefinedFunctionsFile);
-    processor = new com.omnisci.thrift.calciteserver.CalciteServer.Processor(handler);
+    processor = new ai.heavy.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.heavyDBPort = heavyDBPort;
     this.server_skT_ = server_skT;
@@ -85,7 +86,7 @@ public class CalciteServerWrapper implements Runnable {
   }
 
   private void startServer(
-          com.omnisci.thrift.calciteserver.CalciteServer.Processor processor) {
+          ai.heavy.thrift.calciteserver.CalciteServer.Processor processor) {
     try {
       TServerTransport serverTransport = server_skT_.openServerTransport(calcitePort);
       server = new TThreadPoolServer(

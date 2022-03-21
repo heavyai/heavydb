@@ -953,8 +953,8 @@ set_target_properties(heavydb PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEF
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/heavy.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/Heavy.java
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/TRow.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/Heavy.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/TRow.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/heavy.thrift)
@@ -962,7 +962,7 @@ add_custom_command(
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/common.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/common.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift)
@@ -970,14 +970,14 @@ add_custom_command(
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     OUTPUT
-        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/serialized_result_set.java
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/serialized_result_set.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
-    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
+    OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/calciteserver/CalciteServer.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -I ${CMAKE_SOURCE_DIR} -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
@@ -1152,8 +1152,8 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/server/Heavy.java
-    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/omnisci/thrift/calciteserver/CalciteServer.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/Heavy.java
+    ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/calciteserver/CalciteServer.java
     ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml
     ${CMAKE_SOURCE_DIR}/heavy.thrift

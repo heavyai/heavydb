@@ -15,10 +15,6 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.Heavy;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TQueryResult;
-
 import org.apache.thrift.TException;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +24,10 @@ import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TQueryResult;
 
 /**
  *
@@ -60,7 +60,8 @@ public class HeavyAIStatement implements java.sql.Statement {
   public ResultSet executeQuery(String sql)
           throws SQLException { // logger.debug("Entered");
     checkClosed();
-    // @TODO: we can and probably should use "first_n" parameter of the sql_execute()
+    // @TODO: we can and probably should use "first_n" parameter of the
+    // sql_execute()
     // endpoint to force the limit on the query, instead of rewriting it here.
     if (maxRows >= 0) {
       // add limit to sql call if it doesn't already have one and is a select
@@ -70,7 +71,7 @@ public class HeavyAIStatement implements java.sql.Statement {
           // do nothing -
         } else {
           // Some applications add TOP <number> to limit the
-          // select statement rather than limit.  Remove TOP and keep
+          // select statement rather than limit. Remove TOP and keep
           // the number it used as the limit.
           Matcher matcher = top_pattern.matcher(sql);
           // Take "select TOP nnnn <rest ot sql>" and translate to select <reset of sql:
@@ -491,7 +492,8 @@ public class HeavyAIStatement implements java.sql.Statement {
    * any alpha numeric For example 'CURRENT_TIME)' is okay while a string
    * like CURRENT_DATE_NOW isn't
    *
-   * Note we've include the non standard version with parenthesis to align with third
+   * Note we've include the non standard version with parenthesis to align with
+   * third
    * party software.
    *
    * Breaking down the components of the pattern
@@ -504,6 +506,7 @@ public class HeavyAIStatement implements java.sql.Statement {
   private static final Pattern CURRENTDATE =
           Pattern.compile("(?<![\\w.])CURRENT_DATE(?:\\(\\))?(?![\\w.])",
                   Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+
   public static String simplisticDateTransform(String sql) {
     // need to iterate as each reduction of string opens up a anew match
     String start;

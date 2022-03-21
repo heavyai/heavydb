@@ -19,14 +19,15 @@ import static com.mapd.tests.HeavyDBAsserts.shouldThrowException;
 
 import com.mapd.tests.HeavyDBAsserts;
 import com.mapd.tests.HeavyDBTestClient;
-import com.omnisci.thrift.server.TDBObject;
-import com.omnisci.thrift.server.TDBObjectType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
+
+import ai.heavy.thrift.server.TDBObject;
+import ai.heavy.thrift.server.TDBObjectType;
 
 public class DashboardTest {
   final static Logger logger = LoggerFactory.getLogger(DashboardTest.class);

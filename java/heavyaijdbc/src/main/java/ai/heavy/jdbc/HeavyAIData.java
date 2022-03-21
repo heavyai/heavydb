@@ -15,12 +15,12 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.TColumn;
-import com.omnisci.thrift.server.TColumnData;
-import com.omnisci.thrift.server.TDatumType;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import ai.heavy.thrift.server.TColumn;
+import ai.heavy.thrift.server.TColumnData;
+import ai.heavy.thrift.server.TDatumType;
 
 /**
  *

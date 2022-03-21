@@ -15,13 +15,6 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TCopyParams;
-import com.omnisci.thrift.server.TCreateParams;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TImportHeaderRow;
-import com.omnisci.thrift.server.TSourceType;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +22,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TCopyParams;
+import ai.heavy.thrift.server.TCreateParams;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TImportHeaderRow;
+import ai.heavy.thrift.server.TSourceType;
 
 public class ImportAlterValidateSelectConcurrencyTest {
   final static String csvTableName = "import_test_mixed_varlen";
@@ -48,8 +48,8 @@ public class ImportAlterValidateSelectConcurrencyTest {
 
   public static void main(String[] args) throws Exception {
     // Command Line Args:
-    //  0: CSV file to import (absolute path accessible by server)
-    //  1: Geo file to import (absolute path accessible by server)
+    // 0: CSV file to import (absolute path accessible by server)
+    // 1: Geo file to import (absolute path accessible by server)
     assert args.length == 2;
     ImportAlterValidateSelectConcurrencyTest test =
             new ImportAlterValidateSelectConcurrencyTest(args[0], args[1]);

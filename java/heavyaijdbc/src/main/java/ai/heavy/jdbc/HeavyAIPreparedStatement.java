@@ -15,13 +15,6 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.Heavy;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TStringRow;
-import com.omnisci.thrift.server.TStringValue;
-import com.omnisci.thrift.server.TTableDetails;
-
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,6 +47,13 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TStringRow;
+import ai.heavy.thrift.server.TStringValue;
+import ai.heavy.thrift.server.TTableDetails;
 
 /**
  *
@@ -96,7 +96,8 @@ class HeavyAIPreparedStatement implements PreparedStatement {
     this.session = session;
     this.stmt = new HeavyAIStatement(session, connection);
     HEAVYDBLOGGER.debug("Prepared statement is " + currentSQL);
-    // TODO in real life this needs to check if the ? is inside quotes before we assume it
+    // TODO in real life this needs to check if the ? is inside quotes before we
+    // assume it
     // a parameter
     brokenSQL = currentSQL.split("\\?", -1);
     parmCount = brokenSQL.length - 1;
@@ -105,7 +106,8 @@ class HeavyAIPreparedStatement implements PreparedStatement {
     parmIsString = new boolean[parmCount];
     repCount = 0;
     if (currentSQL.toUpperCase().contains("INSERT ")) {
-      // remove double quotes required for queries generated with " around all names like
+      // remove double quotes required for queries generated with " around all names
+      // like
       // kafka connect
       currentSQL = currentSQL.replaceAll("\"", " ");
       HEAVYDBLOGGER.debug("Insert Prepared statement is " + currentSQL);
@@ -894,7 +896,8 @@ class HeavyAIPreparedStatement implements PreparedStatement {
   @Override
   public void setFetchSize(int rows) throws SQLException {
     HEAVYDBLOGGER.debug("Entered");
-    // TODO we need to chnage the model to allow smaller select chunks at the moment you
+    // TODO we need to chnage the model to allow smaller select chunks at the moment
+    // you
     // get everything
   }
 

@@ -1,11 +1,11 @@
 import os
 import pytest
-from omnisci.thrift.ttypes import TColumnType
-from omnisci.common.ttypes import TTypeInfo
+from heavy.thrift.ttypes import TColumnType
+from heavy.common.ttypes import TTypeInfo
 from omnisci import OperationalError, connect
-from omnisci.connection import _parse_uri, ConnectionInfo
-from omnisci.exceptions import Error
-from omnisci._parsers import ColumnDetails, _extract_column_details
+from heavy.connection import _parse_uri, ConnectionInfo
+from heavy.exceptions import Error
+from heavy._parsers import ColumnDetails, _extract_column_details
 
 omniscihost = os.environ.get('OMNISCI_HOST', 'localhost')
 

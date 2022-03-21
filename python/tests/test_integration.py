@@ -8,9 +8,9 @@ import os
 
 import pytest
 from omnisci import connect, ProgrammingError, DatabaseError
-from omnisci.cursor import Cursor
-from omnisci._parsers import Description, ColumnDetails
-from omnisci.thrift.ttypes import TDBException
+from heavy.cursor import Cursor
+from heavy._parsers import Description, ColumnDetails
+from heavy.thrift.ttypes import TDBException
 
 # XXX: Make it hashable to silence warnings; see if this can be done upstream
 # This isn't a huge deal, but our testing context mangers for asserting
@@ -267,7 +267,7 @@ class TestIntegration:
 
 class TestExtras:
     def test_sql_validate(self, con):
-        from omnisci.common.ttypes import TTypeInfo
+        from heavy.common.ttypes import TTypeInfo
 
         c = con.cursor()
         c.execute('drop table if exists stocks;')

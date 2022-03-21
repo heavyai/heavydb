@@ -15,14 +15,14 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TDBException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.CyclicBarrier;
+
+import ai.heavy.thrift.server.TDBException;
 
 public class CtasItasSelectUpdelConcurrencyTest {
   final static Logger logger =

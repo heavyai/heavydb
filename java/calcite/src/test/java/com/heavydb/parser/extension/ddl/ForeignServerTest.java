@@ -5,9 +5,10 @@ import static org.junit.Assert.assertEquals;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.junit.Test;
+
+import ai.heavy.thrift.calciteserver.TPlanResult;
 
 public class ForeignServerTest extends DDLTest {
   public ForeignServerTest() {
@@ -117,6 +118,7 @@ public class ForeignServerTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
   @Test
   public void ShowForeignServersWhere() throws Exception {
     final JsonObject expectedJsonObject =
@@ -127,6 +129,7 @@ public class ForeignServerTest extends DDLTest {
             gson.fromJson(result.plan_result, JsonObject.class);
     assertEquals(expectedJsonObject, actualJsonObject);
   }
+
   @Test
   public void ShowForeignServersLike() throws Exception {
     final JsonObject expectedJsonObject =

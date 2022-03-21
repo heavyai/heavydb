@@ -74,7 +74,7 @@ def con(omnisci_server):
 
 @pytest.fixture
 def mock_client(mocker):
-    """A magicmock for omnisci.connection.Client"""
+    """A magicmock for heavy.connection.Client"""
     return mocker.patch("omnisci.connection.Client")
 
 

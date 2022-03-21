@@ -20,7 +20,6 @@ import static java.lang.System.exit;
 
 import com.mapd.common.SockTransportProperties;
 import com.mapd.utility.db_vendors.Db_vendor_types;
-import com.omnisci.thrift.server.*;
 
 import org.apache.commons.cli.*;
 import org.apache.thrift.TException;
@@ -43,6 +42,8 @@ import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
 
+import ai.heavy.thrift.server.*;
+
 interface DateTimeUtils {
   long getSecondsFromMilliseconds(long milliseconds);
 }
@@ -63,6 +64,7 @@ class MutuallyExlusiveOptionsException extends ParseException {
     return new MutuallyExlusiveOptionsException(sb.toString());
   }
 }
+
 class SQLImporter_args {
   private Options options = new Options();
 

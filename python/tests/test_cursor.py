@@ -1,5 +1,5 @@
 import pytest
-from omnisci.cursor import Cursor, _bind_parameters
+from heavy.cursor import Cursor, _bind_parameters
 from omnisci import connect
 
 

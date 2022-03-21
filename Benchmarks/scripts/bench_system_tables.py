@@ -2,7 +2,7 @@ import argparse
 import sys
 import pymapd
 
-from omnisci.thrift.ttypes import TDashboard
+from heavy.thrift.ttypes import TDashboard
 
 def getOptions(args=None):
     parser = argparse.ArgumentParser(description='Basic benchmark for system tables')
