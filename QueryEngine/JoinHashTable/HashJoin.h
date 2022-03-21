@@ -253,6 +253,9 @@ class HashJoin {
       const TemporaryTables* temporary_tables,
       const bool is_overlaps_join = false);
 
+  template <typename T>
+  static const T* getHashJoinColumn(const Analyzer::Expr* expr);
+
   // Normalize each expression tuple
   static std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>>
   normalizeColumnPairs(const Analyzer::BinOper* condition,
