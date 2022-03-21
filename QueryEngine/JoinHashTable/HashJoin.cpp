@@ -775,6 +775,16 @@ void HashJoin::checkHashJoinReplicationConstraint(const int table_id,
   }
 }
 
+template <typename T>
+const T* HashJoin::getHashJoinColumn(const Analyzer::Expr* expr) {
+  auto* target_expr = expr;
+  if (auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr)) {
+    target_expr = cast_expr->get_operand();
+  }
+  CHECK(target_expr);
+  return dynamic_cast<const T*>(target_expr);
+}
+
 std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
     const Analyzer::Expr* lhs,
     const Analyzer::Expr* rhs,
@@ -812,19 +822,11 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
   if (lhs_ti.is_decimal() && (lhs_cast || rhs_cast)) {
     throw HashJoinFail("Cannot use hash join for given expression (cast to decimal)");
   }
-  auto lhs_col = lhs_cast
-                     ? dynamic_cast<const Analyzer::ColumnVar*>(lhs_cast->get_operand())
-                     : dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-  auto rhs_col = rhs_cast
-                     ? dynamic_cast<const Analyzer::ColumnVar*>(rhs_cast->get_operand())
-                     : dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+  auto lhs_col = getHashJoinColumn<Analyzer::ColumnVar>(lhs);
+  auto rhs_col = getHashJoinColumn<Analyzer::ColumnVar>(rhs);
 
-  const auto lhs_string_oper =
-      lhs_cast ? dynamic_cast<const Analyzer::StringOper*>(lhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::StringOper*>(lhs);
-  const auto rhs_string_oper =
-      rhs_cast ? dynamic_cast<const Analyzer::StringOper*>(rhs_cast->get_operand())
-               : dynamic_cast<const Analyzer::StringOper*>(rhs);
+  const auto lhs_string_oper = getHashJoinColumn<Analyzer::StringOper>(lhs);
+  const auto rhs_string_oper = getHashJoinColumn<Analyzer::StringOper>(rhs);
 
   auto process_string_op_infos = [](const auto& string_oper, auto& col, auto& ti) {
     std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;

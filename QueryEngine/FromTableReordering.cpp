@@ -271,22 +271,50 @@ std::vector<node_t> traverse_join_cost_graph(
         Decision decision = Decision::IGNORE;
         // inner col's rte should be larger than outer col
         int inner_rte = -1;
+        int outer_rte = -1;
+        bool is_outer_col_valid = false;
+        auto check_expr_is_valid_col = [&is_outer_col_valid](const Analyzer::Expr* expr) {
+          if (auto expr_tuple = dynamic_cast<const Analyzer::ExpressionTuple*>(expr)) {
+            for (auto& inner_expr : expr_tuple->getTuple()) {
+              auto cv_from_expr =
+                  HashJoin::getHashJoinColumn<Analyzer::ColumnVar>(inner_expr.get());
+              if (!cv_from_expr) {
+                is_outer_col_valid = false;
+                return;
+              }
+            }
+          } else {
+            auto cv_from_expr = HashJoin::getHashJoinColumn<Analyzer::ColumnVar>(expr);
+            if (!cv_from_expr) {
+              is_outer_col_valid = false;
+              return;
+            }
+          }
+          is_outer_col_valid = true;
+        };
         if (inner_qual_decision == InnerQualDecision::LHS) {
           inner_rte = (*lhs_colvar_set.begin())->get_rte_idx();
+          outer_rte = (*rhs_colvar_set.begin())->get_rte_idx();
+          check_expr_is_valid_col(rhs.get());
         } else if (inner_qual_decision == InnerQualDecision::RHS) {
           inner_rte = (*rhs_colvar_set.begin())->get_rte_idx();
+          outer_rte = (*lhs_colvar_set.begin())->get_rte_idx();
+          check_expr_is_valid_col(lhs.get());
         }
-        if (inner_rte >= 0) {
+        if (inner_rte >= 0 && outer_rte >= 0) {
           const auto inner_cardinality =
               table_infos[inner_rte].info.getNumTuplesUpperBound();
-          if (inner_cardinality <= g_trivial_loop_join_threshold) {
-            decision = Decision::IGNORE;
-          } else {
+          const auto outer_cardinality =
+              table_infos[outer_rte].info.getNumTuplesUpperBound();
+          if (inner_cardinality > g_trivial_loop_join_threshold) {
             if (inner_rte == static_cast<int>(start)) {
               // inner is driving the join loop but also has a valid join column
               // which is available for building a hash table
-              // so needs to swap inner and outer to use the valid inner
-              decision = Decision::SWAP;
+              // but ignore swapping when inner's cardinality is larger than that of
+              // outer's / otherwise swap inner and outer (to use the valid inner)
+              decision = is_outer_col_valid && inner_cardinality > outer_cardinality
+                             ? Decision::IGNORE
+                             : Decision::SWAP;
             } else {
               CHECK_EQ(inner_rte, static_cast<int>(alternative_rte));
               // now, a valid inner column is outer table
@@ -329,7 +357,8 @@ std::vector<node_t> traverse_join_cost_graph(
         start_edge.nest_level = start;
       };
 
-      if (auto bin_op = dynamic_cast<Analyzer::BinOper*>(join_qual.begin()->get())) {
+      auto bin_op = dynamic_cast<Analyzer::BinOper*>(join_qual.begin()->get());
+      if (bin_op) {
         auto lhs = bin_op->get_own_left_operand();
         auto rhs = bin_op->get_own_right_operand();
         if (auto lhs_exp = dynamic_cast<Analyzer::ExpressionTuple*>(lhs.get())) {
