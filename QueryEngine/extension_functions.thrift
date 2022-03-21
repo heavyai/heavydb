@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.calciteserver
-namespace py omnisci.extension_functions
+namespace java ai.heavy.thrift.calciteserver
+namespace py heavy.extension_functions
 
 /* See QueryEngine/ExtensionFunctionsWhitelist.h for required values */
 enum TExtArgumentType {

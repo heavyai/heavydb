@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.server
-namespace py omnisci.thrift
+namespace java ai.heavy.thrift.server
+namespace py heavy.thrift
 
 include "common.thrift"
 include "completion_hints.thrift"

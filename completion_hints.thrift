@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.calciteserver
-namespace py omnisci.completion_hints
+namespace java ai.heavy.thrift.calciteserver
+namespace py heavy.completion_hints
 
 enum TCompletionHintType {
   COLUMN,

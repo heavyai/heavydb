@@ -1,8 +1,5 @@
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TTypeInfo;
-
 import org.apache.commons.math3.util.Pair;
 
 import java.time.LocalDateTime;
@@ -14,6 +11,9 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.Random;
 import java.util.function.Function;
+
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TTypeInfo;
 
 /**
  * a (hopefully) complete test case for date/time functions in OmniSci.
@@ -98,23 +98,23 @@ public class DateTimeTest {
         return t;
       }
     }),
-    //		dtMILLENNIUM("MILLENNIUM", new Function<LocalDateTime, LocalDateTime>() {
-    //			@Override
-    //			public LocalDateTime apply(LocalDateTime t) {
-    //				int year = t.getYear();
-    //				int range = 1000;
-    //				int diff = year % range;
-    //				if (diff == 0) {
-    //					diff = range;
-    //				}
-    //				year -= diff;
-    //				t = t.withYear(year + 1);
-    //				t = t.withMonth(1);
-    //				t = t.withDayOfMonth(1);
-    //				t = t.truncatedTo(ChronoUnit.DAYS);
-    //				return t;
-    //			}
-    //		}),
+    // dtMILLENNIUM("MILLENNIUM", new Function<LocalDateTime, LocalDateTime>() {
+    // @Override
+    // public LocalDateTime apply(LocalDateTime t) {
+    // int year = t.getYear();
+    // int range = 1000;
+    // int diff = year % range;
+    // if (diff == 0) {
+    // diff = range;
+    // }
+    // year -= diff;
+    // t = t.withYear(year + 1);
+    // t = t.withMonth(1);
+    // t = t.withDayOfMonth(1);
+    // t = t.truncatedTo(ChronoUnit.DAYS);
+    // return t;
+    // }
+    // }),
     dtCENTURY("CENTURY", new Function<LocalDateTime, LocalDateTime>() {
       @Override
       public LocalDateTime apply(LocalDateTime t) {
@@ -176,18 +176,18 @@ public class DateTimeTest {
         return t;
       }
     }),
-    //		  dtQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, LocalDateTime>()
-    //{
-    //			  @Override
-    //			public LocalDateTime apply(LocalDateTime t) {
-    //				  int hour = t.getHour();
-    //				  hour /= 4;
+    // dtQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, LocalDateTime>()
+    // {
+    // @Override
+    // public LocalDateTime apply(LocalDateTime t) {
+    // int hour = t.getHour();
+    // hour /= 4;
     //
-    //				  t = t.withHour(hour);
-    //				t = t.truncatedTo(ChronoUnit.SECONDS);
-    //				return t;
-    //			}
-    //		  })
+    // t = t.withHour(hour);
+    // t = t.truncatedTo(ChronoUnit.SECONDS);
+    // return t;
+    // }
+    // })
     ;
 
     private String sqlToken;
@@ -261,9 +261,9 @@ public class DateTimeTest {
         return (long) t.get(ChronoField.SECOND_OF_MINUTE);
       }
     }),
-    //		daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
-    //		daCENTURY("CENTURY", ChronoField.YEAR, 100),
-    //		daDECADE("DECADE", ChronoField.YEAR, 10),
+    // daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
+    // daCENTURY("CENTURY", ChronoField.YEAR, 100),
+    // daDECADE("DECADE", ChronoField.YEAR, 10),
     daMILLISECOND("MILLISECOND", new Function<LocalDateTime, Long>() {
       @Override
       public Long apply(LocalDateTime t) {
@@ -309,18 +309,18 @@ public class DateTimeTest {
         return (long) weeks;
       }
     }),
-    //		daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
-    //			}
-    //		}),
-    //		daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return t.get(ChronoField.DAY_OF_WEEK);
-    //			}
-    //		}),
+    // daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
+    // }
+    // }),
+    // daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return t.get(ChronoField.DAY_OF_WEEK);
+    // }
+    // }),
     daDAYOFYEAR("DOY", new Function<LocalDateTime, Long>() {
       @Override
       public Long apply(LocalDateTime t) {
@@ -357,7 +357,7 @@ public class DateTimeTest {
         }
 
         start = DateTruncUnit.dtQUARTER.trunc.apply(start);
-        //				end = DateTruncUnit.dtQUARTER.trunc.apply(end);
+        // end = DateTruncUnit.dtQUARTER.trunc.apply(end);
         long rc = 0;
 
         while (start.compareTo(end) <= 0) {
@@ -398,9 +398,9 @@ public class DateTimeTest {
         return d.getFirst().until(d.getSecond(), ChronoUnit.SECONDS);
       }
     }),
-    //		daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
-    //		daCENTURY("CENTURY", ChronoField.YEAR, 100),
-    //		daDECADE("DECADE", ChronoField.YEAR, 10),
+    // daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
+    // daCENTURY("CENTURY", ChronoField.YEAR, 100),
+    // daDECADE("DECADE", ChronoField.YEAR, 10),
     daMILLISECOND(
             "MILLISECOND", new Function<Pair<LocalDateTime, LocalDateTime>, Long>() {
               public Long apply(Pair<LocalDateTime, LocalDateTime> d) {
@@ -423,18 +423,18 @@ public class DateTimeTest {
         return d.getFirst().until(d.getSecond(), ChronoUnit.WEEKS);
       }
     }),
-    //		daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
-    //			}
-    //		}),
-    //		daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return t.get(ChronoField.DAY_OF_WEEK);
-    //			}
-    //		}),
+    // daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
+    // }
+    // }),
+    // daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return t.get(ChronoField.DAY_OF_WEEK);
+    // }
+    // }),
     ;
 
     private String sqlToken;
@@ -491,9 +491,9 @@ public class DateTimeTest {
         return t.getFirst().plus(t.getSecond(), ChronoUnit.SECONDS);
       }
     }),
-    //		daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
-    //		daCENTURY("CENTURY", ChronoField.YEAR, 100),
-    //		daDECADE("DECADE", ChronoField.YEAR, 10),
+    // daMILLENNIUM("MILLENNIUM", ChronoField.YEAR, 1000),
+    // daCENTURY("CENTURY", ChronoField.YEAR, 100),
+    // daDECADE("DECADE", ChronoField.YEAR, 10),
     daMILLISECOND("MILLISECOND",
             12 * 30 * 24 * 60 * 60 * 1000L,
             new Function<Pair<LocalDateTime, Long>, LocalDateTime>() {
@@ -524,18 +524,18 @@ public class DateTimeTest {
         return t.getFirst().plus(t.getSecond(), ChronoUnit.WEEKS);
       }
     }),
-    //		daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
-    //			}
-    //		}),
-    //		daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
-    //			@Override
-    //			public Integer apply(LocalDateTime t) {
-    //				return t.get(ChronoField.DAY_OF_WEEK);
-    //			}
-    //		}),
+    // daQUARTERDAY("QUERTERDAY", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return ((t.get(ChronoField.HOUR_OF_DAY) -1 ) / 4) + 1;
+    // }
+    // }),
+    // daWEEKDAY("WEEKDAYS", new Function<LocalDateTime, Integer>() {
+    // @Override
+    // public Integer apply(LocalDateTime t) {
+    // return t.get(ChronoField.DAY_OF_WEEK);
+    // }
+    // }),
     ;
 
     private String sqlToken;
@@ -672,7 +672,7 @@ public class DateTimeTest {
   static LocalDateTime getDateTimeFromQuery(HeavyDBTestClient client, String sql)
           throws Exception {
     try {
-      com.omnisci.thrift.server.TQueryResult res = client.runSql(sql);
+      ai.heavy.thrift.server.TQueryResult res = client.runSql(sql);
       LocalDateTime r = null;
       if (res.row_set.is_columnar) {
         TTypeInfo tt = res.row_set.row_desc.get(0).col_type;
@@ -704,7 +704,7 @@ public class DateTimeTest {
 
   static long getLongFromQuery(HeavyDBTestClient client, String sql) throws Exception {
     try {
-      com.omnisci.thrift.server.TQueryResult res = client.runSql(sql);
+      ai.heavy.thrift.server.TQueryResult res = client.runSql(sql);
       long r = -1;
       if (res.row_set.is_columnar) {
         long val = res.row_set.columns.get(0).data.int_col.get(0);

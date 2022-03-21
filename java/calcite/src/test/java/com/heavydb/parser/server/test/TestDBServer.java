@@ -19,9 +19,6 @@ package com.mapd.parser.server.test;
 import static org.junit.Assert.*;
 
 import com.mapd.parser.server.CalciteServerWrapper;
-import com.omnisci.thrift.server.Heavy;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TQueryResult;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -36,6 +33,10 @@ import org.slf4j.LoggerFactory;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TQueryResult;
 
 public class TestDBServer {
   private final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(TestDBServer.class);

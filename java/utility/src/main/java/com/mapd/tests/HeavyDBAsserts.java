@@ -15,7 +15,7 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TDashboard;
+import ai.heavy.thrift.server.TDashboard;
 
 public class HeavyDBAsserts {
   public static interface TestRun { void run() throws Exception; }

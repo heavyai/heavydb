@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.server
-namespace py omnisci.common
+namespace java ai.heavy.thrift.server
+namespace py heavy.common
 
 enum TDeviceType {
   CPU,

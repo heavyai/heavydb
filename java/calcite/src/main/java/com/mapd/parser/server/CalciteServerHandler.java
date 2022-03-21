@@ -21,19 +21,6 @@ import com.mapd.calcite.parser.HeavyDBParser;
 import com.mapd.calcite.parser.HeavyDBParserOptions;
 import com.mapd.calcite.parser.HeavyDBUser;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.CalciteServer;
-import com.omnisci.thrift.calciteserver.InvalidParseRequest;
-import com.omnisci.thrift.calciteserver.TAccessedQueryObjects;
-import com.omnisci.thrift.calciteserver.TCompletionHint;
-import com.omnisci.thrift.calciteserver.TCompletionHintType;
-import com.omnisci.thrift.calciteserver.TExtArgumentType;
-import com.omnisci.thrift.calciteserver.TFilterPushDownInfo;
-import com.omnisci.thrift.calciteserver.TOptimizationOption;
-import com.omnisci.thrift.calciteserver.TPlanResult;
-import com.omnisci.thrift.calciteserver.TQueryParsingOption;
-import com.omnisci.thrift.calciteserver.TRestriction;
-import com.omnisci.thrift.calciteserver.TUserDefinedFunction;
-import com.omnisci.thrift.calciteserver.TUserDefinedTableFunction;
 
 import org.apache.calcite.prepare.HeavyDBPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -58,6 +45,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import ai.heavy.thrift.calciteserver.CalciteServer;
+import ai.heavy.thrift.calciteserver.InvalidParseRequest;
+import ai.heavy.thrift.calciteserver.TAccessedQueryObjects;
+import ai.heavy.thrift.calciteserver.TCompletionHint;
+import ai.heavy.thrift.calciteserver.TCompletionHintType;
+import ai.heavy.thrift.calciteserver.TExtArgumentType;
+import ai.heavy.thrift.calciteserver.TFilterPushDownInfo;
+import ai.heavy.thrift.calciteserver.TOptimizationOption;
+import ai.heavy.thrift.calciteserver.TPlanResult;
+import ai.heavy.thrift.calciteserver.TQueryParsingOption;
+import ai.heavy.thrift.calciteserver.TRestriction;
+import ai.heavy.thrift.calciteserver.TUserDefinedFunction;
+import ai.heavy.thrift.calciteserver.TUserDefinedTableFunction;
 
 /**
  *

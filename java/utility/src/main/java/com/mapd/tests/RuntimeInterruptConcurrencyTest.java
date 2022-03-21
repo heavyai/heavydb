@@ -15,9 +15,6 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TQueryInfo;
-
 import org.checkerframework.checker.units.qual.A;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +29,9 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TQueryInfo;
 
 public class RuntimeInterruptConcurrencyTest {
   final static Logger logger =

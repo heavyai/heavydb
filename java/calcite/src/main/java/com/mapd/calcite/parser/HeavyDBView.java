@@ -18,7 +18,6 @@ package com.mapd.calcite.parser;
 import static com.mapd.calcite.parser.HeavyDBParser.CURRENT_PARSER;
 
 import com.mapd.calcite.parser.HeavyDBParserOptions;
-import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -35,6 +34,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+
+import ai.heavy.thrift.server.TTableDetails;
 
 public class HeavyDBView extends HeavyDBTable implements TranslatableTable {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBView.class);

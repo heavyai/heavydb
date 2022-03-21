@@ -6,10 +6,11 @@ import static org.junit.Assert.fail;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.calciteserver.InvalidParseRequest;
-import com.omnisci.thrift.calciteserver.TPlanResult;
 
 import org.junit.Test;
+
+import ai.heavy.thrift.calciteserver.InvalidParseRequest;
+import ai.heavy.thrift.calciteserver.TPlanResult;
 
 public class ForeignTableTest extends DDLTest {
   public ForeignTableTest() {

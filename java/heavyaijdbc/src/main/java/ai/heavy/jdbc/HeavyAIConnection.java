@@ -16,10 +16,6 @@
 package ai.heavy.jdbc;
 
 import com.mapd.common.SockTransportProperties;
-import com.omnisci.thrift.server.Heavy;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TServerStatus;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -53,7 +49,12 @@ import java.util.concurrent.Executor;
 
 import javax.crypto.Cipher;
 
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TServerStatus;
 import sun.security.provider.X509Factory;
+
 /**
  *
  * @author michael
@@ -119,9 +120,11 @@ class Options {
   static String max_rows = "max_rows";
   static String user = "user";
   static String password = "password";
-  // The order in the array corresponds to the order the value will appear in the ':'
-  // separated URL. Used to loop over the incoming URL and store in the properties struct
-  // Note user and password are not expected to come via the main body  of the url
+  // The order in the array corresponds to the order the value will appear in the
+  // ':'
+  // separated URL. Used to loop over the incoming URL and store in the properties
+  // struct
+  // Note user and password are not expected to come via the main body of the url
   // However they may be supplied in the query string portion.
 
   static String[] option_order = {host_name,
@@ -155,15 +158,20 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
     // Priority is given to the URL data, followed by the query fragment data and
     // lastly the Properties information
     //
-    // All connection parameters can be supplied via the main portion of the connection
+    // All connection parameters can be supplied via the main portion of the
+    // connection
     // URL, however as this structure is position dependent the nth argument must be
-    // preceded by the n - 1  arguments.  In the case of complex connection strings it is
-    // recommended to use either a properties object or the query string portion of the
+    // preceded by the n - 1 arguments. In the case of complex connection strings it
+    // is
+    // recommended to use either a properties object or the query string portion of
+    // the
     // URL.
     //
-    // Note the class java.sql.DriverManager expects the URL to contain three components
+    // Note the class java.sql.DriverManager expects the URL to contain three
+    // components
     // the literal string JDBC a 'subprotocol' followed by a 'subname', as in
-    // 'jdbc:heavyao:localhost' For this reason host mame must be supplied in the  main
+    // 'jdbc:heavyao:localhost' For this reason host mame must be supplied in the
+    // main
     // part of the URL and should not be supplied in the query portion.
 
     private String extract_and_remove_query_components(
@@ -194,13 +202,15 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
       // return the url with out any query component
       return url_components[0];
     }
+
     public Connection_properties(String connection_url, Properties baseProperties)
             throws SQLException {
       connection_url = extract_and_remove_query_components(connection_url, this);
       String[] url_values = connection_url.split(":");
       // add 2 for the default jdbc:heavy.ai at the start of the url.
       if (url_values.length > Options.option_order.length + 2) {
-        // would be nice to print the url at this stage, but the user may have added their
+        // would be nice to print the url at this stage, but the user may have added
+        // their
         // password into the list.
         throw new SQLException("Invalid number of arguments provided in url ["
                 + url_values.length + "]. Maximum allowed ["
@@ -311,10 +321,12 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
       return (this.containsKey(Options.protocol)
               && this.getProperty(Options.protocol).equals("binary"));
     }
+
     boolean isBinary_tls() {
       return (this.containsKey(Options.protocol)
               && this.getProperty(Options.protocol).equals("binary_tls"));
     }
+
     boolean containsTrustStore() {
       return this.containsKey(Options.server_trust_store);
     }

@@ -8,8 +8,8 @@ from sqlalchemy.engine.url import make_url
 from thrift.protocol import TBinaryProtocol, TJSONProtocol
 from thrift.transport import TSocket, TSSLSocket, THttpClient, TTransport
 from thrift.transport.TSocket import TTransportException
-from omnisci.thrift.OmniSci import Client
-from omnisci.thrift.ttypes import TDBException
+from heavy.thrift.OmniSci import Client
+from heavy.thrift.ttypes import TDBException
 
 from .cursor import Cursor
 from .exceptions import _translate_exception, OperationalError

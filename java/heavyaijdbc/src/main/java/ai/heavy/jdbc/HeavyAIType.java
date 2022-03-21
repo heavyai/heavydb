@@ -15,9 +15,9 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.TDatumType;
-
 import java.sql.DatabaseMetaData;
+
+import ai.heavy.thrift.server.TDatumType;
 
 /**
  *

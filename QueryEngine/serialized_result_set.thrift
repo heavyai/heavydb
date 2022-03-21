@@ -1,5 +1,5 @@
-namespace java com.omnisci.thrift.server
-namespace py omnisci.serialized_result_set
+namespace java ai.heavy.thrift.server
+namespace py heavy.serialized_result_set
 
 include "../common.thrift"
 

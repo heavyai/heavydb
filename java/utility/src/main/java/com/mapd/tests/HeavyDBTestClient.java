@@ -15,9 +15,6 @@
  */
 package com.mapd.tests;
 
-import com.omnisci.thrift.server.*;
-import com.omnisci.thrift.server.Heavy;
-
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -27,6 +24,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+
+import ai.heavy.thrift.server.*;
+import ai.heavy.thrift.server.Heavy;
 
 public class HeavyDBTestClient {
   Heavy.Client client;

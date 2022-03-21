@@ -15,15 +15,15 @@
  */
 package ai.heavy.jdbc;
 
-import com.omnisci.thrift.server.TDatumType;
-import com.omnisci.thrift.server.TQueryResult;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+
+import ai.heavy.thrift.server.TDatumType;
+import ai.heavy.thrift.server.TQueryResult;
 
 /**
  *

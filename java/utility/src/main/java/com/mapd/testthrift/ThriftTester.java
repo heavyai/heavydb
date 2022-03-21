@@ -15,19 +15,6 @@
  */
 package com.mapd.testthrift;
 
-import com.omnisci.thrift.server.Heavy;
-import com.omnisci.thrift.server.TColumn;
-import com.omnisci.thrift.server.TColumnData;
-import com.omnisci.thrift.server.TColumnType;
-import com.omnisci.thrift.server.TDBException;
-import com.omnisci.thrift.server.TDBInfo;
-import com.omnisci.thrift.server.TDatum;
-import com.omnisci.thrift.server.TQueryResult;
-import com.omnisci.thrift.server.TRow;
-import com.omnisci.thrift.server.TRowSet;
-import com.omnisci.thrift.server.TTableDetails;
-import com.omnisci.thrift.server.TTypeInfo;
-
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -39,6 +26,19 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+
+import ai.heavy.thrift.server.Heavy;
+import ai.heavy.thrift.server.TColumn;
+import ai.heavy.thrift.server.TColumnData;
+import ai.heavy.thrift.server.TColumnType;
+import ai.heavy.thrift.server.TDBException;
+import ai.heavy.thrift.server.TDBInfo;
+import ai.heavy.thrift.server.TDatum;
+import ai.heavy.thrift.server.TQueryResult;
+import ai.heavy.thrift.server.TRow;
+import ai.heavy.thrift.server.TRowSet;
+import ai.heavy.thrift.server.TTableDetails;
+import ai.heavy.thrift.server.TTypeInfo;
 
 /**
  *

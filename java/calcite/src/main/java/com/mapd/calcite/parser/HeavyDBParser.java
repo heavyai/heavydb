@@ -24,7 +24,6 @@ import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import com.mapd.parser.hint.HeavyDBHintStrategyTable;
-import com.omnisci.thrift.server.TTableDetails;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
@@ -77,6 +76,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+
+import ai.heavy.thrift.server.TTableDetails;
 
 /**
  *
@@ -305,7 +306,8 @@ public final class HeavyDBParser {
     final MetaConnect mc =
             new MetaConnect(dbPort, dataDir, dbUser, this, sock_transport_properties);
 
-    // TODO MAT for this checkin we are not going to actually allow any additional schemas
+    // TODO MAT for this checkin we are not going to actually allow any additional
+    // schemas
     // Eveything should work and perform as it ever did
     if (false) {
       for (String db : mc.getDatabases()) {
@@ -1605,6 +1607,7 @@ public final class HeavyDBParser {
         return true;
       }
     }
+
     private SqlKind targetKind;
   }
 }
