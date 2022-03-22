@@ -49,7 +49,7 @@ void QueryExporterCSV::beginExport(const std::string& file_path,
   }
 
   // write header?
-  if (copy_params.has_header == import_export::ImportHeaderRow::kHasHeader) {
+  if (copy_params.has_header != import_export::ImportHeaderRow::kNoHeader) {
     bool not_first{false};
     int column_index = 0;
     for (auto const& column_info : column_infos) {
@@ -200,6 +200,8 @@ void QueryExporterCSV::exportResults(const std::vector<AggregatedResult>& query_
             outfile_ << copy_params_.null_str;
           } else if (ti.is_time()) {
             outfile_ << shared::convert_temporal_to_iso_format(ti, int_val);
+          } else if (ti.is_boolean()) {
+            outfile_ << (int_val ? "true" : "false");
           } else {
             outfile_ << int_val;
           }

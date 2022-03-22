@@ -3773,8 +3773,10 @@ class ExportTest : public ImportTestGDAL {
       ASSERT_NO_THROW(sql(ddl));
 
       // import to that table
-      auto import_options = std::string("array_delimiter='|', header=") +
-                            (file_type == "CSV" ? "'true'" : "'false'");
+      std::string import_options = "array_delimiter='|'";
+      if (file_type == "" || file_type == "CSV") {
+        import_options += ", header='true'";
+      }
       ASSERT_NO_THROW(sql("COPY query_export_test_reimport FROM '" + actual_file +
                           "' WITH (" + import_options + ");"));
     } else {
@@ -3886,8 +3888,13 @@ class ExportTest : public ImportTestGDAL {
         sql("COPY query_export_test FROM "
             "'../../Tests/Export/QueryExport/datafiles/"
             "query_export_test_nulls.csv' WITH (header='true');"));
-    ASSERT_NO_THROW(sql("COPY (SELECT " + select + " FROM query_export_test) TO '" +
-                        exp_file + "' WITH (file_type='" + file_type + "');"));
+    auto copy_stmt = "COPY (SELECT " + select + " FROM query_export_test) TO '" +
+                     exp_file + "' WITH (file_type='" + file_type + "'";
+    if (file_type == "CSV") {
+      copy_stmt += ", header='false'";
+    }
+    copy_stmt += ");";
+    ASSERT_NO_THROW(sql(copy_stmt));
     ASSERT_NO_THROW(doCompareText(file, PLAIN_TEXT));
     ASSERT_NO_THROW(removeExportedFile(file));
     ASSERT_NO_THROW(sql("DROP TABLE query_export_test;"));
@@ -4016,7 +4023,7 @@ TEST_F(ExportTest, Default) {
   SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
-    std::string exp_file = "query_export_test_csv_no_header_" + geo_type + ".csv";
+    std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
     ASSERT_NO_THROW(doExport(exp_file, "", "", geo_type, WITH_ARRAYS, DEFAULT_SRID));
     ASSERT_NO_THROW(doCompareText(exp_file, PLAIN_TEXT));
     doImportAgainAndCompare(exp_file, "", geo_type, WITH_ARRAYS);
@@ -4520,7 +4527,8 @@ class TemporalColumnExportTest : public DBHandlerTestFixture {
 };
 
 TEST_F(TemporalColumnExportTest, Quoted) {
-  sql("COPY (SELECT * FROM test_table ORDER BY index) TO 'temporal_columns_quoted.csv';");
+  sql("COPY (SELECT * FROM test_table ORDER BY index) TO 'temporal_columns_quoted.csv' "
+      "WITH(header='false');");
   assertExpectedFileContent(
       "temporal_columns_quoted.csv",
       {"\"0\",\"00:00:00\",\"1000-01-01\",\"1000-01-01T00:00:00Z\",\"1000-01-01T00:00:00."
@@ -4543,7 +4551,7 @@ TEST_F(TemporalColumnExportTest, Quoted) {
 
 TEST_F(TemporalColumnExportTest, Unquoted) {
   sql("COPY (SELECT * FROM test_table ORDER BY index) TO 'temporal_columns_unquoted.csv' "
-      "WITH (quoted = 'false');");
+      "WITH (quoted='false', header='false');");
   assertExpectedFileContent(
       "temporal_columns_unquoted.csv",
       {"0,00:00:00,1000-01-01,1000-01-01T00:00:00Z,1000-01-01T00:00:00."
