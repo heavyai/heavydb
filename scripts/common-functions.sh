@@ -141,10 +141,13 @@ function install_awscpp() {
     download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
     tar xvfz ${AWSCPP_VERSION}.tar.gz
     pushd aws-sdk-cpp-${AWSCPP_VERSION}
+    sed -i 's/CMAKE_ARGS/CMAKE_ARGS -DBUILD_TESTING=off -DCMAKE_C_FLAGS="-Wno-error"/g' third-party/cmake/BuildAwsCCommon.cmake
+    sed -i 's/-Werror//g' cmake/compiler_settings.cmake
     mkdir build
     cd build
     cmake \
         -GNinja \
+        -DAUTORUN_UNIT_TESTS=off \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$PREFIX \
         -DBUILD_ONLY="s3;transfer;config;sts;cognito-identity;identity-management" \
