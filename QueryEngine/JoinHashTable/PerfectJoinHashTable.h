@@ -159,6 +159,9 @@ class PerfectJoinHashTable : public HashJoin {
                              const Data_Namespace::MemoryLevel effective_memory_level,
                              const int device_id);
 
+  Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
+      const std::vector<InnerOuter>& inner_outer_pairs) const;
+
   std::vector<InnerOuter> inner_outer_pairs_;
 
   PerfectJoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -172,7 +175,7 @@ class PerfectJoinHashTable : public HashJoin {
                        ColumnCacheMap& column_cache,
                        Executor* executor,
                        const int device_count,
-                       HashtableAccessPathInfo hashtable_access_path_info,
+                       const HashTableBuildDagMap& hashtable_build_dag_map,
                        const TableIdToNodeMap& table_id_to_node_map,
                        const InnerOuterStringOpInfos& inner_outer_string_op_infos = {})
       : qual_bin_oper_(qual_bin_oper)
@@ -187,9 +190,7 @@ class PerfectJoinHashTable : public HashJoin {
       , column_cache_(column_cache)
       , device_count_(device_count)
       , needs_dict_translation_(false)
-      , hashtable_cache_key_(hashtable_access_path_info.hashed_query_plan_dag)
-      , hashtable_cache_meta_info_(hashtable_access_path_info.meta_info)
-      , table_keys_(hashtable_access_path_info.table_keys)
+      , hashtable_build_dag_map_(hashtable_build_dag_map)
       , table_id_to_node_map_(table_id_to_node_map)
       , inner_outer_string_op_infos_(inner_outer_string_op_infos) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
@@ -229,6 +230,10 @@ class PerfectJoinHashTable : public HashJoin {
   size_t getComponentBufferSize() const noexcept override;
 
   HashTable* getHashTableForDevice(const size_t device_id) const;
+
+  void copyCpuHashTableToGpu(std::shared_ptr<PerfectHashTable>& cpu_hash_table,
+                             const int device_id,
+                             Data_Namespace::DataMgr* data_mgr);
 
   struct AlternativeCacheKeyForPerfectHashJoin {
     const ExpressionRange col_range;
@@ -271,7 +276,9 @@ class PerfectJoinHashTable : public HashJoin {
   ColumnCacheMap& column_cache_;
   const int device_count_;
   mutable bool needs_dict_translation_;
-  QueryPlanHash hashtable_cache_key_;
+  HashTableBuildDagMap hashtable_build_dag_map_;
+  // per-device cache key to cover hash table for sharded table
+  std::vector<QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;

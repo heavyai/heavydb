@@ -332,19 +332,6 @@ bool HashtableRecycler::isSafeToCacheHashtable(
     bool need_dict_translation,
     const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_info_pairs,
     const int table_id) {
-  // Disable all recycling when string ops are applied to join quals until we can
-  // add these to the cache key
-  constexpr bool string_ops_considered_safe = false;
-  if (!string_ops_considered_safe) {
-    for (const auto& inner_outer_string_op_infos_pair :
-         inner_outer_string_op_info_pairs) {
-      if (!inner_outer_string_op_infos_pair.first.empty() ||
-          !inner_outer_string_op_infos_pair.second.empty()) {
-        return false;
-      }
-    }
-  }
-
   // if hashtable is built from subquery's resultset we need to check
   // 1) whether resulset rows can have inconsistency, e.g., rows can randomly be
   // permutated per execution and 2) whether it needs dictionary translation for hashtable
@@ -383,13 +370,26 @@ bool HashtableRecycler::isSafeToCacheHashtable(
   return !(found_sort_node || (found_project_node && need_dict_translation));
 }
 
+bool HashtableRecycler::isInvalidHashTableCacheKey(
+    const std::vector<QueryPlanHash>& cache_keys) {
+  return cache_keys.empty() ||
+         std::any_of(cache_keys.cbegin(), cache_keys.cend(), [](QueryPlanHash key) {
+           return key == EMPTY_HASHED_PLAN_DAG_KEY;
+         });
+}
+
 HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs,
     const SQLOps op_type,
     const JoinType join_type,
     const HashTableBuildDagMap& hashtable_build_dag_map,
+    int device_count,
+    int shard_count,
+    const std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>>& frags_for_device,
     Executor* executor) {
+  CHECK_GT(device_count, (int)0);
+  CHECK_GE(shard_count, (int)0);
   std::vector<const Analyzer::ColumnVar*> inner_cols_vec, outer_cols_vec;
   size_t join_qual_info = EMPTY_HASHED_PLAN_DAG_KEY;
   for (auto& join_col_pair : inner_outer_pairs) {
@@ -422,7 +422,7 @@ HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
   }
 
   auto join_cols_info = getJoinColumnInfoHash(inner_cols_vec, outer_cols_vec, executor);
-  HashtableAccessPathInfo access_path_info;
+  HashtableAccessPathInfo access_path_info(device_count);
   auto it = hashtable_build_dag_map.find(join_cols_info);
   if (it != hashtable_build_dag_map.end()) {
     size_t hashtable_access_path = EMPTY_HASHED_PLAN_DAG_KEY;
@@ -431,9 +431,27 @@ HashtableAccessPathInfo HashtableRecycler::getHashtableAccessPathInfo(
     if (inner_cols_vec.front()->get_type_info().is_dict_encoded_string()) {
       boost::hash_combine(hashtable_access_path, it->second.outer_cols_access_path);
     }
-    HashtableCacheMetaInfo meta_info;
-    access_path_info.hashed_query_plan_dag = hashtable_access_path;
-    access_path_info.meta_info = meta_info;
+    boost::hash_combine(hashtable_access_path, shard_count);
+
+    if (!shard_count) {
+      const auto frag_list = HashJoin::collectFragmentIds(frags_for_device[0]);
+      auto cache_key_for_device = hashtable_access_path;
+      // no sharding, so all devices have the same fragments
+      boost::hash_combine(cache_key_for_device, frag_list);
+      for (int i = 0; i < device_count; ++i) {
+        access_path_info.hashed_query_plan_dag[i] = cache_key_for_device;
+      }
+    } else {
+      // we need to retrieve specific fragments for each device
+      // and consider them to make a cache key for it
+      for (int i = 0; i < device_count; ++i) {
+        const auto frag_list_for_device =
+            HashJoin::collectFragmentIds(frags_for_device[i]);
+        auto cache_key_for_device = hashtable_access_path;
+        boost::hash_combine(cache_key_for_device, frag_list_for_device);
+        access_path_info.hashed_query_plan_dag[i] = cache_key_for_device;
+      }
+    }
     access_path_info.table_keys = it->second.inputTableKeys;
   }
   return access_path_info;

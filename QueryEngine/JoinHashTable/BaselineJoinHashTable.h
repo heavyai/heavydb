@@ -146,7 +146,7 @@ class BaselineJoinHashTable : public HashJoin {
       const std::vector<InnerOuter>& inner_outer_pairs,
       const std::vector<InnerOuterStringOpInfos>& col_pairs_string_op_infos,
       const int device_count,
-      HashtableAccessPathInfo hashtable_access_path_info,
+      const HashTableBuildDagMap& hashtable_build_dag_map,
       const TableIdToNodeMap& table_id_to_node_map);
 
   size_t getComponentBufferSize() const noexcept override;
@@ -163,10 +163,7 @@ class BaselineJoinHashTable : public HashJoin {
       DeviceAllocator* dev_buff_owner);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
-      const std::vector<ColumnsForDevice>&,
-      QueryPlanHash key,
-      CacheItemType item_type,
-      DeviceIdentifier device_identifier) const;
+      const std::vector<ColumnsForDevice>&) const;
 
   virtual size_t getKeyComponentWidth() const;
 
@@ -176,7 +173,14 @@ class BaselineJoinHashTable : public HashJoin {
 
   size_t shardCount() const;
 
+  Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
+      const std::vector<InnerOuter>& inner_outer_pairs) const;
+
   void reify(const HashType preferred_layout);
+
+  void copyCpuHashTableToGpu(std::shared_ptr<BaselineHashTable>& cpu_hash_table,
+                             const int device_id,
+                             Data_Namespace::DataMgr* data_mgr);
 
   virtual void reifyForDevice(const ColumnsForDevice& columns_for_device,
                               const HashType layout,
@@ -208,12 +212,10 @@ class BaselineJoinHashTable : public HashJoin {
                                 DeviceIdentifier device_identifier,
                                 size_t hashtable_building_time);
 
-  std::pair<std::optional<size_t>, size_t> getApproximateTupleCountFromCache(
-      QueryPlanHash key,
-      CacheItemType item_type,
-      DeviceIdentifier device_identifier) const;
-
   bool isBitwiseEq() const override;
+
+  ChunkKey genChunkKey(
+      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) const;
 
   struct AlternativeCacheKeyForBaselineHashJoin {
     std::vector<InnerOuter> inner_outer_pairs;
@@ -221,6 +223,7 @@ class BaselineJoinHashTable : public HashJoin {
     const size_t num_elements;
     const SQLOps optype;
     const JoinType join_type;
+    const ChunkKey chunk_key;
   };
 
   static QueryPlanHash getAlternativeCacheKey(
@@ -261,7 +264,9 @@ class BaselineJoinHashTable : public HashJoin {
   std::optional<HashType>
       layout_override_;  // allows us to use a 1:many hash table for many:many
 
-  QueryPlanHash hashtable_cache_key_;
+  HashTableBuildDagMap hashtable_build_dag_map_;
+  // per-device cache key to cover hash table for sharded table
+  std::vector<QueryPlanHash> hashtable_cache_key_;
   HashtableCacheMetaInfo hashtable_cache_meta_info_;
   std::unordered_set<size_t> table_keys_;
   const TableIdToNodeMap table_id_to_node_map_;
