@@ -153,6 +153,7 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
   std::shared_ptr<arrow::Table> parseJson(std::shared_ptr<arrow::io::InputStream> input,
                                           const JsonParseOptions parse_options,
                                           const ColumnInfoList& col_infos = {});
+  Fragmenter_Namespace::TableInfo getEmptyTableMetadata(int table_id) const;
   void fetchFixedLenData(const TableData& table,
                          size_t frag_idx,
                          size_t col_idx,

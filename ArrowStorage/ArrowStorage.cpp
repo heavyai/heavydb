@@ -215,6 +215,10 @@ Fragmenter_Namespace::TableInfo ArrowStorage::getTableMetadata(int db_id,
   CHECK_EQ(tables_.count(table_id), (size_t)1);
   auto& table = *tables_.at(table_id);
 
+  if (table.fragments.empty()) {
+    return getEmptyTableMetadata(table_id);
+  }
+
   Fragmenter_Namespace::TableInfo res;
   res.setPhysicalNumTuples(table.row_count);
   for (size_t frag_idx = 0; frag_idx < table.fragments.size(); ++frag_idx) {
@@ -230,6 +234,24 @@ Fragmenter_Namespace::TableInfo ArrowStorage::getTableMetadata(int db_id,
       frag_info.setChunkMetadata(static_cast<int>(col_idx + 1), frag.metadata[col_idx]);
     }
   }
+  return res;
+}
+
+Fragmenter_Namespace::TableInfo ArrowStorage::getEmptyTableMetadata(int table_id) const {
+  Fragmenter_Namespace::TableInfo res;
+  res.setPhysicalNumTuples(0);
+
+  // Executor requires dummy empty fragment for empty tables
+  Fragmenter_Namespace::FragmentInfo& empty_frag = res.fragments.emplace_back();
+  empty_frag.fragmentId = 0;
+  empty_frag.shadowNumTuples = 0;
+  empty_frag.setPhysicalNumTuples(0);
+  empty_frag.deviceIds.push_back(0);  // Data_Namespace::DISK_LEVEL
+  empty_frag.deviceIds.push_back(0);  // Data_Namespace::CPU_LEVEL
+  empty_frag.deviceIds.push_back(0);  // Data_Namespace::GPU_LEVEL
+  empty_frag.physicalTableId = table_id;
+  res.fragments.push_back(empty_frag);
+
   return res;
 }
 
