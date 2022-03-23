@@ -69,19 +69,17 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
   CHECK_LT(frag_idx, table.fragments.size());
   CHECK_LT(col_idx, table.col_data.size());
 
-  const auto* fixed_type =
-      dynamic_cast<const arrow::FixedWidthType*>(table.col_data[col_idx]->type().get());
-  if (fixed_type) {
+  auto col_type =
+      getColumnInfo(
+          key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
+          ->type;
+  if (!col_type.is_varlen_indeed()) {
     CHECK_EQ(key.size(), (size_t)4);
-    size_t elem_size = fixed_type->bit_width() / CHAR_BIT;
+    size_t elem_size = col_type.get_size();
     fetchFixedLenData(table, frag_idx, col_idx, dest, num_bytes, elem_size);
   } else {
     CHECK_EQ(key.size(), (size_t)5);
     if (key[CHUNK_KEY_VARLEN_IDX] == 1) {
-      auto col_type =
-          getColumnInfo(
-              key[CHUNK_KEY_DB_IDX], key[CHUNK_KEY_TABLE_IDX], key[CHUNK_KEY_COLUMN_IDX])
-              ->type;
       if (!dest->hasEncoder()) {
         dest->initEncoder(col_type);
       }
@@ -101,6 +99,7 @@ void ArrowStorage::fetchBuffer(const ChunkKey& key,
       fetchVarLenOffsets(table, frag_idx, col_idx, dest, num_bytes);
     }
   }
+  dest->setSize(num_bytes);
 }
 
 void ArrowStorage::fetchFixedLenData(const TableData& table,
@@ -111,13 +110,22 @@ void ArrowStorage::fetchFixedLenData(const TableData& table,
                                      size_t elem_size) const {
   auto& frag = table.fragments[frag_idx];
   size_t rows_to_fetch = num_bytes ? num_bytes / elem_size : frag.row_count;
-  auto data_to_fetch = table.col_data[col_idx]->Slice(
-      static_cast<int64_t>(frag.offset), static_cast<int64_t>(rows_to_fetch));
+  const auto* fixed_type =
+      dynamic_cast<const arrow::FixedWidthType*>(table.col_data[col_idx]->type().get());
+  CHECK(fixed_type);
+  size_t arrow_elem_size = fixed_type->bit_width() / 8;
+  // For fixed size arrays we simply use elem type in arrow and therefore have to scale
+  // to get a proper slice.
+  size_t elems = elem_size / arrow_elem_size;
+  CHECK_GT(elems, 0);
+  auto data_to_fetch =
+      table.col_data[col_idx]->Slice(static_cast<int64_t>(frag.offset * elems),
+                                     static_cast<int64_t>(rows_to_fetch * elems));
   int8_t* dst_ptr = dest->getMemoryPtr();
   for (auto& chunk : data_to_fetch->chunks()) {
-    size_t chunk_size = chunk->length() * elem_size;
+    size_t chunk_size = chunk->length() * arrow_elem_size;
     const int8_t* src_ptr =
-        chunk->data()->GetValues<int8_t>(1, chunk->data()->offset * elem_size);
+        chunk->data()->GetValues<int8_t>(1, chunk->data()->offset * arrow_elem_size);
     memcpy(dst_ptr, src_ptr, chunk_size);
     dst_ptr += chunk_size;
   }
