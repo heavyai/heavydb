@@ -1018,6 +1018,11 @@ std::shared_ptr<arrow::ChunkedArray> replaceNullValues(
     return convertTimestampToTimeReplacingNulls(arr);
   }
   if (type.get_type() == kDATE) {
+    if (type.get_compression() != kENCODING_DATE_IN_DAYS) {
+      throw std::runtime_error("Unsupported date type for Arrow import: "s +
+                               type.toString());
+    }
+
     switch (type.get_size()) {
       case 2:
         return convertDateReplacingNulls<int32_t, int16_t>(arr);
@@ -1096,8 +1101,9 @@ SQLTypeInfo getOmnisciType(const arrow::DataType& type) {
     case Type::FLOAT:
       return SQLTypeInfo(kFLOAT, false);
     case Type::DATE32:
+      return SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 32, kNULLT);
     case Type::DATE64:
-      return SQLTypeInfo(kDATE, false);
+      return SQLTypeInfo(kTIMESTAMP, 3, 0);
     case Type::DOUBLE:
       return SQLTypeInfo(kDOUBLE, false);
       // uncomment when arrow 2.0 will be released and modin support for dictionary
