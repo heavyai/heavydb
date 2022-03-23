@@ -1130,6 +1130,82 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_role_credentials) {
 
 #endif  // HAVE_AWS_S3
 
+class ThriftFileGlobbingTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS " + test_table_name_ + ";");
+    sql("CREATE TABLE " + test_table_name_ + " (i INTEGER);");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS " + test_table_name_ + ";");
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static TCopyParams getCopyParams() {
+    TCopyParams copy_params;
+    copy_params.source_type = TSourceType::DELIMITED_FILE;
+    return copy_params;
+  }
+
+  static std::string getTestGlobPath() {
+    return boost::filesystem::canonical("../../Tests/FsiDataFiles/sorted_dir/csv")
+               .string() +
+           "/a_*.csv";
+  }
+
+  static std::string getNonExistentGlobPath() {
+    return boost::filesystem::canonical("../../Tests/FsiDataFiles/sorted_dir/csv")
+               .string() +
+           "/nonexistent*.csv";
+  }
+
+  inline static const std::string test_table_name_{"test_table"};
+};
+
+TEST_F(ThriftFileGlobbingTest, Detect) {
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  TDetectResult result;
+  db_handler->detect_column_types(result, session_id, getTestGlobPath(), getCopyParams());
+  const auto& row_set = result.row_set;
+  ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(1));
+  ASSERT_EQ(row_set.row_desc[0].col_name, "i");
+  ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::SMALLINT);
+  ASSERT_EQ(row_set.rows.size(), static_cast<size_t>(1));
+  ASSERT_EQ(row_set.rows[0].cols.size(), static_cast<size_t>(1));
+  ASSERT_EQ(row_set.rows[0].cols[0].val.str_val, "2");
+}
+
+TEST_F(ThriftFileGlobbingTest, DetectWithNonExistentGlobPath) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, session_id = session_id] {
+        TDetectResult result;
+        db_handler->detect_column_types(
+            result, session_id, getNonExistentGlobPath(), getCopyParams());
+      },
+      "File or directory \"" + getNonExistentGlobPath() + "\" does not exist.");
+}
+
+TEST_F(ThriftFileGlobbingTest, Import) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  sqlAndCompareResult("SELECT * FROM " + test_table_name_ + ";", {});
+  db_handler->import_table(
+      session_id, test_table_name_, getTestGlobPath(), getCopyParams());
+  sqlAndCompareResult("SELECT * FROM " + test_table_name_ + ";", {{i(2)}});
+}
+
+TEST_F(ThriftFileGlobbingTest, ImportWithNonExistentGlobPath) {
+  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+  executeLambdaAndAssertException(
+      [db_handler = db_handler, session_id = session_id] {
+        db_handler->import_table(
+            session_id, test_table_name_, getNonExistentGlobPath(), getCopyParams());
+      },
+      "File does not exist: " + getNonExistentGlobPath());
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

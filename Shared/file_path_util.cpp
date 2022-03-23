@@ -171,4 +171,8 @@ std::vector<arrow::fs::FileInfo> arrow_fs_filter_sort_files(
 
 #endif  // HAVE_AWS_S3
 
+bool file_or_glob_path_exists(const std::string& path) {
+  return boost::filesystem::exists(path) || !heavyai::glob(path).empty();
+}
+
 }  // namespace shared
