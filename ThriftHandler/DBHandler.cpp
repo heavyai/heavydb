@@ -6506,37 +6506,6 @@ void DBHandler::sql_execute_impl(ExecutionResult& _return,
     auto result_future = execute_rel_alg_task->get_future();
     result_future.get();
     return;
-  } else if (pw.is_optimize) {
-    // Get the Stmt object
-    std::unique_ptr<Parser::Stmt> stmt =
-        Parser::create_stmt_for_query(query_str, *session_ptr);
-    const auto optimize_stmt = dynamic_cast<Parser::OptimizeTableStmt*>(stmt.get());
-    CHECK(optimize_stmt);
-
-    _return.addExecutionTime(measure<>::execution([&]() {
-      const auto td_with_lock =
-          lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-              cat, optimize_stmt->getTableName());
-      const auto td = td_with_lock();
-
-      if (!td ||
-          !user_can_access_table(*session_ptr, td, AccessPrivileges::DELETE_FROM_TABLE)) {
-        throw std::runtime_error("Table " + optimize_stmt->getTableName() +
-                                 " does not exist.");
-      }
-      if (td->isView) {
-        throw std::runtime_error("OPTIMIZE TABLE command is not supported on views.");
-      }
-
-      auto executor = Executor::getExecutor(
-          Executor::UNITARY_EXECUTOR_ID, "", "", system_parameters_);
-      const TableOptimizer optimizer(td, executor.get(), cat);
-      if (optimize_stmt->shouldVacuumDeletedRows()) {
-        optimizer.vacuumDeletedRows();
-      }
-      optimizer.recomputeMetadata();
-    }));
-    return;
   }
 
   // TODO: is this following check even necessary any more ?

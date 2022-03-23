@@ -67,7 +67,6 @@ class ParserWrapper {
   bool is_itas = false;
   bool is_copy = false;
   bool is_copy_to = false;
-  bool is_optimize = false;
   bool is_validate = false;
 
   DMLType getDMLType() const { return dml_type_; }
@@ -100,7 +99,7 @@ class ParserWrapper {
     if (is_ddl_) {
       return isCalcitePermissableDdl(read_only_mode);
     }
-    return (!is_optimize && !is_validate && isCalcitePermissableDml(read_only_mode) &&
+    return (!is_validate && isCalcitePermissableDml(read_only_mode) &&
             !(explain_type_ == ExplainType::Other));
   }
 
