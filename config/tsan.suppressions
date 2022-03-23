@@ -14,4 +14,5 @@ race:tbb::detail::*
 race:^tbb*
 # mktime in libarchive uses tzset
 race:^tzset
-
+# QE-338
+race_top:StringDictionaryProxy_GetTransientBulk_Test::TestBody
