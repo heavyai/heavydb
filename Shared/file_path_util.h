@@ -257,4 +257,6 @@ class FileOrderArrow : public FileOrderBase<ArrowFsComparator> {
 
 #endif  // HAVE_AWS_S3
 
+bool file_or_glob_path_exists(const std::string& path);
+
 }  // namespace shared

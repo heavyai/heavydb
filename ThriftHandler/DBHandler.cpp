@@ -4133,7 +4133,8 @@ bool is_local_file(const std::string& file_path) {
 
 void validate_import_file_path_if_local(const std::string& file_path) {
   if (is_local_file(file_path)) {
-    ddl_utils::validate_allowed_file_path(file_path, ddl_utils::DataTransferType::IMPORT);
+    ddl_utils::validate_allowed_file_path(
+        file_path, ddl_utils::DataTransferType::IMPORT, true);
   }
 }
 }  // namespace
@@ -4203,7 +4204,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         }
       } else {
         // check for regular file
-        if (!boost::filesystem::exists(file_path)) {
+        if (!shared::file_or_glob_path_exists(file_path.string())) {
           THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
         }
       }
@@ -5067,7 +5068,7 @@ void DBHandler::import_table(const TSessionId& session,
                     boost::filesystem::path(file_name).filename();
         file_name = file_path.string();
       }
-      if (!boost::filesystem::exists(file_path)) {
+      if (!shared::file_or_glob_path_exists(file_path.string())) {
         THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
       }
     }
@@ -5095,6 +5096,8 @@ void DBHandler::import_table(const TSessionId& session,
     }
     auto ms = measure<>::execution([&]() { importer->import(session_ptr.get()); });
     LOG(INFO) << "Total Import Time: " << (double)ms / 1000.0 << " Seconds.";
+  } catch (const TDBException& e) {
+    throw;
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string(e.what()));
   }
