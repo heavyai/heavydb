@@ -24,9 +24,9 @@ class PerfectJoinHashTableBuilder {
  public:
   PerfectJoinHashTableBuilder() {}
 
-  void allocateDeviceMemory(const JoinColumn& join_column,
+  void allocateDeviceMemory(const size_t num_column_elems,
                             const HashType layout,
-                            HashEntryInfo& hash_entry_info,
+                            HashEntryInfo hash_entry_info,
                             const size_t shard_count,
                             const int device_id,
                             const int device_count,
@@ -42,18 +42,34 @@ class PerfectJoinHashTableBuilder {
     const size_t total_count =
         layout == HashType::OneToOne
             ? hash_entry_info.getNormalizedHashEntryCount()
-            : 2 * hash_entry_info.getNormalizedHashEntryCount() + join_column.num_elems;
+            : 2 * hash_entry_info.getNormalizedHashEntryCount() + num_column_elems;
     CHECK(!hash_table_);
     hash_table_ =
         std::make_unique<PerfectHashTable>(executor->getDataMgr(),
                                            layout,
                                            ExecutorDeviceType::GPU,
                                            hash_entry_info.getNormalizedHashEntryCount(),
-                                           join_column.num_elems);
+                                           num_column_elems);
     hash_table_->allocateGpuMemory(total_count, device_id);
 #else
     UNREACHABLE();
 #endif  // HAVE_CUDA
+  }
+
+  void allocateDeviceMemory(const JoinColumn& join_column,
+                            const HashType layout,
+                            HashEntryInfo& hash_entry_info,
+                            const size_t shard_count,
+                            const int device_id,
+                            const int device_count,
+                            const Executor* executor) {
+    allocateDeviceMemory(join_column.num_elems,
+                         layout,
+                         hash_entry_info,
+                         shard_count,
+                         device_id,
+                         device_count,
+                         executor);
   }
 
 #ifdef HAVE_CUDA

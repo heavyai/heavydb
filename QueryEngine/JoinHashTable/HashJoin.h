@@ -310,6 +310,9 @@ class HashJoin {
     hash_tables_for_device_.swap(empty_hash_tables);
   }
 
+  static std::vector<int> collectFragmentIds(
+      const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
+
   static CompositeKeyInfo getCompositeKeyInfo(
       const std::vector<InnerOuter>& inner_outer_pairs,
       const Executor* executor,

@@ -15,7 +15,6 @@
  */
 
 #include "HashingSchemeRecycler.h"
-#include "QueryEngine/JoinHashTable/HashJoin.h"
 
 std::optional<HashType> HashingSchemeRecycler::getItemFromCache(
     QueryPlanHash key,

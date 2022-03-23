@@ -443,6 +443,15 @@ const StringDictionaryProxy::IdMap* HashJoin::translateInnerToOuterStrDictProxie
   return nullptr;
 }
 
+std::vector<int> HashJoin::collectFragmentIds(
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+  auto const fragment_id = [](auto const& frag_info) { return frag_info.fragmentId; };
+  std::vector<int> frag_ids(fragments.size());
+  std::transform(fragments.cbegin(), fragments.cend(), frag_ids.begin(), fragment_id);
+  std::sort(frag_ids.begin(), frag_ids.end());
+  return frag_ids;
+}
+
 CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const Executor* executor,

@@ -35,14 +35,19 @@ struct HashtableCacheMetaInfo {
 };
 
 struct HashtableAccessPathInfo {
-  QueryPlanHash hashed_query_plan_dag;
+  std::vector<QueryPlanHash> hashed_query_plan_dag;
   HashtableCacheMetaInfo meta_info;
   std::unordered_set<size_t> table_keys;
 
-  HashtableAccessPathInfo()
-      : hashed_query_plan_dag(EMPTY_HASHED_PLAN_DAG_KEY)
-      , meta_info(HashtableCacheMetaInfo())
-      , table_keys({}){};
+  HashtableAccessPathInfo(int device_count)
+      : meta_info(HashtableCacheMetaInfo()), table_keys({}) {
+    // each shard can build different hash tables,
+    // and each device fetches different set of sharded column
+    // (based on round-robin shard distribution)
+    // so we need to keep cache key per device
+    // (all device have the same key if the table is not sharde)
+    hashed_query_plan_dag.resize(device_count, EMPTY_HASHED_PLAN_DAG_KEY);
+  }
 };
 
 class HashtableRecycler
@@ -91,6 +96,10 @@ class HashtableRecycler
       const SQLOps op_type,
       const JoinType join_type,
       const HashTableBuildDagMap& hashtable_build_dag_map,
+      int device_count,
+      int shard_count,
+      const std::vector<std::vector<Fragmenter_Namespace::FragmentInfo>>&
+          frags_for_device,
       Executor* executor);
 
   static size_t getJoinColumnInfoHash(std::vector<const Analyzer::ColumnVar*>& inner_cols,
@@ -102,6 +111,8 @@ class HashtableRecycler
       bool need_dict_translation,
       const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_info_pairs,
       const int table_id);
+
+  static bool isInvalidHashTableCacheKey(const std::vector<QueryPlanHash>& cache_keys);
 
   // this function is required to test data recycler
   // specifically, it is tricky to get a hashtable cache key when we only know
