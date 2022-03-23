@@ -107,11 +107,19 @@ const JoinType RelLeftDeepInnerJoin::getJoinType(const size_t nesting_level) con
   return original_joins_[original_joins_.size() - nesting_level]->getJoinType();
 }
 
-std::string RelLeftDeepInnerJoin::toString() const {
+std::string RelLeftDeepInnerJoin::toString(RelRexToStringConfig config) const {
   std::string ret = ::typeName(this) + "(";
-  ret += ::toString(condition_);
-  for (const auto& input : inputs_) {
-    ret += " " + ::toString(input);
+  ret += condition_->toString(config);
+  if (!config.skip_input_nodes) {
+    for (const auto& input : inputs_) {
+      ret += " " + input->toString(config);
+    }
+  } else {
+    ret += ", input node id={";
+    for (auto& input : inputs_) {
+      ret += std::to_string(input->getId()) + " ";
+    }
+    ret += "}";
   }
   ret += ")";
   return ret;

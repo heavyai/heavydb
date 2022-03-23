@@ -60,7 +60,8 @@ void RelRexDagVisitor::castAndVisit(RelAlgNode const* rel_alg_node) {
   if (itr != handlers.cend() && itr->type_index == type_index) {
     (this->*itr->handler)(rel_alg_node);
   } else {
-    LOG(FATAL) << "Unhandled RelAlgNode type: " << rel_alg_node->toString();
+    LOG(FATAL) << "Unhandled RelAlgNode type: "
+               << rel_alg_node->toString(RelRexToStringConfig::defaults());
   }
 }
 
@@ -145,7 +146,8 @@ void RelRexDagVisitor::visit(RexScalar const* rex_scalar) {
   if (itr != handlers.cend() && itr->type_index == type_index) {
     (this->*itr->handler)(rex_scalar);
   } else {
-    LOG(FATAL) << "Unhandled RexScalar type: " << rex_scalar->toString();
+    LOG(FATAL) << "Unhandled RexScalar type: "
+               << rex_scalar->toString(RelRexToStringConfig::defaults());
   }
 }
 

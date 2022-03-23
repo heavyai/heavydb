@@ -822,7 +822,7 @@ size_t RelLogicalUnion::size() const {
   return inputs_.front()->size();
 }
 
-std::string RelLogicalUnion::toString() const {
+std::string RelLogicalUnion::toString(RelRexToStringConfig config) const {
   return cat(::typeName(this), "(is_all(", is_all_, "))");
 }
 
@@ -3112,8 +3112,8 @@ std::string tree_string(const RelAlgNode* ra, const size_t depth) {
   return result;
 }
 
-std::string RexSubQuery::toString() const {
-  return cat(::typeName(this), "(", ::toString(ra_.get()), ")");
+std::string RexSubQuery::toString(RelRexToStringConfig config) const {
+  return cat(::typeName(this), "(", ra_->toString(config), ")");
 }
 
 size_t RexSubQuery::toHash() const {
@@ -3124,19 +3124,19 @@ size_t RexSubQuery::toHash() const {
   return *hash_;
 }
 
-std::string RexInput::toString() const {
+std::string RexInput::toString(RelRexToStringConfig config) const {
   const auto scan_node = dynamic_cast<const RelScan*>(node_);
   if (scan_node) {
     auto field_name = scan_node->getFieldName(getIndex());
     auto table_name = scan_node->getTableDescriptor()->tableName;
     return ::typeName(this) + "(" + table_name + "." + field_name + ")";
   }
-  return cat(::typeName(this),
-             "(node=",
-             ::toString(node_),
-             ", in_index=",
-             std::to_string(getIndex()),
-             ")");
+  auto node_id_in_plan = node_->getIdInPlanTree();
+  auto node_id_str =
+      node_id_in_plan ? std::to_string(*node_id_in_plan) : std::to_string(node_->getId());
+  auto node_str = config.skip_input_nodes ? "(input_node_id=" + node_id_str
+                                          : "(input_node=" + node_->toString(config);
+  return cat(::typeName(this), node_str, ", in_index=", std::to_string(getIndex()), ")");
 }
 
 size_t RexInput::toHash() const {
@@ -3148,23 +3148,30 @@ size_t RexInput::toHash() const {
   return *hash_;
 }
 
-std::string RelCompound::toString() const {
-  return cat(::typeName(this),
-             "(",
-             (filter_expr_ ? filter_expr_->toString() : "null"),
-             ", target_exprs=",
-             ::toString(target_exprs_),
+std::string RelCompound::toString(RelRexToStringConfig config) const {
+  auto ret = cat(::typeName(this),
+                 ", filter_expr=",
+                 (filter_expr_ ? filter_expr_->toString(config) : "null"),
+                 ", target_exprs=");
+  for (auto& expr : target_exprs_) {
+    ret += expr->toString(config) + " ";
+  }
+  ret += ", agg_exps=";
+  for (auto& expr : agg_exprs_) {
+    ret += expr->toString(config) + " ";
+  }
+  ret += ", scalar_sources=";
+  for (auto& expr : scalar_sources_) {
+    ret += expr->toString(config) + " ";
+  }
+  return cat(ret,
              ", ",
              std::to_string(groupby_count_),
-             ", agg_exps=",
-             ::toString(agg_exprs_),
+             ", ",
              ", fields=",
              ::toString(fields_),
-             ", scalar_sources=",
-             ::toString(scalar_sources_),
              ", is_agg=",
-             std::to_string(is_agg_),
-             ")");
+             std::to_string(is_agg_));
 }
 
 size_t RelCompound::toHash() const {

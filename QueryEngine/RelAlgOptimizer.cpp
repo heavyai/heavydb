@@ -156,7 +156,7 @@ bool is_identical_copy(
         return false;
       }
       CHECK(dynamic_cast<const RelFilter*>(only_usr))
-          << "only_usr: " << only_usr->toString();
+          << "only_usr: " << only_usr->toString(RelRexToStringConfig::defaults());
       usrs_it = du_web.find(only_usr);
       CHECK(usrs_it != du_web.end());
     }
@@ -332,7 +332,7 @@ void cleanup_dead_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
     if (nodeIt->use_count() == 1) {
       VLOG(1) << "Node (ID: " << (*nodeIt)->getId() << ") deleted.";
       if (logger::fast_logging_check(logger::Severity::DEBUG2)) {
-        auto node_str = (*nodeIt)->toString();
+        auto node_str = (*nodeIt)->toString(RelRexToStringConfig::defaults());
         auto [node_substr, post_fix] = ::substring(node_str, g_max_log_length);
         VLOG(2) << "Deleted Node (ID: " << (*nodeIt)->getId()
                 << ") contents: " << node_substr << post_fix;
@@ -379,7 +379,7 @@ std::unordered_set<const RelProject*> get_visible_projects(const RelAlgNode* roo
   }
 
   CHECK(dynamic_cast<const RelFilter*>(root) || dynamic_cast<const RelSort*>(root))
-      << "root = " << root->toString();
+      << "root = " << root->toString(RelRexToStringConfig::defaults());
   return get_visible_projects(root->getInput(0));
 }
 
@@ -823,7 +823,7 @@ void add_new_indices_for(
     CHECK(node_sz_it != orig_node_sizes.end());
     const auto node_size = node_sz_it->second;
     CHECK_GT(node_size, live_fields.size());
-    auto node_str = node->toString();
+    auto node_str = node->toString(RelRexToStringConfig::defaults());
     auto [node_substr, post_fix] = ::substring(node_str, g_max_log_length);
     LOG(INFO) << node_substr << post_fix << " eliminated "
               << node_size - live_fields.size() << " columns.";
@@ -1159,7 +1159,8 @@ void propagate_input_renumbering(
       }
       sort->setCollation(std::move(new_collations));
     } else if (!dynamic_cast<RelLogicalUnion*>(node)) {
-      LOG(FATAL) << "Unhandled node type: " << node->toString();
+      LOG(FATAL) << "Unhandled node type: "
+                 << node->toString(RelRexToStringConfig::defaults());
     }
 
     // Ignore empty live_out due to some invalid node
@@ -1200,7 +1201,8 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
     auto node = live_pair.first;
     const auto& outs = live_pair.second;
     if (outs.empty()) {
-      LOG(WARNING) << "RA node with no used column: " << node->toString();
+      LOG(WARNING) << "RA node with no used column: "
+                   << node->toString(RelRexToStringConfig::defaults());
       // Ignore empty live_out due to some invalid node
       intact_nodes.insert(node);
     }
@@ -1491,7 +1493,7 @@ void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
         VLOG(1) << "Node ID=" << filter->getId() << " folded into "
                 << "ID=" << folded_filter->getId();
         if (logger::fast_logging_check(logger::Severity::DEBUG2)) {
-          auto node_str = folded_filter->toString();
+          auto node_str = folded_filter->toString(RelRexToStringConfig::defaults());
           auto [node_substr, post_fix] = ::substring(node_str, g_max_log_length);
           VLOG(2) << "Folded Node (ID: " << folded_filter->getId()
                   << ") contents: " << node_substr << post_fix;

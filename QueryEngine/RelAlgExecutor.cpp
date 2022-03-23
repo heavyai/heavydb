@@ -608,20 +608,29 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     for (size_t i = 0; i < ed_seq.size(); i++) {
       nodes.emplace_back(ed_seq.getDescriptor(i)->getBody());
     }
+    size_t ctr_node_id_in_plan = nodes.size();
+    for (auto& body : boost::adaptors::reverse(nodes)) {
+      // we set each node's id in the query plan in advance before calling toString
+      // method to properly represent the query plan
+      auto node_id_in_plan_tree = ctr_node_id_in_plan--;
+      body->setIdInPlanTree(node_id_in_plan_tree);
+    }
     size_t ctr = nodes.size();
     size_t tab_ctr = 0;
+    RelRexToStringConfig config;
+    config.skip_input_nodes = true;
     for (auto& body : boost::adaptors::reverse(nodes)) {
       const auto index = ctr--;
       const auto tabs = std::string(tab_ctr++, '\t');
       CHECK(body);
-      ss << tabs << std::to_string(index) << " : " << body->toString() << "\n";
+      ss << tabs << std::to_string(index) << " : " << body->toString(config) << "\n";
       if (auto sort = dynamic_cast<const RelSort*>(body)) {
-        ss << tabs << "  : " << sort->getInput(0)->toString() << "\n";
+        ss << tabs << "  : " << sort->getInput(0)->toString(config) << "\n";
       }
       if (dynamic_cast<const RelProject*>(body) ||
           dynamic_cast<const RelCompound*>(body)) {
         if (auto join = dynamic_cast<const RelLeftDeepInnerJoin*>(body->getInput(0))) {
-          ss << tabs << "  : " << join->toString() << "\n";
+          ss << tabs << "  : " << join->toString(config) << "\n";
         }
       }
     }
@@ -631,7 +640,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
          << "\n";
       for (const auto& subquery : subqueries) {
         const auto ra = subquery->getRelAlg();
-        ss << "\t" << ra->toString() << "\n";
+        ss << "\t" << ra->toString(config) << "\n";
       }
     }
     auto rs = std::make_shared<ResultSet>(ss.str());
@@ -1124,7 +1133,9 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
             if (prev_result) {
               prev_count = prev_result->rowCount();
               VLOG(3) << "Setting output row count for projection node to previous node ("
-                      << prev_exec_desc->getBody()->toString() << ") to " << *prev_count;
+                      << prev_exec_desc->getBody()->toString(
+                             RelRexToStringConfig::defaults())
+                      << ") to " << *prev_count;
             }
           }
         }
@@ -1199,7 +1210,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     addTemporaryTable(-table_func->getId(), exec_desc.getResult().getDataPtr());
     return;
   }
-  LOG(FATAL) << "Unhandled body type: " << body->toString();
+  LOG(FATAL) << "Unhandled body type: "
+             << body->toString(RelRexToStringConfig::defaults());
 }
 
 void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
@@ -1420,7 +1432,8 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(
     const auto it_ok = input_to_nest_level.emplace(input_ra, idx);
     CHECK(it_ok.second);
     LOG_IF(INFO, !input_permutation.empty())
-        << "Assigned input " << input_ra->toString() << " to nest level " << input_idx;
+        << "Assigned input " << input_ra->toString(RelRexToStringConfig::defaults())
+        << " to nest level " << input_idx;
   }
   return input_to_nest_level;
 }
@@ -1457,12 +1470,15 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
   }
 
   if (dynamic_cast<const RelLogicalUnion*>(ra_node)) {
-    CHECK_GT(ra_node->inputCount(), 1u) << ra_node->toString();
+    CHECK_GT(ra_node->inputCount(), 1u)
+        << ra_node->toString(RelRexToStringConfig::defaults());
   } else if (dynamic_cast<const RelTableFunction*>(ra_node)) {
     // no-op
-    CHECK_GE(ra_node->inputCount(), 0u) << ra_node->toString();
+    CHECK_GE(ra_node->inputCount(), 0u)
+        << ra_node->toString(RelRexToStringConfig::defaults());
   } else {
-    CHECK_EQ(ra_node->inputCount(), 1u) << ra_node->toString();
+    CHECK_EQ(ra_node->inputCount(), 1u)
+        << ra_node->toString(RelRexToStringConfig::defaults());
   }
   return std::make_pair(std::unordered_set<const RexInput*>{},
                         std::vector<std::shared_ptr<RexInput>>{});
@@ -1475,7 +1491,7 @@ void collect_used_input_desc(
     const RelAlgNode* ra_node,
     const std::unordered_set<const RexInput*>& source_used_inputs,
     const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
-  VLOG(3) << "ra_node=" << ra_node->toString()
+  VLOG(3) << "ra_node=" << ra_node->toString(RelRexToStringConfig::defaults())
           << " input_col_descs_unique.size()=" << input_col_descs_unique.size()
           << " source_used_inputs.size()=" << source_used_inputs.size();
   for (const auto used_input : source_used_inputs) {
@@ -1631,7 +1647,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const ::ExecutorType executor_type) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   const size_t scalar_sources_size = get_scalar_sources_size(ra_node);
-  VLOG(3) << "get_scalar_sources_size(" << ra_node->toString()
+  VLOG(3) << "get_scalar_sources_size("
+          << ra_node->toString(RelRexToStringConfig::defaults())
           << ") = " << scalar_sources_size;
   for (size_t i = 0; i < scalar_sources_size; ++i) {
     const auto scalar_rex = scalar_at(i, ra_node);
@@ -1870,7 +1887,8 @@ std::vector<TargetMetaInfo> get_targets_meta(
   } else if (auto const* input = dynamic_cast<RelScan const*>(input0)) {
     return get_targets_meta(input, target_exprs);
   }
-  UNREACHABLE() << "Unhandled node type: " << input0->toString();
+  UNREACHABLE() << "Unhandled node type: "
+                << input0->toString(RelRexToStringConfig::defaults());
   return {};
 }
 
@@ -2003,7 +2021,8 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
 
     execute_update_for_node(project, work_unit, false);
   } else {
-    throw std::runtime_error("Unsupported parent node for update: " + node->toString());
+    throw std::runtime_error("Unsupported parent node for update: " +
+                             node->toString(RelRexToStringConfig::defaults()));
   }
 }
 
@@ -2104,7 +2123,8 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
     }
     execute_delete_for_node(project, work_unit, false);
   } else {
-    throw std::runtime_error("Unsupported parent node for delete: " + node->toString());
+    throw std::runtime_error("Unsupported parent node for delete: " +
+                             node->toString(RelRexToStringConfig::defaults()));
   }
 }
 
@@ -3415,7 +3435,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   const auto body = work_unit.body;
   CHECK(body);
   auto it = leaf_results_.find(body->getId());
-  VLOG(3) << "body->getId()=" << body->getId() << " body->toString()=" << body->toString()
+  VLOG(3) << "body->getId()=" << body->getId()
+          << " body->toString()=" << body->toString(RelRexToStringConfig::defaults())
           << " it==leaf_results_.end()=" << (it == leaf_results_.end());
   if (it != leaf_results_.end()) {
     executor_->addTransientStringLiterals(work_unit.exe_unit,
@@ -3976,7 +3997,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
   if (filter) {
     return createFilterWorkUnit(filter, sort_info, eo.just_explain);
   }
-  LOG(FATAL) << "Unhandled node type: " << node->toString();
+  LOG(FATAL) << "Unhandled node type: "
+             << node->toString(RelRexToStringConfig::defaults());
   return {};
 }
 
@@ -4659,7 +4681,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
 
   VLOG(3) << "input_to_nest_level.size()=" << input_to_nest_level.size() << " Pairs are:";
   for (auto& pair : input_to_nest_level) {
-    VLOG(3) << "  (" << pair.first->toString() << ", " << pair.second << ')';
+    VLOG(3) << "  (" << pair.first->toString(RelRexToStringConfig::defaults()) << ", "
+            << pair.second << ')';
   }
 
   RelAlgTranslator translator(
@@ -4670,8 +4693,9 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
   std::vector<Analyzer::Expr*> target_exprs_pair[2];
   for (unsigned i = 0; i < 2; ++i) {
     auto input_exprs_owned = target_exprs_for_union(logical_union->getInput(i));
-    CHECK(!input_exprs_owned.empty()) << "No metainfo found for input node(" << i << ") "
-                                      << logical_union->getInput(i)->toString();
+    CHECK(!input_exprs_owned.empty())
+        << "No metainfo found for input node(" << i << ") "
+        << logical_union->getInput(i)->toString(RelRexToStringConfig::defaults());
     VLOG(3) << "i(" << i << ") input_exprs_owned.size()=" << input_exprs_owned.size();
     for (auto& input_expr : input_exprs_owned) {
       VLOG(3) << "  " << input_expr->toString();
@@ -4728,7 +4752,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createUnionWorkUnit(
   } else if (dynamic_cast<const RelSort*>(input0)) {
     throw QueryNotSupported("LIMIT and OFFSET are not currently supported with UNION.");
   } else {
-    throw QueryNotSupported("Unsupported input type: " + input0->toString());
+    throw QueryNotSupported("Unsupported input type: " +
+                            input0->toString(RelRexToStringConfig::defaults()));
   }
   VLOG(3) << "logical_union->getOutputMetainfo()="
           << shared::printContainer(logical_union->getOutputMetainfo())

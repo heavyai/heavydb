@@ -24,6 +24,7 @@
 #include <atomic>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include <rapidjson/document.h>
@@ -42,9 +43,15 @@
 using ColumnNameList = std::vector<std::string>;
 static auto const HASH_N = boost::hash_value("n");
 
+struct RelRexToStringConfig {
+  bool skip_input_nodes{false};
+
+  static RelRexToStringConfig defaults() { return RelRexToStringConfig{false}; }
+};
+
 class Rex {
  public:
-  virtual std::string toString() const = 0;
+  virtual std::string toString(RelRexToStringConfig config) const = 0;
 
   // return hashed value of string representation of this rex
   virtual size_t toHash() const = 0;
@@ -66,7 +73,8 @@ class RexAbstractInput : public RexScalar {
 
   void setIndex(const unsigned in_index) const { in_index_ = in_index; }
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     return cat(::typeName(this), "(", std::to_string(in_index_), ")");
   }
 
@@ -182,7 +190,8 @@ class RexLiteral : public RexScalar {
 
   unsigned getTargetPrecision() const { return target_precision_; }
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     std::ostringstream oss;
     oss << "RexLiteral(" << literal_ << " type=" << type_ << '(' << precision_ << ','
         << scale_ << ") target_type=" << target_type_ << '(' << target_precision_ << ','
@@ -249,15 +258,13 @@ class RexOperator : public RexScalar {
 
   const SQLTypeInfo& getType() const { return type_; }
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               std::to_string(op_),
-               ", operands=",
-               ::toString(operands_),
-               ", type=",
-               type_.to_string(),
-               ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this), "(", std::to_string(op_), ", operands=");
+    for (auto& operand : operands_) {
+      ret += operand->toString(config) + " ";
+    }
+    return cat(ret, ", type=", type_.to_string(), ")");
   };
 
   size_t toHash() const override {
@@ -319,7 +326,8 @@ class RexSubQuery : public RexScalar {
 
   const RelAlgNode* getRelAlg() const { return ra_.get(); }
 
-  std::string toString() const override;
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
   size_t toHash() const override;
 
@@ -351,7 +359,8 @@ class RexInput : public RexAbstractInput {
     return getSourceNode() == that.getSourceNode() && getIndex() == that.getIndex();
   }
 
-  std::string toString() const override;
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
   size_t toHash() const override;
 
@@ -398,13 +407,14 @@ class RexCase : public RexScalar {
 
   const RexScalar* getElse() const { return else_expr_.get(); }
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(expr_pair_list=",
-               ::toString(expr_pair_list_),
-               ", else_expr=",
-               (else_expr_ ? else_expr_->toString() : "null"),
-               ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this), "(expr_pair_list=");
+    for (auto& expr : expr_pair_list_) {
+      ret += expr.first->toString(config) + " " + expr.second->toString(config) + " ";
+    }
+    return cat(
+        ret, ", else_expr=", (else_expr_ ? else_expr_->toString(config) : "null"), ")");
   }
 
   size_t toHash() const override {
@@ -444,8 +454,13 @@ class RexFunctionOperator : public RexOperator {
 
   const std::string& getName() const { return name_; }
 
-  std::string toString() const override {
-    return cat(::typeName(this), "(", name_, ", operands=", ::toString(operands_), ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this), "(", name_, ", operands=");
+    for (auto& operand : operands_) {
+      ret += operand->toString(config) + " ";
+    }
+    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -594,17 +609,21 @@ class RexWindowFunctionOperator : public RexFunctionOperator {
                                       getType()));
   }
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               getName(),
-               ", operands=",
-               ::toString(operands_),
-               ", partition_keys=",
-               ::toString(partition_keys_),
-               ", order_keys=",
-               ::toString(order_keys_),
-               ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this), "(", getName(), ", operands=");
+    for (auto& operand : operands_) {
+      ret += operand->toString(config) + " ";
+    }
+    ret += ", partition_keys=";
+    for (auto& key : partition_keys_) {
+      ret += key->toString(config) + " ";
+    }
+    ret += ", order_keys=";
+    for (auto& key : order_keys_) {
+      ret += key->toString(config) + " ";
+    }
+    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -659,7 +678,8 @@ class RexRef : public RexScalar {
 
   size_t getIndex() const { return index_; }
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     return cat(::typeName(this), "(", std::to_string(index_), ")");
   }
 
@@ -685,7 +705,8 @@ class RexAgg : public Rex {
          const std::vector<size_t>& operands)
       : agg_(agg), distinct_(distinct), type_(type), operands_(operands) {}
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     return cat(::typeName(this),
                "(agg=",
                std::to_string(agg_),
@@ -739,6 +760,7 @@ class RelAlgNode {
   RelAlgNode(RelAlgInputs inputs = {})
       : inputs_(std::move(inputs))
       , id_(crt_id_++)
+      , id_in_plan_tree_(std::nullopt)
       , context_data_(nullptr)
       , is_nop_(false)
       , query_plan_dag_("")
@@ -776,6 +798,10 @@ class RelAlgNode {
   }
 
   unsigned getId() const { return id_; }
+
+  void setIdInPlanTree(size_t id) const { id_in_plan_tree_ = id; }
+
+  std::optional<size_t> getIdInPlanTree() const { return id_in_plan_tree_; }
 
   bool hasContextData() const { return !(context_data_ == nullptr); }
 
@@ -825,7 +851,7 @@ class RelAlgNode {
 
   void markAsNop() { is_nop_ = true; }
 
-  virtual std::string toString() const = 0;
+  virtual std::string toString(RelRexToStringConfig config) const = 0;
 
   // return hashed value of a string representation of this rel node
   virtual size_t toHash() const = 0;
@@ -845,6 +871,7 @@ class RelAlgNode {
  protected:
   RelAlgInputs inputs_;
   const unsigned id_;
+  mutable std::optional<size_t> id_in_plan_tree_;
   mutable std::optional<size_t> hash_;
 
  private:
@@ -877,7 +904,8 @@ class RelScan : public RelAlgNode {
 
   const std::string getFieldName(const size_t i) const { return field_names_[i]; }
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     return cat(
         ::typeName(this), "(", td_->tableName, ", ", ::toString(field_names_), ")");
   }
@@ -1057,9 +1085,13 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   void appendInput(std::string new_field_name,
                    std::unique_ptr<const RexScalar> new_input);
 
-  std::string toString() const override {
-    return cat(
-        ::typeName(this), "(", ::toString(scalar_exprs_), ", ", ::toString(fields_), ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this), "(");
+    for (auto& expr : scalar_exprs_) {
+      ret += expr->toString(config) + " ";
+    }
+    return cat(ret, ", ", ::toString(fields_), ")");
   }
 
   size_t toHash() const override {
@@ -1177,17 +1209,28 @@ class RelAggregate : public RelAlgNode {
     agg_exprs_ = std::move(agg_exprs);
   }
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               std::to_string(groupby_count_),
-               ", agg_exprs=",
-               ::toString(agg_exprs_),
-               ", fields=",
-               ::toString(fields_),
-               ", inputs=",
-               ::toString(inputs_),
-               ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this),
+                   "(",
+                   std::to_string(groupby_count_),
+                   ", agg_exprs=",
+                   ::toString(agg_exprs_),
+                   ", fields=",
+                   ::toString(fields_));
+    if (!config.skip_input_nodes) {
+      ret += ::toString(inputs_);
+    } else {
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
+    }
+    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -1272,12 +1315,24 @@ class RelJoin : public RelAlgNode {
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               ::toString(inputs_),
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this), "(");
+    if (!config.skip_input_nodes) {
+      ret += ::toString(inputs_);
+    } else {
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
+    }
+    return cat(ret,
                ", condition=",
-               (condition_ ? condition_->toString() : "null"),
+               (condition_ ? condition_->toString(config) : "null"),
                ", join_type=",
                ::toString(join_type_));
   }
@@ -1359,7 +1414,8 @@ class RelTranslatedJoin : public RelAlgNode {
       , qualifier_(qualifier)
       , op_typeinfo_(op_typeinfo) {}
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     return cat(::typeName(this),
                "( join_quals { lhs: ",
                ::toString(lhs_join_cols_),
@@ -1368,7 +1424,7 @@ class RelTranslatedJoin : public RelAlgNode {
                " }, filter_quals: { ",
                ::toString(filter_ops_),
                " }, outer_join_cond: { ",
-               ::toString(outer_join_cond_),
+               outer_join_cond_->toString(config),
                " }, loop_join: ",
                ::toString(nested_loop_),
                ", join_type: ",
@@ -1480,12 +1536,23 @@ class RelFilter : public RelAlgNode {
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               (filter_ ? filter_->toString() : "null"),
-               ", ",
-               ::toString(inputs_) + ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret =
+        cat(::typeName(this), "(", (filter_ ? filter_->toString(config) : "null"), ", ");
+    if (!config.skip_input_nodes) {
+      ret += ::toString(inputs_);
+    } else {
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
+    }
+    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -1520,7 +1587,8 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 
   const JoinType getJoinType(const size_t nesting_level) const;
 
-  std::string toString() const override;
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
   size_t toHash() const override;
 
@@ -1621,7 +1689,8 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 
   const RexAgg* getAggExpr(size_t i) const { return agg_exprs_[i].get(); }
 
-  std::string toString() const override;
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
 
   size_t toHash() const override;
 
@@ -1709,21 +1778,32 @@ class RelSort : public RelAlgNode {
 
   size_t getOffset() const { return offset_; }
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     const std::string limit_info = limit_delivered_ ? std::to_string(limit_) : "N/A";
-    return cat(::typeName(this),
-               "(",
-               "empty_result: ",
-               ::toString(empty_result_),
-               ", collation=",
-               ::toString(collation_),
-               ", limit=",
-               limit_info,
-               ", offset",
-               std::to_string(offset_),
-               ", inputs=",
-               ::toString(inputs_),
-               ")");
+    auto ret = cat(::typeName(this),
+                   "(",
+                   "empty_result: ",
+                   ::toString(empty_result_),
+                   ", collation=",
+                   ::toString(collation_),
+                   ", limit=",
+                   limit_info,
+                   ", offset",
+                   std::to_string(offset_));
+    if (!config.skip_input_nodes) {
+      ret += ", inputs=", ::toString(inputs_);
+    } else {
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
+    }
+    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -1835,19 +1915,30 @@ class RelModify : public RelAlgNode {
     return std::make_shared<RelModify>(*this);
   }
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               table_descriptor_->tableName,
-               ", flattened=",
-               std::to_string(flattened_),
-               ", op=",
-               yieldModifyOperationString(operation_),
-               ", target_column_list=",
-               ::toString(target_column_list_),
-               ", inputs=",
-               ::toString(inputs_),
-               ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this),
+                   "(",
+                   table_descriptor_->tableName,
+                   ", flattened=",
+                   std::to_string(flattened_),
+                   ", op=",
+                   yieldModifyOperationString(operation_),
+                   ", target_column_list=",
+                   ::toString(target_column_list_));
+    if (!config.skip_input_nodes) {
+      ret += ", inputs=", ::toString(inputs_);
+    } else {
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
+    }
+    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -2003,20 +2094,35 @@ class RelTableFunction : public RelAlgNode {
     return std::make_shared<RelTableFunction>(*this);
   }
 
-  std::string toString() const override {
-    return cat(::typeName(this),
-               "(",
-               function_name_,
-               ", inputs=",
-               ::toString(inputs_),
-               ", fields=",
-               ::toString(fields_),
-               ", col_inputs=...",
-               ", table_func_inputs=",
-               ::toString(table_func_inputs_),
-               ", target_exprs=",
-               ::toString(target_exprs_),
-               ")");
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
+    auto ret = cat(::typeName(this), "(", function_name_);
+    if (!config.skip_input_nodes) {
+      ret += ", inputs=", ::toString(inputs_);
+    } else {
+      ret += ", input node id={";
+      for (auto& input : inputs_) {
+        auto node_id_in_plan = input->getIdInPlanTree();
+        auto node_id_str = node_id_in_plan ? std::to_string(*node_id_in_plan)
+                                           : std::to_string(input->getId());
+        ret += node_id_str + " ";
+      }
+      ret += "}";
+    }
+    ret +=
+        cat(", fields=", ::toString(fields_), ", col_inputs=...", ", table_func_inputs=");
+    if (!config.skip_input_nodes) {
+      ret += ::toString(table_func_inputs_);
+    } else {
+      for (auto& expr : table_func_inputs_) {
+        ret += expr->toString(config) + " ";
+      }
+    }
+    ret += ", target_exprs=";
+    for (auto& expr : target_exprs_) {
+      ret += expr->toString(config) + " ";
+    }
+    return cat(ret, ")");
   }
 
   size_t toHash() const override {
@@ -2063,7 +2169,8 @@ class RelLogicalValues : public RelAlgNode {
 
   const std::vector<TargetMetaInfo> getTupleType() const { return tuple_type_; }
 
-  std::string toString() const override {
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override {
     std::string ret = ::typeName(this) + "(";
     for (const auto& target_meta_info : tuple_type_) {
       ret += " (" + target_meta_info.get_resname() + " " +
@@ -2121,7 +2228,8 @@ class RelLogicalUnion : public RelAlgNode {
     return std::make_shared<RelLogicalUnion>(*this);
   }
   size_t size() const override;
-  std::string toString() const override;
+  std::string toString(
+      RelRexToStringConfig config = RelRexToStringConfig::defaults()) const override;
   size_t toHash() const override;
 
   std::string getFieldName(const size_t i) const;

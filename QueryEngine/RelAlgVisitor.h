@@ -75,7 +75,8 @@ class RelAlgVisitor {
     if (logical_union) {
       return aggregateResult(result, visitLogicalUnion(logical_union));
     }
-    LOG(FATAL) << "Unhandled rel_alg type: " << rel_alg->toString();
+    LOG(FATAL) << "Unhandled rel_alg type: "
+               << rel_alg->toString(RelRexToStringConfig::defaults());
     return {};
   }
 

@@ -50,7 +50,8 @@ class RexVisitorBase {
     if (rex_ref) {
       return visitRef(rex_ref);
     }
-    LOG(FATAL) << "No visit path for " << rex_scalar->toString();
+    LOG(FATAL) << "No visit path for "
+               << rex_scalar->toString(RelRexToStringConfig::defaults());
     return defaultResult();
   }
 

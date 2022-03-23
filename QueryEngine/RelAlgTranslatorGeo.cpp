@@ -896,7 +896,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
   }
   if (use_geo_projections && !allow_gdal_transform) {
     throw std::runtime_error("Geospatial projection for function " +
-                             rex_function->toString() +
+                             rex_function->toString(RelRexToStringConfig::defaults()) +
                              " not yet supported in this context");
   }
   return makeExpr<Analyzer::GeoUOper>(

@@ -396,7 +396,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
   const auto source = rex_input->getSourceNode();
   const auto it_rte_idx = input_to_nest_level_.find(source);
   CHECK(it_rte_idx != input_to_nest_level_.end())
-      << "Not found in input_to_nest_level_, source=" << source->toString();
+      << "Not found in input_to_nest_level_, source="
+      << source->toString(RelRexToStringConfig::defaults());
   const int rte_idx = it_rte_idx->second;
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   const auto& in_metainfo = source->getOutputMetainfo();
@@ -425,7 +426,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     return std::make_shared<Analyzer::ColumnVar>(
         col_ti, table_desc->tableId, cd->columnId, rte_idx);
   }
-  CHECK(!in_metainfo.empty()) << "for " << source->toString();
+  CHECK(!in_metainfo.empty()) << "for "
+                              << source->toString(RelRexToStringConfig::defaults());
   CHECK_GE(rte_idx, 0);
   const size_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
