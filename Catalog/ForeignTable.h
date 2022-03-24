@@ -119,7 +119,7 @@ struct ForeignTable : public TableDescriptor, public OptionsContainer {
     @brief Verifies that the given options map only contains options that can be legally
     altered.
    */
-  static void validateAlterOptions(const OptionsMap& options_map);
+  void validateAlterOptions(const OptionsMap& options_map) const;
 
   /**
     @brief Verifies the schema is supported by this foreign table

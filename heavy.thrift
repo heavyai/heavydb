@@ -244,10 +244,11 @@ struct TCopyParams {
   33: string odbc_dsn;
   34: string odbc_connection_string;
   35: string odbc_sql_select;
-  36: string odbc_username;
-  37: string odbc_password;
-  38: string odbc_credential_string;
-  39: string add_metadata_columns;
+  36: string odbc_sql_order_by;
+  37: string odbc_username;
+  38: string odbc_password;
+  39: string odbc_credential_string;
+  40: string add_metadata_columns;
 }
 
 struct TCreateParams {

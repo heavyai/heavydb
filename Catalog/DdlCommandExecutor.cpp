@@ -1676,7 +1676,7 @@ ExecutionResult AlterForeignTableCommand::execute() {
   } else if (alter_type == "RENAME_COLUMN") {
     renameColumn(foreign_table);
   } else if (alter_type == "ALTER_OPTIONS") {
-    alterOptions(foreign_table);
+    alterOptions(*foreign_table);
   }
 
   return ExecutionResult();
@@ -1720,15 +1720,23 @@ void AlterForeignTableCommand::renameColumn(
 }
 
 void AlterForeignTableCommand::alterOptions(
-    const foreign_storage::ForeignTable* foreign_table) {
+    const foreign_storage::ForeignTable& foreign_table) {
   auto& ddl_payload = extractPayload(ddl_data_);
   const std::string& table_name = ddl_payload["tableName"].GetString();
   auto& cat = session_ptr_->getCatalog();
   auto new_options_map =
       foreign_storage::ForeignTable::createOptionsMap(ddl_payload["options"]);
-  foreign_table->validateSupportedOptionKeys(new_options_map);
-  foreign_storage::ForeignTable::validateAlterOptions(new_options_map);
+  foreign_table.validateSupportedOptionKeys(new_options_map);
+  foreign_table.validateAlterOptions(new_options_map);
   cat.setForeignTableOptions(table_name, new_options_map, false);
+
+  // These options will invalidate any data in the cache.
+  if (new_options_map.find(foreign_storage::OdbcDataWrapper::ODBC_SELECT_KEY) !=
+          new_options_map.end() ||
+      new_options_map.find(foreign_storage::OdbcDataWrapper::ODBC_ORDER_BY_KEY) !=
+          new_options_map.end()) {
+    foreign_storage::refresh_foreign_table_unlocked(cat, foreign_table, true);
+  }
 }
 
 ShowDiskCacheUsageCommand::ShowDiskCacheUsageCommand(

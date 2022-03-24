@@ -21,28 +21,16 @@
 #include "QueryEngine/ExternalCacheInvalidators.h"
 
 namespace foreign_storage {
-void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
-                           const std::string& table_name,
-                           const bool evict_cached_entries) {
+void refresh_foreign_table_unlocked(Catalog_Namespace::Catalog& catalog,
+                                    const ForeignTable& td,
+                                    const bool evict_cached_entries) {
   auto& data_mgr = catalog.getDataMgr();
-  auto table_lock =
-      std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
-          lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
-              catalog, table_name, false));
-
-  const TableDescriptor* td = (*table_lock)();
-  if (td->storageType != StorageType::FOREIGN_TABLE) {
-    throw std::runtime_error{
-        table_name +
-        " is not a foreign table. Refreshes are applicable to only foreign tables."};
-  }
-
-  ChunkKey table_key{catalog.getCurrentDB().dbId, td->tableId};
+  ChunkKey table_key{catalog.getCurrentDB().dbId, td.tableId};
   ResultSetCacheInvalidator::invalidateCachesByTable(boost::hash_value(table_key));
 
-  catalog.removeFragmenterForTable(td->tableId);
+  catalog.removeFragmenterForTable(td.tableId);
 
-  if (catalog.getForeignTable(td->tableId)->isAppendMode() && !evict_cached_entries) {
+  if (catalog.getForeignTable(td.tableId)->isAppendMode() && !evict_cached_entries) {
     ChunkMetadataVector metadata_vec;
     data_mgr.getChunkMetadataVecForKeyPrefix(metadata_vec, table_key);
     int last_fragment_id = 0;
@@ -65,10 +53,30 @@ void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
   try {
     data_mgr.getPersistentStorageMgr()->getForeignStorageMgr()->refreshTable(
         table_key, evict_cached_entries);
-    catalog.updateForeignTableRefreshTimes(td->tableId);
+    catalog.updateForeignTableRefreshTimes(td.tableId);
   } catch (PostEvictionRefreshException& e) {
-    catalog.updateForeignTableRefreshTimes(td->tableId);
+    catalog.updateForeignTableRefreshTimes(td.tableId);
     throw e.getOriginalException();
   }
+}
+
+void refresh_foreign_table(Catalog_Namespace::Catalog& catalog,
+                           const std::string& table_name,
+                           const bool evict_cached_entries) {
+  auto table_lock =
+      std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+          lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+              catalog, table_name, false));
+
+  const TableDescriptor* td = (*table_lock)();
+  if (td->storageType != StorageType::FOREIGN_TABLE) {
+    throw std::runtime_error{
+        table_name +
+        " is not a foreign table. Refreshes are applicable to only foreign tables."};
+  }
+
+  auto foreign_table = dynamic_cast<const ForeignTable*>(td);
+  CHECK(foreign_table);
+  refresh_foreign_table_unlocked(catalog, *foreign_table, evict_cached_entries);
 }
 }  // namespace foreign_storage

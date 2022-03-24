@@ -118,7 +118,7 @@ class AlterForeignTableCommand : public DdlCommand {
   ExecutionResult execute() override;
 
  private:
-  void alterOptions(const foreign_storage::ForeignTable* foreign_table);
+  void alterOptions(const foreign_storage::ForeignTable& foreign_table);
   void renameTable(const foreign_storage::ForeignTable* foreign_table);
   void renameColumn(const foreign_storage::ForeignTable* foreign_table);
 };
