@@ -258,6 +258,10 @@ std::shared_ptr<Catalog_Namespace::Catalog> QueryRunner::getCatalog() const {
   return session_info_->get_catalog_ptr();
 }
 
+std::shared_ptr<Data_Namespace::DataMgr> QueryRunner::getDataMgr() const {
+  return data_mgr_;
+}
+
 std::shared_ptr<Calcite> QueryRunner::getCalcite() const {
   // TODO: Embed Calcite shared_ptr ownership in QueryRunner
   return g_calcite;
@@ -284,46 +288,6 @@ std::vector<MemoryInfo> QueryRunner::getMemoryInfo(
     const Data_Namespace::MemoryLevel memory_level) const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   return session_info_->getCatalog().getDataMgr().getMemoryInfo(memory_level);
-}
-
-BufferPoolStats QueryRunner::getBufferPoolStats(
-    const Data_Namespace::MemoryLevel memory_level) const {
-  // Only works single-node for now
-  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
-  const std::vector<MemoryInfo> memory_infos =
-      session_info_->getCatalog().getDataMgr().getMemoryInfo(memory_level);
-  if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
-    CHECK_EQ(memory_infos.size(), static_cast<size_t>(1));
-  }
-  std::set<std::vector<int32_t>> chunk_keys;
-  std::set<std::vector<int32_t>> table_keys;
-  std::set<std::vector<int32_t>> column_keys;
-  std::set<std::vector<int32_t>> fragment_keys;
-  size_t total_num_buffers{
-      0};  // can be greater than chunk keys set size due to table replication
-  size_t total_num_bytes{0};
-  for (auto& pool_memory_info : memory_infos) {
-    const std::vector<MemoryData>& memory_data = pool_memory_info.nodeMemoryData;
-    for (auto& memory_datum : memory_data) {
-      total_num_buffers++;
-      const auto& chunk_key = memory_datum.chunk_key;
-      if (memory_datum.memStatus == Buffer_Namespace::MemStatus::FREE ||
-          chunk_key.size() < 4) {
-        continue;
-      }
-      total_num_bytes += (memory_datum.numPages * pool_memory_info.pageSize);
-      table_keys.insert({chunk_key[0], chunk_key[1]});
-      column_keys.insert({chunk_key[0], chunk_key[1], chunk_key[2]});
-      fragment_keys.insert({chunk_key[0], chunk_key[1], chunk_key[3]});
-      chunk_keys.insert(chunk_key);
-    }
-  }
-  return {total_num_buffers,
-          total_num_bytes,
-          table_keys.size(),
-          column_keys.size(),
-          fragment_keys.size(),
-          chunk_keys.size()};
 }
 
 RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str) {

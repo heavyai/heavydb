@@ -29,6 +29,7 @@
 #include "../Shared/StringTransform.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
+#include "BufferPoolStats.h"
 #include "ClusterTester.h"
 #include "DistributedLoader.h"
 
@@ -17000,7 +17001,7 @@ TEST(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(2));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(2));
@@ -17021,7 +17022,7 @@ TEST(Select, FilterNodeCoalesce) {
     }
 
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -17043,7 +17044,7 @@ TEST(Select, FilterNodeCoalesce) {
     }
 
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -17064,7 +17065,7 @@ TEST(Select, FilterNodeCoalesce) {
     }
 
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -17082,7 +17083,7 @@ TEST(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
     const auto buffer_pool_stats =
-        QR::get()->getBufferPoolStats(Data_Namespace::MemoryLevel::CPU_LEVEL);
+        getBufferPoolStats(QR::get()->getDataMgr().get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
