@@ -44,9 +44,7 @@ inline int64_t fixed_encoding_nullable_val(const int64_t val,
 std::vector<size_t> get_padded_target_sizes(
     const ResultSet& rows,
     const std::vector<SQLTypeInfo>& target_types) {
-  const auto slot_for_target_indicies = rows.getSlotIndicesForTargetIndices();
   std::vector<size_t> padded_target_sizes;
-
   // We have to check that the result set is valid as one entry point
   // to columnar results constructs effectively a fake result set.
   // In these cases it should be safe to assume that we can use the type
@@ -60,15 +58,15 @@ std::vector<size_t> get_padded_target_sizes(
   }
 
   // If here we have a valid result set, so use it's QMD padded widths
-  size_t col_idx{0UL};
-  for (const auto& slot_for_target_index : slot_for_target_indicies) {
+  const auto col_context = rows.getQueryMemDesc().getColSlotContext();
+  for (size_t col_idx = 0; col_idx < target_types.size(); col_idx++) {
     // Lazy fetch columns will have 0 as a padded with, so use the type's
     // logical width for those
+    const auto idx = col_context.getSlotsForCol(col_idx).front();
     const size_t padded_slot_width =
-        static_cast<size_t>(rows.getPaddedSlotWidthBytes(slot_for_target_index));
+        static_cast<size_t>(rows.getPaddedSlotWidthBytes(idx));
     padded_target_sizes.emplace_back(
         padded_slot_width == 0UL ? target_types[col_idx].get_size() : padded_slot_width);
-    col_idx++;
   }
   return padded_target_sizes;
 }
@@ -132,8 +130,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     , target_types_{target_type}
     , parallel_conversion_(false)
     , direct_columnar_conversion_(false)
-    , thread_idx_(thread_idx)
-    , padded_target_sizes_(target_type.get_size()) {
+    , thread_idx_(thread_idx) {
   auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
       target_type.is_array() ||
@@ -143,6 +140,7 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     throw ColumnarConversionNotSupported();
   }
   executor_ = Executor::getExecutor(executor_id);
+  padded_target_sizes_.emplace_back(target_type.get_size());
   CHECK(executor_);
   const auto buf_size = num_rows * target_type.get_size();
   column_buffers_[0] =
