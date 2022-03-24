@@ -150,11 +150,11 @@ class CommandLineOptions {
   const bool dist_v5_;
 
  private:
-  bool enable_runtime_udfs = false;
+  bool enable_runtime_udfs = true;
   // To store deprecated --enable-runtime-udf flag, replaced by --enable-runtime-udfs
   // If the --enable-runtime-udf flag is specified, the contents of enable_runtime_udf
   // are transferred to enable_runtime_udfs
-  bool enable_runtime_udf = false;
+  bool enable_runtime_udf = true;
   bool enable_udf_registration_for_all_users = false;
 };
 
