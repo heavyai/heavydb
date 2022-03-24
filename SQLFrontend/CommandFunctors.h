@@ -252,7 +252,7 @@ StandardCommand(Help, {
   std::cout << "\\timing Print timing information.\n";
   std::cout << "\\notiming Do not print timing information.\n";
   std::cout << "\\memory_summary Print memory usage summary.\n";
-  std::cout << "\\version Print OmniSci Server version.\n";
+  std::cout << "\\version Print HeavyDB Server version.\n";
   std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
   std::cout << "\\status Get status of the server and the leaf nodes.\n";
   std::cout << "\\export_dashboard <dashboard name> <filename> <optional: dashboard "
@@ -270,8 +270,8 @@ StandardCommand(Help, {
                "roles and users.\n";
   std::cout << "\\detect {parquet} <file_name|s3_details> Reads a sample of the "
                "specified file and returns a CREATE TABLE statement\n";
-  std::cout << "\\clear_cpu Releases CPU memory held by OmniSci server Data Manager\n";
-  std::cout << "\\clear_gpu Releases GPU memory held by OmniSci server Data Manager\n";
+  std::cout << "\\clear_cpu Releases CPU memory held by HeavyDB server Data Manager\n";
+  std::cout << "\\clear_gpu Releases GPU memory held by HeavyDB server Data Manager\n";
 
   std::cout << "\\q Quit.\n";
   std::cout.flush();

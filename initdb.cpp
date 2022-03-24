@@ -163,8 +163,8 @@ int main(int argc, char* argv[]) {
   desc.add_options()("help,h", "Print help messages ")(
       "data",
       po::value<std::string>(&base_path)->required(),
-      "Directory path to OmniSci catalogs")("force,f",
-                                            "Force overwriting of existing OmniSci "
+      "Directory path to HeavyDB catalogs")("force,f",
+                                            "Force overwriting of existing HeavyDB "
                                             "instance")("skip-geo",
                                                         "Skip inserting sample geo data");
 
@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(catalogs_path);
     } else {
-      std::cerr << "OmniSci catalogs already initialized at " + base_path +
+      std::cerr << "HeavyDB catalogs already initialized at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -227,7 +227,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(data_path);
     } else {
-      std::cerr << "OmniSci data directory already exists at " + base_path +
+      std::cerr << "HeavyDB data directory already exists at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -237,7 +237,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(export_path);
     } else {
-      std::cerr << "OmniSci export directory already exists at " + base_path +
+      std::cerr << "HeavyDB export directory already exists at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -247,7 +247,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(disk_cache_path);
     } else {
-      std::cerr << "OmniSci disk cache already exists at " + disk_cache_path +
+      std::cerr << "HeavyDB disk cache already exists at " + disk_cache_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }

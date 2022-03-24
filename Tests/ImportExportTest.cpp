@@ -820,8 +820,8 @@ TEST_F(ParquetImportErrorHandling, MismatchColumnType) {
   queryAndAssertException(
       "COPY test_table FROM '" + fsi_file_base_dir +
           "/two_col_1_2.parquet' WITH (source_type='parquet_file');",
-      "Conversion from Parquet type \"INT64\" to OmniSci type \"TEXT\" is not allowed. "
-      "Please use an appropriate column type. Parquet column: col2, OmniSci column: t, "
+      "Conversion from Parquet type \"INT64\" to HeavyDB type \"TEXT\" is not allowed. "
+      "Please use an appropriate column type. Parquet column: col2, HeavyDB column: t, "
       "Parquet file: ../../Tests/FsiDataFiles/two_col_1_2.parquet.");
 }
 
@@ -2131,8 +2131,8 @@ TEST_F(ImportTest, One_parquet_file_1k_rows_in_10_groups) {
         EXPECT_TRUE(importTestLocalParquet(
             ".", "trip_data_dir/trip_data_1k_rows_in_10_grps.parquet", 1000, 1.0));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: _c5, OmniSci "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: _c5, HeavyDB "
       "column: pickup_datetime, Parquet file: "
       "../../Tests/Import/datafiles/./trip_data_dir/"
       "trip_data_1k_rows_in_10_grps.parquet.");
@@ -2147,9 +2147,9 @@ TEST_F(ImportTest, One_parquet_file) {
             1.0));
         EXPECT_TRUE(importTestParquetWithNull(100));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
       "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-      "OmniSci column: pickup_datetime, Parquet file: "
+      "HeavyDB column: pickup_datetime, Parquet file: "
       "../../Tests/Import/datafiles/trip.parquet/"
       "part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-c000.snappy.parquet.");
 }
@@ -2163,9 +2163,9 @@ TEST_F(ImportTest, One_parquet_file_gzip) {
             1.0));
         EXPECT_TRUE(importTestParquetWithNull(100));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
       "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-      "OmniSci column: pickup_datetime, Parquet file: "
+      "HeavyDB column: pickup_datetime, Parquet file: "
       "../../Tests/Import/datafiles/trip_gzip.parquet/"
       "part-00000-10535b0e-9ae5-4d8d-9045-3c70593cc34b-c000.gz.parquet.");
 }
@@ -2178,8 +2178,8 @@ TEST_F(ImportTest, One_parquet_file_drop) {
             100,
             1.0));
       },
-      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
+      "Conversion from Parquet type \"String\" to HeavyDB type \"SMALLINT\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: _c3, HeavyDB "
       "column: rate_code_id, Parquet file: "
       "../../Tests/Import/datafiles/trip+1.parquet/"
       "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
@@ -2190,9 +2190,9 @@ TEST_F(ImportTest, All_parquet_file) {
         EXPECT_TRUE(importTestLocalParquet("trip.parquet", "*.parquet", 1200, 1.0));
         EXPECT_TRUE(importTestParquetWithNull(1200));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
       "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-      "OmniSci column: pickup_datetime, Parquet file: "
+      "HeavyDB column: pickup_datetime, Parquet file: "
       "../../Tests/Import/datafiles/trip.parquet/"
       "part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-c000.snappy.parquet.");
 }
@@ -2201,9 +2201,9 @@ TEST_F(ImportTest, All_parquet_file_gzip) {
       [&]() {
         EXPECT_TRUE(importTestLocalParquet("trip_gzip.parquet", "*.parquet", 1200, 1.0));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
       "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-      "OmniSci column: pickup_datetime, Parquet file: "
+      "HeavyDB column: pickup_datetime, Parquet file: "
       "../../Tests/Import/datafiles/trip_gzip.parquet/"
       "part-00000-10535b0e-9ae5-4d8d-9045-3c70593cc34b-c000.gz.parquet.");
 }
@@ -2212,8 +2212,8 @@ TEST_F(ImportTest, All_parquet_file_drop) {
       [&]() {
         EXPECT_TRUE(importTestLocalParquet("trip+1.parquet", "*.parquet", 1200, 1.0));
       },
-      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
+      "Conversion from Parquet type \"String\" to HeavyDB type \"SMALLINT\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: _c3, HeavyDB "
       "column: rate_code_id, Parquet file: "
       "../../Tests/Import/datafiles/trip+1.parquet/"
       "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
@@ -2234,9 +2234,9 @@ TEST_F(ImportTest, One_parquet_file_with_geo_point) {
 
         sqlAndCompareResult(query_str, {{100L}});
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
       "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
-      "OmniSci column: pickup_datetime, Parquet file: "
+      "HeavyDB column: pickup_datetime, Parquet file: "
       "../../Tests/Import/datafiles/trip_data_with_point.parquet/"
       "part-00000-6dbefb0c-abbd-4c39-93e7-0026e36b7b7c-c000.snappy.parquet.");
 }
@@ -2258,8 +2258,8 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
                              {6.f, 8.f, 1.f, -100.f}});
         sql("DROP TABLE unique_rowgroups;");
       },
-      "Conversion from Parquet type \"INT64\" to OmniSci type \"FLOAT\" is not allowed. "
-      "Please use an appropriate column type. Parquet column: a, OmniSci column: a, "
+      "Conversion from Parquet type \"INT64\" to HeavyDB type \"FLOAT\" is not allowed. "
+      "Please use an appropriate column type. Parquet column: a, HeavyDB column: a, "
       "Parquet file: ../../Tests/Import/datafiles/unique_rowgroups.parquet.");
 }
 #ifdef HAVE_AWS_S3

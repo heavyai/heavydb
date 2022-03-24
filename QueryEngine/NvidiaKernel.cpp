@@ -54,7 +54,7 @@ boost::filesystem::path get_gpu_rt_path() {
   gpu_rt_path /= "QueryEngine";
   gpu_rt_path /= "cuda_mapd_rt.fatbin";
   if (!boost::filesystem::exists(gpu_rt_path)) {
-    throw std::runtime_error("OmniSci GPU runtime library not found at " +
+    throw std::runtime_error("HeavyDB GPU runtime library not found at " +
                              gpu_rt_path.string());
   }
   return gpu_rt_path;
@@ -65,7 +65,7 @@ boost::filesystem::path get_cuda_table_functions_path() {
   cuda_table_functions_path /= "QueryEngine";
   cuda_table_functions_path /= "CudaTableFunctions.a";
   if (!boost::filesystem::exists(cuda_table_functions_path)) {
-    throw std::runtime_error("OmniSci GPU table functions module not found at " +
+    throw std::runtime_error("HeavyDB GPU table functions module not found at " +
                              cuda_table_functions_path.string());
   }
 

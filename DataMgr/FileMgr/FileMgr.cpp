@@ -1026,7 +1026,7 @@ void FileMgr::createTopLevelMetadata() {
   db_version_ = readVersionFromDisk(DB_META_FILENAME);
 
   if (db_version_ > getDBVersion()) {
-    LOG(FATAL) << "DB forward compatibility is not supported. Version of OmniSci "
+    LOG(FATAL) << "DB forward compatibility is not supported. Version of HeavyDB "
                   "software used is older than the version of DB being read: "
                << db_version_;
   }
@@ -1102,7 +1102,7 @@ void FileMgr::migrateToLatestFileMgrVersion() {
     writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, fileMgrVersion_);
   } else if (fileMgrVersion_ > latestFileMgrVersion_) {
     LOG(FATAL)
-        << "Table storage forward compatibility is not supported. Version of OmniSci "
+        << "Table storage forward compatibility is not supported. Version of HeavyDB "
            "software used is older than the version of table being read: "
         << fileMgrVersion_;
   }

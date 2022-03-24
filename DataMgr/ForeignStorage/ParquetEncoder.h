@@ -106,7 +106,7 @@ class ParquetEncoder {
   static void throwNotNullViolation(const std::string& parquet_column_name) {
     std::stringstream error_message;
     error_message << "A null value was detected in Parquet column '"
-                  << parquet_column_name << "' but OmniSci column is set to not null";
+                  << parquet_column_name << "' but HeavyDB column is set to not null";
     throw std::runtime_error(error_message.str());
   }
 

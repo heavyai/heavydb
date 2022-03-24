@@ -1077,7 +1077,7 @@ void validate_max_repetition_and_definition_level(
   if (is_valid_parquet_list && !omnisci_column_descriptor->columnType.is_array()) {
     throw std::runtime_error(
         "Unsupported mapping detected. Column '" + parquet_column_descriptor->name() +
-        "' detected to be a parquet list but OmniSci mapped column '" +
+        "' detected to be a parquet list but HeavyDB mapped column '" +
         omnisci_column_descriptor->columnName + "' is not an array.");
   }
   if (is_valid_parquet_list) {
@@ -1356,7 +1356,7 @@ void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
     }
     std::string omnisci_type = omnisci_column->columnType.get_type_name();
     throw std::runtime_error{"Conversion from Parquet type \"" + parquet_type +
-                             "\" to OmniSci type \"" + omnisci_type +
+                             "\" to HeavyDB type \"" + omnisci_type +
                              "\" is not allowed. Please use an appropriate column type."};
   }
 }
@@ -1408,7 +1408,7 @@ void validate_column_mapping_and_row_group_metadata(
     } catch (std::runtime_error& e) {
       std::stringstream error_message;
       error_message << e.what() << " Parquet column: " << descr->name()
-                    << ", OmniSci column: " << (*column_it)->columnName
+                    << ", HeavyDB column: " << (*column_it)->columnName
                     << ", Parquet file: " << file_path << ".";
       throw std::runtime_error(error_message.str());
     }
@@ -1862,7 +1862,7 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
     } catch (std::runtime_error& e) {
       std::stringstream error_message;
       error_message << e.what() << " Parquet column: " << parquet_column->name()
-                    << ", OmniSci column: " << column_descriptor->columnName
+                    << ", HeavyDB column: " << column_descriptor->columnName
                     << ", Parquet file: " << file_path << ".";
       throw std::runtime_error(error_message.str());
     }
