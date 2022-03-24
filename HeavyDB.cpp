@@ -378,7 +378,7 @@ class UnboundedTHttpServerTransportFactory : public THttpServerTransportFactory 
 
 int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server = true) {
   // Prepare to launch the Thrift server.
-  LOG(INFO) << "OmniSciDB starting up";
+  LOG(INFO) << "HeavyDB starting up";
   register_signal_handlers();
 #ifdef HAVE_AWS_S3
   omnisci_aws_sdk::init_sdk();
@@ -402,7 +402,7 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
   ScopeGuard server_shutdown_guard = [&] {
     // This function will never be called by exit(), but we shouldn't ever be calling
     // exit(), we should be setting g_running to false instead.
-    LOG(INFO) << "OmniSciDB shutting down";
+    LOG(INFO) << "HeavyDB shutting down";
 
     g_running = false;
 
@@ -526,13 +526,13 @@ int startMapdServer(CommandLineOptions& prog_config_opts, bool start_http_server
       http_binary_socket = std::make_shared<TSSLServerSocket>(
           prog_config_opts.http_binary_port, sslSocketFactory);
     }
-    LOG(INFO) << " OmniSci server using encrypted connection. Cert file ["
+    LOG(INFO) << " HeavyDB server using encrypted connection. Cert file ["
               << prog_config_opts.system_parameters.ssl_cert_file << "], key file ["
               << prog_config_opts.system_parameters.ssl_key_file << "]";
 
   } else {
     // Non-SSL port setup.
-    LOG(INFO) << " OmniSci server using unencrypted connection";
+    LOG(INFO) << " HeavyDB server using unencrypted connection";
     tcp_socket = std::make_shared<TServerSocket>(
         prog_config_opts.system_parameters.omnisci_server_port);
     if (start_http_server) {

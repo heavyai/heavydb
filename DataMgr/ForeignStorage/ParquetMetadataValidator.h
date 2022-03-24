@@ -49,7 +49,7 @@ inline void throw_parquet_metadata_out_of_bounds_error(
     const std::string& encountered_value) {
   std::stringstream error_message;
   error_message << "Parquet column contains values that are outside the range of the "
-                   "OmniSci column "
+                   "HeavyDB column "
                    "type. Consider using a wider column type. Min allowed value: "
                 << min_value << ". Max allowed value: " << max_value
                 << ". Encountered value: " << encountered_value << ".";

@@ -2089,7 +2089,7 @@ TEST_P(DataWrapperSelectQueryTest, OutOfRange) {
     queryAndAssertException(
         "SELECT * FROM "s + default_table_name,
         "Parquet column contains values that are outside the range of the "
-        "OmniSci column type. Consider using a wider column type. Min allowed value: "
+        "HeavyDB column type. Consider using a wider column type. Min allowed value: "
         "-2147483647. Max allowed value: 2147483647. Encountered value: -2147483648. "
         "Error validating statistics of Parquet column 'numeric' in row group 0 of "
         "Parquet file '" +
@@ -2383,9 +2383,9 @@ TEST_F(SelectQueryTest, UnsupportedColumnMapping) {
   sql(query);
   queryAndAssertException(default_select,
                           "Conversion from Parquet type "
-                          "\"DOUBLE\" to OmniSci type \"INTEGER\" is "
+                          "\"DOUBLE\" to HeavyDB type \"INTEGER\" is "
                           "not allowed. Please use an appropriate column type. Parquet "
-                          "column: double, OmniSci column: f, Parquet file: " +
+                          "column: double, HeavyDB column: f, Parquet file: " +
                               getDataFilesPath() + +"example_2.parquet.");
 }
 
@@ -4077,7 +4077,7 @@ TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
   queryAndAssertException(
       default_select,
 
-      "Detected an empty array being loaded into OmniSci column "
+      "Detected an empty array being loaded into HeavyDB column "
       "'tinyint_arr_empty' which has a fixed length array type, expecting 1 elements. "
       "Row group: 0, Parquet column: 'tinyint_arr_empty.list.item', Parquet file: '" +
           getDataFilesPath() + "int8_empty_array.parquet'");
@@ -4144,7 +4144,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayMalformed) {
   TQueryResult result;
   queryAndAssertException(
       default_select,
-      "Detected a row with 2 elements being loaded into OmniSci column "
+      "Detected a row with 2 elements being loaded into HeavyDB column "
       "'bigint_array' which has a fixed length array type, expecting 3 elements. Row "
       "group: 2, Parquet column: 'i64.list.item', Parquet file: '" +
           getDataFilesPath() + "array_fixed_len_malformed.parquet'");
@@ -4349,7 +4349,7 @@ TEST_F(SelectQueryTest, ParquetMalformedGeoPoint) {
 
   TQueryResult result;
   queryAndAssertException(default_select,
-                          "Failed to extract valid geometry in OmniSci column 'p'. Row "
+                          "Failed to extract valid geometry in HeavyDB column 'p'. Row "
                           "group: 0, Parquet column: 'point', Parquet file: '" +
                               getDataFilesPath() + "geo_point_malformed.parquet'");
 }
@@ -4362,7 +4362,7 @@ TEST_F(SelectQueryTest, ParquetWrongGeoType) {
   TQueryResult result;
   queryAndAssertException(
       default_select,
-      "Imported geometry doesn't match the geospatial type of OmniSci column "
+      "Imported geometry doesn't match the geospatial type of HeavyDB column "
       "'p'. Row group: 0, Parquet column: 'point', Parquet file: '" +
           getDataFilesPath() + "geo_point.parquet'");
 }
@@ -5460,7 +5460,7 @@ class ParquetCoercionTest : public SelectQueryTest {
                                    const std::string& base_file_name) {
     const std::string file_name = getDataFilesPath() + base_file_name + ".parquet";
     return "Parquet column contains values that are outside the range of the "
-           "OmniSci "
+           "HeavyDB "
            "column type. Consider using a wider column type. Min allowed value: " +
            min_allowed_value +
            ". Max allowed "
@@ -6078,7 +6078,7 @@ TEST_F(SelectQueryTest, ParquetNotNullWithoutNullOutOfRange) {
   queryAndAssertException(
       "SELECT * FROM " + default_table_name,
       "Parquet column contains values that are outside the range of the "
-      "OmniSci "
+      "HeavyDB "
       "column type. Consider using a wider column type. Min allowed value: -127"
       ". Max allowed "
       "value: 127. Encountered value: -128"
@@ -6103,7 +6103,7 @@ TEST_F(SelectQueryTest, ParquetNotNullWithNull) {
   sql(query);
   queryAndAssertException(
       default_select,
-      "A null value was detected in Parquet column 'tinyint' but OmniSci "
+      "A null value was detected in Parquet column 'tinyint' but HeavyDB "
       "column is set to not null in row group 1 of Parquet file '" +
           file_name + "'.");
 }

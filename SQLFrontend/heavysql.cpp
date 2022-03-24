@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2022 HEAVY.AI, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 /**
  * @file    omnisql.cpp
  * @author  Wei Hong <wei@map-d.com>
- * @brief   OmniSci SQL Client Tool
+ * @brief   HeavyDB SQL Client Tool
  *
  **/
 
@@ -678,7 +678,7 @@ void print_memory_summary(ClientContext& context, std::string memory_level) {
     sub_system = "CPU";
   }
 
-  tss << "OmniSci Server " << sub_system << " Memory Summary:" << std::endl;
+  tss << "HeavyDB Server " << sub_system << " Memory Summary:" << std::endl;
 
   if (multiNode) {
     if (hasGPU) {
@@ -768,7 +768,7 @@ void print_memory_info(ClientContext& context, std::string memory_level) {
     multiNode = context.cpu_memory.size() > 1;
   }
 
-  tss << "OmniSci Server Detailed " << sub_system << " Memory Usage:" << std::endl;
+  tss << "HeavyDB Server Detailed " << sub_system << " Memory Usage:" << std::endl;
   for (auto& nodeIt : memory_info) {
     if (cur_host.compare(nodeIt.host_name)) {
       mgr_num = 0;
@@ -1118,7 +1118,7 @@ void print_status(ClientContext& context) {
           << ": " << node->version << std::endl
           << "\033[31m*** Version mismatch! ***\033[0m Please make "
              "sure All leaves, Aggregator and String Dictionary are running "
-             "the same version of OmniSci."
+             "the same version of HeavyDB."
           << std::endl;
     }
   }
@@ -1161,7 +1161,7 @@ int main(int argc, char** argv) {
                      "Field delimiter in row output");
   desc.add_options()("db",
                      po::value<std::string>(&db_name),
-                     "Database name (server default is omnisci)");
+                     "Database name (server default is heavyai)");
   desc.add_options()("user,u",
                      po::value<std::string>(&user_name)->default_value(user_name),
                      "User name");
@@ -1323,7 +1323,7 @@ int main(int argc, char** argv) {
     if (line[0] != '\0' && line[0] != '\\') {
       // printf("echo: '%s'\n", line);
       if (context.session == INVALID_SESSION_ID) {
-        std::cerr << "Not connected to any OmniSci databases." << std::endl;
+        std::cerr << "Not connected to any HeavyDB databases." << std::endl;
         success = false;
         continue;
       }
@@ -1418,15 +1418,15 @@ int main(int argc, char** argv) {
       std::cout << "Hybrid execution mode has been deprecated." << std::endl;
     } else if (!strncmp(line, "\\version", 8)) {
       if (thrift_with_retry(kGET_VERSION, context, nullptr)) {
-        std::cout << "OmniSci Server Version: " << context.version << std::endl;
+        std::cout << "HeavyDB Server Version: " << context.version << std::endl;
       } else {
-        std::cout << "Cannot connect to OmniSci Server." << std::endl;
+        std::cout << "Cannot connect to HeavyDB Server." << std::endl;
       }
     } else if (!strncmp(line, "\\memory_gpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_GPU, context, nullptr)) {
         print_memory_info(context, "gpu");
       } else {
-        std::cout << "Cannot connect to OmniSci Server." << std::endl;
+        std::cout << "Cannot connect to HeavyDB Server." << std::endl;
       }
     } else if (!strncmp(line, "\\memory_cpu", 11)) {
       if (thrift_with_retry(kGET_MEMORY_CPU, context, nullptr)) {
@@ -1434,11 +1434,11 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\clear_gpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_GPU, context, nullptr)) {
-        std::cout << "OmniSci Server GPU memory Cleared " << std::endl;
+        std::cout << "HeavyDB Server GPU memory Cleared " << std::endl;
       }
     } else if (!strncmp(line, "\\clear_cpu", 11)) {
       if (thrift_with_retry(kCLEAR_MEMORY_CPU, context, nullptr)) {
-        std::cout << "OmniSci Server CPU memory Cleared " << std::endl;
+        std::cout << "HeavyDB Server CPU memory Cleared " << std::endl;
       }
     } else if (!strncmp(line, "\\memory_summary", 11)) {
       if (thrift_with_retry(kGET_MEMORY_SUMMARY, context, nullptr)) {

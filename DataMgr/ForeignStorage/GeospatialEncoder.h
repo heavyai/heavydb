@@ -447,7 +447,7 @@ class GeospatialEncoder {
   }
 
   static void throwMalformedGeoElement(const std::string& omnisci_column_name) {
-    std::string error_message = "Failed to extract valid geometry in OmniSci column '" +
+    std::string error_message = "Failed to extract valid geometry in HeavyDB column '" +
                                 omnisci_column_name + "'.";
     throw foreign_storage::ForeignStorageException(error_message);
   }
@@ -455,7 +455,7 @@ class GeospatialEncoder {
   static void throwMismatchedGeoElement(const std::string& omnisci_column_name) {
     throw foreign_storage::ForeignStorageException(
         "Imported geometry"
-        " doesn't match the geospatial type of OmniSci column '" +
+        " doesn't match the geospatial type of HeavyDB column '" +
         omnisci_column_name + "'.");
   }
 

@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   desc.add_options()("help,h", "Print help messages ")(
       "data",
       po::value<std::string>(&base_path)->required(),
-      "Directory path to OmniSci catalogs")(
+      "Directory path to HeavyDB catalogs")(
       "calcite-port",
       po::value<int>(&calcite_port)->default_value(calcite_port),
       "Calcite port")("columnar-output",

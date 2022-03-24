@@ -139,7 +139,7 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
     throw ForeignStorageException(
         "Detected an empty array"
         " being loaded into"
-        " OmniSci column '" +
+        " HeavyDB column '" +
         omnisci_column_name +
         "' which has a fixed length array type,"
         " expecting " +
@@ -152,7 +152,7 @@ class ParquetFixedLengthArrayEncoder : public ParquetArrayEncoder {
     throw ForeignStorageException("Detected a row with " +
                                   std::to_string(size_of_last_array) +
                                   " elements being loaded into"
-                                  " OmniSci column '" +
+                                  " HeavyDB column '" +
                                   omnisci_column_name +
                                   "' which has a fixed length array type,"
                                   " expecting " +

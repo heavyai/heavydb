@@ -133,8 +133,8 @@ TEST_F(InitDBTest, Help) {
                       0,
                       R"(Options:
   -h [ --help ]                         Print help messages 
-  --data arg                            Directory path to OmniSci catalogs
-  -f [ --force ]                        Force overwriting of existing OmniSci 
+  --data arg                            Directory path to HeavyDB catalogs
+  -f [ --force ]                        Force overwriting of existing HeavyDB 
                                         instance
   --skip-geo                            Skip inserting sample geo data
   --enable-thrift-logs [=arg(=1)] (=0)  Enable writing messages directly from 
@@ -174,7 +174,7 @@ TEST_F(InitDBTest, AlreadyInit) {
                       get_temp_dir(),
                       1,
                       "",
-                      "OmniSci catalogs already initialized at " + get_temp_dir() +
+                      "HeavyDB catalogs already initialized at " + get_temp_dir() +
                           ". Use -f to force reinitialization.");
 }
 // Blocked by existing cache.
@@ -185,7 +185,7 @@ TEST_F(InitDBTest, ExistingCache) {
                       get_temp_dir(),
                       1,
                       "",
-                      "OmniSci disk cache already exists at " + get_temp_dir() + "/" +
+                      "HeavyDB disk cache already exists at " + get_temp_dir() + "/" +
                           shared::kDefaultDiskCacheDirName +
                           ". Use -f to force reinitialization.");
 }
