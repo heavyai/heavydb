@@ -1729,14 +1729,6 @@ void AlterForeignTableCommand::alterOptions(
   foreign_table.validateSupportedOptionKeys(new_options_map);
   foreign_table.validateAlterOptions(new_options_map);
   cat.setForeignTableOptions(table_name, new_options_map, false);
-
-  // These options will invalidate any data in the cache.
-  if (new_options_map.find(foreign_storage::OdbcDataWrapper::ODBC_SELECT_KEY) !=
-          new_options_map.end() ||
-      new_options_map.find(foreign_storage::OdbcDataWrapper::ODBC_ORDER_BY_KEY) !=
-          new_options_map.end()) {
-    foreign_storage::refresh_foreign_table_unlocked(cat, foreign_table, true);
-  }
 }
 
 ShowDiskCacheUsageCommand::ShowDiskCacheUsageCommand(

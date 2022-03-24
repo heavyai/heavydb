@@ -339,7 +339,6 @@ class ForeignTableTest : public DBHandlerTestFixture {
     }
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
-    setupOdbcIfEnabled();
   }
 
   void TearDown() override {
@@ -347,32 +346,7 @@ class ForeignTableTest : public DBHandlerTestFixture {
       return;
     }
     g_enable_fsi = true;
-    teardownOdbcIfEnabled();
     DBHandlerTestFixture::TearDown();
-  }
-
-  void setupOdbc() {
-    CHECK(is_odbc(wrapper_type_));
-    createLocalODBCServer(wrapper_type_);
-    createODBCUserMapping(wrapper_type_);
-  }
-
-  void setupOdbcIfEnabled() {
-    if (is_odbc(wrapper_type_)) {
-      setupOdbc();
-    }
-  }
-
-  void teardownOdbc() {
-    CHECK(is_odbc(wrapper_type_));
-    dropUserMappingIfExists();
-    dropLocalODBCServerIfExists();
-  }
-
-  void teardownOdbcIfEnabled() {
-    if (is_odbc(wrapper_type_)) {
-      teardownOdbc();
-    }
   }
 
   static std::string getCreateForeignTableQuery(const std::string& columns,
