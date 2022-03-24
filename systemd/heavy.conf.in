@@ -1,7 +1,7 @@
 port = 6274
 http-port = 6278
 calcite-port = 6279
-data = "@HEAVYAI_DATA@"
+data = "@HEAVYAI_STORAGE@"
 null-div-by-zero = true
 
 [web]
