@@ -189,7 +189,6 @@ class DBHandler : public HeavyIf {
             const bool legacy_syntax,
             const int idle_session_duration,
             const int max_session_duration,
-            const bool enable_runtime_udf_registration,
             const std::string& udf_filename,
             const std::string& clang_path,
             const std::vector<std::string>& clang_options,
@@ -937,8 +936,6 @@ class DBHandler : public HeavyIf {
                                      // method
   const int idle_session_duration_;  // max duration of idle session
   const int max_session_duration_;   // max duration of session
-
-  const bool runtime_udf_registration_enabled_;
 
   const bool enable_rendering_;
   const bool renderer_use_ppll_polys_;

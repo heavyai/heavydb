@@ -435,9 +435,23 @@ void CommandLineOptions::fillOptions() {
       po::value<bool>(&enable_runtime_udf)
           ->default_value(enable_runtime_udf)
           ->implicit_value(true),
+      "DEPRECATED. Please use `enable-runtime-udfs` instead as this flag will be removed "
+      "in the near future.");
+  help_desc.add_options()(
+      "enable-runtime-udfs",
+      po::value<bool>(&enable_runtime_udfs)
+          ->default_value(enable_runtime_udfs)
+          ->implicit_value(true),
       "Enable runtime UDF registration by passing signatures and corresponding LLVM IR "
       "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
       "Compiler server, packaged separately.");
+  help_desc.add_options()("enable-udf-registration-for-all-users",
+                          po::value<bool>(&enable_udf_registration_for_all_users)
+                              ->default_value(enable_udf_registration_for_all_users)
+                              ->implicit_value(true),
+                          "Allow all users, not just superusers, to register runtime "
+                          "UDFs/UDTFs. Option only valid if  "
+                          "`--enable-runtime-udfs` is set to true.");
   help_desc.add_options()("version,v", "Print Version Number.");
   help_desc.add_options()("enable-string-functions",
                           po::value<bool>(&g_enable_string_functions)
@@ -1223,6 +1237,17 @@ void CommandLineOptions::validate() {
 #endif
 }
 
+SystemParameters::RuntimeUdfRegistrationPolicy construct_runtime_udf_registration_policy(
+    const bool enable_runtime_udfs,
+    const bool enable_udf_registration_for_all_users) {
+  return enable_runtime_udfs
+             ? (enable_udf_registration_for_all_users
+                    ? SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_ALL_USERS
+                    : SystemParameters::RuntimeUdfRegistrationPolicy::
+                          ALLOWED_SUPERUSERS_ONLY)
+             : SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED;
+}
+
 boost::optional<int> CommandLineOptions::parse_command_line(
     int argc,
     char const* const* argv,
@@ -1258,6 +1283,7 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       std::cout << "HeavyDB Version: " << MAPD_RELEASE << std::endl;
       return 0;
     }
+
     if (vm.count("config")) {
       std::ifstream settings_file(system_parameters.config_file);
 
@@ -1274,6 +1300,25 @@ boost::optional<int> CommandLineOptions::parse_command_line(
              "Please remove use of this option, as it may be disabled in the future."
           << std::endl;
     }
+
+    if (!vm["enable-runtime-udf"].defaulted()) {
+      if (!vm["enable-runtime-udfs"].defaulted()) {
+        std::cerr << "Usage Error: Both enable-runtime-udf and enable-runtime-udfs "
+                     "specified. Please remove use of the enable-runtime-udfs flag, "
+                     "as it will be deprecated in the future."
+                  << std::endl;
+        return 1;
+      } else {
+        enable_runtime_udfs = enable_runtime_udf;
+        std::cerr << "The enable-runtime-udf flag has been deprecated and replaced "
+                     "with enable-runtime-udfs. Please remove use of this option "
+                     "as it will be disabled in the future."
+                  << std::endl;
+      }
+    }
+    system_parameters.runtime_udf_registration_policy =
+        construct_runtime_udf_registration_policy(enable_runtime_udfs,
+                                                  enable_udf_registration_for_all_users);
 
     if (should_init_logging) {
       init_logging();
@@ -1353,10 +1398,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
   if (vm.count("udf-compiler-options")) {
     std::for_each(udf_compiler_options.begin(), udf_compiler_options.end(), trim_string);
-  }
-
-  if (enable_runtime_udf) {
-    LOG(INFO) << " Runtime user defined extension functions enabled globally.";
   }
 
   boost::algorithm::trim_if(system_parameters.ha_brokers, boost::is_any_of("\"'"));
@@ -1451,6 +1492,28 @@ boost::optional<int> CommandLineOptions::parse_command_line(
               << (g_allow_query_step_skipping ? "enabled" : "disabled");
     LOG(INFO) << " \t Use chunk metadata cache: "
               << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
+  }
+  LOG(INFO) << " \t Use chunk metadata cache: "
+            << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
+
+  const std::string udf_reg_policy_log_prefix{
+      " \t\t Runtime UDF/UDTF Registration Policy: "};
+  switch (system_parameters.runtime_udf_registration_policy) {
+    case SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED: {
+      LOG(INFO) << udf_reg_policy_log_prefix << " DISALLOWED";
+      break;
+    }
+    case SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_SUPERUSERS_ONLY: {
+      LOG(INFO) << udf_reg_policy_log_prefix << " ALLOWED for superusers only";
+      break;
+    }
+    case SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_ALL_USERS: {
+      LOG(INFO) << udf_reg_policy_log_prefix << " ALLOWED for all users";
+      break;
+    }
+    default: {
+      UNREACHABLE() << "Unrecognized option for Runtime UDF/UDTF registration policy.";
+    }
   }
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));

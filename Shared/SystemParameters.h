@@ -72,6 +72,13 @@ struct SystemParameters {
   size_t calcite_keepalive = false;  // calcite keepalive connection
   int num_executors = 2;
   int num_sessions = -1;  // maximum number of user sessions
+  enum class RuntimeUdfRegistrationPolicy {
+    DISALLOWED,
+    ALLOWED_SUPERUSERS_ONLY,
+    ALLOWED_ALL_USERS
+  };
+  RuntimeUdfRegistrationPolicy runtime_udf_registration_policy =
+      RuntimeUdfRegistrationPolicy::DISALLOWED;
 
   SystemParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };

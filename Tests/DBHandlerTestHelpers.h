@@ -312,7 +312,8 @@ class DBHandlerTestFixture : public testing::Test {
       const bool legacy_syntax{true};
       const int idle_session_duration{60};
       const int max_session_duration{43200};
-      const bool enable_runtime_udf_registration{false};
+      system_parameters_.runtime_udf_registration_policy =
+          SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED;
       system_parameters_.omnisci_server_port = -1;
       system_parameters_.calcite_port = 3280;
 
@@ -348,7 +349,6 @@ class DBHandlerTestFixture : public testing::Test {
                                                 legacy_syntax,
                                                 idle_session_duration,
                                                 max_session_duration,
-                                                enable_runtime_udf_registration,
                                                 udf_filename_,
                                                 udf_compiler_path_,
                                                 udf_compiler_options_,

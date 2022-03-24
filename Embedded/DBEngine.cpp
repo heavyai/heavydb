@@ -177,7 +177,6 @@ class DBEngineImpl : public DBEngine {
                                       prog_config_opts.enable_legacy_syntax,
                                       prog_config_opts.idle_session_duration,
                                       prog_config_opts.max_session_duration,
-                                      prog_config_opts.enable_runtime_udf,
                                       prog_config_opts.udf_file_name,
                                       prog_config_opts.udf_compiler_path,
                                       prog_config_opts.udf_compiler_options,

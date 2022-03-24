@@ -72,9 +72,6 @@ class CommandLineOptions {
   bool renderer_use_ppll_polys = false;
   bool renderer_prefer_igpu = false;
   unsigned renderer_vulkan_timeout_ms = 60000;  // in milliseconds
-
-  bool enable_runtime_udf = false;
-
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   size_t watchdog_none_encoded_string_translation_limit = 1000000;
@@ -151,6 +148,14 @@ class CommandLineOptions {
   void validate_base_path();
   void init_logging();
   const bool dist_v5_;
+
+ private:
+  bool enable_runtime_udfs = false;
+  // To store deprecated --enable-runtime-udf flag, replaced by --enable-runtime-udfs
+  // If the --enable-runtime-udf flag is specified, the contents of enable_runtime_udf
+  // are transferred to enable_runtime_udfs
+  bool enable_runtime_udf = false;
+  bool enable_udf_registration_for_all_users = false;
 };
 
 extern bool g_enable_watchdog;

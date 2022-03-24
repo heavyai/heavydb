@@ -14,7 +14,7 @@ def catch_udf_support_disabled(mth):
             if type(
                 msg
             ).__name__ == 'TDBException' and msg.error_msg.startswith(
-                'Runtime UDF registration is disabled'
+                'Runtime UDF and UDTF function registration is disabled'
             ):
                 print('Ignoring `%s` failure' % (msg.error_msg))
                 return
