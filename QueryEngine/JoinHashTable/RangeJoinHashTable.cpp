@@ -531,7 +531,7 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
       0,
       11,
       true,
-      effective_memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+      effective_memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
           ? ExecutorDeviceType::GPU
           : ExecutorDeviceType::CPU,
       1,
