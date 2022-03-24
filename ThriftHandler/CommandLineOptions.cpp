@@ -1258,13 +1258,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       std::cout << "HeavyDB Version: " << MAPD_RELEASE << std::endl;
       return 0;
     }
-    if (!g_enable_union) {
-      std::cerr
-          << "The enable-union option is DEPRECATED and is now enabled by default. "
-             "Please remove use of this option, as it may be disabled in the future."
-          << std::endl;
-    }
-
     if (vm.count("config")) {
       std::ifstream settings_file(system_parameters.config_file);
 
@@ -1273,6 +1266,13 @@ boost::optional<int> CommandLineOptions::parse_command_line(
       po::store(po::parse_config_file(sanitized_settings, all_desc, false), vm);
       po::notify(vm);
       settings_file.close();
+    }
+
+    if (!g_enable_union) {
+      std::cerr
+          << "The enable-union option is DEPRECATED and is now enabled by default. "
+             "Please remove use of this option, as it may be disabled in the future."
+          << std::endl;
     }
 
     if (should_init_logging) {
