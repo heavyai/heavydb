@@ -260,7 +260,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
                      const bool legacy_syntax,
                      const int idle_session_duration,
                      const int max_session_duration,
-                     const bool enable_runtime_udf_registration,
                      const std::string& udf_filename,
                      const std::string& clang_path,
                      const std::vector<std::string>& clang_options,
@@ -288,8 +287,6 @@ DBHandler::DBHandler(const std::vector<LeafHostInfo>& db_leaves,
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
-    , runtime_udf_registration_enabled_(enable_runtime_udf_registration)
-
     , enable_rendering_(enable_rendering)
     , renderer_use_ppll_polys_(renderer_use_ppll_polys)
     , renderer_prefer_igpu_(renderer_prefer_igpu)
@@ -7318,13 +7315,28 @@ void DBHandler::register_runtime_extension_functions(
     const std::vector<TUserDefinedFunction>& udfs,
     const std::vector<TUserDefinedTableFunction>& udtfs,
     const std::map<std::string, std::string>& device_ir_map) {
-  const auto session_info = get_session_copy(session);
-  VLOG(1) << "register_runtime_extension_functions: " << udfs.size() << " "
-          << udtfs.size() << std::endl;
+  auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
-  if (!runtime_udf_registration_enabled_) {
-    THROW_MAPD_EXCEPTION("Runtime extension functions registration is disabled.");
+  VLOG(1) << "register_runtime_extension_functions: # UDFs: " << udfs.size()
+          << " # UDTFs: " << udtfs.size() << std::endl;
+
+  if (system_parameters_.runtime_udf_registration_policy ==
+      SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED) {
+    THROW_MAPD_EXCEPTION("Runtime UDF and UDTF function registration is disabled.");
   }
+
+  if (system_parameters_.runtime_udf_registration_policy ==
+      SystemParameters::RuntimeUdfRegistrationPolicy::ALLOWED_SUPERUSERS_ONLY) {
+    auto session_ptr = stdlog.getConstSessionInfo();
+    if (!session_ptr->get_currentUser().isSuper) {
+      THROW_MAPD_EXCEPTION(
+          "Server is configured to require superuser privilege to register UDFs and "
+          "UDTFs.");
+    }
+  }
+  CHECK(system_parameters_.runtime_udf_registration_policy !=
+        SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED);
 
   Executor::registerExtensionFunctions([&]() {
     auto it_cpu = device_ir_map.find(std::string{"cpu"});
