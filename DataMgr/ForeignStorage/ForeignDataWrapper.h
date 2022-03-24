@@ -100,6 +100,11 @@ class ForeignDataWrapper {
   virtual const std::set<std::string_view>& getSupportedTableOptions() const = 0;
 
   /**
+   * Gets the subset of table options that can be altered for the data wrapper.
+   */
+  virtual const std::set<std::string> getAlterableTableOptions() const { return {}; };
+
+  /**
    * Checks that the options for the given user mapping object are valid.
    * @param user_mapping - user mapping object containing options to be validated
    */

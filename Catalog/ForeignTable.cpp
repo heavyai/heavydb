@@ -145,9 +145,15 @@ OptionsMap ForeignTable::createOptionsMap(const rapidjson::Value& json_options) 
   return options_map;
 }
 
-void ForeignTable::validateAlterOptions(const OptionsMap& options_map) {
+void ForeignTable::validateAlterOptions(const OptionsMap& options_map) const {
+  const auto& data_wrapper_options =
+      foreign_storage::ForeignDataWrapperFactory::createForValidation(
+          foreign_server->data_wrapper_type, this)
+          .getAlterableTableOptions();
+
   for (const auto& [key, value] : options_map) {
-    if (!shared::contains(alterable_options, key)) {
+    if (!shared::contains(alterable_options, key) &&
+        !shared::contains(data_wrapper_options, key)) {
       throw std::runtime_error{std::string("Altering foreign table option \"") + key +
                                "\" is not currently supported."};
     }

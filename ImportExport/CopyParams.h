@@ -92,6 +92,7 @@ struct CopyParams {
   std::string add_metadata_columns;
   // odbc parameters
   std::string odbc_sql_select;
+  std::string odbc_sql_order_by;
   // odbc user mapping parameters
   std::string odbc_username;
   std::string odbc_password;

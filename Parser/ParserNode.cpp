@@ -1522,6 +1522,12 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         if (bool_from_string_literal(str_literal)) {
           copy_params.raster_point_compute_angle = true;
         }
+      } else if (boost::iequals(*p->get_name(), "odbc_sql_order_by")) {
+        if (auto str_literal = dynamic_cast<const StringLiteral*>(p->get_value())) {
+          copy_params.odbc_sql_order_by = *str_literal->get_stringval();
+        } else {
+          throw std::runtime_error("Option odbc_sql_order_by must be a string.");
+        }
       } else if (boost::iequals(*p->get_name(), "odbc_username")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -5482,6 +5488,10 @@ void CopyTableStmt::execute(
 
   if (copy_params.source_type == import_export::SourceType::kOdbc) {
     copy_params.odbc_sql_select = copy_from_source;
+    if (copy_params.odbc_sql_order_by.empty()) {
+      throw std::runtime_error(
+          "Option \"SQL ORDER BY\" must be specified when copying from an ODBC source.");
+    }
   }
 
   std::string tr;

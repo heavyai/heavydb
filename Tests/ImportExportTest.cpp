@@ -980,8 +980,9 @@ class ImportAndSelectTest
       const std::string& file_name_base,
       const std::string& select_query,
       const std::string& line_regex,
-      const std::string& odbc_select,
       const int64_t max_byte_size_per_element,
+      const std::string& odbc_select = {},
+      const std::string& odbc_order_by = {},
       const std::string& table_options = {},
       const bool is_dir = false,
       const bool is_odbc_geo = false,
@@ -1035,7 +1036,8 @@ class ImportAndSelectTest
     EXPECT_NO_THROW(sql(
         copy_from_result,
         "COPY import_test_new FROM " + copy_from_source +
-            getCopyFromOptions(import_type, data_source_type, line_regex, max_reject) +
+            getCopyFromOptions(
+                import_type, data_source_type, line_regex, max_reject, odbc_order_by) +
             ";"));
     copy_from_result_ = get_copy_from_result_str(copy_from_result);
 
@@ -1066,7 +1068,7 @@ class ImportAndSelectTest
         "COMPRESSED(32));";
 
     std::string copy_from_sql = "COPY import_test_new FROM '" + file_path + "'";
-    copy_from_sql += getCopyFromOptions(import_type, data_source_type, "", std::nullopt);
+    copy_from_sql += getCopyFromOptions(import_type, data_source_type, "");
     copy_from_sql += ";";
 
     EXPECT_NO_THROW(sql(create_sql));
@@ -1080,7 +1082,8 @@ class ImportAndSelectTest
   std::string getCopyFromOptions(const std::string& import_type,
                                  const std::string& data_source_type,
                                  const std::string& line_regex,
-                                 const std::optional<int64_t> max_reject) {
+                                 const std::optional<int64_t> max_reject = {},
+                                 const std::optional<std::string> odbc_order_by = {}) {
     std::vector<std::string> options;
     if (max_reject.has_value()) {
       options.emplace_back("max_reject=" + std::to_string(max_reject.value()) + "");
@@ -1099,6 +1102,9 @@ class ImportAndSelectTest
     }
     if (data_source_type == "s3_public" || data_source_type == "s3_private") {
       options.emplace_back("s3_region='us-west-1'");
+    }
+    if (odbc_order_by.has_value()) {
+      options.emplace_back("odbc_sql_order_by='" + odbc_order_by.value() + "'");
     }
     if (options.empty()) {
       return {};
@@ -1164,9 +1170,10 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
       "geo_types",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
+      256,
       "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
       "ST_AsText(multipoly) as multipoly FROM import_test;'",
-      256,
+      "index",
       {},
       false,
       /*is_odbc_geo=*/true);
@@ -1235,7 +1242,6 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
       "array_types",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_array_regex(11),
-      "",  // unused odbc_select
       24);
   // clang-format off
   assertResultSetEqual({
@@ -1276,7 +1282,6 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
       "array_fixed_len_types",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_array_regex(11),
-      "",  // unused odbc_select
       24);
   // clang-format off
   assertResultSetEqual({
@@ -1314,8 +1319,9 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
       "scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
+      14,
       "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
-      14);
+      "s");
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1349,8 +1355,9 @@ TEST_P(ImportAndSelectTest, Sharded) {
       "scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
       14,
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      "s",
       "SHARD_COUNT=2");
 
   // clang-format off
@@ -1388,8 +1395,9 @@ TEST_P(ImportAndSelectTest, Multifile) {
                                             "example_2",
                                             "SELECT * FROM import_test_new ORDER BY i,t;",
                                             get_line_regex(3),
-                                            "",  // unused odbc_select
                                             4,
+                                            "",  // unused odbc_select
+                                            "",  // unused odbc_order_by
                                             /*table_options=*/{},
                                             /*is_dir=*/true);
 
@@ -1420,9 +1428,10 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
       "invalid_records/geo_types",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
+      256,
       "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
       "ST_AsText(multipoly) as multipoly FROM import_test;'",
-      256,
+      "index",
       {},
       false,
       /*is_odbc_geo=*/true);
@@ -1464,9 +1473,10 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
       "invalid_records/geo_types_not_null",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
+      256,
       "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
       "ST_AsText(multipoly) as multipoly FROM import_test;'",
-      256,
+      "index",
       {},
       false,
       /*is_odbc_geo=*/true);
@@ -1501,7 +1511,6 @@ TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
       "invalid_records/array_types",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_array_regex(11),
-      "",  // unused odbc_select
       24);
   // clang-format off
   assertResultSetEqual({
@@ -1544,7 +1553,6 @@ TEST_P(ImportAndSelectTest, NotNullArrayTypeColumns) {
                                                          // fixed length arrays
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_array_regex(11),
-      "",  // unused odbc_select
       24);
 
   // clang-format off
@@ -1580,7 +1588,6 @@ TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
       "invalid_records/array_fixed_len_types",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_array_regex(11),
-      "",  // unused odbc_select
       24);
   // clang-format off
   assertResultSetEqual({
@@ -1622,7 +1629,6 @@ TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
       "invalid_records/array_fixed_len_types_not_null",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_array_regex(11),
-      "",  // unused odbc_select
       24);
 
   // clang-format off
@@ -1654,8 +1660,9 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
       "invalid_records/scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
+      14,
       "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
-      14);
+      "s");
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1691,8 +1698,9 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
       "invalid_records/scalar_types_not_null",
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
+      14,
       "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
-      14);
+      "s");
 
   auto expected_values =
       std::vector<std::vector<NullableTargetValue>>{{True,
@@ -1728,8 +1736,9 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
       "invalid_records/scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
       14,
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      "s",
       "SHARD_COUNT=2");
 
   // clang-format off
@@ -1762,8 +1771,9 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
       "invalid_records/scalar_types",
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
       14,
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      "s",
       {},
       false,
       false,

@@ -70,6 +70,7 @@ using DsnType = std::string;
 using FileExtType = std::string;
 using EvictCacheString = std::string;
 using ImportFlag = bool;
+using NameTypePair = std::pair<std::string, std::string>;
 
 // sets of wrappers for parametarized testing
 static const std::vector<WrapperType> local_wrappers{"csv",
@@ -91,8 +92,7 @@ static const std::vector<WrapperType> odbc_wrappers{"snowflake",
 static const std::map<std::string, std::pair<std::string, std::string>>
     odbc_credentials_environment{
         {"redshift", {"redshift_username", "redshift_password"}},
-        {"snowflake", {"snowflake_username", "snowflake_password"}},
-    };
+        {"snowflake", {"snowflake_username", "snowflake_password"}}};
 
 static const std::string default_table_name = "test_foreign_table";
 static const std::string default_table_name_2 = "test_foreign_table_2";
@@ -112,10 +112,21 @@ static const std::string default_select = "SELECT * FROM " + default_table_name 
 
 namespace {
 // Needs to be a macro since GTEST_SKIP() breaks by invoking "return".
+#define SKIP_SETUP_IF_DISTRIBUTED(msg) \
+  if (isDistributedMode()) {           \
+    skip_teardown_ = true;             \
+    GTEST_SKIP() << msg;               \
+  }
+
 #define SKIP_IF_DISTRIBUTED(msg) \
   if (isDistributedMode()) {     \
     GTEST_SKIP() << msg;         \
   }
+
+// These need to be done as macros because GTEST_SKIP() invokes "return" in the function
+// it is called in as well as setting IsSkipped().
+#define SKIP_SETUP_IF_ODBC_DISABLED() \
+  GTEST_SKIP() << "ODBC tests not supported with this build configuration."
 
 bool is_odbc(const std::string& wrapper_type) {
   // TODO(andrew) : remove snowflake clause once it's been properly added to all odbc
@@ -251,6 +262,47 @@ std::string get_data_wrapper_name(const std::string& data_wrapper_type) {
   }
   return data_wrapper;
 }
+
+foreign_storage::OptionsMap add_missing_options_for_wrapper(
+    const foreign_storage::OptionsMap& options,
+    const std::string& data_wrapper_type,
+    const std::vector<NameTypePair>& column_pairs,
+    const std::string& table_name,
+    const std::string& src_path,
+    const int32_t order_by_column_index = 0) {
+  foreign_storage::OptionsMap new_options = options;
+  if (data_wrapper_type == "regex_parser") {
+    if (options.find("LINE_REGEX") == options.end()) {
+      new_options["LINE_REGEX"] = get_line_regex(column_pairs.size());
+    }
+    if (options.find("HEADER") == options.end()) {
+      new_options["HEADER"] = "TRUE";
+    }
+  }
+
+  if (is_odbc(data_wrapper_type)) {
+    if (options.find("SQL_SELECT") == options.end()) {
+      std::stringstream ss;
+      ss << "select ";
+      size_t i = 0;
+      for (auto [name, type] : column_pairs) {
+        ss << name << ((++i < column_pairs.size()) ? ", " : " from " + table_name);
+      }
+      new_options["SQL_SELECT"] = ss.str();
+    }
+    if (options.find("SQL_ORDER_BY") == options.end()) {
+      CHECK_LT(static_cast<size_t>(order_by_column_index), column_pairs.size());
+      std::stringstream ss;
+      ss << column_pairs[order_by_column_index].first;
+      new_options["SQL_ORDER_BY"] = ss.str();
+    }
+  } else {
+    if (options.find("FILE_PATH") == options.end()) {
+      new_options["FILE_PATH"] = src_path;
+    }
+  }
+  return new_options;
+}
 }  // namespace
 
 /**
@@ -274,31 +326,52 @@ class TempDirManager {
 /**
  * Helper class for creating foreign tables
  */
-using NameTypePair = std::pair<std::string, std::string>;
 class ForeignTableTest : public DBHandlerTestFixture {
  protected:
   inline static const std::string DEFAULT_ODBC_SERVER_NAME_ = "temp_odbc";
 
   std::string wrapper_type_ = "csv";
+  bool skip_teardown_ = false;
 
   void SetUp() override {
+    if (is_odbc(wrapper_type_)) {
+      SKIP_SETUP_IF_ODBC_DISABLED();
+    }
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
     setupOdbcIfEnabled();
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     g_enable_fsi = true;
+    teardownOdbcIfEnabled();
     DBHandlerTestFixture::TearDown();
   }
 
-  void skipIfOdbcDisabled() {
-    GTEST_SKIP() << "ODBC tests not supported with this build configuration.";
+  void setupOdbc() {
+    CHECK(is_odbc(wrapper_type_));
+    createLocalODBCServer(wrapper_type_);
+    createODBCUserMapping(wrapper_type_);
   }
 
   void setupOdbcIfEnabled() {
     if (is_odbc(wrapper_type_)) {
-      skipIfOdbcDisabled();
+      setupOdbc();
+    }
+  }
+
+  void teardownOdbc() {
+    CHECK(is_odbc(wrapper_type_));
+    dropUserMappingIfExists();
+    dropLocalODBCServerIfExists();
+  }
+
+  void teardownOdbcIfEnabled() {
+    if (is_odbc(wrapper_type_)) {
+      teardownOdbc();
     }
   }
 
@@ -574,6 +647,9 @@ class SelectQueryTest : public ForeignTableTest {
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     g_enable_fsi = true;
     sqlDropForeignTable();
     sqlDropForeignTable(0, default_table_name_2);
@@ -710,7 +786,7 @@ class CacheControllingSelectQueryBaseTest : public SelectQueryTest {
  public:
   inline static std::string cache_path_ =
       to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
-  File_Namespace::DiskCacheLevel starting_cache_level_;
+  std::optional<File_Namespace::DiskCacheLevel> starting_cache_level_;
   File_Namespace::DiskCacheLevel cache_level_;
 
   CacheControllingSelectQueryBaseTest(const File_Namespace::DiskCacheLevel& cache_level)
@@ -728,24 +804,27 @@ class CacheControllingSelectQueryBaseTest : public SelectQueryTest {
   void SetUp() override {
     // Distributed mode doens't handle the resetPersistentStorageMgr appropriately as the
     // leaves don't have a way of being updated, so we skip these tests.
-    SKIP_IF_DISTRIBUTED("Test relies on disk cache");
+    SKIP_SETUP_IF_DISTRIBUTED("Test relies on disk cache");
     // Disable/enable the cache as test param requires
     starting_cache_level_ = getCatalog()
                                 .getDataMgr()
                                 .getPersistentStorageMgr()
                                 ->getDiskCacheConfig()
                                 .enabled_level;
-    if (starting_cache_level_ != cache_level_) {
+    if (starting_cache_level_ && (*starting_cache_level_ != cache_level_)) {
       resetPersistentStorageMgr(cache_level_);
     }
     SelectQueryTest::SetUp();
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     SelectQueryTest::TearDown();
     // Reset cache to pre-test conditions
-    if (starting_cache_level_ != cache_level_) {
-      resetPersistentStorageMgr(starting_cache_level_);
+    if (starting_cache_level_ && (*starting_cache_level_ != cache_level_)) {
+      resetPersistentStorageMgr(*starting_cache_level_);
     }
   }
 };
@@ -763,7 +842,7 @@ class RecoverCacheQueryTest : public ForeignTableTest {
       to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
   Catalog_Namespace::Catalog* cat_;
   PersistentStorageMgr* psm_;
-  foreign_storage::ForeignStorageCache* cache_;
+  foreign_storage::ForeignStorageCache* cache_ = nullptr;
 
  protected:
   void resetPersistentStorageMgr(File_Namespace::DiskCacheConfig cache_config) {
@@ -836,8 +915,14 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sqlDropForeignTable();
-    cache_->clear();
+    if (cache_) {
+      // Cache may not exist if SetUp() was skipped.
+      cache_->clear();
+    }
     ForeignTableTest::TearDown();
   }
 };
@@ -866,7 +951,12 @@ class DataTypeFragmentSizeAndDataWrapperTest
     SelectQueryTest::SetUp();
   }
 
-  void TearDown() override { SelectQueryTest::TearDown(); }
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    SelectQueryTest::TearDown();
+  }
 
   std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>>
   getExpectedScalarTypeMetadata(bool data_loaded) {
@@ -1099,7 +1189,7 @@ TEST_P(CacheControllingSelectQueryTest, RefreshDisabledCache) {
 class SqliteCacheControllingSelectQueryTest : public CacheControllingSelectQueryTest {
   void SetUp() override {
     wrapper_type_ = "sqlite";
-    skipIfOdbcDisabled();
+    SKIP_SETUP_IF_ODBC_DISABLED();
     CacheControllingSelectQueryTest::SetUp();
   }
 };
@@ -2384,6 +2474,9 @@ class FsiImportSelectTest : public SelectQueryTest {
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sql("DROP TABLE IF EXISTS " + default_table_name + ";");
     SelectQueryTest::TearDown();
   }
@@ -2473,6 +2566,9 @@ class FsiImportSelectTest : public SelectQueryTest {
 class FsiImportDecimalTest : public FsiImportSelectTest,
                              public ::testing::WithParamInterface<ImportFlag> {
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     std::string table_type = GetParam() ? "TABLE" : "FOREIGN TABLE";
     sql("DROP " + table_type + " IF EXISTS " + default_table_name + ";");
     SelectQueryTest::TearDown();
@@ -2711,6 +2807,9 @@ class RefreshForeignTableTest : public ForeignTableTest {
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     bf::remove(getDataFilesPath() + table_1_filename + ".csv");
     bf::remove(getDataFilesPath() + table_2_filename + ".csv");
     sqlDropForeignTable(0, table_1_name);
@@ -2733,7 +2832,7 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
   std::vector<std::string> tmp_file_names_;
   std::vector<std::string> table_names_;
   Catalog_Namespace::Catalog* cat_;
-  foreign_storage::ForeignStorageCache* cache_;
+  foreign_storage::ForeignStorageCache* cache_ = nullptr;
 
   void SetUp() override {
     ForeignTableTest::SetUp();
@@ -2745,6 +2844,9 @@ class RefreshTests : public ForeignTableTest, public TempDirManager {
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     for (auto table_name : table_names_) {
       sqlDropForeignTable(0, table_name);
     }
@@ -2890,11 +2992,16 @@ class RefreshParamTests : public RefreshTests,
                           public ::testing::WithParamInterface<WrapperType> {
  protected:
   void SetUp() override {
-    // Tests need local metadata
-    SKIP_IF_DISTRIBUTED("Test needs local metadata");
-
+    SKIP_SETUP_IF_DISTRIBUTED("Test needs local metadata");
     wrapper_type_ = GetParam();
     RefreshTests::SetUp();
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    RefreshTests::TearDown();
   }
 
   void assertExpectedCacheStatePostScan(ChunkKey& chunk_key) {
@@ -3335,6 +3442,9 @@ class AppendRefreshTestCSV : public RecoverCacheQueryTest, public TempDirManager
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sqlDropForeignTable(0, default_table_name);
     RecoverCacheQueryTest::TearDown();
   }
@@ -3382,6 +3492,9 @@ class AppendRefreshBase : public RecoverCacheQueryTest, public TempDirManager {
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sqlDropForeignTable(0, table_name_);
     RecoverCacheQueryTest::TearDown();
   }
@@ -3605,6 +3718,9 @@ class StringDictAppendTest
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sqlDropForeignTable(0, table_name2_);
     AppendRefreshBase::TearDown();
   }
@@ -3804,7 +3920,7 @@ TEST_P(DataWrapperAppendRefreshTest, MissingRows) {
     queryAndAssertException("REFRESH FOREIGN TABLES " + table_name_ + ";",
                             "Refresh of foreign table created with \"APPEND\" update "
                             "type failed as result set of select statement reduced in "
-                            "size: \"select i from refresh_tmp order by i\"");
+                            "size: \"select i from refresh_tmp\"");
   } else {
     queryAndAssertException(
         "REFRESH FOREIGN TABLES " + table_name_ + ";",
@@ -4506,6 +4622,7 @@ class PostGisSelectQueryTest : public SelectQueryTest {
  public:
   void SetUp() override {
     wrapper_type_ = "postgres";
+    SKIP_SETUP_IF_ODBC_DISABLED();
     SelectQueryTest::SetUp();
   }
 };
@@ -4733,13 +4850,16 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
   }
 
   void SetUp() override {
+    SKIP_SETUP_IF_DISTRIBUTED("Needs local cache");
     ForeignTableTest::SetUp();
     cache->clear();
     createTestTable();
-    SKIP_IF_DISTRIBUTED("Needs local cache");
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sqlDropForeignTable();
     ForeignTableTest::TearDown();
   }
@@ -5215,6 +5335,9 @@ class SchemaMismatchTest : public ForeignTableTest,
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sqlDropForeignTable();
     ForeignTableTest::TearDown();
   }
@@ -6038,6 +6161,9 @@ class RegexParserSelectQueryTest : public SelectQueryTest,
   void SetUp() override { SelectQueryTest::SetUp(); }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     foreign_storage::RegexFileBufferParser::setMaxBufferResize(
         import_export::max_import_buffer_resize_byte_size);
     SelectQueryTest::TearDown();
@@ -6334,7 +6460,7 @@ class PrefetchLimitTest : public RecoverCacheQueryTest {
   static constexpr size_t cache_size_ = 1ULL << 34;       // 16GB
 
   void SetUp() override {
-    SKIP_IF_DISTRIBUTED("Cache settings are not distributed yet.");
+    SKIP_SETUP_IF_DISTRIBUTED("Cache settings are not distributed yet.");
     // TODO(Misiu): Right now we only test parquet since it prefetches multi-fragment and
     // does not prefetch for metdata scan.
     wrapper_type_ = "parquet";
@@ -6343,7 +6469,9 @@ class PrefetchLimitTest : public RecoverCacheQueryTest {
   }
 
   void TearDown() override {
-    SKIP_IF_DISTRIBUTED("Cache settings are not distributed yet.");
+    if (skip_teardown_) {
+      return;
+    }
     resetPersistentStorageMgr({cache_path_, fn::DiskCacheLevel::fsi});
     RecoverCacheQueryTest::TearDown();
   }
@@ -6594,6 +6722,9 @@ class TableInteractionTest : public ForeignTableTest {
   }
 
   void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
     sql("drop table if exists " + table_name + ";");
     sql("drop foreign table if exists " + default_table_name + ";");
     ForeignTableTest::TearDown();
@@ -6607,6 +6738,36 @@ TEST_F(TableInteractionTest, SharedDictionaryDisabled) {
           default_table_name + "(t));",
       "Attempting to share dictionary with foreign table " + default_table_name +
           ".  Foreign table dictionaries cannot currently be shared.");
+}
+
+class AlterOdbcClearCacheTest : public RefreshTests {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = "sqlite";
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    RefreshTests::SetUp();
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    RefreshTests::TearDown();
+  }
+};
+
+TEST_F(AlterOdbcClearCacheTest, AlterOdbcClearCache) {
+  sql(createForeignTableQuery(
+      {{"t", "TEXT"}, {"i", "INTEGER"}, {"d", "DOUBLE"}},
+      getDataFilesPath() + "/example_2.csv",
+      wrapper_type_,
+      {{"SQL_SELECT", "select t, i, d from " + default_table_name},
+       {"SQL_ORDER_BY", "i"}}));
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  sql("SELECT * FROM " + default_table_name + ";");
+  ASSERT_GT(cache_->getNumCachedChunks(), 0U);
+  sql("ALTER FOREIGN TABLE " + default_table_name + " SET (SQL_ORDER_BY = 'i');");
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
 }
 
 int main(int argc, char** argv) {
