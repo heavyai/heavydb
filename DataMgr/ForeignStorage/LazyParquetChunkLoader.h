@@ -20,6 +20,7 @@
 #include <parquet/schema.h>
 
 #include "DataMgr/Chunk/Chunk.h"
+#include "DataPreview.h"
 #include "ForeignTableSchema.h"
 #include "Interval.h"
 #include "ParquetEncoder.h"
@@ -128,9 +129,33 @@ class LazyParquetChunkLoader {
       const std::map<int, StringDictionary*>& column_dictionaries,
       const int num_threads = 1);
 
+  /**
+   * @brief Preview rows of data and column types in a set of files
+   *
+   * @param files - files to preview
+   * @param max_num_rows - maximum number of rows to preview
+   *
+   * @return a `DataPreview` instance that contains relevant preview
+   * information
+   */
+  DataPreview previewFiles(const std::vector<std::string>& files,
+                           const size_t max_num_rows);
+
  private:
-  std::shared_ptr<arrow::fs::FileSystem> file_system_;
-  FileReaderMap* file_reader_cache_;
+  /**
+   * Suggest a possible Parquet to OmniSci column mapping based on heuristics.
+   *
+   * @param parquet_column - the column descriptor of the Parquet column
+   *
+   * @return a supported OmniSci `SQLTypeInfo` given the Parquet column type
+   *
+   * NOTE: the suggested type may be entirely inappropriate given a specific
+   * use-case; however, it is guaranteed to be an allowed mapping. For example,
+   * geo-types are never attempted to be detected and instead strings are
+   * always suggested in their place.
+   */
+  static SQLTypeInfo suggestColumnMapping(
+      const parquet::ColumnDescriptor* parquet_column);
 
   std::list<std::unique_ptr<ChunkMetadata>> appendRowGroups(
       const std::vector<RowGroupInterval>& row_group_intervals,
@@ -138,7 +163,12 @@ class LazyParquetChunkLoader {
       const ColumnDescriptor* column_descriptor,
       std::list<Chunk_NS::Chunk>& chunks,
       StringDictionary* string_dictionary,
-      RejectedRowIndices* rejected_row_indices);
+      RejectedRowIndices* rejected_row_indices,
+      const bool is_for_detect = false,
+      const std::optional<int64_t> max_levels_read = std::nullopt);
+
+  std::shared_ptr<arrow::fs::FileSystem> file_system_;
+  FileReaderMap* file_reader_cache_;
 
   const RenderGroupAnalyzerMap* render_group_analyzer_map_;
 };

@@ -43,6 +43,9 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/TableDescriptor.h"
 #include "DataMgr/Chunk/Chunk.h"
+#if defined(ENABLE_IMPORT_PARQUET)
+#include "DataMgr/ForeignStorage/DataPreview.h"
+#endif
 #include "Fragmenter/Fragmenter.h"
 #include "Geospatial/GDAL.h"
 #include "ImportExport/CopyParams.h"
@@ -758,6 +761,9 @@ class Detector : public DataStreamSink {
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
   std::string line1;
+#if defined(ENABLE_IMPORT_PARQUET)
+  std::optional<foreign_storage::DataPreview> data_preview_;
+#endif
   std::vector<SQLTypes> best_sqltypes;
   std::vector<EncodingType> best_encodings;
 };

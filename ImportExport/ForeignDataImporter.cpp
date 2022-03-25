@@ -41,13 +41,6 @@ extern bool g_enable_fsi_regex_import;
 
 namespace {
 
-struct DownloadedObjectToProcess {
-  std::string object_key;
-  std::atomic<bool> is_downloaded;
-  std::string download_file_path;
-  std::string import_file_path;
-};
-
 std::string get_data_wrapper_type(const import_export::CopyParams& copy_params) {
   std::string data_wrapper_type;
   if (copy_params.source_type == import_export::SourceType::kDelimitedFile) {
@@ -92,43 +85,6 @@ void validate_copy_params(const import_export::CopyParams& copy_params) {
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
     foreign_storage::validate_regex_parser_options(copy_params);
   }
-}
-
-std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
-           std::unique_ptr<foreign_storage::UserMapping>,
-           std::unique_ptr<foreign_storage::ForeignTable>>
-create_proxy_fsi_objects(const std::string& copy_from_source,
-                         const import_export::CopyParams& copy_params,
-                         Catalog_Namespace::Catalog& catalog,
-                         const TableDescriptor* table,
-                         const Catalog_Namespace::SessionInfo* session_info) {
-  auto& current_user = session_info->get_currentUser();
-  auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
-      catalog.getDatabaseId(), current_user.userId, copy_from_source, copy_params);
-
-  CHECK(server);
-  server->validate();
-
-  auto user_mapping =
-      foreign_storage::ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
-          catalog.getDatabaseId(),
-          current_user.userId,
-          copy_from_source,
-          copy_params,
-          server.get());
-
-  if (user_mapping) {
-    user_mapping->validate(server.get());
-  }
-
-  auto foreign_table =
-      foreign_storage::ForeignDataWrapperFactory::createForeignTableProxy(
-          catalog.getDatabaseId(), table, copy_from_source, copy_params, server.get());
-
-  CHECK(foreign_table);
-  foreign_table->validateOptionValues();
-
-  return {std::move(server), std::move(user_mapping), std::move(foreign_table)};
 }
 
 import_export::ImportStatus import_foreign_data(
@@ -250,6 +206,13 @@ import_export::ImportStatus import_foreign_data(
 }
 
 #ifdef HAVE_AWS_S3
+struct DownloadedObjectToProcess {
+  std::string object_key;
+  std::atomic<bool> is_downloaded;
+  std::string download_file_path;
+  std::string import_file_path;
+};
+
 size_t get_number_of_digits(const size_t number) {
   return std::to_string(number).length();
 }
@@ -393,8 +356,13 @@ ImportStatus ForeignDataImporter::importGeneral(
 
   ImportStatus import_status;
   {
-    auto [server, user_mapping, foreign_table] = create_proxy_fsi_objects(
-        copy_from_source, copy_params, catalog, table_, session_info);
+    auto& current_user = session_info->get_currentUser();
+    auto [server, user_mapping, foreign_table] =
+        foreign_storage::create_proxy_fsi_objects(copy_from_source,
+                                                  copy_params,
+                                                  catalog.getDatabaseId(),
+                                                  table_,
+                                                  current_user.userId);
 
     // set fragment size for proxy foreign table during import
     foreign_table->maxFragRows = proxy_foreign_table_fragment_size_;

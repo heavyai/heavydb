@@ -156,6 +156,8 @@ class ParquetScalarEncoder : public ParquetEncoder, public ParquetImportEncoder 
 
   virtual void validateUsingEncodersColumnType(const int8_t* parquet_data,
                                                const int64_t j) const = 0;
+
+  virtual std::string encodedDataToString(const int8_t* bytes) const = 0;
 };
 
 }  // namespace foreign_storage

@@ -33,6 +33,38 @@ bool is_valid_source_type(const import_export::CopyParams& copy_params);
 void validate_regex_parser_options(const import_export::CopyParams& copy_params);
 
 /**
+ * @brief Create proxy fsi objects for use outside FSI
+ *
+ * @param copy_from_source - the source that will be copied
+ * @param copy_params - CopyParams that specify parameters around use case
+ * @param db_id - db id of database in use case
+ * @param table - the table descriptor of the table in use case
+ * @param user_id - the user id of user in use case
+ *
+ * @return tuple of FSI objects that can be used for particular use case (for example
+ * import or detect)
+ */
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const int db_id,
+                         const TableDescriptor* table,
+                         const int32_t user_id);
+
+/**
+ * @brief Create proxy fsi objects for use outside FSI
+ * NOTE: parameters mirror function above
+ */
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const TableDescriptor* table);
+
+/**
  * @type DataWrapperType
  * @brief Encapsulates an enumeration of foreign data wrapper type strings
  */

@@ -23,6 +23,7 @@
 #include "ImportExport/Importer.h"
 
 #include <arrow/api.h>
+#include <arrow/filesystem/localfs.h>
 #include <arrow/io/api.h>
 #include <gdal.h>
 #include <ogrsf_frmts.h>
@@ -53,11 +54,23 @@
 #include "Archive/PosixFileArchive.h"
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
+#include "Catalog/os/UserMapping.h"
+#ifdef ENABLE_IMPORT_PARQUET
+#include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
+#endif
+#if defined(ENABLE_IMPORT_PARQUET)
+#include "Catalog/ForeignTable.h"
+#include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
+#endif
+#ifdef ENABLE_IMPORT_PARQUET
+#include "DataMgr/ForeignStorage/ParquetS3DetectFileSystem.h"
+#endif
 #include "Geospatial/Compression.h"
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Transforms.h"
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
+#include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/MetadataColumn.h"
 #include "ImportExport/RasterImporter.h"
 #include "Logger/Logger.h"
@@ -92,9 +105,11 @@
 
 size_t g_max_import_threads =
     32;  // Max number of default import threads to use (num hardware threads will be used
-         // if lower, and can also be explicitly overriden in copy statement with threads
-         // option)
+// if lower, and can also be explicitly overriden in copy statement with threads
+// option)
 size_t g_archive_read_buf_size = 1 << 20;
+
+std::optional<size_t> g_detect_test_sample_size = std::nullopt;
 
 static constexpr int kMaxRasterScanlinesPerThread = 32;
 
@@ -3530,6 +3545,11 @@ bool Detector::detect_headers(const std::vector<SQLTypes>& head_types,
 }
 
 std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
+#if defined(ENABLE_IMPORT_PARQUET)
+  if (data_preview_.has_value()) {
+    return data_preview_.value().sample_rows;
+  } else
+#endif
   {
     n = std::min(n, raw_rows.size());
     size_t offset = (has_headers && raw_rows.size() > 1) ? 1 : 0;
@@ -3540,6 +3560,11 @@ std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
 }
 
 std::vector<std::string> Detector::get_headers() {
+#if defined(ENABLE_IMPORT_PARQUET)
+  if (data_preview_.has_value()) {
+    return data_preview_.value().column_names;
+  } else
+#endif
   {
     std::vector<std::string> headers(best_sqltypes.size());
     for (size_t i = 0; i < best_sqltypes.size(); i++) {
@@ -3554,6 +3579,11 @@ std::vector<std::string> Detector::get_headers() {
 }
 
 std::vector<SQLTypeInfo> Detector::getBestColumnTypes() const {
+#if defined(ENABLE_IMPORT_PARQUET)
+  if (data_preview_.has_value()) {
+    return data_preview_.value().column_types;
+  } else
+#endif
   {
     std::vector<SQLTypeInfo> types;
     CHECK_EQ(best_sqltypes.size(), best_encodings.size());
@@ -3659,8 +3689,74 @@ ImportStatus DataStreamSink::archivePlumber(
   return import_status_;
 }
 
+namespace {
+#ifdef ENABLE_IMPORT_PARQUET
+
+foreign_storage::ParquetS3DetectFileSystem::ParquetS3DetectFileSystemConfiguration
+create_parquet_s3_detect_filesystem_config(const foreign_storage::ForeignServer* server,
+                                           const CopyParams& copy_params) {
+  foreign_storage::ParquetS3DetectFileSystem::ParquetS3DetectFileSystemConfiguration
+      config;
+
+  if (!copy_params.s3_access_key.empty()) {
+    config.s3_access_key = copy_params.s3_access_key;
+  }
+  if (!copy_params.s3_secret_key.empty()) {
+    config.s3_secret_key = copy_params.s3_secret_key;
+  }
+  if (!copy_params.s3_session_token.empty()) {
+    config.s3_session_token = copy_params.s3_session_token;
+  }
+
+  return config;
+}
+
+foreign_storage::DataPreview get_parquet_data_preview(const std::string& file_name,
+                                                      const CopyParams& copy_params) {
+  TableDescriptor td;
+  td.tableName = "parquet-detect-table";
+  td.tableId = -1;
+  td.maxFragRows = Detector::kDefaultSampleRowsCount;
+  auto [foreign_server, user_mapping, foreign_table] =
+      foreign_storage::create_proxy_fsi_objects(file_name, copy_params, &td);
+
+  std::shared_ptr<arrow::fs::FileSystem> file_system;
+  auto& server_options = foreign_server->options;
+  if (server_options
+          .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+          ->second ==
+      foreign_storage::AbstractFileStorageDataWrapper::LOCAL_FILE_STORAGE_TYPE) {
+    file_system = std::make_shared<arrow::fs::LocalFileSystem>();
+#ifdef HAVE_AWS_S3
+  } else if (server_options
+                 .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+                 ->second ==
+             foreign_storage::AbstractFileStorageDataWrapper::S3_STORAGE_TYPE) {
+    file_system = foreign_storage::ParquetS3DetectFileSystem::create(
+        create_parquet_s3_detect_filesystem_config(foreign_server.get(), copy_params));
+#endif
+  } else {
+    UNREACHABLE();
+  }
+
+  auto parquet_data_wrapper = std::make_unique<foreign_storage::ParquetDataWrapper>(
+      foreign_table.get(), file_system);
+  return parquet_data_wrapper->getDataPreview(g_detect_test_sample_size.has_value()
+                                                  ? g_detect_test_sample_size.value()
+                                                  : Detector::kDefaultSampleRowsCount);
+}
+#endif
+
+}  // namespace
+
 Detector::Detector(const boost::filesystem::path& fp, CopyParams& cp)
     : DataStreamSink(cp, fp.string()), file_path(fp) {
+#ifdef ENABLE_IMPORT_PARQUET
+  if (cp.source_type == import_export::SourceType::kParquetFile && g_enable_fsi &&
+      !g_enable_legacy_parquet_import) {
+    data_preview_ = get_parquet_data_preview(fp.string(), cp);
+  } else
+#endif
   {
     read_file();
     init();
