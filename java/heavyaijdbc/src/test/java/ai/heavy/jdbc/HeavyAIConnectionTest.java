@@ -13,7 +13,6 @@ import java.sql.SQLException;
 import java.util.Properties;
 
 public class HeavyAIConnectionTest {
-  // Property_loader loads the values from 'connection.properties in resources
   static Properties PROPERTIES = new Property_loader("connection_test.properties");
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");
@@ -158,8 +157,9 @@ public class HeavyAIConnectionTest {
       pt.setProperty("password", password);
       Connection conn = DriverManager.getConnection(url, pt);
     } catch (SQLException sq) {
-      assertEquals(sq.getMessage(),
-              "No suitable driver found for jdbc:NOT_heavyai:localhost:6274:heavyai");
+      // for different servers  the exact string may be different
+      assertTrue(
+              sq.getMessage().contains("No suitable driver found for jdbc:NOT_heavyai"));
       return;
     }
     String err = "Connection should have thrown";
@@ -169,7 +169,7 @@ public class HeavyAIConnectionTest {
   @Test
   public void tst4_connect_url_override() {
     try {
-      String url = PROPERTIES.getProperty("default_mapd_connection_url") + ":"
+      String url = PROPERTIES.getProperty("default_db_connection_url") + ":"
               + PROPERTIES.getProperty("default_db");
       Properties pt = new Properties();
       pt.setProperty("user", user);

@@ -18,7 +18,7 @@ import java.util.concurrent.Future;
 import java.util.function.Supplier;
 
 public class HeavyAIStatementTest {
-  static Properties PROPERTIES = new Property_loader("connection.properties");
+  static Properties PROPERTIES = new Property_loader("connection_test.properties");
   static final String url = PROPERTIES.getProperty("default_db_connection_url");
   static final String user = PROPERTIES.getProperty("default_super_user");
   static final String password = PROPERTIES.getProperty("default_user_password");

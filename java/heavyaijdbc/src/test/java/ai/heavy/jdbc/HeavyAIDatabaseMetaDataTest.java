@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.Properties;
 
 public class HeavyAIDatabaseMetaDataTest {
-  // Property_loader loads the values from 'connection.properties in resources
   static Properties PROPERTIES = new Property_loader("metadata_test.properties");
 
   static final ArrayList<String> default_tables = new ArrayList<String>() {
