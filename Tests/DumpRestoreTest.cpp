@@ -554,6 +554,27 @@ TEST_F(DumpAndRestoreTest, PreRebrandTableDump) {
   sqlAndCompareResult("SELECT * FROM test_table;", {1, 2, 3});
 }
 
+// Make sure that files are adjusted for altered tables even if using pre-rebrand files.
+TEST_F(DumpAndRestoreTest, PreRebrandAlteredTable) {
+  auto file_path =
+      boost::filesystem::canonical("../../Tests/Export/TableDump/altered_table.gz")
+          .string();
+  run_ddl_statement("RESTORE TABLE test_table FROM '" + file_path +
+                    "' WITH (compression='gzip');");
+  sqlAndCompareResult("SELECT * FROM test_table;", std::vector<int64_t>{1});
+}
+
+// Check for error when restoring a table that contains pages from a deleted column.
+TEST_F(DumpAndRestoreTest, DumpAlteredTable) {
+  run_ddl_statement("CREATE TABLE test_table (c1 int, c2 int);");
+  run_multiple_agg("INSERT INTO test_table VALUES(1, 2);");
+  run_ddl_statement("ALTER TABLE test_table DROP COLUMN c2;");
+  run_ddl_statement("DUMP TABLE test_table TO '" + tar_ball_path + "';");
+  run_ddl_statement("DROP TABLE test_table;");
+  run_ddl_statement("RESTORE TABLE test_table FROM '" + tar_ball_path + "';");
+  sqlAndCompareResult("SELECT * FROM test_table;", std::vector<int64_t>{1});
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 

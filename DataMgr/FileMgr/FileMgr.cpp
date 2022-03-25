@@ -773,14 +773,13 @@ void FileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purg
 
 FileBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t num_bytes) {
   mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
-  auto chunk_it = chunkIndex_.find(key);
-  return getBufferUnlocked(chunk_it, num_bytes);
+  return getBufferUnlocked(key, num_bytes);
 }
 
-FileBuffer* FileMgr::getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                       const size_t num_bytes) {
-  CHECK(chunk_it != chunkIndex_.end())
-      << "Chunk does not exist for key: " << show_chunk(chunk_it->first);
+FileBuffer* FileMgr::getBufferUnlocked(const ChunkKey& key,
+                                       const size_t num_bytes) const {
+  auto chunk_it = chunkIndex_.find(key);
+  CHECK(chunk_it != chunkIndex_.end()) << "Chunk does not exist: " << show_chunk(key);
   return chunk_it->second;
 }
 
@@ -981,6 +980,12 @@ FILE* FileMgr::getFileForFileId(const int32_t fileId) {
   CHECK(fileId >= 0);
   CHECK(files_.find(fileId) != files_.end());
   return files_.at(fileId)->f;
+}
+
+bool FileMgr::hasChunkMetadataForKeyPrefix(const ChunkKey& keyPrefix) {
+  mapd_shared_lock<mapd_shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
+  return (chunkIt != chunkIndex_.end());
 }
 
 void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
@@ -1569,15 +1574,16 @@ bool FileMgr::updatePageIfDeleted(FileInfo* file_info,
   auto [db_id, tb_id] = get_fileMgrKey();
   chunk_key[CHUNK_KEY_DB_IDX] = db_id;
   chunk_key[CHUNK_KEY_TABLE_IDX] = tb_id;
-  const bool delete_contingent =
-      (contingent == DELETE_CONTINGENT || contingent == ROLLOFF_CONTINGENT);
-  // Check if page was deleted with a checkpointed epoch
-  if (delete_contingent && epoch(db_id, tb_id) >= page_epoch) {
+
+  auto table_epoch = epoch(db_id, tb_id);
+
+  if (is_page_deleted_with_checkpoint(table_epoch, page_epoch, contingent)) {
     file_info->freePageImmediate(page_num);
     return true;
   }
+
   // Recover page if it was deleted but not checkpointed.
-  if (delete_contingent) {
+  if (is_page_deleted_without_checkpoint(table_epoch, page_epoch, contingent)) {
     file_info->recoverPage(chunk_key, page_num);
   }
   return false;
@@ -1590,7 +1596,7 @@ FileBuffer* FileMgr::getOrCreateBuffer(const ChunkKey& key) {
   if (chunk_it == chunkIndex_.end()) {
     buf = createBufferUnlocked(key);
   } else {
-    buf = getBufferUnlocked(chunk_it);
+    buf = getBufferUnlocked(key);
   }
   return buf;
 }
