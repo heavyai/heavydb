@@ -6265,4 +6265,40 @@ std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
   return defaults_buffers;
 }
 
+std::unique_ptr<AbstractImporter> create_importer(
+    Catalog_Namespace::Catalog& catalog,
+    const TableDescriptor* td,
+    const std::string& copy_from_source,
+    const import_export::CopyParams& copy_params) {
+  if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+#ifdef ENABLE_IMPORT_PARQUET
+    if (!g_enable_legacy_parquet_import) {
+      return std::make_unique<import_export::ForeignDataImporter>(
+          copy_from_source, copy_params, td);
+    }
+#else
+    throw std::runtime_error("Parquet not supported!");
+#endif
+  }
+
+  if (copy_params.source_type == import_export::SourceType::kDelimitedFile &&
+      !g_enable_legacy_delimited_import) {
+    return std::make_unique<import_export::ForeignDataImporter>(
+        copy_from_source, copy_params, td);
+  }
+
+  if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
+    if (g_enable_fsi_regex_import) {
+      return std::make_unique<import_export::ForeignDataImporter>(
+          copy_from_source, copy_params, td);
+    } else {
+      throw std::runtime_error(
+          "Regex parsed import only supported using 'fsi-regex-import' flag");
+    }
+  }
+
+  return std::make_unique<import_export::Importer>(
+      catalog, td, copy_from_source, copy_params);
+}
+
 }  // namespace import_export

@@ -5088,15 +5088,10 @@ void DBHandler::import_table(const TSessionId& session,
 
     const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
         session_ptr->getCatalog(), table_name);
-    std::unique_ptr<import_export::Importer> importer;
+    std::unique_ptr<import_export::AbstractImporter> importer;
     if (leaf_aggregator_.leafCount() > 0) {
-      importer.reset(new import_export::Importer(
-          new DistributedLoader(*session_ptr, td, &leaf_aggregator_),
-          file_path.string(),
-          copy_params));
     } else {
-      importer.reset(
-          new import_export::Importer(cat, td, file_path.string(), copy_params));
+      importer = import_export::create_importer(cat, td, file_path.string(), copy_params);
     }
     auto ms = measure<>::execution([&]() { importer->import(session_ptr.get()); });
     LOG(INFO) << "Total Import Time: " << (double)ms / 1000.0 << " Seconds.";

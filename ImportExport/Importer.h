@@ -895,6 +895,12 @@ std::vector<std::unique_ptr<TypedImportBuffer>> fill_missing_columns(
     const Catalog_Namespace::Catalog* cat,
     Fragmenter_Namespace::InsertData& insert_data);
 
+std::unique_ptr<AbstractImporter> create_importer(
+    Catalog_Namespace::Catalog& catalog,
+    const TableDescriptor* td,
+    const std::string& copy_from_source,
+    const import_export::CopyParams& copy_params);
+
 }  // namespace import_export
 
 #endif  // _IMPORTER_H_
