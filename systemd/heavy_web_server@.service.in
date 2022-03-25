@@ -6,7 +6,7 @@ After=network.target remote-fs.target
 User=@HEAVYAI_USER@
 Group=@HEAVYAI_GROUP@
 WorkingDirectory=@HEAVYAI_PATH@
-ExecStart=@HEAVYAI_PATH@/bin/heavy_web_server --config @HEAVYAI_STORAGE@/%I/heavy.conf
+ExecStart=@HEAVYAI_PATH@/bin/heavy_web_server --config @HEAVYAI_BASE@/%I/heavy.conf
 LimitNOFILE=65536
 Restart=always
 
