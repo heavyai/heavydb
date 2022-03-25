@@ -1100,6 +1100,34 @@ void FileMgr::migrateEpochFileV0() {
   writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, migrationCompleteVersion);
 }
 
+void FileMgr::migrateLegacyFilesV1() {
+  LOG(INFO) << "Migrating file format version from 1 to 2";
+  renameAndSymlinkLegacyFiles(fileMgrBasePath_);
+  constexpr int32_t migration_complete_version{2};
+  writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, migration_complete_version);
+}
+
+void FileMgr::renameAndSymlinkLegacyFiles(const std::string& table_data_dir) {
+  std::map<boost::filesystem::path, boost::filesystem::path> old_to_new_paths;
+  for (boost::filesystem::directory_iterator it(table_data_dir), end_it; it != end_it;
+       it++) {
+    const auto old_path = boost::filesystem::canonical(it->path());
+    if (boost::filesystem::is_regular_file(it->status()) &&
+        old_path.extension().string() == kLegacyDataFileExtension) {
+      auto new_path = old_path;
+      new_path.replace_extension(DATA_FILE_EXT);
+      old_to_new_paths[old_path] = new_path;
+    }
+  }
+  for (const auto& [old_path, new_path] : old_to_new_paths) {
+    boost::filesystem::rename(old_path, new_path);
+    LOG(INFO) << "Rebrand migration: Renamed " << old_path << " to " << new_path;
+    boost::filesystem::create_symlink(new_path.filename(), old_path);
+    LOG(INFO) << "Rebrand migration: Added symlink from " << old_path << " to "
+              << new_path.filename();
+  }
+}
+
 void FileMgr::migrateToLatestFileMgrVersion() {
   fileMgrVersion_ = readVersionFromDisk(FILE_MGR_VERSION_FILENAME);
   if (fileMgrVersion_ == INVALID_VERSION) {
@@ -1117,6 +1145,10 @@ void FileMgr::migrateToLatestFileMgrVersion() {
       switch (fileMgrVersion_) {
         case 0: {
           migrateEpochFileV0();
+          break;
+        }
+        case 1: {
+          migrateLegacyFilesV1();
           break;
         }
         default: {
@@ -1447,6 +1479,7 @@ void FileMgr::deleteEmptyFiles() {
       fclose(file_info->f);
       file_info->f = nullptr;
       auto file_path = get_data_file_path(fileMgrBasePath_, file_id, file_info->pageSize);
+      boost::filesystem::remove(get_legacy_data_file_path(file_path));
       boost::filesystem::remove(file_path);
     }
   }

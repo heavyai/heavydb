@@ -48,6 +48,12 @@ std::string get_data_file_path(const std::string& base_path,
          std::string(DATA_FILE_EXT);  // DATA_FILE_EXT has preceding "."
 }
 
+std::string get_legacy_data_file_path(const std::string& new_data_file_path) {
+  auto legacy_path = boost::filesystem::canonical(new_data_file_path);
+  legacy_path.replace_extension(kLegacyDataFileExtension);
+  return legacy_path.string();
+}
+
 FILE* create(const std::string& basePath,
              const int fileId,
              const size_t pageSize,
@@ -71,7 +77,8 @@ FILE* create(const std::string& basePath,
                << fileSize(f) << " does not equal pageSize * numPages "
                << pageSize * numPages;
   }
-
+  boost::filesystem::create_symlink(boost::filesystem::canonical(path).filename(),
+                                    get_legacy_data_file_path(path));
   return f;
 }
 

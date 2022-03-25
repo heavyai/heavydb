@@ -33,9 +33,13 @@
 
 namespace File_Namespace {
 
+constexpr auto kLegacyDataFileExtension{".mapd"};
+
 std::string get_data_file_path(const std::string& base_path,
                                int file_id,
                                size_t page_size);
+
+std::string get_legacy_data_file_path(const std::string& new_data_file_path);
 
 FILE* create(const std::string& basePath,
              const int fileId,

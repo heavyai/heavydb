@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "Catalog/Types.h"
 #include "SqliteConnector/SqliteConnector.h"
 
@@ -32,6 +34,8 @@ class MigrationMgr {
       const int database_id,
       const Catalog_Namespace::Catalog* cat,
       SqliteConnector& sqlite);
+
+  static void executeRebrandMigration(const std::string& base_path);
 };
 
 }  // namespace migrations

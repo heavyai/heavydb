@@ -381,6 +381,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   static void setNumPagesPerDataFile(size_t num_pages);
   static void setNumPagesPerMetadataFile(size_t num_pages);
 
+  static void renameAndSymlinkLegacyFiles(const std::string& table_data_dir);
+
   static constexpr char LEGACY_EPOCH_FILENAME[] = "epoch";
   static constexpr char EPOCH_FILENAME[] = "epoch_metadata";
   static constexpr char DB_META_FILENAME[] = "dbmeta";
@@ -403,7 +405,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   int32_t db_version_;   /// DB version from dbmeta file, should be compatible with
                          /// GlobalFileMgr::omnisci_db_version_
   int32_t fileMgrVersion_;
-  const int32_t latestFileMgrVersion_{1};
+  const int32_t latestFileMgrVersion_{2};
   FILE* DBMetaFile_ = nullptr;  /// pointer to DB level metadata
   std::mutex getPageMutex_;
   mutable mapd_shared_mutex chunkIndexMutex_;
@@ -459,6 +461,7 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // Migration functions
   void migrateToLatestFileMgrVersion();
   void migrateEpochFileV0();
+  void migrateLegacyFilesV1();
 
   OpenFilesResult openFiles();
 
