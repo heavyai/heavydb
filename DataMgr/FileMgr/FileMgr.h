@@ -260,6 +260,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   void getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadataVec,
                                        const ChunkKey& keyPrefix) override;
 
+  bool hasChunkMetadataForKeyPrefix(const ChunkKey& keyPrefix);
+
   /**
    * @brief Fsyncs data files, writes out epoch and
    * fsyncs that
@@ -494,8 +496,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   virtual ChunkKeyToChunkMap::iterator deleteBufferUnlocked(
       const ChunkKeyToChunkMap::iterator chunk_it,
       const bool purge = true);
-  virtual FileBuffer* getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                        const size_t numBytes = 0);
+  virtual FileBuffer* getBufferUnlocked(const ChunkKey& key,
+                                        const size_t numBytes = 0) const;
 
  private:
   void rollOffOldData(const int32_t epochCeiling, const bool shouldCheckpoint);

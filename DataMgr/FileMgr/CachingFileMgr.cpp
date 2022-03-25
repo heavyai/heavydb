@@ -694,7 +694,7 @@ std::optional<FileBuffer*> CachingFileMgr::getBufferIfExists(const ChunkKey& key
   if (chunk_it == chunkIndex_.end()) {
     return {};
   }
-  return getBufferUnlocked(chunk_it);
+  return getBufferUnlocked(key);
 }
 
 ChunkKeyToChunkMap::iterator CachingFileMgr::deleteBufferUnlocked(
@@ -713,10 +713,10 @@ void CachingFileMgr::getChunkMetadataVecForKeyPrefix(
   }
 }
 
-FileBuffer* CachingFileMgr::getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                              const size_t num_bytes) {
-  touchKey(chunk_it->first);
-  return FileMgr::getBufferUnlocked(chunk_it, num_bytes);
+FileBuffer* CachingFileMgr::getBufferUnlocked(const ChunkKey& key,
+                                              const size_t num_bytes) const {
+  touchKey(key);
+  return FileMgr::getBufferUnlocked(key, num_bytes);
 }
 
 void CachingFileMgr::free_page(std::pair<FileInfo*, int32_t>&& page) {

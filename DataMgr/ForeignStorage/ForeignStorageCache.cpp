@@ -180,9 +180,7 @@ void ForeignStorageCache::getCachedMetadataVecForKeyPrefix(
 
 bool ForeignStorageCache::hasCachedMetadataForKeyPrefix(
     const ChunkKey& chunk_prefix) const {
-  ChunkMetadataVector meta_vec;
-  caching_file_mgr_->getChunkMetadataVecForKeyPrefix(meta_vec, chunk_prefix);
-  return (meta_vec.size() > 0);
+  return caching_file_mgr_->hasChunkMetadataForKeyPrefix(chunk_prefix);
 }
 
 void ForeignStorageCache::clearForTablePrefix(const ChunkKey& chunk_prefix) {

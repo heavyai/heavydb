@@ -111,4 +111,12 @@ struct FileInfo {
   void recoverPage(const ChunkKey& chunk_key, int32_t page_num);
 };
 
+bool is_page_deleted_with_checkpoint(int32_t table_epoch,
+                                     int32_t page_epoch,
+                                     int32_t contingent);
+
+bool is_page_deleted_without_checkpoint(int32_t table_epoch,
+                                        int32_t page_epoch,
+                                        int32_t contingent);
+
 }  // namespace File_Namespace

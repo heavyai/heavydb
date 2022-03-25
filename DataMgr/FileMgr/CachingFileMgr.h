@@ -473,8 +473,8 @@ class CachingFileMgr : public FileMgr {
    **/
   void setMaxSizes();
 
-  FileBuffer* getBufferUnlocked(const ChunkKeyToChunkMap::iterator chunk_it,
-                                const size_t numBytes = 0) override;
+  FileBuffer* getBufferUnlocked(const ChunkKey& key,
+                                const size_t numBytes = 0) const override;
   ChunkKeyToChunkMap::iterator deleteBufferUnlocked(
       const ChunkKeyToChunkMap::iterator chunk_it,
       const bool purge = true) override;

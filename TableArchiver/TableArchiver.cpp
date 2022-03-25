@@ -32,6 +32,7 @@
 #include <sstream>
 #include <system_error>
 
+#include "DataMgr/FileMgr/FileInfo.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
@@ -169,10 +170,81 @@ inline std::string get_table_schema(const std::string& archive_path,
   return std::regex_replace(schema_str, regex, table);
 }
 
+// If a table was altered there may be a mapping from old column ids to new ones these
+// values need to be replaced in the page headers.
+void rewrite_column_ids_in_page_headers(
+    const boost::filesystem::path& path,
+    const std::unordered_map<int, int>& column_ids_map,
+    const int32_t table_epoch) {
+  const std::string file_path = path.string();
+  const std::string file_name = path.filename().string();
+  std::vector<std::string> tokens;
+  boost::split(tokens, file_name, boost::is_any_of("."));
+
+  // ref. FileMgr::init for hint of data file name layout
+  if (tokens.size() <= 2 || !(DATA_FILE_EXT == "." + tokens[2] || tokens[2] == "mapd")) {
+    // We are only interested in files in the form <id>.<page_size>.<DATA_FILE_EXT>
+    return;
+  }
+
+  const auto page_size = boost::lexical_cast<int64_t>(tokens[1]);
+  const auto file_size = boost::filesystem::file_size(file_path);
+  std::unique_ptr<FILE, decltype(simple_file_closer)> fp(
+      std::fopen(file_path.c_str(), "r+"), simple_file_closer);
+  if (!fp) {
+    throw std::runtime_error("Failed to open " + file_path +
+                             " for update: " + std::strerror(errno));
+  }
+  // TODO(Misiu): Rather than reference an exernal layout we should de-duplicate this
+  // page-reading code in a single location.  This will also reduce the need for comments
+  // below.
+  // ref. FileInfo::openExistingFile for hint of chunk header layout
+  for (size_t page = 0; page < file_size / page_size; ++page) {
+    int32_t header_info[8];
+    if (0 != std::fseek(fp.get(), page * page_size, SEEK_SET)) {
+      throw std::runtime_error("Failed to seek to page# " + std::to_string(page) +
+                               file_path + " for read: " + std::strerror(errno));
+    }
+    if (1 != fread(header_info, sizeof header_info, 1, fp.get())) {
+      throw std::runtime_error("Failed to read " + file_path + ": " +
+                               std::strerror(errno));
+    }
+    if (const auto header_size = header_info[0]; header_size > 0) {
+      // header_info[1] is the page's db_id; but can also be used as an "is deleted"
+      // indicator if negative.
+      auto& contingent = header_info[1];
+      // header_info[2] is the page's table_id; but can also used to store the page's
+      // epoch since the FileMgr stores table_id information separately.
+      auto& epoch = header_info[2];
+      auto& col_id = header_info[3];
+      if (File_Namespace::is_page_deleted_with_checkpoint(
+              table_epoch, epoch, contingent)) {
+        continue;
+      }
+      auto column_map_it = column_ids_map.find(col_id);
+      CHECK(column_map_it != column_ids_map.end()) << "could not find " << col_id;
+      // If a header contains a column id that is remapped to new location
+      // then write that change to the file.
+      if (const auto dest_col_id = column_map_it->second; col_id != dest_col_id) {
+        col_id = dest_col_id;
+        if (0 != std::fseek(fp.get(), page * page_size, SEEK_SET)) {
+          throw std::runtime_error("Failed to seek to page# " + std::to_string(page) +
+                                   file_path + " for write: " + std::strerror(errno));
+        }
+        if (1 != fwrite(header_info, sizeof header_info, 1, fp.get())) {
+          throw std::runtime_error("Failed to write " + file_path + ": " +
+                                   std::strerror(errno));
+        }
+      }
+    }
+  }
+}
+
 // Adjust column ids in chunk keys in a table's data files under a temp_data_dir,
 // including files of all shards of the table. Can be slow for big files but should
 // be scale faster than refragmentizing. Table altering should be rare for olap.
-void adjust_altered_table_files(const std::string& temp_data_dir,
+void adjust_altered_table_files(const int32_t table_epoch,
+                                const std::string& temp_data_dir,
                                 const std::unordered_map<int, int>& column_ids_map) {
   boost::filesystem::path base_path(temp_data_dir);
   boost::filesystem::recursive_directory_iterator end_it;
@@ -180,52 +252,9 @@ void adjust_altered_table_files(const std::string& temp_data_dir,
   for (boost::filesystem::recursive_directory_iterator fit(base_path); fit != end_it;
        ++fit) {
     if (boost::filesystem::is_regular_file(fit->status())) {
-      const std::string file_path = fit->path().string();
-      const std::string file_name = fit->path().filename().string();
-      std::vector<std::string> tokens;
-      boost::split(tokens, file_name, boost::is_any_of("."));
-      // ref. FileMgr::init for hint of data file name layout
-      if (tokens.size() > 2 && DATA_FILE_EXT == "." + tokens[2]) {
-        thread_controller.startThread([file_name, file_path, tokens, &column_ids_map] {
-          const auto page_size = boost::lexical_cast<int64_t>(tokens[1]);
-          const auto file_size = boost::filesystem::file_size(file_path);
-          std::unique_ptr<FILE, decltype(simple_file_closer)> fp(
-              std::fopen(file_path.c_str(), "r+"), simple_file_closer);
-          if (!fp) {
-            throw std::runtime_error("Failed to open " + file_path +
-                                     " for update: " + std::strerror(errno));
-          }
-          // ref. FileInfo::openExistingFile for hint of chunk header layout
-          for (size_t page = 0; page < file_size / page_size; ++page) {
-            int ints[8];
-            if (0 != std::fseek(fp.get(), page * page_size, SEEK_SET)) {
-              throw std::runtime_error("Failed to seek to page# " + std::to_string(page) +
-                                       file_path + " for read: " + std::strerror(errno));
-            }
-            if (1 != fread(ints, sizeof ints, 1, fp.get())) {
-              throw std::runtime_error("Failed to read " + file_path + ": " +
-                                       std::strerror(errno));
-            }
-            if (ints[0] > 0) {  // header size
-              auto cit = column_ids_map.find(ints[3]);
-              CHECK(cit != column_ids_map.end());
-              if (ints[3] != cit->second) {
-                ints[3] = cit->second;
-                if (0 != std::fseek(fp.get(), page * page_size, SEEK_SET)) {
-                  throw std::runtime_error("Failed to seek to page# " +
-                                           std::to_string(page) + file_path +
-                                           " for write: " + std::strerror(errno));
-                }
-                if (1 != fwrite(ints, sizeof ints, 1, fp.get())) {
-                  throw std::runtime_error("Failed to write " + file_path + ": " +
-                                           std::strerror(errno));
-                }
-              }
-            }
-          }
-        });
-        thread_controller.checkThreadsStatus();
-      }
+      thread_controller.startThread(
+          rewrite_column_ids_in_page_headers, fit->path(), column_ids_map, table_epoch);
+      thread_controller.checkThreadsStatus();
     }
   }
   thread_controller.finish();
@@ -477,10 +506,13 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
   run("rm -rf " + temp_data_dir);
   run("mkdir -p " + temp_data_dir);
   run("tar " + compression + " -xvf " + get_quoted_string(archive_path), temp_data_dir);
+
   // if table was ever altered after it was created, update column ids in chunk headers.
   if (was_table_altered) {
+    const auto epoch = boost::lexical_cast<int32_t>(
+        simple_file_cat(archive_path, table_epoch_filename, compression));
     const auto time_ms = measure<>::execution(
-        [&]() { adjust_altered_table_files(temp_data_dir, column_ids_map); });
+        [&]() { adjust_altered_table_files(epoch, temp_data_dir, column_ids_map); });
     VLOG(3) << "adjust_altered_table_files: " << time_ms << " ms";
   }
   // finally,,, swap table data/dict dirs!
@@ -504,10 +536,9 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
       }
     }
     backup_completed = true;
-    // accord src data dirs to dst
-    rename_table_directories(
-        cat_->getDataMgr().getGlobalFileMgr(), temp_data_dir, data_file_dirs, "table_");
-    // accord src dict dirs to dst
+    // Move table directories from temp dir to main data directory.
+    rename_table_directories(global_file_mgr, temp_data_dir, data_file_dirs, "table_");
+    // Move dictionaries from temp dir to main dir.
     for (const auto& dit : dict_paths_map) {
       if (!dit.first.empty() && !dit.second.empty()) {
         const auto src_dict_path = temp_data_dir + "/" + dit.first;

@@ -78,6 +78,9 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
   int32_t oldVersionEpoch = -99;
   int32_t skipped = 0;
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
+    // TODO(Misiu): It would be nice to replace this array with a struct that would
+    // clarify what is being read and have a single definition (currently this code is
+    // replicated in TableArchiver and possibly elsewhere).
     constexpr size_t MAX_INTS_TO_READ{10};  // currently use 1+6 ints
     int32_t ints[MAX_INTS_TO_READ];
     CHECK_EQ(fseek(f, pageNum * pageSize, SEEK_SET), 0);
@@ -259,5 +262,29 @@ void FileInfo::recoverPage(const ChunkKey& chunk_key, int32_t page_num) {
                           2 * sizeof(int32_t),
                           reinterpret_cast<const int8_t*>(chunk_key.data()));
   }
+}
+
+bool is_page_deleted_with_checkpoint(int32_t table_epoch,
+                                     int32_t page_epoch,
+                                     int32_t contingent) {
+  const bool delete_contingent =
+      (contingent == DELETE_CONTINGENT || contingent == ROLLOFF_CONTINGENT);
+  // Check if page was deleted with a checkpointed epoch
+  if (delete_contingent && (table_epoch >= page_epoch)) {
+    return true;
+  }
+  return false;
+}
+
+bool is_page_deleted_without_checkpoint(int32_t table_epoch,
+                                        int32_t page_epoch,
+                                        int32_t contingent) {
+  const bool delete_contingent =
+      (contingent == DELETE_CONTINGENT || contingent == ROLLOFF_CONTINGENT);
+  // Check if page was deleted but the epoch was not yet checkpointed.
+  if (delete_contingent && (table_epoch < page_epoch)) {
+    return true;
+  }
+  return false;
 }
 }  // namespace File_Namespace
