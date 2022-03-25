@@ -5386,35 +5386,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              const std::string& copy_from_source,
                              const import_export::CopyParams& copy_params)
       -> std::unique_ptr<import_export::AbstractImporter> {
-    if (copy_params.source_type == import_export::SourceType::kParquetFile) {
-#ifdef ENABLE_IMPORT_PARQUET
-      if (!g_enable_legacy_parquet_import) {
-        return std::make_unique<import_export::ForeignDataImporter>(
-            copy_from_source, copy_params, td);
-      }
-#else
-      throw std::runtime_error("Parquet not supported!");
-#endif
-    }
-
-    if (copy_params.source_type == import_export::SourceType::kDelimitedFile &&
-        !g_enable_legacy_delimited_import) {
-      return std::make_unique<import_export::ForeignDataImporter>(
-          copy_from_source, copy_params, td);
-    }
-
-    if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
-      if (g_enable_fsi_regex_import) {
-        return std::make_unique<import_export::ForeignDataImporter>(
-            copy_from_source, copy_params, td);
-      } else {
-        throw std::runtime_error(
-            "Regex parsed import only supported using 'fsi-regex-import' flag");
-      }
-    }
-
-    return std::make_unique<import_export::Importer>(
-        catalog, td, copy_from_source, copy_params);
+    return import_export::create_importer(catalog, td, copy_from_source, copy_params);
   };
   return execute(session, importer_factory);
 }
