@@ -18,6 +18,9 @@
  * @file FileMgrTest.cpp
  * @brief Unit tests for FileMgr class.
  */
+
+#include <fstream>
+
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 
@@ -1062,7 +1065,9 @@ class FileMgrUnitTest : public testing::Test {
     bf::remove_all(file_mgr_path);
     bf::create_directory(file_mgr_path);
   }
+
   void TearDown() override { bf::remove_all(file_mgr_path); }
+
   std::unique_ptr<File_Namespace::GlobalFileMgr> initializeGFM(
       std::shared_ptr<ForeignStorageInterface> fsi,
       size_t num_pages = 1) {
@@ -1118,6 +1123,100 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedAppendPages) {
   File_Namespace::GlobalFileMgr gfm(0, fsi, file_mgr_path, 0, page_size_);
   auto buffer = dynamic_cast<File_Namespace::FileBuffer*>(gfm.getBuffer({1, 1, 1, 1}));
   ASSERT_EQ(buffer->pageCount(), 1U);
+}
+
+class RebrandMigrationTest : public FileMgrUnitTest {
+ protected:
+  void setFileMgrVersion(int32_t version_number) {
+    const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+    std::ofstream version_file{table_data_dir / "filemgr_version"};
+    version_file.write(reinterpret_cast<char*>(&version_number), sizeof(int32_t));
+    version_file.close();
+  }
+
+  int32_t getFileMgrVersion() {
+    const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+    int32_t version_number;
+    std::ifstream version_file{table_data_dir / "filemgr_version"};
+    version_file.read(reinterpret_cast<char*>(&version_number), sizeof(int32_t));
+    version_file.close();
+    return version_number;
+  }
+};
+
+TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
+  auto global_file_mgr = initializeGFM(std::make_shared<ForeignStorageInterface>());
+  constexpr int32_t db_id{1};
+  constexpr int32_t table_id{1};
+  global_file_mgr->closeFileMgr(db_id, table_id);
+  const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+  const auto legacy_data_file_path =
+      table_data_dir / ("0." + std::to_string(page_size_) + ".mapd");
+  const auto new_data_file_path =
+      table_data_dir / ("0." + std::to_string(page_size_) + ".data");
+  const auto legacy_metadata_file_path =
+      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".mapd");
+  const auto new_metadata_file_path =
+      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".data");
+
+  if (boost::filesystem::exists(legacy_data_file_path)) {
+    boost::filesystem::remove(legacy_data_file_path);
+  }
+
+  if (boost::filesystem::exists(legacy_metadata_file_path)) {
+    boost::filesystem::remove(legacy_metadata_file_path);
+  }
+
+  ASSERT_TRUE(boost::filesystem::exists(new_data_file_path));
+  boost::filesystem::rename(new_data_file_path, legacy_data_file_path);
+
+  ASSERT_TRUE(boost::filesystem::exists(new_metadata_file_path));
+  boost::filesystem::rename(new_metadata_file_path, legacy_metadata_file_path);
+
+  setFileMgrVersion(1);
+  ASSERT_EQ(getFileMgrVersion(), 1);
+  // Migration should occur when the file manager is initialized.
+  global_file_mgr->getFileMgr(db_id, table_id);
+  ASSERT_EQ(getFileMgrVersion(), 2);
+
+  ASSERT_TRUE(boost::filesystem::exists(new_data_file_path));
+  ASSERT_TRUE(boost::filesystem::is_regular_file(new_data_file_path));
+
+  ASSERT_TRUE(boost::filesystem::exists(new_metadata_file_path));
+  ASSERT_TRUE(boost::filesystem::is_regular_file(new_metadata_file_path));
+
+  boost::filesystem::canonical(legacy_data_file_path);
+  ASSERT_TRUE(boost::filesystem::exists(legacy_data_file_path));
+  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_data_file_path));
+
+  ASSERT_TRUE(boost::filesystem::exists(legacy_metadata_file_path));
+  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_metadata_file_path));
+}
+
+TEST_F(RebrandMigrationTest, NewDataFiles) {
+  initializeGFM(std::make_shared<ForeignStorageInterface>(), 1);
+
+  const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+  const auto legacy_data_file_path =
+      table_data_dir / ("0." + std::to_string(page_size_) + ".mapd");
+  const auto new_data_file_path =
+      table_data_dir / ("0." + std::to_string(page_size_) + ".data");
+  const auto legacy_metadata_file_path =
+      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".mapd");
+  const auto new_metadata_file_path =
+      table_data_dir / ("1." + std::to_string(METADATA_PAGE_SIZE) + ".data");
+
+  ASSERT_TRUE(boost::filesystem::exists(new_data_file_path));
+  ASSERT_TRUE(boost::filesystem::is_regular_file(new_data_file_path));
+
+  ASSERT_TRUE(boost::filesystem::exists(new_metadata_file_path));
+  ASSERT_TRUE(boost::filesystem::is_regular_file(new_metadata_file_path));
+
+  ASSERT_TRUE(boost::filesystem::exists(legacy_data_file_path));
+  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_data_file_path));
+
+  ASSERT_TRUE(boost::filesystem::exists(legacy_metadata_file_path));
+  ASSERT_TRUE(boost::filesystem::is_symlink(legacy_metadata_file_path));
 }
 
 int main(int argc, char** argv) {

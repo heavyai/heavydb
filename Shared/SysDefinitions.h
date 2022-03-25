@@ -37,6 +37,7 @@ inline const std::string kDefaultDiskCacheDirName = "disk_cache";
 inline const std::string kDefaultKeyFileName = "heavyai.pem";
 inline const std::string kDefaultKeyStoreDirName = "key_store";
 inline const std::string kDefaultLogDirName = "log";
-inline const std::string kCatalogDirectoryName{"catalogs"};
-inline const std::string kDataDirectoryName{"data"};
+inline const std::string kCatalogDirectoryName = "catalogs";
+inline const std::string kDataDirectoryName = "data";
+inline const std::string kDefaultLicenseFileName = "heavyai.license";
 }  // namespace shared

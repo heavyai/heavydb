@@ -25,6 +25,7 @@
 #include "LeafHostInfo.h"
 #include "ImportExport/ForeignDataImporter.h"
 #include "MapDRelease.h"
+#include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "Shared/Compressor.h"
 #include "Shared/SysDefinitions.h"
@@ -1089,7 +1090,7 @@ void CommandLineOptions::validate() {
     }
   }
   if (license_path.length() == 0) {
-    license_path = base_path + "/heavyai.license";
+    license_path = base_path + "/" + shared::kDefaultLicenseFileName;
   }
 
   // add all parameters to be displayed on startup
@@ -1300,6 +1301,9 @@ boost::optional<int> CommandLineOptions::parse_command_line(
              "Please remove use of this option, as it may be disabled in the future."
           << std::endl;
     }
+
+    // Execute rebrand migration before accessing any system files.
+    migrations::MigrationMgr::executeRebrandMigration(base_path);
 
     if (!vm["enable-runtime-udf"].defaulted()) {
       if (!vm["enable-runtime-udfs"].defaulted()) {

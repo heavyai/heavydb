@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include "TestHelpers.h"
+#include <filesystem>
+#include <fstream>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -26,6 +27,7 @@
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
+#include "TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -384,9 +386,172 @@ TEST_F(DateInDaysMigrationTest, RetryAlreadyMigrated) {
   ASSERT_EQ(optimized_metadata->chunkStats.has_nulls, false);
 }
 
+class RebrandMigrationTest : public ::testing::Test {
+ public:
+  static void setTestDir(const std::filesystem::path& test_dir) { test_dir_ = test_dir; }
+
+ protected:
+  void SetUp() override {
+    std::filesystem::remove_all(test_dir_);
+    std::filesystem::create_directory(test_dir_);
+  }
+
+  void TearDown() override {
+    if (std::filesystem::exists(test_dir_)) {
+      std::filesystem::remove_all(test_dir_);
+    }
+  }
+
+  void createLegacySystemFiles(bool create_optional_files) {
+    for (const auto& dir_name : required_legacy_dirs_) {
+      std::filesystem::create_directory(test_dir_ / dir_name);
+    }
+    createFile(test_dir_ / "mapd_catalogs" / "omnisci_system_catalog");
+    if (create_optional_files) {
+      for (const auto& dir_name : optional_legacy_dirs_) {
+        std::filesystem::create_directory(test_dir_ / dir_name);
+      }
+      createFile(test_dir_ / "omnisci.license");
+      createFile(test_dir_ / "omnisci_server_pid.lck");
+      createFile(test_dir_ / "mapd_server_pid.lck");
+      createFile(test_dir_ / "omnisci_key_store" / "omnisci.pem");
+    }
+  }
+
+  void createNewSystemFiles(bool create_optional_files) {
+    for (const auto& dir_name : required_new_dirs_) {
+      std::filesystem::create_directory(test_dir_ / dir_name);
+    }
+    createFile(test_dir_ / shared::kCatalogDirectoryName / shared::kSystemCatalogName);
+    if (create_optional_files) {
+      for (const auto& dir_name : optional_new_dirs_) {
+        std::filesystem::create_directory(test_dir_ / dir_name);
+      }
+      createFile(test_dir_ / shared::kDefaultLicenseFileName);
+      createFile(test_dir_ / shared::kDefaultKeyStoreDirName /
+                 shared::kDefaultKeyFileName);
+    }
+  }
+
+  static void createFile(const std::filesystem::path& file_path) {
+    std::ofstream fstream(file_path);
+    fstream.close();
+  }
+
+  void assertExpectedRequiredFiles() {
+    for (const auto& dir_name : required_new_dirs_) {
+      assertDirectory(test_dir_ / dir_name);
+    }
+
+    for (const auto& dir_name : required_legacy_dirs_) {
+      assertSymlink(test_dir_ / dir_name);
+    }
+
+    assertFile(test_dir_ / shared::kCatalogDirectoryName / shared::kSystemCatalogName);
+    assertSymlink(test_dir_ / "mapd_catalogs" / "omnisci_system_catalog");
+  }
+
+  void assertExpectedOptionalFiles() {
+    for (const auto& dir_name : optional_new_dirs_) {
+      assertDirectory(test_dir_ / dir_name);
+    }
+
+    for (const auto& dir_name : optional_legacy_dirs_) {
+      constexpr auto legacy_disk_cache_dir{"omnisci_disk_cache"};
+      if (dir_name == legacy_disk_cache_dir) {
+        ASSERT_FALSE(std::filesystem::exists(test_dir_ / legacy_disk_cache_dir));
+      } else {
+        assertSymlink(test_dir_ / dir_name);
+      }
+    }
+
+    assertFile(test_dir_ / shared::kDefaultLicenseFileName);
+    assertSymlink(test_dir_ / "omnisci.license");
+    assertFile(test_dir_ / shared::kDefaultKeyStoreDirName / shared::kDefaultKeyFileName);
+    assertSymlink(test_dir_ / "omnisci_key_store" / "omnisci.pem");
+
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / "omnisci_server_pid.lck"));
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / "mapd_server_pid.lck"));
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / shared::kDefaultLogDirName /
+                                         "omnisci_server.FATAL"));
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / shared::kDefaultLogDirName /
+                                         "omnisci_server.ERROR"));
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / shared::kDefaultLogDirName /
+                                         "omnisci_server.WARNING"));
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / shared::kDefaultLogDirName /
+                                         "omnisci_server.INFO"));
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / shared::kDefaultLogDirName /
+                                         "omnisci_web_server.ALL"));
+    ASSERT_FALSE(std::filesystem::exists(test_dir_ / shared::kDefaultLogDirName /
+                                         "omnisci_web_server.ACCESS"));
+  }
+
+  void assertDirectory(const std::filesystem::path& path) {
+    ASSERT_TRUE(std::filesystem::exists(path)) << path;
+    ASSERT_TRUE(std::filesystem::is_directory(path)) << path;
+  }
+
+  void assertFile(const std::filesystem::path& path) {
+    ASSERT_TRUE(std::filesystem::exists(path)) << path;
+    ASSERT_TRUE(std::filesystem::is_regular_file(path)) << path;
+  }
+
+  void assertSymlink(const std::filesystem::path& path) {
+    ASSERT_TRUE(std::filesystem::exists(path)) << path;
+    ASSERT_TRUE(std::filesystem::is_symlink(path)) << path;
+  }
+
+  static inline std::filesystem::path test_dir_;
+  static inline const std::array<std::string, 3> required_legacy_dirs_{"mapd_data",
+                                                                       "mapd_log",
+                                                                       "mapd_catalogs"};
+  static inline const std::array<std::string, 3> required_new_dirs_{
+      shared::kDataDirectoryName,
+      shared::kDefaultLogDirName,
+      shared::kCatalogDirectoryName};
+  static inline const std::array<std::string, 4> optional_legacy_dirs_{
+      "mapd_export",
+      "mapd_import",
+      "omnisci_disk_cache",
+      "omnisci_key_store"};
+  static inline const std::array<std::string, 3> optional_new_dirs_{
+      shared::kDefaultExportDirName,
+      shared::kDefaultImportDirName,
+      shared::kDefaultKeyStoreDirName};
+};
+
+TEST_F(RebrandMigrationTest, LegacyFiles) {
+  createLegacySystemFiles(true);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  assertExpectedRequiredFiles();
+  assertExpectedOptionalFiles();
+}
+
+TEST_F(RebrandMigrationTest, OptionalLegacyFilesMissing) {
+  createLegacySystemFiles(false);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  assertExpectedRequiredFiles();
+}
+
+TEST_F(RebrandMigrationTest, NewFiles) {
+  createNewSystemFiles(true);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  assertExpectedRequiredFiles();
+  assertExpectedOptionalFiles();
+}
+
+TEST_F(RebrandMigrationTest, OptionalNewFilesMissing) {
+  createNewSystemFiles(false);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  assertExpectedRequiredFiles();
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+
+  RebrandMigrationTest::setTestDir(std::filesystem::canonical(argv[0]).parent_path() /
+                                   "migration_test");
 
   // Disable automatic metadata update in order to ensure
   // that metadata is not automatically updated for other

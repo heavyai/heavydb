@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <exception>
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -25,6 +26,7 @@
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/sqltypes.h"
 
 #include "MapDRelease.h"
@@ -146,4 +148,129 @@ void MigrationMgr::migrateDateInDaysMetadata(
   LOG(INFO) << "Successfully migrated all date in days column metadata.";
 }
 
+namespace {
+bool rename_and_symlink_path(const std::filesystem::path& old_path,
+                             const std::filesystem::path& new_path) {
+  bool file_updated{false};
+  if (std::filesystem::exists(old_path)) {
+    // Skip if we have already created a symlink for the old path.
+    if (std::filesystem::is_symlink(old_path)) {
+      CHECK_EQ(std::filesystem::read_symlink(old_path), new_path.filename())
+          << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
+          << ". Symlink does not reference file: " << new_path.filename();
+      CHECK(std::filesystem::exists(new_path))
+          << "Rebrand migration: Encountered symlink at legacy path: " << old_path
+          << " but no corresponding file at new path: " << new_path;
+    } else {
+      CHECK(!std::filesystem::exists(new_path))
+          << "Rebrand migration: Encountered existing non-symlink files at the legacy "
+             "path: "
+          << old_path << " and new path: " << new_path;
+      std::filesystem::rename(old_path, new_path);
+      std::cout << "Rebrand migration: Renamed " << old_path << " to " << new_path
+                << std::endl;
+      file_updated = true;
+    }
+  }
+
+  if (std::filesystem::exists(old_path)) {
+    CHECK(std::filesystem::is_symlink(old_path))
+        << "Rebrand migration: An unexpected error occurred. A symlink should have been "
+           "created at "
+        << old_path;
+    CHECK_EQ(std::filesystem::read_symlink(old_path), new_path.filename())
+        << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
+        << ". Symlink does not reference file: " << new_path.filename();
+  } else if (std::filesystem::exists(new_path)) {
+    std::filesystem::create_symlink(new_path.filename(), old_path);
+    std::cout << "Rebrand migration: Added symlink from " << old_path << " to "
+              << new_path.filename() << std::endl;
+    file_updated = true;
+  }
+  return file_updated;
+}
+
+bool rename_and_symlink_file(const std::filesystem::path& base_path,
+                             const std::string& dir_name,
+                             const std::string& old_file_name,
+                             const std::string& new_file_name) {
+  auto old_path = std::filesystem::canonical(base_path);
+  auto new_path = std::filesystem::canonical(base_path);
+  if (!dir_name.empty()) {
+    old_path /= dir_name;
+    new_path /= dir_name;
+  }
+  CHECK(!old_file_name.empty());
+  old_path /= old_file_name;
+
+  CHECK(!new_file_name.empty());
+  new_path /= new_file_name;
+
+  return rename_and_symlink_path(old_path, new_path);
+}
+}  // namespace
+
+void MigrationMgr::executeRebrandMigration(const std::string& base_path) {
+  bool migration_occurred{false};
+
+  // clang-format off
+  const std::map<std::string, std::string> old_to_new_dir_names {
+    {"mapd_catalogs", shared::kCatalogDirectoryName},
+    {"mapd_data", shared::kDataDirectoryName},
+    {"mapd_log", shared::kDefaultLogDirName},
+    {"mapd_export", shared::kDefaultExportDirName},
+    {"mapd_import", shared::kDefaultImportDirName},
+    {"omnisci_key_store", shared::kDefaultKeyStoreDirName}
+  };
+  // clang-format on
+
+  const auto storage_base_path = std::filesystem::canonical(base_path);
+  // Rename legacy directories (if they exist), and create symlinks from legacy directory
+  // names to the new names (if they don't already exist).
+  for (const auto& [old_dir_name, new_dir_name] : old_to_new_dir_names) {
+    auto old_path = storage_base_path / old_dir_name;
+    auto new_path = storage_base_path / new_dir_name;
+    if (rename_and_symlink_path(old_path, new_path)) {
+      migration_occurred = true;
+    }
+  }
+
+  // Rename legacy files and create symlinks to them.
+  const auto license_updated = rename_and_symlink_file(
+      storage_base_path, "", "omnisci.license", shared::kDefaultLicenseFileName);
+  const auto key_updated = rename_and_symlink_file(storage_base_path,
+                                                   shared::kDefaultKeyStoreDirName,
+                                                   "omnisci.pem",
+                                                   shared::kDefaultKeyFileName);
+  const auto sys_catalog_updated = rename_and_symlink_file(storage_base_path,
+                                                           shared::kCatalogDirectoryName,
+                                                           "omnisci_system_catalog",
+                                                           shared::kSystemCatalogName);
+  if (license_updated || key_updated || sys_catalog_updated) {
+    migration_occurred = true;
+  }
+
+  // Delete the disk cache directory and legacy files that will no longer be used.
+  const std::array<std::filesystem::path, 9> files_to_delete{
+      storage_base_path / "omnisci_disk_cache",
+      storage_base_path / "omnisci_server_pid.lck",
+      storage_base_path / "mapd_server_pid.lck",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.FATAL",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.ERROR",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.WARNING",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_server.INFO",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_web_server.ALL",
+      storage_base_path / shared::kDefaultLogDirName / "omnisci_web_server.ACCESS"};
+
+  for (const auto& file_path : files_to_delete) {
+    if (std::filesystem::exists(file_path)) {
+      std::filesystem::remove_all(file_path);
+      std::cout << "Rebrand migration: Deleted file " << file_path << std::endl;
+      migration_occurred = true;
+    }
+  }
+  if (migration_occurred) {
+    std::cout << "Rebrand migration completed" << std::endl;
+  }
+}
 }  // namespace migrations

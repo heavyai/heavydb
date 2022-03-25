@@ -33,6 +33,7 @@
 #include <system_error>
 
 #include "DataMgr/FileMgr/FileInfo.h"
+#include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
@@ -251,7 +252,8 @@ void adjust_altered_table_files(const int32_t table_epoch,
   ThreadController_NS::SimpleThreadController<> thread_controller(cpu_threads());
   for (boost::filesystem::recursive_directory_iterator fit(base_path); fit != end_it;
        ++fit) {
-    if (boost::filesystem::is_regular_file(fit->status())) {
+    if (!boost::filesystem::is_symlink(fit->path()) &&
+        boost::filesystem::is_regular_file(fit->status())) {
       thread_controller.startThread(
           rewrite_column_ids_in_page_headers, fit->path(), column_ids_map, table_epoch);
       thread_controller.checkThreadsStatus();
@@ -260,16 +262,35 @@ void adjust_altered_table_files(const int32_t table_epoch,
   thread_controller.finish();
 }
 
-void rename_legacy_data_files(const std::string& table_data_dir) {
-  boost::filesystem::directory_iterator end_it;
-  for (boost::filesystem::directory_iterator it(table_data_dir); it != end_it; it++) {
-    auto constexpr old_data_extension{".mapd"};
-    if (boost::filesystem::is_regular_file(it->status()) &&
-        it->path().extension().string() == old_data_extension) {
-      auto new_path = it->path();
-      new_path.replace_extension(DATA_FILE_EXT);
-      boost::filesystem::rename(it->path(), new_path);
+void delete_old_symlinks(const std::string& table_data_dir) {
+  std::vector<boost::filesystem::path> symlinks;
+  for (boost::filesystem::directory_iterator it(table_data_dir), end_it; it != end_it;
+       it++) {
+    if (boost::filesystem::is_symlink(it->path())) {
+      symlinks.emplace_back(it->path());
     }
+  }
+  for (const auto& symlink : symlinks) {
+    boost::filesystem::remove_all(symlink);
+  }
+}
+
+void add_data_file_symlinks(const std::string& table_data_dir) {
+  std::map<boost::filesystem::path, boost::filesystem::path> old_to_new_paths;
+  for (boost::filesystem::directory_iterator it(table_data_dir), end_it; it != end_it;
+       it++) {
+    const auto path = boost::filesystem::canonical(it->path());
+    if (path.extension().string() == DATA_FILE_EXT) {
+      auto old_path = path;
+      old_path.replace_extension(File_Namespace::kLegacyDataFileExtension);
+      // Add a symlink to data file, if one does not exist.
+      if (!boost::filesystem::exists(old_path)) {
+        old_to_new_paths[old_path] = path;
+      }
+    }
+  }
+  for (const auto& [old_path, new_path] : old_to_new_paths) {
+    boost::filesystem::create_symlink(new_path.filename(), old_path);
   }
 }
 
@@ -291,7 +312,12 @@ void rename_table_directories(const File_Namespace::GlobalFileMgr* global_file_m
           throw std::runtime_error("Failed to rename file " + file_path + " to " +
                                    target_path + ": " + std::strerror(errno));
         }
-        rename_legacy_data_files(target_path);
+        // Delete any old/invalid symlinks contained in table dump.
+        delete_old_symlinks(target_path);
+        File_Namespace::FileMgr::renameAndSymlinkLegacyFiles(target_path);
+        // For post-rebrand table dumps, symlinks need to be added here, since file mgr
+        // migration would already have been executed for the dumped table.
+        add_data_file_symlinks(target_path);
       }
     }
   }

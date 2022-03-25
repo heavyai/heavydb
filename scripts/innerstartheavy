@@ -82,9 +82,16 @@ echo "Backend HTTP: localhost:${MAPD_HTTP_PORT}"
 echo "Frontend Web: localhost:${MAPD_WEB_PORT}"
 echo "Calcite TCP:  localhost:${MAPD_CALCITE_PORT}"
 
-if [ ! -d $MAPD_DATA/data ]; then
+if [ ! -d $MAPD_DATA ]; then
     mkdir -p $MAPD_DATA
     ./bin/initheavy -f --data $MAPD_DATA
+fi
+
+# Rename the log directory, if it exists, so that the web server can start out writing to the correct directory.
+if [[ -d $MAPD_DATA/mapd_log && ! -L $MAPD_DATA/mapd_log ]]; then
+  mv $MAPD_DATA/mapd_log $MAPD_DATA/log
+  ln -sfn log $(readlink -f $MAPD_DATA)/mapd_log
+  echo "Rebrand migration: Added symlink from $(readlink -f $MAPD_DATA)/mapd_log to log"
 fi
 
 VMAJOR=${BASH_VERSINFO[0]}
