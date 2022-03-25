@@ -76,30 +76,23 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
 ParquetDataWrapper::ParquetDataWrapper()
     : do_metadata_stats_validation_(true), db_id_(-1), foreign_table_(nullptr) {}
 
-ParquetDataWrapper::ParquetDataWrapper(const int db_id,
-                                       const ForeignTable* foreign_table,
-                                       const UserMapping* user_mapping,
-                                       const bool do_metadata_stats_validation)
-    : do_metadata_stats_validation_(do_metadata_stats_validation)
-    , db_id_(db_id)
+ParquetDataWrapper::ParquetDataWrapper(const ForeignTable* foreign_table,
+                                       std::shared_ptr<arrow::fs::FileSystem> file_system)
+    : do_metadata_stats_validation_(false)
+    , db_id_(-1)
     , foreign_table_(foreign_table)
     , last_fragment_index_(0)
     , last_fragment_row_count_(0)
     , total_row_count_(0)
     , last_row_group_(0)
     , is_restored_(false)
-    , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
-    , file_reader_cache_(std::make_unique<FileReaderMap>()) {
-  auto& server_options = foreign_table->foreign_server->options;
-  if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
-    file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
-  } else {
-    UNREACHABLE();
-  }
-}
+    , file_system_(file_system)
+    , file_reader_cache_(std::make_unique<FileReaderMap>()) {}
 
-ParquetDataWrapper::ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table)
-    : do_metadata_stats_validation_(true)
+ParquetDataWrapper::ParquetDataWrapper(const int db_id,
+                                       const ForeignTable* foreign_table,
+                                       const bool do_metadata_stats_validation)
+    : do_metadata_stats_validation_(do_metadata_stats_validation)
     , db_id_(db_id)
     , foreign_table_(foreign_table)
     , last_fragment_index_(0)
@@ -453,8 +446,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
                                          rejected_row_indices.get());
 
   if (delete_buffer) {
-    // all modifying operations on `delete_buffer` must be synchronized as it is a shared
-    // buffer
+    // all modifying operations on `delete_buffer` must be synchronized as it is a
+    // shared buffer
     std::unique_lock<std::mutex> delete_buffer_lock(delete_buffer_mutex_);
 
     CHECK(!chunks.empty());
@@ -468,8 +461,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       delete_buffer->append(data.data(), remaining_rows);
     }
 
-    // compute a logical OR with current `delete_buffer` contents and this chunks rejected
-    // indices
+    // compute a logical OR with current `delete_buffer` contents and this chunks
+    // rejected indices
     CHECK(rejected_row_indices);
     auto delete_buffer_data = delete_buffer->getMemoryPtr();
     for (const auto& rejected_index : *rejected_row_indices) {
@@ -611,6 +604,12 @@ void ParquetDataWrapper::restoreDataWrapperInternals(
 
 bool ParquetDataWrapper::isRestored() const {
   return is_restored_;
+}
+
+DataPreview ParquetDataWrapper::getDataPreview(const size_t num_rows) {
+  LazyParquetChunkLoader chunk_loader(
+      file_system_, file_reader_cache_.get(), &render_group_analyzer_map_);
+  return chunk_loader.previewFiles(getAllFilePaths(), num_rows);
 }
 
 // declared in three derived classes to avoid

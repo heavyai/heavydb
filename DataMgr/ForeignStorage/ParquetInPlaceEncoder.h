@@ -19,6 +19,7 @@
 #include "ParquetEncoder.h"
 #include "ParquetMetadataValidator.h"
 #include "ParquetShared.h"
+#include "TypedParquetDetectBuffer.h"
 
 #include <parquet/schema.h>
 #include <parquet/types.h>
@@ -119,18 +120,63 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
             buffer,
             sizeof(V),
             parquet::GetTypeByteSize(parquet_column_descriptor->physical_type()))
-      , current_batch_offset_(0) {}
+      , current_batch_offset_(0) {
+    if (auto detect_buffer = dynamic_cast<TypedParquetDetectBuffer*>(buffer_)) {
+      setDetectBufferConverterType();
+    }
+  }
 
   TypedParquetInPlaceEncoder(Data_Namespace::AbstractBuffer* buffer,
                              const size_t omnisci_data_type_byte_size,
                              const size_t parquet_data_type_byte_size)
       : ParquetInPlaceEncoder(buffer, sizeof(V), parquet_data_type_byte_size)
-      , current_batch_offset_(0) {}
+      , current_batch_offset_(0) {
+    if (auto detect_buffer = dynamic_cast<TypedParquetDetectBuffer*>(buffer_)) {
+      setDetectBufferConverterType();
+    }
+  }
 
   void validate(const int8_t* parquet_data,
                 const int64_t j,
                 const SQLTypeInfo& column_type) const override {
     // no-op by default
+  }
+
+  std::string integralTypeToString(const V& element) const {
+    Datum d;
+    d.bigintval = element;
+    return DatumToString(d, ParquetEncoder::column_type_);
+  }
+
+  bool isIntegralType(const SQLTypeInfo& type) const {
+    return type.is_timestamp() || type.is_time() || type.is_date() || type.is_boolean() ||
+           type.is_decimal() || type.is_integer();
+  }
+
+  std::string elementToString(const V& element) const {
+    // handle specialized cases that require specific formating when converting to string
+    auto null_value = get_null_value<NullType>();
+    if (element == null_value) {
+      return "NULL";
+    }
+    if (isIntegralType(ParquetEncoder::column_type_)) {
+      return integralTypeToString(element);
+    }
+    return std::to_string(element);
+  }
+
+  std::string encodedDataToString(const int8_t* bytes) const override {
+    const auto& element = reinterpret_cast<const V*>(bytes)[0];
+    return elementToString(element);
+  }
+
+  void setDetectBufferConverterType() {
+    auto detect_buffer = dynamic_cast<TypedParquetDetectBuffer*>(buffer_);
+    CHECK(detect_buffer);
+    std::function<std::string(const V&)> element_to_string = [this](const V& element) {
+      return this->elementToString(element);
+    };
+    detect_buffer->setConverterType<V>(element_to_string);
   }
 
   void validateUsingEncodersColumnType(const int8_t* parquet_data,

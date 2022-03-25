@@ -36,6 +36,48 @@ bool is_s3_uri(const std::string& file_path) {
   const std::string s3_prefix = "s3://";
   return file_path.find(s3_prefix) != std::string::npos;
 }
+
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const int db_id,
+                         const TableDescriptor* table,
+                         const int32_t user_id) {
+  auto server = foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
+      db_id, user_id, copy_from_source, copy_params);
+
+  CHECK(server);
+  server->validate();
+
+  auto user_mapping =
+      foreign_storage::ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
+          db_id, user_id, copy_from_source, copy_params, server.get());
+
+  if (user_mapping) {
+    user_mapping->validate(server.get());
+  }
+
+  auto foreign_table =
+      foreign_storage::ForeignDataWrapperFactory::createForeignTableProxy(
+          db_id, table, copy_from_source, copy_params, server.get());
+
+  CHECK(foreign_table);
+  foreign_table->validateOptionValues();
+
+  return {std::move(server), std::move(user_mapping), std::move(foreign_table)};
+}
+
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>,
+           std::unique_ptr<foreign_storage::UserMapping>,
+           std::unique_ptr<foreign_storage::ForeignTable>>
+create_proxy_fsi_objects(const std::string& copy_from_source,
+                         const import_export::CopyParams& copy_params,
+                         const TableDescriptor* table) {
+  return create_proxy_fsi_objects(copy_from_source, copy_params, -1, table, -1);
+}
+
 }  // namespace foreign_storage
 
 namespace {
@@ -90,7 +132,7 @@ std::unique_ptr<ForeignDataWrapper> ForeignDataWrapperFactory::createForGeneralI
 #ifdef ENABLE_IMPORT_PARQUET
   else if (data_wrapper_type == DataWrapperType::PARQUET) {
     return std::make_unique<ParquetDataWrapper>(
-        db_id, foreign_table, user_mapping, /*do_metadata_stats_validation=*/false);
+        db_id, foreign_table, /*do_metadata_stats_validation=*/false);
   }
 #endif
 

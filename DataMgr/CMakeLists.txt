@@ -34,6 +34,7 @@ set(datamgr_source_files
     ForeignStorage/FileRegions.cpp
     ForeignStorage/TextFileBufferParser.cpp
     ForeignStorage/CsvFileBufferParser.cpp
+    ForeignStorage/DataPreview.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
@@ -76,6 +77,7 @@ if(ENABLE_IMPORT_PARQUET)
   list(APPEND datamgr_source_files ForeignStorage/ParquetShared.cpp)
   list(APPEND datamgr_source_files ForeignStorage/LazyParquetChunkLoader.cpp)
   list(APPEND datamgr_source_files ForeignStorage/TypedParquetStorageBuffer.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/TypedParquetDetectBuffer.cpp)
   list(APPEND datamgr_source_files ForeignStorage/ParquetImporter.cpp)
 endif()
 

@@ -4229,6 +4229,7 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         auto& ti = best_types[col_idx];
         col.col_type.precision = ti.get_precision();
         col.col_type.scale = ti.get_scale();
+        col.col_type.comp_param = ti.get_comp_param();
         if (ti.is_geometry()) {
           // set this so encoding_to_thrift does the right thing
           ti.set_compression(copy_params.geo_coords_encoding);
@@ -4239,6 +4240,9 @@ void DBHandler::detect_column_types(TDetectResult& _return,
         }
         col.col_type.type = type_to_thrift(ti);
         col.col_type.encoding = encoding_to_thrift(ti);
+        if (ti.is_array()) {
+          col.col_type.is_array = true;
+        }
         if (copy_params.sanitize_column_names) {
           col.col_name = ImportHelpers::sanitize_name(headers[col_idx]);
         } else {

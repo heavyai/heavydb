@@ -152,15 +152,26 @@ class ParquetArrayEncoder : public ParquetEncoder {
     return rep_level == 0 && has_assembly_started_;
   }
 
-  virtual void appendArrayItem(const int64_t encoded_index) {
-    auto omnisci_data_ptr = resizeArrayDataBytes(1);
-    scalar_encoder_->copy(
-        encode_buffer_.data() + (encoded_index)*omnisci_data_type_byte_size_,
-        omnisci_data_ptr);
+  int8_t* encodedDataAtIndex(const size_t index) {
+    return encode_buffer_.data() + (index)*omnisci_data_type_byte_size_;
+  }
+
+  void updateMetadataForAppendedArrayItem(const int64_t encoded_index) {
     num_elements_in_array_++;
     if (is_error_tracking_enabled_ && !is_valid_item_[encoded_index]) {
       is_invalid_array_ = true;
     }
+  }
+
+  virtual void appendArrayItem(const int64_t encoded_index) {
+    auto omnisci_data_ptr = resizeArrayDataBytes(1);
+    scalar_encoder_->copy(encodedDataAtIndex(encoded_index), omnisci_data_ptr);
+    updateMetadataForAppendedArrayItem(encoded_index);
+  }
+
+  virtual void encodeAllValues(const int8_t* values, const int64_t values_read) {
+    encode_buffer_.resize(values_read * omnisci_data_type_byte_size_);
+    scalar_encoder_->encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
   }
 
  private:
@@ -179,11 +190,6 @@ class ParquetArrayEncoder : public ParquetEncoder {
     } else {
       UNREACHABLE();
     }
-  }
-
-  void encodeAllValues(const int8_t* values, const int64_t values_read) {
-    encode_buffer_.resize(values_read * omnisci_data_type_byte_size_);
-    scalar_encoder_->encodeAndCopyContiguous(values, encode_buffer_.data(), values_read);
   }
 
   void markArrayAsNull() { is_null_array_ = true; }

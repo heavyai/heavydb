@@ -27,10 +27,12 @@
 
 #include "ForeignStorageException.h"
 #include "FsiChunkUtils.h"
+#include "ParquetArrayDetectEncoder.h"
 #include "ParquetArrayImportEncoder.h"
 #include "ParquetDateInDaysFromTimestampEncoder.h"
 #include "ParquetDateInSecondsEncoder.h"
 #include "ParquetDecimalEncoder.h"
+#include "ParquetDetectStringEncoder.h"
 #include "ParquetFixedLengthArrayEncoder.h"
 #include "ParquetFixedLengthEncoder.h"
 #include "ParquetGeospatialEncoder.h"
@@ -43,10 +45,15 @@
 #include "ParquetVariableLengthArrayEncoder.h"
 #include "Shared/misc.h"
 #include "StringDictionary/StringDictionary.h"
+#include "TypedParquetDetectBuffer.h"
 
 namespace foreign_storage {
 
 namespace {
+
+bool within_range(int64_t lower_bound, int64_t upper_bound, int64_t value) {
+  return value >= lower_bound && value <= upper_bound;
+}
 
 bool is_valid_parquet_string(const parquet::ColumnDescriptor* parquet_column) {
   return (parquet_column->logical_type()->is_none() &&
@@ -772,7 +779,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
     const Chunk_NS::Chunk& chunk,
     StringDictionary* string_dictionary,
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
-    bool is_for_import) {
+    bool is_for_import,
+    const bool is_for_detect) {
   auto column_type = omnisci_column->columnType;
   if (!is_valid_parquet_string(parquet_column) ||
       !omnisci_column->columnType.is_string()) {
@@ -786,27 +794,31 @@ std::shared_ptr<ParquetEncoder> create_parquet_string_encoder(
                                                         chunk.getIndexBuf());
     }
   } else if (column_type.get_compression() == kENCODING_DICT) {
-    chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
-    std::unique_ptr<ChunkMetadata>& logical_chunk_metadata = chunk_metadata.back();
-    logical_chunk_metadata->sqlType = omnisci_column->columnType;
-    switch (column_type.get_size()) {
-      case 1:
-        return std::make_shared<ParquetStringEncoder<uint8_t>>(
-            chunk.getBuffer(),
-            string_dictionary,
-            is_for_import ? nullptr : logical_chunk_metadata.get());
-      case 2:
-        return std::make_shared<ParquetStringEncoder<uint16_t>>(
-            chunk.getBuffer(),
-            string_dictionary,
-            is_for_import ? nullptr : logical_chunk_metadata.get());
-      case 4:
-        return std::make_shared<ParquetStringEncoder<int32_t>>(
-            chunk.getBuffer(),
-            string_dictionary,
-            is_for_import ? nullptr : logical_chunk_metadata.get());
-      default:
-        UNREACHABLE();
+    if (!is_for_detect) {  // non-detect use case
+      chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>());
+      std::unique_ptr<ChunkMetadata>& logical_chunk_metadata = chunk_metadata.back();
+      logical_chunk_metadata->sqlType = omnisci_column->columnType;
+      switch (column_type.get_size()) {
+        case 1:
+          return std::make_shared<ParquetStringEncoder<uint8_t>>(
+              chunk.getBuffer(),
+              string_dictionary,
+              is_for_import ? nullptr : logical_chunk_metadata.get());
+        case 2:
+          return std::make_shared<ParquetStringEncoder<uint16_t>>(
+              chunk.getBuffer(),
+              string_dictionary,
+              is_for_import ? nullptr : logical_chunk_metadata.get());
+        case 4:
+          return std::make_shared<ParquetStringEncoder<int32_t>>(
+              chunk.getBuffer(),
+              string_dictionary,
+              is_for_import ? nullptr : logical_chunk_metadata.get());
+        default:
+          UNREACHABLE();
+      }
+    } else {  // detect use-case
+      return std::make_shared<ParquetDetectStringEncoder>(chunk.getBuffer());
     }
   } else {
     UNREACHABLE();
@@ -851,7 +863,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     StringDictionary* string_dictionary,
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
     const bool is_metadata_scan,
-    const bool is_for_import);
+    const bool is_for_import,
+    const bool is_for_detect);
 
 /**
  * @brief Create a Parquet specific encoder for a Parquet to OmniSci mapping.
@@ -893,7 +906,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
     const RenderGroupAnalyzerMap* render_group_analyzer_map,
     const bool is_metadata_scan = false,
-    const bool is_for_import = false) {
+    const bool is_for_import = false,
+    const bool is_for_detect = false) {
   CHECK(!(is_metadata_scan && is_for_import));
   auto buffer = chunks.empty() ? nullptr : chunks.begin()->getBuffer();
   if (auto encoder = create_parquet_geospatial_encoder(omnisci_column,
@@ -911,7 +925,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
                                                   string_dictionary,
                                                   chunk_metadata,
                                                   is_metadata_scan,
-                                                  is_for_import)) {
+                                                  is_for_import,
+                                                  is_for_detect)) {
     return encoder;
   }
   if (auto encoder = create_parquet_decimal_encoder(
@@ -952,7 +967,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_encoder(
           chunks.empty() ? Chunk_NS::Chunk{} : *chunks.begin(),
           string_dictionary,
           chunk_metadata,
-          is_for_import)) {
+          is_for_import,
+          is_for_detect)) {
     return encoder;
   }
   UNREACHABLE();
@@ -1005,7 +1021,8 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
     StringDictionary* string_dictionary,
     std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata,
     const bool is_metadata_scan,
-    const bool is_for_import) {
+    const bool is_for_import,
+    const bool is_for_detect) {
   bool is_valid_parquet_list = is_valid_parquet_list_column(parquet_column);
   if (!is_valid_parquet_list || !omnisci_column->columnType.is_array()) {
     return {};
@@ -1019,22 +1036,28 @@ std::shared_ptr<ParquetEncoder> create_parquet_array_encoder(
                                         chunk_metadata,
                                         nullptr,
                                         is_metadata_scan,
-                                        is_for_import);
+                                        is_for_import,
+                                        is_for_detect);
   CHECK(encoder.get());
   auto scalar_encoder = std::dynamic_pointer_cast<ParquetScalarEncoder>(encoder);
   CHECK(scalar_encoder);
   if (!is_for_import) {
-    if (omnisci_column->columnType.is_fixlen_array()) {
-      encoder = std::make_shared<ParquetFixedLengthArrayEncoder>(
-          is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
-          scalar_encoder,
-          omnisci_column);
-    } else {
-      encoder = std::make_shared<ParquetVariableLengthArrayEncoder>(
-          is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
-          is_metadata_scan ? nullptr : chunks.begin()->getIndexBuf(),
-          scalar_encoder,
-          omnisci_column);
+    if (!is_for_detect) {
+      if (omnisci_column->columnType.is_fixlen_array()) {
+        encoder = std::make_shared<ParquetFixedLengthArrayEncoder>(
+            is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
+            scalar_encoder,
+            omnisci_column);
+      } else {
+        encoder = std::make_shared<ParquetVariableLengthArrayEncoder>(
+            is_metadata_scan ? nullptr : chunks.begin()->getBuffer(),
+            is_metadata_scan ? nullptr : chunks.begin()->getIndexBuf(),
+            scalar_encoder,
+            omnisci_column);
+      }
+    } else {  // is_for_detect
+      encoder = std::make_shared<ParquetArrayDetectEncoder>(
+          chunks.begin()->getBuffer(), scalar_encoder, omnisci_column);
     }
   } else {  // is_for_import
     encoder = std::make_shared<ParquetArrayImportEncoder>(
@@ -1134,6 +1157,30 @@ bool validate_decimal_mapping(const ColumnDescriptor* omnisci_column,
   return false;
 }
 
+SQLTypeInfo suggest_decimal_mapping(const parquet::ColumnDescriptor* parquet_column) {
+  if (auto decimal_logical_column = dynamic_cast<const parquet::DecimalLogicalType*>(
+          parquet_column->logical_type().get())) {
+    auto parquet_precision = decimal_logical_column->precision();
+    auto parquet_scale = decimal_logical_column->scale();
+    if (parquet_precision > 18) {
+      throw ForeignStorageException(
+          "Parquet column \"" + parquet_column->ToString() +
+          "\" has decimal precision of " + std::to_string(parquet_precision) +
+          " which is too high to import, maximum precision supported is 18.");
+    }
+    SQLTypeInfo type;
+    type.set_type(kDECIMAL);
+    type.set_compression(kENCODING_NONE);
+    type.set_precision(parquet_precision);
+    type.set_scale(parquet_scale);
+    type.set_fixed_size();
+    return type;
+  }
+  UNREACHABLE()
+      << " a Parquet column's decimal logical type failed to be read appropriately";
+  return {};
+}
+
 bool validate_floating_point_mapping(const ColumnDescriptor* omnisci_column,
                                      const parquet::ColumnDescriptor* parquet_column) {
   if (!omnisci_column->columnType.is_fp()) {
@@ -1148,6 +1195,21 @@ bool validate_floating_point_mapping(const ColumnDescriptor* omnisci_column,
             omnisci_column->columnType.get_type() == kFLOAT);
   }
   return false;
+}
+
+SQLTypeInfo suggest_floating_point_mapping(
+    const parquet::ColumnDescriptor* parquet_column) {
+  SQLTypeInfo type;
+  if (parquet_column->physical_type() == parquet::Type::FLOAT) {
+    type.set_type(kFLOAT);
+  } else if (parquet_column->physical_type() == parquet::Type::DOUBLE) {
+    type.set_type(kDOUBLE);
+  } else {
+    UNREACHABLE();
+  }
+  type.set_compression(kENCODING_NONE);
+  type.set_fixed_size();
+  return type;
 }
 
 bool validate_integral_mapping(const ColumnDescriptor* omnisci_column,
@@ -1175,6 +1237,51 @@ bool validate_integral_mapping(const ColumnDescriptor* omnisci_column,
             omnisci_column->columnType.get_size() <= 4);
   }
   return false;
+}
+
+SQLTypeInfo suggest_integral_mapping(const parquet::ColumnDescriptor* parquet_column) {
+  SQLTypeInfo type;
+  type.set_compression(kENCODING_NONE);
+  if (auto int_logical_column = dynamic_cast<const parquet::IntLogicalType*>(
+          parquet_column->logical_type().get())) {
+    auto bit_width = int_logical_column->bit_width();
+    if (!int_logical_column->is_signed()) {
+      if (within_range(33, 64, bit_width)) {
+        throw ForeignStorageException(
+            "Unsigned integer column \"" + parquet_column->name() +
+            "\" in Parquet file with 64 bit-width has no supported type for ingestion "
+            "that will not result in data loss");
+      } else if (within_range(17, 32, bit_width)) {
+        type.set_type(kBIGINT);
+      } else if (within_range(9, 16, bit_width)) {
+        type.set_type(kINT);
+      } else if (within_range(0, 8, bit_width)) {
+        type.set_type(kSMALLINT);
+      }
+    } else {
+      if (within_range(33, 64, bit_width)) {
+        type.set_type(kBIGINT);
+      } else if (within_range(17, 32, bit_width)) {
+        type.set_type(kINT);
+      } else if (within_range(9, 16, bit_width)) {
+        type.set_type(kSMALLINT);
+      } else if (within_range(0, 8, bit_width)) {
+        type.set_type(kTINYINT);
+      }
+    }
+    type.set_fixed_size();
+    return type;
+  }
+
+  CHECK(parquet_column->logical_type()->is_none());
+  if (parquet_column->physical_type() == parquet::Type::INT32) {
+    type.set_type(kINT);
+  } else {
+    CHECK(parquet_column->physical_type() == parquet::Type::INT64);
+    type.set_type(kBIGINT);
+  }
+  type.set_fixed_size();
+  return type;
 }
 
 bool is_nanosecond_precision(const ColumnDescriptor* omnisci_column) {
@@ -1213,6 +1320,15 @@ bool validate_none_type_mapping(const ColumnDescriptor* omnisci_column,
   return parquet_column->logical_type()->is_none() && is_none_encoded_mapping;
 }
 
+SQLTypeInfo suggest_boolean_type_mapping(
+    const parquet::ColumnDescriptor* parquet_column) {
+  SQLTypeInfo type;
+  type.set_compression(kENCODING_NONE);
+  type.set_type(kBOOLEAN);
+  type.set_fixed_size();
+  return type;
+}
+
 bool validate_timestamp_mapping(const ColumnDescriptor* omnisci_column,
                                 const parquet::ColumnDescriptor* parquet_column) {
   if (!(omnisci_column->columnType.get_type() == kTIMESTAMP &&
@@ -1248,6 +1364,26 @@ bool validate_timestamp_mapping(const ColumnDescriptor* omnisci_column,
   return false;
 }
 
+SQLTypeInfo suggest_timestamp_mapping(const parquet::ColumnDescriptor* parquet_column) {
+  if (auto timestamp_logical_column = dynamic_cast<const parquet::TimestampLogicalType*>(
+          parquet_column->logical_type().get())) {
+    SQLTypeInfo type;
+    type.set_type(kTIMESTAMP);
+    type.set_compression(kENCODING_NONE);
+    if (is_nanosecond_precision(timestamp_logical_column)) {
+      type.set_precision(9);
+    } else if (is_microsecond_precision(timestamp_logical_column)) {
+      type.set_precision(6);
+    } else if (is_millisecond_precision(timestamp_logical_column)) {
+      type.set_precision(3);
+    }
+    type.set_fixed_size();
+    return type;
+  }
+  UNREACHABLE();
+  return {};
+}
+
 bool validate_time_mapping(const ColumnDescriptor* omnisci_column,
                            const parquet::ColumnDescriptor* parquet_column) {
   if (!(omnisci_column->columnType.get_type() == kTIME &&
@@ -1260,6 +1396,15 @@ bool validate_time_mapping(const ColumnDescriptor* omnisci_column,
     return true;
   }
   return false;
+}
+
+SQLTypeInfo suggest_time_mapping(const parquet::ColumnDescriptor* parquet_column) {
+  CHECK(parquet_column->logical_type()->is_time());
+  SQLTypeInfo type;
+  type.set_type(kTIME);
+  type.set_compression(kENCODING_NONE);
+  type.set_fixed_size();
+  return type;
 }
 
 bool validate_date_mapping(const ColumnDescriptor* omnisci_column,
@@ -1279,12 +1424,31 @@ bool validate_date_mapping(const ColumnDescriptor* omnisci_column,
              ->is_timestamp();  // to support TIMESTAMP -> DATE coercion
 }
 
+SQLTypeInfo suggest_date_mapping(const parquet::ColumnDescriptor* parquet_column) {
+  CHECK(parquet_column->logical_type()->is_date());
+  SQLTypeInfo type;
+  type.set_type(kDATE);
+  type.set_compression(kENCODING_NONE);
+  type.set_fixed_size();
+  return type;
+}
+
 bool validate_string_mapping(const ColumnDescriptor* omnisci_column,
                              const parquet::ColumnDescriptor* parquet_column) {
   return is_valid_parquet_string(parquet_column) &&
          omnisci_column->columnType.is_string() &&
          (omnisci_column->columnType.get_compression() == kENCODING_NONE ||
           omnisci_column->columnType.get_compression() == kENCODING_DICT);
+}
+
+SQLTypeInfo suggest_string_mapping(const parquet::ColumnDescriptor* parquet_column) {
+  CHECK(is_valid_parquet_string(parquet_column));
+  SQLTypeInfo type;
+  type.set_type(kTEXT);
+  type.set_compression(kENCODING_DICT);
+  type.set_comp_param(32);
+  type.set_fixed_size();
+  return type;
 }
 
 bool validate_array_mapping(const ColumnDescriptor* omnisci_column,
@@ -1359,6 +1523,50 @@ void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
                              "\" to HeavyDB type \"" + omnisci_type +
                              "\" is not allowed. Please use an appropriate column type."};
   }
+}
+
+SQLTypeInfo suggest_column_scalar_type(const parquet::ColumnDescriptor* parquet_column) {
+  // decimal case
+  if (parquet_column->logical_type()->is_decimal()) {
+    return suggest_decimal_mapping(parquet_column);
+  }
+  // float case
+  if (parquet_column->logical_type()->is_none() &&
+      (parquet_column->physical_type() == parquet::Type::FLOAT ||
+       parquet_column->physical_type() == parquet::Type::DOUBLE)) {
+    return suggest_floating_point_mapping(parquet_column);
+  }
+  // integral case
+  if ((parquet_column->logical_type()->is_none() &&
+       (parquet_column->physical_type() == parquet::Type::INT32 ||
+        parquet_column->physical_type() == parquet::Type::INT64)) ||
+      parquet_column->logical_type()->is_int()) {
+    return suggest_integral_mapping(parquet_column);
+  }
+  // boolean case
+  if (parquet_column->logical_type()->is_none() &&
+      parquet_column->physical_type() == parquet::Type::BOOLEAN) {
+    return suggest_boolean_type_mapping(parquet_column);
+  }
+  // timestamp case
+  if (parquet_column->logical_type()->is_timestamp()) {
+    return suggest_timestamp_mapping(parquet_column);
+  }
+  // time case
+  if (parquet_column->logical_type()->is_time()) {
+    return suggest_time_mapping(parquet_column);
+  }
+  // date case
+  if (parquet_column->logical_type()->is_date()) {
+    return suggest_date_mapping(parquet_column);
+  }
+  // string case
+  if (is_valid_parquet_string(parquet_column)) {
+    return suggest_string_mapping(parquet_column);
+  }
+
+  throw ForeignStorageException("Unsupported data type detected for column: " +
+                                parquet_column->ToString());
 }
 
 void validate_number_of_columns(
@@ -1576,7 +1784,9 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
     const ColumnDescriptor* column_descriptor,
     std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
-    RejectedRowIndices* rejected_row_indices) {
+    RejectedRowIndices* rejected_row_indices,
+    const bool is_for_detect,
+    const std::optional<int64_t> max_levels_read) {
   auto timer = DEBUG_TIMER(__func__);
   std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
   // `def_levels` and `rep_levels` below are used to store the read definition
@@ -1598,13 +1808,18 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                         chunks,
                                         string_dictionary,
                                         chunk_metadata,
-                                        render_group_analyzer_map_);
+                                        render_group_analyzer_map_,
+                                        false,
+                                        false,
+                                        is_for_detect);
   CHECK(encoder.get());
 
   if (rejected_row_indices) {  // error tracking is enabled
     encoder->initializeErrorTracking(column_descriptor->columnType);
   }
 
+  bool early_exit = false;
+  int64_t total_levels_read = 0;
   for (const auto& row_group_interval : row_group_intervals) {
     const auto& file_path = row_group_interval.file_path;
     auto file_reader = file_reader_cache_->getOrInsert(file_path, file_system_);
@@ -1662,6 +1877,14 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
                                 levels_read,
                                 values.data());
           }
+
+          if (max_levels_read.has_value()) {
+            total_levels_read += levels_read;
+            if (total_levels_read >= max_levels_read.value()) {
+              early_exit = true;
+              break;
+            }
+          }
         }
         if (auto array_encoder = dynamic_cast<ParquetArrayEncoder*>(encoder.get())) {
           array_encoder->finalizeRowGroup();
@@ -1672,6 +1895,12 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
             ", Parquet column: '" + col_reader->descr()->path()->ToDotString() +
             "', Parquet file: '" + file_path + "'");
       }
+      if (max_levels_read.has_value() && early_exit) {
+        break;
+      }
+    }
+    if (max_levels_read.has_value() && early_exit) {
+      break;
     }
   }
 
@@ -1679,6 +1908,18 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
     *rejected_row_indices = encoder->getRejectedRowIndices();
   }
   return chunk_metadata;
+}
+
+SQLTypeInfo LazyParquetChunkLoader::suggestColumnMapping(
+    const parquet::ColumnDescriptor* parquet_column) {
+  auto type = suggest_column_scalar_type(parquet_column);
+
+  // array case
+  if (is_valid_parquet_list_column(parquet_column)) {
+    return type.get_array_type();
+  }
+
+  return type;
 }
 
 bool LazyParquetChunkLoader::isColumnMappingSupported(
@@ -1975,6 +2216,134 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
 
   return {group_reader->metadata()->num_rows() - invalid_indices.size(),
           invalid_indices.size()};
+}
+
+struct PreviewBuffers {
+  std::list<std::unique_ptr<TypedParquetDetectBuffer>> detect_buffers;
+  std::list<Chunk_NS::Chunk> column_chunks;
+};
+
+DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>& files,
+                                                 const size_t max_num_rows) {
+  CHECK(!files.empty());
+
+  auto first_file = *files.begin();
+  auto first_file_reader = file_reader_cache_->getOrInsert(*files.begin(), file_system_);
+
+  for (auto current_file_it = ++files.begin(); current_file_it != files.end();
+       ++current_file_it) {
+    auto file_reader = file_reader_cache_->getOrInsert(*current_file_it, file_system_);
+    validate_equal_schema(first_file_reader, file_reader, first_file, *current_file_it);
+  }
+
+  auto first_file_metadata = first_file_reader->parquet_reader()->metadata();
+  auto num_columns = first_file_metadata->num_columns();
+
+  DataPreview data_preview;
+  data_preview.num_rejected_rows = 0;
+
+  auto current_file_it = files.begin();
+  while (data_preview.sample_rows.size() < max_num_rows &&
+         current_file_it != files.end()) {
+    size_t total_num_rows = data_preview.sample_rows.size();
+    size_t max_num_rows_to_append = max_num_rows - data_preview.sample_rows.size();
+
+    // gather enough rows in row groups to produce required samples
+    std::vector<RowGroupInterval> row_group_intervals;
+    for (; current_file_it != files.end(); ++current_file_it) {
+      const auto& file_path = *current_file_it;
+      auto file_reader = file_reader_cache_->getOrInsert(file_path, file_system_);
+      auto file_metadata = file_reader->parquet_reader()->metadata();
+      auto num_row_groups = file_metadata->num_row_groups();
+      int end_row_group = 0;
+      for (int i = 0; i < num_row_groups && total_num_rows < max_num_rows; ++i) {
+        const size_t next_num_rows = file_metadata->RowGroup(i)->num_rows();
+        total_num_rows += next_num_rows;
+        end_row_group = i;
+      }
+      row_group_intervals.push_back(RowGroupInterval{file_path, 0, end_row_group});
+    }
+
+    auto rejected_row_indices = std::make_unique<RejectedRowIndices>();
+    PreviewBuffers preview_buffers;
+    for (int i = 0; i < num_columns; ++i) {
+      auto col = first_file_metadata->schema()->Column(i);
+      ColumnDescriptor cd;
+      auto sql_type = LazyParquetChunkLoader::suggestColumnMapping(col);
+      cd.columnType = sql_type;
+      cd.columnName =
+          sql_type.is_array() ? col->path()->ToDotVector()[0] + "_array" : col->name();
+      cd.isSystemCol = false;
+      cd.isVirtualCol = false;
+      cd.tableId = -1;
+      cd.columnId = i + 1;
+      data_preview.column_names.emplace_back(cd.columnName);
+      data_preview.column_types.emplace_back(sql_type);
+      preview_buffers.detect_buffers.push_back(
+          std::make_unique<TypedParquetDetectBuffer>());
+      auto& detect_buffer = preview_buffers.detect_buffers.back();
+      auto chunk = preview_buffers.column_chunks.emplace_back(&cd);
+      chunk.setBuffer(detect_buffer.get());
+      auto chunk_list = std::list<Chunk_NS::Chunk>{chunk};
+      appendRowGroups(row_group_intervals,
+                      i,
+                      &cd,
+                      chunk_list,
+                      nullptr,
+                      rejected_row_indices.get(),
+                      true,
+                      max_num_rows_to_append);
+    }
+
+    size_t num_rows = 0;
+    auto buffers_it = preview_buffers.detect_buffers.begin();
+    for (int i = 0; i < num_columns; ++i, ++buffers_it) {
+      CHECK(buffers_it != preview_buffers.detect_buffers.end());
+      auto& strings = buffers_it->get()->getStrings();
+      if (i == 0) {
+        num_rows = strings.size();
+      } else {
+        CHECK_EQ(num_rows, strings.size());
+      }
+    }
+
+    size_t num_rejected_rows = rejected_row_indices->size();
+    data_preview.num_rejected_rows += num_rejected_rows;
+    CHECK_GE(num_rows, num_rejected_rows);
+    auto row_count = num_rows - num_rejected_rows;
+
+    auto offset_row = data_preview.sample_rows.size();
+    data_preview.sample_rows.resize(std::min(offset_row + row_count, max_num_rows));
+
+    for (size_t irow = 0, rows_appended = 0;
+         irow < num_rows && offset_row + rows_appended < max_num_rows;
+         ++irow) {
+      if (rejected_row_indices->find(irow) != rejected_row_indices->end()) {
+        continue;
+      }
+      auto& row_data = data_preview.sample_rows[offset_row + rows_appended];
+      row_data.resize(num_columns);
+      auto buffers_it = preview_buffers.detect_buffers.begin();
+      for (int i = 0; i < num_columns; ++i, ++buffers_it) {
+        CHECK(buffers_it != preview_buffers.detect_buffers.end());
+        auto& strings = buffers_it->get()->getStrings();
+        row_data[i] = strings[irow];
+      }
+      ++rows_appended;
+    }
+  }
+
+  // attempt to detect geo columns
+  for (int i = 0; i < num_columns; ++i) {
+    auto tentative_geo_type =
+        foreign_storage::detect_geo_type(data_preview.sample_rows, i);
+    if (tentative_geo_type.has_value()) {
+      data_preview.column_types[i].set_type(tentative_geo_type.value());
+      data_preview.column_types[i].set_compression(kENCODING_NONE);
+    }
+  }
+
+  return data_preview;
 }
 
 std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(

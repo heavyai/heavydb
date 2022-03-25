@@ -22,11 +22,18 @@
 
 #include "AbstractFileStorageDataWrapper.h"
 #include "DataMgr/Chunk/Chunk.h"
+#include "DataPreview.h"
 #include "ForeignDataWrapper.h"
 #include "ForeignTableSchema.h"
 #include "ImportExport/Importer.h"
 #include "Interval.h"
 #include "LazyParquetChunkLoader.h"
+
+namespace arrow {
+namespace fs {
+class FileSystem;
+}
+}  // namespace arrow
 
 namespace foreign_storage {
 
@@ -34,12 +41,15 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
  public:
   ParquetDataWrapper();
 
-  ParquetDataWrapper(const int db_id, const ForeignTable* foreign_table);
-
   ParquetDataWrapper(const int db_id,
                      const ForeignTable* foreign_table,
-                     const UserMapping* user_mapping,
                      const bool do_metadata_stats_validation = true);
+
+  /**
+   * @brief Constructor intended for detect use-case only
+   */
+  ParquetDataWrapper(const ForeignTable* foreign_table,
+                     std::shared_ptr<arrow::fs::FileSystem> file_system);
 
   void populateChunkMetadata(ChunkMetadataVector& chunk_metadata_vector) override;
 
@@ -62,6 +72,8 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   }
 
   void createRenderGroupAnalyzers() override;
+
+  DataPreview getDataPreview(const size_t num_rows);
 
  private:
   std::list<const ColumnDescriptor*> getColumnsToInitialize(

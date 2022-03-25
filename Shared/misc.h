@@ -58,15 +58,15 @@ constexpr std::array<double, sizeof...(Indices)> inversePowersOfImpl(
 
 namespace shared {
 
-template <typename K, typename V>
-V& get_from_map(std::map<K, V>& map, const K& key) {
+template <typename K, typename V, typename comp>
+V& get_from_map(std::map<K, V, comp>& map, const K& key) {
   auto find_it = map.find(key);
   CHECK(find_it != map.end());
   return find_it->second;
 }
 
-template <typename K, typename V>
-const V& get_from_map(const std::map<K, V>& map, const K& key) {
+template <typename K, typename V, typename comp>
+const V& get_from_map(const std::map<K, V, comp>& map, const K& key) {
   auto find_it = map.find(key);
   CHECK(find_it != map.end());
   return find_it->second;
