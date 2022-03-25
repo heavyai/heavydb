@@ -3692,6 +3692,7 @@ ImportStatus DataStreamSink::archivePlumber(
 namespace {
 #ifdef ENABLE_IMPORT_PARQUET
 
+#ifdef HAVE_AWS_S3
 foreign_storage::ParquetS3DetectFileSystem::ParquetS3DetectFileSystemConfiguration
 create_parquet_s3_detect_filesystem_config(const foreign_storage::ForeignServer* server,
                                            const CopyParams& copy_params) {
@@ -3710,6 +3711,7 @@ create_parquet_s3_detect_filesystem_config(const foreign_storage::ForeignServer*
 
   return config;
 }
+#endif
 
 foreign_storage::DataPreview get_parquet_data_preview(const std::string& file_name,
                                                       const CopyParams& copy_params) {
