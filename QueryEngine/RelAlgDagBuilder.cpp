@@ -2403,6 +2403,7 @@ void add_window_function_pre_project(
     CHECK(prev_node);
 
     auto filter_node = std::dynamic_pointer_cast<RelFilter>(prev_node);
+    auto join_node = std::dynamic_pointer_cast<RelJoin>(prev_node);
 
     auto scan_node = std::dynamic_pointer_cast<RelScan>(prev_node);
     const bool has_multi_fragment_scan_input =
@@ -2428,12 +2429,15 @@ void add_window_function_pre_project(
     // query plans, i.e. filters before joins, and whether there is a more general
     // approach to solving this (will still need the preceding project node for
     // window functions preceded by filter nodes for correctness though)
-    // 3. when partition by / order by clauses have a general expression instead of
+    // 3. Similar to the above, when the window function project node is preceded
+    // by a join node.
+    // 4. when partition by / order by clauses have a general expression instead of
     // referencing column
 
     if (!((always_add_project_if_first_project_is_window_expr &&
            project_node_counter == 1) ||
-          filter_node || has_multi_fragment_scan_input || need_pushdown_generic_expr())) {
+          filter_node || join_node || has_multi_fragment_scan_input ||
+          need_pushdown_generic_expr())) {
       continue;
     }
 
