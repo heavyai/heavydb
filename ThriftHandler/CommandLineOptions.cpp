@@ -1302,6 +1302,9 @@ boost::optional<int> CommandLineOptions::parse_command_line(
           << std::endl;
     }
 
+    // Trim base path before executing migration
+    boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
+
     // Execute rebrand migration before accessing any system files.
     migrations::MigrationMgr::executeRebrandMigration(base_path);
 
