@@ -20738,6 +20738,40 @@ TEST(Select, WindowFunctionRank) {
   }
 }
 
+TEST(Select, WindowFunctionJoins) {
+  // Tests added separation of joins from window functions for
+  // add_window_function_pre_project
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Inner join, implicit syntax
+    {
+      std::string query =
+          "SELECT test.x, ROW_NUMBER() OVER (ORDER by test.x ASC NULLS FIRST) FROM test, "
+          "test_inner WHERE test.str = test_inner.str ORDER BY test.x ASC NULLS FIRST;";
+      c(query, query, dt);
+    }
+    // Inner join, explicit syntax
+    // Note that before the fix to separate window functions from preceding joins,
+    // implicit inner joins would work (i.e. the query above) but explicit
+    // INNER or LEFT joins (i.e. the two below) would crash
+    {
+      std::string query =
+          "SELECT test.x, ROW_NUMBER() OVER (ORDER by test.x ASC NULLS FIRST) FROM test "
+          "INNER JOIN test_inner ON test.str = test_inner.str ORDER BY test.x ASC NULLS "
+          "FIRST;";
+      c(query, query, dt);
+    }
+    // Left join
+    {
+      std::string query =
+          "SELECT test.x, ROW_NUMBER() OVER (ORDER by test.x ASC NULLS FIRST) FROM test "
+          "LEFT JOIN test_inner ON test.str = test_inner.str ORDER BY test.x ASC NULLS "
+          "FIRST;";
+      c(query, query, dt);
+    }
+  }
+}
+
 TEST(Select, WindowFunctionOneRowPartitions) {
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
