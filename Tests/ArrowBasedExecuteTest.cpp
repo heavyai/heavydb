@@ -17756,6 +17756,65 @@ TEST_F(Select, ParseIntegerExceptions) {
   }
 }
 
+class SubqueryTestEnv : public ExecuteTestBase, public ::testing::Test {
+ protected:
+  void SetUp() override {
+    auto create_test_table = [](const std::string& table_name) {
+      createTable(table_name,
+                  {{"r1", SQLTypeInfo(kINT)},
+                   {"r2", SQLTypeInfo(kINT)},
+                   {"r3", SQLTypeInfo(kINT)}});
+      insertCsvValues(table_name, "1,2,3\n2,3,4\n3,4,5\n4,5,6\n1,3,4");
+
+      sqlite_comparator_.query("DROP TABLE IF EXISTS " + table_name + ";");
+      sqlite_comparator_.query("CREATE TABLE " + table_name +
+                               " (r1 int, r2 int, r3 int);");
+      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (1,2,3);");
+      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (2,3,4);");
+      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (3,4,5);");
+      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (4,5,6);");
+      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (1,3,4);");
+    };
+
+    create_test_table("R1");
+    create_test_table("R2");
+    create_test_table("R3");
+  }
+
+  void TearDown() override {
+    auto drop_table = [](const std::string& table_name) {
+      dropTable(table_name);
+      sqlite_comparator_.query("DROP TABLE IF EXISTS " + table_name + ";");
+    };
+
+    drop_table("R1");
+    drop_table("R2");
+    drop_table("R3");
+  }
+};
+
+TEST_F(SubqueryTestEnv, SubqueryTest) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // multi-step subquery
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
+      dt);
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r3 in (select t2.r3 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2)",
+      dt);
+    // multi-step subquery different tables
+    c(R"(select t1.r1, t1.r2, t1.r3 from R2 t1 where t1.r1 in (select t2.r1 from R1 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
+      dt);
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R2 t2 join (select * from R1) t3 on t2.r1 = t3.r1) order by 1, 2;)",
+      dt);
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 in (select t2.r1 from R2 t2 join (select * from R3) t3 on t2.r1 = t3.r1) order by 1, 2;)",
+      dt);
+    // multi-step multi-subquery
+    c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 > (SELECT min(t2.r1) FROM R1 t2 where t2.r2 < 3) and t1.r2 >= (SELECT max(t3.r2) FROM R1 t3 where t3.r3 > (SELECT avg(t4.r3) FROM R1 t4 where t4.r1 < 2)) order by 1, 2;)",
+      dt);
+  }
+}
+
 int main(int argc, char** argv) {
   g_is_test_env = true;
 
