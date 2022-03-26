@@ -1129,15 +1129,17 @@ class RebrandMigrationTest : public FileMgrUnitTest {
  protected:
   void setFileMgrVersion(int32_t version_number) {
     const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
-    std::ofstream version_file{table_data_dir / "filemgr_version"};
+    const auto filename = table_data_dir / "filemgr_version";
+    std::ofstream version_file{filename.string()};
     version_file.write(reinterpret_cast<char*>(&version_number), sizeof(int32_t));
     version_file.close();
   }
 
   int32_t getFileMgrVersion() {
     const auto table_data_dir = boost::filesystem::path(file_mgr_path) / "table_1_1";
+    const auto filename = table_data_dir / "filemgr_version";
+    std::ifstream version_file{filename.string()};
     int32_t version_number;
-    std::ifstream version_file{table_data_dir / "filemgr_version"};
     version_file.read(reinterpret_cast<char*>(&version_number), sizeof(int32_t));
     version_file.close();
     return version_number;

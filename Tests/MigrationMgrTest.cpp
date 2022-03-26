@@ -522,27 +522,27 @@ class RebrandMigrationTest : public ::testing::Test {
 
 TEST_F(RebrandMigrationTest, LegacyFiles) {
   createLegacySystemFiles(true);
-  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_.string());
   assertExpectedRequiredFiles();
   assertExpectedOptionalFiles();
 }
 
 TEST_F(RebrandMigrationTest, OptionalLegacyFilesMissing) {
   createLegacySystemFiles(false);
-  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_.string());
   assertExpectedRequiredFiles();
 }
 
 TEST_F(RebrandMigrationTest, NewFiles) {
   createNewSystemFiles(true);
-  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_.string());
   assertExpectedRequiredFiles();
   assertExpectedOptionalFiles();
 }
 
 TEST_F(RebrandMigrationTest, OptionalNewFilesMissing) {
   createNewSystemFiles(false);
-  migrations::MigrationMgr::executeRebrandMigration(test_dir_);
+  migrations::MigrationMgr::executeRebrandMigration(test_dir_.string());
   assertExpectedRequiredFiles();
 }
 
