@@ -16,7 +16,10 @@
 
 #include "TestHelpers.h"
 
+#include "Shared/funcannotations.h"
 #include "StringDictionary/StringDictionaryProxy.h"
+
+#include <boost/lexical_cast.hpp>
 
 #include <cstdlib>
 #include <filesystem>
@@ -36,6 +39,12 @@
 #endif
 
 extern bool g_cache_string_hash;
+
+// This function is in the tsan.suppressions file.
+// Only call from a location where it is guaranteed that a race condition cannot occur.
+NEVER_INLINE std::string tsan_safe_to_string(StringDictionaryProxy::IdMap const& id_map) {
+  return boost::lexical_cast<std::string>(id_map);
+}
 
 TEST(StringDictionary, AddAndGet) {
   const DictRef dict_ref(-1, 1);
@@ -863,7 +872,7 @@ TEST(StringDictionary, TransientUnion) {
     //           rhs id(-3 -2 -1 0 1 2  3  4  5  6)
     // translation_map_(-3 -2 -1 2 3 4 -4 -5 -6 -7)
     ASSERT_EQ("IdMap(offset_(3) vector_map_(-3 -2 -1 2 3 4 -4 -5 -6 -7))",
-              boost::lexical_cast<std::string>(id_map));
+              tsan_safe_to_string(id_map));
     ASSERT_EQ(0, sdp_lhs.getIdOfString("a"));
     ASSERT_EQ(1, sdp_lhs.getIdOfString("b"));
     ASSERT_EQ(2, sdp_lhs.getIdOfString("c"));
@@ -898,7 +907,7 @@ TEST(StringDictionary, TransientUnion) {
     // e   2 (existing id in sd_rhs)
     // translation_map_(-3 -2 -1 -4 -5 0 1 2)
     ASSERT_EQ("IdMap(offset_(3) vector_map_(-3 -2 -1 -4 -5 0 1 2))",
-              boost::lexical_cast<std::string>(id_map));
+              tsan_safe_to_string(id_map));
     ASSERT_EQ(-2, sdp_lhs.getIdOfString("t0"));
     ASSERT_EQ(-3, sdp_lhs.getIdOfString("t1"));
     ASSERT_EQ(-4, sdp_lhs.getIdOfString("a"));
