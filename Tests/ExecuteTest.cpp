@@ -20936,6 +20936,14 @@ TEST(Select, WindowFunctionSubquery) {
       c(query, sqlite_query, dt);
     }
   }
+  {
+    std::string query =
+        "SELECT sum( (sum_y - x) * (sum_y - x) )FROM (select x, avg(cast(y as float)) "
+        "over () as "
+        "sum_y from test WHERE x is not null);";
+    // run query without "Window expression not supported in this context" exception
+    EXPECT_NO_THROW(run_multiple_agg(query, dt));
+  }
 }
 
 TEST(Select, WindowFunctionPercentRank) {
