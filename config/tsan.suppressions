@@ -16,5 +16,5 @@ race:^tbb*
 race:^tzset
 # QE-338
 race_top:StringDictionaryProxy_GetTransientBulk_Test::TestBody
-# BE-6333
-race:tsan_safe_to_string
+# BE-6333 QE-348
+race:tsan_safe_*

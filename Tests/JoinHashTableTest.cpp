@@ -866,6 +866,14 @@ TEST(MultiFragment, PerfectOneToMany) {
   }
 }
 
+NEVER_INLINE
+std::set<DecodedJoinHashBufferEntry> tsan_safe_to_set(
+    std::shared_ptr<HashJoin> const& hash_table,
+    const ExecutorDeviceType device_type,
+    const int device_id) {
+  return hash_table->toSet(device_type, device_id);
+}
+
 TEST(MultiFragment, KeyedOneToOne) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
@@ -941,9 +949,9 @@ TEST(MultiFragment, KeyedOneToOne) {
     auto hash_table2 = buildKeyed(op);
     EXPECT_EQ(hash_table2->getHashType(), HashType::OneToOne);
 
-    //
-    auto s1 = hash_table1->toSet(g_device_type, 0);
-    auto s2 = hash_table2->toSet(g_device_type, 0);
+    // QE-348 Suppress false tsan warnings
+    auto s1 = tsan_safe_to_set(hash_table1, g_device_type, 0);
+    auto s2 = tsan_safe_to_set(hash_table2, g_device_type, 0);
 
     EXPECT_EQ(s1, s2);
 
