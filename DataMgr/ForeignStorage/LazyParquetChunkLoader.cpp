@@ -2218,9 +2218,11 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
           invalid_indices.size()};
 }
 
-struct PreviewBuffers {
-  std::list<std::unique_ptr<TypedParquetDetectBuffer>> detect_buffers;
-  std::list<Chunk_NS::Chunk> column_chunks;
+struct PreviewContext {
+  std::vector<std::unique_ptr<TypedParquetDetectBuffer>> detect_buffers;
+  std::vector<Chunk_NS::Chunk> column_chunks;
+  std::vector<std::unique_ptr<RejectedRowIndices>> rejected_row_indices_per_column;
+  std::list<ColumnDescriptor> column_descriptors;
 };
 
 DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>& files,
@@ -2264,11 +2266,10 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
       row_group_intervals.push_back(RowGroupInterval{file_path, 0, end_row_group});
     }
 
-    auto rejected_row_indices = std::make_unique<RejectedRowIndices>();
-    PreviewBuffers preview_buffers;
+    PreviewContext preview_context;
     for (int i = 0; i < num_columns; ++i) {
       auto col = first_file_metadata->schema()->Column(i);
-      ColumnDescriptor cd;
+      ColumnDescriptor& cd = preview_context.column_descriptors.emplace_back();
       auto sql_type = LazyParquetChunkLoader::suggestColumnMapping(col);
       cd.columnType = sql_type;
       cd.columnName =
@@ -2279,26 +2280,57 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
       cd.columnId = i + 1;
       data_preview.column_names.emplace_back(cd.columnName);
       data_preview.column_types.emplace_back(sql_type);
-      preview_buffers.detect_buffers.push_back(
+      preview_context.detect_buffers.push_back(
           std::make_unique<TypedParquetDetectBuffer>());
-      auto& detect_buffer = preview_buffers.detect_buffers.back();
-      auto chunk = preview_buffers.column_chunks.emplace_back(&cd);
+      preview_context.rejected_row_indices_per_column.push_back(
+          std::make_unique<RejectedRowIndices>());
+      auto& detect_buffer = preview_context.detect_buffers.back();
+      auto& chunk = preview_context.column_chunks.emplace_back(&cd);
+      chunk.setPinnable(false);
       chunk.setBuffer(detect_buffer.get());
-      auto chunk_list = std::list<Chunk_NS::Chunk>{chunk};
-      appendRowGroups(row_group_intervals,
-                      i,
-                      &cd,
-                      chunk_list,
-                      nullptr,
-                      rejected_row_indices.get(),
-                      true,
-                      max_num_rows_to_append);
+    }
+
+    std::function<void(const std::vector<int>&)> append_row_groups_for_column =
+        [&](const std::vector<int>& column_indices) {
+          for (const auto& column_index : column_indices) {
+            auto& chunk = preview_context.column_chunks[column_index];
+            auto chunk_list = std::list<Chunk_NS::Chunk>{chunk};
+            auto& rejected_row_indices =
+                preview_context.rejected_row_indices_per_column[column_index];
+            appendRowGroups(row_group_intervals,
+                            column_index,
+                            chunk.getColumnDesc(),
+                            chunk_list,
+                            nullptr,
+                            rejected_row_indices.get(),
+                            true,
+                            max_num_rows_to_append);
+          }
+        };
+
+    std::vector<int> columns(num_columns);
+    std::iota(columns.begin(), columns.end(), 0);
+    auto futures = create_futures_for_workers(
+        columns, g_max_import_threads, append_row_groups_for_column);
+    for (auto& future : futures) {
+      future.wait();
+    }
+    for (auto& future : futures) {
+      future.get();
+    }
+
+    // merge all `rejected_row_indices_per_column`
+    auto rejected_row_indices = std::make_unique<RejectedRowIndices>();
+    for (int i = 0; i < num_columns; ++i) {
+      rejected_row_indices->insert(
+          preview_context.rejected_row_indices_per_column[i]->begin(),
+          preview_context.rejected_row_indices_per_column[i]->end());
     }
 
     size_t num_rows = 0;
-    auto buffers_it = preview_buffers.detect_buffers.begin();
+    auto buffers_it = preview_context.detect_buffers.begin();
     for (int i = 0; i < num_columns; ++i, ++buffers_it) {
-      CHECK(buffers_it != preview_buffers.detect_buffers.end());
+      CHECK(buffers_it != preview_context.detect_buffers.end());
       auto& strings = buffers_it->get()->getStrings();
       if (i == 0) {
         num_rows = strings.size();
@@ -2323,9 +2355,9 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
       }
       auto& row_data = data_preview.sample_rows[offset_row + rows_appended];
       row_data.resize(num_columns);
-      auto buffers_it = preview_buffers.detect_buffers.begin();
+      auto buffers_it = preview_context.detect_buffers.begin();
       for (int i = 0; i < num_columns; ++i, ++buffers_it) {
-        CHECK(buffers_it != preview_buffers.detect_buffers.end());
+        CHECK(buffers_it != preview_context.detect_buffers.end());
         auto& strings = buffers_it->get()->getStrings();
         row_data[i] = strings[irow];
       }
@@ -2335,11 +2367,14 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
 
   // attempt to detect geo columns
   for (int i = 0; i < num_columns; ++i) {
-    auto tentative_geo_type =
-        foreign_storage::detect_geo_type(data_preview.sample_rows, i);
-    if (tentative_geo_type.has_value()) {
-      data_preview.column_types[i].set_type(tentative_geo_type.value());
-      data_preview.column_types[i].set_compression(kENCODING_NONE);
+    auto type_info = data_preview.column_types[i];
+    if (type_info.is_string()) {
+      auto tentative_geo_type =
+          foreign_storage::detect_geo_type(data_preview.sample_rows, i);
+      if (tentative_geo_type.has_value()) {
+        data_preview.column_types[i].set_type(tentative_geo_type.value());
+        data_preview.column_types[i].set_compression(kENCODING_NONE);
+      }
     }
   }
 
