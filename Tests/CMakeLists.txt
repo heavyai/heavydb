@@ -350,7 +350,6 @@ set(TEST_PROGRAMS
   CalciteOptimizeTest
   JoinHashTableTest
   CachedHashTableTest
-  RuntimeInterruptTest
   StringFunctionsTest
   StringDictionaryTest
   CommandLineTest
@@ -418,7 +417,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
+    DEPENDS ${TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest RuntimeInterruptTest
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests
