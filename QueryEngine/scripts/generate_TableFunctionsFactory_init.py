@@ -1891,12 +1891,12 @@ def parse_annotations(input_files):
                 if is_gpu_function(sig):
                     gpu_template_functions.append(t)
                     gpu_function_address_expressions.append(address_expression)
-                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
+                add = ('AddTableFunctionsParams{"%s", %s, %s, %s, %s, %s}'
                        % (name, sizer.format_sizer(), input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
 
             else:
-                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
+                add = ('AddTableFunctionsParams{"%s", %s, %s, %s, %s, %s}'
                        % (sig.name, sizer.format_sizer(), input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
                 address_expression = ('avoid_opt_address(reinterpret_cast<void*>(%s))' % sig.name)
@@ -1981,6 +1981,35 @@ std::once_flag init_flag;
 #if defined(_MSC_VER)
 #pragma optimize("", off)
 #endif
+
+struct AddTableFunctionsParams {
+  char const* const name;
+  TableFunctionOutputRowSizer const sizer;
+  std::vector<ExtArgumentType> const input_args;
+  std::vector<ExtArgumentType> const output_args;
+  std::vector<ExtArgumentType> const sql_args;
+  std::vector<std::map<std::string, std::string>> const annotations;
+};
+
+template <size_t N>
+struct AddTableFunctions {
+  using ParamsArray = std::array<AddTableFunctionsParams, N>;
+  ParamsArray params_array_;
+  AddTableFunctions(ParamsArray params_array)
+      : params_array_(std::move(params_array)) {}
+  NO_OPT_ATTRIBUTE void operator()() {
+    for (auto const& param : params_array_) {
+      TableFunctionsFactory::add(param.name,
+                                 param.sizer,
+                                 param.input_args,
+                                 param.output_args,
+                                 param.sql_args,
+                                 param.annotations,
+                                 /*is_runtime:*/ false);
+    }
+  }
+};
+
 void TableFunctionsFactory::init() {
   if (!g_enable_table_functions) {
     return;
@@ -1991,9 +2020,9 @@ void TableFunctionsFactory::init() {
     return;
   }
 
-  std::call_once(init_flag, []() NO_OPT_ATTRIBUTE {
+  std::call_once(init_flag, AddTableFunctions<%d>({
     %s
-  });
+  }));
 }
 #if defined(_MSC_VER)
 #pragma optimize("", on)
@@ -2007,7 +2036,8 @@ void TableFunctionsFactory::init() {
 ''' % (sys.argv[0],
         '\n'.join(header_includes),
         ' &&\n'.join(cpu_address_expressions),
-        '\n    '.join(add_stmts),
+        len(add_stmts),
+        ',\n    '.join(add_stmts),
         ''.join(cond_fns))
 
 header_content = '''
