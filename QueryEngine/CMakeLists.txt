@@ -213,6 +213,7 @@ if (ENABLE_SYSTEM_TFS)
   list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleTableFunctions.cpp)
   list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/UtilityTableFunctions.cpp)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GeoRasterTableFunctions.h)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/SessionizeTableFunctions.hpp)
 
   if (ENABLE_CUDA)
     list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleTableFunctions.cpp)
