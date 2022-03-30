@@ -74,16 +74,49 @@ EXTENSION_NOINLINE_HOST int32_t TableFunctionManager_error_message(int8_t* mgr_p
 // https://www.fluentcpp.com/2018/04/06/strong-types-by-struct/
 struct TextEncodingDict {
   int32_t value;
+
+#ifndef __CUDACC__
+  TextEncodingDict(const int32_t other) : value(other) {}
+  TextEncodingDict() : value(0) {}
+#endif
+
   operator int32_t() const { return value; }
   TextEncodingDict operator=(const int32_t other) {
     value = other;
     return *this;
   }
-#ifndef __CUDACC__
-  TextEncodingDict(const int32_t other) : value(other) {}
-  TextEncodingDict() : value(0) {}
-#endif
+
+  DEVICE ALWAYS_INLINE bool operator==(const TextEncodingDict& other) const {
+    return value == other.value;
+  }
+  DEVICE ALWAYS_INLINE bool operator==(const int32_t other) const {
+    return value == other;
+  }
+
+  DEVICE ALWAYS_INLINE bool operator!=(const TextEncodingDict& other) const {
+    return !operator==(other);
+  }
+  DEVICE ALWAYS_INLINE bool operator!=(const int32_t other) const {
+    return !operator==(other);
+  }
+
+  DEVICE ALWAYS_INLINE bool operator<(const TextEncodingDict& other) const {
+    return value < other.value;
+  }
+
+  DEVICE ALWAYS_INLINE bool operator<(const int32_t other) const { return value < other; }
 };
+
+template <>
+DEVICE inline TextEncodingDict inline_null_value() {
+#ifndef __CUDACC__
+  return TextEncodingDict(inline_int_null_value<int32_t>());
+#else
+  TextEncodingDict null_val;
+  null_val.value = inline_int_null_value<int32_t>();
+  return null_val;
+#endif
+}
 
 template <typename T>
 struct Array {
@@ -223,6 +256,10 @@ struct Timestamp {
     return !operator==(other);
   }
 
+  DEVICE ALWAYS_INLINE bool operator<(const Timestamp& other) const {
+    return time < other.time;
+  }
+
   DEVICE ALWAYS_INLINE Timestamp truncateToMicroseconds() const {
     return Timestamp((time / kMilliSecsPerSec) * kMilliSecsPerSec);
   }
@@ -288,6 +325,11 @@ struct Timestamp {
   }
 #endif
 };
+
+template <>
+DEVICE inline Timestamp inline_null_value() {
+  return Timestamp(inline_int_null_value<int64_t>());
+}
 
 struct GeoPoint {
   int8_t* ptr;
