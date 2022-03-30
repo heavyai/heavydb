@@ -318,8 +318,7 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count,
-    const bool is_range_join = false,
-    const bool is_geo_compressed = false);
+    const bool is_range_join = false);
 
 void fill_one_to_many_baseline_hash_table_64(
     int32_t* buff,
@@ -333,8 +332,7 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count,
-    const bool is_range_join = false,
-    const bool is_geo_compressed = false);
+    const bool is_range_join = false);
 
 void fill_one_to_many_baseline_hash_table_on_device_32(
     int32_t* buff,

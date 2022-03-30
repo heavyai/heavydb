@@ -2675,8 +2675,7 @@ FetchResult Executor::fetchChunks(
       if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
         // determine if we need special treatment to linearlize multi-frag table
         // i.e., a column that is classified as varlen type, i.e., array
-        // for now, we only support fixed-length array that contains
-        // geo point coordianates but we can support more types in this way
+        // for now, we can support more types in this way
         if (needLinearizeAllFragments(
                 *col_id, ra_exe_unit, selected_fragments, memory_level)) {
           bool for_lazy_fetch = false;
@@ -3091,7 +3090,6 @@ int32_t Executor::executePlanWithoutGroupBy(
       error_code == Executor::ERR_OUT_OF_TIME ||
       error_code == Executor::ERR_INTERRUPTED ||
       error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
-      error_code == Executor::ERR_GEOS ||
       error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
     return error_code;
   }
@@ -3352,7 +3350,6 @@ int32_t Executor::executePlanWithGroupBy(
       error_code == Executor::ERR_OUT_OF_TIME ||
       error_code == Executor::ERR_INTERRUPTED ||
       error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES ||
-      error_code == Executor::ERR_GEOS ||
       error_code == Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT) {
     return error_code;
   }

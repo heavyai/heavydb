@@ -39,34 +39,6 @@
 ///    * The LHS of the RangeOper is used to build the hash table
 ///    * The LHS of the OverlapsOper + the RHS of the RangeOper is used as probe
 ///
-/// SELECT count(*) FROM t1, t2 where ST_Distance(t1.p1_comp32, t2.p1) <= 6.3;
-///
-///   BinOper condition
-///   -----------------------
-///   ((OVERLAPS)
-///     (ColumnVar table: (t1) column: (p1_comp32) GEOMETRY(POINT, 4326) ENCODING  COMPRESSED(32))
-///     (RangeOper)
-///        (ColumnVar table: (t2) column: (p1) GEOMETRY(POINT, 4326) ENCODING NONE),
-///        (Const 6.330000))
-/// 
-///
-///   RangeOper condition
-///   -----------------------
-///
-///     [(ColumnVar table: 5 (t2) column: 1 rte: 1 GEOMETRY(POINT, 4326) ENCODING NONE),
-///      (Const 6.330000)]
-///
-/// Same example as above, annotated:
-///
-///   SELECT count(*) FROM t1, t2 where 
-///          ST_Distance(
-///                        t1.p1_comp32,      << Overlaps Condition LHS
-///                        t2.p1              << RangeOper LHS
-///                     ) <= 6.3;             << RangeOper RHS
-///
-/// In this case, we select the uncompressed runtime functions when building the hash table 
-/// over t2.p1. When performing the probe, we must select the *compressed* runtime functions.
-///
 // clang-format on
 
 std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(

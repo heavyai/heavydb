@@ -1481,14 +1481,14 @@ void fill_one_to_many_baseline_hash_table(
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const size_t cpu_thread_count,
-    const bool is_range_join,
-    const bool is_geo_compressed) {
+    const bool is_range_join) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> counter_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     if (is_range_join) {
+      bool is_compressed = false;
       counter_threads.push_back(std::async(
           std::launch::async,
           [count_buff,
@@ -1496,11 +1496,11 @@ void fill_one_to_many_baseline_hash_table(
            &hash_entry_count,
            &join_buckets_per_key,
            &join_column_per_key,
-           &is_geo_compressed,
+           &is_compressed,
            cpu_thread_idx,
            cpu_thread_count] {
             const auto key_handler = RangeKeyHandler(
-                is_geo_compressed,
+                false,
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
                 &join_column_per_key[0],
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
@@ -1594,6 +1594,7 @@ void fill_one_to_many_baseline_hash_table(
   std::vector<std::future<void>> rowid_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
     if (is_range_join) {
+      bool is_compressed = false;
       rowid_threads.push_back(std::async(
           std::launch::async,
           [buff,
@@ -1602,11 +1603,11 @@ void fill_one_to_many_baseline_hash_table(
            invalid_slot_val,
            &join_column_per_key,
            &join_buckets_per_key,
-           &is_geo_compressed,
+           &is_compressed,
            cpu_thread_idx,
            cpu_thread_count] {
             const auto key_handler = RangeKeyHandler(
-                is_geo_compressed,
+                false,
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.size(),
                 &join_column_per_key[0],
                 join_buckets_per_key[0].inverse_bucket_sizes_for_dimension.data());
@@ -1695,8 +1696,7 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count,
-    const bool is_range_join,
-    const bool is_geo_compressed) {
+    const bool is_range_join) {
   fill_one_to_many_baseline_hash_table<int32_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -1708,8 +1708,7 @@ void fill_one_to_many_baseline_hash_table_32(
                                                 sd_inner_proxy_per_key,
                                                 sd_outer_proxy_per_key,
                                                 cpu_thread_count,
-                                                is_range_join,
-                                                is_geo_compressed);
+                                                is_range_join);
 }
 
 void fill_one_to_many_baseline_hash_table_64(
@@ -1724,8 +1723,7 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count,
-    const bool is_range_join,
-    const bool is_geo_compressed) {
+    const bool is_range_join) {
   fill_one_to_many_baseline_hash_table<int64_t>(buff,
                                                 composite_key_dict,
                                                 hash_entry_count,
@@ -1737,8 +1735,7 @@ void fill_one_to_many_baseline_hash_table_64(
                                                 sd_inner_proxy_per_key,
                                                 sd_outer_proxy_per_key,
                                                 cpu_thread_count,
-                                                is_range_join,
-                                                is_geo_compressed);
+                                                is_range_join);
 }
 
 void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,

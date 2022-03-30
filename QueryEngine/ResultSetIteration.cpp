@@ -890,7 +890,7 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
   auto cpu_buf = std::shared_ptr<int8_t>(new int8_t[length], FreeDeleter());
   buffer_provider->copyFromDevice(
       cpu_buf.get(), reinterpret_cast<const int8_t*>(varlen_ptr), length, device_id);
-  // Just fetching the data from gpu, not checking geo nullness
+  // Just fetching the data from gpu
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
 }
 

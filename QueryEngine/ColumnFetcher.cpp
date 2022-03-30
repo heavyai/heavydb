@@ -472,10 +472,6 @@ const int8_t* ColumnFetcher::linearizeColumnFragments(
   MergedChunk res{nullptr, nullptr};
   // Do linearize multi-fragmented column depending on column type
   // We cover array and non-encoded text columns
-  // Note that geo column is actually organized as a set of arrays
-  // and each geo object has different set of vectors that they require
-  // Here, we linearize each array at a time, so eventually the geo object has a set of
-  // "linearized" arrays
   {
     std::lock_guard<std::mutex> linearization_guard(linearization_mutex_);
     if (col_ti.is_array()) {

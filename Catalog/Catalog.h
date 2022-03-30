@@ -42,7 +42,6 @@
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/CustomExpression.h"
 #include "Catalog/DashboardDescriptor.h"
-#include "Catalog/Defs.h"
 #include "Catalog/DictDescriptor.h"
 #include "Catalog/LinkDescriptor.h"
 #include "Catalog/SessionInfo.h"

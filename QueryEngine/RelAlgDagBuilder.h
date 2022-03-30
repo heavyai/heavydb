@@ -32,7 +32,6 @@
 #include <boost/variant.hpp>
 
 #include "Analyzer/Analyzer.h"
-#include "Catalog/Defs.h"
 #include "Descriptors/InputDescriptors.h"
 #include "QueryEngine/QueryHint.h"
 #include "QueryEngine/TargetMetaInfo.h"
@@ -855,73 +854,32 @@ class RelScan : public RelAlgNode {
   int32_t getTableId() const { return table_info_->table_id; }
 
   bool isVirtualColBySpi(int spi) const {
-    // GEO column is never virtual.
-    if (spi >= SPIMAP_MAGIC1) {
-      return false;
-    }
-
     CHECK_LE(static_cast<size_t>(spi), column_infos_.size());
     return column_infos_[spi - 1]->is_rowid;
   }
 
   int getColumnIdBySpi(int spi) const {
-    int col_idx;
-    int geo_idx = 0;
-    if (spi >= SPIMAP_MAGIC1) {
-      col_idx = (spi - SPIMAP_MAGIC1) / SPIMAP_MAGIC2 - 1;
-      geo_idx = (spi - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
-    } else {
-      col_idx = spi - 1;
-    }
+    int col_idx = spi - 1;
 
     CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
-    return column_infos_[col_idx]->column_id + geo_idx;
+    return column_infos_[col_idx]->column_id;
   }
 
   std::string getColumnNameBySpi(int spi) const {
-    int col_idx;
-    int geo_idx = 0;
-    if (spi >= SPIMAP_MAGIC1) {
-      col_idx = (spi - SPIMAP_MAGIC1) / SPIMAP_MAGIC2 - 1;
-      geo_idx = (spi - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
-    } else {
-      col_idx = spi - 1;
-    }
-
-    // Is not physical geo column case.
-    CHECK_EQ(geo_idx, 0);
+    int col_idx = spi - 1;
 
     CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->name;
   }
 
   SQLTypeInfo getColumnTypeBySpi(int spi) const {
-    int col_idx;
-    int geo_idx = 0;
-    if (spi >= SPIMAP_MAGIC1) {
-      col_idx = (spi - SPIMAP_MAGIC1) / SPIMAP_MAGIC2 - 1;
-      geo_idx = (spi - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
-    } else {
-      col_idx = spi - 1;
-    }
-
-    // Is not physical geo column case.
-    CHECK_EQ(geo_idx, 0);
+    int col_idx = spi - 1;
 
     CHECK_LT(static_cast<size_t>(col_idx), column_infos_.size());
     return column_infos_[col_idx]->type;
   }
 
   ColumnInfoPtr getColumnInfoBySpi(int spi) const {
-    if (spi >= SPIMAP_MAGIC1) {
-      return std::make_shared<ColumnInfo>(table_info_->db_id,
-                                          table_info_->table_id,
-                                          getColumnIdBySpi(spi),
-                                          getColumnNameBySpi(spi),
-                                          getColumnTypeBySpi(spi),
-                                          isVirtualColBySpi(spi));
-    }
-
     return column_infos_[spi - 1];
   }
 

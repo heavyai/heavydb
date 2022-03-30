@@ -337,7 +337,6 @@ struct CgenState {
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
   std::map<std::pair<llvm::Value*, llvm::Value*>, ArrayLoadCodegen>
       array_load_cache_;  // byte stream to array info
-  std::unordered_map<std::string, llvm::Value*> geo_target_cache_;
   bool needs_error_check_;
 
   llvm::Function* query_func_;

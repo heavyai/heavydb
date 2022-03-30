@@ -219,13 +219,6 @@ class RelAlgPhysicalColumnInfosVisitor
     for (size_t col_idx = 0; col_idx < scan->size(); ++col_idx) {
       auto col_info = scan->getColumnInfoBySpi(col_idx + 1);
       res.insert({*col_info, col_info});
-
-      // Add physical geo columns if any.
-      for (auto geo_idx = 0; geo_idx < col_info->type.get_physical_cols(); ++geo_idx) {
-        auto geo_col_info =
-            scan->getColumnInfoBySpi(SPIMAP_GEO_PHYSICAL_INPUT(col_idx, geo_idx + 1));
-        res.insert({*geo_col_info, geo_col_info});
-      }
     }
 
     return res;

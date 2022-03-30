@@ -65,7 +65,7 @@ class HashTable {
 
   //! Decode hash table into a human-readable string.
   static std::string toString(
-      const std::string& type,         // perfect, keyed, or geo
+      const std::string& type,         // perfect, keyed
       const std::string& layout_type,  // one-to-one, one-to-many, many-to-many
       size_t key_component_count,      // number of key parts
       size_t key_component_width,      // width of a key part

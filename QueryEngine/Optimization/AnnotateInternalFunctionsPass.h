@@ -96,13 +96,7 @@ class AnnotateInternalFunctionsPass : public llvm::CallGraphSCCPass {
 char AnnotateInternalFunctionsPass::ID = 0;
 
 const std::set<std::string> AnnotateInternalFunctionsPass::extension_functions =
-    std::set<std::string>{"point_coord_array_is_null",
-                          "decompress_x_coord_geoint",
-                          "decompress_y_coord_geoint",
-                          "compress_x_coord_geoint",
-                          "compress_y_coord_geoint",
-                          // GeoOpsRuntime.cpp
-                          "transform_4326_900913_x",
+    std::set<std::string>{"transform_4326_900913_x",
                           "transform_4326_900913_y",
                           "transform_900913_4326_x",
                           "transform_900913_4326_y",

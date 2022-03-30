@@ -2530,7 +2530,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   auto source_work_unit = createWorkUnit(source, sort_info, eo);
   const auto& source_exe_unit = source_work_unit.exe_unit;
 
-  // we do not allow sorting geometry or array types
+  // we do not allow sorting array types
   for (auto order_entry : order_entries) {
     CHECK_GT(order_entry.tle_no, 0);  // tle_no is a 1-base index
     const auto& te = source_exe_unit.target_exprs[order_entry.tle_no - 1];
@@ -3179,8 +3179,6 @@ ErrorInfo getErrorDescription(const int32_t error_code) {
     case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
       return {.code = "ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES",
               .description = "Multiple distinct values encountered"};
-    case Executor::ERR_GEOS:
-      return {.code = "ERR_GEOS", .description = "ERR_GEOS"};
     case Executor::ERR_WIDTH_BUCKET_INVALID_ARGUMENT:
       return {.code = "ERR_WIDTH_BUCKET_INVALID_ARGUMENT",
               .description =

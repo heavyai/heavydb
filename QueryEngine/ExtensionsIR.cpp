@@ -213,7 +213,6 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
       // semantics.
       return false;
     } else if (!arg_ti.get_notnull() && !arg_ti.is_buffer()) {
-      // Nullable geometry args will trigger a null check
       return true;
     } else {
       continue;

@@ -145,7 +145,6 @@ void TableOptimizer::recomputeMetadata() const {
 
     const auto table_id = td->tableId;
 
-    // TODO(adb): Support geo
     auto col_descs = cat_.getAllColumnMetadataForTable(table_id, false, false, false);
     for (const auto& cd : col_descs) {
       recomputeColumnMetadata(td, cd, {}, {});

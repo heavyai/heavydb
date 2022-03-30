@@ -391,7 +391,7 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
        information is lost when casting of argument values is
        required.
 
-       For array and geo types, the matching means that the argument
+       For array, the matching means that the argument
        type matches exactly with a group of extension function
        argument types. See `match_arguments`.
 

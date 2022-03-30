@@ -28,30 +28,11 @@ namespace {
 using cost_t = unsigned;
 using node_t = size_t;
 
-static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kARRAY, 60}};
-
 // Returns a lhs/rhs cost for the given qualifier. Must be strictly greater than 0.
 std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,
                                              const Executor* executor) {
   const auto func_oper = dynamic_cast<const Analyzer::FunctionOper*>(qual);
   if (func_oper) {
-    std::vector<SQLTypes> geo_types_for_func;
-    for (size_t i = 0; i < func_oper->getArity(); i++) {
-      const auto arg_expr = func_oper->getArg(i);
-      const auto& ti = arg_expr->get_type_info();
-      if (is_constructed_point(arg_expr)) {
-        geo_types_for_func.push_back(ti.get_type());
-      }
-    }
-    std::regex geo_func_regex("ST_[\\w]*");
-    std::smatch geo_func_match;
-    const auto& func_name = func_oper->getName();
-    if (geo_types_for_func.size() == 2 &&
-        std::regex_match(func_name, geo_func_match, geo_func_regex)) {
-      const auto rhs_cost = GEO_TYPE_COSTS[geo_types_for_func[0]];
-      const auto lhs_cost = GEO_TYPE_COSTS[geo_types_for_func[1]];
-      return {lhs_cost, rhs_cost};
-    }
     return {200, 200};
   }
   const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);

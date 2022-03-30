@@ -405,13 +405,6 @@ class BaselineJoinHashTableBuilder {
       auto one_to_many_buff = reinterpret_cast<int32_t*>(
           cpu_hash_table_ptr + keyspace_entry_count * entry_size);
       init_hash_join_buff(one_to_many_buff, keyspace_entry_count, -1, 0, 1);
-      bool is_geo_compressed = false;
-      if constexpr (std::is_same_v<KEY_HANDLER, RangeKeyHandler>) {
-        if (const auto range_handler =
-                reinterpret_cast<const RangeKeyHandler*>(key_handler)) {
-          is_geo_compressed = range_handler->is_compressed_;
-        }
-      }
       setHashLayout(layout);
       switch (key_component_width) {
         case 4: {
@@ -428,8 +421,7 @@ class BaselineJoinHashTableBuilder {
               composite_key_info.sd_inner_proxy_per_key,
               composite_key_info.sd_outer_proxy_per_key,
               thread_count,
-              std::is_same_v<KEY_HANDLER, RangeKeyHandler>,
-              is_geo_compressed);
+              std::is_same_v<KEY_HANDLER, RangeKeyHandler>);
           break;
         }
         case 8: {
@@ -446,8 +438,7 @@ class BaselineJoinHashTableBuilder {
               composite_key_info.sd_inner_proxy_per_key,
               composite_key_info.sd_outer_proxy_per_key,
               thread_count,
-              std::is_same_v<KEY_HANDLER, RangeKeyHandler>,
-              is_geo_compressed);
+              std::is_same_v<KEY_HANDLER, RangeKeyHandler>);
           break;
         }
         default:

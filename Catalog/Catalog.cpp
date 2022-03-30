@@ -1416,11 +1416,6 @@ const int Catalog::getColumnIdBySpiUnlocked(const int table_id, const size_t spi
 
   auto spx = spi;
   int phi = 0;
-  if (spx >= size_t(SPIMAP_MAGIC1))  // see Catalog.h
-  {
-    phi = (spx - SPIMAP_MAGIC1) % SPIMAP_MAGIC2;
-    spx = (spx - SPIMAP_MAGIC1) / SPIMAP_MAGIC2;
-  }
 
   CHECK(0 < spx && spx <= columnIdBySpi.size());
   return columnIdBySpi[spx - 1] + phi;

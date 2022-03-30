@@ -745,8 +745,7 @@ void ResultSetReductionJIT::reduceOneEntryTargetsNoCollisions(
         (target_info.agg_kind == kAVG ||
          (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
       // Note that this assumes if one of the slot pairs in a given target is an array,
-      // all slot pairs are arrays. Currently this is true for all geo targets, but we
-      // should better codify and store this information in the future
+      // all slot pairs are arrays.
       two_slot_target = true;
     }
 
