@@ -609,7 +609,12 @@ bool ParquetDataWrapper::isRestored() const {
 DataPreview ParquetDataWrapper::getDataPreview(const size_t num_rows) {
   LazyParquetChunkLoader chunk_loader(
       file_system_, file_reader_cache_.get(), &render_group_analyzer_map_);
-  return chunk_loader.previewFiles(getAllFilePaths(), num_rows);
+  auto file_paths = getAllFilePaths();
+  if (file_paths.empty()) {
+    throw ForeignStorageException{"No file found at \"" +
+                                  getFullFilePath(foreign_table_) + "\""};
+  }
+  return chunk_loader.previewFiles(file_paths, num_rows);
 }
 
 // declared in three derived classes to avoid

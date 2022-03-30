@@ -4162,6 +4162,21 @@ void DBHandler::detect_column_types(TDetectResult& _return,
     }
     validate_import_file_path_if_local(file_name);
 
+    if ((copy_params.source_type == import_export::SourceType::kGeoFile ||
+         copy_params.source_type == import_export::SourceType::kRasterFile) &&
+        is_local_file(file_name)) {
+      auto file_paths =
+          shared::local_glob_filter_sort_files(file_name,
+                                               copy_params.regex_path_filter,
+                                               copy_params.file_sort_order_by,
+                                               copy_params.file_sort_regex,
+                                               false);
+      // For geo and raster detect, pick the first file, if multiple files are provided
+      // (e.g. through file globbing).
+      CHECK(!file_paths.empty());
+      file_name = file_paths[0];
+    }
+
     // if it's a geo or raster import, handle alternative paths (S3, HTTP, archive etc.)
     if (copy_params.source_type == import_export::SourceType::kGeoFile) {
       if (is_a_supported_archive_file(file_name)) {
@@ -4202,12 +4217,14 @@ void DBHandler::detect_column_types(TDetectResult& _return,
           copy_params.source_type == import_export::SourceType::kRasterFile) {
         // check for geo or raster file
         if (!import_export::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
-          THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+          THROW_MAPD_EXCEPTION("File or directory \"" + file_path.string() +
+                               "\" does not exist.")
         }
       } else {
         // check for regular file
         if (!shared::file_or_glob_path_exists(file_path.string())) {
-          THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+          THROW_MAPD_EXCEPTION("File or directory \"" + file_path.string() +
+                               "\" does not exist.");
         }
       }
     }
@@ -5075,7 +5092,8 @@ void DBHandler::import_table(const TSessionId& session,
         file_name = file_path.string();
       }
       if (!shared::file_or_glob_path_exists(file_path.string())) {
-        THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+        THROW_MAPD_EXCEPTION("File or directory \"" + file_path.string() +
+                             "\" does not exist.");
       }
     }
     validate_import_file_path_if_local(file_name);
