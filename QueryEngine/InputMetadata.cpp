@@ -269,6 +269,7 @@ ChunkMetadataMap synthesize_metadata_table_function(const ResultSet* rows) {
             static_cast<int32_t>(inline_fixed_encoding_null_val(col_sql_type_info)));
         break;
       case kBIGINT:
+      case kTIMESTAMP:
         compute_table_function_col_chunk_stats(
             chunk_metadata,
             reinterpret_cast<const int64_t*>(columnar_buffer),
