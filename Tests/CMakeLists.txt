@@ -6,9 +6,17 @@ add_definitions("-DBASE_PATH=\"${TEST_BASE_PATH}\"")
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Udf/udf_sample.cpp DESTINATION ${CMAKE_BINARY_DIR}/Tests/Udf)
 
+set(test_helpers_files
+    ArrowSQLRunner.cpp
+    SchemaJson.cpp
+    SQLiteComparator.cpp
+)
+
+add_library(TestHelpers ${test_helpers_files})
+
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
-add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp SchemaJson.cpp)
+add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
@@ -84,9 +92,9 @@ if(NOT MSVC)
   add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
 endif()
 add_executable(NoCatalogRelAlgTest NoCatalogRelAlgTest.cpp TestRelAlgDagBuilder.cpp)
-add_executable(NoCatalogSqlTest NoCatalogSqlTest.cpp SchemaJson.cpp)
+add_executable(NoCatalogSqlTest NoCatalogSqlTest.cpp)
 add_executable(ArrowStorageTest ArrowStorageTest.cpp)
-add_executable(ArrowStorageSqlTest ArrowStorageSqlTest.cpp SchemaJson.cpp)
+add_executable(ArrowStorageSqlTest ArrowStorageSqlTest.cpp)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
@@ -103,7 +111,7 @@ endif()
 
 # Tests + Microbenchmarks
 
-set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
+set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt TestHelpers ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 # Replace Licensing library with TestLicensing library
@@ -206,8 +214,8 @@ target_link_libraries(JSONTest gtest Logger Shared)
 target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(NoCatalogRelAlgTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(NoCatalogSqlTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(ArrowStorageTest ArrowStorage ${EXECUTE_TEST_LIBS})
-target_link_libraries(ArrowStorageSqlTest ArrowStorage ${EXECUTE_TEST_LIBS})
+target_link_libraries(ArrowStorageTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ArrowStorageSqlTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ParallelSortTest ${EXECUTE_TEST_LIBS} ${THRIFT_HANDLER_TEST_LIBRARIES})
 
 

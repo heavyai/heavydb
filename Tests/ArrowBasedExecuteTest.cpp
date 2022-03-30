@@ -14,34 +14,15 @@
  * limitations under the License.
  */
 
+#include "ArrowSQLRunner.h"
+#include "SQLiteComparator.h"
 #include "TestHelpers.h"
 
-#include "ArrowStorage/ArrowStorage.h"
-#include "BufferPoolStats.h"
-#include "Calcite/Calcite.h"
-#include "DataMgr/DataMgr.h"
-#include "DataMgr/DataMgrDataProvider.h"
-#include "DistributedLoader.h"
 #include "ImportExport/Importer.h"
-#include "Parser/parser.h"
 #include "QueryEngine/ArrowResultSet.h"
-#include "QueryEngine/CalciteAdapter.h"
-#include "QueryEngine/CgenState.h"
-#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/Execute.h"
-#include "QueryEngine/ExpressionRange.h"
-#include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
-#include "QueryEngine/ThriftSerializers.h"
-#include "Shared/DateConverters.h"
-#include "Shared/DateTimeParser.h"
-#include "Shared/StringTransform.h"
 #include "Shared/scope.h"
-#include "SqliteConnector/SqliteConnector.h"
-
-#include "gen-cpp/CalciteServer.h"
-
-#include "SchemaJson.h"
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
@@ -51,12 +32,9 @@
 #include <cmath>
 #include <cstdio>
 
-#ifdef _WIN32
-#define timegm _mkgmtime
-#endif
-
 using namespace std;
 using namespace TestHelpers;
+using namespace TestHelpers::ArrowSQLRunner;
 
 bool g_aggregator{false};
 
@@ -95,315 +73,12 @@ ArrayDatum StringToArray(const std::string& s,
 
 namespace {
 
-bool g_hoist_literals{true};
-bool g_use_row_iterator{true};
-
-constexpr double EPS = 1.25e-5;
-
-class SQLiteComparator {
- public:
-  SQLiteComparator() : connector_("sqliteTestDB", "") {}
-
-  void query(const std::string& query_string) { connector_.query(query_string); }
-
-  void compare(ResultSetPtr omnisci_results,
-               const std::string& query_string,
-               const ExecutorDeviceType device_type) {
-    compare_impl(omnisci_results.get(), query_string, device_type, false);
-  }
-
-  void compare_arrow_output(std::unique_ptr<ArrowResultSet>& arrow_omnisci_results,
-                            const std::string& sqlite_query_string,
-                            const ExecutorDeviceType device_type) {
-    compare_impl(
-        arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
-  }
-
-  // added to deal with time shift for now testing
-  void compare_timstamp_approx(ResultSetPtr omnisci_results,
-                               const std::string& query_string,
-                               const ExecutorDeviceType device_type) {
-    compare_impl(omnisci_results.get(), query_string, device_type, true);
-  }
-
- private:
-  // Moved from TimeGM::parse_fractional_seconds().
-  int parse_fractional_seconds(unsigned sfrac, const int ntotal, const SQLTypeInfo& ti) {
-    int dimen = ti.get_dimension();
-    int nfrac = log10(sfrac) + 1;
-    if (ntotal - nfrac > dimen) {
-      return 0;
-    }
-    if (ntotal >= 0 && ntotal < dimen) {
-      sfrac *= pow(10, dimen - ntotal);
-    } else if (ntotal > dimen) {
-      sfrac /= pow(10, ntotal - dimen);
-    }
-    return sfrac;
-  }
-
-  template <class RESULT_SET>
-  void compare_impl(const RESULT_SET* omnisci_results,
-                    const std::string& sqlite_query_string,
-                    const ExecutorDeviceType device_type,
-                    const bool timestamp_approx,
-                    const bool is_arrow = false) {
-    auto const errmsg = ExecutorDeviceType::CPU == device_type
-                            ? "CPU: " + sqlite_query_string
-                            : "GPU: " + sqlite_query_string;
-    connector_.query(sqlite_query_string);
-    ASSERT_EQ(connector_.getNumRows(), omnisci_results->rowCount()) << errmsg;
-    const int num_rows{static_cast<int>(connector_.getNumRows())};
-    if (omnisci_results->definitelyHasNoRows()) {
-      ASSERT_EQ(0, num_rows) << errmsg;
-      return;
-    }
-    if (!num_rows) {
-      return;
-    }
-    CHECK_EQ(connector_.getNumCols(), omnisci_results->colCount()) << errmsg;
-    const int num_cols{static_cast<int>(connector_.getNumCols())};
-    auto row_iterator = omnisci_results->rowIterator(true, true);
-    for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
-      const auto crt_row =
-          g_use_row_iterator ? *row_iterator++ : omnisci_results->getNextRow(true, true);
-      CHECK(!crt_row.empty()) << errmsg;
-      CHECK_EQ(static_cast<size_t>(num_cols), crt_row.size()) << errmsg;
-      for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
-        const auto ref_col_type = connector_.columnTypes[col_idx];
-        const auto omnisci_variant = crt_row[col_idx];
-        const auto scalar_omnisci_variant =
-            boost::get<ScalarTargetValue>(&omnisci_variant);
-        CHECK(scalar_omnisci_variant) << errmsg;
-        auto omnisci_ti = omnisci_results->getColType(col_idx);
-        const auto omnisci_type = omnisci_ti.get_type();
-        checkTypeConsistency(ref_col_type, omnisci_ti);
-        const bool ref_is_null = connector_.isNull(row_idx, col_idx);
-        switch (omnisci_type) {
-          case kTINYINT:
-          case kSMALLINT:
-          case kINT:
-          case kBIGINT: {
-            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
-            ASSERT_NE(nullptr, omnisci_as_int_p);
-            const auto omnisci_val = *omnisci_as_int_p;
-            if (ref_is_null) {
-              ASSERT_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
-            } else {
-              const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
-              ASSERT_EQ(ref_val, omnisci_val) << errmsg;
-            }
-            break;
-          }
-          case kTEXT:
-          case kCHAR:
-          case kVARCHAR: {
-            const auto omnisci_as_str_p =
-                boost::get<NullableString>(scalar_omnisci_variant);
-            ASSERT_NE(nullptr, omnisci_as_str_p) << errmsg;
-            const auto omnisci_str_notnull = boost::get<std::string>(omnisci_as_str_p);
-            const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-            if (omnisci_str_notnull) {
-              const auto omnisci_val = *omnisci_str_notnull;
-              ASSERT_EQ(ref_val, omnisci_val) << errmsg;
-            } else {
-              // not null but no data, so val is empty string
-              const auto omnisci_val = "";
-              ASSERT_EQ(ref_val, omnisci_val) << errmsg;
-            }
-            break;
-          }
-          case kNUMERIC:
-          case kDECIMAL:
-          case kDOUBLE: {
-            const auto omnisci_as_double_p = boost::get<double>(scalar_omnisci_variant);
-            ASSERT_NE(nullptr, omnisci_as_double_p) << errmsg;
-            const auto omnisci_val = *omnisci_as_double_p;
-            if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kDOUBLE, false)), omnisci_val)
-                  << errmsg;
-            } else {
-              const auto ref_val = connector_.getData<double>(row_idx, col_idx);
-              if (!std::isinf(omnisci_val) || !std::isinf(ref_val) ||
-                  ((omnisci_val < 0) ^ (ref_val < 0))) {
-                ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
-              }
-            }
-            break;
-          }
-          case kFLOAT: {
-            const auto omnisci_as_float_p = boost::get<float>(scalar_omnisci_variant);
-            ASSERT_NE(nullptr, omnisci_as_float_p) << errmsg;
-            const auto omnisci_val = *omnisci_as_float_p;
-            if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kFLOAT, false)), omnisci_val)
-                  << errmsg;
-            } else {
-              const auto ref_val = connector_.getData<float>(row_idx, col_idx);
-              if (!std::isinf(omnisci_val) || !std::isinf(ref_val) ||
-                  ((omnisci_val < 0) ^ (ref_val < 0))) {
-                ASSERT_NEAR(ref_val, omnisci_val, EPS * std::fabs(ref_val)) << errmsg;
-              }
-            }
-            break;
-          }
-          case kTIMESTAMP:
-          case kDATE: {
-            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
-            CHECK(omnisci_as_int_p);
-            const auto omnisci_val = *omnisci_as_int_p;
-            time_t nsec = 0;
-            const int dimen = omnisci_ti.get_dimension();
-            if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
-            } else {
-              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              auto temp_val = dateTimeParseOptional<kTIMESTAMP>(ref_val, dimen);
-              if (!temp_val) {
-                temp_val = dateTimeParseOptional<kDATE>(ref_val, dimen);
-              }
-              CHECK(temp_val) << ref_val;
-              nsec = temp_val.value();
-              if (timestamp_approx) {
-                // approximate result give 10 second lee way
-                ASSERT_NEAR(
-                    *omnisci_as_int_p, nsec, dimen > 0 ? 10 * pow(10, dimen) : 10);
-              } else {
-                struct tm tm_struct {
-                  0
-                };
-#ifdef _WIN32
-                auto ret_code = gmtime_s(&tm_struct, &nsec);
-                CHECK(ret_code == 0) << "Error code returned " << ret_code;
-#else
-                gmtime_r(&nsec, &tm_struct);
-#endif
-                if (is_arrow && omnisci_type == kDATE) {
-                  if (device_type == ExecutorDeviceType::CPU) {
-                    ASSERT_EQ(
-                        *omnisci_as_int_p,
-                        DateConverters::get_epoch_days_from_seconds(timegm(&tm_struct)))
-                        << errmsg;
-                  } else {
-                    ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
-                        << errmsg;
-                  }
-                } else {
-                  ASSERT_EQ(*omnisci_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
-                      << errmsg;
-                }
-              }
-            }
-            break;
-          }
-          case kBOOLEAN: {
-            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
-            CHECK(omnisci_as_int_p) << errmsg;
-            const auto omnisci_val = *omnisci_as_int_p;
-            if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
-            } else {
-              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              if (ref_val == "t") {
-                ASSERT_EQ(1, *omnisci_as_int_p) << errmsg;
-              } else {
-                CHECK_EQ("f", ref_val) << errmsg;
-                ASSERT_EQ(0, *omnisci_as_int_p) << errmsg;
-              }
-            }
-            break;
-          }
-          case kTIME: {
-            const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
-            CHECK(omnisci_as_int_p) << errmsg;
-            const auto omnisci_val = *omnisci_as_int_p;
-            if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
-            } else {
-              const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              std::vector<std::string> time_tokens;
-              boost::split(time_tokens, ref_val, boost::is_any_of(":"));
-              ASSERT_EQ(size_t(3), time_tokens.size()) << errmsg;
-              ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
-                            boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
-                            boost::lexical_cast<int64_t>(time_tokens[2]),
-                        *omnisci_as_int_p)
-                  << errmsg;
-            }
-            break;
-          }
-          default:
-            CHECK(false) << errmsg;
-        }
-      }
-    }
-  }
-
- private:
-  static void checkTypeConsistency(const int ref_col_type,
-                                   const SQLTypeInfo& omnisci_ti) {
-    if (ref_col_type == SQLITE_NULL) {
-      // TODO(alex): re-enable the check that omnisci_ti is nullable,
-      //             got invalidated because of outer joins
-      return;
-    }
-    if (omnisci_ti.is_integer()) {
-      CHECK_EQ(SQLITE_INTEGER, ref_col_type);
-    } else if (omnisci_ti.is_fp() || omnisci_ti.is_decimal()) {
-      CHECK(ref_col_type == SQLITE_FLOAT || ref_col_type == SQLITE_INTEGER);
-    } else {
-      CHECK_EQ(SQLITE_TEXT, ref_col_type);
-    }
-  }
-
-  SqliteConnector connector_;
-};
-
 const size_t g_num_rows{10};
 
 }  // namespace
 
 class ExecuteTestBase {
  public:
-  static constexpr int TEST_SCHEMA_ID = 1;
-  static constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
-
-  static constexpr int CALCITE_PORT = 3278;
-
-  static void init() {
-    storage_ = std::make_shared<ArrowStorage>(TEST_SCHEMA_ID, "test", TEST_DB_ID);
-
-    std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
-    bool uses_gpu = false;
-#ifdef HAVE_CUDA
-    cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
-    uses_gpu = true;
-#endif
-
-    SystemParameters system_parameters;
-    data_mgr_ =
-        std::make_shared<DataMgr>("", system_parameters, std::move(cuda_mgr), uses_gpu);
-    auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
-    ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
-
-    executor_ = std::make_shared<Executor>(0,
-                                           data_mgr_.get(),
-                                           data_mgr_->getBufferProvider(),
-                                           system_parameters.cuda_block_size,
-                                           system_parameters.cuda_grid_size,
-                                           system_parameters.max_gpu_slab_size,
-                                           "",
-                                           "");
-
-    calcite_ = std::make_shared<Calcite>(-1, CALCITE_PORT, "", 1024, 5000, true, "");
-    ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
-    table_functions::TableFunctionsFactory::init();
-    auto udtfs = ThriftSerializers::to_thrift(
-        table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
-    std::vector<TUserDefinedFunction> udfs = {};
-    calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
-  }
-
   static void createEmptyTestTable() {
     createTable("empty_test_table",
                 {{"id", SQLTypeInfo(kINT)},
@@ -414,29 +89,29 @@ class ExecuteTestBase {
                  {"f", SQLTypeInfo(kFLOAT)},
                  {"d", SQLTypeInfo(kDOUBLE)},
                  {"b", SQLTypeInfo(kBOOLEAN)}});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS empty_test_table;");
+    run_sqlite_query("DROP TABLE IF EXISTS empty_test_table;");
     std::string create_statement(
         "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t "
         "tinyint, "
         "f float, d double, b boolean);");
-    sqlite_comparator_.query(create_statement);
+    run_sqlite_query(create_statement);
   }
 
   static void createTestRangesTable() {
     createTable(
         "test_ranges", {{"i", SQLTypeInfo(kINT)}, {"b", SQLTypeInfo(kBIGINT)}}, {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_ranges;");
-    sqlite_comparator_.query("CREATE TABLE test_ranges(i INT, b BIGINT);");
+    run_sqlite_query("DROP TABLE IF EXISTS test_ranges;");
+    run_sqlite_query("CREATE TABLE test_ranges(i INT, b BIGINT);");
     {
       const std::string insert_query{
           "INSERT INTO test_ranges VALUES(2147483647, 9223372036854775806);"};
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
       insertCsvValues("test_ranges", "2147483647, 9223372036854775806");
     }
     {
       const std::string insert_query{
           "INSERT INTO test_ranges VALUES(-2147483647, -9223372036854775807);"};
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
       insertCsvValues("test_ranges", "-2147483647, -9223372036854775807");
     }
   }
@@ -452,8 +127,8 @@ class ExecuteTestBase {
                  {"dt16", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 16, kNULLT)},
                  {"ts", SQLTypeInfo(kTIMESTAMP)}},
                 {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_inner;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS test_inner;");
+    run_sqlite_query(
         "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text, dt "
         "DATE, "
         "dt32 DATE, dt16 DATE, ts DATETIME);");
@@ -463,7 +138,7 @@ class ExecuteTestBase {
           "'1999-09-09', '2014-12-13 22:23:15');"};
       insertCsvValues("test_inner",
                       "7,43,7,foo,1999-09-09,1999-09-09,1999-09-09,2014-12-13 22:23:15");
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
     {
       const std::string insert_query{
@@ -472,13 +147,13 @@ class ExecuteTestBase {
       insertCsvValues(
           "test_inner",
           "-9,72,-9,bars,2014-12-13,2014-12-13,2014-12-13,1999-09-09 14:15:16");
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
   }
 
   static void createTestTable() {
-    auto test_inner = storage_->getTableInfo(TEST_DB_ID, "test_inner");
-    auto test_inner_str = storage_->getColumnInfo(*test_inner, "str");
+    auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
+    auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
     auto test_inner_str_type = test_inner_str->type;
 
     createTable("test",
@@ -519,8 +194,8 @@ class ExecuteTestBase {
                  {"smallint_nulls", SQLTypeInfo(kSMALLINT)},
                  {"bn", SQLTypeInfo(kBOOLEAN, true)}},
                 {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS test;");
+    run_sqlite_query(
         "CREATE TABLE test(x int not null, w tinyint, y int, z smallint, t bigint, b "
         "boolean, f "
         "float, ff float, fn float, d "
@@ -554,7 +229,7 @@ class ExecuteTestBase {
           "22:23:15,2014-12-13 22:23:15.323,1999-07-11 14:02:53.874533,2006-04-26 "
           "03:49:04.607435125,15:13:14,1999-09-09,1999-09-09,1999-09-09,9,111.1,111.1,"
           "fish,,2147483647,-2147483648,,-1,32767,true");
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
     for (size_t i = 0; i < g_num_rows / 2; ++i) {
       const std::string insert_query{
@@ -574,7 +249,7 @@ class ExecuteTestBase {
           "12-13 22:23:15,2014-12-13 22:23:15.323,2014-12-13 22:23:15.874533,2014-12-13 "
           "22:23:15.607435763,15:13:14,,,,,222.2,222.2,,,,-2147483647,"
           "9223372036854775807,-9223372036854775808,,false");
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
     for (size_t i = 0; i < g_num_rows / 2; ++i) {
       const std::string insert_query{
@@ -594,13 +269,13 @@ class ExecuteTestBase {
           "14 22:23:15,2014-12-14 22:23:15.750,2014-12-14 22:23:15.437321,2014-12-14 "
           "22:23:15.934567401,15:13:14,1999-09-09,1999-09-09,1999-09-09,11,333.3,333.3,"
           "boat,,1,-1,1,-9223372036854775808,1,true");
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
   }
 
   static void createTestEmptyTable() {
-    auto test_inner = storage_->getTableInfo(TEST_DB_ID, "test_inner");
-    auto test_inner_str = storage_->getColumnInfo(*test_inner, "str");
+    auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
+    auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
     auto test_inner_str_type = test_inner_str->type;
     createTable("test_empty",
                 {{"x", SQLTypeInfo(kINT, true)},
@@ -636,8 +311,8 @@ class ExecuteTestBase {
                  {"ufq", SQLTypeInfo(kBIGINT, true)}},
                 {2});
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_empty;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS test_empty;");
+    run_sqlite_query(
         "CREATE TABLE test_empty(x int not null, w tinyint, y int, z smallint, t "
         "bigint, b boolean, f float, ff float, fn float, d "
         "double, dn double, str varchar(10), null_str text, fixed_str text, "
@@ -651,8 +326,8 @@ class ExecuteTestBase {
   }
 
   static void createTestOneRowTable() {
-    auto test_inner = storage_->getTableInfo(TEST_DB_ID, "test_inner");
-    auto test_inner_str = storage_->getColumnInfo(*test_inner, "str");
+    auto test_inner = getStorage()->getTableInfo(TEST_DB_ID, "test_inner");
+    auto test_inner_str = getStorage()->getColumnInfo(*test_inner, "str");
     auto test_inner_str_type = test_inner_str->type;
     createTable("test_one_row",
                 {{"x", SQLTypeInfo(kINT, true)},
@@ -688,8 +363,8 @@ class ExecuteTestBase {
                  {"ufq", SQLTypeInfo(kBIGINT, true)}},
                 {2});
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_one_row;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS test_one_row;");
+    run_sqlite_query(
         "CREATE TABLE test_one_row(x int not null, w tinyint, y int, z smallint, t "
         "bigint, b "
         "boolean, "
@@ -719,7 +394,7 @@ class ExecuteTestBase {
           "null, null, null, "
           "-2147483647, "
           "9223372036854775807, -9223372036854775808);"};
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
   }
 
@@ -727,9 +402,9 @@ class ExecuteTestBase {
 
   static void importArrayTest(const std::string& table_name) {
     CHECK_EQ(size_t(0), g_array_test_row_count % 4);
-    auto tinfo = storage_->getTableInfo(TEST_DB_ID, table_name);
+    auto tinfo = getStorage()->getTableInfo(TEST_DB_ID, table_name);
     ASSERT_TRUE(tinfo);
-    auto col_infos = storage_->listColumns(*tinfo);
+    auto col_infos = getStorage()->listColumns(*tinfo);
     std::stringstream json_ss;
     for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
       json_ss << "{";
@@ -861,10 +536,10 @@ class ExecuteTestBase {
                  {"tz", SQLTypeInfo(kTIMESTAMP)},
                  {"dn", SQLTypeInfo(kDECIMAL, 5, 0, false)}},
                 {id == 2 ? 2ULL : 20ULL});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS " + table_name + ";");
-    sqlite_comparator_.query("CREATE TABLE " + table_name +
-                             "(x int not null, y int, str text, dup_str text, d date, t "
-                             "time, tz timestamp, dn decimal(5));");
+    run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
+    run_sqlite_query("CREATE TABLE " + table_name +
+                     "(x int not null, y int, str text, dup_str text, d date, t "
+                     "time, tz timestamp, dn decimal(5));");
     TestHelpers::ValuesGenerator gen(table_name);
     std::stringstream ss;
     for (int i = 0; i < 5; i++) {
@@ -876,7 +551,7 @@ class ExecuteTestBase {
                                     "'12:34:56'",
                                     "'2018-01-01 12:34:56'",
                                     i * 1.1);
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
       ss << i << "," << (20 - i) << ",test,test,2018-01-01,12:34:56,2018-01-01 12:34:56,"
          << int(i * 1.1) << std::endl;
     }
@@ -889,7 +564,7 @@ class ExecuteTestBase {
                                     "'12:34:00'",
                                     "'2017-01-01 12:34:56'",
                                     i * 1.1);
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
       ss << i << "," << (20 - i)
          << ",test1,test1,2017-01-01,12:34:00,2017-01-01 12:34:56," << int(i * 1.1)
          << std::endl;
@@ -904,7 +579,7 @@ class ExecuteTestBase {
                                       "'12:00:56'",
                                       "'2016-01-01 12:34:56'",
                                       i * 1.1);
-        sqlite_comparator_.query(insert_query);
+        run_sqlite_query(insert_query);
         ss << i << "," << (20 - i)
            << ",test2,test2,2016-01-01,12:00:56,2016-01-01 12:34:56," << int(i * 1.1)
            << std::endl;
@@ -920,7 +595,7 @@ class ExecuteTestBase {
                                       "'10:34:56'",
                                       "'2015-01-01 12:34:56'",
                                       i * 1.1);
-        sqlite_comparator_.query(insert_query);
+        run_sqlite_query(insert_query);
         ss << i << "," << (20 - i)
            << ",test3,test3,2015-01-01,10:34:56,2015-01-01 12:34:56," << int(i * 1.1)
            << std::endl;
@@ -932,11 +607,11 @@ class ExecuteTestBase {
   static void createProjTopTable() {
     createTable("proj_top", {{"str", SQLTypeInfo(kTEXT)}, {"x", SQLTypeInfo(kINT)}});
     insertCsvValues("proj_top", "a,7\nb,6\nc,5");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS proj_top;");
-    sqlite_comparator_.query("CREATE TABLE proj_top(str TEXT, x INT);");
-    sqlite_comparator_.query("INSERT INTO proj_top VALUES('a', 7);");
-    sqlite_comparator_.query("INSERT INTO proj_top VALUES('b', 6);");
-    sqlite_comparator_.query("INSERT INTO proj_top VALUES('c', 5);");
+    run_sqlite_query("DROP TABLE IF EXISTS proj_top;");
+    run_sqlite_query("CREATE TABLE proj_top(str TEXT, x INT);");
+    run_sqlite_query("INSERT INTO proj_top VALUES('a', 7);");
+    run_sqlite_query("INSERT INTO proj_top VALUES('b', 6);");
+    run_sqlite_query("INSERT INTO proj_top VALUES('c', 5);");
   }
 
   static void createJoinTestTable() {
@@ -947,26 +622,26 @@ class ExecuteTestBase {
                  {"dup_str", dictType()}},
                 {2});
     insertCsvValues("join_test", "7,43,foo,foo\n8,,bar,foo\n9,,baz,bar");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS join_test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS join_test;");
+    run_sqlite_query(
         "CREATE TABLE join_test(x int not null, y int, str text, dup_str text);");
-    sqlite_comparator_.query("INSERT INTO join_test VALUES(7, 43, 'foo', 'foo');");
-    sqlite_comparator_.query("INSERT INTO join_test VALUES(8, null, 'bar', 'foo');");
-    sqlite_comparator_.query("INSERT INTO join_test VALUES(9, null, 'baz', 'bar');");
+    run_sqlite_query("INSERT INTO join_test VALUES(7, 43, 'foo', 'foo');");
+    run_sqlite_query("INSERT INTO join_test VALUES(8, null, 'bar', 'foo');");
+    run_sqlite_query("INSERT INTO join_test VALUES(9, null, 'baz', 'bar');");
   }
 
   static void createQueryRewriteTestTable() {
     createTable(
         "query_rewrite_test", {{"x", SQLTypeInfo(kINT)}, {"str", dictType()}}, {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS query_rewrite_test;");
-    sqlite_comparator_.query("CREATE TABLE query_rewrite_test(x int, str text);");
+    run_sqlite_query("DROP TABLE IF EXISTS query_rewrite_test;");
+    run_sqlite_query("CREATE TABLE query_rewrite_test(x int, str text);");
     std::stringstream ss;
     for (size_t i = 1; i <= 30; ++i) {
       for (size_t j = 1; j <= i % 2 + 1; ++j) {
         const std::string insert_query{"INSERT INTO query_rewrite_test VALUES(" +
                                        std::to_string(i) + ", 'str" + std::to_string(i) +
                                        "');"};
-        sqlite_comparator_.query(insert_query);
+        run_sqlite_query(insert_query);
         ss << i << ",str" << i << std::endl;
       }
     }
@@ -980,20 +655,19 @@ class ExecuteTestBase {
                  {"deptno", SQLTypeInfo(kINT)}},
                 {2});
     insertCsvValues("emp", "1,Brock,10\n2,Bill,20\n3,Julia,60\n4,David,10");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS emp;");
-    sqlite_comparator_.query(
-        "CREATE TABLE emp(empno INT, ename TEXT NOT NULL, deptno INT);");
-    sqlite_comparator_.query("INSERT INTO emp VALUES(1, 'Brock', 10);");
-    sqlite_comparator_.query("INSERT INTO emp VALUES(2, 'Bill', 20);");
-    sqlite_comparator_.query("INSERT INTO emp VALUES(3, 'Julia', 60);");
-    sqlite_comparator_.query("INSERT INTO emp VALUES(4, 'David', 10);");
+    run_sqlite_query("DROP TABLE IF EXISTS emp;");
+    run_sqlite_query("CREATE TABLE emp(empno INT, ename TEXT NOT NULL, deptno INT);");
+    run_sqlite_query("INSERT INTO emp VALUES(1, 'Brock', 10);");
+    run_sqlite_query("INSERT INTO emp VALUES(2, 'Bill', 20);");
+    run_sqlite_query("INSERT INTO emp VALUES(3, 'Julia', 60);");
+    run_sqlite_query("INSERT INTO emp VALUES(4, 'David', 10);");
   }
 
   void createTestLotsColsTable() {
     const size_t num_columns = 50;
     const std::string table_name("test_lots_cols");
     const std::string drop_table("DROP TABLE IF EXISTS " + table_name + ";");
-    sqlite_comparator_.query(drop_table);
+    run_sqlite_query(drop_table);
     std::string create_query("CREATE TABLE " + table_name + "(");
     std::string insert_query1("INSERT INTO " + table_name + " VALUES (");
     std::string insert_query2(insert_query1);
@@ -1017,11 +691,11 @@ class ExecuteTestBase {
     csv2 += "real_bar";
 
     createTable(table_name, cols, {2});
-    sqlite_comparator_.query(create_query + ");");
+    run_sqlite_query(create_query + ");");
 
     for (size_t i = 0; i < 10; i++) {
       insertCsvValues(table_name, i % 2 ? csv2 : csv1);
-      sqlite_comparator_.query(i % 2 ? insert_query2 : insert_query1);
+      run_sqlite_query(i % 2 ? insert_query2 : insert_query1);
     }
   }
 
@@ -1039,15 +713,12 @@ class ExecuteTestBase {
                 {2});
     insertCsvValues("big_decimal_range_test",
                     "-40840124.400000,1.3\n59016609.300000,1.3\n-999999999999.99,1.3");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS big_decimal_range_test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS big_decimal_range_test;");
+    run_sqlite_query(
         "CREATE TABLE big_decimal_range_test(d DECIMAL(14, 2), d1 DECIMAL(17,11));");
-    sqlite_comparator_.query(
-        "INSERT INTO big_decimal_range_test VALUES(-40840124.400000, 1.3);");
-    sqlite_comparator_.query(
-        "INSERT INTO big_decimal_range_test VALUES(59016609.300000, 1.3);");
-    sqlite_comparator_.query(
-        "INSERT INTO big_decimal_range_test VALUES(-999999999999.99, 1.3);");
+    run_sqlite_query("INSERT INTO big_decimal_range_test VALUES(-40840124.400000, 1.3);");
+    run_sqlite_query("INSERT INTO big_decimal_range_test VALUES(59016609.300000, 1.3);");
+    run_sqlite_query("INSERT INTO big_decimal_range_test VALUES(-999999999999.99, 1.3);");
   }
 
   static void createGpuSortTestTable() {
@@ -1057,17 +728,17 @@ class ExecuteTestBase {
                  {"z", SQLTypeInfo(kSMALLINT)},
                  {"t", SQLTypeInfo(kTINYINT)}},
                 {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS gpu_sort_test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS gpu_sort_test;");
+    run_sqlite_query(
         "CREATE TABLE gpu_sort_test (x bigint, y int, z smallint, t tinyint);");
     TestHelpers::ValuesGenerator gen("gpu_sort_test");
     for (size_t i = 0; i < 4; ++i) {
       insertCsvValues("gpu_sort_test", "2,2,2,2");
-      sqlite_comparator_.query(gen(2, 2, 2, 2));
+      run_sqlite_query(gen(2, 2, 2, 2));
     }
     for (size_t i = 0; i < 6; ++i) {
       insertCsvValues("gpu_sort_test", "16000,16000,16000,127");
-      sqlite_comparator_.query(gen(16000, 16000, 16000, 127));
+      run_sqlite_query(gen(16000, 16000, 16000, 127));
     }
   }
 
@@ -1088,8 +759,8 @@ class ExecuteTestBase {
                     {"double_null", SQLTypeInfo(kDOUBLE)},
                 },
                 {4});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS logical_size_test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS logical_size_test;");
+    run_sqlite_query(
         "CREATE TABLE logical_size_test (big_int BIGINT NOT NULL, big_int_null BIGINT, "
         "id INT NOT NULL, id_null INT, small_int SMALLINT NOT NULL, small_int_null "
         "SMALLINT, tiny_int TINYINT NOT NULL, tiny_int_null TINYINT, float_not_null "
@@ -1124,7 +795,7 @@ class ExecuteTestBase {
     query_maker("2002,63,7,6,75,-32767,13,-2,4.7,-4.1,22.7,-33.3");
     query_maker("2002,NULL,5,NULL,76,NULL,15,NULL,4.4,NULL,22.5,-23.4");
     for (auto insert_query : insert_queries) {
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
     insertCsvValues("logical_size_test", csv_data);
   }
@@ -1137,8 +808,8 @@ class ExecuteTestBase {
                  {"x4", SQLTypeInfo(kINT)},
                  {"x5", SQLTypeInfo(kINT)}},
                 {256});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS random_test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS random_test;");
+    run_sqlite_query(
         "CREATE TABLE random_test (x1 int, x2 int, x3 int, x4 int, x5 int);");
 
     TestHelpers::ValuesGenerator gen("random_test");
@@ -1151,7 +822,7 @@ class ExecuteTestBase {
       int32_t x4 =
           static_cast<int32_t>(100000000 * std::floor(10 * std::sin(i * pi / 32.0)));
       int32_t x5 = static_cast<int32_t>(std::floor(1000000000 * std::cos(i * pi / 32.0)));
-      sqlite_comparator_.query(gen(x1, x2, x3, x4, x5));
+      run_sqlite_query(gen(x1, x2, x3, x4, x5));
       csv_data += std::to_string(x1) + "," + std::to_string(x2) + "," +
                   std::to_string(x3) + "," + std::to_string(x4) + "," +
                   std::to_string(x5) + "\n";
@@ -1165,8 +836,8 @@ class ExecuteTestBase {
                  {"med_dec", SQLTypeInfo(kDECIMAL, 9, 2, false)},
                  {"small_dec", SQLTypeInfo(kDECIMAL, 4, 2, false)}},
                 {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS decimal_compression_test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS decimal_compression_test;");
+    run_sqlite_query(
         "CREATE TABLE decimal_compression_test(big_dec DECIMAL(17, 2), med_dec "
         "DECIMAL(9, "
         "2), small_dec DECIMAL(4, 2));");
@@ -1175,7 +846,7 @@ class ExecuteTestBase {
       const std::string insert_query{
           "INSERT INTO decimal_compression_test VALUES(999999999999999.99, 9999999.99, "
           "99.99);"};
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
     {
       insertCsvValues("decimal_compression_test",
@@ -1183,13 +854,13 @@ class ExecuteTestBase {
       const std::string insert_query{
           "INSERT INTO decimal_compression_test VALUES(-999999999999999.99, -9999999.99, "
           "-99.99);"};
-      sqlite_comparator_.query(insert_query);
+      run_sqlite_query(insert_query);
     }
     {
       insertCsvValues("decimal_compression_test", "12.24,12.24,12.24");
       const std::string sqlite_insert_query{
           "INSERT INTO decimal_compression_test VALUES(12.24, 12.24 , 12.24);"};
-      sqlite_comparator_.query(sqlite_insert_query);
+      run_sqlite_query(sqlite_insert_query);
     }
   }
 
@@ -1202,8 +873,8 @@ class ExecuteTestBase {
                  {"d", SQLTypeInfo(kDOUBLE, true)},
                  {"dd", SQLTypeInfo(kDECIMAL, 10, 2, true)},
                  {"ts", SQLTypeInfo(kTIMESTAMP)}});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS emptytab;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS emptytab;");
+    run_sqlite_query(
         "CREATE TABLE emptytab(x int not null, y int, t bigint not null, f float not "
         "null, d double not null, dd "
         "decimal(10, 2) not null, ts timestamp);");
@@ -1211,20 +882,20 @@ class ExecuteTestBase {
 
   static void createSubqueryTestTable() {
     createTable("subquery_test", {{"x", SQLTypeInfo(kINT)}}, {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS subquery_test;");
-    sqlite_comparator_.query("CREATE TABLE subquery_test(x int);");
+    run_sqlite_query("DROP TABLE IF EXISTS subquery_test;");
+    run_sqlite_query("CREATE TABLE subquery_test(x int);");
     CHECK_EQ(g_num_rows % 2, size_t(0));
     for (size_t i = 0; i < g_num_rows; ++i) {
       insertCsvValues("subquery_test", "7");
-      sqlite_comparator_.query("INSERT INTO subquery_test VALUES(7);");
+      run_sqlite_query("INSERT INTO subquery_test VALUES(7);");
     }
     for (size_t i = 0; i < g_num_rows / 2; ++i) {
       insertCsvValues("subquery_test", "8");
-      sqlite_comparator_.query("INSERT INTO subquery_test VALUES(8);");
+      run_sqlite_query("INSERT INTO subquery_test VALUES(8);");
     }
     for (size_t i = 0; i < g_num_rows / 2; ++i) {
       insertCsvValues("subquery_test", "9");
-      sqlite_comparator_.query("INSERT INTO subquery_test VALUES(9);");
+      run_sqlite_query("INSERT INTO subquery_test VALUES(9);");
     }
   }
 
@@ -1232,24 +903,24 @@ class ExecuteTestBase {
     createTable("test_in_bitmap", {{"str", dictType()}});
     insertCsvValues("test_in_bitmap", "a\nb\nc");
     insertJsonValues("test_in_bitmap", "{\"str\": null}");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_in_bitmap;");
-    sqlite_comparator_.query("CREATE TABLE test_in_bitmap(str TEXT);");
-    sqlite_comparator_.query("INSERT INTO test_in_bitmap VALUES('a');");
-    sqlite_comparator_.query("INSERT INTO test_in_bitmap VALUES('b');");
-    sqlite_comparator_.query("INSERT INTO test_in_bitmap VALUES('c');");
-    sqlite_comparator_.query("INSERT INTO test_in_bitmap VALUES(NULL);");
+    run_sqlite_query("DROP TABLE IF EXISTS test_in_bitmap;");
+    run_sqlite_query("CREATE TABLE test_in_bitmap(str TEXT);");
+    run_sqlite_query("INSERT INTO test_in_bitmap VALUES('a');");
+    run_sqlite_query("INSERT INTO test_in_bitmap VALUES('b');");
+    run_sqlite_query("INSERT INTO test_in_bitmap VALUES('c');");
+    run_sqlite_query("INSERT INTO test_in_bitmap VALUES(NULL);");
   }
 
   static void createDeptTable() {
     createTable("dept", {{"deptno", SQLTypeInfo(kINT)}, {"dname", dictType()}}, {2});
     insertCsvValues("dept", "10,Sales\n20,Dev\n30,Marketing\n40,HR\n50,QA");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS dept;");
-    sqlite_comparator_.query("CREATE TABLE dept(deptno INT, dname TEXT ENCODING DICT);");
-    sqlite_comparator_.query("INSERT INTO dept VALUES(10, 'Sales');");
-    sqlite_comparator_.query("INSERT INTO dept VALUES(20, 'Dev');");
-    sqlite_comparator_.query("INSERT INTO dept VALUES(30, 'Marketing');");
-    sqlite_comparator_.query("INSERT INTO dept VALUES(40, 'HR');");
-    sqlite_comparator_.query("INSERT INTO dept VALUES(50, 'QA');");
+    run_sqlite_query("DROP TABLE IF EXISTS dept;");
+    run_sqlite_query("CREATE TABLE dept(deptno INT, dname TEXT ENCODING DICT);");
+    run_sqlite_query("INSERT INTO dept VALUES(10, 'Sales');");
+    run_sqlite_query("INSERT INTO dept VALUES(20, 'Dev');");
+    run_sqlite_query("INSERT INTO dept VALUES(30, 'Marketing');");
+    run_sqlite_query("INSERT INTO dept VALUES(40, 'HR');");
+    run_sqlite_query("INSERT INTO dept VALUES(50, 'QA');");
   }
 
   static void createArrayTestInnerTable() {
@@ -1273,28 +944,27 @@ class ExecuteTestBase {
                  {"t", SQLTypeInfo(kBIGINT)}},
                 {2});
     insertCsvValues("hash_join_test", "7,foo,1001\n8,bar,5000000000\n9,the,1002");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS hash_join_test;");
-    sqlite_comparator_.query(
-        "CREATE TABLE hash_join_test(x int not null, str text, t BIGINT);");
-    sqlite_comparator_.query("INSERT INTO hash_join_test VALUES(7, 'foo', 1001);");
-    sqlite_comparator_.query("INSERT INTO hash_join_test VALUES(8, 'bar', 5000000000);");
-    sqlite_comparator_.query("INSERT INTO hash_join_test VALUES(9, 'the', 1002);");
+    run_sqlite_query("DROP TABLE IF EXISTS hash_join_test;");
+    run_sqlite_query("CREATE TABLE hash_join_test(x int not null, str text, t BIGINT);");
+    run_sqlite_query("INSERT INTO hash_join_test VALUES(7, 'foo', 1001);");
+    run_sqlite_query("INSERT INTO hash_join_test VALUES(8, 'bar', 5000000000);");
+    run_sqlite_query("INSERT INTO hash_join_test VALUES(9, 'the', 1002);");
   }
 
   static void createBarTable() {
     createTable("bar", {{"str", dictType()}}, {2});
     insertCsvValues("bar", "bar");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS bar;");
-    sqlite_comparator_.query("CREATE TABLE bar(str text);");
-    sqlite_comparator_.query("INSERT INTO bar VALUES('bar');");
+    run_sqlite_query("DROP TABLE IF EXISTS bar;");
+    run_sqlite_query("CREATE TABLE bar(str text);");
+    run_sqlite_query("INSERT INTO bar VALUES('bar');");
   }
 
   static void createSingleRowTestTable() {
     createTable("single_row_test", {{"x", SQLTypeInfo(kINT)}});
     insertJsonValues("single_row_test", "{\"x\": null}");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS single_row_test;");
-    sqlite_comparator_.query("CREATE TABLE single_row_test(x int);");
-    sqlite_comparator_.query("INSERT INTO single_row_test VALUES(null);");
+    run_sqlite_query("DROP TABLE IF EXISTS single_row_test;");
+    run_sqlite_query("CREATE TABLE single_row_test(x int);");
+    run_sqlite_query("INSERT INTO single_row_test VALUES(null);");
   }
 
   static void createTestInnerXTable() {
@@ -1304,10 +974,9 @@ class ExecuteTestBase {
                  {"str", dictType()}},
                 {2});
     insertCsvValues("test_inner_x", "7,43,foo");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_inner_x;");
-    sqlite_comparator_.query(
-        "CREATE TABLE test_inner_x(x int not null, y int, str text);");
-    sqlite_comparator_.query("INSERT INTO test_inner_x VALUES(7, 43, 'foo');");
+    run_sqlite_query("DROP TABLE IF EXISTS test_inner_x;");
+    run_sqlite_query("CREATE TABLE test_inner_x(x int not null, y int, str text);");
+    run_sqlite_query("INSERT INTO test_inner_x VALUES(7, 43, 'foo');");
   }
 
   static void createTestXTable() {
@@ -1341,8 +1010,8 @@ class ExecuteTestBase {
                  {"ofq", SQLTypeInfo(kBIGINT)},
                  {"ufq", SQLTypeInfo(kBIGINT, true)}},
                 {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_x;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS test_x;");
+    run_sqlite_query(
         "CREATE TABLE test_x(x int not null, y int, z smallint, t bigint, b boolean, f "
         "float, ff float, fn float, d "
         "double, dn double, str "
@@ -1355,7 +1024,7 @@ class ExecuteTestBase {
         "null);");
     CHECK_EQ(g_num_rows % 2, size_t(0));
     for (size_t i = 0; i < g_num_rows; ++i) {
-      sqlite_comparator_.query(
+      run_sqlite_query(
           "INSERT INTO test_x VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
           "'foo', null, 'foo', 'real_foo', '2014-12-13 22:23:15', "
           "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, "
@@ -1366,7 +1035,7 @@ class ExecuteTestBase {
                       "fish,,2147483647,-2147483648,,-1");
     }
     for (size_t i = 0; i < g_num_rows / 2; ++i) {
-      sqlite_comparator_.query(
+      run_sqlite_query(
           "INSERT INTO test_x VALUES(8, 43, 102, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
           "-2002.4, 'bar', null, 'bar', 'real_bar', '2014-12-13 22:23:15', "
           "'15:13:14', NULL, NULL, NULL, NULL, 222.2, 222.2, null, null, null, "
@@ -1378,7 +1047,7 @@ class ExecuteTestBase {
           "9223372036854775808");
     }
     for (size_t i = 0; i < g_num_rows / 2; ++i) {
-      sqlite_comparator_.query(
+      run_sqlite_query(
           "INSERT INTO test_x VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
           "-220.6, 'baz', null, 'baz', 'real_baz', '2014-12-13 22:23:15', "
           "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, "
@@ -1393,15 +1062,15 @@ class ExecuteTestBase {
 
   static void createBweqTestTable() {
     createTable("bweq_test", {{"x", SQLTypeInfo(kINT)}}, {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS bweq_test");
-    sqlite_comparator_.query("create table bweq_test (x int);");
+    run_sqlite_query("DROP TABLE IF EXISTS bweq_test");
+    run_sqlite_query("create table bweq_test (x int);");
     for (auto i = 0; i < 15; i++) {
       insertCsvValues("bweq_test", "7");
-      sqlite_comparator_.query("insert into bweq_test values(7);");
+      run_sqlite_query("insert into bweq_test values(7);");
     }
     for (auto i = 0; i < 5; i++) {
       insertJsonValues("bweq_test", "{\"x\": null}");
-      sqlite_comparator_.query("insert into bweq_test values(NULL);");
+      run_sqlite_query("insert into bweq_test values(NULL);");
     }
   }
 
@@ -1410,13 +1079,13 @@ class ExecuteTestBase {
         "outer_join_foo",
         {{"a", SQLTypeInfo(kINT)}, {"b", SQLTypeInfo(kINT)}, {"c", SQLTypeInfo(kINT)}});
     insertCsvValues("outer_join_foo", "1,3,2\n2,3,4\n,6,7\n7,,8\n,,10");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS outer_join_foo;");
-    sqlite_comparator_.query("CREATE TABLE outer_join_foo (a int, b int, c int);");
-    sqlite_comparator_.query("INSERT INTO outer_join_foo VALUES (1,3,2)");
-    sqlite_comparator_.query("INSERT INTO outer_join_foo VALUES (2,3,4)");
-    sqlite_comparator_.query("INSERT INTO outer_join_foo VALUES (null,6,7)");
-    sqlite_comparator_.query("INSERT INTO outer_join_foo VALUES (7,null,8)");
-    sqlite_comparator_.query("INSERT INTO outer_join_foo VALUES (null,null,10)");
+    run_sqlite_query("DROP TABLE IF EXISTS outer_join_foo;");
+    run_sqlite_query("CREATE TABLE outer_join_foo (a int, b int, c int);");
+    run_sqlite_query("INSERT INTO outer_join_foo VALUES (1,3,2)");
+    run_sqlite_query("INSERT INTO outer_join_foo VALUES (2,3,4)");
+    run_sqlite_query("INSERT INTO outer_join_foo VALUES (null,6,7)");
+    run_sqlite_query("INSERT INTO outer_join_foo VALUES (7,null,8)");
+    run_sqlite_query("INSERT INTO outer_join_foo VALUES (null,null,10)");
   }
 
   static void createOuterJoinBarTable() {
@@ -1424,13 +1093,13 @@ class ExecuteTestBase {
         "outer_join_bar",
         {{"d", SQLTypeInfo(kINT)}, {"e", SQLTypeInfo(kINT)}, {"f", SQLTypeInfo(kINT)}});
     insertCsvValues("outer_join_bar", "1,3,4\n4,3,5\n,9,7\n9,,8\n,,11");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS outer_join_bar;");
-    sqlite_comparator_.query("CREATE TABLE outer_join_bar (d int, e int, f int);");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar VALUES (1,3,4)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar VALUES (4,3,5)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar VALUES (null,9,7)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar VALUES (9,null,8)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar VALUES (null,null,11)");
+    run_sqlite_query("DROP TABLE IF EXISTS outer_join_bar;");
+    run_sqlite_query("CREATE TABLE outer_join_bar (d int, e int, f int);");
+    run_sqlite_query("INSERT INTO outer_join_bar VALUES (1,3,4)");
+    run_sqlite_query("INSERT INTO outer_join_bar VALUES (4,3,5)");
+    run_sqlite_query("INSERT INTO outer_join_bar VALUES (null,9,7)");
+    run_sqlite_query("INSERT INTO outer_join_bar VALUES (9,null,8)");
+    run_sqlite_query("INSERT INTO outer_join_bar VALUES (null,null,11)");
   }
 
   static void createOuterJoinBar2Table() {
@@ -1445,15 +1114,15 @@ class ExecuteTestBase {
     insertCsvValues(
         "outer_join_bar2",
         "1,3,4,1,1,1,1\n4,3,5,2,2,2,2\n,9,7,2,2,2,2\n9,,8,2,2,2,2\n,,11,2,2,2,2");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS outer_join_bar2;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS outer_join_bar2;");
+    run_sqlite_query(
         "CREATE TABLE outer_join_bar2 (d int, e int, f int, g int, h int, i int, j "
         "int)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar2 VALUES (1,3,4,1,1,1,1)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar2 VALUES (4,3,5,2,2,2,2)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar2 VALUES (null,9,7,2,2,2,2)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar2 VALUES (9,null,8,2,2,2,2)");
-    sqlite_comparator_.query("INSERT INTO outer_join_bar2 VALUES (null,null,11,2,2,2,2)");
+    run_sqlite_query("INSERT INTO outer_join_bar2 VALUES (1,3,4,1,1,1,1)");
+    run_sqlite_query("INSERT INTO outer_join_bar2 VALUES (4,3,5,2,2,2,2)");
+    run_sqlite_query("INSERT INTO outer_join_bar2 VALUES (null,9,7,2,2,2,2)");
+    run_sqlite_query("INSERT INTO outer_join_bar2 VALUES (9,null,8,2,2,2,2)");
+    run_sqlite_query("INSERT INTO outer_join_bar2 VALUES (null,null,11,2,2,2,2)");
   }
 
   static void createUnnestJoinTestTable() {
@@ -1476,11 +1145,10 @@ class ExecuteTestBase {
         {{"x", SQLTypeInfo(kINT, true)}, {"y", SQLTypeInfo(kINT)}, {"str", dictType()}},
         {2});
     insertCsvValues("test_inner_y", "8,43,bar\n7,43,foo");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_inner_y;");
-    sqlite_comparator_.query(
-        "CREATE TABLE test_inner_y(x int not null, y int, str text);");
-    sqlite_comparator_.query("INSERT INTO test_inner_y VALUES(8, 43, 'bar');");
-    sqlite_comparator_.query("INSERT INTO test_inner_y VALUES(7, 43, 'foo');");
+    run_sqlite_query("DROP TABLE IF EXISTS test_inner_y;");
+    run_sqlite_query("CREATE TABLE test_inner_y(x int not null, y int, str text);");
+    run_sqlite_query("INSERT INTO test_inner_y VALUES(8, 43, 'bar');");
+    run_sqlite_query("INSERT INTO test_inner_y VALUES(7, 43, 'foo');");
   }
 
   static void createHashJoinDecimalTest() {
@@ -1490,14 +1158,14 @@ class ExecuteTestBase {
                 {2});
     insertCsvValues("hash_join_decimal_test",
                     "1.00,1.000\n2.00,2.000\n3.00,3.000\n4.00,4.001\n10.00,10.000");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS hash_join_decimal_test;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS hash_join_decimal_test;");
+    run_sqlite_query(
         "CREATE TABLE hash_join_decimal_test(x DECIMAL(18,2), y DECIMAL(18,3));");
-    sqlite_comparator_.query("INSERT INTO hash_join_decimal_test VALUES(1.00, 1.000);");
-    sqlite_comparator_.query("INSERT INTO hash_join_decimal_test VALUES(2.00, 2.000);");
-    sqlite_comparator_.query("INSERT INTO hash_join_decimal_test VALUES(3.00, 3.000);");
-    sqlite_comparator_.query("INSERT INTO hash_join_decimal_test VALUES(4.00, 4.001);");
-    sqlite_comparator_.query("INSERT INTO hash_join_decimal_test VALUES(10.00, 10.000);");
+    run_sqlite_query("INSERT INTO hash_join_decimal_test VALUES(1.00, 1.000);");
+    run_sqlite_query("INSERT INTO hash_join_decimal_test VALUES(2.00, 2.000);");
+    run_sqlite_query("INSERT INTO hash_join_decimal_test VALUES(3.00, 3.000);");
+    run_sqlite_query("INSERT INTO hash_join_decimal_test VALUES(4.00, 4.001);");
+    run_sqlite_query("INSERT INTO hash_join_decimal_test VALUES(10.00, 10.000);");
   }
 
   static void createTextGroupByTestTable() {
@@ -1516,50 +1184,49 @@ class ExecuteTestBase {
         "ts_overflow_underflow",
         "2273-01-01 23:12:12,2273-01-01\n2263-01-01 00:00:00,2263-01-01\n1676-09-21 "
         "00:12:43,1676-09-21\n1677-09-21 00:00:43,1677-09-21\n,");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS ts_overflow_underflow;");
-    sqlite_comparator_.query(
-        "CREATE TABLE ts_overflow_underflow (a TIMESTAMP(0), b DATE);");
+    run_sqlite_query("DROP TABLE IF EXISTS ts_overflow_underflow;");
+    run_sqlite_query("CREATE TABLE ts_overflow_underflow (a TIMESTAMP(0), b DATE);");
 
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO ts_overflow_underflow VALUES('2273-01-01 23:12:12', "
         "'2273-01-01');");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO ts_overflow_underflow VALUES('2263-01-01 00:00:00', "
         "'2263-01-01');");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO ts_overflow_underflow VALUES('1676-09-21 00:12:43', "
         "'1676-09-21');");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO ts_overflow_underflow VALUES('1677-09-21 00:00:43', "
         "'1677-09-21');");
-    sqlite_comparator_.query("INSERT INTO ts_overflow_underflow VALUES(null, null);");
+    run_sqlite_query("INSERT INTO ts_overflow_underflow VALUES(null, null);");
   }
 
   static void createCurrentUserTable() {
     createTable("test_current_user", {{"u", dictType()}});
     insertCsvValues("test_current_user", "SESSIONLESS_USER\nsome_user\nsome_other_user");
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_current_user;");
-    sqlite_comparator_.query("CREATE TABLE test_current_user (u TEXT);");
-    sqlite_comparator_.query("INSERT INTO test_current_user VALUES('SESSIONLESS_USER');");
-    sqlite_comparator_.query("INSERT INTO test_current_user VALUES('some_user');");
-    sqlite_comparator_.query("INSERT INTO test_current_user VALUES('some_other_user');");
+    run_sqlite_query("DROP TABLE IF EXISTS test_current_user;");
+    run_sqlite_query("CREATE TABLE test_current_user (u TEXT);");
+    run_sqlite_query("INSERT INTO test_current_user VALUES('SESSIONLESS_USER');");
+    run_sqlite_query("INSERT INTO test_current_user VALUES('some_user');");
+    run_sqlite_query("INSERT INTO test_current_user VALUES('some_other_user');");
   }
 
   static void createCorrInFactsTable() {
     createTable("corr_in_facts", {{"id", SQLTypeInfo(kINT)}, {"val", SQLTypeInfo(kINT)}});
     insertCsvValues("corr_in_facts", "1,1\n1,2\n1,3\n1,4\n2,1\n2,2\n2,3\n2,4");
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS corr_in_facts;");
-    sqlite_comparator_.query("CREATE TABLE corr_in_facts (id INT, val INT);");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (1,1);");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (1,2)");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (1,3)");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (1,4)");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (2,1)");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (2,2)");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (2,3)");
-    sqlite_comparator_.query("INSERT INTO corr_in_facts VALUES (2,4)");
+    run_sqlite_query("DROP TABLE IF EXISTS corr_in_facts;");
+    run_sqlite_query("CREATE TABLE corr_in_facts (id INT, val INT);");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (1,1);");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (1,2)");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (1,3)");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (1,4)");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (2,1)");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (2,2)");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (2,3)");
+    run_sqlite_query("INSERT INTO corr_in_facts VALUES (2,4)");
   }
 
   static void createCorrInLookup() {
@@ -1567,12 +1234,12 @@ class ExecuteTestBase {
                 {{"id", SQLTypeInfo(kINT)}, {"val", SQLTypeInfo(kINT)}});
     insertCsvValues("corr_in_lookup", "1,1\n2,2\n3,3\n4,4");
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS corr_in_lookup;");
-    sqlite_comparator_.query("CREATE TABLE corr_in_lookup (id INT, val INT);");
-    sqlite_comparator_.query("INSERT INTO corr_in_lookup VALUES (1,1);");
-    sqlite_comparator_.query("INSERT INTO corr_in_lookup VALUES (2,2)");
-    sqlite_comparator_.query("INSERT INTO corr_in_lookup VALUES (3,3)");
-    sqlite_comparator_.query("INSERT INTO corr_in_lookup VALUES (4,4)");
+    run_sqlite_query("DROP TABLE IF EXISTS corr_in_lookup;");
+    run_sqlite_query("CREATE TABLE corr_in_lookup (id INT, val INT);");
+    run_sqlite_query("INSERT INTO corr_in_lookup VALUES (1,1);");
+    run_sqlite_query("INSERT INTO corr_in_lookup VALUES (2,2)");
+    run_sqlite_query("INSERT INTO corr_in_lookup VALUES (3,3)");
+    run_sqlite_query("INSERT INTO corr_in_lookup VALUES (4,4)");
   }
 
   static void createRoundingTable() {
@@ -1589,17 +1256,17 @@ class ExecuteTestBase {
                     "34567.23456\n-3456,-234567,-3456789012,-3456.3456,-34567.23456,"
                     "-34567.23456,-34567.23456\n,,,,,,");
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS test_rounding;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS test_rounding;");
+    run_sqlite_query(
         "CREATE TABLE test_rounding (s16 SMALLINT, s32 INTEGER, s64 BIGINT, f32 FLOAT, "
         "f64 DOUBLE, n64 NUMERIC(10,5), d64 DECIMAL(10,5));");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO test_rounding VALUES(3456, 234567, 3456789012, 3456.3456, "
         "34567.23456, 34567.23456, 34567.23456);");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO test_rounding VALUES(-3456, -234567, -3456789012, -3456.3456, "
         "-34567.23456, -34567.23456, -34567.23456);");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO test_rounding VALUES(NULL, NULL, NULL, NULL, NULL, NULL, NULL);");
   }
 
@@ -1616,43 +1283,42 @@ class ExecuteTestBase {
                  {"dd", SQLTypeInfo(kDOUBLE)}},
                 {multi_frag ? 2ULL : 32000000ULL});
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS " + table_name + ";");
-    sqlite_comparator_.query(
-        "CREATE TABLE " + table_name +
-        " (x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, dd DOUBLE);");
+    run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
+    run_sqlite_query("CREATE TABLE " + table_name +
+                     " (x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, dd DOUBLE);");
     insertCsvValues(table_name, "1,aaa,4,2019-03-02,1,1");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(1, 'aaa', 4, '2019-03-02', 1, 1);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(1, 'aaa', 4, '2019-03-02', 1, 1);");
     insertCsvValues(table_name, "0,aaa,5,2019-03-01,0,0");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(0, 'aaa', 5, '2019-03-01', 0, 0);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(0, 'aaa', 5, '2019-03-01', 0, 0);");
     insertCsvValues(table_name, "2,ccc,6,2019-03-03,2,2");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(2, 'ccc', 6, '2019-03-03', 2, 2);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(2, 'ccc', 6, '2019-03-03', 2, 2);");
     insertCsvValues(table_name, "10,bbb,7,2019-03-11,10,10");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(10, 'bbb', 7, '2019-03-11', 10, 10);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(10, 'bbb', 7, '2019-03-11', 10, 10);");
     insertCsvValues(table_name, "3,bbb,8,2019-03-04,3,3");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(3, 'bbb', 8, '2019-03-04', 3, 3);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(3, 'bbb', 8, '2019-03-04', 3, 3);");
     insertCsvValues(table_name, "6,bbb,9,2019-03-07,6,6");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(6, 'bbb', 9, '2019-03-07', 6, 6);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(6, 'bbb', 9, '2019-03-07', 6, 6);");
     insertCsvValues(table_name, "9,bbb,10,2019-03-10,9,9");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(9, 'bbb', 10, '2019-03-10', 9, 9);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(9, 'bbb', 10, '2019-03-10', 9, 9);");
     insertCsvValues(table_name, "6,bbb,11,2019-03-07,6,6");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(6, 'bbb', 11, '2019-03-07', 6, 6);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(6, 'bbb', 11, '2019-03-07', 6, 6);");
     insertCsvValues(table_name, "9,bbb,12,2019-03-10,9,9");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(9, 'bbb', 12, '2019-03-10', 9, 9);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(9, 'bbb', 12, '2019-03-10', 9, 9);");
     insertCsvValues(table_name, "9,bbb,13,2019-03-10,9,9");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(9, 'bbb', 13, '2019-03-10', 9, 9);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(9, 'bbb', 13, '2019-03-10', 9, 9);");
     insertCsvValues(table_name, ",,14,,,");
-    sqlite_comparator_.query("INSERT INTO " + table_name +
-                             " VALUES(NULL, NULL, 14, NULL, NULL, NULL);");
+    run_sqlite_query("INSERT INTO " + table_name +
+                     " VALUES(NULL, NULL, 14, NULL, NULL, NULL);");
   }
 
   static void createUnionAllTestsTable() {
@@ -1671,11 +1337,11 @@ class ExecuteTestBase {
                  {"b3", SQLTypeInfo(kFLOAT)}},
                 {3});
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS union_all_a;");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS union_all_b;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS union_all_a;");
+    run_sqlite_query("DROP TABLE IF EXISTS union_all_b;");
+    run_sqlite_query(
         "CREATE TABLE union_all_a (a0 SMALLINT, a1 INT, a2 BIGINT, a3 FLOAT);");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "CREATE TABLE union_all_b (b0 SMALLINT, b1 INT, b2 BIGINT, b3 FLOAT);");
 
     for (int i = 0; i < 10; i++) {
@@ -1688,7 +1354,7 @@ class ExecuteTestBase {
                 ',',
                 140 + i,
                 ");");
-      sqlite_comparator_.query(sql);
+      run_sqlite_query(sql);
       insertCsvValues("union_all_a",
                       std::to_string(110 + i) + "," + std::to_string(120 + i) + "," +
                           std::to_string(130 + i) + "," + std::to_string(140 + i));
@@ -1702,7 +1368,7 @@ class ExecuteTestBase {
                 ',',
                 240 + i,
                 ");");
-      sqlite_comparator_.query(sql);
+      run_sqlite_query(sql);
       insertCsvValues("union_all_b",
                       std::to_string(210 + i) + "," + std::to_string(220 + i) + "," +
                           std::to_string(230 + i) + "," + std::to_string(240 + i));
@@ -1771,176 +1437,6 @@ class ExecuteTestBase {
     createWindowFuncTable(false);
     createUnionAllTestsTable();
     createVarlenLazyFetchTable();
-  }
-
-  static void reset() {
-    storage_.reset();
-    executor_.reset();
-    data_mgr_.reset();
-    calcite_.reset();
-  }
-
-  static bool gpusPresent() { return data_mgr_->gpusPresent(); }
-
-  static void printStats() {
-    std::cout << "Total schema to JSON time: " << (schema_to_json_time_ / 1000) << "ms."
-              << std::endl;
-    std::cout << "Total Calcite parsing time: " << (calcite_time_ / 1000) << "ms."
-              << std::endl;
-    std::cout << "Total execution time: " << (execution_time_ / 1000) << "ms."
-              << std::endl;
-  }
-
- protected:
-  static void createTable(
-      const std::string& table_name,
-      const std::vector<ArrowStorage::ColumnDescription>& columns,
-      const ArrowStorage::TableOptions& options = ArrowStorage::TableOptions()) {
-    storage_->createTable(table_name, columns, options);
-  }
-
-  static void dropTable(const std::string& table_name) {
-    storage_->dropTable(table_name);
-  }
-
-  static void insertCsvValues(const std::string& table_name, const std::string& values) {
-    ArrowStorage::CsvParseOptions parse_options;
-    parse_options.header = false;
-    storage_->appendCsvData(values, table_name, parse_options);
-  }
-
-  static void insertJsonValues(const std::string& table_name, const std::string& values) {
-    storage_->appendJsonData(values, table_name);
-  }
-
-  static SQLTypeInfo arrayType(SQLTypes st, int size = 0) {
-    SQLTypeInfo res(kARRAY, (st == kTEXT) ? kENCODING_DICT : kENCODING_NONE, 0, st);
-    if (size) {
-      res.set_size(size * res.get_elem_type().get_size());
-    }
-    return res;
-  }
-
-  static SQLTypeInfo decimalArrayType(int dimension, int scale, int size = 0) {
-    SQLTypeInfo res(kARRAY, dimension, scale, false, kENCODING_NONE, 0, kDECIMAL);
-    if (size) {
-      res.set_size(size * res.get_elem_type().get_size());
-    }
-    return res;
-  }
-
-  static SQLTypeInfo dictType(int size = 4, bool notnull = false, int comp = 0) {
-    SQLTypeInfo res(kTEXT, notnull, kENCODING_DICT);
-    res.set_size(size);
-    res.set_comp_param(comp);
-    return res;
-  }
-
-  static ExecutionResult runSqlQuery(const std::string& sql,
-                                     const CompilationOptions& co,
-                                     const ExecutionOptions& eo) {
-    std::string schema_json;
-    std::string query_ra;
-    ExecutionResult res;
-
-    schema_to_json_time_ += measure<std::chrono::microseconds>::execution(
-        [&]() { schema_json = schema_to_json(storage_); });
-
-    calcite_time_ += measure<std::chrono::microseconds>::execution([&]() {
-      query_ra =
-          calcite_->process("admin", "test_db", pg_shim(sql), schema_json, "", {}, true)
-              .plan_result;
-    });
-
-    execution_time_ += measure<std::chrono::microseconds>::execution([&]() {
-      auto dag =
-          std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
-      auto ra_executor = RelAlgExecutor(executor_.get(),
-                                        TEST_DB_ID,
-                                        storage_,
-                                        data_mgr_->getDataProvider(),
-                                        std::move(dag));
-      res = ra_executor.executeRelAlgQuery(co, eo, false, nullptr);
-    });
-
-    return res;
-  }
-
-  static ExecutionResult runSqlQuery(const std::string& sql,
-                                     ExecutorDeviceType device_type,
-                                     const ExecutionOptions& eo) {
-    return runSqlQuery(sql, getCompilationOptions(device_type), eo);
-  }
-
-  static ExecutionResult runSqlQuery(const std::string& sql,
-                                     ExecutorDeviceType device_type,
-                                     bool allow_loop_joins) {
-    return runSqlQuery(sql, device_type, getExecutionOptions(allow_loop_joins));
-  }
-
-  static ExecutionOptions getExecutionOptions(bool allow_loop_joins,
-                                              bool just_explain = false) {
-    return {g_enable_columnar_output,
-            true,
-            just_explain,
-            allow_loop_joins,
-            false,
-            false,
-            false,
-            false,
-            10000,
-            false,
-            false,
-            g_gpu_mem_limit_percent,
-            false,
-            1000};
-  }
-
-  static CompilationOptions getCompilationOptions(ExecutorDeviceType device_type) {
-    auto co = CompilationOptions::defaults(device_type);
-    co.hoist_literals = g_hoist_literals;
-    return co;
-  }
-
-  static std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
-                                                     const ExecutorDeviceType device_type,
-                                                     const bool allow_loop_joins = true) {
-    return runSqlQuery(query_str, device_type, allow_loop_joins).getRows();
-  }
-
-  static TargetValue run_simple_agg(const string& query_str,
-                                    const ExecutorDeviceType device_type,
-                                    const bool allow_loop_joins = true) {
-    auto rows = run_multiple_agg(query_str, device_type, allow_loop_joins);
-    auto crt_row = rows->getNextRow(true, true);
-    CHECK_EQ(size_t(1), crt_row.size()) << query_str;
-    return crt_row[0];
-  }
-
-  static void c(const std::string& query_string, const ExecutorDeviceType device_type) {
-    sqlite_comparator_.compare(
-        run_multiple_agg(query_string, device_type), query_string, device_type);
-  }
-
-  static void c(const std::string& query_string,
-                const std::string& sqlite_query_string,
-                const ExecutorDeviceType device_type) {
-    sqlite_comparator_.compare(
-        run_multiple_agg(query_string, device_type), sqlite_query_string, device_type);
-  }
-
-  /* timestamp approximate checking for NOW() */
-  static void cta(const std::string& query_string, const ExecutorDeviceType device_type) {
-    sqlite_comparator_.compare_timstamp_approx(
-        run_multiple_agg(query_string, device_type), query_string, device_type);
-  }
-
-  static void c_arrow(const std::string& query_string,
-                      const ExecutorDeviceType device_type) {
-    auto results = run_multiple_agg(query_string, device_type);
-    auto arrow_omnisci_results = result_set_arrow_loopback(nullptr, results, device_type);
-    sqlite_comparator_.compare_arrow_output(
-        arrow_omnisci_results, query_string, device_type);
   }
 
   static void check_date_trunc_groups(const ResultSet& rows) {
@@ -2066,25 +1562,7 @@ class ExecuteTestBase {
         "SELECT CAST(DATE_TRUNC('" + unit + "', TIMESTAMP '" + ts + "') AS TEXT);";
     return boost::get<std::string>(v<NullableString>(run_simple_agg(query, dt)));
   }
-
-  static std::shared_ptr<DataMgr> data_mgr_;
-  static std::shared_ptr<ArrowStorage> storage_;
-  static std::shared_ptr<Executor> executor_;
-  static std::shared_ptr<Calcite> calcite_;
-  static SQLiteComparator sqlite_comparator_;
-  static int64_t schema_to_json_time_;
-  static int64_t calcite_time_;
-  static int64_t execution_time_;
 };
-
-std::shared_ptr<DataMgr> ExecuteTestBase::data_mgr_;
-std::shared_ptr<ArrowStorage> ExecuteTestBase::storage_;
-std::shared_ptr<Executor> ExecuteTestBase::executor_;
-std::shared_ptr<Calcite> ExecuteTestBase::calcite_;
-SQLiteComparator ExecuteTestBase::sqlite_comparator_;
-int64_t ExecuteTestBase::schema_to_json_time_ = 0;
-int64_t ExecuteTestBase::calcite_time_ = 0;
-int64_t ExecuteTestBase::execution_time_ = 0;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -2820,14 +2298,14 @@ TEST_F(Select, AggregateOnEmptyDecimalColumn) {
         createTable(tbl_name, {{"val", SQLTypeInfo(kDECIMAL, p, s)}});
         std::string decimal_prec =
             "val DECIMAL(" + std::to_string(p) + "," + std::to_string(s) + ")";
-        sqlite_comparator_.query("DROP TABLE IF EXISTS " + tbl_name + ";");
-        sqlite_comparator_.query("CREATE TABLE " + tbl_name + "( " + decimal_prec + ");");
+        run_sqlite_query("DROP TABLE IF EXISTS " + tbl_name + ";");
+        run_sqlite_query("CREATE TABLE " + tbl_name + "( " + decimal_prec + ");");
 
         std::string query =
             "SELECT MIN(val), MAX(val), SUM(val), AVG(val) FROM " + tbl_name + ";";
         c(query, dt);
 
-        sqlite_comparator_.query("DROP TABLE IF EXISTS " + tbl_name + ";");
+        run_sqlite_query("DROP TABLE IF EXISTS " + tbl_name + ";");
         dropTable(tbl_name);
       }
     }
@@ -3641,9 +3119,9 @@ TEST_F(Select, ConstantWidthBucketExpr) {
       "double, dc decimal(15,8), n numeric(15,8));";
   auto insert =
       "INSERT INTO wb_test VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);";
-  sqlite_comparator_.query(drop);
-  sqlite_comparator_.query(create);
-  sqlite_comparator_.query(insert);
+  run_sqlite_query(drop);
+  run_sqlite_query(create);
+  run_sqlite_query(insert);
   auto test_queries = [](const std::string col_name) {
     std::string omnisci_query =
         "SELECT WIDTH_BUCKET(" + col_name + ", 1, 2, 3) FROM wb_test;";
@@ -3717,7 +3195,7 @@ TEST_F(Select, ConstantWidthBucketExpr) {
     }
   }
   dropTable("wb_test");
-  sqlite_comparator_.query(drop);
+  run_sqlite_query(drop);
 }
 
 TEST_F(Select, WidthBucketExpr) {
@@ -3746,9 +3224,9 @@ TEST_F(Select, WidthBucketExpr) {
       "double, dcn decimal(15,8), nn numeric(15,8));";
   auto insert_sqlite =
       "INSERT INTO wb_test VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);";
-  sqlite_comparator_.query(drop);
-  sqlite_comparator_.query(create_sqlite);
-  sqlite_comparator_.query(insert_sqlite);
+  run_sqlite_query(drop);
+  run_sqlite_query(create_sqlite);
+  run_sqlite_query(insert_sqlite);
   auto test_queries = [](const std::string col_name) {
     std::string omnisci_query =
         "SELECT WIDTH_BUCKET(" + col_name + ", i4, i4*10, i4*10) FROM wb_test;";
@@ -3834,7 +3312,7 @@ TEST_F(Select, WidthBucketExpr) {
     }
   }
   dropTable("wb_test");
-  sqlite_comparator_.query(drop);
+  run_sqlite_query(drop);
 }
 
 TEST_F(Select, WidthBucketWithGroupBy) {
@@ -3863,13 +3341,13 @@ TEST_F(Select, WidthBucketWithGroupBy) {
   }
   populate_tables.emplace_back("INSERT INTO wb_test_nullable VALUES(null);");
   for (const auto& stmt : drop_tables) {
-    sqlite_comparator_.query(stmt);
+    run_sqlite_query(stmt);
   }
   for (const auto& stmt : create_tables) {
-    sqlite_comparator_.query(stmt);
+    run_sqlite_query(stmt);
   }
   for (const auto& stmt : populate_tables) {
-    sqlite_comparator_.query(stmt);
+    run_sqlite_query(stmt);
   }
 
   auto query_gen = [&](const std::string& table_name, bool for_omnisci, bool has_filter) {
@@ -3907,7 +3385,7 @@ TEST_F(Select, WidthBucketWithGroupBy) {
     c(query_gen("wb_test", true, true), query_gen("wb_test", false, true), dt);
   }
   for (const auto& stmt : drop_tables) {
-    sqlite_comparator_.query(stmt);
+    run_sqlite_query(stmt);
   }
   dropTable("wb_test_nullable");
   dropTable("wb_test_non_nullable");
@@ -7814,9 +7292,9 @@ TEST_F(Select, CastFromNull2) {
   createTable("cast_from_null2",
               {{"d", SQLTypeInfo(kDOUBLE)}, {"dd", SQLTypeInfo(kDECIMAL, 8, 2, false)}});
   insertCsvValues("cast_from_null2", "1.0,");
-  sqlite_comparator_.query("DROP TABLE IF EXISTS cast_from_null2;");
-  sqlite_comparator_.query("CREATE TABLE cast_from_null2 (d DOUBLE, dd DECIMAL(8,2));");
-  sqlite_comparator_.query("INSERT INTO cast_from_null2 VALUES (1.0, NULL);");
+  run_sqlite_query("DROP TABLE IF EXISTS cast_from_null2;");
+  run_sqlite_query("CREATE TABLE cast_from_null2 (d DOUBLE, dd DECIMAL(8,2));");
+  run_sqlite_query("INSERT INTO cast_from_null2 VALUES (1.0, NULL);");
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT d * dd FROM cast_from_null2;", dt);
@@ -10733,26 +10211,23 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
       createTable("BE_6037_a", {{"id", SQLTypeInfo(kINT)}});
       createTable("BE_6037_b", {{"id", SQLTypeInfo(kINT)}});
       createTable("BE_6037_c", {{"id", SQLTypeInfo(kINT)}});
-      sqlite_comparator_.query("DROP TABLE IF EXISTS BE_6037_a;");
-      sqlite_comparator_.query("DROP TABLE IF EXISTS BE_6037_b;");
-      sqlite_comparator_.query("DROP TABLE IF EXISTS BE_6037_c;");
-      sqlite_comparator_.query("CREATE TABLE BE_6037_a (id INT);");
-      sqlite_comparator_.query("CREATE TABLE BE_6037_b (id INT);");
-      sqlite_comparator_.query("CREATE TABLE BE_6037_c (id INT);");
+      run_sqlite_query("DROP TABLE IF EXISTS BE_6037_a;");
+      run_sqlite_query("DROP TABLE IF EXISTS BE_6037_b;");
+      run_sqlite_query("DROP TABLE IF EXISTS BE_6037_c;");
+      run_sqlite_query("CREATE TABLE BE_6037_a (id INT);");
+      run_sqlite_query("CREATE TABLE BE_6037_b (id INT);");
+      run_sqlite_query("CREATE TABLE BE_6037_c (id INT);");
 
       for (int i = 1; i <= 12; i++) {
         insertCsvValues("BE_6037_a", std::to_string(i));
-        sqlite_comparator_.query("INSERT INTO BE_6037_a VALUES ("s + std::to_string(i) +
-                                 ");");
+        run_sqlite_query("INSERT INTO BE_6037_a VALUES ("s + std::to_string(i) + ");");
         if (i % 2 == 0) {
           insertCsvValues("BE_6037_b", std::to_string(i));
-          sqlite_comparator_.query("INSERT INTO BE_6037_b VALUES ("s + std::to_string(i) +
-                                   ");");
+          run_sqlite_query("INSERT INTO BE_6037_b VALUES ("s + std::to_string(i) + ");");
         }
         if (i % 3 == 0) {
           insertCsvValues("BE_6037_c", std::to_string(i));
-          sqlite_comparator_.query("INSERT INTO BE_6037_c VALUES ("s + std::to_string(i) +
-                                   ");");
+          run_sqlite_query("INSERT INTO BE_6037_c VALUES ("s + std::to_string(i) + ");");
         }
       }
       auto q1 =
@@ -10789,9 +10264,9 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
       dropTable("BE_6037_a");
       dropTable("BE_6037_b");
       dropTable("BE_6037_c");
-      sqlite_comparator_.query("DROP TABLE IF EXISTS BE_6037_a;");
-      sqlite_comparator_.query("DROP TABLE IF EXISTS BE_6037_b;");
-      sqlite_comparator_.query("DROP TABLE IF EXISTS BE_6037_c;");
+      run_sqlite_query("DROP TABLE IF EXISTS BE_6037_a;");
+      run_sqlite_query("DROP TABLE IF EXISTS BE_6037_b;");
+      run_sqlite_query("DROP TABLE IF EXISTS BE_6037_c;");
     }
   }
 }
@@ -10831,7 +10306,7 @@ TEST_F(Select, Joins_MultiCompositeColumns) {
 
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+      clearCpuMemory();
     }
   }
 }
@@ -10845,7 +10320,7 @@ TEST_F(Select, Joins_BuildHashTable) {
 
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+      clearCpuMemory();
     }
   }
 }
@@ -10903,7 +10378,7 @@ TEST_F(Select, Joins_CoalesceColumns) {
       dt);
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+      clearCpuMemory();
     }
   }
 }
@@ -10998,7 +10473,7 @@ TEST_F(Select, Joins_TimeAndDate) {
 
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+      clearCpuMemory();
     }
   }
 }
@@ -16858,15 +16333,14 @@ TEST_F(Select, FilterNodeCoalesce) {
   // One-level projection - sanity test
   {
     // Clear CPU memory and hash table caches
-    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+    clearCpuMemory();
     {
       std::string query =
           "SELECT x, t, x * t  FROM test_window_func WHERE x >= 3 ORDER BY x ASC NULLS "
           "FIRST, t ASC NULLS FIRST;";
       c(query, query, dt);
     }
-    const auto buffer_pool_stats =
-        getBufferPoolStats(data_mgr_.get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats();
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(2));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(2));
@@ -16877,7 +16351,7 @@ TEST_F(Select, FilterNodeCoalesce) {
   // Single-step window function
   {
     // Clear CPU memory and hash table caches
-    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+    clearCpuMemory();
     {
       std::string query =
           "SELECT x, y, LAG(f) OVER (PARTITION BY y ORDER BY x ASC) f_lag FROM "
@@ -16886,8 +16360,7 @@ TEST_F(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
 
-    const auto buffer_pool_stats =
-        getBufferPoolStats(data_mgr_.get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats();
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -16898,7 +16371,7 @@ TEST_F(Select, FilterNodeCoalesce) {
   // Multi-step window function to ensure project is inserted before each window step
   {
     // Clear CPU memory and hash table caches
-    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+    clearCpuMemory();
     {
       std::string query =
           "SELECT x, y, RANK() OVER (PARTITION BY y ORDER BY x ASC NULLS FIRST) rk FROM "
@@ -16908,8 +16381,7 @@ TEST_F(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
 
-    const auto buffer_pool_stats =
-        getBufferPoolStats(data_mgr_.get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats();
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(3));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -16920,7 +16392,7 @@ TEST_F(Select, FilterNodeCoalesce) {
   // Multi-fragment window function with filter should run due to preceding compound node
   {
     // Clear CPU memory and hash table caches
-    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+    clearCpuMemory();
     {
       std::string query =
           "SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d ASC NULLS FIRST) sum_d "
@@ -16929,8 +16401,7 @@ TEST_F(Select, FilterNodeCoalesce) {
       c(query, query, dt);
     }
 
-    const auto buffer_pool_stats =
-        getBufferPoolStats(data_mgr_.get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats();
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -16940,15 +16411,14 @@ TEST_F(Select, FilterNodeCoalesce) {
 
   {
     // Clear CPU memory and hash table caches
-    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL, data_mgr_.get());
+    clearCpuMemory();
     {
       std::string query =
           "SELECT x, y, d, SUM(d) OVER (PARTITION BY x ORDER BY d ASC NULLS FIRST) sum_d "
           "FROM test_x ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, d ASC NULLS FIRST;";
       c(query, query, dt);
     }
-    const auto buffer_pool_stats =
-        getBufferPoolStats(data_mgr_.get(), Data_Namespace::MemoryLevel::CPU_LEVEL);
+    const auto buffer_pool_stats = getBufferPoolStats();
     ASSERT_GE(buffer_pool_stats.num_buffers, static_cast<size_t>(30));
     ASSERT_EQ(buffer_pool_stats.num_tables, static_cast<size_t>(1));
     ASSERT_EQ(buffer_pool_stats.num_columns, static_cast<size_t>(3));
@@ -17171,14 +16641,14 @@ TEST_F(Select, GroupEmptyBlank) {
         "blank_test", {{"t1", dictType(4, true)}, {"i1", SQLTypeInfo(kINT)}}, {10});
     insertCsvValues("blank_test", ",1\na,2");
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS blank_test;");
-    sqlite_comparator_.query("CREATE TABLE blank_test (t1 TEXT NOT NULL, i1 INTEGER);");
-    sqlite_comparator_.query("INSERT INTO blank_test VALUES('',1);");
-    sqlite_comparator_.query("INSERT INTO blank_test VALUES('a',2);");
+    run_sqlite_query("DROP TABLE IF EXISTS blank_test;");
+    run_sqlite_query("CREATE TABLE blank_test (t1 TEXT NOT NULL, i1 INTEGER);");
+    run_sqlite_query("INSERT INTO blank_test VALUES('',1);");
+    run_sqlite_query("INSERT INTO blank_test VALUES('a',2);");
 
     c("select t1 from blank_test group by t1 order by t1;", dt);
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS blank_test;");
+    run_sqlite_query("DROP TABLE IF EXISTS blank_test;");
     dropTable("blank_test");
   }
 }
@@ -17522,9 +16992,9 @@ TEST_F(Select, LeftJoinDictionaryGenerationIssue463) {
                  {"notes", dictType()}});
     insertCsvValues("issue463_table2", "keefeti01,Pitching Triple Crown,1888,NL,0,0");
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS issue463_table1;");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS issue463_table2;");
-    sqlite_comparator_.query(
+    run_sqlite_query("DROP TABLE IF EXISTS issue463_table1;");
+    run_sqlite_query("DROP TABLE IF EXISTS issue463_table2;");
+    run_sqlite_query(
         "CREATE TABLE issue463_table1 ("
         " playerID TEXT ENCODING DICT(32),"
         " yearID BIGINT,"
@@ -17548,7 +17018,7 @@ TEST_F(Select, LeftJoinDictionaryGenerationIssue463) {
         " SH BIGINT,"
         " SF BIGINT,"
         " GIDP BIGINT);");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "CREATE TABLE issue463_table2 ("
         " playerID TEXT ENCODING DICT(32),"
         " awardID TEXT ENCODING DICT(32),"
@@ -17556,10 +17026,10 @@ TEST_F(Select, LeftJoinDictionaryGenerationIssue463) {
         " lgID TEXT ENCODING DICT(32),"
         " tie TEXT ENCODING DICT(32),"
         " notes TEXT ENCODING DICT(32));");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO issue463_table1 VALUES "
         "('keefeti01',1880,1,'TRN','NL',12,43,4,10,3,0,0,3,0,0,1,12,0,0,0,0,0);");
-    sqlite_comparator_.query(
+    run_sqlite_query(
         "INSERT INTO issue463_table2 VALUES ('keefeti01','Pitching Triple "
         "Crsqlite_comparator_own',1888,'NL',0,0);");
     // SELECT returns no rows
@@ -17599,8 +17069,8 @@ FROM (
     c(select_norows, dt);
     c(select_onerow, dt);
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS issue463_table1;");
-    sqlite_comparator_.query("DROP TABLE IF EXISTS issue463_table2;");
+    run_sqlite_query("DROP TABLE IF EXISTS issue463_table1;");
+    run_sqlite_query("DROP TABLE IF EXISTS issue463_table2;");
     dropTable("issue463_table1");
     dropTable("issue463_table2");
   }
@@ -17614,12 +17084,12 @@ TEST_F(Select, StringFromEliminatedColumn) {
     SKIP_NO_GPU();
 
     createTable("flights", {{"plane_model", dictType()}, {"dest_city", dictType()}}, {2});
-    sqlite_comparator_.query("DROP TABLE IF EXISTS flights;");
-    sqlite_comparator_.query("CREATE TABLE flights (plane_model TEXT, dest_city TEXT);");
+    run_sqlite_query("DROP TABLE IF EXISTS flights;");
+    run_sqlite_query("CREATE TABLE flights (plane_model TEXT, dest_city TEXT);");
     for (std::string plane_model : {"B-1", "B-2", "B-3", "B-4"}) {
       for (auto dest_city : {"Austin", "Dallas", "Chicago"}) {
-        sqlite_comparator_.query("INSERT INTO flights VALUES ('" + plane_model + "', '" +
-                                 dest_city + "');");
+        run_sqlite_query("INSERT INTO flights VALUES ('" + plane_model + "', '" +
+                         dest_city + "');");
         insertCsvValues("flights", plane_model + "," + dest_city);
       }
     }
@@ -17642,7 +17112,7 @@ TEST_F(Select, StringFromEliminatedColumn) {
       ") ORDER BY str;",
       dt);
 
-    sqlite_comparator_.query("DROP TABLE IF EXISTS flights;");
+    run_sqlite_query("DROP TABLE IF EXISTS flights;");
     dropTable("flights");
   }
 }
@@ -17776,14 +17246,13 @@ class SubqueryTestEnv : public ExecuteTestBase, public ::testing::Test {
                    {"r3", SQLTypeInfo(kINT)}});
       insertCsvValues(table_name, "1,2,3\n2,3,4\n3,4,5\n4,5,6\n1,3,4");
 
-      sqlite_comparator_.query("DROP TABLE IF EXISTS " + table_name + ";");
-      sqlite_comparator_.query("CREATE TABLE " + table_name +
-                               " (r1 int, r2 int, r3 int);");
-      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (1,2,3);");
-      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (2,3,4);");
-      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (3,4,5);");
-      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (4,5,6);");
-      sqlite_comparator_.query("INSERT INTO " + table_name + " VALUES (1,3,4);");
+      run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
+      run_sqlite_query("CREATE TABLE " + table_name + " (r1 int, r2 int, r3 int);");
+      run_sqlite_query("INSERT INTO " + table_name + " VALUES (1,2,3);");
+      run_sqlite_query("INSERT INTO " + table_name + " VALUES (2,3,4);");
+      run_sqlite_query("INSERT INTO " + table_name + " VALUES (3,4,5);");
+      run_sqlite_query("INSERT INTO " + table_name + " VALUES (4,5,6);");
+      run_sqlite_query("INSERT INTO " + table_name + " VALUES (1,3,4);");
     };
 
     create_test_table("R1");
@@ -17794,7 +17263,7 @@ class SubqueryTestEnv : public ExecuteTestBase, public ::testing::Test {
   void TearDown() override {
     auto drop_table = [](const std::string& table_name) {
       dropTable(table_name);
-      sqlite_comparator_.query("DROP TABLE IF EXISTS " + table_name + ";");
+      run_sqlite_query("DROP TABLE IF EXISTS " + table_name + ";");
     };
 
     drop_table("R1");
@@ -17958,7 +17427,7 @@ int main(int argc, char** argv) {
         File_Namespace::DiskCacheLevel::all};
   }
 
-  ExecuteTestBase::init();
+  init();
 
   int err{0};
   try {
@@ -17973,9 +17442,9 @@ int main(int argc, char** argv) {
 
   Executor::nukeCacheOfExecutors();
   ResultSetReductionJIT::clearCache();
-  ExecuteTestBase::reset();
 
-  ExecuteTestBase::printStats();
+  printStats();
+  reset();
 
   return err;
 }

@@ -254,6 +254,29 @@ std::string build_create_table_statement(
          with_statement_assembly.str() + replicated_def + ");";
 }
 
+SQLTypeInfo arrayType(SQLTypes st, int size = 0) {
+  SQLTypeInfo res(kARRAY, (st == kTEXT) ? kENCODING_DICT : kENCODING_NONE, 0, st);
+  if (size) {
+    res.set_size(size * res.get_elem_type().get_size());
+  }
+  return res;
+}
+
+SQLTypeInfo decimalArrayType(int dimension, int scale, int size = 0) {
+  SQLTypeInfo res(kARRAY, dimension, scale, false, kENCODING_NONE, 0, kDECIMAL);
+  if (size) {
+    res.set_size(size * res.get_elem_type().get_size());
+  }
+  return res;
+}
+
+SQLTypeInfo dictType(int size = 4, bool notnull = false, int comp = 0) {
+  SQLTypeInfo res(kTEXT, notnull, kENCODING_DICT);
+  res.set_size(size);
+  res.set_comp_param(comp);
+  return res;
+}
+
 }  // namespace TestHelpers
 
 #endif  // TEST_HELPERS_H_
