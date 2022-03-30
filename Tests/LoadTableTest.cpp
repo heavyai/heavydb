@@ -1130,57 +1130,158 @@ TEST_F(ThriftImportServerPrivilegeTest, S3_Private_with_role_credentials) {
 
 #endif  // HAVE_AWS_S3
 
-class ThriftFileGlobbingTest : public DBHandlerTestFixture {
+class ThriftFileGlobbingTest : public DBHandlerTestFixture,
+                               public testing::WithParamInterface<std::string> {
  protected:
   void SetUp() override {
     DBHandlerTestFixture::SetUp();
     sql("DROP TABLE IF EXISTS " + test_table_name_ + ";");
-    sql("CREATE TABLE " + test_table_name_ + " (i INTEGER);");
+    createTable();
   }
 
   void TearDown() override {
     sql("DROP TABLE IF EXISTS " + test_table_name_ + ";");
+    if (boost::filesystem::exists(empty_dir_path_)) {
+      boost::filesystem::remove_all(empty_dir_path_);
+    }
     DBHandlerTestFixture::TearDown();
   }
 
-  static TCopyParams getCopyParams() {
+  void createTable() {
+    if (isGeoImport()) {
+      sql("CREATE TABLE " + test_table_name_ + " (trip DOUBLE, geom POINT);");
+    } else if (isRasterImport()) {
+      sql("CREATE TABLE " + test_table_name_ +
+          " (raster_lon DOUBLE, raster_lat DOUBLE, band_1_1 INTEGER);");
+    } else {
+      sql("CREATE TABLE " + test_table_name_ + " (i INTEGER);");
+    }
+  }
+
+  bool isGeoImport() { return GetParam() == "geo"; }
+
+  bool isRasterImport() { return GetParam() == "raster"; }
+
+  bool isParquetImport() { return GetParam() == "parquet"; }
+
+  bool isDelimitedImport() { return GetParam() == "delimited"; }
+
+  void assertDetectResult(const TDetectResult& result) {
+    const auto& row_set = result.row_set;
+    if (isGeoImport()) {
+      ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(2));
+      ASSERT_EQ(row_set.row_desc[0].col_name, "trip");
+      ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::DOUBLE);
+      ASSERT_EQ(row_set.row_desc[1].col_name, "geom");
+      ASSERT_EQ(row_set.row_desc[1].col_type.type, TDatumType::POINT);
+      ASSERT_EQ(row_set.rows.size(), static_cast<size_t>(10));
+      for (const auto& row : row_set.rows) {
+        ASSERT_EQ(row.cols.size(), static_cast<size_t>(2));
+      }
+    } else if (isRasterImport()) {
+      ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(3));
+      ASSERT_EQ(row_set.row_desc[0].col_name, "raster_lon");
+      ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::DOUBLE);
+      ASSERT_EQ(row_set.row_desc[1].col_name, "raster_lat");
+      ASSERT_EQ(row_set.row_desc[1].col_type.type, TDatumType::DOUBLE);
+      ASSERT_EQ(row_set.row_desc[2].col_name, "band_1_1");
+      ASSERT_EQ(row_set.row_desc[2].col_type.type, TDatumType::INT);
+      ASSERT_TRUE(row_set.rows.empty());
+    } else {
+      CHECK(isParquetImport() || isDelimitedImport());
+      ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(1));
+      ASSERT_EQ(row_set.row_desc[0].col_name, "i");
+      if (isParquetImport()) {
+        ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::BIGINT);
+      } else {
+        ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::SMALLINT);
+      }
+      ASSERT_EQ(row_set.rows.size(), static_cast<size_t>(2));
+      ASSERT_EQ(row_set.rows[0].cols.size(), static_cast<size_t>(1));
+      ASSERT_EQ(row_set.rows[0].cols[0].val.str_val, "2");
+      ASSERT_EQ(row_set.rows[1].cols.size(), static_cast<size_t>(1));
+      ASSERT_EQ(row_set.rows[1].cols[0].val.str_val, "1");
+    }
+  }
+
+  TCopyParams getCopyParams() {
     TCopyParams copy_params;
-    copy_params.source_type = TSourceType::DELIMITED_FILE;
+    if (isGeoImport()) {
+      copy_params.source_type = TSourceType::GEO_FILE;
+    } else if (isRasterImport()) {
+      copy_params.source_type = TSourceType::RASTER_FILE;
+    } else if (isParquetImport()) {
+      copy_params.source_type = TSourceType::PARQUET_FILE;
+    } else if (isDelimitedImport()) {
+      copy_params.source_type = TSourceType::DELIMITED_FILE;
+    } else {
+      UNREACHABLE() << "Unexpected import type: " << GetParam();
+    }
     return copy_params;
   }
 
-  static std::string getTestGlobPath() {
-    return boost::filesystem::canonical("../../Tests/FsiDataFiles/sorted_dir/csv")
-               .string() +
-           "/a_*.csv";
+  std::string getTestGlobPath() {
+    auto path = boost::filesystem::canonical("../../Tests").string();
+    if (isGeoImport()) {
+      path += "/Import/datafiles/geospatial_point/geospatial_point_*.geojson";
+    } else if (isRasterImport()) {
+      path += "/Import/datafiles/raster/s1b_*.tiff";
+    } else if (isParquetImport()) {
+      path += "/FsiDataFiles/sorted_dir/parquet/*1.parquet";
+    } else if (isDelimitedImport()) {
+      path += "/FsiDataFiles/sorted_dir/csv/*1.csv";
+    } else {
+      UNREACHABLE() << "Unexpected import type: " << GetParam();
+    }
+    return path;
   }
 
   static std::string getNonExistentGlobPath() {
-    return boost::filesystem::canonical("../../Tests/FsiDataFiles/sorted_dir/csv")
-               .string() +
-           "/nonexistent*.csv";
+    return boost::filesystem::canonical("../../Tests/FsiDataFiles/sorted_dir").string() +
+           "/nonexistent*";
+  }
+
+  static std::string getEmptyDirectoryPath() {
+    return boost::filesystem::canonical(empty_dir_path_).string();
+  }
+
+  void importTable(const std::string& file_path) {
+    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+    if (isGeoImport() || isRasterImport()) {
+      db_handler->import_geo_table(
+          session_id, test_table_name_, file_path, getCopyParams(), {}, {});
+    } else {
+      CHECK(isParquetImport() || isDelimitedImport());
+      db_handler->import_table(session_id, test_table_name_, file_path, getCopyParams());
+    }
+  }
+
+  int64_t getTestImportRowCount() {
+    if (isGeoImport()) {
+      return 30;
+    } else if (isRasterImport()) {
+      return 40000;
+    } else {
+      CHECK(isParquetImport() || isDelimitedImport());
+      return 2;
+    }
   }
 
   inline static const std::string test_table_name_{"test_table"};
+  inline static const std::string empty_dir_path_{"./test_import_empty_dir"};
 };
 
-TEST_F(ThriftFileGlobbingTest, Detect) {
+TEST_P(ThriftFileGlobbingTest, Detect) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   TDetectResult result;
   db_handler->detect_column_types(result, session_id, getTestGlobPath(), getCopyParams());
-  const auto& row_set = result.row_set;
-  ASSERT_EQ(row_set.row_desc.size(), static_cast<size_t>(1));
-  ASSERT_EQ(row_set.row_desc[0].col_name, "i");
-  ASSERT_EQ(row_set.row_desc[0].col_type.type, TDatumType::SMALLINT);
-  ASSERT_EQ(row_set.rows.size(), static_cast<size_t>(1));
-  ASSERT_EQ(row_set.rows[0].cols.size(), static_cast<size_t>(1));
-  ASSERT_EQ(row_set.rows[0].cols[0].val.str_val, "2");
+  assertDetectResult(result);
 }
 
-TEST_F(ThriftFileGlobbingTest, DetectWithNonExistentGlobPath) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+TEST_P(ThriftFileGlobbingTest, DetectWithNonExistentGlobPath) {
   executeLambdaAndAssertException(
-      [db_handler = db_handler, session_id = session_id] {
+      [this] {
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
         TDetectResult result;
         db_handler->detect_column_types(
             result, session_id, getNonExistentGlobPath(), getCopyParams());
@@ -1188,23 +1289,53 @@ TEST_F(ThriftFileGlobbingTest, DetectWithNonExistentGlobPath) {
       "File or directory \"" + getNonExistentGlobPath() + "\" does not exist.");
 }
 
-TEST_F(ThriftFileGlobbingTest, Import) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+TEST_P(ThriftFileGlobbingTest, Import) {
   sqlAndCompareResult("SELECT * FROM " + test_table_name_ + ";", {});
-  db_handler->import_table(
-      session_id, test_table_name_, getTestGlobPath(), getCopyParams());
-  sqlAndCompareResult("SELECT * FROM " + test_table_name_ + ";", {{i(2)}});
+  importTable(getTestGlobPath());
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + test_table_name_ + ";",
+                      {{getTestImportRowCount()}});
+  if (isParquetImport() || isDelimitedImport()) {
+    sqlAndCompareResult("SELECT * FROM " + test_table_name_ + " ORDER BY i;",
+                        {{i(1)}, {i(2)}});
+  }
 }
 
-TEST_F(ThriftFileGlobbingTest, ImportWithNonExistentGlobPath) {
-  const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+TEST_P(ThriftFileGlobbingTest, ImportWithNonExistentGlobPath) {
   executeLambdaAndAssertException(
-      [db_handler = db_handler, session_id = session_id] {
-        db_handler->import_table(
-            session_id, test_table_name_, getNonExistentGlobPath(), getCopyParams());
-      },
-      "File does not exist: " + getNonExistentGlobPath());
+      [this] { importTable(getNonExistentGlobPath()); },
+      "File or directory \"" + getNonExistentGlobPath() + "\" does not exist.");
 }
+
+TEST_P(ThriftFileGlobbingTest, DetectEmptyDirectory) {
+  boost::filesystem::create_directory(empty_dir_path_);
+  std::string error_message{"detect_column_types error: "};
+  if (isGeoImport()) {
+    error_message +=
+        "openGDALDataSource Error: Unable to open geo file " + getEmptyDirectoryPath();
+  } else if (isRasterImport()) {
+    error_message +=
+        "Raster Importer: Unable to open raster file " + getEmptyDirectoryPath();
+  } else if (isParquetImport()) {
+    error_message += "No file found at \"" + getEmptyDirectoryPath() + "\"";
+  } else if (isDelimitedImport()) {
+    error_message += "No rows found in: test_import_empty_dir";
+  } else {
+    UNREACHABLE() << "Unexpected import type: " << GetParam();
+  }
+  executeLambdaAndAssertException(
+      [this] {
+        const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
+        TDetectResult result;
+        db_handler->detect_column_types(
+            result, session_id, getEmptyDirectoryPath(), getCopyParams());
+      },
+      error_message);
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentImportTypes,
+                         ThriftFileGlobbingTest,
+                         testing::Values("delimited", "parquet", "geo", "raster"),
+                         [](const auto& param_info) { return param_info.param; });
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
