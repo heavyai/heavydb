@@ -20,6 +20,7 @@
 #include "Logger/Logger.h"
 #include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/GpuMemUtils.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
 #include "QueryEngine/TableFunctions/TableFunctionManager.h"
 #include "Shared/funcannotations.h"
@@ -132,7 +133,8 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::unique_ptr<CudaAllocator> device_allocator;
   if (device_type == ExecutorDeviceType::GPU) {
     auto data_mgr = executor->getDataMgr();
-    device_allocator.reset(new CudaAllocator(data_mgr, device_id));
+    device_allocator.reset(new CudaAllocator(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
   }
   std::vector<const int8_t*> col_buf_ptrs;
   std::vector<int64_t> col_sizes;
@@ -552,7 +554,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
 
   auto num_out_columns = exe_unit.target_exprs.size();
   auto data_mgr = executor->getDataMgr();
-  auto gpu_allocator = std::make_unique<CudaAllocator>(data_mgr, device_id);
+  auto gpu_allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   CHECK(gpu_allocator);
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
 
@@ -657,6 +660,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   CHECK(compilation_context);
   const auto native_code = compilation_context->getNativeCode(device_id);
   auto cu_func = static_cast<CUfunction>(native_code.first);
+  auto qe_cuda_stream = getQueryEngineCudaStreamForDevice(device_id);
   checkCudaErrors(cuLaunchKernel(cu_func,
                                  grid_size_x,
                                  grid_size_y,
@@ -665,10 +669,10 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
                                  block_size_y,
                                  block_size_z,
                                  0,  // shared mem bytes
-                                 nullptr,
+                                 qe_cuda_stream,
                                  &param_ptrs[0],
                                  nullptr));
-  // TODO(adb): read errors
+  checkCudaErrors(cuStreamSynchronize(qe_cuda_stream));
 
   // read output row count from GPU
   gpu_allocator->copyFromDevice(

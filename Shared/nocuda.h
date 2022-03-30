@@ -20,6 +20,7 @@
 typedef int CUdevice;
 typedef int CUresult;
 typedef int CUcontext;
+typedef void* CUstream;
 typedef void* CUmodule;
 typedef void* CUfunction;
 typedef int CUjit_option;

@@ -26,6 +26,7 @@
 #include "Geospatial/Compression.h"
 #include "Geospatial/Types.h"
 #include "ParserNode.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/TargetValue.h"
 #include "ResultSet.h"
 #include "ResultSetGeoSerialization.h"
@@ -632,7 +633,8 @@ InternalTargetValue ResultSet::getVarlenOrderEntry(const int64_t str_ptr,
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
     auto data_mgr = executor->getDataMgr();
-    auto allocator = data_mgr->createGpuAllocator(device_id_);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
     allocator->copyFromDevice(
         &cpu_buffer[0], reinterpret_cast<int8_t*>(str_ptr), str_len);
     host_str_ptr = reinterpret_cast<char*>(&cpu_buffer[0]);
@@ -930,7 +932,8 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
                                                        const int device_id) {
   auto cpu_buf =
       std::shared_ptr<int8_t>(new int8_t[length], std::default_delete<int8_t[]>());
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   allocator->copyFromDevice(cpu_buf.get(), reinterpret_cast<int8_t*>(varlen_ptr), length);
   // Just fetching the data from gpu, not checking geo nullness
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
@@ -1412,7 +1415,8 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     const auto executor = query_mem_desc_.getExecutor();
     CHECK(executor);
     auto data_mgr = executor->getDataMgr();
-    auto allocator = data_mgr->createGpuAllocator(device_id_);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
 
     allocator->copyFromDevice(
         &cpu_buffer[0], reinterpret_cast<int8_t*>(varlen_ptr), length);

@@ -196,7 +196,8 @@ std::vector<double> compute_bucket_sizes(
     // Note that we compute the bucket sizes using only a single GPU
     const int device_id = 0;
     auto data_mgr = executor->getDataMgr();
-    CudaAllocator allocator(data_mgr, device_id);
+    CudaAllocator allocator(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     auto device_bucket_sizes_gpu =
         transfer_vector_of_flat_objects_to_gpu(bucket_sizes, allocator);
     auto join_column_gpu = transfer_flat_object_to_gpu(join_column, allocator);
@@ -607,7 +608,8 @@ void OverlapsJoinHashTable::reifyWithLayout(const HashType layout) {
   if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL ||
       allow_gpu_hashtable_build) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
+          data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
   }
 
@@ -1059,11 +1061,15 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
          data_mgr,
          &host_hll_buffers,
          &emitted_keys_count_device_threads] {
-          auto allocator = data_mgr->createGpuAllocator(device_id);
+          auto allocator = std::make_unique<CudaAllocator>(
+              data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
           auto device_hll_buffer =
               allocator->alloc(count_distinct_desc.bitmapPaddedSizeBytes());
           data_mgr->getCudaMgr()->zeroDeviceMem(
-              device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
+              device_hll_buffer,
+              count_distinct_desc.bitmapPaddedSizeBytes(),
+              device_id,
+              getQueryEngineCudaStreamForDevice(device_id));
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
               columns_for_device.join_columns, *allocator);
@@ -1081,7 +1087,10 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator->alloc(row_counts_buffer_sz);
           data_mgr->getCudaMgr()->zeroDeviceMem(
-              row_counts_buffer, row_counts_buffer_sz, device_id);
+              row_counts_buffer,
+              row_counts_buffer_sz,
+              device_id,
+              getQueryEngineCudaStreamForDevice(device_id));
           const auto key_handler =
               OverlapsKeyHandler(inverse_bucket_sizes_for_dimension.size(),
                                  join_columns_gpu,
@@ -1373,7 +1382,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::initHashTableOnGpu(
 
   BaselineJoinHashTableBuilder builder;
   auto data_mgr = executor_->getDataMgr();
-  CudaAllocator allocator(data_mgr, device_id);
+  CudaAllocator allocator(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
@@ -1429,7 +1439,8 @@ std::shared_ptr<BaselineHashTable> OverlapsJoinHashTable::copyCpuHashTableToGpu(
 
   CHECK_LE(cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
            gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
-  auto device_allocator = data_mgr->createGpuAllocator(device_id);
+  auto device_allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   device_allocator->copyToDevice(
       gpu_buffer_ptr,
       cpu_hash_table->getCpuBuffer(),
@@ -1730,7 +1741,8 @@ std::string OverlapsJoinHashTable::toString(const ExecutorDeviceType device_type
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
     CHECK(executor_);
     auto data_mgr = executor_->getDataMgr();
-    auto device_allocator = data_mgr->createGpuAllocator(device_id);
+    auto device_allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
 
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
@@ -1770,7 +1782,8 @@ std::set<DecodedJoinHashBufferEntry> OverlapsJoinHashTable::toSet(
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
     CHECK(executor_);
     auto data_mgr = executor_->getDataMgr();
-    auto allocator = data_mgr->createGpuAllocator(device_id);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
 
     allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }

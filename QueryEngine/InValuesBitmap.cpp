@@ -24,6 +24,7 @@
 #include "../Shared/checked_alloc.h"
 #include "GroupByAndAggregate.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/QueryEngine.h"
 #include "RuntimeFunctions.h"
 
 #include <limits>
@@ -85,7 +86,8 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     for (int device_id = 0; device_id < device_count_; ++device_id) {
-      auto device_allocator = data_mgr_->createGpuAllocator(device_id);
+      auto device_allocator = std::make_unique<CudaAllocator>(
+          data_mgr_, device_id, getQueryEngineCudaStreamForDevice(device_id));
       gpu_buffers_.emplace_back(
           data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, bitmap_sz_bytes));
       auto gpu_bitset = gpu_buffers_.back()->getMemoryPtr();

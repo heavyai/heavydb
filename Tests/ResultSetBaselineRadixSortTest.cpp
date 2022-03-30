@@ -23,6 +23,7 @@
 
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Execute.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "Tests/ResultSetTestUtils.h"
@@ -31,6 +32,7 @@
 #ifdef HAVE_CUDA
 #include "CudaMgr/CudaMgr.h"
 extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
+std::shared_ptr<QueryEngine> g_query_engine;
 #endif  // HAVE_CUDA
 
 #include <gtest/gtest.h>
@@ -327,6 +329,7 @@ int main(int argc, char** argv) {
 #ifdef HAVE_CUDA
   try {
     g_cuda_mgr.reset(new CudaMgr_Namespace::CudaMgr(0));
+    g_query_engine = QueryEngine::getInstance(g_cuda_mgr.get());
   } catch (...) {
     LOG(WARNING) << "Could not instantiate CudaMgr, will run on CPU";
   }
@@ -340,6 +343,7 @@ int main(int argc, char** argv) {
   }
 
 #ifdef HAVE_CUDA
+  g_query_engine.reset();
   g_cuda_mgr.reset(nullptr);
 #endif  // HAVE_CUDA
 

@@ -80,6 +80,7 @@ set(query_engine_source_files
     OutputBufferInitialization.cpp
     QueryPhysicalInputsCollector.cpp
     PlanState.cpp
+    QueryEngine.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     QueryExecutionContext.cpp

@@ -225,6 +225,8 @@ QueryRunner::QueryRunner(const char* db_path,
                mapd_params.aggregator,
                string_servers);
 
+  query_engine_ = QueryEngine::getInstance(data_mgr_->getCudaMgr());
+
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
       sys_cat.createUser(
@@ -1112,6 +1114,7 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
 }
 
 void QueryRunner::reset() {
+  qr_instance_->query_engine_.reset();
   qr_instance_.reset(nullptr);
   calcite_shutdown_handler();
 }

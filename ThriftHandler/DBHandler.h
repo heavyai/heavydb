@@ -47,6 +47,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/TableGenerations.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
@@ -622,6 +623,7 @@ class DBHandler : public HeavyIf {
   int64_t start_time_;
   const AuthMetadata& authMetadata_;
   SystemParameters& system_parameters_;
+  std::shared_ptr<QueryEngine> query_engine_;
   std::unique_ptr<RenderHandler> render_handler_;
   std::unique_ptr<MapDAggHandler> agg_handler_;
   std::unique_ptr<MapDLeafHandler> leaf_handler_;

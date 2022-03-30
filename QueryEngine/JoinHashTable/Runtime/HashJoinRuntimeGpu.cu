@@ -15,6 +15,9 @@
  */
 #include "HashJoinRuntime.cpp"
 
+#include <cuda.h>
+CUstream getQueryEngineCudaStream();
+
 #include <thrust/device_ptr.h>
 #include <thrust/scan.h>
 
@@ -25,8 +28,9 @@ void cuda_kernel_launch_wrapper(F func, ARGS&&... args) {
   int grid_size = -1;
   int block_size = -1;
   checkCudaErrors(cudaOccupancyMaxPotentialBlockSize(&grid_size, &block_size, func));
-  func<<<grid_size, block_size>>>(std::forward<ARGS>(args)...);
-  checkCudaErrors(cudaGetLastError());
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  func<<<grid_size, block_size, 0, qe_cuda_stream>>>(std::forward<ARGS>(args)...);
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
 }
 
 __global__ void fill_hash_join_buff_wrapper(int32_t* buff,
@@ -221,7 +225,10 @@ void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
                                                 FILL_ROW_IDS_FUNCTOR fill_row_ids_func) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   count_matches_func();
 
   cuda_kernel_launch_wrapper(set_valid_pos_flag, pos_buff, count_buff, hash_entry_count);
@@ -231,7 +238,9 @@ void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
       count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
 
   cuda_kernel_launch_wrapper(set_valid_pos, pos_buff, count_buff, hash_entry_count);
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   fill_row_ids_func();
 }
 
@@ -307,7 +316,10 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
   auto hash_entry_count = hash_entry_info.hash_entry_count;
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   cuda_kernel_launch_wrapper(
       SUFFIX(count_matches_sharded), count_buff, join_column, type_info, shard_info);
 
@@ -317,7 +329,9 @@ void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
   thrust::inclusive_scan(
       count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
   cuda_kernel_launch_wrapper(set_valid_pos, pos_buff, count_buff, hash_entry_count);
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   cuda_kernel_launch_wrapper(SUFFIX(fill_row_ids_sharded),
                              buff,
                              hash_entry_count,
@@ -334,7 +348,10 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
                                                     const size_t num_elems) {
   auto pos_buff = buff;
   auto count_buff = buff + hash_entry_count;
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
   cuda_kernel_launch_wrapper(count_matches_baseline_gpu<T, KEY_HANDLER>,
                              count_buff,
                              composite_key_dict,
@@ -348,7 +365,9 @@ void fill_one_to_many_baseline_hash_table_on_device(int32_t* buff,
   thrust::inclusive_scan(
       count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
   cuda_kernel_launch_wrapper(set_valid_pos, pos_buff, count_buff, hash_entry_count);
-  cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
+  checkCudaErrors(
+      cudaMemsetAsync(count_buff, 0, hash_entry_count * sizeof(int32_t), qe_cuda_stream));
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
 
   cuda_kernel_launch_wrapper(fill_row_ids_baseline_gpu<T, KEY_HANDLER>,
                              buff,
@@ -574,8 +593,10 @@ void approximate_distinct_tuples_on_device_range(uint8_t* hll_buffer,
                                                  const size_t num_elems,
                                                  const size_t block_size_x,
                                                  const size_t grid_size_x) {
-  approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x>>>(
+  auto qe_cuda_stream = getQueryEngineCudaStream();
+  approximate_distinct_tuples_impl_gpu<<<grid_size_x, block_size_x, 0, qe_cuda_stream>>>(
       hll_buffer, row_counts_buffer, b, num_elems, key_handler);
+  checkCudaErrors(cudaStreamSynchronize(qe_cuda_stream));
 
   auto row_counts_buffer_ptr = thrust::device_pointer_cast(row_counts_buffer);
   thrust::inclusive_scan(

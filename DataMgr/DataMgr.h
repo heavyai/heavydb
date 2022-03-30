@@ -226,7 +226,8 @@ class DataMgr {
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;
 
-  std::unique_ptr<DeviceAllocator> createGpuAllocator(int device_id);
+  // std::unique_ptr<DeviceAllocator> createGpuAllocator(int device_id);
+  // NOTE(sy): Revisit how DataMgr should handle Cuda streams if Intel ever needs this.
 
   struct SystemMemoryUsage {
     size_t free;      // available CPU RAM memory in bytes

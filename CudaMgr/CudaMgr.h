@@ -17,6 +17,7 @@
 
 #include <cstdlib>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -90,26 +91,33 @@ class CudaMgr {
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num,
+                        std::optional<CUstream> cuda_stream = {});
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
-                        const int device_num);
+                        const int device_num,
+                        std::optional<CUstream> cuda_stream = {});
   void copyDeviceToDevice(int8_t* dest_ptr,
                           int8_t* src_ptr,
                           const size_t num_bytes,
                           const int dest_device_num,
-                          const int src_device_num);
+                          const int src_device_num,
+                          std::optional<CUstream> cuda_stream = {});
 
   int8_t* allocatePinnedHostMem(const size_t num_bytes);
   int8_t* allocateDeviceMem(const size_t num_bytes, const int device_num);
   void freePinnedHostMem(int8_t* host_ptr);
   void freeDeviceMem(int8_t* device_ptr);
-  void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes, const int device_num);
+  void zeroDeviceMem(int8_t* device_ptr,
+                     const size_t num_bytes,
+                     const int device_num,
+                     std::optional<CUstream> cuda_stream = {});
   void setDeviceMem(int8_t* device_ptr,
                     const unsigned char uc,
                     const size_t num_bytes,
-                    const int device_num);
+                    const int device_num,
+                    std::optional<CUstream> cuda_stream = {});
 
   size_t getMinSharedMemoryPerBlockForAllDevices() const {
     return min_shared_memory_per_block_for_all_devices;
@@ -197,6 +205,7 @@ class CudaMgr {
   }
 
   void setContext(const int device_num) const;
+  int getContext() const;
 
 #ifdef HAVE_CUDA
 

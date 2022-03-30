@@ -24,6 +24,7 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExternalExecutor.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/SerializeToSql.h"
 
 namespace {
@@ -185,7 +186,8 @@ void ExecutionKernel::runImpl(Executor* executor,
   if (chosen_device_type == ExecutorDeviceType::GPU) {
     gpu_lock.reset(
         new std::lock_guard<std::mutex>(executor->gpu_exec_mutex_[chosen_device_id]));
-    device_allocator = std::make_unique<CudaAllocator>(data_mgr, chosen_device_id);
+    device_allocator = std::make_unique<CudaAllocator>(
+        data_mgr, chosen_device_id, getQueryEngineCudaStreamForDevice(chosen_device_id));
   }
   std::shared_ptr<FetchResult> fetch_result(new FetchResult);
   try {

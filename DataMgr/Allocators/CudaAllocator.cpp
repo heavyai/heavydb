@@ -21,8 +21,10 @@
 #include <Logger/Logger.h>
 #include <Shared/types.h>
 
-CudaAllocator::CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id)
-    : data_mgr_(data_mgr), device_id_(device_id) {
+CudaAllocator::CudaAllocator(Data_Namespace::DataMgr* data_mgr,
+                             const int device_id,
+                             CUstream cuda_stream)
+    : data_mgr_(data_mgr), device_id_(device_id), cuda_stream_(cuda_stream) {
   CHECK(data_mgr_);
 #ifdef HAVE_CUDA
   const auto cuda_mgr = data_mgr_->getCudaMgr();
@@ -71,7 +73,7 @@ void CudaAllocator::copyToDevice(void* device_dst,
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
   cuda_mgr->copyHostToDevice(
-      (int8_t*)device_dst, (int8_t*)host_src, num_bytes, device_id_);
+      (int8_t*)device_dst, (int8_t*)host_src, num_bytes, device_id_, cuda_stream_);
 }
 
 void CudaAllocator::copyFromDevice(void* host_dst,
@@ -80,13 +82,13 @@ void CudaAllocator::copyFromDevice(void* host_dst,
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
   cuda_mgr->copyDeviceToHost(
-      (int8_t*)host_dst, (int8_t*)device_src, num_bytes, device_id_);
+      (int8_t*)host_dst, (int8_t*)device_src, num_bytes, device_id_, cuda_stream_);
 }
 
 void CudaAllocator::zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
-  cuda_mgr->zeroDeviceMem(device_ptr, num_bytes, device_id_);
+  cuda_mgr->zeroDeviceMem(device_ptr, num_bytes, device_id_, cuda_stream_);
 }
 
 void CudaAllocator::setDeviceMem(int8_t* device_ptr,
@@ -94,5 +96,5 @@ void CudaAllocator::setDeviceMem(int8_t* device_ptr,
                                  const size_t num_bytes) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
-  cuda_mgr->setDeviceMem(device_ptr, uc, num_bytes, device_id_);
+  cuda_mgr->setDeviceMem(device_ptr, uc, num_bytes, device_id_, cuda_stream_);
 }

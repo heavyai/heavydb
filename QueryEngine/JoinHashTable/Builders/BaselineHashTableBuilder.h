@@ -21,6 +21,7 @@
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinKeyHandlers.h"
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
+#include "QueryEngine/QueryEngine.h"
 #include "Shared/thread_count.h"
 
 template <typename SIZE,
@@ -544,7 +545,8 @@ class BaselineJoinHashTableBuilder {
       return 0;
     }
     auto data_mgr = executor->getDataMgr();
-    auto allocator = data_mgr->createGpuAllocator(device_id);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     auto dev_err_buff = allocator->alloc(sizeof(int));
 
     allocator->copyToDevice(dev_err_buff, &err, sizeof(err));

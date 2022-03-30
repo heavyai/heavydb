@@ -405,7 +405,8 @@ void PerfectJoinHashTable::reify() {
             ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments);
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
+          data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
   }
 
@@ -1097,7 +1098,8 @@ void PerfectJoinHashTable::copyCpuHashTableToGpu(
   CHECK_LE(cpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU),
            gpu_hash_table->getHashTableBufferSize(ExecutorDeviceType::GPU));
 
-  auto device_allocator = data_mgr->createGpuAllocator(device_id);
+  auto device_allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   device_allocator->copyToDevice(
       gpu_buffer_ptr,
       cpu_hash_table->getCpuBuffer(),
@@ -1118,7 +1120,8 @@ std::string PerfectJoinHashTable::toString(const ExecutorDeviceType device_type,
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
     auto data_mgr = executor_->getDataMgr();
-    auto device_allocator = data_mgr->createGpuAllocator(device_id);
+    auto device_allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
@@ -1153,7 +1156,8 @@ std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
     auto data_mgr = executor_->getDataMgr();
-    auto device_allocator = data_mgr->createGpuAllocator(device_id);
+    auto device_allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);

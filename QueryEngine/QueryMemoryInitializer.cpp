@@ -22,6 +22,7 @@
 #include "GpuMemUtils.h"
 #include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
+#include "QueryEngine/QueryEngine.h"
 #include "ResultSet.h"
 #include "StreamingTopN.h"
 
@@ -998,7 +999,8 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
 
   const auto col_slot_context = query_mem_desc.getColSlotContext();
 
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
 
   for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
     const size_t col_width = col_slot_context.getSlotInfo(col_idx).logical_size;

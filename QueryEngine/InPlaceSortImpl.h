@@ -33,7 +33,8 @@ void sort_on_gpu(int64_t* val_buff,
                  const uint64_t entry_count,
                  const bool desc,
                  const uint32_t chosen_bytes,
-                 ThrustAllocator& alloc);
+                 ThrustAllocator& alloc,
+                 const int device_id);
 
 void sort_on_cpu(int64_t* val_buff,
                  int32_t* key_buff,
@@ -45,7 +46,8 @@ void apply_permutation_on_gpu(int64_t* val_buff,
                               int32_t* idx_buff,
                               const uint64_t entry_count,
                               const uint32_t chosen_bytes,
-                              ThrustAllocator& alloc);
+                              ThrustAllocator& alloc,
+                              const int device_id);
 
 void apply_permutation_on_cpu(int64_t* val_buff,
                               int32_t* idx_buff,

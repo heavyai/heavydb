@@ -41,7 +41,7 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>&,
                       const QueryMemoryDescriptor&,
                       const GpuGroupByBuffers&,
                       Data_Namespace::DataMgr*,
-                      const int);
+                      const int device_id);
 
 void sort_groups_cpu(int64_t* val_buff,
                      int32_t* key_buff,

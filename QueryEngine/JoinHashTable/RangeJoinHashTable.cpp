@@ -182,7 +182,8 @@ void RangeJoinHashTable::reifyWithLayout(const HashType layout) {
             ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments);
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(&data_mgr, device_id));
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
+          &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
     // for overlaps join, we need to fetch columns regardless of the availability of
     // cached hash table to calculate various params, i.e., bucket size info todo
@@ -410,7 +411,8 @@ std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnGpu(
 
   BaselineJoinHashTableBuilder builder;
   auto data_mgr = executor_->getDataMgr();
-  CudaAllocator allocator(data_mgr, device_id);
+  CudaAllocator allocator(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   CHECK_EQ(join_columns.size(), 1u);
   CHECK(!join_bucket_info.empty());
@@ -609,11 +611,15 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
          &host_hll_buffers,
          &emitted_keys_count_device_threads,
          this] {
-          auto allocator = data_mgr.createGpuAllocator(device_id);
+          auto allocator = std::make_unique<CudaAllocator>(
+              &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
           auto device_hll_buffer =
               allocator->alloc(count_distinct_desc.bitmapPaddedSizeBytes());
           data_mgr.getCudaMgr()->zeroDeviceMem(
-              device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
+              device_hll_buffer,
+              count_distinct_desc.bitmapPaddedSizeBytes(),
+              device_id,
+              getQueryEngineCudaStreamForDevice(device_id));
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
               columns_for_device.join_columns, *allocator);
@@ -630,7 +636,10 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
               columns_per_device.front().join_columns[0].num_elems * sizeof(int32_t);
           auto row_counts_buffer = allocator->alloc(row_counts_buffer_sz);
           data_mgr.getCudaMgr()->zeroDeviceMem(
-              row_counts_buffer, row_counts_buffer_sz, device_id);
+              row_counts_buffer,
+              row_counts_buffer_sz,
+              device_id,
+              getQueryEngineCudaStreamForDevice(device_id));
           const auto key_handler =
               RangeKeyHandler(isInnerColCompressed(),
                               bucket_sizes_for_dimension.size(),

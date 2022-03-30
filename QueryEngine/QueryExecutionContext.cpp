@@ -21,6 +21,7 @@
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
+#include "QueryEngine/QueryEngine.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
@@ -53,7 +54,8 @@ QueryExecutionContext::QueryExecutionContext(
   CHECK(executor);
   auto data_mgr = executor->getDataMgr();
   if (device_type == ExecutorDeviceType::GPU) {
-    gpu_allocator_ = std::make_unique<CudaAllocator>(data_mgr, device_id);
+    gpu_allocator_ = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   }
 
   auto render_allocator_map = render_info && render_info->isPotentialInSituRender()

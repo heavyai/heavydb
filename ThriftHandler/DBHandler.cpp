@@ -469,6 +469,8 @@ void DBHandler::initialize(const bool is_new_db) {
     }
   }
 
+  query_engine_ = QueryEngine::getInstance(data_mgr_->getCudaMgr());
+
   if (leaf_aggregator_.leafCount() > 0) {
     try {
       agg_handler_.reset(new MapDAggHandler(this));
@@ -7250,6 +7252,8 @@ void DBHandler::get_license_claims(TLicenseInfo& _return,
 
 void DBHandler::shutdown() {
   emergency_shutdown();
+
+  query_engine_.reset();
 
   if (render_handler_) {
     render_handler_->shutdown();

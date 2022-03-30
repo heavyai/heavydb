@@ -525,15 +525,6 @@ AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
 }
 
-std::unique_ptr<DeviceAllocator> DataMgr::createGpuAllocator(int device_id) {
-#ifdef HAVE_CUDA
-  return std::make_unique<CudaAllocator>(this, device_id);
-#else
-  UNREACHABLE();
-  return nullptr;  // avoid warning/error
-#endif
-}
-
 void DataMgr::free(AbstractBuffer* buffer) {
   std::lock_guard<std::mutex> buffer_lock(buffer_access_mutex_);
   int level = static_cast<int>(buffer->getType());

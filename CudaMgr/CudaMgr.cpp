@@ -109,39 +109,74 @@ void CudaMgr::synchronizeDevices() const {
 void CudaMgr::copyHostToDevice(int8_t* device_ptr,
                                const int8_t* host_ptr,
                                const size_t num_bytes,
-                               const int device_num) {
+                               const int device_num,
+                               std::optional<CUstream> cuda_stream) {
   setContext(device_num);
-  checkError(
-      cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes));
+  if (!cuda_stream) {
+    checkError(
+        cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes));
+  } else {
+    checkError(cuMemcpyHtoDAsync(
+        reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes, *cuda_stream));
+    checkError(cuStreamSynchronize(*cuda_stream));
+  }
 }
 
 void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const int8_t* device_ptr,
                                const size_t num_bytes,
-                               const int device_num) {
+                               const int device_num,
+                               std::optional<CUstream> cuda_stream) {
   setContext(device_num);
-  checkError(
-      cuMemcpyDtoH(host_ptr, reinterpret_cast<const CUdeviceptr>(device_ptr), num_bytes));
+  if (!cuda_stream) {
+    checkError(cuMemcpyDtoH(
+        host_ptr, reinterpret_cast<const CUdeviceptr>(device_ptr), num_bytes));
+  } else {
+    checkError(cuMemcpyDtoHAsync(host_ptr,
+                                 reinterpret_cast<const CUdeviceptr>(device_ptr),
+                                 num_bytes,
+                                 *cuda_stream));
+    checkError(cuStreamSynchronize(*cuda_stream));
+  }
 }
 
 void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
                                  int8_t* src_ptr,
                                  const size_t num_bytes,
                                  const int dest_device_num,
-                                 const int src_device_num) {
+                                 const int src_device_num,
+                                 std::optional<CUstream> cuda_stream) {
   // dest_device_num and src_device_num are the device numbers relative to start_gpu_
   // (real_device_num - start_gpu_)
   if (src_device_num == dest_device_num) {
     setContext(src_device_num);
-    checkError(cuMemcpy(reinterpret_cast<CUdeviceptr>(dest_ptr),
-                        reinterpret_cast<CUdeviceptr>(src_ptr),
-                        num_bytes));
+    if (!cuda_stream) {
+      checkError(cuMemcpy(reinterpret_cast<CUdeviceptr>(dest_ptr),
+                          reinterpret_cast<CUdeviceptr>(src_ptr),
+                          num_bytes));
+    } else {
+      checkError(cuMemcpyAsync(reinterpret_cast<CUdeviceptr>(dest_ptr),
+                               reinterpret_cast<CUdeviceptr>(src_ptr),
+                               num_bytes,
+                               *cuda_stream));
+      checkError(cuStreamSynchronize(*cuda_stream));
+    }
   } else {
-    checkError(cuMemcpyPeer(reinterpret_cast<CUdeviceptr>(dest_ptr),
-                            device_contexts_[dest_device_num],
-                            reinterpret_cast<CUdeviceptr>(src_ptr),
-                            device_contexts_[src_device_num],
-                            num_bytes));  // will we always have peer?
+    if (!cuda_stream) {
+      checkError(cuMemcpyPeer(reinterpret_cast<CUdeviceptr>(dest_ptr),
+                              device_contexts_[dest_device_num],
+                              reinterpret_cast<CUdeviceptr>(src_ptr),
+                              device_contexts_[src_device_num],
+                              num_bytes));  // will we always have peer?
+    } else {
+      checkError(cuMemcpyPeerAsync(reinterpret_cast<CUdeviceptr>(dest_ptr),
+                                   device_contexts_[dest_device_num],
+                                   reinterpret_cast<CUdeviceptr>(src_ptr),
+                                   device_contexts_[src_device_num],
+                                   num_bytes,
+                                   *cuda_stream));  // will we always have peer?
+      checkError(cuStreamSynchronize(*cuda_stream));
+    }
   }
 }
 
@@ -269,16 +304,24 @@ void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
 
 void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
                             const size_t num_bytes,
-                            const int device_num) {
-  setDeviceMem(device_ptr, 0, num_bytes, device_num);
+                            const int device_num,
+                            std::optional<CUstream> cuda_stream) {
+  setDeviceMem(device_ptr, 0, num_bytes, device_num, cuda_stream);
 }
 
 void CudaMgr::setDeviceMem(int8_t* device_ptr,
                            const unsigned char uc,
                            const size_t num_bytes,
-                           const int device_num) {
+                           const int device_num,
+                           std::optional<CUstream> cuda_stream) {
   setContext(device_num);
-  checkError(cuMemsetD8(reinterpret_cast<CUdeviceptr>(device_ptr), uc, num_bytes));
+  if (!cuda_stream) {
+    checkError(cuMemsetD8(reinterpret_cast<CUdeviceptr>(device_ptr), uc, num_bytes));
+  } else {
+    checkError(cuMemsetD8Async(
+        reinterpret_cast<CUdeviceptr>(device_ptr), uc, num_bytes, *cuda_stream));
+    checkError(cuStreamSynchronize(*cuda_stream));
+  }
 }
 
 /**
@@ -363,6 +406,23 @@ void CudaMgr::setContext(const int device_num) const {
   // deviceNum is the device number relative to startGpu (realDeviceNum - startGpu_)
   CHECK_LT(device_num, device_count_);
   cuCtxSetCurrent(device_contexts_[device_num]);
+}
+
+int CudaMgr::getContext() const {
+  CUcontext cnow;
+  checkError(cuCtxGetCurrent(&cnow));
+  if (cnow == NULL) {
+    throw std::runtime_error("no cuda device context");
+  }
+  int device_num{0};
+  for (auto& c : device_contexts_) {
+    if (c == cnow) {
+      return device_num;
+    }
+    ++device_num;
+  }
+  // TODO(sy): Change device_contexts_ to have O(1) lookup? (Or maybe not worth it.)
+  throw std::runtime_error("invalid cuda device context");
 }
 
 void CudaMgr::printDeviceProperties() const {

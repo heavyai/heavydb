@@ -17,6 +17,7 @@
 #pragma once
 
 #include "QueryEngine/JoinHashTable/PerfectHashTable.h"
+#include "QueryEngine/QueryEngine.h"
 
 #include "Shared/scope.h"
 
@@ -97,7 +98,8 @@ class PerfectJoinHashTableBuilder {
     auto dev_err_buff = gpu_hash_table_err_buff->getMemoryPtr();
     int err{0};
 
-    auto allocator = data_mgr->createGpuAllocator(device_id);
+    auto allocator = std::make_unique<CudaAllocator>(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     allocator->copyToDevice(dev_err_buff, &err, sizeof(err));
 
     CHECK(hash_table_);

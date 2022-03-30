@@ -27,6 +27,7 @@
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
 #include "OutputBufferInitialization.h"
+#include "QueryEngine/QueryEngine.h"
 #include "RelAlgExecutionUnit.h"
 #include "RuntimeFunctions.h"
 #include "Shared/Intervals.h"
@@ -151,7 +152,8 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
         data_mgr_, estimator_->getBufferSize(), device_id_);
     data_mgr->getCudaMgr()->zeroDeviceMem(device_estimator_buffer_->getMemoryPtr(),
                                           estimator_->getBufferSize(),
-                                          device_id_);
+                                          device_id_,
+                                          getQueryEngineCudaStreamForDevice(device_id_));
   } else {
     host_estimator_buffer_ =
         static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
@@ -699,7 +701,8 @@ void ResultSet::syncEstimatorBuffer() const {
       static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   CHECK(device_estimator_buffer_);
   auto device_buffer_ptr = device_estimator_buffer_->getMemoryPtr();
-  auto allocator = data_mgr_->createGpuAllocator(device_id_);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr_, device_id_, getQueryEngineCudaStreamForDevice(device_id_));
   allocator->copyFromDevice(
       host_estimator_buffer_, device_buffer_ptr, estimator_->getBufferSize());
 }
@@ -1221,7 +1224,8 @@ void ResultSet::radixSortOnGpu(
   auto timer = DEBUG_TIMER(__func__);
   auto data_mgr = &catalog_->getDataMgr();
   const int device_id{0};
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   CHECK_GT(block_size_, 0);
   CHECK_GT(grid_size_, 0);
   std::vector<int64_t*> group_by_buffers(block_size_);

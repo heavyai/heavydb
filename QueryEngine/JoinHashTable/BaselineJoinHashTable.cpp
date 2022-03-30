@@ -164,7 +164,8 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
 
     auto& data_mgr = catalog_->getDataMgr();
-    auto device_allocator = data_mgr.createGpuAllocator(device_id);
+    auto device_allocator = std::make_unique<CudaAllocator>(
+        &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : buffer;
@@ -202,7 +203,8 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
   if (device_type == ExecutorDeviceType::GPU) {
     buffer_copy = std::make_unique<int8_t[]>(buffer_size);
     auto& data_mgr = catalog_->getDataMgr();
-    auto device_allocator = data_mgr.createGpuAllocator(device_id);
+    auto device_allocator = std::make_unique<CudaAllocator>(
+        &data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     device_allocator->copyFromDevice(buffer_copy.get(), buffer, buffer_size);
   }
   auto ptr1 = buffer_copy ? buffer_copy.get() : buffer;
@@ -327,7 +329,8 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
             ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments);
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
-      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(data_mgr, device_id));
+      dev_buff_owners.emplace_back(std::make_unique<CudaAllocator>(
+          data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id)));
     }
   }
 
@@ -555,11 +558,15 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
          &count_distinct_desc,
          data_mgr,
          &host_hll_buffers] {
-          auto allocator = data_mgr->createGpuAllocator(device_id);
+          auto allocator = std::make_unique<CudaAllocator>(
+              data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
           auto device_hll_buffer =
               allocator->alloc(count_distinct_desc.bitmapPaddedSizeBytes());
           data_mgr->getCudaMgr()->zeroDeviceMem(
-              device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
+              device_hll_buffer,
+              count_distinct_desc.bitmapPaddedSizeBytes(),
+              device_id,
+              getQueryEngineCudaStreamForDevice(device_id));
           const auto& columns_for_device = columns_per_device[device_id];
           auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
               columns_for_device.join_columns, *allocator);
@@ -721,7 +728,8 @@ void BaselineJoinHashTable::copyCpuHashTableToGpu(
 
   const auto gpu_buff = gpu_target_hash_table->getGpuBuffer();
   CHECK(gpu_buff);
-  auto allocator = data_mgr->createGpuAllocator(device_id);
+  auto allocator = std::make_unique<CudaAllocator>(
+      data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
   allocator->copyToDevice(
       gpu_buff,
       cpu_hash_table->getCpuBuffer(),
@@ -846,7 +854,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
     BaselineJoinHashTableBuilder builder;
 
     auto data_mgr = executor_->getDataMgr();
-    CudaAllocator allocator(data_mgr, device_id);
+    CudaAllocator allocator(
+        data_mgr, device_id, getQueryEngineCudaStreamForDevice(device_id));
     auto join_column_types_gpu =
         transfer_vector_of_flat_objects_to_gpu(join_column_types, allocator);
     auto join_columns_gpu =
