@@ -95,6 +95,7 @@ add_executable(NoCatalogRelAlgTest NoCatalogRelAlgTest.cpp TestRelAlgDagBuilder.
 add_executable(NoCatalogSqlTest NoCatalogSqlTest.cpp)
 add_executable(ArrowStorageTest ArrowStorageTest.cpp)
 add_executable(ArrowStorageSqlTest ArrowStorageSqlTest.cpp)
+add_executable(ResultSetArrowConversion ResultSetArrowConversion.cpp)
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
@@ -217,6 +218,7 @@ target_link_libraries(NoCatalogSqlTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowStorageTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowStorageSqlTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ParallelSortTest ${EXECUTE_TEST_LIBS} ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(ResultSetArrowConversion ${EXECUTE_TEST_LIBS})
 
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -306,6 +308,7 @@ add_test(NoCatalogSqlTest NoCatalogSqlTest ${TEST_ARGS})
 add_test(ArrowStorageTest ArrowStorageTest ${TEST_ARGS})
 add_test(ArrowStorageSqlTest ArrowStorageSqlTest ${TEST_ARGS})
 add_test(ParallelSortTest ParallelSortTest ${TEST_ARGS})
+add_test(ResultSetArrowConversion ResultSetArrowConversion ${TEST_ARGS})
 
 if(ENABLE_CUDA)
   add_test(GpuSharedMemoryTest GpuSharedMemoryTest ${TEST_ARGS})
@@ -400,6 +403,7 @@ set(TEST_PROGRAMS
   ArrowStorageTest
   ArrowStorageSqlTest
   ParallelSortTest
+  ResultSetArrowConversion
 )
 
 if(ENABLE_CUDA)
