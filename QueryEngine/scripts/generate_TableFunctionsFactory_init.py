@@ -1891,12 +1891,12 @@ def parse_annotations(input_files):
                 if is_gpu_function(sig):
                     gpu_template_functions.append(t)
                     gpu_function_address_expressions.append(address_expression)
-                add = ('AddTableFunctionsParams{"%s", %s, %s, %s, %s, %s}'
+                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
                        % (name, sizer.format_sizer(), input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
 
             else:
-                add = ('AddTableFunctionsParams{"%s", %s, %s, %s, %s, %s}'
+                add = ('TableFunctionsFactory::add("%s", %s, %s, %s, %s, %s, /*is_runtime:*/false);'
                        % (sig.name, sizer.format_sizer(), input_types, output_types, sql_types, annotations))
                 add_stmts.append(add)
                 address_expression = ('avoid_opt_address(reinterpret_cast<void*>(%s))' % sig.name)
@@ -1928,6 +1928,24 @@ add_stmts, cpu_template_functions, gpu_template_functions, cpu_address_expressio
 
 canonical_input_files = [input_file[input_file.find("/QueryEngine/") + 1:] for input_file in input_files]
 header_includes = ['#include "' + canonical_input_file + '"' for canonical_input_file in canonical_input_files]
+
+# Split up calls to TableFunctionsFactory::add() into chunks
+ADD_FUNC_CHUNK_SIZE = 100
+
+def add_method(i, chunk):
+	return '''
+  NO_OPT_ATTRIBUTE void add_table_functions_%d() const {
+    %s
+  }
+''' % (i, '\n    '.join(chunk))
+
+def add_methods(add_stmts):
+	chunks = [ add_stmts[n:n+ADD_FUNC_CHUNK_SIZE] for n in range(0, len(add_stmts), ADD_FUNC_CHUNK_SIZE) ]
+	return [ add_method(i,chunk) for i,chunk in enumerate(chunks) ]
+
+def call_methods(add_stmts):
+	quot, rem = divmod(len(add_stmts), ADD_FUNC_CHUNK_SIZE)
+	return [ 'add_table_functions_%d();' % (i) for i in range(quot + int(0 < rem)) ]
 
 content = '''
 /*
@@ -1982,31 +2000,10 @@ std::once_flag init_flag;
 #pragma optimize("", off)
 #endif
 
-struct AddTableFunctionsParams {
-  char const* const name;
-  TableFunctionOutputRowSizer const sizer;
-  std::vector<ExtArgumentType> const input_args;
-  std::vector<ExtArgumentType> const output_args;
-  std::vector<ExtArgumentType> const sql_args;
-  std::vector<std::map<std::string, std::string>> const annotations;
-};
-
-template <size_t N>
 struct AddTableFunctions {
-  using ParamsArray = std::array<AddTableFunctionsParams, N>;
-  ParamsArray params_array_;
-  AddTableFunctions(ParamsArray params_array)
-      : params_array_(std::move(params_array)) {}
+%s
   NO_OPT_ATTRIBUTE void operator()() {
-    for (auto const& param : params_array_) {
-      TableFunctionsFactory::add(param.name,
-                                 param.sizer,
-                                 param.input_args,
-                                 param.output_args,
-                                 param.sql_args,
-                                 param.annotations,
-                                 /*is_runtime:*/ false);
-    }
+    %s
   }
 };
 
@@ -2020,9 +2017,7 @@ void TableFunctionsFactory::init() {
     return;
   }
 
-  std::call_once(init_flag, AddTableFunctions<%d>({
-    %s
-  }));
+  std::call_once(init_flag, AddTableFunctions{});
 }
 #if defined(_MSC_VER)
 #pragma optimize("", on)
@@ -2036,8 +2031,8 @@ void TableFunctionsFactory::init() {
 ''' % (sys.argv[0],
         '\n'.join(header_includes),
         ' &&\n'.join(cpu_address_expressions),
-        len(add_stmts),
-        ',\n    '.join(add_stmts),
+        ''.join(add_methods(add_stmts)),
+        '\n    '.join(call_methods(add_stmts)),
         ''.join(cond_fns))
 
 header_content = '''
