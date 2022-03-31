@@ -20937,12 +20937,21 @@ TEST(Select, WindowFunctionSubquery) {
     }
   }
   {
-    std::string query =
+    std::string query1 =
         "SELECT sum( (sum_y - x) * (sum_y - x) )FROM (select x, avg(cast(y as float)) "
         "over () as "
         "sum_y from test WHERE x is not null);";
+    std::string query2 =
+        "SELECT (sum_y - x) * sum_y FROM ( select x, sum(cast(y as float)) over () AS "
+        "sum_y from test WHERE x is not null );";
+    std::string query3 =
+        "SELECT 1.0 - (sum((sum_y - x) * (sum_y - x)) / sum((x - avg_y) * (x - avg_y))) "
+        "FROM ( select x, sum(cast(y as float)) over () AS sum_y, avg(cast(y as float)) "
+        "over () as avg_y from test WHERE x is not null );";
     // run query without "Window expression not supported in this context" exception
-    EXPECT_NO_THROW(run_multiple_agg(query, dt));
+    EXPECT_NO_THROW(run_multiple_agg(query1, dt));
+    EXPECT_NO_THROW(run_multiple_agg(query2, dt));
+    EXPECT_NO_THROW(run_multiple_agg(query3, dt));
   }
 }
 
