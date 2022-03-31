@@ -5054,6 +5054,17 @@ TEST_F(RasterImportTest, ImportSpecifiedBandsRenameTest) {
       {{86880.0, 0.0, 33.674859619140648}}));
 }
 
+TEST_F(RasterImportTest, CaseInsensitiveBandNamesTest) {
+  auto do_test = []() {
+    auto const abs_file_name =
+        boost::filesystem::canonical(
+            "../../Tests/Import/datafiles/raster/band_names_differing_only_by_case.grib2")
+            .string();
+    sql("COPY raster FROM '" + abs_file_name + "' WITH (source_type='raster_file');");
+  };
+  ASSERT_NO_THROW(do_test());
+}
+
 //
 // Metadata Column Tests
 //
