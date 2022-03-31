@@ -155,6 +155,7 @@ public class ForeignTableRefreshConcurrencyTest {
             }
             logger.info("Finished table join thread T[" + tid + "]");
           } catch (Exception e) {
+            e.printStackTrace();
             logger.error(
                     "Table join " + thread_name + " Caught Exception: " + e.getMessage(),
                     e);
@@ -218,7 +219,7 @@ public class ForeignTableRefreshConcurrencyTest {
           HeavyDBTestClient dba, String table_name, Path copy_from_path)
           throws Exception {
     dba.runSql("CREATE TABLE " + table_name
-            + " (id INTEGER, str TEXT ENCODING DICT(32), x DOUBLE, y BIGINT) WITH (FRAGMENT_SIZE=1)");
+            + " (id INTEGER, str TEXT ENCODING DICT(32), x DOUBLE, y BIGINT) WITH (FRAGMENT_SIZE=1, partitions='replicated')");
     dba.runSql("COPY " + table_name + " FROM '" + copy_from_path.toString()
             + "' WITH (header='false');");
   }
