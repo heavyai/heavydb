@@ -76,10 +76,13 @@ class QueryCompilationDescriptor {
   ExecutorDeviceType getDeviceType() const { return compilation_device_type_; }
   bool hoistLiterals() const { return hoist_literals_; }
   int8_t getMinByteWidth() const { return actual_min_byte_width_; }
+  bool useGroupByBufferDesc() const { return use_groupby_buffer_desc_; }
+  void setUseGroupByBufferDesc(bool val) { use_groupby_buffer_desc_ = val; }
 
  private:
   CompilationResult compilation_result_;
   ExecutorDeviceType compilation_device_type_;
   bool hoist_literals_;
   int8_t actual_min_byte_width_;
+  bool use_groupby_buffer_desc_;
 };

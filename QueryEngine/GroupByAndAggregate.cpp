@@ -31,6 +31,7 @@
 #include "TargetExprBuilder.h"
 
 #include "../CudaMgr/CudaMgr.h"
+#include "../Shared/Globals.h"
 #include "../Shared/checked_alloc.h"
 #include "../Shared/funcannotations.h"
 #include "../ThirdParty/robin_hood.h"
@@ -1276,17 +1277,33 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
     const size_t key_width,
     const int32_t row_size_quad) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
+
+  std::vector<llvm::Value*> func_args;
+
   if (group_key->getType() != llvm::Type::getInt64PtrTy(LL_CONTEXT)) {
     CHECK(key_width == sizeof(int32_t));
     group_key =
         LL_BUILDER.CreatePointerCast(group_key, llvm::Type::getInt64PtrTy(LL_CONTEXT));
   }
-  std::vector<llvm::Value*> func_args{
-      groups_buffer,
-      LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
-      &*group_key,
-      &*key_size_lv,
-      LL_INT(static_cast<int32_t>(key_width))};
+
+  if (query_mem_desc.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByBaselineHash &&
+      co.use_groupby_buffer_desc) {
+    auto [hash_ptr, hash_size] = genLoadHashDesc(groups_buffer);
+    func_args = std::vector<llvm::Value*>{hash_ptr,
+                                          hash_size,
+                                          &*group_key,
+                                          &*key_size_lv,
+                                          LL_INT(static_cast<int32_t>(key_width))};
+  } else {
+    func_args = std::vector<llvm::Value*>{
+        groups_buffer,
+        LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
+        &*group_key,
+        &*key_size_lv,
+        LL_INT(static_cast<int32_t>(key_width))};
+  }
+
   std::string func_name{"get_group_value"};
   if (query_mem_desc.didOutputColumnar()) {
     func_name += "_columnar_slot";
@@ -1296,6 +1313,7 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
   if (co.with_dynamic_watchdog) {
     func_name += "_with_watchdog";
   }
+
   if (query_mem_desc.didOutputColumnar()) {
     return std::make_tuple(groups_buffer, emitCall(func_name, func_args));
   } else {
@@ -1305,6 +1323,7 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
 
 llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
+
   CHECK_GT(ra_exe_unit_.groupby_exprs.size(), size_t(1));
   auto ft = llvm::FunctionType::get(
       get_int_type(32, LL_CONTEXT),
@@ -1356,6 +1375,7 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
                                                    const TargetInfo& agg_info,
                                                    llvm::Value* target) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
+
   const auto& agg_type = agg_info.sql_type;
   const size_t chosen_bytes = agg_type.get_size();
 
@@ -1411,21 +1431,34 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(executor_);
+
+  auto arg_it = ROW_FUNC->arg_begin();
+  llvm::Value* groups_buffer = arg_it++;
+
   if (window_func_context && window_function_is_aggregate(window_func->getKind())) {
     const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
                                       ? 0
                                       : query_mem_desc.getRowSize() / sizeof(int64_t);
-    auto arg_it = ROW_FUNC->arg_begin();
-    auto groups_buffer = arg_it++;
+    std::vector<llvm::Value*> args;
+
     CodeGenerator code_generator(executor_);
     auto window_pos_lv = code_generator.codegenWindowPosition(
         window_func_context, code_generator.posArg(nullptr));
     const auto pos_in_window =
         LL_BUILDER.CreateTrunc(window_pos_lv, get_int_type(32, LL_CONTEXT));
-    llvm::Value* entry_count_lv =
-        LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount()));
-    std::vector<llvm::Value*> args{
-        &*groups_buffer, entry_count_lv, pos_in_window, code_generator.posArg(nullptr)};
+
+    if (query_mem_desc.getQueryDescriptionType() ==
+            QueryDescriptionType::GroupByBaselineHash &&
+        co.use_groupby_buffer_desc) {
+      auto [hash_ptr, hash_size] = genLoadHashDesc(groups_buffer);
+      args = std::vector<llvm::Value*>{
+          hash_ptr, hash_size, pos_in_window, code_generator.posArg(nullptr)};
+    } else {
+      llvm::Value* entry_count_lv =
+          LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount()));
+      args = std::vector<llvm::Value*>{
+          groups_buffer, entry_count_lv, pos_in_window, code_generator.posArg(nullptr)};
+    }
     if (query_mem_desc.didOutputColumnar()) {
       const auto columnar_output_offset =
           emitCall("get_columnar_scan_output_offset", args);
@@ -1434,9 +1467,7 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
     args.push_back(LL_INT(row_size_quad));
     return emitCall("get_scan_output_slot", args);
   }
-  auto arg_it = ROW_FUNC->arg_begin();
-  auto groups_buffer = arg_it++;
-  return codegenOutputSlot(&*groups_buffer, query_mem_desc, co, diamond_codegen);
+  return codegenOutputSlot(groups_buffer, query_mem_desc, co, diamond_codegen);
 }
 
 bool GroupByAndAggregate::codegenAggCalls(
@@ -1854,6 +1885,27 @@ void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
       llvm::ICmpInst::ICMP_EQ, retCode, zero_const);
 
   executor_->cgen_state_->emitErrorCheck(rc_check_condition, retCode, "rc");
+}
+
+std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::genLoadHashDesc(
+    llvm::Value* groups_buffer) {
+  auto* desc_type = llvm::StructType::get(llvm::Type::getInt8PtrTy(LL_CONTEXT),
+                                          LL_BUILDER.getInt32Ty());
+  auto* desc_ptr_type = llvm::PointerType::getUnqual(desc_type);
+
+  llvm::Value* hash_table_desc_ptr =
+      LL_BUILDER.CreatePointerCast(groups_buffer, desc_ptr_type);
+  CHECK(hash_table_desc_ptr);
+
+  auto hash_ptr_ptr = LL_BUILDER.CreateStructGEP(hash_table_desc_ptr, 0);
+  llvm::Value* hash_ptr = LL_BUILDER.CreateLoad(hash_ptr_ptr);
+  CHECK(hash_ptr->getType() == llvm::Type::getInt8PtrTy(LL_CONTEXT));
+  hash_ptr =
+      LL_BUILDER.CreatePointerCast(hash_ptr, llvm::Type::getInt64PtrTy(LL_CONTEXT));
+  auto hash_size_ptr = LL_BUILDER.CreateStructGEP(hash_table_desc_ptr, 1);
+  llvm::Value* hash_size = LL_BUILDER.CreateLoad(hash_size_ptr);
+
+  return {hash_ptr, hash_size};
 }
 
 #undef CUR_FUNC

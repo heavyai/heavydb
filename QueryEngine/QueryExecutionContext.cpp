@@ -16,6 +16,7 @@
 
 #include "QueryExecutionContext.h"
 #include "AggregateUtils.h"
+#include "CompilationOptions.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
@@ -24,6 +25,7 @@
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
 #include "ResultSet.h"
+#include "Shared/Globals.h"
 #include "Shared/likely.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
@@ -38,6 +40,7 @@ QueryExecutionContext::QueryExecutionContext(
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const ExecutorDispatchMode dispatch_mode,
+    bool use_groupby_buffer_desc,
     const int device_id,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -69,6 +72,7 @@ QueryExecutionContext::QueryExecutionContext(
                                                             dispatch_mode,
                                                             output_columnar,
                                                             sort_on_gpu,
+                                                            use_groupby_buffer_desc,
                                                             num_rows,
                                                             col_buffers,
                                                             frag_offsets,

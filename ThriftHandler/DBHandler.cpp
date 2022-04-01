@@ -63,6 +63,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/ArrowUtil.h"
+#include "Shared/Globals.h"
 #include "Shared/StringTransform.h"
 #include "Shared/import_helpers.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -4434,7 +4435,9 @@ std::vector<PushedDownFilterInfo> DBHandler::execute_rel_alg(
                            /*filter_on_deleted_column=*/true,
                            explain_info.explain_optimized ? ExecutorExplainType::Optimized
                                                           : ExecutorExplainType::Default,
-                           intel_jit_profile_};
+                           intel_jit_profile_,
+                           g_use_groupby_buffer_desc};
+
   auto validate_or_explain_query =
       explain_info.justExplain() || explain_info.justCalciteExplain() || just_validate;
   ExecutionOptions eo = {g_enable_columnar_output,
@@ -4507,7 +4510,9 @@ void DBHandler::execute_rel_alg_df(TDataFrame& _return,
                            /*allow_lazy_fetch=*/true,
                            /*filter_on_deleted_column=*/true,
                            ExecutorExplainType::Default,
-                           intel_jit_profile_};
+                           intel_jit_profile_,
+                           g_use_groupby_buffer_desc};
+
   ExecutionOptions eo = {
       g_enable_columnar_output,
       allow_multifrag_,

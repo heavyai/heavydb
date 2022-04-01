@@ -43,6 +43,7 @@ class QueryExecutionContext : boost::noncopyable {
                         const Executor* executor,
                         const ExecutorDeviceType device_type,
                         const ExecutorDispatchMode dispatch_mode,
+                        const bool use_groupby_buffer_desc,
                         const int device_id,
                         const int64_t num_rows,
                         const std::vector<std::vector<const int8_t*>>& col_buffers,

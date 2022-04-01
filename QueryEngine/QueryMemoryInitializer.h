@@ -20,6 +20,7 @@
 
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "GpuMemUtils.h"
+#include "HashTableDesc.h"
 #include "ResultSet.h"
 
 #include "Rendering/RenderAllocator.h"
@@ -42,6 +43,7 @@ class QueryMemoryInitializer {
                          const ExecutorDispatchMode dispatch_mode,
                          const bool output_columnar,
                          const bool sort_on_gpu,
+                         const bool use_hash_table_desc,
                          const int64_t num_rows,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,
@@ -57,6 +59,7 @@ class QueryMemoryInitializer {
                          const QueryMemoryDescriptor& query_mem_desc,
                          const int device_id,
                          const ExecutorDeviceType device_type,
+                         const bool use_hash_table_desc,
                          const int64_t num_rows,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,
@@ -231,6 +234,8 @@ class QueryMemoryInitializer {
 
   size_t num_buffers_;
   std::vector<int64_t*> group_by_buffers_;
+  std::vector<std::unique_ptr<HashTableDesc>> hash_table_desc_holders_;
+
   std::shared_ptr<VarlenOutputInfo> varlen_output_info_;
   CUdeviceptr varlen_output_buffer_;
   int8_t* varlen_output_buffer_host_ptr_;
@@ -243,6 +248,8 @@ class QueryMemoryInitializer {
   DeviceAllocator* device_allocator_{nullptr};
   std::vector<Data_Namespace::AbstractBuffer*> temporary_buffers_;
 
+
+  bool use_hash_table_desc_;
   const size_t thread_idx_;
 
   friend class Executor;  // Accesses result_sets_

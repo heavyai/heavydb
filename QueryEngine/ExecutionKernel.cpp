@@ -24,9 +24,8 @@
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExternalExecutor.h"
-#include "QueryEngine/SerializeToSql.h"
-
 #include "QueryEngine/Rendering/RenderInfo.h"
+#include "QueryEngine/SerializeToSql.h"
 
 extern size_t g_cpu_sub_task_size;
 namespace {
@@ -341,7 +340,6 @@ void ExecutionKernel::runImpl(Executor* executor,
   if (can_run_subkernels) {
     size_t total_rows = fetch_result->num_rows[0][0];
     size_t sub_size = g_cpu_sub_task_size;
-
     for (size_t sub_start = start_rowid; sub_start < total_rows; sub_start += sub_size) {
       sub_size = (sub_start + sub_size > total_rows) ? total_rows - sub_start : sub_size;
       auto subtask = std::make_shared<KernelSubtask>(*this,
@@ -366,6 +364,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                   executor,
                                                   chosen_device_type,
                                                   kernel_dispatch_mode,
+                                                  query_comp_desc.useGroupByBufferDesc(),
                                                   chosen_device_id,
                                                   total_num_input_rows,
                                                   fetch_result->col_buffers,
@@ -497,6 +496,7 @@ void KernelSubtask::runImpl(Executor* executor) {
           executor,
           kernel_.chosen_device_type,
           kernel_.kernel_dispatch_mode,
+          kernel_.query_comp_desc.useGroupByBufferDesc(),
           kernel_.chosen_device_id,
           total_num_input_rows_,
           col_buffers,

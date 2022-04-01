@@ -19,6 +19,7 @@
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "GpuMemUtils.h"
+#include "HashTableDesc.h"
 #include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
 #include "ResultSet.h"
@@ -26,6 +27,7 @@
 
 #include "QueryEngine/Rendering/RenderInfo.h"
 
+#include <Shared/Globals.h>
 #include <Shared/checked_alloc.h>
 #include <ThirdParty/robin_hood.h>
 #include <x86intrin.h>
@@ -241,6 +243,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const ExecutorDispatchMode dispatch_mode,
     const bool output_columnar,
     const bool sort_on_gpu,
+    const bool use_hash_table_desc,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
@@ -261,6 +264,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , count_distinct_bitmap_crt_ptr_(nullptr)
     , count_distinct_bitmap_host_mem_(nullptr)
     , device_allocator_(device_allocator)
+    , use_hash_table_desc_(use_hash_table_desc)
     , thread_idx_(thread_idx) {
   CHECK(!sort_on_gpu || output_columnar);
 
@@ -339,6 +343,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   CHECK_GE(actual_group_buffer_size, group_buffer_size);
 
   if (query_mem_desc.hasVarlenOutput()) {
+    CHECK(!use_hash_table_desc_);
     const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
     CHECK(varlen_buffer_elem_size_opt);  // TODO(adb): relax
     auto varlen_output_buffer = reinterpret_cast<int64_t*>(row_set_mem_owner_->allocate(
@@ -352,6 +357,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                                                  render_allocator_map,
                                                  thread_idx_,
                                                  row_set_mem_owner_.get());
+
     if (!query_mem_desc.lazyInitGroups(device_type)) {
       if (group_by_buffer_template) {
         memcpy(group_by_buffer + index_buffer_qw,
@@ -366,14 +372,29 @@ QueryMemoryInitializer::QueryMemoryInitializer(
                           executor);
       }
     }
-    group_by_buffers_.push_back(group_by_buffer);
+
+    if (query_mem_desc.getQueryDescriptionType() ==
+            QueryDescriptionType::GroupByBaselineHash &&
+        use_hash_table_desc_) {
+      //  when Hash Table Descriptors are used, int64_t pointers passed to IR's function
+      //  are casted back correctly to HashTableDesc*.
+      auto* desc = new HashTableDesc(reinterpret_cast<int8_t*>(group_by_buffer),
+                                     query_mem_desc.getEntryCount());
+      group_by_buffers_.push_back(reinterpret_cast<int64_t*>(desc));
+      hash_table_desc_holders_.emplace_back(desc);
+    } else {
+      group_by_buffers_.push_back(group_by_buffer);
+    }
+
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
     }
+
     const auto column_frag_offsets =
         get_col_frag_offsets(ra_exe_unit.target_exprs, frag_offsets);
     const auto column_frag_sizes =
         get_consistent_frags_sizes(ra_exe_unit.target_exprs, consistent_frag_sizes);
+
     result_sets_.emplace_back(
         new ResultSet(target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc),
                       executor->getColLazyFetchInfo(ra_exe_unit.target_exprs),
@@ -404,6 +425,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const QueryMemoryDescriptor& query_mem_desc,
     const int device_id,
     const ExecutorDeviceType device_type,
+    const bool use_hash_table_desc,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
@@ -421,6 +443,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , count_distinct_bitmap_crt_ptr_(nullptr)
     , count_distinct_bitmap_host_mem_(nullptr)
     , device_allocator_(device_allocator)
+    , use_hash_table_desc_(use_hash_table_desc)
     , thread_idx_(0) {
   // Table functions output columnar, basically treat this as a projection
   const auto& consistent_frag_sizes = get_consistent_frags_sizes(frag_offsets);
@@ -449,7 +472,15 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     initColumnarGroups(
         query_mem_desc, group_by_buffer + index_buffer_qw, init_agg_vals_, executor);
   }
-  group_by_buffers_.push_back(group_by_buffer);
+
+  if (use_hash_table_desc_) {
+    auto* desc = new HashTableDesc(reinterpret_cast<int8_t*>(group_by_buffer),
+                                   query_mem_desc.getEntryCount());
+    group_by_buffers_.push_back(reinterpret_cast<int64_t*>(desc));
+    hash_table_desc_holders_.emplace_back(desc);
+  } else {
+    group_by_buffers_.push_back(group_by_buffer);
+  }
 
   const auto column_frag_offsets =
       get_col_frag_offsets(exe_unit.target_exprs, frag_offsets);
@@ -948,7 +979,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     return prepareTopNHeapsDevBuffer(
         query_mem_desc, init_agg_vals_dev_ptr, n, device_id, block_size_x, grid_size_x);
   }
-
+  CHECK(!use_hash_table_desc_);
   auto dev_group_by_buffers =
       create_dev_group_by_buffers(device_allocator_,
                                   group_by_buffers_,
@@ -1082,6 +1113,7 @@ void QueryMemoryInitializer::copyFromTableFunctionGpuBuffers(
     const int device_id,
     const unsigned block_size_x,
     const unsigned grid_size_x) {
+  CHECK(!use_hash_table_desc_);
   const size_t num_columns = query_mem_desc.getBufferColSlotCount();
   const size_t column_size = entry_count * sizeof(int64_t);
   const size_t orig_column_size = gpu_group_by_buffers.entry_count * sizeof(int64_t);
@@ -1175,6 +1207,8 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
     const GpuGroupByBuffers& gpu_group_by_buffers,
     const size_t projection_count,
     const int device_id) {
+  CHECK(!use_hash_table_desc_);
+
   // store total number of allocated rows:
   const auto num_allocated_rows =
       std::min(projection_count, query_mem_desc.getEntryCount());
@@ -1215,6 +1249,7 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
     total_buff_size =
         query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU, entry_count);
   }
+  CHECK(!use_hash_table_desc_);
   copy_group_by_buffers_from_gpu(buffer_provider,
                                  group_by_buffers_,
                                  total_buff_size,
@@ -1251,6 +1286,8 @@ void QueryMemoryInitializer::applyStreamingTopNOffsetGpu(
     const unsigned total_thread_count,
     const int device_id) {
 #ifdef HAVE_CUDA
+  CHECK(!use_hash_table_desc_);
+
   CHECK_EQ(group_by_buffers_.size(), num_buffers_);
   const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
 

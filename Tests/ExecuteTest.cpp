@@ -26,6 +26,7 @@
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/DateConverters.h"
+#include "../Shared/Globals.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
@@ -15698,7 +15699,6 @@ TEST(Create, QuotedColumnIdentifier) {
     ASSERT_EQ(static_cast<int64_t>(1),
               v<int64_t>(run_simple_agg(
                   "SELECT \"sum\" FROM identifier_test where id = 1;", dt)));
-
     run_ddl_statement("alter table identifier_test rename column \"sum\" to \"count\";");
 
     ASSERT_EQ(static_cast<int64_t>(2),
@@ -19322,6 +19322,11 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_bump_allocator)
                          ->implicit_value(true),
                      "Enable the bump allocator for projection queries on GPU.");
+  desc.add_options()("use-groupby-buffer-desc",
+                     po::value<bool>(&g_use_groupby_buffer_desc)
+                         ->default_value(g_use_groupby_buffer_desc)
+                         ->implicit_value(true),
+                     "Use GroupBy Buffer Descriptor for hash tables.");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()("use-existing-data",
                      "Don't create and drop tables and only run select tests (it "

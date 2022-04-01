@@ -38,6 +38,7 @@ struct CompilationOptions {
                                         // scans. Primarily disabled for delete queries.
   ExecutorExplainType explain_type{ExecutorExplainType::Default};
   bool register_intel_jit_listener{false};
+  bool use_groupby_buffer_desc{false};
 
   static CompilationOptions makeCpuOnly(const CompilationOptions& in) {
     return CompilationOptions{ExecutorDeviceType::CPU,
@@ -47,7 +48,8 @@ struct CompilationOptions {
                               in.allow_lazy_fetch,
                               in.filter_on_deleted_column,
                               in.explain_type,
-                              in.register_intel_jit_listener};
+                              in.register_intel_jit_listener,
+                              in.use_groupby_buffer_desc};
   }
 
   static CompilationOptions defaults(
@@ -59,6 +61,7 @@ struct CompilationOptions {
                               true,
                               true,
                               ExecutorExplainType::Default,
+                              false,
                               false};
   }
 };

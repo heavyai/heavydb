@@ -19,6 +19,8 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "SchemaMgr/SimpleSchemaProvider.h"
+#include "Shared/Globals.h"
+#include "Shared/scope.h"
 
 #include "gen-cpp/CalciteServer.h"
 
@@ -29,6 +31,7 @@
 #include "TestRelAlgDagBuilder.h"
 
 #include <gtest/gtest.h>
+#include <boost/program_options.hpp>
 
 constexpr int TEST_SCHEMA_ID = 1;
 constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
@@ -203,8 +206,10 @@ class NoCatalogSqlTest : public ::testing::Test {
                                       schema_provider_,
                                       data_mgr_->getDataProvider(),
                                       std::move(dag));
-    return ra_executor.executeRelAlgQuery(
-        CompilationOptions(), ExecutionOptions(), false, nullptr);
+
+    auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+    co.use_groupby_buffer_desc = g_use_groupby_buffer_desc;
+    return ra_executor.executeRelAlgQuery(co, ExecutionOptions(), false, nullptr);
   }
 
   RelAlgExecutor getExecutor(const std::string& sql) {
@@ -331,11 +336,43 @@ TEST_F(NoCatalogSqlTest, StreamingFilter) {
   ArrowTestHelpers::compare_arrow_table(at, std::vector<int32_t>{30, 30, 40, 70, 90});
 }
 
+void parse_cli_args_to_globals(int argc, char* argv[]) {
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+
+  desc.add_options()("help,h", "Print help messages ");
+
+  desc.add_options()("use-groupby-buffer-desc",
+                     po::bool_switch()->default_value(false),
+                     "Use GroupBy Buffer Descriptor for hash tables.");
+
+  po::variables_map vm;
+
+  try {
+    po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+
+    if (vm.count("help")) {
+      std::cout << desc;
+      std::exit(EXIT_SUCCESS);
+    }
+    po::notify(vm);
+    g_use_groupby_buffer_desc = vm["use-groupby-buffer-desc"].as<bool>();
+
+  } catch (boost::program_options::error& e) {
+    std::cerr << "Usage Error: " << e.what() << std::endl;
+    std::cout << desc;
+    std::exit(EXIT_FAILURE);
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
   int err{0};
+  parse_cli_args_to_globals(argc, argv);
+
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {

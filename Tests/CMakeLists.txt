@@ -224,6 +224,7 @@ add_test(NAME ExecuteTestTemporaryTables COMMAND ExecuteTest ${TEST_ARGS} "--use
 add_test(NAME ExecuteTestColumnarOutput COMMAND ExecuteTest ${TEST_ARGS} "--enable-columnar-output")
 add_test(ArrowBasedExecuteTest ArrowBasedExecuteTest ${TEST_ARGS})
 add_test(NAME ArrowBasedExecuteTestColumnarOutput COMMAND ArrowBasedExecuteTest ${TEST_ARGS} "--enable-columnar-output")
+add_test(NAME ExecuteTestSizeAgnostic COMMAND ExecuteTest ${TEST_ARGS} "--use-groupby-buffer-desc")
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
@@ -397,6 +398,7 @@ list(APPEND SANITY_TESTS ExecuteTestTemporaryTables)
 list(APPEND SANITY_TESTS ArrowBasedExecuteTestColumnarOutput)
 list(APPEND SANITY_TESTS StringDictionaryHashTest)
 list(APPEND SANITY_TESTS ExecuteTestColumnarOutput)
+list(APPEND SANITY_TESTS ExecuteTestSizeAgnostic)
 
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 

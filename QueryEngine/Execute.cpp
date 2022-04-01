@@ -1472,6 +1472,7 @@ std::shared_ptr<StreamExecutionContext> Executor::prepareStreamingExecution(
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
 
   auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
+  query_comp_desc_owned->setUseGroupByBufferDesc(co.use_groupby_buffer_desc);
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
 
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
@@ -1626,6 +1627,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
       column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
     };
     auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
+    query_comp_desc_owned->setUseGroupByBufferDesc(co.use_groupby_buffer_desc);
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
 
     if (eo.executor_type == ExecutorType::Native) {
@@ -1649,7 +1651,8 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                             co.allow_lazy_fetch,
                                             co.filter_on_deleted_column,
                                             co.explain_type,
-                                            co.register_intel_jit_listener},
+                                            co.register_intel_jit_listener,
+                                            co.use_groupby_buffer_desc},
                                            eo,
                                            render_info,
                                            this);
@@ -1686,6 +1689,7 @@ TemporaryTable Executor::executeWorkUnitImpl(
                                      column_fetcher,
                                      query_infos,
                                      eo,
+                                     co,
                                      is_agg,
                                      allow_single_frag_table_opt,
                                      context_count,
@@ -1785,6 +1789,7 @@ void Executor::executeWorkUnitPerFragment(
 
   ColumnFetcher column_fetcher(this, data_provider, column_cache);
   auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
+  query_comp_desc_owned->setUseGroupByBufferDesc(co.use_groupby_buffer_desc);
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
   {
     auto clock_begin = timer_start();
@@ -2261,6 +2266,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
     ColumnFetcher& column_fetcher,
     const std::vector<InputTableInfo>& table_infos,
     const ExecutionOptions& eo,
+    const CompilationOptions& co,
     const bool is_agg,
     const bool allow_single_frag_table_opt,
     const size_t context_count,
@@ -2317,6 +2323,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                       &eo,
                                       &query_comp_desc,
                                       &query_mem_desc,
+                                      &co,
                                       render_info](const int device_id,
                                                    const FragmentsList& frag_list,
                                                    const int64_t rowid_lookup_key) {
@@ -2356,6 +2363,7 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                          &execution_kernels,
                                          &column_fetcher,
                                          &eo,
+                                         &co,
                                          &frag_list_idx,
                                          &device_type,
                                          &query_comp_desc,
@@ -2367,7 +2375,6 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
         return;
       }
       CHECK_GE(device_id, 0);
-
       execution_kernels.emplace_back(
           std::make_unique<ExecutionKernel>(ra_exe_unit,
                                             device_type,

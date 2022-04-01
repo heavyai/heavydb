@@ -580,6 +580,7 @@ class Executor {
       ColumnFetcher& column_fetcher,
       const std::vector<InputTableInfo>& table_infos,
       const ExecutionOptions& eo,
+      const CompilationOptions& co,
       const bool is_agg,
       const bool allow_single_frag_table_opt,
       const size_t context_count,

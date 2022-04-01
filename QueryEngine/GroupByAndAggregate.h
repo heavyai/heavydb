@@ -202,6 +202,8 @@ class GroupByAndAggregate {
 
   void prependForceSync();
 
+  std::tuple<llvm::Value*, llvm::Value*> genLoadHashDesc(llvm::Value* groups_buffer);
+
   Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<InputTableInfo>& query_infos_;
