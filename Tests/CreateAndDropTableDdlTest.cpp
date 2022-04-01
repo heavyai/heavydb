@@ -1478,6 +1478,71 @@ TEST_F(CreateTableInThrift, ThriftCreateTableWithDefaults) {
   }
 }
 
+TEST_F(CreateTableInThrift, ThriftCreateTableDifferentEncodings) {
+  struct ColumnDef {
+    TDatumType::type type;
+    TEncodingType::type encoding;
+    int comp_param;
+  };
+  const vector<ColumnDef> columns = {{TDatumType::TINYINT, TEncodingType::NONE, 0},
+                                     {TDatumType::SMALLINT, TEncodingType::NONE, 0},
+                                     {TDatumType::SMALLINT, TEncodingType::FIXED, 8},
+                                     {TDatumType::INT, TEncodingType::NONE, 0},
+                                     {TDatumType::INT, TEncodingType::FIXED, 8},
+                                     {TDatumType::INT, TEncodingType::FIXED, 16},
+                                     {TDatumType::BIGINT, TEncodingType::NONE, 0},
+                                     {TDatumType::BIGINT, TEncodingType::FIXED, 8},
+                                     {TDatumType::BIGINT, TEncodingType::FIXED, 16},
+                                     {TDatumType::BIGINT, TEncodingType::FIXED, 32},
+                                     {TDatumType::FLOAT, TEncodingType::NONE, 0},
+                                     {TDatumType::DOUBLE, TEncodingType::NONE, 0},
+                                     {TDatumType::DECIMAL, TEncodingType::NONE, 0},
+                                     {TDatumType::STR, TEncodingType::NONE, 0},
+                                     {TDatumType::STR, TEncodingType::DICT, 8},
+                                     {TDatumType::STR, TEncodingType::DICT, 16},
+                                     {TDatumType::STR, TEncodingType::DICT, 32},
+                                     {TDatumType::TIME, TEncodingType::NONE, 0},
+                                     {TDatumType::TIME, TEncodingType::FIXED, 32},
+                                     {TDatumType::TIMESTAMP, TEncodingType::NONE, 0},
+                                     {TDatumType::TIMESTAMP, TEncodingType::FIXED, 32},
+                                     {TDatumType::DATE, TEncodingType::DATE_IN_DAYS, 16},
+                                     {TDatumType::DATE, TEncodingType::DATE_IN_DAYS, 32},
+                                     {TDatumType::BOOL, TEncodingType::NONE, 0},
+                                     {TDatumType::POINT, TEncodingType::NONE, 0},
+                                     {TDatumType::LINESTRING, TEncodingType::NONE, 0},
+                                     {TDatumType::POLYGON, TEncodingType::NONE, 0},
+                                     {TDatumType::MULTIPOLYGON, TEncodingType::NONE, 0}};
+  TCreateParams cp;
+  cp.is_replicated = false;
+  TRowDescriptor row_desc;
+  for (size_t i = 0; i < columns.size(); ++i) {
+    TColumnType c;
+    c.col_name = "c" + to_string(i);
+    c.col_type.type = columns[i].type;
+    c.col_type.encoding = columns[i].encoding;
+    c.col_type.comp_param = columns[i].comp_param;
+    if (c.col_type.type == TDatumType::POINT ||
+        c.col_type.type == TDatumType::LINESTRING ||
+        c.col_type.type == TDatumType::POLYGON ||
+        c.col_type.type == TDatumType::MULTIPOLYGON) {
+      c.col_type.precision = static_cast<int>(SQLTypes::kGEOGRAPHY);
+    }
+    row_desc.push_back(move(c));
+  }
+  auto [handler, session] = getDbHandlerAndSessionId();
+  handler->create_table(session, "test_table", row_desc, cp);
+  TTableDetails details;
+  handler->get_table_details(details, session, "test_table");
+  auto created_row_desc = details.row_desc;
+  EXPECT_EQ(created_row_desc.size(), row_desc.size());
+  for (size_t i = 0; i < row_desc.size(); ++i) {
+    EXPECT_EQ(created_row_desc[i].col_name, row_desc[i].col_name);
+    EXPECT_EQ(created_row_desc[i].col_type.type, row_desc[i].col_type.type);
+    EXPECT_EQ(created_row_desc[i].col_type.encoding, row_desc[i].col_type.encoding);
+    EXPECT_EQ(created_row_desc[i].col_type.comp_param, row_desc[i].col_type.comp_param);
+  }
+}
+
 class DropTableTest : public CreateAndDropTableDdlTest,
                       public testing::WithParamInterface<ddl_utils::TableType> {
  protected:

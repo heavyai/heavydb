@@ -5014,7 +5014,8 @@ void DBHandler::create_table(const TSessionId& session,
       col_stmt.append(" ENCODING " + thrift_to_encoding_name(col.col_type));
       if (thrift_to_encoding(col.col_type.encoding) == kENCODING_DICT ||
           thrift_to_encoding(col.col_type.encoding) == kENCODING_FIXED ||
-          thrift_to_encoding(col.col_type.encoding) == kENCODING_GEOINT) {
+          thrift_to_encoding(col.col_type.encoding) == kENCODING_GEOINT ||
+          thrift_to_encoding(col.col_type.encoding) == kENCODING_DATE_IN_DAYS) {
         col_stmt.append("(" + std::to_string(col.col_type.comp_param) + ")");
       }
     } else if (col.col_type.type == TDatumType::STR) {
