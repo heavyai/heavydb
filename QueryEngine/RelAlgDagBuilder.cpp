@@ -2450,9 +2450,9 @@ void add_window_function_pre_project(
 
     auto scan_node = std::dynamic_pointer_cast<RelScan>(prev_node);
     const bool has_multi_fragment_scan_input =
-        (scan_node && (scan_node->getNumShards() > 0 || scan_node->getNumFragments() > 1))
-            ? true
-            : false;
+        (scan_node &&
+         (scan_node->getNumShards() > 0 || scan_node->getNumFragments() > 1));
+    const bool needs_expr_pushdown = need_pushdown_generic_expr();
 
     // We currently add a preceding project node in one of two conditions:
     // 1. always_add_project_if_first_project_is_window_expr = true, which
@@ -2480,65 +2480,105 @@ void add_window_function_pre_project(
     if (!((always_add_project_if_first_project_is_window_expr &&
            project_node_counter == 1) ||
           filter_node || join_node || has_multi_fragment_scan_input ||
-          need_pushdown_generic_expr())) {
+          needs_expr_pushdown)) {
       continue;
     }
 
-    std::unordered_map<size_t, size_t> expr_offset_cache;
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_for_new_project;
-    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_for_window_project;
-    std::vector<std::string> fields_for_window_project;
-    std::vector<std::string> fields_for_new_project;
+    if (needs_expr_pushdown || join_node) {
+      // previous logic cannot cover join_node case well, so use the newly introduced
+      // push-down expression logic to safely add pre_project node before processing
+      // window function
+      std::unordered_map<size_t, size_t> expr_offset_cache;
+      std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_for_new_project;
+      std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_for_window_project;
+      std::vector<std::string> fields_for_window_project;
+      std::vector<std::string> fields_for_new_project;
 
-    // step 0. create new project node with an empty scalar expr to rebind target exprs
-    std::vector<std::unique_ptr<const RexScalar>> dummy_scalar_exprs;
-    std::vector<std::string> dummy_fields;
-    auto new_project =
-        std::make_shared<RelProject>(dummy_scalar_exprs, dummy_fields, prev_node);
+      // step 0. create new project node with an empty scalar expr to rebind target exprs
+      std::vector<std::unique_ptr<const RexScalar>> dummy_scalar_exprs;
+      std::vector<std::string> dummy_fields;
+      auto new_project =
+          std::make_shared<RelProject>(dummy_scalar_exprs, dummy_fields, prev_node);
 
-    // step 1 - 2
-    PushDownGenericExpressionInWindowFunction visitor(new_project,
-                                                      scalar_exprs_for_new_project,
-                                                      fields_for_new_project,
-                                                      expr_offset_cache);
-    for (size_t i = 0; i < window_func_project_node->size(); ++i) {
-      auto projected_target = window_func_project_node->getProjectAt(i);
-      auto new_projection_target = visitor.visit(projected_target);
-      scalar_exprs_for_window_project.emplace_back(
-          std::move(new_projection_target.release()));
-    }
-    new_project->setExpressions(scalar_exprs_for_new_project);
-    new_project->setFields(std::move(fields_for_new_project));
-    bool has_groupby = false;
-    auto aggregate = std::dynamic_pointer_cast<RelAggregate>(prev_node);
-    if (aggregate) {
-      has_groupby = aggregate->getGroupByCount() > 0;
-    }
-    if (has_groupby && visitor.hasPartitionExpression()) {
-      // we currently may compute incorrect result with columnar output when
-      // 1) the window function has partition expression, and
-      // 2) a parent node of the window function projection node has group by expression
-      // so we force rowwise output (only) for the newly injected projection node
-      // to prevent computing incorrect query result
-      // todo (yoonmin) : relax this
-      VLOG(1) << "Query output overridden to row-wise format due to presence of a window "
-                 "function with partition expression and group-by expression.";
-      new_project->forceRowwiseOutput();
-    }
-    if (visitor.hasCaseExprAsWindowOperand()) {
-      // force rowwise output
-      VLOG(1) << "Query output overridden to row-wise format due to presence of a window "
-                 "function with a case statement as its operand.";
-      new_project->forceRowwiseOutput();
-    }
+      // step 1 - 2
+      PushDownGenericExpressionInWindowFunction visitor(new_project,
+                                                        scalar_exprs_for_new_project,
+                                                        fields_for_new_project,
+                                                        expr_offset_cache);
+      for (size_t i = 0; i < window_func_project_node->size(); ++i) {
+        auto projected_target = window_func_project_node->getProjectAt(i);
+        auto new_projection_target = visitor.visit(projected_target);
+        scalar_exprs_for_window_project.emplace_back(
+            std::move(new_projection_target.release()));
+      }
+      new_project->setExpressions(scalar_exprs_for_new_project);
+      new_project->setFields(std::move(fields_for_new_project));
+      bool has_groupby = false;
+      auto aggregate = std::dynamic_pointer_cast<RelAggregate>(prev_node);
+      if (aggregate) {
+        has_groupby = aggregate->getGroupByCount() > 0;
+      }
+      if (has_groupby && visitor.hasPartitionExpression()) {
+        // we currently may compute incorrect result with columnar output when
+        // 1) the window function has partition expression, and
+        // 2) a parent node of the window function projection node has group by expression
+        // so we force rowwise output (only) for the newly injected projection node
+        // to prevent computing incorrect query result
+        // todo (yoonmin) : relax this
+        VLOG(1)
+            << "Query output overridden to row-wise format due to presence of a window "
+               "function with partition expression and group-by expression.";
+        new_project->forceRowwiseOutput();
+      }
+      if (visitor.hasCaseExprAsWindowOperand()) {
+        // force rowwise output
+        VLOG(1)
+            << "Query output overridden to row-wise format due to presence of a window "
+               "function with a case statement as its operand.";
+        new_project->forceRowwiseOutput();
+      }
 
-    // step 3. finalize
-    propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
-    node_list.insert(node_itr, new_project);
-    window_func_project_node->replaceInput(prev_node, new_project);
-    window_func_project_node->setExpressions(scalar_exprs_for_window_project);
+      // step 3. finalize
+      propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
+      node_list.insert(node_itr, new_project);
+      window_func_project_node->replaceInput(prev_node, new_project);
+      window_func_project_node->setExpressions(scalar_exprs_for_window_project);
+    } else {
+      // only push rex_inputs listed in the window function down to a new project node
+      RexInputSet inputs;
+      RexInputCollector input_collector;
+      for (size_t i = 0; i < window_func_project_node->size(); i++) {
+        auto new_inputs =
+            input_collector.visit(window_func_project_node->getProjectAt(i));
+        inputs.insert(new_inputs.begin(), new_inputs.end());
+      }
+
+      // Note: Technically not required since we are mapping old inputs to new input
+      // indices, but makes the re-mapping of inputs easier to follow.
+      std::vector<RexInput> sorted_inputs(inputs.begin(), inputs.end());
+      std::sort(sorted_inputs.begin(),
+                sorted_inputs.end(),
+                [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
+
+      std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
+      std::vector<std::string> fields;
+      std::unordered_map<unsigned, unsigned> old_index_to_new_index;
+      for (auto& input : sorted_inputs) {
+        CHECK_EQ(input.getSourceNode(), prev_node.get());
+        CHECK(old_index_to_new_index
+                  .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
+                  .second);
+        scalar_exprs.emplace_back(input.deepCopy());
+        fields.emplace_back("");
+      }
+
+      auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, prev_node);
+      propagate_hints_to_new_project(window_func_project_node, new_project, query_hints);
+      node_list.insert(node_itr, new_project);
+      window_func_project_node->replaceInput(
+          prev_node, new_project, old_index_to_new_index);
+    }
   }
-
   nodes.assign(node_list.begin(), node_list.end());
 }
 
