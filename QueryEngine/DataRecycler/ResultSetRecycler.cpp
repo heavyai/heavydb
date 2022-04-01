@@ -173,6 +173,7 @@ void ResultSetRecycler::putItemToCache(QueryPlanHash key,
     } else if (cache_status == CacheAvailability::AVAILABLE_AFTER_CLEANUP) {
       auto required_size = metric_tracker.calculateRequiredSpaceForItemAddition(
           device_identifier, item_size);
+      CHECK_GT(required_size, 0UL);
       LOG(INFO) << "Cleanup cached query resultset(s) to make a free space ("
                 << required_size << " bytes) to cache a new resultset";
       cleanupCacheForInsertion(item_type, device_identifier, required_size, lock);
@@ -234,19 +235,26 @@ void ResultSetRecycler::cleanupCacheForInsertion(
   int elimination_target_offset = 0;
   size_t removed_size = 0;
   auto& metric_tracker = getMetricTracker(item_type);
-  auto actual_space_to_free = metric_tracker.getTotalCacheSize() / 2;
-  if (!g_is_test_env && required_size < actual_space_to_free) {
-    required_size = actual_space_to_free;
+  auto actual_space_to_free = required_size;
+  // cast total_cache_size to double for accurate calculation
+  double moderate_free_space =
+      static_cast<double>(metric_tracker.getTotalCacheSize()) / 2;
+  if (!g_is_test_env && required_size < moderate_free_space) {
+    // we try to make enough (and moderate) free space to avoid
+    // too frequent cache clearance
+    // we can expect that this strategy is likely to maintain cache hit ratio
+    // since elimination targets are selected based on cache metrics including
+    // # referenced (i.e., we try to keep frequently recycled items as long as we can)
+    actual_space_to_free = moderate_free_space;
   }
   metric_tracker.sortCacheInfoByQueryMetric(device_identifier);
   auto cached_item_metrics = metric_tracker.getCacheItemMetrics(device_identifier);
   sortCacheContainerByQueryMetric(item_type, device_identifier);
-
   for (auto& metric : cached_item_metrics) {
     auto target_size = metric->getMemSize();
     ++elimination_target_offset;
     removed_size += target_size;
-    if (removed_size > required_size) {
+    if (removed_size > actual_space_to_free) {
       break;
     }
   }
