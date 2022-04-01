@@ -39,6 +39,19 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
   } else {
     operand_lv = codegen(operand, true, co).front();
   }
+
+  // If the operand is a TextEncodingNone struct ({i8*, i64, i8})
+  // unpack it into an int64_t using "string_pack" so that codegenCast
+  // can properly cast it to a TextEncodingDict
+  if (operand_lv->getType()->isPointerTy() &&
+      operand_lv->getType()->getPointerElementType()->isStructTy()) {
+    auto _struct = cgen_state_->ir_builder_.CreateLoad(operand_lv);
+    auto ptr = cgen_state_->ir_builder_.CreateExtractValue(_struct, {0});
+    auto len = cgen_state_->ir_builder_.CreateTrunc(
+        cgen_state_->ir_builder_.CreateExtractValue(_struct, {1}),
+        get_int_type(32, cgen_state_->context_));
+    operand_lv = cgen_state_->emitCall("string_pack", {ptr, len});
+  }
   const auto& operand_ti = operand->get_type_info();
   return codegenCast(operand_lv, operand_ti, ti, operand_as_const, co);
 }
