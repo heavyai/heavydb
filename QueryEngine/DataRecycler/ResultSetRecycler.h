@@ -90,6 +90,10 @@ class ResultSetRecycler : public DataRecycler<ResultSetPtr, ResultSetMetaInfo> {
 
   std::vector<std::shared_ptr<Analyzer::Expr>>& getTargetExprs(QueryPlanHash key) const;
 
+  CacheMetricTracker& getResultSetRecyclerMetricTracker() {
+    return getMetricTracker(CacheItemType::QUERY_RESULTSET);
+  }
+
  private:
   bool hasItemInCache(
       QueryPlanHash key,

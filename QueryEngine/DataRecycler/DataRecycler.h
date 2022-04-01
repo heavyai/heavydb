@@ -274,9 +274,10 @@ class CacheMetricTracker {
                                                size_t item_size) const {
     auto it = current_cache_size_in_bytes_.find(device_identifier);
     CHECK(it != current_cache_size_in_bytes_.end());
-    auto rem = total_cache_size_ - it->second;
-    CHECK_GT(item_size, rem);
-    return item_size - rem;
+    CHECK_LE(item_size, total_cache_size_);
+    const auto current_cache_size = it->second;
+    long rem = total_cache_size_ - current_cache_size;
+    return rem < 0 ? item_size : item_size - rem;
   }
 
   void clearCacheMetricTracker() {
@@ -295,18 +296,22 @@ class CacheMetricTracker {
 
   CacheAvailability canAddItem(DeviceIdentifier device_identifier,
                                size_t item_size) const {
-    if (item_size > max_cache_item_size_) {
+    if (item_size > max_cache_item_size_ || item_size > total_cache_size_) {
       return CacheAvailability::UNAVAILABLE;
     }
+    // now we know that a cache can hold the new item since its size is less than
+    // per-item maximum size limit
+    // check if we need to remove some (or all) of cached item to make a room
+    // for the new item
     auto current_cache_size = getCurrentCacheSize(device_identifier);
     CHECK(current_cache_size.has_value());
-    if (*current_cache_size > total_cache_size_) {
-      return CacheAvailability::UNAVAILABLE;
-    }
     auto cache_size_after_addition = *current_cache_size + item_size;
     if (cache_size_after_addition > total_cache_size_) {
+      // if so, we need to remove the item to hold the new one within the cache
       return CacheAvailability::AVAILABLE_AFTER_CLEANUP;
     }
+    // cache has a sufficient space to hold the new item
+    // thus, there is no need to remove cached item
     return CacheAvailability::AVAILABLE;
   }
 

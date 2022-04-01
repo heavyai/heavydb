@@ -990,6 +990,8 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
       auto q1_tuning_param = q1_ht_and_metainfo.cached_tuning_info;
       EXPECT_EQ(static_cast<size_t>(1), q1_ht_and_metainfo.cached_metric->getRefCount());
       EXPECT_EQ(static_cast<size_t>(208), q1_ht_and_metainfo.cached_metric->getMemSize());
+      const auto q1_hash_table_cache_key = *visited_hashtable_key.begin();
+      CHECK_NE(q1_hash_table_cache_key, EMPTY_HASHED_PLAN_DAG_KEY);
 
       auto q2 =
           R"(SELECT count(*) from overlaps_t2 as b JOIN overlaps_t2 as a ON ST_Intersects(a.poly, b.pt);)";
@@ -1002,17 +1004,7 @@ TEST(DataRecycler, Overlaps_Hashtable_Reuse_Per_Parameter) {
                                                  CacheItemType::OVERLAPS_HT));
       auto q2_ht_and_metainfo =
           getCachedOverlapsHashTableWithItsTuningParam(visited_hashtable_key);
-      EXPECT_EQ(static_cast<size_t>(1), q2_ht_and_metainfo.cached_metric->getRefCount());
-      EXPECT_EQ(static_cast<size_t>(416), q2_ht_and_metainfo.cached_metric->getMemSize());
-      auto q2_ht_metainfo = q2_ht_and_metainfo.cached_ht_metainfo;
-      if (!q2_ht_metainfo.has_value() &&
-          !q2_ht_metainfo->overlaps_meta_info.has_value()) {
-        EXPECT_TRUE(false);
-      }
-      auto q2_tuning_param = q2_ht_and_metainfo.cached_tuning_info;
-      if (!q2_tuning_param.has_value()) {
-        EXPECT_TRUE(false);
-      }
+      CHECK(!q2_ht_and_metainfo.cached_ht);
     }
 
     // test4. run q1 and then run q2 but make cache ignore
@@ -2389,6 +2381,76 @@ TEST(DataRecycler, Lazy_Cache_Invalidation) {
   }
   drop_tables();
   drop_tables_for_string_joins();
+}
+
+TEST(DataRecycler, MetricTrackerTest) {
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  auto& resultset_recycler_holder = executor->getRecultSetRecyclerHolder();
+  auto resultset_recycler = resultset_recycler_holder.getResultSetRecycler();
+  CHECK(resultset_recycler);
+  auto& metric_tracker = resultset_recycler->getResultSetRecyclerMetricTracker();
+
+  ScopeGuard reset_status = [orig_max_size = g_max_cacheable_query_resultset_size_bytes,
+                             orig_total_size = g_query_resultset_cache_total_bytes,
+                             &metric_tracker] {
+    metric_tracker.setMaxCacheItemSize(orig_max_size);
+    metric_tracker.setTotalCacheSize(orig_total_size);
+  };
+
+  metric_tracker.setTotalCacheSize(20);
+  metric_tracker.setMaxCacheItemSize(15);
+
+  QueryPlanHash dummy_key{1};
+  DeviceIdentifier dummy_id{DataRecyclerUtil::CPU_DEVICE_IDENTIFIER};
+
+  auto add_dummy_item_to_cache =
+      [&dummy_key, &dummy_id, &metric_tracker](size_t dummy_size) {
+        metric_tracker.putNewCacheItemMetric(dummy_key++, dummy_id, dummy_size, 0);
+      };
+
+  // case 1. add new item to an empty cache
+  {
+    add_dummy_item_to_cache(1);
+    EXPECT_EQ(*metric_tracker.getCurrentCacheSize(dummy_id), 1UL);
+
+    add_dummy_item_to_cache(2);
+    EXPECT_EQ(*metric_tracker.getCurrentCacheSize(dummy_id), 3UL);
+
+    metric_tracker.clearCacheMetricTracker();
+  }
+
+  // case 2. try to add item when its size is larger than size limitation
+  // a) larger than per-item maximum limit
+  {
+    CacheAvailability ca1 = metric_tracker.canAddItem(dummy_id, 16);
+    // b) larger than total cache size
+    CacheAvailability ca2 = metric_tracker.canAddItem(dummy_id, 21);
+    EXPECT_EQ(ca1, CacheAvailability::UNAVAILABLE);
+    EXPECT_EQ(ca2, CacheAvailability::UNAVAILABLE);
+
+    metric_tracker.clearCacheMetricTracker();
+  }
+
+  // case 3. complicated cases
+  {
+    // fill caches, current cache size = 15 (=1+2+3+4+5)
+    for (size_t sz = 1; sz <= 5; sz++) {
+      add_dummy_item_to_cache(sz);
+    }
+    EXPECT_EQ(metric_tracker.getCurrentCacheSize(dummy_id), 15UL);
+    // a) total cache size will be 11
+    CacheAvailability ca1 = metric_tracker.canAddItem(dummy_id, 1);
+    EXPECT_EQ(ca1, CacheAvailability::AVAILABLE);
+    // b) total cache size will be 20
+    CacheAvailability ca2 = metric_tracker.canAddItem(dummy_id, 5);
+    EXPECT_EQ(ca2, CacheAvailability::AVAILABLE);
+    // c) need to cleanup few items to add the item of size 10
+    CacheAvailability ca3 = metric_tracker.canAddItem(dummy_id, 10);
+    EXPECT_EQ(ca3, CacheAvailability::AVAILABLE_AFTER_CLEANUP);
+    // d) impossible since it is larger than per-max table cached item limit
+    CacheAvailability ca4 = metric_tracker.canAddItem(dummy_id, 16);
+    EXPECT_EQ(ca4, CacheAvailability::UNAVAILABLE);
+  }
 }
 
 int main(int argc, char* argv[]) {
