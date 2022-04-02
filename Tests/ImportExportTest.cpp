@@ -880,16 +880,6 @@ class ImportAndSelectTest
   std::string import_id_;
   std::string copy_from_result_;
 
-  static bool isOdbc(const std::string& import_type) {
-    return (import_type == "sqlite" || import_type == "postgres");
-  }
-
-  static void createODBCSourceTable(const std::string& table_name,
-                                    const std::string& table_schema,
-                                    const std::string& src_file,
-                                    const std::string& import_type,
-                                    const bool is_odbc_geo = false) {}
-
   static void SetUpTestSuite() {
     FsiImportTest::setupS3();
     ImportExportTestBase::SetUpTestSuite();
@@ -905,12 +895,19 @@ class ImportAndSelectTest
              param_.data_source_type,
              param_.fragment_size,
              param_.num_elements_per_chunk) = GetParam();
+    if (testShouldBeSkipped()) {
+      GTEST_SKIP();
+    }
     enableAllFsiImportCodePaths();
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
+    if (g_run_odbc && isOdbc(param_.import_type)) {
+    }
   }
 
   void TearDown() override {
+    if (g_run_odbc && isOdbc(param_.import_type)) {
+    }
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
     ImportExportTestBase::TearDown();
     restoreAllImportCodePaths();
@@ -1008,6 +1005,11 @@ class ImportAndSelectTest
     std::string extension =
         isOdbc(import_type) || import_type == "regex_parser" ? "csv" : import_type;
     std::string base_name = file_name_base + "." + extension;
+    if (is_odbc_geo && import_type == "redshift") {
+      // redshift geo types require the inclusion of ST_GeomFromText when inserting
+      // geometry values
+      base_name = file_name_base + "_redshift." + extension;
+    }
     if (is_dir) {
       base_name = file_name_base + "_" + extension + "_dir";
     }
@@ -1097,8 +1099,6 @@ class ImportAndSelectTest
       options.emplace_back("source_type='parquet_file'");
     }
     if (isOdbc(import_type)) {
-      options.emplace_back("source_type='odbc'");
-      options.emplace_back("odbc_dsn='" + import_type + "'");
     }
     if (data_source_type == "s3_public" || data_source_type == "s3_private") {
       options.emplace_back("s3_region='us-west-1'");
@@ -1159,20 +1159,18 @@ class ImportAndSelectTest
 };
 
 TEST_P(ImportAndSelectTest, GeoTypes) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (param_.import_type == "sqlite") {
     GTEST_SKIP() << "sqlite does not support geometry types";
   }
+
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, l LINESTRING, poly POLYGON, multipoly MULTIPOLYGON",
-      "geo_types",
+      "geo_types_valid",
       "SELECT * FROM import_test_new ORDER BY index;",
       "(\\d+),\\s*" + get_line_geo_regex(4),
       256,
-      "'SELECT index, ST_AsText(p) as p, ST_AsText(l) as l, ST_AsText(poly) as poly, "
-      "ST_AsText(multipoly) as multipoly FROM import_test;'",
+      sql_select_stmt,
       "index",
       {},
       false,
@@ -1180,7 +1178,7 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
   // clang-format off
     assertResultSetEqual({
     {
-      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,0 1,1 1,0 0))",
+      i(1), "POINT (0 0)", "LINESTRING (0 0,0 0)", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)))"
     },
     {
@@ -1203,9 +1201,6 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
 }
 
 TEST_P(ImportAndSelectTest, GeoTypesRenderGroups) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   // we only need to run this test for one of these combos, skip all others
   if (param_.fragment_size != 1 || param_.num_elements_per_chunk != 1) {
     GTEST_SKIP() << "Skipping test for duplicate ignored values";
@@ -1229,9 +1224,6 @@ TEST_P(ImportAndSelectTest, GeoTypesRenderGroups) {
 }
 
 TEST_P(ImportAndSelectTest, ArrayTypes) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (isOdbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
@@ -1259,7 +1251,7 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
     },
     {
       3L, array({True}), array({120L}), array({31000L}), array({2100000000L, 200000000L}),
-      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f}), array({"10:00:00"}),
+      array({9100000000000000000L, 9200000000000000000L}), array({(param_.import_type == "redshift" ? 1000.12f : 1000.123f)}), array({"10:00:00"}),
       array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
       array({"text_4"}),array({6.78})
     }},
@@ -1269,9 +1261,6 @@ TEST_P(ImportAndSelectTest, ArrayTypes) {
 }
 
 TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (isOdbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
@@ -1299,7 +1288,7 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
     },
     {
       3L, array({True,True}), array({120L,44L}), array({31000L,8123L}), array({2100000000L, 200000000L}),
-      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f,1392.22f}), array({"10:00:00","20:00:00"}),
+      array({9100000000000000000L, 9200000000000000000L}), array({(param_.import_type == "redshift" ? 1000.12f : 1000.123f),1392.22f}), array({"10:00:00","20:00:00"}),
       array({"12/31/2500 23:59:59","1/1/2500 23:59:59"}), array({"12/31/2500","1/1/2500"}),
       array({"text_5","text_6"}),array({6.78,5.6})
     }},
@@ -1309,9 +1298,7 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
 }
 
 TEST_P(ImportAndSelectTest, ScalarTypes) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
@@ -1320,7 +1307,7 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      sql_select_stmt,
       "s");
 
   // clang-format off
@@ -1329,7 +1316,7 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
         "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
       {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
         "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
-      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
         "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
   };
   // clang-format on
@@ -1345,9 +1332,7 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
 }
 
 TEST_P(ImportAndSelectTest, Sharded) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
+  std::string sql_select_stmt = "";
   auto query = createTableCopyFromAndSelect(
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
       "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
@@ -1356,7 +1341,7 @@ TEST_P(ImportAndSelectTest, Sharded) {
       "SELECT * FROM import_test_new ORDER BY s;",
       get_line_regex(12),
       14,
-      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM import_test;'",
+      sql_select_stmt,
       "s",
       "SHARD_COUNT=2");
 
@@ -1366,7 +1351,7 @@ TEST_P(ImportAndSelectTest, Sharded) {
         "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
       {False, 110L, 30500L, 2000500000L, 9000000050000000000L, 100.12f, 2.1234,
         "00:10:00", "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"},
-      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
         "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
   };
   // clang-format on
@@ -1385,9 +1370,6 @@ TEST_P(ImportAndSelectTest, Sharded) {
 }
 
 TEST_P(ImportAndSelectTest, Multifile) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (isOdbc(param_.import_type)) {
     GTEST_SKIP() << " multifile support not tested for ODBC";
   }
@@ -1415,9 +1397,6 @@ TEST_P(ImportAndSelectTest, Multifile) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
     GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
@@ -1459,7 +1438,7 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
 TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
   // Skip non local test cases for NOT NULL columns since other cases add no additional
   // coverage
-  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+  if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
@@ -1492,9 +1471,6 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (isOdbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
@@ -1522,7 +1498,7 @@ TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
     },
     {
       3L, array({True}), array({120L}), array({31000L}), array({2100000000L, 200000000L}),
-      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f}), array({"10:00:00"}),
+      array({9100000000000000000L, 9200000000000000000L}), array({(param_.import_type == "redshift" ? 1000.12f : 1000.123f)}), array({"10:00:00"}),
       array({"12/31/2500 23:59:59"}), array({"12/31/2500"}),
       array({"text_4"}),array({6.78})
     }},
@@ -1534,7 +1510,7 @@ TEST_P(ImportAndSelectTest, InvalidArrayTypesRecord) {
 TEST_P(ImportAndSelectTest, NotNullArrayTypeColumns) {
   // Skip non local test cases for NOT NULL columns since other cases add no additional
   // coverage
-  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+  if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
@@ -1569,9 +1545,6 @@ TEST_P(ImportAndSelectTest, NotNullArrayTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (isOdbc(param_.import_type)) {
     GTEST_SKIP() << " array types are not supported for ODBC";
   }
@@ -1599,7 +1572,7 @@ TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
     },
     {
       3L, array({True,True}), array({120L,44L}), array({31000L,8123L}), array({2100000000L, 200000000L}),
-      array({9100000000000000000L, 9200000000000000000L}), array({1000.123f,1392.22f}), array({"10:00:00","20:00:00"}),
+      array({9100000000000000000L, 9200000000000000000L}), array({(param_.import_type == "redshift" ? 1000.12f : 1000.123f),1392.22f}), array({"10:00:00","20:00:00"}),
       array({"12/31/2500 23:59:59","1/1/2500 23:59:59"}), array({"12/31/2500","1/1/2500"}),
       array({"text_5","text_6"}),array({6.78,5.6})
     }},
@@ -1611,7 +1584,7 @@ TEST_P(ImportAndSelectTest, InvalidFixedLengthArrayTypesRecord) {
 TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
   // Skip non local test cases for NOT NULL columns since other cases add no additional
   // coverage
-  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+  if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
@@ -1645,9 +1618,6 @@ TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
     GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
@@ -1668,7 +1638,7 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
       {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
         "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
-      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
         "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
     {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null}
   };
@@ -1681,7 +1651,7 @@ TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
 TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
   // Skip non local test cases for NOT NULL columns since other cases add no additional
   // coverage
-  if (testShouldBeSkipped() || param_.data_source_type != "local") {
+  if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
@@ -1721,9 +1691,6 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
     GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "
@@ -1745,7 +1712,7 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
       {True, 100L, 30000L, 2000000000L, 9000000000000000000L, 10.1f, 100.1234,
         "00:00:10", "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"},
-      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, 1000.123f, 100.1,
+      {True, 120L, 31000L, 2100000000L, 9100000000000000000L, (param_.import_type == "redshift" ? 1000.12f : 1000.123f), 100.1,
         "10:00:00", "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"},
     {Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null, Null}
   };
@@ -1756,9 +1723,6 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
 }
 
 TEST_P(ImportAndSelectTest, MaxRejectReached) {
-  if (testShouldBeSkipped()) {
-    GTEST_SKIP();
-  }
   if (!(param_.import_type == "csv" || param_.import_type == "regex_parser" ||
         param_.import_type == "parquet")) {
     GTEST_SKIP() << "only CSV, regex_parser, & parquet currently supported for error "

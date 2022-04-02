@@ -1,3 +1,0 @@
-index, point, linestring, polygon, multipolygon
-1, "POINT(0 0)", "LINESTRING(0 0, 0 0)", "POLYGON((0 0, 1 0, 0 1, 1 1, 0 0))", "MULTIPOLYGON(((0 0, 1 0, 0 1, 0 0)))"
-2,\N,\N,\N,\N

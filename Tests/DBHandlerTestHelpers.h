@@ -63,6 +63,7 @@ std::vector<ColumnPair> schema_string_to_pairs(const std::string& schema) {
         tokens[1].substr(0, 3) == "key") {  // skip `shard key` specifier
       continue;
     }
+    CHECK(tokens.size() >= 2);
     result.push_back({tokens[0], tokens[1]});
   }
   return result;
@@ -73,31 +74,42 @@ boost::regex make_regex(const std::string& pattern) {
   return boost::regex(whitespace_wrapper, boost::regex::icase);
 }
 
-void substitute_rdms_column_types(const std::string& dbms_type, std::string& type) {
-  static const std::map<std::string, std::map<boost::regex, std::string>>
-      substitutions_by_dbms = {
-          {"sqlite",
-           {{make_regex("DECIMAL\\s*\\(\\d+,\\s*\\d+\\)\\s*\\[\\d*\\]"), "double"}}},
-          {"postgres",
-           {{make_regex("FLOAT"), "real"},
-            {make_regex("DOUBLE"), "double precision"},
-            {make_regex("TINYINT"), "smallint"},
-            {make_regex("TIME"), "time(0)"},
-            {make_regex("TIMESTAMP"), "timestamp(0)"},
-            {make_regex("TIMESTAMP\\s*\\(6\\)"), "timestamp"},
-            {make_regex("POINT"), "geometry"},
-            {make_regex("LINESTRING"), "geometry"},
-            {make_regex("POLYGON"), "geometry"},
-            {make_regex("MULTIPOLYGON"), "geometry"}}},
-          {"redshift",
-           {{make_regex("FLOAT"), "real"},
-            {make_regex("DOUBLE"), "double precision"},
-            {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
-            {make_regex("TINYINT"), "smallint"}}}};
+const std::map<std::string, std::map<boost::regex, std::string>>
+    k_rdms_column_type_substitutes = {
+        {"sqlite",
+         {{make_regex("DECIMAL\\s*\\(\\d+,\\s*\\d+\\)\\s*(\\[\\d*\\])?"), "double"},
+          {make_regex("FLOAT"), "double"}}},
+        {"postgres",
+         {{make_regex("FLOAT"), "real"},
+          {make_regex("DOUBLE"), "double precision"},
+          {make_regex("TINYINT"), "smallint"},
+          {make_regex("TIME\\b"), "time(0)"},
+          {make_regex("TIMESTAMP"), "timestamp(0)"},
+          {make_regex("TIMESTAMP\\s*\\(6\\)"), "timestamp"},
+          {make_regex("POINT"), "geometry"},
+          {make_regex("LINESTRING"), "geometry"},
+          {make_regex("POLYGON"), "geometry"},
+          {make_regex("MULTIPOLYGON"), "geometry"}}},
+        {"redshift",
+         {{make_regex("FLOAT"), "real"},
+          {make_regex("DOUBLE"), "double precision"},
+          {make_regex("TIMESTAMP\\s*\\(\\d+\\)"), "timestamp"},
+          {make_regex("TINYINT"), "smallint"},
+          {make_regex("POINT"), "geometry"},
+          {make_regex("LINESTRING"), "geometry"},
+          {make_regex("POLYGON"), "geometry"},
+          {make_regex("MULTIPOLYGON"), "geometry"}}},
+        {"snowflake",
+         {{make_regex("TIME\\b"), "time(0)"},
+          {make_regex("POINT"), "geography"},
+          {make_regex("LINESTRING"), "geography"},
+          {make_regex("POLYGON"), "geography"},
+          {make_regex("MULTIPOLYGON"), "geography"}}}};
 
-  if (const auto& dbms_it = substitutions_by_dbms.find(dbms_type);
-      dbms_it != substitutions_by_dbms.end()) {
-    for (const auto& substitute : dbms_it->second) {
+void substitute_rdms_column_types(const std::string& rdms_type, std::string& type) {
+  if (const auto& rdms_it = k_rdms_column_type_substitutes.find(rdms_type);
+      rdms_it != k_rdms_column_type_substitutes.end()) {
+    for (const auto& substitute : rdms_it->second) {
       if (boost::regex_match(type, substitute.first)) {
         type = substitute.second;
         return;
@@ -273,6 +285,19 @@ class DBHandlerTestFixture : public testing::Test {
                            const std::vector<LeafHostInfo>& leaf_servers) {
     string_leaves_ = string_servers;
     db_leaves_ = leaf_servers;
+  }
+
+  static bool isOdbc(const std::string& data_wrapper_type) {
+    static const std::vector<std::string> odbc_wrappers{
+        "sqlite", "postgres", "redshift", "snowflake"};
+    return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), data_wrapper_type) !=
+           odbc_wrappers.end();
+  }
+
+  static std::string getOdbcTableName(const std::string& table_name,
+                                      const std::string& data_wrapper_type) {
+    CHECK(false);
+    return "";
   }
 
  protected:
@@ -462,6 +487,12 @@ class DBHandlerTestFixture : public testing::Test {
     }
     return schema_stream.str();
   }
+
+  static void createODBCSourceTable(const std::string& table_name,
+                                    const std::string& table_schema,
+                                    const std::string& src_file,
+                                    const std::string& data_wrapper_type,
+                                    const bool is_odbc_geo = false) {}
 
   static const std::vector<LeafHostInfo>& getDbLeaves() { return db_leaves_; }
 
