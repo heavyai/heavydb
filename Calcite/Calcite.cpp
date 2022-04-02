@@ -544,9 +544,12 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
   const auto& cat = user_session_info->getCatalog();
   const std::string user = getInternalSessionProxyUserName();
   const std::string catalog = cat.getCurrentDB().dbName;
-  LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
-  LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
-  LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
+  LOG(INFO) << "User " << user << " catalog " << catalog << " sql '"
+            << hide_sensitive_data_from_query(sql_string) << "'";
+  LOG(IR) << "SQL query\n"
+          << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
+  LOG(PTX) << "SQL query\n"
+           << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
 
   std::vector<TRestriction> trestrictions;
 
