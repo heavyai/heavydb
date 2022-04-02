@@ -1388,6 +1388,13 @@ TEST_F(StringFunctionTest, CaseStatement) {
           {"90210"}, {"US"}, {""}, {""}};
       compare_result_set(expected_result_set, result_set);
     }
+    // [QE-359] Currently unsupported string op on output of case statement
+    {
+      EXPECT_ANY_THROW(
+          sql("select upper(case when name like 'United%' then 'The ' || name "
+              "else name end) from string_function_test_countries order by id asc;",
+              dt));
+    }
   }
 }
 
@@ -1482,6 +1489,16 @@ TEST_F(StringFunctionTest, Join) {
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"JOHN", "UNITED STATES"}, {"John", "UNITED STATES"}};
       compare_result_set(expected_result_set, result_set);
+    }
+
+    // [QE-359] Should throw when join predicate contains string op
+    // on top of case statement
+    {
+      EXPECT_ANY_THROW(
+          sql("select count(*) from string_function_test_people a inner join "
+              "string_function_test_countries b on lower(code) = lower(case when "
+              "code = 'US' then repeat(code, 2) else code end);",
+              dt));
     }
   }
 }
