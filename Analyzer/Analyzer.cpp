@@ -3963,6 +3963,16 @@ void StringOper::check_operand_types(
     const auto decasted_arg = remove_cast(args_[arg_idx]);
     const bool is_arg_constant =
         dynamic_cast<const Analyzer::Constant*>(decasted_arg.get()) != nullptr;
+    const bool is_arg_column_var =
+        dynamic_cast<const Analyzer::ColumnVar*>(decasted_arg.get()) != nullptr;
+    const bool is_arg_string_oper =
+        dynamic_cast<const Analyzer::StringOper*>(decasted_arg.get()) != nullptr;
+    if (!(is_arg_constant || is_arg_column_var || is_arg_string_oper)) {
+      oss << "Error instantiating " << ::toString(get_kind()) << " operator. "
+          << "Currently only constant, column, or other string operator arguments "
+          << "are allowed as inputs.";
+      throw std::runtime_error(oss.str());
+    }
     auto decasted_arg_ti = decasted_arg->get_type_info();
     // We need to prevent any non-string type from being casted to a string, but can
     // permit non-integer types being casted to integers Todo: Find a cleaner way to

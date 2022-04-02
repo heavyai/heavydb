@@ -841,7 +841,18 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
     std::vector<StringOps_Namespace::StringOpInfo> string_op_infos;
     if (string_oper) {
       col = dynamic_cast<const Analyzer::ColumnVar*>(string_oper->getArg(0));
-      CHECK(col);
+      if (!col) {
+        // Todo (todd): Allow for non-colvar inputs into string operators for
+        // join predicates
+        // We now guard against non constant/colvar/stringoper inputs
+        // in Analyzer::StringOper::check_operand_types, but keeping this to not
+        // depend on that logic if and when it changes as allowing non-colvar inputs
+        // for hash joins will be additional work on top of allowing them
+        // outside of join predicates
+        throw HashJoinFail(
+            "Hash joins involving string operators currently restricted to column inputs "
+            "(i.e. not case statements).");
+      }
       ti = col->get_type_info();
       CHECK(ti.is_dict_encoded_string());
       const auto chained_string_op_exprs = string_oper->getChainedStringOpExprs();

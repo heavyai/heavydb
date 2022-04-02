@@ -684,6 +684,11 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
 
   std::shared_ptr<Analyzer::Expr> visitStringOper(
       const Analyzer::StringOper* string_oper) const override {
+    // Todo(todd): For clarity and modularity we should move string
+    // operator rewrites into their own visitor class.
+    // String operation rewrites were originally put here as they only
+    // handled string operators on rewrite, but now handle variable
+    // inputs as well.
     const auto original_args = string_oper->getOwnArgs();
     std::vector<std::shared_ptr<Analyzer::Expr>> rewritten_args;
     const bool parent_in_string_op_chain = in_string_op_chain_;
