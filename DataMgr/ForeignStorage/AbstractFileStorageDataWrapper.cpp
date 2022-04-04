@@ -1,5 +1,8 @@
 #include "AbstractFileStorageDataWrapper.h"
 
+#include <codecvt>
+#include <locale>
+
 #include "Catalog/ForeignServer.h"
 #include "Catalog/ForeignTable.h"
 #include "Shared/StringTransform.h"
@@ -77,7 +80,14 @@ void AbstractFileStorageDataWrapper::validateFilePath(const ForeignTable* foreig
 namespace {
 std::string append_file_path(const std::optional<std::string>& base,
                              const std::optional<std::string>& subdirectory) {
+#ifdef _WIN32
+  const std::wstring str_to_cov{boost::filesystem::path::preferred_separator};
+  using convert_type = std::codecvt_utf8<wchar_t>;
+  std::wstring_convert<convert_type, wchar_t> converter;
+  std::string separator = converter.to_bytes(str_to_cov);
+#else
   const std::string separator{boost::filesystem::path::preferred_separator};
+#endif
   return std::regex_replace(
       (base ? *base + separator : "") + (subdirectory ? *subdirectory : ""),
       std::regex{separator + "{2,}"},
@@ -97,7 +107,14 @@ std::string AbstractFileStorageDataWrapper::getFullFilePath(
   auto storage_type = foreign_server->getOption(STORAGE_TYPE_KEY);
   CHECK(storage_type);
 
+#ifdef _WIN32
+  const std::wstring str_to_cov{boost::filesystem::path::preferred_separator};
+  using convert_type = std::codecvt_utf8<wchar_t>;
+  std::wstring_convert<convert_type, wchar_t> converter;
+  std::string separator = converter.to_bytes(str_to_cov);
+#else
   const std::string separator{boost::filesystem::path::preferred_separator};
+#endif
   if (*storage_type == LOCAL_FILE_STORAGE_TYPE) {
     base_path = foreign_server->getOption(BASE_PATH_KEY);
   }

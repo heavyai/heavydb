@@ -35,6 +35,7 @@
 
 #ifdef _WIN32
 #include <io.h>
+#include <process.h>
 #endif
 
 const std::string CommandLineOptions::nodeIds_token = {"node_id"};

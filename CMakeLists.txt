@@ -7,8 +7,10 @@ set(ENABLE_CONDA OFF)
 if(DEFINED ENV{CONDA_PREFIX})
   set(ENABLE_CONDA ON)
   list(APPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
+  # add a compile definition for conda build
+  add_definitions("-DCONDA_BUILD")
   # resolves link issue for zlib
-  link_directories("$ENV{CONDA_PREFIX}/lib")
+  link_directories("$ENV{CONDA_PREFIX}/lib" "$ENV{CONDA_PREFIX}/Library/lib")
   # various fixes and workarounds
   add_definitions("-Dsecure_getenv=getenv")
   # fixes `undefined reference to `boost::system::detail::system_category_instance'`:

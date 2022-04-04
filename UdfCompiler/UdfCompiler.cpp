@@ -30,8 +30,9 @@
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
 #include <boost/process/search_path.hpp>
+#include <cctype>
 #include <iterator>
-#include <memory>
+#include <locale>
 #include "clang/Basic/Version.h"
 
 #if LLVM_VERSION_MAJOR >= 11

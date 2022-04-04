@@ -999,7 +999,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     df_td = df_td_owned.get();
   }
 
-#ifdef ENABLE_ARROW_4
+#ifdef ENABLE_ARROW_4 || defined(_WIN32)
   auto io_context = arrow::io::default_io_context();
 #else
   auto io_context = arrow::default_memory_pool();
