@@ -59,6 +59,7 @@ public class HeavyAIArray implements java.sql.Array {
       case STR:
       case POINT:
       case LINESTRING:
+      case MULTILINESTRING:
       case POLYGON:
       case MULTIPOLYGON:
         checkClass(elements_class, String.class);
@@ -174,6 +175,7 @@ public class HeavyAIArray implements java.sql.Array {
           case STR:
           case POINT:
           case LINESTRING:
+          case MULTILINESTRING:
           case POLYGON:
           case MULTIPOLYGON:
             is_string = true;
@@ -214,6 +216,7 @@ public class HeavyAIArray implements java.sql.Array {
         case STR:
         case POINT:
         case LINESTRING:
+        case MULTILINESTRING:
         case POLYGON:
         case MULTIPOLYGON:
         case TIME:

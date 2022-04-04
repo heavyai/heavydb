@@ -103,6 +103,7 @@ class HeavyAIType {
       case POLYGON:
       case MULTIPOLYGON:
       case LINESTRING:
+      case MULTILINESTRING:
         return java.sql.Types.OTHER;
       default:
         throw new AssertionError(type.name());

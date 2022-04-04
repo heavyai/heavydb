@@ -144,6 +144,9 @@ public class HeavyDBTable implements Table {
       case LINESTRING:
         return typeFactory.createSqlType(SqlTypeName.ANY);
       // return new LinestringSqlType();
+      case MULTILINESTRING:
+        return typeFactory.createSqlType(SqlTypeName.ANY);
+      // return new LinestringSqlType();
       case POLYGON:
         return typeFactory.createSqlType(SqlTypeName.ANY);
       // return new PolygonSqlType();

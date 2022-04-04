@@ -239,6 +239,8 @@ HeavyDBGeo HeavyDBGeoType() :
     |   
         <LINESTRING> { geoType = HeavyDBGeo.LINESTRING; }
     | 
+        <MULTILINESTRING> { geoType = HeavyDBGeo.MULTILINESTRING; }
+    | 
         <POLYGON> { geoType = HeavyDBGeo.POLYGON; }
     |
         <MULTIPOLYGON> { geoType = HeavyDBGeo.MULTIPOLYGON; }

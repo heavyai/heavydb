@@ -640,7 +640,8 @@ public class SQLImporter {
         case java.sql.Types.LONGNVARCHAR:
           match = (dstType == TDatumType.STR || dstType == TDatumType.POINT
                   || dstType == TDatumType.POLYGON || dstType == TDatumType.MULTIPOLYGON
-                  || dstType == TDatumType.LINESTRING);
+                  || dstType == TDatumType.LINESTRING
+                  || dstType == TDatumType.MULTILINESTRING);
           break;
         case java.sql.Types.OTHER:
           // NOTE: I ignore subtypes (geography vs geopetry vs none) here just because
@@ -657,6 +658,9 @@ public class SQLImporter {
               break;
             case LINESTRING:
               match = gisType.type.equalsIgnoreCase("LINESTRING");
+              break;
+            case MULTILINESTRING:
+              match = gisType.type.equalsIgnoreCase("MULTILINESTRING");
               break;
             case POLYGON:
               match = gisType.type.equalsIgnoreCase("POLYGON");

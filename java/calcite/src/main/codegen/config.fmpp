@@ -103,6 +103,7 @@ data: {
         "POINT"
         "POLYGON"
         "LINESTRING"
+        "MULTILINESTRING"
         "MULTIPOLYGON"
         "TEXT"
         "REFRESH"

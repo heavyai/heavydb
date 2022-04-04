@@ -165,6 +165,8 @@ String HeavyDBGeoDataTypeName() :
     |
         type = <LINESTRING>
     |
+        type = <MULTILINESTRING>
+    |
         type = <POLYGON>
     |
         type = <MULTIPOLYGON>
