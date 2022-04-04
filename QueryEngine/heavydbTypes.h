@@ -233,6 +233,7 @@ struct Timestamp {
     return Timestamp((time / kNanoSecsPerSec) * kNanoSecsPerSec);
   }
 
+#ifndef __CUDACC__
   DEVICE ALWAYS_INLINE Timestamp truncateToMinutes() const {
     return Timestamp(DateTruncate(dtMINUTE, (time / kNanoSecsPerSec)) * kNanoSecsPerSec);
   }
@@ -283,6 +284,7 @@ struct Timestamp {
   DEVICE ALWAYS_INLINE int64_t getYear() const {
     return ExtractFromTime(kYEAR, time / kNanoSecsPerSec);
   }
+#endif
 };
 
 struct GeoPoint {
