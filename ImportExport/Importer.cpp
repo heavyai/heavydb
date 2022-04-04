@@ -303,6 +303,7 @@ Datum NullDatum(SQLTypeInfo& ti) {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       throw std::runtime_error("Internal error: geometry type in NullDatum.");
@@ -344,6 +345,7 @@ Datum NullArrayDatum(SQLTypeInfo& ti) {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       throw std::runtime_error("Internal error: geometry type in NullArrayDatum.");
@@ -495,6 +497,7 @@ Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       throw std::runtime_error("Internal error: geometry type in TDatumToDatum.");
@@ -751,6 +754,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       addGeoString(val);
@@ -805,6 +809,7 @@ void TypedImportBuffer::pop_value() {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       geo_string_buffer_->pop_back();
@@ -992,6 +997,7 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
           cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       arrow_throw_if(col.type_id() != Type::BINARY && col.type_id() != Type::STRING,
@@ -1133,6 +1139,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON: {
       dataSize = col.data.str_col.size();
@@ -1456,6 +1463,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       if (is_null) {
@@ -1621,6 +1629,7 @@ void TypedImportBuffer::addDefaultValues(const ColumnDescriptor* cd, size_t num_
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       geo_string_buffer_->resize(num_rows, val);
@@ -1701,8 +1710,8 @@ void Importer::set_geo_physical_import_buffer(
   tdd_coords.is_null = is_null_geo;
   import_buffers[col_idx++]->add_value(cd_coords, tdd_coords, false);
 
-  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-    // Create ring_sizes array value and add it to the physical column
+  if (col_type == kMULTILINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    // Create [linest]ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     TDatum tdd_ring_sizes;
     tdd_ring_sizes.val.arr_val.reserve(ring_sizes.size());
@@ -1731,7 +1740,8 @@ void Importer::set_geo_physical_import_buffer(
     import_buffers[col_idx++]->add_value(cd_poly_rings, tdd_poly_rings, false);
   }
 
-  if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+  if (col_type == kLINESTRING || col_type == kMULTILINESTRING || col_type == kPOLYGON ||
+      col_type == kMULTIPOLYGON) {
     auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     TDatum tdd_bounds;
     tdd_bounds.val.arr_val.reserve(bounds.size());
@@ -1806,11 +1816,11 @@ void Importer::set_geo_physical_import_buffer_columnar(
   }
   col_idx++;
 
-  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+  if (col_type == kMULTILINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     if (ring_sizes_column.size() != coords_row_count) {
       CHECK(false) << "Geometry import columnar: ring sizes column size mismatch";
     }
-    // Create ring_sizes array value and add it to the physical column
+    // Create [linest[ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto const& ring_sizes : ring_sizes_column) {
       bool is_null_geo = false;
@@ -1858,7 +1868,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
     col_idx++;
   }
 
-  if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+  if (col_type == kLINESTRING || col_type == kMULTILINESTRING || col_type == kPOLYGON ||
+      col_type == kMULTIPOLYGON) {
     if (bounds_column.size() != coords_row_count) {
       CHECK(false) << "Geometry import columnar: bounds column size mismatch";
     }
@@ -2556,8 +2567,9 @@ static ImportStatus import_thread_shapefile(
             import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
             ++col_idx;
 
-            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-              // Create ring_sizes array value and add it to the physical column
+            if (col_type == kMULTILINESTRING || col_type == kPOLYGON ||
+                col_type == kMULTIPOLYGON) {
+              // Create [linest]ring_sizes array value and add it to the physical column
               ++cd_it;
               auto cd_ring_sizes = *cd_it;
               std::vector<TDatum> td_ring_sizes;
@@ -2594,8 +2606,8 @@ static ImportStatus import_thread_shapefile(
               ++col_idx;
             }
 
-            if (col_type == kLINESTRING || col_type == kPOLYGON ||
-                col_type == kMULTIPOLYGON) {
+            if (col_type == kLINESTRING || col_type == kMULTILINESTRING ||
+                col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
               // Create bounds array value and add it to the physical column
               ++cd_it;
               auto cd_bounds = *cd_it;
@@ -2895,6 +2907,7 @@ void Loader::fillShardRow(const size_t row_index,
         break;
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         CHECK_LT(row_index, input_buffer->getGeoStringBuffer()->size());
@@ -3340,6 +3353,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
       type = kPOINT;
     } else if (str_upper_case.find("LINESTRING") == 0) {
       type = kLINESTRING;
+    } else if (str_upper_case.find("MULTILINESTRING") == 0) {
+      type = kMULTILINESTRING;
     } else if (str_upper_case.find("POLYGON") == 0) {
       if (PROMOTE_POLYGON_TO_MULTIPOLYGON) {
         type = kMULTIPOLYGON;
@@ -3362,6 +3377,8 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
           type = kPOINT;
         } else if (first_five_bytes == "0000000002" || first_five_bytes == "0102000000") {
           type = kLINESTRING;
+        } else if (first_five_bytes == "0000000005" || first_five_bytes == "0105000000") {
+          type = kMULTILINESTRING;
         } else if (first_five_bytes == "0000000003" || first_five_bytes == "0103000000") {
           type = kPOLYGON;
         } else if (first_five_bytes == "0000000006" || first_five_bytes == "0106000000") {
@@ -3414,6 +3431,7 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
   typeorder[kDATE] = 10;
   typeorder[kPOINT] = 11;
   typeorder[kLINESTRING] = 11;
+  typeorder[kMULTILINESTRING] = 11;
   typeorder[kPOLYGON] = 11;
   typeorder[kMULTIPOLYGON] = 11;
   typeorder[kTEXT] = 12;
@@ -3898,6 +3916,7 @@ auto TypedImportBuffer::del_values(const SQLTypes type,
       return del_values(*string_buffer_, bad_rows_tracker);
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       return del_values(*geo_string_buffer_, bad_rows_tracker);
@@ -4776,11 +4795,11 @@ void Importer::readMetadataSampleGDAL(
     switch (wkbFlatten(geometry->getGeometryType())) {
       case wkbPoint:
       case wkbLineString:
+      case wkbMultiLineString:
       case wkbPolygon:
       case wkbMultiPolygon:
         break;
       case wkbMultiPoint:
-      case wkbMultiLineString:
         // supported if geo_explode_collections is specified
         if (!copy_params.geo_explode_collections) {
           throw std::runtime_error("Unsupported geometry type: " +
@@ -4861,6 +4880,8 @@ SQLTypes ogr_to_type(const OGRwkbGeometryType& ogr_type) {
       return kPOINT;
     case wkbLineString:
       return kLINESTRING;
+    case wkbMultiLineString:
+      return kMULTILINESTRING;
     case wkbPolygon:
       return kPOLYGON;
     case wkbMultiPolygon:
