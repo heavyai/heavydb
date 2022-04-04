@@ -731,12 +731,11 @@ void TableFunctionCompilationContext::generateCastsForInputTypes(
   if (exe_unit.table_func.usesManager()) {
     ++func_arg_index;
   }
-  for (size_t i = 0; i < exe_unit.input_exprs.size(); ++i) {
+  for (size_t i = 0; i < exe_unit.input_exprs.size(); ++i, ++func_arg_index) {
     const auto& ti = exe_unit.input_exprs[i]->get_type_info();
 
     // skip over column list args
     if (ti.is_column_list()) {
-      func_arg_index++;
       i += (ti.get_dimension() - 1);
       continue;
     }
