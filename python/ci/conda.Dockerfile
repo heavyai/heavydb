@@ -9,6 +9,6 @@ COPY environment.yml .
 RUN conda env create -f environment.yml
 
 # Make RUN commands use the new environment:
-SHELL ["conda", "run", "-n", "omnisci-connector-dev", "/bin/bash", "-c"]
+SHELL ["conda", "run", "-n", "heavydb-dev", "/bin/bash", "-c"]
 
 ENTRYPOINT pip install -e .; pytest -x tests

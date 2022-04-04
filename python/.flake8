@@ -1,6 +1,3 @@
-[bdist_wheel]
-universal=0
-
 [flake8]
 exclude = tests/test_data
           omnisci/common
@@ -12,6 +9,3 @@ exclude = tests/test_data
           benchmarks
           scripts
           .eggs
-
-[tool:pytest]
-addopts = -rsx -v
