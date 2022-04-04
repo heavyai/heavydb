@@ -68,7 +68,8 @@ std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "VOID",
                                                      "CURSOR",
                                                      "COLUMN",
-                                                     "COLUMN_LIST"};
+                                                     "COLUMN_LIST",
+                                                     "MULTILINESTRING"};
 std::string SQLTypeInfo::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 
@@ -323,6 +324,7 @@ Datum StringToDatum(std::string_view s, SQLTypeInfo& ti) {
         break;
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
         throw std::runtime_error("Internal error: geometry type in StringToDatum.");
@@ -368,6 +370,7 @@ bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
     case kCHAR:
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       if (ti.get_compression() == kENCODING_DICT) {

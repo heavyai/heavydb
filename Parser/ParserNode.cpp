@@ -2577,9 +2577,10 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
             false));
         ++cds_id;
 
-        if (cd->columnType.get_type() == kPOLYGON ||
+        if (cd->columnType.get_type() == kMULTILINESTRING ||
+            cd->columnType.get_type() == kPOLYGON ||
             cd->columnType.get_type() == kMULTIPOLYGON) {
-          // Put ring sizes array into separate physical column
+          // Put [linest]ring sizes array into separate physical column
           const auto* cd_ring_sizes = cds[cds_id];
           CHECK(cd_ring_sizes);
           CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
@@ -2625,6 +2626,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         }
 
         if (cd->columnType.get_type() == kLINESTRING ||
+            cd->columnType.get_type() == kMULTILINESTRING ||
             cd->columnType.get_type() == kPOLYGON ||
             cd->columnType.get_type() == kMULTIPOLYGON) {
           const auto* cd_bounds = cds[cds_id];

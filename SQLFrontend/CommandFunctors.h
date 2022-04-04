@@ -561,6 +561,7 @@ StandardCommand(GetOptimizedSchema, {
                               ")");
       } else if (p.col_type.type == TDatumType::POINT ||
                  p.col_type.type == TDatumType::LINESTRING ||
+                 p.col_type.type == TDatumType::MULTILINESTRING ||
                  p.col_type.type == TDatumType::POLYGON ||
                  p.col_type.type == TDatumType::MULTIPOLYGON) {
         if (p.col_type.scale == 4326) {

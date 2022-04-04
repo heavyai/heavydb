@@ -92,6 +92,7 @@ void Chunk::setChunkBuffer(AbstractBuffer* buffer, AbstractBuffer* index_buffer)
       }
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         auto str_encoder = dynamic_cast<StringNoneEncoder*>(buffer_->getEncoder());
@@ -188,6 +189,7 @@ size_t Chunk::getNumElemsForBytesInsertData(const DataBlockPtr& src_data,
     }
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON: {
       StringNoneEncoder* str_encoder =
@@ -255,6 +257,7 @@ std::shared_ptr<ChunkMetadata> Chunk::appendData(DataBlockPtr& src_data,
       }
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =
@@ -303,6 +306,7 @@ void Chunk::initEncoder() {
       }
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON: {
         StringNoneEncoder* str_encoder =

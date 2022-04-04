@@ -641,6 +641,87 @@ void GeoLineString::getColumns(std::vector<double>& coords,
   bounds.push_back(bbox.max.y);
 }
 
+std::unique_ptr<GeoBase> GeoMultiLineString::clone() const {
+  CHECK(geom_);
+  return std::unique_ptr<GeoBase>(new GeoMultiLineString(geom_->clone(), true));
+}
+
+GeoMultiLineString::GeoMultiLineString(const std::vector<double>& coords,
+                                       const std::vector<int32_t>& linestring_sizes) {
+  geom_ = OGRGeometryFactory::createGeometry(OGRwkbGeometryType::wkbMultiLineString);
+  OGRMultiLineString* multilinestring = dynamic_cast<OGRMultiLineString*>(geom_);
+  CHECK(multilinestring);
+
+  size_t coords_ctr = 0;
+  for (const auto linestring_sz : linestring_sizes) {
+    OGRLineString linestring;
+    auto next_coords_ctr = coords_ctr + 2 * linestring_sz;
+    CHECK(next_coords_ctr <= coords.size());
+    for (auto i = coords_ctr; i < next_coords_ctr; i += 2) {
+      linestring.addPoint(coords[i], coords[i + 1]);
+    }
+    coords_ctr = next_coords_ctr;
+    multilinestring->addGeometry(&linestring);
+  }
+}
+
+GeoMultiLineString::GeoMultiLineString(const std::string& wkt) {
+  const auto err = GeoBase::createFromWktString(wkt, &geom_);
+  if (err != OGRERR_NONE) {
+    throw GeoTypesError("MultiLineString", err);
+  }
+  CHECK(geom_);
+  if (wkbFlatten(geom_->getGeometryType()) != OGRwkbGeometryType::wkbMultiLineString) {
+    throw GeoTypesError("MultiLineString",
+                        "Unexpected geometry type from WKT string: " +
+                            std::string(OGRGeometryTypeToName(geom_->getGeometryType())));
+  }
+}
+
+void GeoMultiLineString::getColumns(std::vector<double>& coords,
+                                    std::vector<int32_t>& linestring_sizes,
+                                    std::vector<double>& bounds) const {
+  auto multilinestring = dynamic_cast<OGRMultiLineString*>(geom_);
+  CHECK(multilinestring);
+
+  if (multilinestring->IsEmpty()) {
+    // until the run-time can handle empties
+    throw GeoTypesError("MultiLineString", "'EMPTY' not supported");
+    // return null bounds
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    bounds.push_back(NULL_DOUBLE);
+    return;
+  }
+
+  BoundingBox bbox;
+  for (auto l = 0; l < multilinestring->getNumGeometries(); l++) {
+    const auto geom = multilinestring->getGeometryRef(l);
+    CHECK(geom);
+    const auto linestring = dynamic_cast<OGRLineString*>(geom);
+    if (!linestring) {
+      throw GeoTypesError("MultiLineString",
+                          "Failed to read linestring geometry from multilinestring");
+    }
+    auto linestring_sz = linestring->getNumPoints();
+    linestring_sizes.push_back(linestring_sz);
+    for (auto i = 0; i < linestring_sz; i++) {
+      OGRPoint point;
+      linestring->getPoint(i, &point);
+      double x = point.getX();
+      double y = point.getY();
+      coords.push_back(x);
+      coords.push_back(y);
+      bbox.update(x, y);
+    }
+  }
+  bounds.push_back(bbox.min.x);
+  bounds.push_back(bbox.min.y);
+  bounds.push_back(bbox.max.x);
+  bounds.push_back(bbox.max.y);
+}
+
 std::unique_ptr<GeoBase> GeoPolygon::clone() const {
   CHECK(geom_);
   return std::unique_ptr<GeoBase>(new GeoPolygon(geom_->clone(), true));
@@ -1079,6 +1160,9 @@ std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom,
       return std::unique_ptr<GeoPoint>(new GeoPoint(geom, owns_geom_obj));
     case wkbLineString:
       return std::unique_ptr<GeoLineString>(new GeoLineString(geom, owns_geom_obj));
+    case wkbMultiLineString:
+      return std::unique_ptr<GeoMultiLineString>(
+          new GeoMultiLineString(geom, owns_geom_obj));
     case wkbPolygon:
       return std::unique_ptr<GeoPolygon>(new GeoPolygon(geom, owns_geom_obj));
     case wkbMultiPolygon:
@@ -1114,6 +1198,14 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       CHECK(geospatial_linestring);
       geospatial_linestring->getColumns(coords, bounds);
       ti.set_type(kLINESTRING);
+      break;
+    }
+    case GeoBase::GeoType::kMULTILINESTRING: {
+      const auto geospatial_multilinestring =
+          dynamic_cast<GeoMultiLineString*>(geospatial_base.get());
+      CHECK(geospatial_multilinestring);
+      geospatial_multilinestring->getColumns(coords, ring_sizes, bounds);
+      ti.set_type(kMULTILINESTRING);
       break;
     }
     case GeoBase::GeoType::kPOLYGON: {
@@ -1157,6 +1249,7 @@ void GeoTypesFactory::getNullGeoColumns(SQLTypeInfo& ti,
       coords.push_back(NULL_DOUBLE);
     } break;
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON: {
       // Leaving coords array empty

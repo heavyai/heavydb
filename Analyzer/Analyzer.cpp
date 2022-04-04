@@ -1187,6 +1187,7 @@ inline bool is_null_value(const SQLTypeInfo& ti, const Datum& constval) {
       return constval.stringval == nullptr;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       return constval.stringval == nullptr;
@@ -1316,6 +1317,7 @@ void Constant::set_null_value() {
       break;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       constval.stringval = nullptr;
@@ -2211,6 +2213,7 @@ bool Datum_equal(const SQLTypeInfo& ti, Datum val1, Datum val2) {
       return val1.bigintval == val2.bigintval;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       return *val1.stringval == *val2.stringval;
@@ -3699,6 +3702,9 @@ SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
     }
     case Geospatial::GeoBase::GeoType::kLINESTRING: {
       return kLINESTRING;
+    }
+    case Geospatial::GeoBase::GeoType::kMULTILINESTRING: {
+      return kMULTILINESTRING;
     }
     case Geospatial::GeoBase::GeoType::kPOLYGON: {
       return kPOLYGON;

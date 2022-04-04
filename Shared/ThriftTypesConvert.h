@@ -64,6 +64,8 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
       return TDatumType::POINT;
     case kLINESTRING:
       return TDatumType::LINESTRING;
+    case kMULTILINESTRING:
+      return TDatumType::MULTILINESTRING;
     case kPOLYGON:
       return TDatumType::POLYGON;
     case kMULTIPOLYGON:
@@ -112,6 +114,8 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
       return kPOINT;
     case TDatumType::LINESTRING:
       return kLINESTRING;
+    case TDatumType::MULTILINESTRING:
+      return kMULTILINESTRING;
     case TDatumType::POLYGON:
       return kPOLYGON;
     case TDatumType::MULTIPOLYGON:

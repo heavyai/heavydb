@@ -388,7 +388,8 @@ void Catalog::updateGeoColumns() {
     string queryString(
         "UPDATE mapd_columns SET is_notnull=1 WHERE coltype=" + std::to_string(kPOINT) +
         " OR coltype=" + std::to_string(kLINESTRING) + " OR coltype=" +
-        std::to_string(kPOLYGON) + " OR coltype=" + std::to_string(kMULTIPOLYGON) + ";");
+        std::to_string(kMULTILINESTRING) + " OR coltype=" + std::to_string(kPOLYGON) +
+        " OR coltype=" + std::to_string(kMULTIPOLYGON) + ";");
     sqliteConnector_.query(queryString);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -2560,6 +2561,34 @@ void Catalog::expandGeoColumn(const ColumnDescriptor& cd,
         coords_ti.set_subtype(kTINYINT);
         physical_cd_coords.columnType = coords_ti;
         columns.push_back(physical_cd_coords);
+
+        ColumnDescriptor physical_cd_bounds(true);
+        physical_cd_bounds.columnName = cd.columnName + "_bounds";
+        SQLTypeInfo bounds_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
+        bounds_ti.set_subtype(kDOUBLE);
+        bounds_ti.set_size(4 * sizeof(double));
+        physical_cd_bounds.columnType = bounds_ti;
+        columns.push_back(physical_cd_bounds);
+
+        // If adding more physical columns - update SQLTypeInfo::get_physical_cols()
+
+        break;
+      }
+      case kMULTILINESTRING: {
+        ColumnDescriptor physical_cd_coords(true);
+        physical_cd_coords.columnName = cd.columnName + "_coords";
+        SQLTypeInfo coords_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
+        // Raw data: compressed/uncompressed coords
+        coords_ti.set_subtype(kTINYINT);
+        physical_cd_coords.columnType = coords_ti;
+        columns.push_back(physical_cd_coords);
+
+        ColumnDescriptor physical_cd_linestring_sizes(true);
+        physical_cd_linestring_sizes.columnName = cd.columnName + "_linestring_sizes";
+        SQLTypeInfo linestring_sizes_ti = SQLTypeInfo(kARRAY, col_ti.get_notnull());
+        linestring_sizes_ti.set_subtype(kINT);
+        physical_cd_linestring_sizes.columnType = linestring_sizes_ti;
+        columns.push_back(physical_cd_linestring_sizes);
 
         ColumnDescriptor physical_cd_bounds(true);
         physical_cd_bounds.columnName = cd.columnName + "_bounds";

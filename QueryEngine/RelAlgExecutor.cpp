@@ -3075,6 +3075,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
           }
           case kPOINT:
           case kLINESTRING:
+          case kMULTILINESTRING:
           case kPOLYGON:
           case kMULTIPOLYGON:
             str_col_buffers[col_ids[col_idx]].push_back(

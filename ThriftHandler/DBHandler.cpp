@@ -5041,6 +5041,7 @@ void DBHandler::create_table(const TSessionId& session,
       col_stmt.append(" ENCODING NONE");
     } else if (col.col_type.type == TDatumType::POINT ||
                col.col_type.type == TDatumType::LINESTRING ||
+               col.col_type.type == TDatumType::MULTILINESTRING ||
                col.col_type.type == TDatumType::POLYGON ||
                col.col_type.type == TDatumType::MULTIPOLYGON) {
       // non encoded compressable geo
@@ -5156,7 +5157,8 @@ namespace {
 
 bool TTypeInfo_IsGeo(const TDatumType::type& t) {
   return (t == TDatumType::POLYGON || t == TDatumType::MULTIPOLYGON ||
-          t == TDatumType::LINESTRING || t == TDatumType::POINT);
+          t == TDatumType::LINESTRING || t == TDatumType::MULTILINESTRING ||
+          t == TDatumType::POINT);
 }
 
 std::string TTypeInfo_TypeToString(const TDatumType::type& t) {

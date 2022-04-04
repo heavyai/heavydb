@@ -203,6 +203,7 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
       return ti.get_size() * 8;
     case kPOINT:
     case kLINESTRING:
+    case kMULTILINESTRING:
     case kPOLYGON:
     case kMULTIPOLYGON:
       return 32;

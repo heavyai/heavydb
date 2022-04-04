@@ -67,7 +67,8 @@ enum SQLTypes {
   kCURSOR = 27,
   kCOLUMN = 28,
   kCOLUMN_LIST = 29,
-  kSQLTYPE_LAST = 30
+  kMULTILINESTRING = 30,
+  kSQLTYPE_LAST = 31
 };
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
@@ -114,6 +115,8 @@ inline std::string toString(const SQLTypes& type) {
       return "POINT";
     case kLINESTRING:
       return "LINESTRING";
+    case kMULTILINESTRING:
+      return "MULTILINESTRING";
     case kPOLYGON:
       return "POLYGON";
     case kMULTIPOLYGON:
@@ -297,8 +300,9 @@ inline std::string toString(const EncodingType& type) {
   (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || \
    ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL) || ((T) == kTINYINT))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
-#define IS_GEO(T) \
-  (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
+#define IS_GEO(T)                                                          \
+  (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kMULTILINESTRING) || \
+   ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 #define IS_INTERVAL(T) ((T) == kINTERVAL_DAY_TIME || (T) == kINTERVAL_YEAR_MONTH)
 #define IS_DECIMAL(T) ((T) == kNUMERIC || (T) == kDECIMAL)
 #define IS_GEO_POLY(T) (((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
@@ -388,8 +392,8 @@ class SQLTypeInfo {
   HOST DEVICE inline int get_size() const { return size; }
 
   inline int is_logical_geo_type() const {
-    if (type == kPOINT || type == kLINESTRING || type == kPOLYGON ||
-        type == kMULTIPOLYGON) {
+    if (type == kPOINT || type == kLINESTRING || type == kMULTILINESTRING ||
+        type == kPOLYGON || type == kMULTIPOLYGON) {
       return true;
     }
     return false;
@@ -412,6 +416,8 @@ class SQLTypeInfo {
         return 1;  // coords
       case kLINESTRING:
         return 2;  // coords, bounds
+      case kMULTILINESTRING:
+        return 3;  // coords, linestring_sizes, bounds
       case kPOLYGON:
         return 4;  // coords, ring_sizes, bounds, render_group
       case kMULTIPOLYGON:
@@ -445,6 +451,8 @@ class SQLTypeInfo {
         return 1;
       case kLINESTRING:
         return 1;  // omit bounds
+      case kMULTILINESTRING:
+        return 2;  // omit bounds
       case kPOLYGON:
         return 2;  // omit bounds, render group
       case kMULTIPOLYGON:
@@ -457,6 +465,7 @@ class SQLTypeInfo {
   inline bool has_bounds() const {
     switch (type) {
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
         return true;
@@ -1102,6 +1111,7 @@ class SQLTypeInfo {
         break;
       case kPOINT:
       case kLINESTRING:
+      case kMULTILINESTRING:
       case kPOLYGON:
       case kMULTIPOLYGON:
       case kCOLUMN:
