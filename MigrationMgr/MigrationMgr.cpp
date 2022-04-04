@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <exception>
 #include <filesystem>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -155,17 +156,26 @@ bool rename_and_symlink_path(const std::filesystem::path& old_path,
   if (std::filesystem::exists(old_path)) {
     // Skip if we have already created a symlink for the old path.
     if (std::filesystem::is_symlink(old_path)) {
-      CHECK_EQ(std::filesystem::read_symlink(old_path), new_path.filename())
-          << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
-          << ". Symlink does not reference file: " << new_path.filename();
-      CHECK(std::filesystem::exists(new_path))
-          << "Rebrand migration: Encountered symlink at legacy path: " << old_path
-          << " but no corresponding file at new path: " << new_path;
+      if (std::filesystem::read_symlink(old_path) != new_path.filename()) {
+        std::stringstream ss;
+        ss << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
+           << ". Symlink does not reference file: " << new_path.filename();
+        throw std::runtime_error(ss.str());
+      }
+      if (!std::filesystem::exists(new_path)) {
+        std::stringstream ss;
+        ss << "Rebrand migration: Encountered symlink at legacy path: " << old_path
+           << " but no corresponding file at new path: " << new_path;
+        throw std::runtime_error(ss.str());
+      }
     } else {
-      CHECK(!std::filesystem::exists(new_path))
-          << "Rebrand migration: Encountered existing non-symlink files at the legacy "
-             "path: "
-          << old_path << " and new path: " << new_path;
+      if (std::filesystem::exists(new_path)) {
+        std::stringstream ss;
+        ss << "Rebrand migration: Encountered existing non-symlink files at the legacy "
+              "path: "
+           << old_path << " and new path: " << new_path;
+        throw std::runtime_error(ss.str());
+      }
       std::filesystem::rename(old_path, new_path);
       std::cout << "Rebrand migration: Renamed " << old_path << " to " << new_path
                 << std::endl;
@@ -174,13 +184,19 @@ bool rename_and_symlink_path(const std::filesystem::path& old_path,
   }
 
   if (std::filesystem::exists(old_path)) {
-    CHECK(std::filesystem::is_symlink(old_path))
-        << "Rebrand migration: An unexpected error occurred. A symlink should have been "
-           "created at "
-        << old_path;
-    CHECK_EQ(std::filesystem::read_symlink(old_path), new_path.filename())
-        << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
-        << ". Symlink does not reference file: " << new_path.filename();
+    if (!std::filesystem::is_symlink(old_path)) {
+      std::stringstream ss;
+      ss << "Rebrand migration: An unexpected error occurred. A symlink should have been "
+            "created at "
+         << old_path;
+      throw std::runtime_error(ss.str());
+    }
+    if (std::filesystem::read_symlink(old_path) != new_path.filename()) {
+      std::stringstream ss;
+      ss << "Rebrand migration: Encountered an unexpected symlink at path: " << old_path
+         << ". Symlink does not reference file: " << new_path.filename();
+      throw std::runtime_error(ss.str());
+    }
   } else if (std::filesystem::exists(new_path)) {
     std::filesystem::create_symlink(new_path.filename(), old_path);
     std::cout << "Rebrand migration: Added symlink from " << old_path << " to "
@@ -200,10 +216,16 @@ bool rename_and_symlink_file(const std::filesystem::path& base_path,
     old_path /= dir_name;
     new_path /= dir_name;
   }
-  CHECK(!old_file_name.empty());
+  if (old_file_name.empty()) {
+    throw std::runtime_error(
+        "Unexpected error in rename_and_symlink_file: old_file_name is empty");
+  }
   old_path /= old_file_name;
 
-  CHECK(!new_file_name.empty());
+  if (new_file_name.empty()) {
+    throw std::runtime_error(
+        "Unexpected error in rename_and_symlink_file: new_file_name is empty");
+  }
   new_path /= new_file_name;
 
   return rename_and_symlink_path(old_path, new_path);
