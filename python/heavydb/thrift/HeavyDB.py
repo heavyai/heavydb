@@ -13141,7 +13141,7 @@ class get_completion_hints_result(object):
                     self.success = []
                     (_etype349, _size346) = iprot.readListBegin()
                     for _i350 in range(_size346):
-                        _elem351 = omnisci.completion_hints.ttypes.TCompletionHint()
+                        _elem351 = heavydb.completion_hints.ttypes.TCompletionHint()
                         _elem351.read(iprot)
                         self.success.append(_elem351)
                     iprot.readListEnd()
@@ -13192,7 +13192,7 @@ class get_completion_hints_result(object):
         return not (self == other)
 all_structs.append(get_completion_hints_result)
 get_completion_hints_result.thrift_spec = (
-    (0, TType.LIST, 'success', (TType.STRUCT, [omnisci.completion_hints.ttypes.TCompletionHint, None], False), None, ),  # 0
+    (0, TType.LIST, 'success', (TType.STRUCT, [heavydb.completion_hints.ttypes.TCompletionHint, None], False), None,),  # 0
     (1, TType.STRUCT, 'e', [TDBException, None], None, ),  # 1
 )
 
@@ -19469,7 +19469,7 @@ class broadcast_serialized_rows_args(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.serialized_rows = omnisci.serialized_result_set.ttypes.TSerializedRows()
+                    self.serialized_rows = heavydb.serialized_result_set.ttypes.TSerializedRows()
                     self.serialized_rows.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -19551,7 +19551,7 @@ class broadcast_serialized_rows_args(object):
 all_structs.append(broadcast_serialized_rows_args)
 broadcast_serialized_rows_args.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'serialized_rows', [omnisci.serialized_result_set.ttypes.TSerializedRows, None], None, ),  # 1
+    (1, TType.STRUCT, 'serialized_rows', [heavydb.serialized_result_set.ttypes.TSerializedRows, None], None,),  # 1
     (2, TType.LIST, 'row_desc', (TType.STRUCT, [TColumnType, None], False), None, ),  # 2
     (3, TType.I64, 'query_id', None, None, ),  # 3
     (4, TType.I64, 'subquery_id', None, None, ),  # 4
@@ -21732,7 +21732,7 @@ class register_runtime_extension_functions_args(object):
                     self.udfs = []
                     (_etype641, _size638) = iprot.readListBegin()
                     for _i642 in range(_size638):
-                        _elem643 = omnisci.extension_functions.ttypes.TUserDefinedFunction()
+                        _elem643 = heavydb.extension_functions.ttypes.TUserDefinedFunction()
                         _elem643.read(iprot)
                         self.udfs.append(_elem643)
                     iprot.readListEnd()
@@ -21743,7 +21743,7 @@ class register_runtime_extension_functions_args(object):
                     self.udtfs = []
                     (_etype647, _size644) = iprot.readListBegin()
                     for _i648 in range(_size644):
-                        _elem649 = omnisci.extension_functions.ttypes.TUserDefinedTableFunction()
+                        _elem649 = heavydb.extension_functions.ttypes.TUserDefinedTableFunction()
                         _elem649.read(iprot)
                         self.udtfs.append(_elem649)
                     iprot.readListEnd()
@@ -21816,8 +21816,8 @@ all_structs.append(register_runtime_extension_functions_args)
 register_runtime_extension_functions_args.thrift_spec = (
     None,  # 0
     (1, TType.STRING, 'session', 'UTF8', None, ),  # 1
-    (2, TType.LIST, 'udfs', (TType.STRUCT, [omnisci.extension_functions.ttypes.TUserDefinedFunction, None], False), None, ),  # 2
-    (3, TType.LIST, 'udtfs', (TType.STRUCT, [omnisci.extension_functions.ttypes.TUserDefinedTableFunction, None], False), None, ),  # 3
+    (2, TType.LIST, 'udfs', (TType.STRUCT, [heavydb.extension_functions.ttypes.TUserDefinedFunction, None], False), None,),  # 2
+    (3, TType.LIST, 'udtfs', (TType.STRUCT, [heavydb.extension_functions.ttypes.TUserDefinedTableFunction, None], False), None,),  # 3
     (4, TType.MAP, 'device_ir_map', (TType.STRING, 'UTF8', TType.STRING, 'UTF8', False), None, ),  # 4
 )
 

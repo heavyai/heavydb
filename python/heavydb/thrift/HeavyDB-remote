@@ -16,8 +16,8 @@ else:
 from thrift.transport import TTransport, TSocket, TSSLSocket, THttpClient
 from thrift.protocol.TBinaryProtocol import TBinaryProtocol
 
-from omnisci.thrift import OmniSci
-from omnisci.thrift.ttypes import *
+from heavydb.thrift import HeavyDB
+from heavydb.thrift.ttypes import *
 
 if len(sys.argv) <= 1 or sys.argv[1] == '--help':
     print('')

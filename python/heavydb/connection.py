@@ -8,8 +8,8 @@ from sqlalchemy.engine.url import make_url
 from thrift.protocol import TBinaryProtocol, TJSONProtocol
 from thrift.transport import TSocket, TSSLSocket, THttpClient, TTransport
 from thrift.transport.TSocket import TTransportException
-from omnisci.thrift.OmniSci import Client
-from omnisci.thrift.ttypes import TDBException
+from heavydb.thrift.HeavyDB import Client
+from heavydb.thrift.ttypes import TDBException
 
 from .cursor import Cursor
 from .exceptions import _translate_exception, OperationalError
@@ -88,12 +88,12 @@ def connect(
     You can either pass a string ``uri``, all the individual components,
     or an existing sessionid excluding user, password, and database
 
-    >>> connect('mapd://admin:HyperInteractive@localhost:6274/omnisci?'
+    >>> connect('mapd://admin:HyperInteractive@localhost:6274/heavydb?'
     ...         'protocol=binary')
     Connection(mapd://mapd:***@localhost:6274/mapd?protocol=binary)
 
     >>> connect(user='admin', password='HyperInteractive', host='localhost',
-    ...         port=6274, dbname='omnisci')
+    ...         port=6274, dbname='heavydb')
 
     >>> connect(user='admin', password='HyperInteractive', host='localhost',
     ...         port=443, idpurl='https://sso.localhost/logon',
@@ -323,7 +323,7 @@ class Connection:
 
     def __repr__(self):
         tpl = (
-            'Connection(omnisci://{user}:***@{host}:{port}/{dbname}?'
+            'Connection(heavydb://{user}:***@{host}:{port}/{dbname}?'
             'protocol={protocol})'
         )
         return tpl.format(

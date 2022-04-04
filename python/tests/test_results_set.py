@@ -1,12 +1,12 @@
-from omnisci.cursor import make_row_results_set
-from omnisci.thrift.ttypes import (
+from heavydb.cursor import make_row_results_set
+from heavydb.thrift.ttypes import (
     TRowSet,
     TColumnType,
     TColumn,
     TColumnData,
     TQueryResult,
 )
-from omnisci.common.ttypes import TTypeInfo
+from heavydb.common.ttypes import TTypeInfo
 
 
 class TestRowResults:
