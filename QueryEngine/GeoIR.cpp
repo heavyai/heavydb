@@ -203,10 +203,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
   argument_list.insert(argument_list.begin(),
                        cgen_state_->llInt(static_cast<int>(geo_expr->getOp())));
   for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
-    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
     argument_list.insert(argument_list.end(),
                          llvm::ConstantPointerNull::get(
                              llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
   }
   // Append geo expr compression
   argument_list.insert(
@@ -264,10 +264,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
   argument_list.insert(argument_list.begin(),
                        cgen_state_->llInt(static_cast<int>(geo_expr->getOp())));
   for (auto i = 3; i > geo_expr->getTypeInfo0().get_physical_coord_cols(); i--) {
-    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
     argument_list.insert(argument_list.end(),
                          llvm::ConstantPointerNull::get(
                              llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+    argument_list.insert(argument_list.end(), cgen_state_->llInt(int64_t(0)));
   }
   // Append geo expr compression
   argument_list.insert(
@@ -298,10 +298,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
         arg1_list.begin(),
         cgen_state_->llInt(static_cast<int>(geo_expr->getTypeInfo1().get_type())));
     for (auto i = 3; i > geo_expr->getTypeInfo1().get_physical_coord_cols(); i--) {
-      arg1_list.insert(arg1_list.end(), cgen_state_->llInt(int64_t(0)));
       arg1_list.insert(arg1_list.end(),
                        llvm::ConstantPointerNull::get(
                            llvm::Type::getInt32PtrTy(cgen_state_->context_, 0)));
+      arg1_list.insert(arg1_list.end(), cgen_state_->llInt(int64_t(0)));
     }
     // Append geo expr compression
     arg1_list.insert(arg1_list.end(),

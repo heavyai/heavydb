@@ -72,6 +72,9 @@ std::string suffix(SQLTypes type) {
   if (type == kLINESTRING) {
     return std::string("_LineString");
   }
+  if (type == kMULTILINESTRING) {
+    return std::string("_MultiLineString");
+  }
   if (type == kPOLYGON) {
     return std::string("_Polygon");
   }

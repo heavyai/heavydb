@@ -166,8 +166,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
   args.push_back(makeExpr<Analyzer::Constant>(arr_ti, false, compressed_coords_exprs));
 
   auto lit_type = ti.get_type();
-  if (lit_type == kPOLYGON || lit_type == kMULTIPOLYGON) {
-    // ring sizes
+  if (lit_type == kMULTILINESTRING || lit_type == kPOLYGON || lit_type == kMULTIPOLYGON) {
+    // [linest]ring sizes
     std::list<std::shared_ptr<Analyzer::Expr>> ring_size_exprs;
     for (auto c : ring_sizes) {
       Datum d;
@@ -223,6 +223,9 @@ std::string suffix(SQLTypes type) {
   if (type == kLINESTRING) {
     return std::string("_LineString");
   }
+  if (type == kMULTILINESTRING) {
+    return std::string("_MultiLineString");
+  }
   if (type == kPOLYGON) {
     return std::string("_Polygon");
   }
@@ -240,6 +243,9 @@ SQLTypes get_ti_from_geo(const Geospatial::GeoBase* geo) {
     }
     case Geospatial::GeoBase::GeoType::kLINESTRING: {
       return kLINESTRING;
+    }
+    case Geospatial::GeoBase::GeoType::kMULTILINESTRING: {
+      return kMULTILINESTRING;
     }
     case Geospatial::GeoBase::GeoType::kPOLYGON: {
       return kPOLYGON;
@@ -1052,6 +1058,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
                                            /*expand_geo_col=*/true,
                                            /*is_projection=*/false,
                                            /*use_geo_expressions=*/true);
+    if (!IS_GEO_POLY(arg_ti.get_type())) {
+      throw QueryNotSupported(rex_function->getName() +
+                              " expects a POLYGON or MULTIPOLYGON");
+    }
     CHECK_EQ(geoargs.size(), size_t(1));
     arg_ti = rex_function->getType();  // TODO: remove
     return makeExpr<Analyzer::GeoOperator>(
@@ -1091,11 +1101,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
       // Reset the transform, transform will be given to the operator as an override
       arg_ti = geoargs.front()->get_type_info();
     }
-    if (arg_ti.get_type() != kPOLYGON && arg_ti.get_type() != kMULTIPOLYGON) {
+    if (!IS_GEO_POLY(arg_ti.get_type())) {
       throw QueryNotSupported(rex_function->getName() +
                               " expects a POLYGON or MULTIPOLYGON");
     }
-
     return makeExpr<Analyzer::GeoOperator>(
         rex_function->getType(),
         rex_function->getName(),
