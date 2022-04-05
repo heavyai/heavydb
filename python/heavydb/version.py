@@ -1,7 +1,7 @@
 def get_source_version():
     import os
 
-    d = dict(MAJOR='5', MINOR='6', MICRO='0', EXTRA='none')
+    d = dict(MAJOR='6', MINOR='0', MICRO='0', EXTRA='none')
     here = os.path.abspath(os.path.dirname(__file__))
     try:
         f = open(os.path.join(here, '..', '..', 'CMakeLists.txt'))
