@@ -6,13 +6,13 @@
 #  options string: py
 #
 
-from thrift.Thrift import TType, TMessageType, TFrozenDict, TException, TApplicationException
-from thrift.protocol.TProtocol import TProtocolException
+from thrift.Thrift import TType
 from thrift.TRecursive import fix_spec
 
 import sys
 
 from thrift.transport import TTransport
+
 all_structs = []
 
 
@@ -190,14 +190,22 @@ class TUserDefinedFunction(object):
 
     """
 
-
-    def __init__(self, name=None, argTypes=None, retType=None,):
+    def __init__(
+        self,
+        name=None,
+        argTypes=None,
+        retType=None,
+    ):
         self.name = name
         self.argTypes = argTypes
         self.retType = retType
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -207,7 +215,11 @@ class TUserDefinedFunction(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -232,12 +244,18 @@ class TUserDefinedFunction(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TUserDefinedFunction')
         if self.name is not None:
             oprot.writeFieldBegin('name', TType.STRING, 1)
-            oprot.writeString(self.name.encode('utf-8') if sys.version_info[0] == 2 else self.name)
+            oprot.writeString(
+                self.name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.name
+            )
             oprot.writeFieldEnd()
         if self.argTypes is not None:
             oprot.writeFieldBegin('argTypes', TType.LIST, 2)
@@ -257,12 +275,14 @@ class TUserDefinedFunction(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -281,8 +301,16 @@ class TUserDefinedTableFunction(object):
 
     """
 
-
-    def __init__(self, name=None, sizerType=None, sizerArgPos=None, inputArgTypes=None, outputArgTypes=None, sqlArgTypes=None, annotations=None,):
+    def __init__(
+        self,
+        name=None,
+        sizerType=None,
+        sizerArgPos=None,
+        inputArgTypes=None,
+        outputArgTypes=None,
+        sqlArgTypes=None,
+        annotations=None,
+    ):
         self.name = name
         self.sizerType = sizerType
         self.sizerArgPos = sizerArgPos
@@ -292,7 +320,11 @@ class TUserDefinedTableFunction(object):
         self.annotations = annotations
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -302,7 +334,11 @@ class TUserDefinedTableFunction(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -353,8 +389,16 @@ class TUserDefinedTableFunction(object):
                         _elem30 = {}
                         (_ktype32, _vtype33, _size31) = iprot.readMapBegin()
                         for _i35 in range(_size31):
-                            _key36 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
-                            _val37 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                            _key36 = (
+                                iprot.readString().decode('utf-8')
+                                if sys.version_info[0] == 2
+                                else iprot.readString()
+                            )
+                            _val37 = (
+                                iprot.readString().decode('utf-8')
+                                if sys.version_info[0] == 2
+                                else iprot.readString()
+                            )
                             _elem30[_key36] = _val37
                         iprot.readMapEnd()
                         self.annotations.append(_elem30)
@@ -368,12 +412,18 @@ class TUserDefinedTableFunction(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TUserDefinedTableFunction')
         if self.name is not None:
             oprot.writeFieldBegin('name', TType.STRING, 1)
-            oprot.writeString(self.name.encode('utf-8') if sys.version_info[0] == 2 else self.name)
+            oprot.writeString(
+                self.name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.name
+            )
             oprot.writeFieldEnd()
         if self.sizerType is not None:
             oprot.writeFieldBegin('sizerType', TType.I32, 2)
@@ -410,8 +460,16 @@ class TUserDefinedTableFunction(object):
             for iter41 in self.annotations:
                 oprot.writeMapBegin(TType.STRING, TType.STRING, len(iter41))
                 for kiter42, viter43 in iter41.items():
-                    oprot.writeString(kiter42.encode('utf-8') if sys.version_info[0] == 2 else kiter42)
-                    oprot.writeString(viter43.encode('utf-8') if sys.version_info[0] == 2 else viter43)
+                    oprot.writeString(
+                        kiter42.encode('utf-8')
+                        if sys.version_info[0] == 2
+                        else kiter42
+                    )
+                    oprot.writeString(
+                        viter43.encode('utf-8')
+                        if sys.version_info[0] == 2
+                        else viter43
+                    )
                 oprot.writeMapEnd()
             oprot.writeListEnd()
             oprot.writeFieldEnd()
@@ -422,32 +480,100 @@ class TUserDefinedTableFunction(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
+
+
 all_structs.append(TUserDefinedFunction)
 TUserDefinedFunction.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'name', 'UTF8', None, ),  # 1
-    (2, TType.LIST, 'argTypes', (TType.I32, None, False), None, ),  # 2
-    (3, TType.I32, 'retType', None, None, ),  # 3
+    (
+        1,
+        TType.STRING,
+        'name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'argTypes',
+        (TType.I32, None, False),
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I32,
+        'retType',
+        None,
+        None,
+    ),  # 3
 )
 all_structs.append(TUserDefinedTableFunction)
 TUserDefinedTableFunction.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'name', 'UTF8', None, ),  # 1
-    (2, TType.I32, 'sizerType', None, None, ),  # 2
-    (3, TType.I32, 'sizerArgPos', None, None, ),  # 3
-    (4, TType.LIST, 'inputArgTypes', (TType.I32, None, False), None, ),  # 4
-    (5, TType.LIST, 'outputArgTypes', (TType.I32, None, False), None, ),  # 5
-    (6, TType.LIST, 'sqlArgTypes', (TType.I32, None, False), None, ),  # 6
-    (7, TType.LIST, 'annotations', (TType.MAP, (TType.STRING, 'UTF8', TType.STRING, 'UTF8', False), False), None, ),  # 7
+    (
+        1,
+        TType.STRING,
+        'name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'sizerType',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I32,
+        'sizerArgPos',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.LIST,
+        'inputArgTypes',
+        (TType.I32, None, False),
+        None,
+    ),  # 4
+    (
+        5,
+        TType.LIST,
+        'outputArgTypes',
+        (TType.I32, None, False),
+        None,
+    ),  # 5
+    (
+        6,
+        TType.LIST,
+        'sqlArgTypes',
+        (TType.I32, None, False),
+        None,
+    ),  # 6
+    (
+        7,
+        TType.LIST,
+        'annotations',
+        (
+            TType.MAP,
+            (TType.STRING, 'UTF8', TType.STRING, 'UTF8', False),
+            False,
+        ),
+        None,
+    ),  # 7
 )
 fix_spec(all_structs)
 del all_structs

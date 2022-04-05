@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import numpy as np
-import pandas.util.testing as tm
+import pandas.testing as tm
 
 pytest.importorskip('rbc')
 

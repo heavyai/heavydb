@@ -3,7 +3,6 @@
 Connect to an OmniSci database.
 """
 from collections import namedtuple
-import base64
 from sqlalchemy.engine.url import make_url
 from thrift.protocol import TBinaryProtocol, TJSONProtocol
 from thrift.transport import TSocket, TSSLSocket, THttpClient, TTransport
@@ -13,8 +12,6 @@ from heavydb.thrift.ttypes import TDBException
 
 from .cursor import Cursor
 from .exceptions import _translate_exception, OperationalError
-
-from ._parsers import _extract_column_details
 
 from ._samlutils import get_saml_response
 

@@ -1,15 +1,13 @@
 """
 Tests that rely on a server running
 """
-import base64
-import json
 import datetime
 import os
 
 import pytest
 from heavydb import connect, ProgrammingError, DatabaseError
 from heavydb.cursor import Cursor
-from heavydb._parsers import Description, ColumnDetails
+from heavydb._parsers import Description
 from heavydb.thrift.ttypes import TDBException
 
 # XXX: Make it hashable to silence warnings; see if this can be done upstream

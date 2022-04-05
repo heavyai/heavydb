@@ -6,14 +6,14 @@
 #  options string: py
 #
 
-from thrift.Thrift import TType, TMessageType, TFrozenDict, TException, TApplicationException
-from thrift.protocol.TProtocol import TProtocolException
+from thrift.Thrift import TType
 from thrift.TRecursive import fix_spec
 
 import sys
 import heavydb.common.ttypes
 
 from thrift.transport import TTransport
+
 all_structs = []
 
 
@@ -97,13 +97,20 @@ class TSlotSize(object):
 
     """
 
-
-    def __init__(self, padded=None, logical=None,):
+    def __init__(
+        self,
+        padded=None,
+        logical=None,
+    ):
         self.padded = padded
         self.logical = logical
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -128,7 +135,9 @@ class TSlotSize(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TSlotSize')
         if self.padded is not None:
@@ -146,12 +155,14 @@ class TSlotSize(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -165,13 +176,20 @@ class TColSlotContext(object):
 
     """
 
-
-    def __init__(self, slot_sizes=None, col_to_slot_map=None,):
+    def __init__(
+        self,
+        slot_sizes=None,
+        col_to_slot_map=None,
+    ):
         self.slot_sizes = slot_sizes
         self.col_to_slot_map = col_to_slot_map
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -212,7 +230,9 @@ class TColSlotContext(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TColSlotContext')
         if self.slot_sizes is not None:
@@ -239,12 +259,14 @@ class TColSlotContext(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -262,8 +284,15 @@ class TCountDistinctDescriptor(object):
 
     """
 
-
-    def __init__(self, impl_type=None, min_val=None, bitmap_sz_bits=None, approximate=None, device_type=None, sub_bitmap_count=None,):
+    def __init__(
+        self,
+        impl_type=None,
+        min_val=None,
+        bitmap_sz_bits=None,
+        approximate=None,
+        device_type=None,
+        sub_bitmap_count=None,
+    ):
         self.impl_type = impl_type
         self.min_val = min_val
         self.bitmap_sz_bits = bitmap_sz_bits
@@ -272,7 +301,11 @@ class TCountDistinctDescriptor(object):
         self.sub_bitmap_count = sub_bitmap_count
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -317,7 +350,9 @@ class TCountDistinctDescriptor(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TCountDistinctDescriptor')
         if self.impl_type is not None:
@@ -351,12 +386,14 @@ class TCountDistinctDescriptor(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -381,8 +418,22 @@ class TResultSetBufferDescriptor(object):
 
     """
 
-
-    def __init__(self, layout=None, keyless=None, entry_count=None, idx_target_as_key=None, min_val=None, max_val=None, bucket=None, group_col_widths=None, key_bytewidth=None, col_slot_context=None, target_groupby_indices=None, count_distinct_descriptors=None, force_4byte_float=None,):
+    def __init__(
+        self,
+        layout=None,
+        keyless=None,
+        entry_count=None,
+        idx_target_as_key=None,
+        min_val=None,
+        max_val=None,
+        bucket=None,
+        group_col_widths=None,
+        key_bytewidth=None,
+        col_slot_context=None,
+        target_groupby_indices=None,
+        count_distinct_descriptors=None,
+        force_4byte_float=None,
+    ):
         self.layout = layout
         self.keyless = keyless
         self.entry_count = entry_count
@@ -398,7 +449,11 @@ class TResultSetBufferDescriptor(object):
         self.force_4byte_float = force_4byte_float
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -495,7 +550,9 @@ class TResultSetBufferDescriptor(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TResultSetBufferDescriptor')
         if self.layout is not None:
@@ -550,7 +607,9 @@ class TResultSetBufferDescriptor(object):
             oprot.writeFieldEnd()
         if self.count_distinct_descriptors is not None:
             oprot.writeFieldBegin('count_distinct_descriptors', TType.LIST, 12)
-            oprot.writeListBegin(TType.STRUCT, len(self.count_distinct_descriptors))
+            oprot.writeListBegin(
+                TType.STRUCT, len(self.count_distinct_descriptors)
+            )
             for iter41 in self.count_distinct_descriptors:
                 iter41.write(oprot)
             oprot.writeListEnd()
@@ -566,12 +625,14 @@ class TResultSetBufferDescriptor(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -589,8 +650,15 @@ class TTargetInfo(object):
 
     """
 
-
-    def __init__(self, is_agg=None, kind=None, type=None, arg_type=None, skip_nulls=None, is_distinct=None,):
+    def __init__(
+        self,
+        is_agg=None,
+        kind=None,
+        type=None,
+        arg_type=None,
+        skip_nulls=None,
+        is_distinct=None,
+    ):
         self.is_agg = is_agg
         self.kind = kind
         self.type = type
@@ -599,7 +667,11 @@ class TTargetInfo(object):
         self.is_distinct = is_distinct
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -646,7 +718,9 @@ class TTargetInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TTargetInfo')
         if self.is_agg is not None:
@@ -680,12 +754,14 @@ class TTargetInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -699,13 +775,20 @@ class TCountDistinctSetStorage(object):
 
     """
 
-
-    def __init__(self, bitmap=None, sparse_set=None,):
+    def __init__(
+        self,
+        bitmap=None,
+        sparse_set=None,
+    ):
         self.bitmap = bitmap
         self.sparse_set = sparse_set
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -735,7 +818,9 @@ class TCountDistinctSetStorage(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TCountDistinctSetStorage')
         if self.bitmap is not None:
@@ -756,12 +841,14 @@ class TCountDistinctSetStorage(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -776,14 +863,22 @@ class TCountDistinctSet(object):
 
     """
 
-
-    def __init__(self, type=None, storage=None, remote_ptr=None,):
+    def __init__(
+        self,
+        type=None,
+        storage=None,
+        remote_ptr=None,
+    ):
         self.type = type
         self.storage = storage
         self.remote_ptr = remote_ptr
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -814,7 +909,9 @@ class TCountDistinctSet(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TCountDistinctSet')
         if self.type is not None:
@@ -836,12 +933,14 @@ class TCountDistinctSet(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -863,8 +962,19 @@ class TSerializedRows(object):
 
     """
 
-
-    def __init__(self, buffers=None, buffer_lengths=None, buffers_total_size=None, total_compression_time_ms=None, descriptor=None, targets=None, target_init_vals=None, varlen_buffer=None, count_distinct_sets=None, explanation=None,):
+    def __init__(
+        self,
+        buffers=None,
+        buffer_lengths=None,
+        buffers_total_size=None,
+        total_compression_time_ms=None,
+        descriptor=None,
+        targets=None,
+        target_init_vals=None,
+        varlen_buffer=None,
+        count_distinct_sets=None,
+        explanation=None,
+    ):
         self.buffers = buffers
         self.buffer_lengths = buffer_lengths
         self.buffers_total_size = buffers_total_size
@@ -877,7 +987,11 @@ class TSerializedRows(object):
         self.explanation = explanation
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -965,7 +1079,11 @@ class TSerializedRows(object):
                     iprot.skip(ftype)
             elif fid == 10:
                 if ftype == TType.STRING:
-                    self.explanation = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.explanation = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -975,7 +1093,9 @@ class TSerializedRows(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TSerializedRows')
         if self.buffers is not None:
@@ -1034,7 +1154,11 @@ class TSerializedRows(object):
             oprot.writeFieldEnd()
         if self.explanation is not None:
             oprot.writeFieldBegin('explanation', TType.STRING, 10)
-            oprot.writeString(self.explanation.encode('utf-8') if sys.version_info[0] == 2 else self.explanation)
+            oprot.writeString(
+                self.explanation.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.explanation
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -1043,90 +1167,358 @@ class TSerializedRows(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
+
+
 all_structs.append(TSlotSize)
 TSlotSize.thrift_spec = (
     None,  # 0
-    (1, TType.I16, 'padded', None, None, ),  # 1
-    (2, TType.I16, 'logical', None, None, ),  # 2
+    (
+        1,
+        TType.I16,
+        'padded',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I16,
+        'logical',
+        None,
+        None,
+    ),  # 2
 )
 all_structs.append(TColSlotContext)
 TColSlotContext.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'slot_sizes', (TType.STRUCT, [TSlotSize, None], False), None, ),  # 1
-    (2, TType.LIST, 'col_to_slot_map', (TType.LIST, (TType.I32, None, False), False), None, ),  # 2
+    (
+        1,
+        TType.LIST,
+        'slot_sizes',
+        (TType.STRUCT, [TSlotSize, None], False),
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'col_to_slot_map',
+        (TType.LIST, (TType.I32, None, False), False),
+        None,
+    ),  # 2
 )
 all_structs.append(TCountDistinctDescriptor)
 TCountDistinctDescriptor.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'impl_type', None, None, ),  # 1
-    (2, TType.I64, 'min_val', None, None, ),  # 2
-    (3, TType.I64, 'bitmap_sz_bits', None, None, ),  # 3
-    (4, TType.BOOL, 'approximate', None, None, ),  # 4
-    (5, TType.I32, 'device_type', None, None, ),  # 5
-    (6, TType.I64, 'sub_bitmap_count', None, None, ),  # 6
+    (
+        1,
+        TType.I32,
+        'impl_type',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'min_val',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'bitmap_sz_bits',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'approximate',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I32,
+        'device_type',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I64,
+        'sub_bitmap_count',
+        None,
+        None,
+    ),  # 6
 )
 all_structs.append(TResultSetBufferDescriptor)
 TResultSetBufferDescriptor.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'layout', None, None, ),  # 1
-    (2, TType.BOOL, 'keyless', None, None, ),  # 2
-    (3, TType.I32, 'entry_count', None, None, ),  # 3
-    (4, TType.I32, 'idx_target_as_key', None, None, ),  # 4
-    (5, TType.I64, 'min_val', None, None, ),  # 5
-    (6, TType.I64, 'max_val', None, None, ),  # 6
-    (7, TType.I64, 'bucket', None, None, ),  # 7
-    (8, TType.LIST, 'group_col_widths', (TType.I16, None, False), None, ),  # 8
-    (9, TType.I16, 'key_bytewidth', None, None, ),  # 9
-    (10, TType.STRUCT, 'col_slot_context', [TColSlotContext, None], None, ),  # 10
-    (11, TType.LIST, 'target_groupby_indices', (TType.I32, None, False), None, ),  # 11
-    (12, TType.LIST, 'count_distinct_descriptors', (TType.STRUCT, [TCountDistinctDescriptor, None], False), None, ),  # 12
-    (13, TType.BOOL, 'force_4byte_float', None, None, ),  # 13
+    (
+        1,
+        TType.I32,
+        'layout',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'keyless',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I32,
+        'entry_count',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I32,
+        'idx_target_as_key',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I64,
+        'min_val',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I64,
+        'max_val',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.I64,
+        'bucket',
+        None,
+        None,
+    ),  # 7
+    (
+        8,
+        TType.LIST,
+        'group_col_widths',
+        (TType.I16, None, False),
+        None,
+    ),  # 8
+    (
+        9,
+        TType.I16,
+        'key_bytewidth',
+        None,
+        None,
+    ),  # 9
+    (
+        10,
+        TType.STRUCT,
+        'col_slot_context',
+        [TColSlotContext, None],
+        None,
+    ),  # 10
+    (
+        11,
+        TType.LIST,
+        'target_groupby_indices',
+        (TType.I32, None, False),
+        None,
+    ),  # 11
+    (
+        12,
+        TType.LIST,
+        'count_distinct_descriptors',
+        (TType.STRUCT, [TCountDistinctDescriptor, None], False),
+        None,
+    ),  # 12
+    (
+        13,
+        TType.BOOL,
+        'force_4byte_float',
+        None,
+        None,
+    ),  # 13
 )
 all_structs.append(TTargetInfo)
 TTargetInfo.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'is_agg', None, None, ),  # 1
-    (2, TType.I32, 'kind', None, None, ),  # 2
-    (3, TType.STRUCT, 'type', [heavydb.common.ttypes.TTypeInfo, None], None,),  # 3
-    (4, TType.STRUCT, 'arg_type', [heavydb.common.ttypes.TTypeInfo, None], None,),  # 4
-    (5, TType.BOOL, 'skip_nulls', None, None, ),  # 5
-    (6, TType.BOOL, 'is_distinct', None, None, ),  # 6
+    (
+        1,
+        TType.BOOL,
+        'is_agg',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'kind',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRUCT,
+        'type',
+        [heavydb.common.ttypes.TTypeInfo, None],
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRUCT,
+        'arg_type',
+        [heavydb.common.ttypes.TTypeInfo, None],
+        None,
+    ),  # 4
+    (
+        5,
+        TType.BOOL,
+        'skip_nulls',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.BOOL,
+        'is_distinct',
+        None,
+        None,
+    ),  # 6
 )
 all_structs.append(TCountDistinctSetStorage)
 TCountDistinctSetStorage.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'bitmap', 'BINARY', None, ),  # 1
-    (2, TType.SET, 'sparse_set', (TType.I64, None, False), None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'bitmap',
+        'BINARY',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.SET,
+        'sparse_set',
+        (TType.I64, None, False),
+        None,
+    ),  # 2
 )
 all_structs.append(TCountDistinctSet)
 TCountDistinctSet.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'type', None, None, ),  # 1
-    (2, TType.STRUCT, 'storage', [TCountDistinctSetStorage, None], None, ),  # 2
-    (3, TType.I64, 'remote_ptr', None, None, ),  # 3
+    (
+        1,
+        TType.I32,
+        'type',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRUCT,
+        'storage',
+        [TCountDistinctSetStorage, None],
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'remote_ptr',
+        None,
+        None,
+    ),  # 3
 )
 all_structs.append(TSerializedRows)
 TSerializedRows.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'buffers', (TType.STRING, 'BINARY', False), None, ),  # 1
-    (2, TType.LIST, 'buffer_lengths', (TType.I64, None, False), None, ),  # 2
-    (3, TType.I64, 'buffers_total_size', None, None, ),  # 3
-    (4, TType.I32, 'total_compression_time_ms', None, None, ),  # 4
-    (5, TType.STRUCT, 'descriptor', [TResultSetBufferDescriptor, None], None, ),  # 5
-    (6, TType.LIST, 'targets', (TType.STRUCT, [TTargetInfo, None], False), None, ),  # 6
-    (7, TType.LIST, 'target_init_vals', (TType.I64, None, False), None, ),  # 7
-    (8, TType.LIST, 'varlen_buffer', (TType.STRING, 'BINARY', False), None, ),  # 8
-    (9, TType.LIST, 'count_distinct_sets', (TType.STRUCT, [TCountDistinctSet, None], False), None, ),  # 9
-    (10, TType.STRING, 'explanation', 'UTF8', None, ),  # 10
+    (
+        1,
+        TType.LIST,
+        'buffers',
+        (TType.STRING, 'BINARY', False),
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'buffer_lengths',
+        (TType.I64, None, False),
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'buffers_total_size',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I32,
+        'total_compression_time_ms',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRUCT,
+        'descriptor',
+        [TResultSetBufferDescriptor, None],
+        None,
+    ),  # 5
+    (
+        6,
+        TType.LIST,
+        'targets',
+        (TType.STRUCT, [TTargetInfo, None], False),
+        None,
+    ),  # 6
+    (
+        7,
+        TType.LIST,
+        'target_init_vals',
+        (TType.I64, None, False),
+        None,
+    ),  # 7
+    (
+        8,
+        TType.LIST,
+        'varlen_buffer',
+        (TType.STRING, 'BINARY', False),
+        None,
+    ),  # 8
+    (
+        9,
+        TType.LIST,
+        'count_distinct_sets',
+        (TType.STRUCT, [TCountDistinctSet, None], False),
+        None,
+    ),  # 9
+    (
+        10,
+        TType.STRING,
+        'explanation',
+        'UTF8',
+        None,
+    ),  # 10
 )
 fix_spec(all_structs)
 del all_structs

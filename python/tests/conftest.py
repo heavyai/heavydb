@@ -12,6 +12,7 @@ import string
 
 heavydb_host = os.environ.get('HEAVYDB_HOST', 'localhost')
 
+
 def _check_open():
     """
     Test to see if OmniSci running on localhost and socket open

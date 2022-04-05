@@ -6,13 +6,13 @@
 #  options string: py
 #
 
-from thrift.Thrift import TType, TMessageType, TFrozenDict, TException, TApplicationException
-from thrift.protocol.TProtocol import TProtocolException
+from thrift.Thrift import TType
 from thrift.TRecursive import fix_spec
 
 import sys
 
 from thrift.transport import TTransport
+
 all_structs = []
 
 
@@ -58,14 +58,22 @@ class TCompletionHint(object):
 
     """
 
-
-    def __init__(self, type=None, hints=None, replaced=None,):
+    def __init__(
+        self,
+        type=None,
+        hints=None,
+        replaced=None,
+    ):
         self.type = type
         self.hints = hints
         self.replaced = replaced
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -83,14 +91,22 @@ class TCompletionHint(object):
                     self.hints = []
                     (_etype3, _size0) = iprot.readListBegin()
                     for _i4 in range(_size0):
-                        _elem5 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                        _elem5 = (
+                            iprot.readString().decode('utf-8')
+                            if sys.version_info[0] == 2
+                            else iprot.readString()
+                        )
                         self.hints.append(_elem5)
                     iprot.readListEnd()
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
                 if ftype == TType.STRING:
-                    self.replaced = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.replaced = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -100,7 +116,9 @@ class TCompletionHint(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TCompletionHint')
         if self.type is not None:
@@ -111,12 +129,20 @@ class TCompletionHint(object):
             oprot.writeFieldBegin('hints', TType.LIST, 2)
             oprot.writeListBegin(TType.STRING, len(self.hints))
             for iter6 in self.hints:
-                oprot.writeString(iter6.encode('utf-8') if sys.version_info[0] == 2 else iter6)
+                oprot.writeString(
+                    iter6.encode('utf-8')
+                    if sys.version_info[0] == 2
+                    else iter6
+                )
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         if self.replaced is not None:
             oprot.writeFieldBegin('replaced', TType.STRING, 3)
-            oprot.writeString(self.replaced.encode('utf-8') if sys.version_info[0] == 2 else self.replaced)
+            oprot.writeString(
+                self.replaced.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.replaced
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -125,21 +151,43 @@ class TCompletionHint(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
+
+
 all_structs.append(TCompletionHint)
 TCompletionHint.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'type', None, None, ),  # 1
-    (2, TType.LIST, 'hints', (TType.STRING, 'UTF8', False), None, ),  # 2
-    (3, TType.STRING, 'replaced', 'UTF8', None, ),  # 3
+    (
+        1,
+        TType.I32,
+        'type',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'hints',
+        (TType.STRING, 'UTF8', False),
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRING,
+        'replaced',
+        'UTF8',
+        None,
+    ),  # 3
 )
 fix_spec(all_structs)
 del all_structs

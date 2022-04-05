@@ -6,13 +6,11 @@
 #  options string: py
 #
 
-from thrift.Thrift import TType, TMessageType, TFrozenDict, TException, TApplicationException
-from thrift.protocol.TProtocol import TProtocolException
+from thrift.Thrift import TType
 from thrift.TRecursive import fix_spec
 
-import sys
-
 from thrift.transport import TTransport
+
 all_structs = []
 
 
@@ -147,8 +145,17 @@ class TTypeInfo(object):
 
     """
 
-
-    def __init__(self, type=None, encoding=None, nullable=None, is_array=None, precision=None, scale=None, comp_param=None, size=-1,):
+    def __init__(
+        self,
+        type=None,
+        encoding=None,
+        nullable=None,
+        is_array=None,
+        precision=None,
+        scale=None,
+        comp_param=None,
+        size=-1,
+    ):
         self.type = type
         self.encoding = encoding
         self.nullable = nullable
@@ -159,7 +166,11 @@ class TTypeInfo(object):
         self.size = size
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -214,7 +225,9 @@ class TTypeInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TTypeInfo')
         if self.type is not None:
@@ -256,26 +269,78 @@ class TTypeInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
+
+
 all_structs.append(TTypeInfo)
 TTypeInfo.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'type', None, None, ),  # 1
-    (2, TType.BOOL, 'nullable', None, None, ),  # 2
-    (3, TType.BOOL, 'is_array', None, None, ),  # 3
-    (4, TType.I32, 'encoding', None, None, ),  # 4
-    (5, TType.I32, 'precision', None, None, ),  # 5
-    (6, TType.I32, 'scale', None, None, ),  # 6
-    (7, TType.I32, 'comp_param', None, None, ),  # 7
-    (8, TType.I32, 'size', None, -1, ),  # 8
+    (
+        1,
+        TType.I32,
+        'type',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'nullable',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'is_array',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I32,
+        'encoding',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I32,
+        'precision',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I32,
+        'scale',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.I32,
+        'comp_param',
+        None,
+        None,
+    ),  # 7
+    (
+        8,
+        TType.I32,
+        'size',
+        None,
+        -1,
+    ),  # 8
 )
 fix_spec(all_structs)
 del all_structs

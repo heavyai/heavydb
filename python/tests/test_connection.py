@@ -9,6 +9,7 @@ from heavydb._parsers import ColumnDetails, _extract_column_details
 
 heavydb_host = os.environ.get('HEAVYDB_HOST', 'localhost')
 
+
 @pytest.mark.usefixtures("heavydb_server")
 class TestConnect:
     def test_host_specified(self):

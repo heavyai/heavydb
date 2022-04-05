@@ -1,4 +1,5 @@
 from .version import get_package_version
+
 __version__ = get_package_version()
 del get_package_version
 

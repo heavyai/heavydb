@@ -6,9 +6,7 @@ old_dashboard_state = {
             "areFiltersInverse": False,
             "cap": 12,
             "renderArea": False,
-            "color": {
-                "type": "none"
-            },
+            "color": {"type": "none"},
             "colorDomain": None,
             "dcFlag": 1,
             "densityAccumulatorEnabled": True,
@@ -36,12 +34,9 @@ old_dashboard_state = {
                     "autobin": False,
                     "numOfBins": None,
                     "isBinned": False,
-                    "isBinnable": False
+                    "isBinnable": False,
                 },
-                {
-                    "isRequired": False,
-                    "isError": False
-                }
+                {"isRequired": False, "isError": False},
             ],
             "elasticX": True,
             "elasticY": True,
@@ -63,12 +58,9 @@ old_dashboard_state = {
                     "categories": None,
                     "colorType": "quantitative",
                     "aggType": "Count",
-                    "originIndex": 0
+                    "originIndex": 0,
                 },
-                {
-                    "isRequired": False,
-                    "isError": False
-                }
+                {"isRequired": False, "isError": False},
             ],
             "rangeChartEnabled": False,
             "rangeFilter": [],
@@ -83,39 +75,30 @@ old_dashboard_state = {
             "multiSources": {},
             "hasError": False,
             "dataSource": "test_data_no_nulls_ipc",
-            "hoverSelectedColumns": []
+            "hoverSelectedColumns": [],
         },
         "test_data_no_nulls_ipc": {
             "dcFlag": 2,
             "loading": False,
-            "color": {
-                "defaultOtherDomain": "Default"
-            }
-        }
+            "color": {"defaultOtherDomain": "Default"},
+        },
     },
     "ui": {
         "showFilterPanel": False,
         "showClearFiltersDropdown": False,
-        "banner": {
-            "open": False,
-            "type": None
-        },
+        "banner": {"open": False, "type": None},
         "modal": {
             "type": None,
             "open": False,
             "content": "",
             "header": "",
-            "primaryAction": {
-                "text": "OK"
-            },
-            "secondaryAction": {
-                "text": "CANCEL"
-            }
+            "primaryAction": {"text": "OK"},
+            "secondaryAction": {"text": "CANCEL"},
         },
         "selectorPillHover": {
             "shouldShowPrompt": False,
             "message": "",
-            "top": 0
+            "top": 0,
         },
         "selectorPositions": {
             "dimensions": [
@@ -123,26 +106,22 @@ old_dashboard_state = {
                 242.60000610351562,
                 202.60000610351562,
                 242.60000610351562,
-                202.60000610351562
+                202.60000610351562,
             ],
             "measures": [
                 331.3999938964844,
                 371.3999938964844,
                 331.3999938964844,
-                291.3999938964844
-            ]
+                291.3999938964844,
+            ],
         },
-        "nagScreenIsEnabled": False
+        "nagScreenIsEnabled": False,
     },
     "filters": [],
     "dashboard": {
         "id": None,
         "title": "old_dashboard_2",
-        "chartContainers": [
-            {
-                "id": "1"
-            }
-        ],
+        "chartContainers": [{"id": "1"}],
         "table": None,
         "filtersId": [],
         "layout": [
@@ -155,7 +134,7 @@ old_dashboard_state = {
                 "minW": 5,
                 "minH": 5,
                 "moved": False,
-                "static": False
+                "static": False,
             }
         ],
         "currentDataSource": "test_data_no_nulls_ipc",
@@ -171,7 +150,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "tinyint_",
-                        "value": "tinyint_"
+                        "value": "tinyint_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -181,7 +160,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "smallint_",
-                        "value": "smallint_"
+                        "value": "smallint_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -191,7 +170,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "int_",
-                        "value": "int_"
+                        "value": "int_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -201,7 +180,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "bigint_",
-                        "value": "bigint_"
+                        "value": "bigint_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -211,7 +190,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "float_",
-                        "value": "float_"
+                        "value": "float_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -221,7 +200,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "double_",
-                        "value": "double_"
+                        "value": "double_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -231,7 +210,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "date_",
-                        "value": "date_"
+                        "value": "date_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -241,7 +220,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "datetime_",
-                        "value": "datetime_"
+                        "value": "datetime_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -251,7 +230,7 @@ old_dashboard_state = {
                         "is_dict": False,
                         "name_is_ambiguous": False,
                         "label": "time_",
-                        "value": "time_"
+                        "value": "time_",
                     },
                     {
                         "table": "test_data_no_nulls_ipc",
@@ -261,38 +240,28 @@ old_dashboard_state = {
                         "is_dict": True,
                         "name_is_ambiguous": False,
                         "label": "text_",
-                        "value": "text_"
-                    }
-                ]
+                        "value": "text_",
+                    },
+                ],
             }
         },
         "privileges": {},
         "saveLinkState": {
             "error": False,
             "request": False,
-            "saveLinkId": None
+            "saveLinkId": None,
         },
         "loadState": {
             "error": False,
             "dataAccessError": False,
             "complete": True,
             "request": False,
-            "loadLinkId": None
+            "loadLinkId": None,
         },
-        "saveState": {
-            "request": False,
-            "error": False,
-            "isSaved": False
-        },
-        "copyState": {
-            "error": False,
-            "request": False
-        },
-        "streaming": {
-            "interval": 0,
-            "request": False
-        },
-        "version": "4.6.1-20190429-02ec2e206b"
+        "saveState": {"request": False, "error": False, "isSaved": False},
+        "copyState": {"error": False, "request": False},
+        "streaming": {"interval": 0, "request": False},
+        "version": "4.6.1-20190429-02ec2e206b",
     },
     "machineLearning": {
         "training": False,
@@ -320,9 +289,6 @@ old_dashboard_state = {
         "trainResults": None,
         "accuracy": None,
         "jobId": None,
-        "progress": {
-            "steps": None,
-            "current": None
-        }
-    }
+        "progress": {"steps": None, "current": None},
+    },
 }

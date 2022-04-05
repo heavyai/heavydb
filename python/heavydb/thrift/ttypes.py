@@ -6,8 +6,10 @@
 #  options string: py
 #
 
-from thrift.Thrift import TType, TMessageType, TFrozenDict, TException, TApplicationException
-from thrift.protocol.TProtocol import TProtocolException
+from thrift.Thrift import (
+    TType,
+    TException,
+)
 from thrift.TRecursive import fix_spec
 
 import sys
@@ -17,6 +19,7 @@ import heavydb.serialized_result_set.ttypes
 import heavydb.extension_functions.ttypes
 
 from thrift.transport import TTransport
+
 all_structs = []
 
 
@@ -258,15 +261,24 @@ class TDatumVal(object):
 
     """
 
-
-    def __init__(self, int_val=None, real_val=None, str_val=None, arr_val=None,):
+    def __init__(
+        self,
+        int_val=None,
+        real_val=None,
+        str_val=None,
+        arr_val=None,
+    ):
         self.int_val = int_val
         self.real_val = real_val
         self.str_val = str_val
         self.arr_val = arr_val
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -286,7 +298,11 @@ class TDatumVal(object):
                     iprot.skip(ftype)
             elif fid == 3:
                 if ftype == TType.STRING:
-                    self.str_val = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.str_val = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 4:
@@ -307,7 +323,9 @@ class TDatumVal(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDatumVal')
         if self.int_val is not None:
@@ -320,7 +338,11 @@ class TDatumVal(object):
             oprot.writeFieldEnd()
         if self.str_val is not None:
             oprot.writeFieldBegin('str_val', TType.STRING, 3)
-            oprot.writeString(self.str_val.encode('utf-8') if sys.version_info[0] == 2 else self.str_val)
+            oprot.writeString(
+                self.str_val.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.str_val
+            )
             oprot.writeFieldEnd()
         if self.arr_val is not None:
             oprot.writeFieldBegin('arr_val', TType.LIST, 4)
@@ -336,12 +358,14 @@ class TDatumVal(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -355,13 +379,20 @@ class TDatum(object):
 
     """
 
-
-    def __init__(self, val=None, is_null=None,):
+    def __init__(
+        self,
+        val=None,
+        is_null=None,
+    ):
         self.val = val
         self.is_null = is_null
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -387,7 +418,9 @@ class TDatum(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDatum')
         if self.val is not None:
@@ -405,12 +438,14 @@ class TDatum(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -424,13 +459,20 @@ class TStringValue(object):
 
     """
 
-
-    def __init__(self, str_val=None, is_null=None,):
+    def __init__(
+        self,
+        str_val=None,
+        is_null=None,
+    ):
         self.str_val = str_val
         self.is_null = is_null
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -440,7 +482,11 @@ class TStringValue(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.str_val = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.str_val = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -455,12 +501,18 @@ class TStringValue(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TStringValue')
         if self.str_val is not None:
             oprot.writeFieldBegin('str_val', TType.STRING, 1)
-            oprot.writeString(self.str_val.encode('utf-8') if sys.version_info[0] == 2 else self.str_val)
+            oprot.writeString(
+                self.str_val.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.str_val
+            )
             oprot.writeFieldEnd()
         if self.is_null is not None:
             oprot.writeFieldBegin('is_null', TType.BOOL, 2)
@@ -473,12 +525,14 @@ class TStringValue(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -498,8 +552,17 @@ class TColumnType(object):
 
     """
 
-
-    def __init__(self, col_name=None, col_type=None, is_reserved_keyword=None, src_name=None, is_system=None, is_physical=None, col_id=None, default_value=None,):
+    def __init__(
+        self,
+        col_name=None,
+        col_type=None,
+        is_reserved_keyword=None,
+        src_name=None,
+        is_system=None,
+        is_physical=None,
+        col_id=None,
+        default_value=None,
+    ):
         self.col_name = col_name
         self.col_type = col_type
         self.is_reserved_keyword = is_reserved_keyword
@@ -510,7 +573,11 @@ class TColumnType(object):
         self.default_value = default_value
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -520,7 +587,11 @@ class TColumnType(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.col_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.col_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -536,7 +607,11 @@ class TColumnType(object):
                     iprot.skip(ftype)
             elif fid == 4:
                 if ftype == TType.STRING:
-                    self.src_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.src_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 5:
@@ -556,7 +631,11 @@ class TColumnType(object):
                     iprot.skip(ftype)
             elif fid == 8:
                 if ftype == TType.STRING:
-                    self.default_value = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.default_value = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -566,12 +645,18 @@ class TColumnType(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TColumnType')
         if self.col_name is not None:
             oprot.writeFieldBegin('col_name', TType.STRING, 1)
-            oprot.writeString(self.col_name.encode('utf-8') if sys.version_info[0] == 2 else self.col_name)
+            oprot.writeString(
+                self.col_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.col_name
+            )
             oprot.writeFieldEnd()
         if self.col_type is not None:
             oprot.writeFieldBegin('col_type', TType.STRUCT, 2)
@@ -583,7 +668,11 @@ class TColumnType(object):
             oprot.writeFieldEnd()
         if self.src_name is not None:
             oprot.writeFieldBegin('src_name', TType.STRING, 4)
-            oprot.writeString(self.src_name.encode('utf-8') if sys.version_info[0] == 2 else self.src_name)
+            oprot.writeString(
+                self.src_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.src_name
+            )
             oprot.writeFieldEnd()
         if self.is_system is not None:
             oprot.writeFieldBegin('is_system', TType.BOOL, 5)
@@ -599,7 +688,11 @@ class TColumnType(object):
             oprot.writeFieldEnd()
         if self.default_value is not None:
             oprot.writeFieldBegin('default_value', TType.STRING, 8)
-            oprot.writeString(self.default_value.encode('utf-8') if sys.version_info[0] == 2 else self.default_value)
+            oprot.writeString(
+                self.default_value.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.default_value
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -608,12 +701,14 @@ class TColumnType(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -626,12 +721,18 @@ class TRow(object):
 
     """
 
-
-    def __init__(self, cols=None,):
+    def __init__(
+        self,
+        cols=None,
+    ):
         self.cols = cols
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -657,7 +758,9 @@ class TRow(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRow')
         if self.cols is not None:
@@ -674,12 +777,14 @@ class TRow(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -695,15 +800,24 @@ class TColumnData(object):
 
     """
 
-
-    def __init__(self, int_col=None, real_col=None, str_col=None, arr_col=None,):
+    def __init__(
+        self,
+        int_col=None,
+        real_col=None,
+        str_col=None,
+        arr_col=None,
+    ):
         self.int_col = int_col
         self.real_col = real_col
         self.str_col = str_col
         self.arr_col = arr_col
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -736,7 +850,11 @@ class TColumnData(object):
                     self.str_col = []
                     (_etype29, _size26) = iprot.readListBegin()
                     for _i30 in range(_size26):
-                        _elem31 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                        _elem31 = (
+                            iprot.readString().decode('utf-8')
+                            if sys.version_info[0] == 2
+                            else iprot.readString()
+                        )
                         self.str_col.append(_elem31)
                     iprot.readListEnd()
                 else:
@@ -759,7 +877,9 @@ class TColumnData(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TColumnData')
         if self.int_col is not None:
@@ -780,7 +900,11 @@ class TColumnData(object):
             oprot.writeFieldBegin('str_col', TType.LIST, 3)
             oprot.writeListBegin(TType.STRING, len(self.str_col))
             for iter40 in self.str_col:
-                oprot.writeString(iter40.encode('utf-8') if sys.version_info[0] == 2 else iter40)
+                oprot.writeString(
+                    iter40.encode('utf-8')
+                    if sys.version_info[0] == 2
+                    else iter40
+                )
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         if self.arr_col is not None:
@@ -797,12 +921,14 @@ class TColumnData(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -816,13 +942,20 @@ class TColumn(object):
 
     """
 
-
-    def __init__(self, data=None, nulls=None,):
+    def __init__(
+        self,
+        data=None,
+        nulls=None,
+    ):
         self.data = data
         self.nulls = nulls
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -853,7 +986,9 @@ class TColumn(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TColumn')
         if self.data is not None:
@@ -874,12 +1009,14 @@ class TColumn(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -892,12 +1029,18 @@ class TStringRow(object):
 
     """
 
-
-    def __init__(self, cols=None,):
+    def __init__(
+        self,
+        cols=None,
+    ):
         self.cols = cols
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -923,7 +1066,9 @@ class TStringRow(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TStringRow')
         if self.cols is not None:
@@ -940,12 +1085,14 @@ class TStringRow(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -959,13 +1106,20 @@ class TKrb5Session(object):
 
     """
 
-
-    def __init__(self, sessionId=None, krbToken=None,):
+    def __init__(
+        self,
+        sessionId=None,
+        krbToken=None,
+    ):
         self.sessionId = sessionId
         self.krbToken = krbToken
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -975,12 +1129,20 @@ class TKrb5Session(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.sessionId = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.sessionId = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.krbToken = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.krbToken = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -990,16 +1152,26 @@ class TKrb5Session(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TKrb5Session')
         if self.sessionId is not None:
             oprot.writeFieldBegin('sessionId', TType.STRING, 1)
-            oprot.writeString(self.sessionId.encode('utf-8') if sys.version_info[0] == 2 else self.sessionId)
+            oprot.writeString(
+                self.sessionId.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.sessionId
+            )
             oprot.writeFieldEnd()
         if self.krbToken is not None:
             oprot.writeFieldBegin('krbToken', TType.STRING, 2)
-            oprot.writeString(self.krbToken.encode('utf-8') if sys.version_info[0] == 2 else self.krbToken)
+            oprot.writeString(
+                self.krbToken.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.krbToken
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -1008,12 +1180,14 @@ class TKrb5Session(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1031,8 +1205,15 @@ class TStepResult(object):
 
     """
 
-
-    def __init__(self, serialized_rows=None, execution_finished=None, merge_type=None, sharded=None, row_desc=None, node_id=None,):
+    def __init__(
+        self,
+        serialized_rows=None,
+        execution_finished=None,
+        merge_type=None,
+        sharded=None,
+        row_desc=None,
+        node_id=None,
+    ):
         self.serialized_rows = serialized_rows
         self.execution_finished = execution_finished
         self.merge_type = merge_type
@@ -1041,7 +1222,11 @@ class TStepResult(object):
         self.node_id = node_id
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1051,7 +1236,9 @@ class TStepResult(object):
                 break
             if fid == 1:
                 if ftype == TType.STRUCT:
-                    self.serialized_rows = heavydb.serialized_result_set.ttypes.TSerializedRows()
+                    self.serialized_rows = (
+                        heavydb.serialized_result_set.ttypes.TSerializedRows()
+                    )
                     self.serialized_rows.read(iprot)
                 else:
                     iprot.skip(ftype)
@@ -1093,7 +1280,9 @@ class TStepResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TStepResult')
         if self.serialized_rows is not None:
@@ -1130,12 +1319,14 @@ class TStepResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1151,15 +1342,24 @@ class TRowSet(object):
 
     """
 
-
-    def __init__(self, row_desc=None, rows=None, columns=None, is_columnar=None,):
+    def __init__(
+        self,
+        row_desc=None,
+        rows=None,
+        columns=None,
+        is_columnar=None,
+    ):
         self.row_desc = row_desc
         self.rows = rows
         self.columns = columns
         self.is_columnar = is_columnar
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1212,7 +1412,9 @@ class TRowSet(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRowSet')
         if self.row_desc is not None:
@@ -1247,12 +1449,14 @@ class TRowSet(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1271,8 +1475,16 @@ class TQueryResult(object):
 
     """
 
-
-    def __init__(self, row_set=None, execution_time_ms=None, total_time_ms=None, nonce=None, debug=None, success=True, query_type=0,):
+    def __init__(
+        self,
+        row_set=None,
+        execution_time_ms=None,
+        total_time_ms=None,
+        nonce=None,
+        debug=None,
+        success=True,
+        query_type=0,
+    ):
         self.row_set = row_set
         self.execution_time_ms = execution_time_ms
         self.total_time_ms = total_time_ms
@@ -1282,7 +1494,11 @@ class TQueryResult(object):
         self.query_type = query_type
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1308,12 +1524,20 @@ class TQueryResult(object):
                     iprot.skip(ftype)
             elif fid == 4:
                 if ftype == TType.STRING:
-                    self.nonce = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.nonce = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.debug = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.debug = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 6:
@@ -1333,7 +1557,9 @@ class TQueryResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TQueryResult')
         if self.row_set is not None:
@@ -1350,11 +1576,19 @@ class TQueryResult(object):
             oprot.writeFieldEnd()
         if self.nonce is not None:
             oprot.writeFieldBegin('nonce', TType.STRING, 4)
-            oprot.writeString(self.nonce.encode('utf-8') if sys.version_info[0] == 2 else self.nonce)
+            oprot.writeString(
+                self.nonce.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.nonce
+            )
             oprot.writeFieldEnd()
         if self.debug is not None:
             oprot.writeFieldBegin('debug', TType.STRING, 5)
-            oprot.writeString(self.debug.encode('utf-8') if sys.version_info[0] == 2 else self.debug)
+            oprot.writeString(
+                self.debug.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.debug
+            )
             oprot.writeFieldEnd()
         if self.success is not None:
             oprot.writeFieldBegin('success', TType.BOOL, 6)
@@ -1371,12 +1605,14 @@ class TQueryResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1395,8 +1631,16 @@ class TDataFrame(object):
 
     """
 
-
-    def __init__(self, sm_handle=None, sm_size=None, df_handle=None, df_size=None, execution_time_ms=None, arrow_conversion_time_ms=None, df_buffer=None,):
+    def __init__(
+        self,
+        sm_handle=None,
+        sm_size=None,
+        df_handle=None,
+        df_size=None,
+        execution_time_ms=None,
+        arrow_conversion_time_ms=None,
+        df_buffer=None,
+    ):
         self.sm_handle = sm_handle
         self.sm_size = sm_size
         self.df_handle = df_handle
@@ -1406,7 +1650,11 @@ class TDataFrame(object):
         self.df_buffer = df_buffer
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1456,7 +1704,9 @@ class TDataFrame(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDataFrame')
         if self.sm_handle is not None:
@@ -1494,12 +1744,14 @@ class TDataFrame(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1513,13 +1765,20 @@ class TDBInfo(object):
 
     """
 
-
-    def __init__(self, db_name=None, db_owner=None,):
+    def __init__(
+        self,
+        db_name=None,
+        db_owner=None,
+    ):
         self.db_name = db_name
         self.db_owner = db_owner
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1529,12 +1788,20 @@ class TDBInfo(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.db_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.db_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.db_owner = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.db_owner = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -1544,16 +1811,26 @@ class TDBInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDBInfo')
         if self.db_name is not None:
             oprot.writeFieldBegin('db_name', TType.STRING, 1)
-            oprot.writeString(self.db_name.encode('utf-8') if sys.version_info[0] == 2 else self.db_name)
+            oprot.writeString(
+                self.db_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.db_name
+            )
             oprot.writeFieldEnd()
         if self.db_owner is not None:
             oprot.writeFieldBegin('db_owner', TType.STRING, 2)
-            oprot.writeString(self.db_owner.encode('utf-8') if sys.version_info[0] == 2 else self.db_owner)
+            oprot.writeString(
+                self.db_owner.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.db_owner
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -1562,12 +1839,14 @@ class TDBInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1580,12 +1859,18 @@ class TDBException(TException):
 
     """
 
-
-    def __init__(self, error_msg=None,):
+    def __init__(
+        self,
+        error_msg=None,
+    ):
         self.error_msg = error_msg
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1595,7 +1880,11 @@ class TDBException(TException):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.error_msg = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.error_msg = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -1605,12 +1894,18 @@ class TDBException(TException):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDBException')
         if self.error_msg is not None:
             oprot.writeFieldBegin('error_msg', TType.STRING, 1)
-            oprot.writeString(self.error_msg.encode('utf-8') if sys.version_info[0] == 2 else self.error_msg)
+            oprot.writeString(
+                self.error_msg.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.error_msg
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -1622,12 +1917,14 @@ class TDBException(TException):
         return repr(self)
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1665,8 +1962,35 @@ class TCopyParams(object):
 
     """
 
-
-    def __init__(self, delimiter=None, null_str=None, has_header=0, quoted=None, quote=None, escape=None, line_delim=None, array_delim=None, array_begin=None, array_end=None, threads=None, file_type=0, s3_access_key=None, s3_secret_key=None, s3_region=None, geo_coords_encoding=6, geo_coords_comp_param=32, geo_coords_type=18, geo_coords_srid=4326, sanitize_column_names=True, geo_layer_name=None, s3_endpoint=None, geo_assign_render_groups=True, geo_explode_collections=False, source_srid=0, s3_session_token=None,):
+    def __init__(
+        self,
+        delimiter=None,
+        null_str=None,
+        has_header=0,
+        quoted=None,
+        quote=None,
+        escape=None,
+        line_delim=None,
+        array_delim=None,
+        array_begin=None,
+        array_end=None,
+        threads=None,
+        file_type=0,
+        s3_access_key=None,
+        s3_secret_key=None,
+        s3_region=None,
+        geo_coords_encoding=6,
+        geo_coords_comp_param=32,
+        geo_coords_type=18,
+        geo_coords_srid=4326,
+        sanitize_column_names=True,
+        geo_layer_name=None,
+        s3_endpoint=None,
+        geo_assign_render_groups=True,
+        geo_explode_collections=False,
+        source_srid=0,
+        s3_session_token=None,
+    ):
         self.delimiter = delimiter
         self.null_str = null_str
         self.has_header = has_header
@@ -1695,7 +2019,11 @@ class TCopyParams(object):
         self.s3_session_token = s3_session_token
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1705,12 +2033,20 @@ class TCopyParams(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.delimiter = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.delimiter = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.null_str = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.null_str = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
@@ -1725,32 +2061,56 @@ class TCopyParams(object):
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.quote = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.quote = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 6:
                 if ftype == TType.STRING:
-                    self.escape = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.escape = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 7:
                 if ftype == TType.STRING:
-                    self.line_delim = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.line_delim = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 8:
                 if ftype == TType.STRING:
-                    self.array_delim = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.array_delim = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 9:
                 if ftype == TType.STRING:
-                    self.array_begin = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.array_begin = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 10:
                 if ftype == TType.STRING:
-                    self.array_end = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.array_end = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 11:
@@ -1765,17 +2125,29 @@ class TCopyParams(object):
                     iprot.skip(ftype)
             elif fid == 13:
                 if ftype == TType.STRING:
-                    self.s3_access_key = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.s3_access_key = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 14:
                 if ftype == TType.STRING:
-                    self.s3_secret_key = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.s3_secret_key = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 15:
                 if ftype == TType.STRING:
-                    self.s3_region = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.s3_region = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 16:
@@ -1805,12 +2177,20 @@ class TCopyParams(object):
                     iprot.skip(ftype)
             elif fid == 21:
                 if ftype == TType.STRING:
-                    self.geo_layer_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.geo_layer_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 22:
                 if ftype == TType.STRING:
-                    self.s3_endpoint = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.s3_endpoint = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 23:
@@ -1830,7 +2210,11 @@ class TCopyParams(object):
                     iprot.skip(ftype)
             elif fid == 26:
                 if ftype == TType.STRING:
-                    self.s3_session_token = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.s3_session_token = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -1840,16 +2224,26 @@ class TCopyParams(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TCopyParams')
         if self.delimiter is not None:
             oprot.writeFieldBegin('delimiter', TType.STRING, 1)
-            oprot.writeString(self.delimiter.encode('utf-8') if sys.version_info[0] == 2 else self.delimiter)
+            oprot.writeString(
+                self.delimiter.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.delimiter
+            )
             oprot.writeFieldEnd()
         if self.null_str is not None:
             oprot.writeFieldBegin('null_str', TType.STRING, 2)
-            oprot.writeString(self.null_str.encode('utf-8') if sys.version_info[0] == 2 else self.null_str)
+            oprot.writeString(
+                self.null_str.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.null_str
+            )
             oprot.writeFieldEnd()
         if self.has_header is not None:
             oprot.writeFieldBegin('has_header', TType.I32, 3)
@@ -1861,27 +2255,51 @@ class TCopyParams(object):
             oprot.writeFieldEnd()
         if self.quote is not None:
             oprot.writeFieldBegin('quote', TType.STRING, 5)
-            oprot.writeString(self.quote.encode('utf-8') if sys.version_info[0] == 2 else self.quote)
+            oprot.writeString(
+                self.quote.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.quote
+            )
             oprot.writeFieldEnd()
         if self.escape is not None:
             oprot.writeFieldBegin('escape', TType.STRING, 6)
-            oprot.writeString(self.escape.encode('utf-8') if sys.version_info[0] == 2 else self.escape)
+            oprot.writeString(
+                self.escape.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.escape
+            )
             oprot.writeFieldEnd()
         if self.line_delim is not None:
             oprot.writeFieldBegin('line_delim', TType.STRING, 7)
-            oprot.writeString(self.line_delim.encode('utf-8') if sys.version_info[0] == 2 else self.line_delim)
+            oprot.writeString(
+                self.line_delim.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.line_delim
+            )
             oprot.writeFieldEnd()
         if self.array_delim is not None:
             oprot.writeFieldBegin('array_delim', TType.STRING, 8)
-            oprot.writeString(self.array_delim.encode('utf-8') if sys.version_info[0] == 2 else self.array_delim)
+            oprot.writeString(
+                self.array_delim.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.array_delim
+            )
             oprot.writeFieldEnd()
         if self.array_begin is not None:
             oprot.writeFieldBegin('array_begin', TType.STRING, 9)
-            oprot.writeString(self.array_begin.encode('utf-8') if sys.version_info[0] == 2 else self.array_begin)
+            oprot.writeString(
+                self.array_begin.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.array_begin
+            )
             oprot.writeFieldEnd()
         if self.array_end is not None:
             oprot.writeFieldBegin('array_end', TType.STRING, 10)
-            oprot.writeString(self.array_end.encode('utf-8') if sys.version_info[0] == 2 else self.array_end)
+            oprot.writeString(
+                self.array_end.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.array_end
+            )
             oprot.writeFieldEnd()
         if self.threads is not None:
             oprot.writeFieldBegin('threads', TType.I32, 11)
@@ -1893,15 +2311,27 @@ class TCopyParams(object):
             oprot.writeFieldEnd()
         if self.s3_access_key is not None:
             oprot.writeFieldBegin('s3_access_key', TType.STRING, 13)
-            oprot.writeString(self.s3_access_key.encode('utf-8') if sys.version_info[0] == 2 else self.s3_access_key)
+            oprot.writeString(
+                self.s3_access_key.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.s3_access_key
+            )
             oprot.writeFieldEnd()
         if self.s3_secret_key is not None:
             oprot.writeFieldBegin('s3_secret_key', TType.STRING, 14)
-            oprot.writeString(self.s3_secret_key.encode('utf-8') if sys.version_info[0] == 2 else self.s3_secret_key)
+            oprot.writeString(
+                self.s3_secret_key.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.s3_secret_key
+            )
             oprot.writeFieldEnd()
         if self.s3_region is not None:
             oprot.writeFieldBegin('s3_region', TType.STRING, 15)
-            oprot.writeString(self.s3_region.encode('utf-8') if sys.version_info[0] == 2 else self.s3_region)
+            oprot.writeString(
+                self.s3_region.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.s3_region
+            )
             oprot.writeFieldEnd()
         if self.geo_coords_encoding is not None:
             oprot.writeFieldBegin('geo_coords_encoding', TType.I32, 16)
@@ -1925,11 +2355,19 @@ class TCopyParams(object):
             oprot.writeFieldEnd()
         if self.geo_layer_name is not None:
             oprot.writeFieldBegin('geo_layer_name', TType.STRING, 21)
-            oprot.writeString(self.geo_layer_name.encode('utf-8') if sys.version_info[0] == 2 else self.geo_layer_name)
+            oprot.writeString(
+                self.geo_layer_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.geo_layer_name
+            )
             oprot.writeFieldEnd()
         if self.s3_endpoint is not None:
             oprot.writeFieldBegin('s3_endpoint', TType.STRING, 22)
-            oprot.writeString(self.s3_endpoint.encode('utf-8') if sys.version_info[0] == 2 else self.s3_endpoint)
+            oprot.writeString(
+                self.s3_endpoint.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.s3_endpoint
+            )
             oprot.writeFieldEnd()
         if self.geo_assign_render_groups is not None:
             oprot.writeFieldBegin('geo_assign_render_groups', TType.BOOL, 23)
@@ -1945,7 +2383,11 @@ class TCopyParams(object):
             oprot.writeFieldEnd()
         if self.s3_session_token is not None:
             oprot.writeFieldBegin('s3_session_token', TType.STRING, 26)
-            oprot.writeString(self.s3_session_token.encode('utf-8') if sys.version_info[0] == 2 else self.s3_session_token)
+            oprot.writeString(
+                self.s3_session_token.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.s3_session_token
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -1954,12 +2396,14 @@ class TCopyParams(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -1972,12 +2416,18 @@ class TCreateParams(object):
 
     """
 
-
-    def __init__(self, is_replicated=None,):
+    def __init__(
+        self,
+        is_replicated=None,
+    ):
         self.is_replicated = is_replicated
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -1997,7 +2447,9 @@ class TCreateParams(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TCreateParams')
         if self.is_replicated is not None:
@@ -2011,12 +2463,14 @@ class TCreateParams(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2030,13 +2484,20 @@ class TDetectResult(object):
 
     """
 
-
-    def __init__(self, row_set=None, copy_params=None,):
+    def __init__(
+        self,
+        row_set=None,
+        copy_params=None,
+    ):
         self.row_set = row_set
         self.copy_params = copy_params
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2063,7 +2524,9 @@ class TDetectResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDetectResult')
         if self.row_set is not None:
@@ -2081,12 +2544,14 @@ class TDetectResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2102,15 +2567,24 @@ class TImportStatus(object):
 
     """
 
-
-    def __init__(self, elapsed=None, rows_completed=None, rows_estimated=None, rows_rejected=None,):
+    def __init__(
+        self,
+        elapsed=None,
+        rows_completed=None,
+        rows_estimated=None,
+        rows_rejected=None,
+    ):
         self.elapsed = elapsed
         self.rows_completed = rows_completed
         self.rows_estimated = rows_estimated
         self.rows_rejected = rows_rejected
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2145,7 +2619,9 @@ class TImportStatus(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TImportStatus')
         if self.elapsed is not None:
@@ -2171,12 +2647,14 @@ class TImportStatus(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2193,8 +2671,14 @@ class TFrontendView(object):
 
     """
 
-
-    def __init__(self, view_name=None, view_state=None, image_hash=None, update_time=None, view_metadata=None,):
+    def __init__(
+        self,
+        view_name=None,
+        view_state=None,
+        image_hash=None,
+        update_time=None,
+        view_metadata=None,
+    ):
         self.view_name = view_name
         self.view_state = view_state
         self.image_hash = image_hash
@@ -2202,7 +2686,11 @@ class TFrontendView(object):
         self.view_metadata = view_metadata
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2212,27 +2700,47 @@ class TFrontendView(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.view_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.view_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.view_state = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.view_state = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
                 if ftype == TType.STRING:
-                    self.image_hash = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.image_hash = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 4:
                 if ftype == TType.STRING:
-                    self.update_time = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.update_time = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.view_metadata = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.view_metadata = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -2242,28 +2750,50 @@ class TFrontendView(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TFrontendView')
         if self.view_name is not None:
             oprot.writeFieldBegin('view_name', TType.STRING, 1)
-            oprot.writeString(self.view_name.encode('utf-8') if sys.version_info[0] == 2 else self.view_name)
+            oprot.writeString(
+                self.view_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.view_name
+            )
             oprot.writeFieldEnd()
         if self.view_state is not None:
             oprot.writeFieldBegin('view_state', TType.STRING, 2)
-            oprot.writeString(self.view_state.encode('utf-8') if sys.version_info[0] == 2 else self.view_state)
+            oprot.writeString(
+                self.view_state.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.view_state
+            )
             oprot.writeFieldEnd()
         if self.image_hash is not None:
             oprot.writeFieldBegin('image_hash', TType.STRING, 3)
-            oprot.writeString(self.image_hash.encode('utf-8') if sys.version_info[0] == 2 else self.image_hash)
+            oprot.writeString(
+                self.image_hash.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.image_hash
+            )
             oprot.writeFieldEnd()
         if self.update_time is not None:
             oprot.writeFieldBegin('update_time', TType.STRING, 4)
-            oprot.writeString(self.update_time.encode('utf-8') if sys.version_info[0] == 2 else self.update_time)
+            oprot.writeString(
+                self.update_time.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.update_time
+            )
             oprot.writeFieldEnd()
         if self.view_metadata is not None:
             oprot.writeFieldBegin('view_metadata', TType.STRING, 5)
-            oprot.writeString(self.view_metadata.encode('utf-8') if sys.version_info[0] == 2 else self.view_metadata)
+            oprot.writeString(
+                self.view_metadata.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.view_metadata
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -2272,12 +2802,14 @@ class TFrontendView(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2298,8 +2830,18 @@ class TServerStatus(object):
 
     """
 
-
-    def __init__(self, read_only=None, version=None, rendering_enabled=None, start_time=None, edition=None, host_name=None, poly_rendering_enabled=None, role=None, renderer_status_json=None,):
+    def __init__(
+        self,
+        read_only=None,
+        version=None,
+        rendering_enabled=None,
+        start_time=None,
+        edition=None,
+        host_name=None,
+        poly_rendering_enabled=None,
+        role=None,
+        renderer_status_json=None,
+    ):
         self.read_only = read_only
         self.version = version
         self.rendering_enabled = rendering_enabled
@@ -2311,7 +2853,11 @@ class TServerStatus(object):
         self.renderer_status_json = renderer_status_json
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2326,7 +2872,11 @@ class TServerStatus(object):
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.version = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.version = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
@@ -2341,12 +2891,20 @@ class TServerStatus(object):
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.edition = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.edition = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 6:
                 if ftype == TType.STRING:
-                    self.host_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.host_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 7:
@@ -2361,7 +2919,11 @@ class TServerStatus(object):
                     iprot.skip(ftype)
             elif fid == 9:
                 if ftype == TType.STRING:
-                    self.renderer_status_json = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.renderer_status_json = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -2371,7 +2933,9 @@ class TServerStatus(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TServerStatus')
         if self.read_only is not None:
@@ -2380,7 +2944,11 @@ class TServerStatus(object):
             oprot.writeFieldEnd()
         if self.version is not None:
             oprot.writeFieldBegin('version', TType.STRING, 2)
-            oprot.writeString(self.version.encode('utf-8') if sys.version_info[0] == 2 else self.version)
+            oprot.writeString(
+                self.version.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.version
+            )
             oprot.writeFieldEnd()
         if self.rendering_enabled is not None:
             oprot.writeFieldBegin('rendering_enabled', TType.BOOL, 3)
@@ -2392,11 +2960,19 @@ class TServerStatus(object):
             oprot.writeFieldEnd()
         if self.edition is not None:
             oprot.writeFieldBegin('edition', TType.STRING, 5)
-            oprot.writeString(self.edition.encode('utf-8') if sys.version_info[0] == 2 else self.edition)
+            oprot.writeString(
+                self.edition.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.edition
+            )
             oprot.writeFieldEnd()
         if self.host_name is not None:
             oprot.writeFieldBegin('host_name', TType.STRING, 6)
-            oprot.writeString(self.host_name.encode('utf-8') if sys.version_info[0] == 2 else self.host_name)
+            oprot.writeString(
+                self.host_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.host_name
+            )
             oprot.writeFieldEnd()
         if self.poly_rendering_enabled is not None:
             oprot.writeFieldBegin('poly_rendering_enabled', TType.BOOL, 7)
@@ -2408,7 +2984,11 @@ class TServerStatus(object):
             oprot.writeFieldEnd()
         if self.renderer_status_json is not None:
             oprot.writeFieldBegin('renderer_status_json', TType.STRING, 9)
-            oprot.writeString(self.renderer_status_json.encode('utf-8') if sys.version_info[0] == 2 else self.renderer_status_json)
+            oprot.writeString(
+                self.renderer_status_json.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.renderer_status_json
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -2417,12 +2997,14 @@ class TServerStatus(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2436,13 +3018,20 @@ class TPixel(object):
 
     """
 
-
-    def __init__(self, x=None, y=None,):
+    def __init__(
+        self,
+        x=None,
+        y=None,
+    ):
         self.x = x
         self.y = y
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2467,7 +3056,9 @@ class TPixel(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TPixel')
         if self.x is not None:
@@ -2485,12 +3076,14 @@ class TPixel(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2508,8 +3101,15 @@ class TPixelTableRowResult(object):
 
     """
 
-
-    def __init__(self, pixel=None, vega_table_name=None, table_id=None, row_id=None, row_set=None, nonce=None,):
+    def __init__(
+        self,
+        pixel=None,
+        vega_table_name=None,
+        table_id=None,
+        row_id=None,
+        row_set=None,
+        nonce=None,
+    ):
         self.pixel = pixel
         self.vega_table_name = vega_table_name
         self.table_id = table_id
@@ -2518,7 +3118,11 @@ class TPixelTableRowResult(object):
         self.nonce = nonce
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2534,7 +3138,11 @@ class TPixelTableRowResult(object):
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.vega_table_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.vega_table_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
@@ -2565,7 +3173,11 @@ class TPixelTableRowResult(object):
                     iprot.skip(ftype)
             elif fid == 6:
                 if ftype == TType.STRING:
-                    self.nonce = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.nonce = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -2575,7 +3187,9 @@ class TPixelTableRowResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TPixelTableRowResult')
         if self.pixel is not None:
@@ -2584,7 +3198,11 @@ class TPixelTableRowResult(object):
             oprot.writeFieldEnd()
         if self.vega_table_name is not None:
             oprot.writeFieldBegin('vega_table_name', TType.STRING, 2)
-            oprot.writeString(self.vega_table_name.encode('utf-8') if sys.version_info[0] == 2 else self.vega_table_name)
+            oprot.writeString(
+                self.vega_table_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.vega_table_name
+            )
             oprot.writeFieldEnd()
         if self.table_id is not None:
             oprot.writeFieldBegin('table_id', TType.LIST, 3)
@@ -2606,7 +3224,11 @@ class TPixelTableRowResult(object):
             oprot.writeFieldEnd()
         if self.nonce is not None:
             oprot.writeFieldBegin('nonce', TType.STRING, 6)
-            oprot.writeString(self.nonce.encode('utf-8') if sys.version_info[0] == 2 else self.nonce)
+            oprot.writeString(
+                self.nonce.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.nonce
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -2615,12 +3237,14 @@ class TPixelTableRowResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2638,8 +3262,15 @@ class TRenderResult(object):
 
     """
 
-
-    def __init__(self, image=None, nonce=None, execution_time_ms=None, render_time_ms=None, total_time_ms=None, vega_metadata=None,):
+    def __init__(
+        self,
+        image=None,
+        nonce=None,
+        execution_time_ms=None,
+        render_time_ms=None,
+        total_time_ms=None,
+        vega_metadata=None,
+    ):
         self.image = image
         self.nonce = nonce
         self.execution_time_ms = execution_time_ms
@@ -2648,7 +3279,11 @@ class TRenderResult(object):
         self.vega_metadata = vega_metadata
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2663,7 +3298,11 @@ class TRenderResult(object):
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.nonce = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.nonce = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
@@ -2683,7 +3322,11 @@ class TRenderResult(object):
                     iprot.skip(ftype)
             elif fid == 6:
                 if ftype == TType.STRING:
-                    self.vega_metadata = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.vega_metadata = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -2693,7 +3336,9 @@ class TRenderResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRenderResult')
         if self.image is not None:
@@ -2702,7 +3347,11 @@ class TRenderResult(object):
             oprot.writeFieldEnd()
         if self.nonce is not None:
             oprot.writeFieldBegin('nonce', TType.STRING, 2)
-            oprot.writeString(self.nonce.encode('utf-8') if sys.version_info[0] == 2 else self.nonce)
+            oprot.writeString(
+                self.nonce.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.nonce
+            )
             oprot.writeFieldEnd()
         if self.execution_time_ms is not None:
             oprot.writeFieldBegin('execution_time_ms', TType.I64, 3)
@@ -2718,7 +3367,11 @@ class TRenderResult(object):
             oprot.writeFieldEnd()
         if self.vega_metadata is not None:
             oprot.writeFieldBegin('vega_metadata', TType.STRING, 6)
-            oprot.writeString(self.vega_metadata.encode('utf-8') if sys.version_info[0] == 2 else self.vega_metadata)
+            oprot.writeString(
+                self.vega_metadata.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.vega_metadata
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -2727,12 +3380,14 @@ class TRenderResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2749,8 +3404,14 @@ class TGpuSpecification(object):
 
     """
 
-
-    def __init__(self, num_sm=None, clock_frequency_kHz=None, memory=None, compute_capability_major=None, compute_capability_minor=None,):
+    def __init__(
+        self,
+        num_sm=None,
+        clock_frequency_kHz=None,
+        memory=None,
+        compute_capability_major=None,
+        compute_capability_minor=None,
+    ):
         self.num_sm = num_sm
         self.clock_frequency_kHz = clock_frequency_kHz
         self.memory = memory
@@ -2758,7 +3419,11 @@ class TGpuSpecification(object):
         self.compute_capability_minor = compute_capability_minor
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2798,7 +3463,9 @@ class TGpuSpecification(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TGpuSpecification')
         if self.num_sm is not None:
@@ -2828,12 +3495,14 @@ class TGpuSpecification(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2851,8 +3520,15 @@ class THardwareInfo(object):
 
     """
 
-
-    def __init__(self, num_gpu_hw=None, num_cpu_hw=None, num_gpu_allocated=None, start_gpu=None, host_name=None, gpu_info=None,):
+    def __init__(
+        self,
+        num_gpu_hw=None,
+        num_cpu_hw=None,
+        num_gpu_allocated=None,
+        start_gpu=None,
+        host_name=None,
+        gpu_info=None,
+    ):
         self.num_gpu_hw = num_gpu_hw
         self.num_cpu_hw = num_cpu_hw
         self.num_gpu_allocated = num_gpu_allocated
@@ -2861,7 +3537,11 @@ class THardwareInfo(object):
         self.gpu_info = gpu_info
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2891,7 +3571,11 @@ class THardwareInfo(object):
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.host_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.host_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 6:
@@ -2912,7 +3596,9 @@ class THardwareInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('THardwareInfo')
         if self.num_gpu_hw is not None:
@@ -2933,7 +3619,11 @@ class THardwareInfo(object):
             oprot.writeFieldEnd()
         if self.host_name is not None:
             oprot.writeFieldBegin('host_name', TType.STRING, 5)
-            oprot.writeString(self.host_name.encode('utf-8') if sys.version_info[0] == 2 else self.host_name)
+            oprot.writeString(
+                self.host_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.host_name
+            )
             oprot.writeFieldEnd()
         if self.gpu_info is not None:
             oprot.writeFieldBegin('gpu_info', TType.LIST, 6)
@@ -2949,12 +3639,14 @@ class THardwareInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -2967,12 +3659,18 @@ class TClusterHardwareInfo(object):
 
     """
 
-
-    def __init__(self, hardware_info=None,):
+    def __init__(
+        self,
+        hardware_info=None,
+    ):
         self.hardware_info = hardware_info
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -2998,7 +3696,9 @@ class TClusterHardwareInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TClusterHardwareInfo')
         if self.hardware_info is not None:
@@ -3015,12 +3715,14 @@ class TClusterHardwareInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3039,8 +3741,16 @@ class TMemoryData(object):
 
     """
 
-
-    def __init__(self, slab=None, start_page=None, num_pages=None, touch=None, chunk_key=None, buffer_epoch=None, is_free=None,):
+    def __init__(
+        self,
+        slab=None,
+        start_page=None,
+        num_pages=None,
+        touch=None,
+        chunk_key=None,
+        buffer_epoch=None,
+        is_free=None,
+    ):
         self.slab = slab
         self.start_page = start_page
         self.num_pages = num_pages
@@ -3050,7 +3760,11 @@ class TMemoryData(object):
         self.is_free = is_free
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3105,7 +3819,9 @@ class TMemoryData(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TMemoryData')
         if self.slab is not None:
@@ -3146,12 +3862,14 @@ class TMemoryData(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3169,8 +3887,15 @@ class TNodeMemoryInfo(object):
 
     """
 
-
-    def __init__(self, host_name=None, page_size=None, max_num_pages=None, num_pages_allocated=None, is_allocation_capped=None, node_memory_data=None,):
+    def __init__(
+        self,
+        host_name=None,
+        page_size=None,
+        max_num_pages=None,
+        num_pages_allocated=None,
+        is_allocation_capped=None,
+        node_memory_data=None,
+    ):
         self.host_name = host_name
         self.page_size = page_size
         self.max_num_pages = max_num_pages
@@ -3179,7 +3904,11 @@ class TNodeMemoryInfo(object):
         self.node_memory_data = node_memory_data
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3189,7 +3918,11 @@ class TNodeMemoryInfo(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.host_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.host_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -3230,12 +3963,18 @@ class TNodeMemoryInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TNodeMemoryInfo')
         if self.host_name is not None:
             oprot.writeFieldBegin('host_name', TType.STRING, 1)
-            oprot.writeString(self.host_name.encode('utf-8') if sys.version_info[0] == 2 else self.host_name)
+            oprot.writeString(
+                self.host_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.host_name
+            )
             oprot.writeFieldEnd()
         if self.page_size is not None:
             oprot.writeFieldBegin('page_size', TType.I64, 2)
@@ -3267,12 +4006,14 @@ class TNodeMemoryInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3294,8 +4035,19 @@ class TTableMeta(object):
 
     """
 
-
-    def __init__(self, table_name=None, num_cols=None, is_view=None, is_replicated=None, shard_count=None, max_rows=None, table_id=None, max_table_id=None, col_types=None, col_names=None,):
+    def __init__(
+        self,
+        table_name=None,
+        num_cols=None,
+        is_view=None,
+        is_replicated=None,
+        shard_count=None,
+        max_rows=None,
+        table_id=None,
+        max_table_id=None,
+        col_types=None,
+        col_names=None,
+    ):
         self.table_name = table_name
         self.num_cols = num_cols
         self.is_view = is_view
@@ -3308,7 +4060,11 @@ class TTableMeta(object):
         self.col_names = col_names
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3318,7 +4074,11 @@ class TTableMeta(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.table_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.table_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -3372,7 +4132,11 @@ class TTableMeta(object):
                     self.col_names = []
                     (_etype135, _size132) = iprot.readListBegin()
                     for _i136 in range(_size132):
-                        _elem137 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                        _elem137 = (
+                            iprot.readString().decode('utf-8')
+                            if sys.version_info[0] == 2
+                            else iprot.readString()
+                        )
                         self.col_names.append(_elem137)
                     iprot.readListEnd()
                 else:
@@ -3384,12 +4148,18 @@ class TTableMeta(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TTableMeta')
         if self.table_name is not None:
             oprot.writeFieldBegin('table_name', TType.STRING, 1)
-            oprot.writeString(self.table_name.encode('utf-8') if sys.version_info[0] == 2 else self.table_name)
+            oprot.writeString(
+                self.table_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.table_name
+            )
             oprot.writeFieldEnd()
         if self.num_cols is not None:
             oprot.writeFieldBegin('num_cols', TType.I64, 2)
@@ -3430,7 +4200,11 @@ class TTableMeta(object):
             oprot.writeFieldBegin('col_names', TType.LIST, 11)
             oprot.writeListBegin(TType.STRING, len(self.col_names))
             for iter139 in self.col_names:
-                oprot.writeString(iter139.encode('utf-8') if sys.version_info[0] == 2 else iter139)
+                oprot.writeString(
+                    iter139.encode('utf-8')
+                    if sys.version_info[0] == 2
+                    else iter139
+                )
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
@@ -3440,12 +4214,14 @@ class TTableMeta(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3466,8 +4242,18 @@ class TTableDetails(object):
 
     """
 
-
-    def __init__(self, row_desc=None, fragment_size=None, page_size=None, max_rows=None, view_sql=None, shard_count=None, key_metainfo=None, is_temporary=None, partition_detail=None,):
+    def __init__(
+        self,
+        row_desc=None,
+        fragment_size=None,
+        page_size=None,
+        max_rows=None,
+        view_sql=None,
+        shard_count=None,
+        key_metainfo=None,
+        is_temporary=None,
+        partition_detail=None,
+    ):
         self.row_desc = row_desc
         self.fragment_size = fragment_size
         self.page_size = page_size
@@ -3479,7 +4265,11 @@ class TTableDetails(object):
         self.partition_detail = partition_detail
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3515,7 +4305,11 @@ class TTableDetails(object):
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.view_sql = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.view_sql = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 6:
@@ -3525,7 +4319,11 @@ class TTableDetails(object):
                     iprot.skip(ftype)
             elif fid == 7:
                 if ftype == TType.STRING:
-                    self.key_metainfo = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.key_metainfo = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 8:
@@ -3545,7 +4343,9 @@ class TTableDetails(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TTableDetails')
         if self.row_desc is not None:
@@ -3569,7 +4369,11 @@ class TTableDetails(object):
             oprot.writeFieldEnd()
         if self.view_sql is not None:
             oprot.writeFieldBegin('view_sql', TType.STRING, 5)
-            oprot.writeString(self.view_sql.encode('utf-8') if sys.version_info[0] == 2 else self.view_sql)
+            oprot.writeString(
+                self.view_sql.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.view_sql
+            )
             oprot.writeFieldEnd()
         if self.shard_count is not None:
             oprot.writeFieldBegin('shard_count', TType.I64, 6)
@@ -3577,7 +4381,11 @@ class TTableDetails(object):
             oprot.writeFieldEnd()
         if self.key_metainfo is not None:
             oprot.writeFieldBegin('key_metainfo', TType.STRING, 7)
-            oprot.writeString(self.key_metainfo.encode('utf-8') if sys.version_info[0] == 2 else self.key_metainfo)
+            oprot.writeString(
+                self.key_metainfo.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.key_metainfo
+            )
             oprot.writeFieldEnd()
         if self.is_temporary is not None:
             oprot.writeFieldBegin('is_temporary', TType.BOOL, 8)
@@ -3594,12 +4402,14 @@ class TTableDetails(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3620,8 +4430,18 @@ class TColumnRange(object):
 
     """
 
-
-    def __init__(self, type=None, col_id=None, table_id=None, has_nulls=None, int_min=None, int_max=None, bucket=None, fp_min=None, fp_max=None,):
+    def __init__(
+        self,
+        type=None,
+        col_id=None,
+        table_id=None,
+        has_nulls=None,
+        int_min=None,
+        int_max=None,
+        bucket=None,
+        fp_min=None,
+        fp_max=None,
+    ):
         self.type = type
         self.col_id = col_id
         self.table_id = table_id
@@ -3633,7 +4453,11 @@ class TColumnRange(object):
         self.fp_max = fp_max
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3693,7 +4517,9 @@ class TColumnRange(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TColumnRange')
         if self.type is not None:
@@ -3739,12 +4565,14 @@ class TColumnRange(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3758,13 +4586,20 @@ class TDictionaryGeneration(object):
 
     """
 
-
-    def __init__(self, dict_id=None, entry_count=None,):
+    def __init__(
+        self,
+        dict_id=None,
+        entry_count=None,
+    ):
         self.dict_id = dict_id
         self.entry_count = entry_count
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3789,7 +4624,9 @@ class TDictionaryGeneration(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDictionaryGeneration')
         if self.dict_id is not None:
@@ -3807,12 +4644,14 @@ class TDictionaryGeneration(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3827,14 +4666,22 @@ class TTableGeneration(object):
 
     """
 
-
-    def __init__(self, table_id=None, tuple_count=None, start_rowid=None,):
+    def __init__(
+        self,
+        table_id=None,
+        tuple_count=None,
+        start_rowid=None,
+    ):
         self.table_id = table_id
         self.tuple_count = tuple_count
         self.start_rowid = start_rowid
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3864,7 +4711,9 @@ class TTableGeneration(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TTableGeneration')
         if self.table_id is not None:
@@ -3886,12 +4735,14 @@ class TTableGeneration(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -3908,8 +4759,14 @@ class TPendingQuery(object):
 
     """
 
-
-    def __init__(self, id=None, column_ranges=None, dictionary_generations=None, table_generations=None, parent_session_id=None,):
+    def __init__(
+        self,
+        id=None,
+        column_ranges=None,
+        dictionary_generations=None,
+        table_generations=None,
+        parent_session_id=None,
+    ):
         self.id = id
         self.column_ranges = column_ranges
         self.dictionary_generations = dictionary_generations
@@ -3917,7 +4774,11 @@ class TPendingQuery(object):
         self.parent_session_id = parent_session_id
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -3965,7 +4826,11 @@ class TPendingQuery(object):
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.parent_session_id = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.parent_session_id = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             else:
@@ -3975,7 +4840,9 @@ class TPendingQuery(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TPendingQuery')
         if self.id is not None:
@@ -3991,7 +4858,9 @@ class TPendingQuery(object):
             oprot.writeFieldEnd()
         if self.dictionary_generations is not None:
             oprot.writeFieldBegin('dictionary_generations', TType.LIST, 3)
-            oprot.writeListBegin(TType.STRUCT, len(self.dictionary_generations))
+            oprot.writeListBegin(
+                TType.STRUCT, len(self.dictionary_generations)
+            )
             for iter166 in self.dictionary_generations:
                 iter166.write(oprot)
             oprot.writeListEnd()
@@ -4005,7 +4874,11 @@ class TPendingQuery(object):
             oprot.writeFieldEnd()
         if self.parent_session_id is not None:
             oprot.writeFieldBegin('parent_session_id', TType.STRING, 5)
-            oprot.writeString(self.parent_session_id.encode('utf-8') if sys.version_info[0] == 2 else self.parent_session_id)
+            oprot.writeString(
+                self.parent_session_id.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.parent_session_id
+            )
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
         oprot.writeStructEnd()
@@ -4014,12 +4887,14 @@ class TPendingQuery(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4033,13 +4908,20 @@ class TVarLen(object):
 
     """
 
-
-    def __init__(self, payload=None, is_null=None,):
+    def __init__(
+        self,
+        payload=None,
+        is_null=None,
+    ):
         self.payload = payload
         self.is_null = is_null
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4064,7 +4946,9 @@ class TVarLen(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TVarLen')
         if self.payload is not None:
@@ -4082,12 +4966,14 @@ class TVarLen(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4101,13 +4987,20 @@ class TDataBlockPtr(object):
 
     """
 
-
-    def __init__(self, fixed_len_data=None, var_len_data=None,):
+    def __init__(
+        self,
+        fixed_len_data=None,
+        var_len_data=None,
+    ):
         self.fixed_len_data = fixed_len_data
         self.var_len_data = var_len_data
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4138,7 +5031,9 @@ class TDataBlockPtr(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDataBlockPtr')
         if self.fixed_len_data is not None:
@@ -4159,12 +5054,14 @@ class TDataBlockPtr(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4182,8 +5079,15 @@ class TInsertData(object):
 
     """
 
-
-    def __init__(self, db_id=None, table_id=None, column_ids=None, data=None, num_rows=None, is_default=None,):
+    def __init__(
+        self,
+        db_id=None,
+        table_id=None,
+        column_ids=None,
+        data=None,
+        num_rows=None,
+        is_default=None,
+    ):
         self.db_id = db_id
         self.table_id = table_id
         self.column_ids = column_ids
@@ -4192,7 +5096,11 @@ class TInsertData(object):
         self.is_default = is_default
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4253,7 +5161,9 @@ class TInsertData(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TInsertData')
         if self.db_id is not None:
@@ -4296,12 +5206,14 @@ class TInsertData(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4314,12 +5226,18 @@ class TPendingRenderQuery(object):
 
     """
 
-
-    def __init__(self, id=None,):
+    def __init__(
+        self,
+        id=None,
+    ):
         self.id = id
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4339,7 +5257,9 @@ class TPendingRenderQuery(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TPendingRenderQuery')
         if self.id is not None:
@@ -4353,12 +5273,14 @@ class TPendingRenderQuery(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4375,8 +5297,14 @@ class TRenderParseResult(object):
 
     """
 
-
-    def __init__(self, merge_type=None, node_id=None, execution_time_ms=None, render_time_ms=None, total_time_ms=None,):
+    def __init__(
+        self,
+        merge_type=None,
+        node_id=None,
+        execution_time_ms=None,
+        render_time_ms=None,
+        total_time_ms=None,
+    ):
         self.merge_type = merge_type
         self.node_id = node_id
         self.execution_time_ms = execution_time_ms
@@ -4384,7 +5312,11 @@ class TRenderParseResult(object):
         self.total_time_ms = total_time_ms
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4424,7 +5356,9 @@ class TRenderParseResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRenderParseResult')
         if self.merge_type is not None:
@@ -4454,12 +5388,14 @@ class TRenderParseResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4479,8 +5415,17 @@ class TRawRenderPassDataResult(object):
 
     """
 
-
-    def __init__(self, num_pixel_channels=None, num_pixel_samples=None, pixels=None, row_ids_A=None, row_ids_B=None, table_ids=None, accum_data=None, accum_depth=None,):
+    def __init__(
+        self,
+        num_pixel_channels=None,
+        num_pixel_samples=None,
+        pixels=None,
+        row_ids_A=None,
+        row_ids_B=None,
+        table_ids=None,
+        accum_data=None,
+        accum_depth=None,
+    ):
         self.num_pixel_channels = num_pixel_channels
         self.num_pixel_samples = num_pixel_samples
         self.pixels = pixels
@@ -4491,7 +5436,11 @@ class TRawRenderPassDataResult(object):
         self.accum_depth = accum_depth
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4546,7 +5495,9 @@ class TRawRenderPassDataResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRawRenderPassDataResult')
         if self.num_pixel_channels is not None:
@@ -4588,12 +5539,14 @@ class TRawRenderPassDataResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4608,14 +5561,22 @@ class TRawPixelData(object):
 
     """
 
-
-    def __init__(self, width=None, height=None, render_pass_map=None,):
+    def __init__(
+        self,
+        width=None,
+        height=None,
+        render_pass_map=None,
+    ):
         self.width = width
         self.height = height
         self.render_pass_map = render_pass_map
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4652,7 +5613,9 @@ class TRawPixelData(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRawPixelData')
         if self.width is not None:
@@ -4665,7 +5628,9 @@ class TRawPixelData(object):
             oprot.writeFieldEnd()
         if self.render_pass_map is not None:
             oprot.writeFieldBegin('render_pass_map', TType.MAP, 3)
-            oprot.writeMapBegin(TType.I32, TType.STRUCT, len(self.render_pass_map))
+            oprot.writeMapBegin(
+                TType.I32, TType.STRUCT, len(self.render_pass_map)
+            )
             for kiter203, viter204 in self.render_pass_map.items():
                 oprot.writeI32(kiter203)
                 viter204.write(oprot)
@@ -4678,12 +5643,14 @@ class TRawPixelData(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4698,14 +5665,22 @@ class TRenderDatum(object):
 
     """
 
-
-    def __init__(self, type=None, cnt=None, value=None,):
+    def __init__(
+        self,
+        type=None,
+        cnt=None,
+        value=None,
+    ):
         self.type = type
         self.cnt = cnt
         self.value = value
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4735,7 +5710,9 @@ class TRenderDatum(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRenderDatum')
         if self.type is not None:
@@ -4757,12 +5734,14 @@ class TRenderDatum(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4779,8 +5758,14 @@ class TRenderStepResult(object):
 
     """
 
-
-    def __init__(self, merge_data=None, raw_pixel_data=None, execution_time_ms=None, render_time_ms=None, total_time_ms=None,):
+    def __init__(
+        self,
+        merge_data=None,
+        raw_pixel_data=None,
+        execution_time_ms=None,
+        render_time_ms=None,
+        total_time_ms=None,
+    ):
         self.merge_data = merge_data
         self.raw_pixel_data = raw_pixel_data
         self.execution_time_ms = execution_time_ms
@@ -4788,7 +5773,11 @@ class TRenderStepResult(object):
         self.total_time_ms = total_time_ms
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4801,21 +5790,48 @@ class TRenderStepResult(object):
                     self.merge_data = {}
                     (_ktype206, _vtype207, _size205) = iprot.readMapBegin()
                     for _i209 in range(_size205):
-                        _key210 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                        _key210 = (
+                            iprot.readString().decode('utf-8')
+                            if sys.version_info[0] == 2
+                            else iprot.readString()
+                        )
                         _val211 = {}
                         (_ktype213, _vtype214, _size212) = iprot.readMapBegin()
                         for _i216 in range(_size212):
-                            _key217 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                            _key217 = (
+                                iprot.readString().decode('utf-8')
+                                if sys.version_info[0] == 2
+                                else iprot.readString()
+                            )
                             _val218 = {}
-                            (_ktype220, _vtype221, _size219) = iprot.readMapBegin()
+                            (
+                                _ktype220,
+                                _vtype221,
+                                _size219,
+                            ) = iprot.readMapBegin()
                             for _i223 in range(_size219):
-                                _key224 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                                _key224 = (
+                                    iprot.readString().decode('utf-8')
+                                    if sys.version_info[0] == 2
+                                    else iprot.readString()
+                                )
                                 _val225 = {}
-                                (_ktype227, _vtype228, _size226) = iprot.readMapBegin()
+                                (
+                                    _ktype227,
+                                    _vtype228,
+                                    _size226,
+                                ) = iprot.readMapBegin()
                                 for _i230 in range(_size226):
-                                    _key231 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                                    _key231 = (
+                                        iprot.readString().decode('utf-8')
+                                        if sys.version_info[0] == 2
+                                        else iprot.readString()
+                                    )
                                     _val232 = []
-                                    (_etype236, _size233) = iprot.readListBegin()
+                                    (
+                                        _etype236,
+                                        _size233,
+                                    ) = iprot.readListBegin()
                                     for _i237 in range(_size233):
                                         _elem238 = TRenderDatum()
                                         _elem238.read(iprot)
@@ -4859,23 +5875,43 @@ class TRenderStepResult(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TRenderStepResult')
         if self.merge_data is not None:
             oprot.writeFieldBegin('merge_data', TType.MAP, 1)
             oprot.writeMapBegin(TType.STRING, TType.MAP, len(self.merge_data))
             for kiter239, viter240 in self.merge_data.items():
-                oprot.writeString(kiter239.encode('utf-8') if sys.version_info[0] == 2 else kiter239)
+                oprot.writeString(
+                    kiter239.encode('utf-8')
+                    if sys.version_info[0] == 2
+                    else kiter239
+                )
                 oprot.writeMapBegin(TType.STRING, TType.MAP, len(viter240))
                 for kiter241, viter242 in viter240.items():
-                    oprot.writeString(kiter241.encode('utf-8') if sys.version_info[0] == 2 else kiter241)
+                    oprot.writeString(
+                        kiter241.encode('utf-8')
+                        if sys.version_info[0] == 2
+                        else kiter241
+                    )
                     oprot.writeMapBegin(TType.STRING, TType.MAP, len(viter242))
                     for kiter243, viter244 in viter242.items():
-                        oprot.writeString(kiter243.encode('utf-8') if sys.version_info[0] == 2 else kiter243)
-                        oprot.writeMapBegin(TType.STRING, TType.LIST, len(viter244))
+                        oprot.writeString(
+                            kiter243.encode('utf-8')
+                            if sys.version_info[0] == 2
+                            else kiter243
+                        )
+                        oprot.writeMapBegin(
+                            TType.STRING, TType.LIST, len(viter244)
+                        )
                         for kiter245, viter246 in viter244.items():
-                            oprot.writeString(kiter245.encode('utf-8') if sys.version_info[0] == 2 else kiter245)
+                            oprot.writeString(
+                                kiter245.encode('utf-8')
+                                if sys.version_info[0] == 2
+                                else kiter245
+                            )
                             oprot.writeListBegin(TType.STRUCT, len(viter246))
                             for iter247 in viter246:
                                 iter247.write(oprot)
@@ -4908,12 +5944,14 @@ class TRenderStepResult(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -4929,15 +5967,24 @@ class TDatabasePermissions(object):
 
     """
 
-
-    def __init__(self, create_=None, delete_=None, view_sql_editor_=None, access_=None,):
+    def __init__(
+        self,
+        create_=None,
+        delete_=None,
+        view_sql_editor_=None,
+        access_=None,
+    ):
         self.create_ = create_
         self.delete_ = delete_
         self.view_sql_editor_ = view_sql_editor_
         self.access_ = access_
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -4972,7 +6019,9 @@ class TDatabasePermissions(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDatabasePermissions')
         if self.create_ is not None:
@@ -4998,12 +6047,14 @@ class TDatabasePermissions(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5023,8 +6074,17 @@ class TTablePermissions(object):
 
     """
 
-
-    def __init__(self, create_=None, drop_=None, select_=None, insert_=None, update_=None, delete_=None, truncate_=None, alter_=None,):
+    def __init__(
+        self,
+        create_=None,
+        drop_=None,
+        select_=None,
+        insert_=None,
+        update_=None,
+        delete_=None,
+        truncate_=None,
+        alter_=None,
+    ):
         self.create_ = create_
         self.drop_ = drop_
         self.select_ = select_
@@ -5035,7 +6095,11 @@ class TTablePermissions(object):
         self.alter_ = alter_
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5090,7 +6154,9 @@ class TTablePermissions(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TTablePermissions')
         if self.create_ is not None:
@@ -5132,12 +6198,14 @@ class TTablePermissions(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5153,15 +6221,24 @@ class TDashboardPermissions(object):
 
     """
 
-
-    def __init__(self, create_=None, delete_=None, view_=None, edit_=None,):
+    def __init__(
+        self,
+        create_=None,
+        delete_=None,
+        view_=None,
+        edit_=None,
+    ):
         self.create_ = create_
         self.delete_ = delete_
         self.view_ = view_
         self.edit_ = edit_
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5196,7 +6273,9 @@ class TDashboardPermissions(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDashboardPermissions')
         if self.create_ is not None:
@@ -5222,12 +6301,14 @@ class TDashboardPermissions(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5245,8 +6326,15 @@ class TViewPermissions(object):
 
     """
 
-
-    def __init__(self, create_=None, drop_=None, select_=None, insert_=None, update_=None, delete_=None,):
+    def __init__(
+        self,
+        create_=None,
+        drop_=None,
+        select_=None,
+        insert_=None,
+        update_=None,
+        delete_=None,
+    ):
         self.create_ = create_
         self.drop_ = drop_
         self.select_ = select_
@@ -5255,7 +6343,11 @@ class TViewPermissions(object):
         self.delete_ = delete_
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5300,7 +6392,9 @@ class TViewPermissions(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TViewPermissions')
         if self.create_ is not None:
@@ -5334,12 +6428,14 @@ class TViewPermissions(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5355,15 +6451,24 @@ class TServerPermissions(object):
 
     """
 
-
-    def __init__(self, create_=None, drop_=None, alter_=None, usage_=None,):
+    def __init__(
+        self,
+        create_=None,
+        drop_=None,
+        alter_=None,
+        usage_=None,
+    ):
         self.create_ = create_
         self.drop_ = drop_
         self.alter_ = alter_
         self.usage_ = usage_
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5398,7 +6503,9 @@ class TServerPermissions(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TServerPermissions')
         if self.create_ is not None:
@@ -5424,12 +6531,14 @@ class TServerPermissions(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5446,8 +6555,14 @@ class TDBObjectPermissions(object):
 
     """
 
-
-    def __init__(self, database_permissions_=None, table_permissions_=None, dashboard_permissions_=None, view_permissions_=None, server_permissions_=None,):
+    def __init__(
+        self,
+        database_permissions_=None,
+        table_permissions_=None,
+        dashboard_permissions_=None,
+        view_permissions_=None,
+        server_permissions_=None,
+    ):
         self.database_permissions_ = database_permissions_
         self.table_permissions_ = table_permissions_
         self.dashboard_permissions_ = dashboard_permissions_
@@ -5455,7 +6570,11 @@ class TDBObjectPermissions(object):
         self.server_permissions_ = server_permissions_
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5500,7 +6619,9 @@ class TDBObjectPermissions(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDBObjectPermissions')
         if self.database_permissions_ is not None:
@@ -5530,12 +6651,14 @@ class TDBObjectPermissions(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5553,8 +6676,15 @@ class TDBObject(object):
 
     """
 
-
-    def __init__(self, objectName=None, objectType=None, privs=None, grantee=None, privilegeObjectType=None, objectId=None,):
+    def __init__(
+        self,
+        objectName=None,
+        objectType=None,
+        privs=None,
+        grantee=None,
+        privilegeObjectType=None,
+        objectId=None,
+    ):
         self.objectName = objectName
         self.objectType = objectType
         self.privs = privs
@@ -5563,7 +6693,11 @@ class TDBObject(object):
         self.objectId = objectId
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5573,7 +6707,11 @@ class TDBObject(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.objectName = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.objectName = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -5593,7 +6731,11 @@ class TDBObject(object):
                     iprot.skip(ftype)
             elif fid == 4:
                 if ftype == TType.STRING:
-                    self.grantee = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.grantee = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 5:
@@ -5613,12 +6755,18 @@ class TDBObject(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDBObject')
         if self.objectName is not None:
             oprot.writeFieldBegin('objectName', TType.STRING, 1)
-            oprot.writeString(self.objectName.encode('utf-8') if sys.version_info[0] == 2 else self.objectName)
+            oprot.writeString(
+                self.objectName.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.objectName
+            )
             oprot.writeFieldEnd()
         if self.objectType is not None:
             oprot.writeFieldBegin('objectType', TType.I32, 2)
@@ -5633,7 +6781,11 @@ class TDBObject(object):
             oprot.writeFieldEnd()
         if self.grantee is not None:
             oprot.writeFieldBegin('grantee', TType.STRING, 4)
-            oprot.writeString(self.grantee.encode('utf-8') if sys.version_info[0] == 2 else self.grantee)
+            oprot.writeString(
+                self.grantee.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.grantee
+            )
             oprot.writeFieldEnd()
         if self.privilegeObjectType is not None:
             oprot.writeFieldBegin('privilegeObjectType', TType.I32, 5)
@@ -5650,12 +6802,14 @@ class TDBObject(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5670,14 +6824,22 @@ class TDashboardGrantees(object):
 
     """
 
-
-    def __init__(self, name=None, is_user=None, permissions=None,):
+    def __init__(
+        self,
+        name=None,
+        is_user=None,
+        permissions=None,
+    ):
         self.name = name
         self.is_user = is_user
         self.permissions = permissions
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5687,7 +6849,11 @@ class TDashboardGrantees(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -5708,12 +6874,18 @@ class TDashboardGrantees(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDashboardGrantees')
         if self.name is not None:
             oprot.writeFieldBegin('name', TType.STRING, 1)
-            oprot.writeString(self.name.encode('utf-8') if sys.version_info[0] == 2 else self.name)
+            oprot.writeString(
+                self.name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.name
+            )
             oprot.writeFieldEnd()
         if self.is_user is not None:
             oprot.writeFieldBegin('is_user', TType.BOOL, 2)
@@ -5730,12 +6902,14 @@ class TDashboardGrantees(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5756,8 +6930,18 @@ class TDashboard(object):
 
     """
 
-
-    def __init__(self, dashboard_name=None, dashboard_state=None, image_hash=None, update_time=None, dashboard_metadata=None, dashboard_id=None, dashboard_owner=None, is_dash_shared=None, dashboard_permissions=None,):
+    def __init__(
+        self,
+        dashboard_name=None,
+        dashboard_state=None,
+        image_hash=None,
+        update_time=None,
+        dashboard_metadata=None,
+        dashboard_id=None,
+        dashboard_owner=None,
+        is_dash_shared=None,
+        dashboard_permissions=None,
+    ):
         self.dashboard_name = dashboard_name
         self.dashboard_state = dashboard_state
         self.image_hash = image_hash
@@ -5769,7 +6953,11 @@ class TDashboard(object):
         self.dashboard_permissions = dashboard_permissions
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5779,27 +6967,47 @@ class TDashboard(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.dashboard_name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.dashboard_name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.dashboard_state = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.dashboard_state = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
                 if ftype == TType.STRING:
-                    self.image_hash = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.image_hash = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 4:
                 if ftype == TType.STRING:
-                    self.update_time = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.update_time = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 5:
                 if ftype == TType.STRING:
-                    self.dashboard_metadata = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.dashboard_metadata = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 6:
@@ -5809,7 +7017,11 @@ class TDashboard(object):
                     iprot.skip(ftype)
             elif fid == 7:
                 if ftype == TType.STRING:
-                    self.dashboard_owner = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.dashboard_owner = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 8:
@@ -5830,28 +7042,50 @@ class TDashboard(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TDashboard')
         if self.dashboard_name is not None:
             oprot.writeFieldBegin('dashboard_name', TType.STRING, 1)
-            oprot.writeString(self.dashboard_name.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_name)
+            oprot.writeString(
+                self.dashboard_name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.dashboard_name
+            )
             oprot.writeFieldEnd()
         if self.dashboard_state is not None:
             oprot.writeFieldBegin('dashboard_state', TType.STRING, 2)
-            oprot.writeString(self.dashboard_state.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_state)
+            oprot.writeString(
+                self.dashboard_state.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.dashboard_state
+            )
             oprot.writeFieldEnd()
         if self.image_hash is not None:
             oprot.writeFieldBegin('image_hash', TType.STRING, 3)
-            oprot.writeString(self.image_hash.encode('utf-8') if sys.version_info[0] == 2 else self.image_hash)
+            oprot.writeString(
+                self.image_hash.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.image_hash
+            )
             oprot.writeFieldEnd()
         if self.update_time is not None:
             oprot.writeFieldBegin('update_time', TType.STRING, 4)
-            oprot.writeString(self.update_time.encode('utf-8') if sys.version_info[0] == 2 else self.update_time)
+            oprot.writeString(
+                self.update_time.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.update_time
+            )
             oprot.writeFieldEnd()
         if self.dashboard_metadata is not None:
             oprot.writeFieldBegin('dashboard_metadata', TType.STRING, 5)
-            oprot.writeString(self.dashboard_metadata.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_metadata)
+            oprot.writeString(
+                self.dashboard_metadata.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.dashboard_metadata
+            )
             oprot.writeFieldEnd()
         if self.dashboard_id is not None:
             oprot.writeFieldBegin('dashboard_id', TType.I32, 6)
@@ -5859,7 +7093,11 @@ class TDashboard(object):
             oprot.writeFieldEnd()
         if self.dashboard_owner is not None:
             oprot.writeFieldBegin('dashboard_owner', TType.STRING, 7)
-            oprot.writeString(self.dashboard_owner.encode('utf-8') if sys.version_info[0] == 2 else self.dashboard_owner)
+            oprot.writeString(
+                self.dashboard_owner.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.dashboard_owner
+            )
             oprot.writeFieldEnd()
         if self.is_dash_shared is not None:
             oprot.writeFieldBegin('is_dash_shared', TType.BOOL, 8)
@@ -5876,12 +7114,14 @@ class TDashboard(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5894,12 +7134,18 @@ class TLicenseInfo(object):
 
     """
 
-
-    def __init__(self, claims=None,):
+    def __init__(
+        self,
+        claims=None,
+    ):
         self.claims = claims
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5912,7 +7158,11 @@ class TLicenseInfo(object):
                     self.claims = []
                     (_etype258, _size255) = iprot.readListBegin()
                     for _i259 in range(_size255):
-                        _elem260 = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                        _elem260 = (
+                            iprot.readString().decode('utf-8')
+                            if sys.version_info[0] == 2
+                            else iprot.readString()
+                        )
                         self.claims.append(_elem260)
                     iprot.readListEnd()
                 else:
@@ -5924,14 +7174,20 @@ class TLicenseInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TLicenseInfo')
         if self.claims is not None:
             oprot.writeFieldBegin('claims', TType.LIST, 1)
             oprot.writeListBegin(TType.STRING, len(self.claims))
             for iter261 in self.claims:
-                oprot.writeString(iter261.encode('utf-8') if sys.version_info[0] == 2 else iter261)
+                oprot.writeString(
+                    iter261.encode('utf-8')
+                    if sys.version_info[0] == 2
+                    else iter261
+                )
             oprot.writeListEnd()
             oprot.writeFieldEnd()
         oprot.writeFieldStop()
@@ -5941,12 +7197,14 @@ class TLicenseInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -5962,15 +7220,24 @@ class TSessionInfo(object):
 
     """
 
-
-    def __init__(self, user=None, database=None, start_time=None, is_super=None,):
+    def __init__(
+        self,
+        user=None,
+        database=None,
+        start_time=None,
+        is_super=None,
+    ):
         self.user = user
         self.database = database
         self.start_time = start_time
         self.is_super = is_super
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -5980,12 +7247,20 @@ class TSessionInfo(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.user = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.user = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.database = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.database = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 3:
@@ -6005,16 +7280,26 @@ class TSessionInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TSessionInfo')
         if self.user is not None:
             oprot.writeFieldBegin('user', TType.STRING, 1)
-            oprot.writeString(self.user.encode('utf-8') if sys.version_info[0] == 2 else self.user)
+            oprot.writeString(
+                self.user.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.user
+            )
             oprot.writeFieldEnd()
         if self.database is not None:
             oprot.writeFieldBegin('database', TType.STRING, 2)
-            oprot.writeString(self.database.encode('utf-8') if sys.version_info[0] == 2 else self.database)
+            oprot.writeString(
+                self.database.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.database
+            )
             oprot.writeFieldEnd()
         if self.start_time is not None:
             oprot.writeFieldBegin('start_time', TType.I64, 3)
@@ -6031,12 +7316,14 @@ class TSessionInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -6050,13 +7337,20 @@ class TGeoFileLayerInfo(object):
 
     """
 
-
-    def __init__(self, name=None, contents=None,):
+    def __init__(
+        self,
+        name=None,
+        contents=None,
+    ):
         self.name = name
         self.contents = contents
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -6066,7 +7360,11 @@ class TGeoFileLayerInfo(object):
                 break
             if fid == 1:
                 if ftype == TType.STRING:
-                    self.name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 2:
@@ -6081,12 +7379,18 @@ class TGeoFileLayerInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TGeoFileLayerInfo')
         if self.name is not None:
             oprot.writeFieldBegin('name', TType.STRING, 1)
-            oprot.writeString(self.name.encode('utf-8') if sys.version_info[0] == 2 else self.name)
+            oprot.writeString(
+                self.name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.name
+            )
             oprot.writeFieldEnd()
         if self.contents is not None:
             oprot.writeFieldBegin('contents', TType.I32, 2)
@@ -6099,12 +7403,14 @@ class TGeoFileLayerInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -6119,14 +7425,22 @@ class TTableEpochInfo(object):
 
     """
 
-
-    def __init__(self, table_id=None, table_epoch=None, leaf_index=None,):
+    def __init__(
+        self,
+        table_id=None,
+        table_epoch=None,
+        leaf_index=None,
+    ):
         self.table_id = table_id
         self.table_epoch = table_epoch
         self.leaf_index = leaf_index
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -6156,7 +7470,9 @@ class TTableEpochInfo(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TTableEpochInfo')
         if self.table_id is not None:
@@ -6178,12 +7494,14 @@ class TTableEpochInfo(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -6201,8 +7519,15 @@ class TCustomExpression(object):
 
     """
 
-
-    def __init__(self, id=None, name=None, expression_json=None, data_source_type=None, data_source_id=None, is_deleted=None,):
+    def __init__(
+        self,
+        id=None,
+        name=None,
+        expression_json=None,
+        data_source_type=None,
+        data_source_id=None,
+        is_deleted=None,
+    ):
         self.id = id
         self.name = name
         self.expression_json = expression_json
@@ -6211,7 +7536,11 @@ class TCustomExpression(object):
         self.is_deleted = is_deleted
 
     def read(self, iprot):
-        if iprot._fast_decode is not None and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None:
+        if (
+            iprot._fast_decode is not None
+            and isinstance(iprot.trans, TTransport.CReadableTransport)
+            and self.thrift_spec is not None
+        ):
             iprot._fast_decode(self, iprot, [self.__class__, self.thrift_spec])
             return
         iprot.readStructBegin()
@@ -6226,12 +7555,20 @@ class TCustomExpression(object):
                     iprot.skip(ftype)
             elif fid == 2:
                 if ftype == TType.STRING:
-                    self.name = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.name = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 4:
                 if ftype == TType.STRING:
-                    self.expression_json = iprot.readString().decode('utf-8') if sys.version_info[0] == 2 else iprot.readString()
+                    self.expression_json = (
+                        iprot.readString().decode('utf-8')
+                        if sys.version_info[0] == 2
+                        else iprot.readString()
+                    )
                 else:
                     iprot.skip(ftype)
             elif fid == 5:
@@ -6256,7 +7593,9 @@ class TCustomExpression(object):
 
     def write(self, oprot):
         if oprot._fast_encode is not None and self.thrift_spec is not None:
-            oprot.trans.write(oprot._fast_encode(self, [self.__class__, self.thrift_spec]))
+            oprot.trans.write(
+                oprot._fast_encode(self, [self.__class__, self.thrift_spec])
+            )
             return
         oprot.writeStructBegin('TCustomExpression')
         if self.id is not None:
@@ -6265,11 +7604,19 @@ class TCustomExpression(object):
             oprot.writeFieldEnd()
         if self.name is not None:
             oprot.writeFieldBegin('name', TType.STRING, 2)
-            oprot.writeString(self.name.encode('utf-8') if sys.version_info[0] == 2 else self.name)
+            oprot.writeString(
+                self.name.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.name
+            )
             oprot.writeFieldEnd()
         if self.expression_json is not None:
             oprot.writeFieldBegin('expression_json', TType.STRING, 4)
-            oprot.writeString(self.expression_json.encode('utf-8') if sys.version_info[0] == 2 else self.expression_json)
+            oprot.writeString(
+                self.expression_json.encode('utf-8')
+                if sys.version_info[0] == 2
+                else self.expression_json
+            )
             oprot.writeFieldEnd()
         if self.data_source_type is not None:
             oprot.writeFieldBegin('data_source_type', TType.I32, 5)
@@ -6290,525 +7637,2221 @@ class TCustomExpression(object):
         return
 
     def __repr__(self):
-        L = ['%s=%r' % (key, value)
-             for key, value in self.__dict__.items()]
+        L = ['%s=%r' % (key, value) for key, value in self.__dict__.items()]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
     def __eq__(self, other):
-        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+        return (
+            isinstance(other, self.__class__)
+            and self.__dict__ == other.__dict__
+        )
 
     def __ne__(self, other):
         return not (self == other)
+
+
 all_structs.append(TDatumVal)
 TDatumVal.thrift_spec = (
     None,  # 0
-    (1, TType.I64, 'int_val', None, None, ),  # 1
-    (2, TType.DOUBLE, 'real_val', None, None, ),  # 2
-    (3, TType.STRING, 'str_val', 'UTF8', None, ),  # 3
-    (4, TType.LIST, 'arr_val', (TType.STRUCT, [TDatum, None], False), None, ),  # 4
+    (
+        1,
+        TType.I64,
+        'int_val',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.DOUBLE,
+        'real_val',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRING,
+        'str_val',
+        'UTF8',
+        None,
+    ),  # 3
+    (
+        4,
+        TType.LIST,
+        'arr_val',
+        (TType.STRUCT, [TDatum, None], False),
+        None,
+    ),  # 4
 )
 all_structs.append(TDatum)
 TDatum.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'val', [TDatumVal, None], None, ),  # 1
-    (2, TType.BOOL, 'is_null', None, None, ),  # 2
+    (
+        1,
+        TType.STRUCT,
+        'val',
+        [TDatumVal, None],
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'is_null',
+        None,
+        None,
+    ),  # 2
 )
 all_structs.append(TStringValue)
 TStringValue.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'str_val', 'UTF8', None, ),  # 1
-    (2, TType.BOOL, 'is_null', None, None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'str_val',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'is_null',
+        None,
+        None,
+    ),  # 2
 )
 all_structs.append(TColumnType)
 TColumnType.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'col_name', 'UTF8', None, ),  # 1
-    (2, TType.STRUCT, 'col_type', [heavydb.common.ttypes.TTypeInfo, None], None,),  # 2
-    (3, TType.BOOL, 'is_reserved_keyword', None, None, ),  # 3
-    (4, TType.STRING, 'src_name', 'UTF8', None, ),  # 4
-    (5, TType.BOOL, 'is_system', None, None, ),  # 5
-    (6, TType.BOOL, 'is_physical', None, None, ),  # 6
-    (7, TType.I64, 'col_id', None, None, ),  # 7
-    (8, TType.STRING, 'default_value', 'UTF8', None, ),  # 8
+    (
+        1,
+        TType.STRING,
+        'col_name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRUCT,
+        'col_type',
+        [heavydb.common.ttypes.TTypeInfo, None],
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'is_reserved_keyword',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRING,
+        'src_name',
+        'UTF8',
+        None,
+    ),  # 4
+    (
+        5,
+        TType.BOOL,
+        'is_system',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.BOOL,
+        'is_physical',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.I64,
+        'col_id',
+        None,
+        None,
+    ),  # 7
+    (
+        8,
+        TType.STRING,
+        'default_value',
+        'UTF8',
+        None,
+    ),  # 8
 )
 all_structs.append(TRow)
 TRow.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'cols', (TType.STRUCT, [TDatum, None], False), None, ),  # 1
+    (
+        1,
+        TType.LIST,
+        'cols',
+        (TType.STRUCT, [TDatum, None], False),
+        None,
+    ),  # 1
 )
 all_structs.append(TColumnData)
 TColumnData.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'int_col', (TType.I64, None, False), None, ),  # 1
-    (2, TType.LIST, 'real_col', (TType.DOUBLE, None, False), None, ),  # 2
-    (3, TType.LIST, 'str_col', (TType.STRING, 'UTF8', False), None, ),  # 3
-    (4, TType.LIST, 'arr_col', (TType.STRUCT, [TColumn, None], False), None, ),  # 4
+    (
+        1,
+        TType.LIST,
+        'int_col',
+        (TType.I64, None, False),
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'real_col',
+        (TType.DOUBLE, None, False),
+        None,
+    ),  # 2
+    (
+        3,
+        TType.LIST,
+        'str_col',
+        (TType.STRING, 'UTF8', False),
+        None,
+    ),  # 3
+    (
+        4,
+        TType.LIST,
+        'arr_col',
+        (TType.STRUCT, [TColumn, None], False),
+        None,
+    ),  # 4
 )
 all_structs.append(TColumn)
 TColumn.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'data', [TColumnData, None], None, ),  # 1
-    (2, TType.LIST, 'nulls', (TType.BOOL, None, False), None, ),  # 2
+    (
+        1,
+        TType.STRUCT,
+        'data',
+        [TColumnData, None],
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'nulls',
+        (TType.BOOL, None, False),
+        None,
+    ),  # 2
 )
 all_structs.append(TStringRow)
 TStringRow.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'cols', (TType.STRUCT, [TStringValue, None], False), None, ),  # 1
+    (
+        1,
+        TType.LIST,
+        'cols',
+        (TType.STRUCT, [TStringValue, None], False),
+        None,
+    ),  # 1
 )
 all_structs.append(TKrb5Session)
 TKrb5Session.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'sessionId', 'UTF8', None, ),  # 1
-    (2, TType.STRING, 'krbToken', 'UTF8', None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'sessionId',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'krbToken',
+        'UTF8',
+        None,
+    ),  # 2
 )
 all_structs.append(TStepResult)
 TStepResult.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'serialized_rows', [heavydb.serialized_result_set.ttypes.TSerializedRows, None], None,),  # 1
-    (2, TType.BOOL, 'execution_finished', None, None, ),  # 2
-    (3, TType.I32, 'merge_type', None, None, ),  # 3
-    (4, TType.BOOL, 'sharded', None, None, ),  # 4
-    (5, TType.LIST, 'row_desc', (TType.STRUCT, [TColumnType, None], False), None, ),  # 5
-    (6, TType.I32, 'node_id', None, None, ),  # 6
+    (
+        1,
+        TType.STRUCT,
+        'serialized_rows',
+        [heavydb.serialized_result_set.ttypes.TSerializedRows, None],
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'execution_finished',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I32,
+        'merge_type',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'sharded',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.LIST,
+        'row_desc',
+        (TType.STRUCT, [TColumnType, None], False),
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I32,
+        'node_id',
+        None,
+        None,
+    ),  # 6
 )
 all_structs.append(TRowSet)
 TRowSet.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'row_desc', (TType.STRUCT, [TColumnType, None], False), None, ),  # 1
-    (2, TType.LIST, 'rows', (TType.STRUCT, [TRow, None], False), None, ),  # 2
-    (3, TType.LIST, 'columns', (TType.STRUCT, [TColumn, None], False), None, ),  # 3
-    (4, TType.BOOL, 'is_columnar', None, None, ),  # 4
+    (
+        1,
+        TType.LIST,
+        'row_desc',
+        (TType.STRUCT, [TColumnType, None], False),
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'rows',
+        (TType.STRUCT, [TRow, None], False),
+        None,
+    ),  # 2
+    (
+        3,
+        TType.LIST,
+        'columns',
+        (TType.STRUCT, [TColumn, None], False),
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'is_columnar',
+        None,
+        None,
+    ),  # 4
 )
 all_structs.append(TQueryResult)
 TQueryResult.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'row_set', [TRowSet, None], None, ),  # 1
-    (2, TType.I64, 'execution_time_ms', None, None, ),  # 2
-    (3, TType.I64, 'total_time_ms', None, None, ),  # 3
-    (4, TType.STRING, 'nonce', 'UTF8', None, ),  # 4
-    (5, TType.STRING, 'debug', 'UTF8', None, ),  # 5
-    (6, TType.BOOL, 'success', None, True, ),  # 6
-    (7, TType.I32, 'query_type', None, 0, ),  # 7
+    (
+        1,
+        TType.STRUCT,
+        'row_set',
+        [TRowSet, None],
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'execution_time_ms',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'total_time_ms',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRING,
+        'nonce',
+        'UTF8',
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'debug',
+        'UTF8',
+        None,
+    ),  # 5
+    (
+        6,
+        TType.BOOL,
+        'success',
+        None,
+        True,
+    ),  # 6
+    (
+        7,
+        TType.I32,
+        'query_type',
+        None,
+        0,
+    ),  # 7
 )
 all_structs.append(TDataFrame)
 TDataFrame.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'sm_handle', 'BINARY', None, ),  # 1
-    (2, TType.I64, 'sm_size', None, None, ),  # 2
-    (3, TType.STRING, 'df_handle', 'BINARY', None, ),  # 3
-    (4, TType.I64, 'df_size', None, None, ),  # 4
-    (5, TType.I64, 'execution_time_ms', None, None, ),  # 5
-    (6, TType.I64, 'arrow_conversion_time_ms', None, None, ),  # 6
-    (7, TType.STRING, 'df_buffer', 'BINARY', None, ),  # 7
+    (
+        1,
+        TType.STRING,
+        'sm_handle',
+        'BINARY',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'sm_size',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRING,
+        'df_handle',
+        'BINARY',
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'df_size',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I64,
+        'execution_time_ms',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I64,
+        'arrow_conversion_time_ms',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.STRING,
+        'df_buffer',
+        'BINARY',
+        None,
+    ),  # 7
 )
 all_structs.append(TDBInfo)
 TDBInfo.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'db_name', 'UTF8', None, ),  # 1
-    (2, TType.STRING, 'db_owner', 'UTF8', None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'db_name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'db_owner',
+        'UTF8',
+        None,
+    ),  # 2
 )
 all_structs.append(TDBException)
 TDBException.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'error_msg', 'UTF8', None, ),  # 1
+    (
+        1,
+        TType.STRING,
+        'error_msg',
+        'UTF8',
+        None,
+    ),  # 1
 )
 all_structs.append(TCopyParams)
 TCopyParams.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'delimiter', 'UTF8', None, ),  # 1
-    (2, TType.STRING, 'null_str', 'UTF8', None, ),  # 2
-    (3, TType.I32, 'has_header', None, 0, ),  # 3
-    (4, TType.BOOL, 'quoted', None, None, ),  # 4
-    (5, TType.STRING, 'quote', 'UTF8', None, ),  # 5
-    (6, TType.STRING, 'escape', 'UTF8', None, ),  # 6
-    (7, TType.STRING, 'line_delim', 'UTF8', None, ),  # 7
-    (8, TType.STRING, 'array_delim', 'UTF8', None, ),  # 8
-    (9, TType.STRING, 'array_begin', 'UTF8', None, ),  # 9
-    (10, TType.STRING, 'array_end', 'UTF8', None, ),  # 10
-    (11, TType.I32, 'threads', None, None, ),  # 11
-    (12, TType.I32, 'file_type', None, 0, ),  # 12
-    (13, TType.STRING, 's3_access_key', 'UTF8', None, ),  # 13
-    (14, TType.STRING, 's3_secret_key', 'UTF8', None, ),  # 14
-    (15, TType.STRING, 's3_region', 'UTF8', None, ),  # 15
-    (16, TType.I32, 'geo_coords_encoding', None, 6, ),  # 16
-    (17, TType.I32, 'geo_coords_comp_param', None, 32, ),  # 17
-    (18, TType.I32, 'geo_coords_type', None, 18, ),  # 18
-    (19, TType.I32, 'geo_coords_srid', None, 4326, ),  # 19
-    (20, TType.BOOL, 'sanitize_column_names', None, True, ),  # 20
-    (21, TType.STRING, 'geo_layer_name', 'UTF8', None, ),  # 21
-    (22, TType.STRING, 's3_endpoint', 'UTF8', None, ),  # 22
-    (23, TType.BOOL, 'geo_assign_render_groups', None, True, ),  # 23
-    (24, TType.BOOL, 'geo_explode_collections', None, False, ),  # 24
-    (25, TType.I32, 'source_srid', None, 0, ),  # 25
-    (26, TType.STRING, 's3_session_token', 'UTF8', None, ),  # 26
+    (
+        1,
+        TType.STRING,
+        'delimiter',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'null_str',
+        'UTF8',
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I32,
+        'has_header',
+        None,
+        0,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'quoted',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'quote',
+        'UTF8',
+        None,
+    ),  # 5
+    (
+        6,
+        TType.STRING,
+        'escape',
+        'UTF8',
+        None,
+    ),  # 6
+    (
+        7,
+        TType.STRING,
+        'line_delim',
+        'UTF8',
+        None,
+    ),  # 7
+    (
+        8,
+        TType.STRING,
+        'array_delim',
+        'UTF8',
+        None,
+    ),  # 8
+    (
+        9,
+        TType.STRING,
+        'array_begin',
+        'UTF8',
+        None,
+    ),  # 9
+    (
+        10,
+        TType.STRING,
+        'array_end',
+        'UTF8',
+        None,
+    ),  # 10
+    (
+        11,
+        TType.I32,
+        'threads',
+        None,
+        None,
+    ),  # 11
+    (
+        12,
+        TType.I32,
+        'file_type',
+        None,
+        0,
+    ),  # 12
+    (
+        13,
+        TType.STRING,
+        's3_access_key',
+        'UTF8',
+        None,
+    ),  # 13
+    (
+        14,
+        TType.STRING,
+        's3_secret_key',
+        'UTF8',
+        None,
+    ),  # 14
+    (
+        15,
+        TType.STRING,
+        's3_region',
+        'UTF8',
+        None,
+    ),  # 15
+    (
+        16,
+        TType.I32,
+        'geo_coords_encoding',
+        None,
+        6,
+    ),  # 16
+    (
+        17,
+        TType.I32,
+        'geo_coords_comp_param',
+        None,
+        32,
+    ),  # 17
+    (
+        18,
+        TType.I32,
+        'geo_coords_type',
+        None,
+        18,
+    ),  # 18
+    (
+        19,
+        TType.I32,
+        'geo_coords_srid',
+        None,
+        4326,
+    ),  # 19
+    (
+        20,
+        TType.BOOL,
+        'sanitize_column_names',
+        None,
+        True,
+    ),  # 20
+    (
+        21,
+        TType.STRING,
+        'geo_layer_name',
+        'UTF8',
+        None,
+    ),  # 21
+    (
+        22,
+        TType.STRING,
+        's3_endpoint',
+        'UTF8',
+        None,
+    ),  # 22
+    (
+        23,
+        TType.BOOL,
+        'geo_assign_render_groups',
+        None,
+        True,
+    ),  # 23
+    (
+        24,
+        TType.BOOL,
+        'geo_explode_collections',
+        None,
+        False,
+    ),  # 24
+    (
+        25,
+        TType.I32,
+        'source_srid',
+        None,
+        0,
+    ),  # 25
+    (
+        26,
+        TType.STRING,
+        's3_session_token',
+        'UTF8',
+        None,
+    ),  # 26
 )
 all_structs.append(TCreateParams)
 TCreateParams.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'is_replicated', None, None, ),  # 1
+    (
+        1,
+        TType.BOOL,
+        'is_replicated',
+        None,
+        None,
+    ),  # 1
 )
 all_structs.append(TDetectResult)
 TDetectResult.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'row_set', [TRowSet, None], None, ),  # 1
-    (2, TType.STRUCT, 'copy_params', [TCopyParams, None], None, ),  # 2
+    (
+        1,
+        TType.STRUCT,
+        'row_set',
+        [TRowSet, None],
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRUCT,
+        'copy_params',
+        [TCopyParams, None],
+        None,
+    ),  # 2
 )
 all_structs.append(TImportStatus)
 TImportStatus.thrift_spec = (
     None,  # 0
-    (1, TType.I64, 'elapsed', None, None, ),  # 1
-    (2, TType.I64, 'rows_completed', None, None, ),  # 2
-    (3, TType.I64, 'rows_estimated', None, None, ),  # 3
-    (4, TType.I64, 'rows_rejected', None, None, ),  # 4
+    (
+        1,
+        TType.I64,
+        'elapsed',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'rows_completed',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'rows_estimated',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'rows_rejected',
+        None,
+        None,
+    ),  # 4
 )
 all_structs.append(TFrontendView)
 TFrontendView.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'view_name', 'UTF8', None, ),  # 1
-    (2, TType.STRING, 'view_state', 'UTF8', None, ),  # 2
-    (3, TType.STRING, 'image_hash', 'UTF8', None, ),  # 3
-    (4, TType.STRING, 'update_time', 'UTF8', None, ),  # 4
-    (5, TType.STRING, 'view_metadata', 'UTF8', None, ),  # 5
+    (
+        1,
+        TType.STRING,
+        'view_name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'view_state',
+        'UTF8',
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRING,
+        'image_hash',
+        'UTF8',
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRING,
+        'update_time',
+        'UTF8',
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'view_metadata',
+        'UTF8',
+        None,
+    ),  # 5
 )
 all_structs.append(TServerStatus)
 TServerStatus.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'read_only', None, None, ),  # 1
-    (2, TType.STRING, 'version', 'UTF8', None, ),  # 2
-    (3, TType.BOOL, 'rendering_enabled', None, None, ),  # 3
-    (4, TType.I64, 'start_time', None, None, ),  # 4
-    (5, TType.STRING, 'edition', 'UTF8', None, ),  # 5
-    (6, TType.STRING, 'host_name', 'UTF8', None, ),  # 6
-    (7, TType.BOOL, 'poly_rendering_enabled', None, None, ),  # 7
-    (8, TType.I32, 'role', None, None, ),  # 8
-    (9, TType.STRING, 'renderer_status_json', 'UTF8', None, ),  # 9
+    (
+        1,
+        TType.BOOL,
+        'read_only',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'version',
+        'UTF8',
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'rendering_enabled',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'start_time',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'edition',
+        'UTF8',
+        None,
+    ),  # 5
+    (
+        6,
+        TType.STRING,
+        'host_name',
+        'UTF8',
+        None,
+    ),  # 6
+    (
+        7,
+        TType.BOOL,
+        'poly_rendering_enabled',
+        None,
+        None,
+    ),  # 7
+    (
+        8,
+        TType.I32,
+        'role',
+        None,
+        None,
+    ),  # 8
+    (
+        9,
+        TType.STRING,
+        'renderer_status_json',
+        'UTF8',
+        None,
+    ),  # 9
 )
 all_structs.append(TPixel)
 TPixel.thrift_spec = (
     None,  # 0
-    (1, TType.I64, 'x', None, None, ),  # 1
-    (2, TType.I64, 'y', None, None, ),  # 2
+    (
+        1,
+        TType.I64,
+        'x',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'y',
+        None,
+        None,
+    ),  # 2
 )
 all_structs.append(TPixelTableRowResult)
 TPixelTableRowResult.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'pixel', [TPixel, None], None, ),  # 1
-    (2, TType.STRING, 'vega_table_name', 'UTF8', None, ),  # 2
-    (3, TType.LIST, 'table_id', (TType.I64, None, False), None, ),  # 3
-    (4, TType.LIST, 'row_id', (TType.I64, None, False), None, ),  # 4
-    (5, TType.STRUCT, 'row_set', [TRowSet, None], None, ),  # 5
-    (6, TType.STRING, 'nonce', 'UTF8', None, ),  # 6
+    (
+        1,
+        TType.STRUCT,
+        'pixel',
+        [TPixel, None],
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'vega_table_name',
+        'UTF8',
+        None,
+    ),  # 2
+    (
+        3,
+        TType.LIST,
+        'table_id',
+        (TType.I64, None, False),
+        None,
+    ),  # 3
+    (
+        4,
+        TType.LIST,
+        'row_id',
+        (TType.I64, None, False),
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRUCT,
+        'row_set',
+        [TRowSet, None],
+        None,
+    ),  # 5
+    (
+        6,
+        TType.STRING,
+        'nonce',
+        'UTF8',
+        None,
+    ),  # 6
 )
 all_structs.append(TRenderResult)
 TRenderResult.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'image', 'BINARY', None, ),  # 1
-    (2, TType.STRING, 'nonce', 'UTF8', None, ),  # 2
-    (3, TType.I64, 'execution_time_ms', None, None, ),  # 3
-    (4, TType.I64, 'render_time_ms', None, None, ),  # 4
-    (5, TType.I64, 'total_time_ms', None, None, ),  # 5
-    (6, TType.STRING, 'vega_metadata', 'UTF8', None, ),  # 6
+    (
+        1,
+        TType.STRING,
+        'image',
+        'BINARY',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'nonce',
+        'UTF8',
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'execution_time_ms',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'render_time_ms',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I64,
+        'total_time_ms',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.STRING,
+        'vega_metadata',
+        'UTF8',
+        None,
+    ),  # 6
 )
 all_structs.append(TGpuSpecification)
 TGpuSpecification.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'num_sm', None, None, ),  # 1
-    (2, TType.I64, 'clock_frequency_kHz', None, None, ),  # 2
-    (3, TType.I64, 'memory', None, None, ),  # 3
-    (4, TType.I16, 'compute_capability_major', None, None, ),  # 4
-    (5, TType.I16, 'compute_capability_minor', None, None, ),  # 5
+    (
+        1,
+        TType.I32,
+        'num_sm',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'clock_frequency_kHz',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'memory',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I16,
+        'compute_capability_major',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I16,
+        'compute_capability_minor',
+        None,
+        None,
+    ),  # 5
 )
 all_structs.append(THardwareInfo)
 THardwareInfo.thrift_spec = (
     None,  # 0
-    (1, TType.I16, 'num_gpu_hw', None, None, ),  # 1
-    (2, TType.I16, 'num_cpu_hw', None, None, ),  # 2
-    (3, TType.I16, 'num_gpu_allocated', None, None, ),  # 3
-    (4, TType.I16, 'start_gpu', None, None, ),  # 4
-    (5, TType.STRING, 'host_name', 'UTF8', None, ),  # 5
-    (6, TType.LIST, 'gpu_info', (TType.STRUCT, [TGpuSpecification, None], False), None, ),  # 6
+    (
+        1,
+        TType.I16,
+        'num_gpu_hw',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I16,
+        'num_cpu_hw',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I16,
+        'num_gpu_allocated',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I16,
+        'start_gpu',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'host_name',
+        'UTF8',
+        None,
+    ),  # 5
+    (
+        6,
+        TType.LIST,
+        'gpu_info',
+        (TType.STRUCT, [TGpuSpecification, None], False),
+        None,
+    ),  # 6
 )
 all_structs.append(TClusterHardwareInfo)
 TClusterHardwareInfo.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'hardware_info', (TType.STRUCT, [THardwareInfo, None], False), None, ),  # 1
+    (
+        1,
+        TType.LIST,
+        'hardware_info',
+        (TType.STRUCT, [THardwareInfo, None], False),
+        None,
+    ),  # 1
 )
 all_structs.append(TMemoryData)
 TMemoryData.thrift_spec = (
     None,  # 0
-    (1, TType.I64, 'slab', None, None, ),  # 1
-    (2, TType.I32, 'start_page', None, None, ),  # 2
-    (3, TType.I64, 'num_pages', None, None, ),  # 3
-    (4, TType.I32, 'touch', None, None, ),  # 4
-    (5, TType.LIST, 'chunk_key', (TType.I64, None, False), None, ),  # 5
-    (6, TType.I32, 'buffer_epoch', None, None, ),  # 6
-    (7, TType.BOOL, 'is_free', None, None, ),  # 7
+    (
+        1,
+        TType.I64,
+        'slab',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'start_page',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'num_pages',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I32,
+        'touch',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.LIST,
+        'chunk_key',
+        (TType.I64, None, False),
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I32,
+        'buffer_epoch',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.BOOL,
+        'is_free',
+        None,
+        None,
+    ),  # 7
 )
 all_structs.append(TNodeMemoryInfo)
 TNodeMemoryInfo.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'host_name', 'UTF8', None, ),  # 1
-    (2, TType.I64, 'page_size', None, None, ),  # 2
-    (3, TType.I64, 'max_num_pages', None, None, ),  # 3
-    (4, TType.I64, 'num_pages_allocated', None, None, ),  # 4
-    (5, TType.BOOL, 'is_allocation_capped', None, None, ),  # 5
-    (6, TType.LIST, 'node_memory_data', (TType.STRUCT, [TMemoryData, None], False), None, ),  # 6
+    (
+        1,
+        TType.STRING,
+        'host_name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'page_size',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'max_num_pages',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'num_pages_allocated',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.BOOL,
+        'is_allocation_capped',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.LIST,
+        'node_memory_data',
+        (TType.STRUCT, [TMemoryData, None], False),
+        None,
+    ),  # 6
 )
 all_structs.append(TTableMeta)
 TTableMeta.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'table_name', 'UTF8', None, ),  # 1
-    (2, TType.I64, 'num_cols', None, None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'table_name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'num_cols',
+        None,
+        None,
+    ),  # 2
     None,  # 3
-    (4, TType.BOOL, 'is_view', None, None, ),  # 4
-    (5, TType.BOOL, 'is_replicated', None, None, ),  # 5
-    (6, TType.I64, 'shard_count', None, None, ),  # 6
-    (7, TType.I64, 'max_rows', None, None, ),  # 7
-    (8, TType.I64, 'table_id', None, None, ),  # 8
-    (9, TType.I64, 'max_table_id', None, None, ),  # 9
-    (10, TType.LIST, 'col_types', (TType.STRUCT, [heavydb.common.ttypes.TTypeInfo, None], False), None,),  # 10
-    (11, TType.LIST, 'col_names', (TType.STRING, 'UTF8', False), None, ),  # 11
+    (
+        4,
+        TType.BOOL,
+        'is_view',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.BOOL,
+        'is_replicated',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I64,
+        'shard_count',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.I64,
+        'max_rows',
+        None,
+        None,
+    ),  # 7
+    (
+        8,
+        TType.I64,
+        'table_id',
+        None,
+        None,
+    ),  # 8
+    (
+        9,
+        TType.I64,
+        'max_table_id',
+        None,
+        None,
+    ),  # 9
+    (
+        10,
+        TType.LIST,
+        'col_types',
+        (TType.STRUCT, [heavydb.common.ttypes.TTypeInfo, None], False),
+        None,
+    ),  # 10
+    (
+        11,
+        TType.LIST,
+        'col_names',
+        (TType.STRING, 'UTF8', False),
+        None,
+    ),  # 11
 )
 all_structs.append(TTableDetails)
 TTableDetails.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'row_desc', (TType.STRUCT, [TColumnType, None], False), None, ),  # 1
-    (2, TType.I64, 'fragment_size', None, None, ),  # 2
-    (3, TType.I64, 'page_size', None, None, ),  # 3
-    (4, TType.I64, 'max_rows', None, None, ),  # 4
-    (5, TType.STRING, 'view_sql', 'UTF8', None, ),  # 5
-    (6, TType.I64, 'shard_count', None, None, ),  # 6
-    (7, TType.STRING, 'key_metainfo', 'UTF8', None, ),  # 7
-    (8, TType.BOOL, 'is_temporary', None, None, ),  # 8
-    (9, TType.I32, 'partition_detail', None, None, ),  # 9
+    (
+        1,
+        TType.LIST,
+        'row_desc',
+        (TType.STRUCT, [TColumnType, None], False),
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'fragment_size',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'page_size',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'max_rows',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'view_sql',
+        'UTF8',
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I64,
+        'shard_count',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.STRING,
+        'key_metainfo',
+        'UTF8',
+        None,
+    ),  # 7
+    (
+        8,
+        TType.BOOL,
+        'is_temporary',
+        None,
+        None,
+    ),  # 8
+    (
+        9,
+        TType.I32,
+        'partition_detail',
+        None,
+        None,
+    ),  # 9
 )
 all_structs.append(TColumnRange)
 TColumnRange.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'type', None, None, ),  # 1
-    (2, TType.I32, 'col_id', None, None, ),  # 2
-    (3, TType.I32, 'table_id', None, None, ),  # 3
-    (4, TType.BOOL, 'has_nulls', None, None, ),  # 4
-    (5, TType.I64, 'int_min', None, None, ),  # 5
-    (6, TType.I64, 'int_max', None, None, ),  # 6
-    (7, TType.I64, 'bucket', None, None, ),  # 7
-    (8, TType.DOUBLE, 'fp_min', None, None, ),  # 8
-    (9, TType.DOUBLE, 'fp_max', None, None, ),  # 9
+    (
+        1,
+        TType.I32,
+        'type',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'col_id',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I32,
+        'table_id',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'has_nulls',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I64,
+        'int_min',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I64,
+        'int_max',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.I64,
+        'bucket',
+        None,
+        None,
+    ),  # 7
+    (
+        8,
+        TType.DOUBLE,
+        'fp_min',
+        None,
+        None,
+    ),  # 8
+    (
+        9,
+        TType.DOUBLE,
+        'fp_max',
+        None,
+        None,
+    ),  # 9
 )
 all_structs.append(TDictionaryGeneration)
 TDictionaryGeneration.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'dict_id', None, None, ),  # 1
-    (2, TType.I64, 'entry_count', None, None, ),  # 2
+    (
+        1,
+        TType.I32,
+        'dict_id',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'entry_count',
+        None,
+        None,
+    ),  # 2
 )
 all_structs.append(TTableGeneration)
 TTableGeneration.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'table_id', None, None, ),  # 1
-    (2, TType.I64, 'tuple_count', None, None, ),  # 2
-    (3, TType.I64, 'start_rowid', None, None, ),  # 3
+    (
+        1,
+        TType.I32,
+        'table_id',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I64,
+        'tuple_count',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'start_rowid',
+        None,
+        None,
+    ),  # 3
 )
 all_structs.append(TPendingQuery)
 TPendingQuery.thrift_spec = (
     None,  # 0
-    (1, TType.I64, 'id', None, None, ),  # 1
-    (2, TType.LIST, 'column_ranges', (TType.STRUCT, [TColumnRange, None], False), None, ),  # 2
-    (3, TType.LIST, 'dictionary_generations', (TType.STRUCT, [TDictionaryGeneration, None], False), None, ),  # 3
-    (4, TType.LIST, 'table_generations', (TType.STRUCT, [TTableGeneration, None], False), None, ),  # 4
-    (5, TType.STRING, 'parent_session_id', 'UTF8', None, ),  # 5
+    (
+        1,
+        TType.I64,
+        'id',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'column_ranges',
+        (TType.STRUCT, [TColumnRange, None], False),
+        None,
+    ),  # 2
+    (
+        3,
+        TType.LIST,
+        'dictionary_generations',
+        (TType.STRUCT, [TDictionaryGeneration, None], False),
+        None,
+    ),  # 3
+    (
+        4,
+        TType.LIST,
+        'table_generations',
+        (TType.STRUCT, [TTableGeneration, None], False),
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'parent_session_id',
+        'UTF8',
+        None,
+    ),  # 5
 )
 all_structs.append(TVarLen)
 TVarLen.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'payload', 'BINARY', None, ),  # 1
-    (2, TType.BOOL, 'is_null', None, None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'payload',
+        'BINARY',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'is_null',
+        None,
+        None,
+    ),  # 2
 )
 all_structs.append(TDataBlockPtr)
 TDataBlockPtr.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'fixed_len_data', 'BINARY', None, ),  # 1
-    (2, TType.LIST, 'var_len_data', (TType.STRUCT, [TVarLen, None], False), None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'fixed_len_data',
+        'BINARY',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.LIST,
+        'var_len_data',
+        (TType.STRUCT, [TVarLen, None], False),
+        None,
+    ),  # 2
 )
 all_structs.append(TInsertData)
 TInsertData.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'db_id', None, None, ),  # 1
-    (2, TType.I32, 'table_id', None, None, ),  # 2
-    (3, TType.LIST, 'column_ids', (TType.I32, None, False), None, ),  # 3
-    (4, TType.LIST, 'data', (TType.STRUCT, [TDataBlockPtr, None], False), None, ),  # 4
-    (5, TType.I64, 'num_rows', None, None, ),  # 5
-    (6, TType.LIST, 'is_default', (TType.BOOL, None, False), None, ),  # 6
+    (
+        1,
+        TType.I32,
+        'db_id',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'table_id',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.LIST,
+        'column_ids',
+        (TType.I32, None, False),
+        None,
+    ),  # 3
+    (
+        4,
+        TType.LIST,
+        'data',
+        (TType.STRUCT, [TDataBlockPtr, None], False),
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I64,
+        'num_rows',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.LIST,
+        'is_default',
+        (TType.BOOL, None, False),
+        None,
+    ),  # 6
 )
 all_structs.append(TPendingRenderQuery)
 TPendingRenderQuery.thrift_spec = (
     None,  # 0
-    (1, TType.I64, 'id', None, None, ),  # 1
+    (
+        1,
+        TType.I64,
+        'id',
+        None,
+        None,
+    ),  # 1
 )
 all_structs.append(TRenderParseResult)
 TRenderParseResult.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'merge_type', None, None, ),  # 1
-    (2, TType.I32, 'node_id', None, None, ),  # 2
-    (3, TType.I64, 'execution_time_ms', None, None, ),  # 3
-    (4, TType.I64, 'render_time_ms', None, None, ),  # 4
-    (5, TType.I64, 'total_time_ms', None, None, ),  # 5
+    (
+        1,
+        TType.I32,
+        'merge_type',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'node_id',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'execution_time_ms',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'render_time_ms',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I64,
+        'total_time_ms',
+        None,
+        None,
+    ),  # 5
 )
 all_structs.append(TRawRenderPassDataResult)
 TRawRenderPassDataResult.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'num_pixel_channels', None, None, ),  # 1
-    (2, TType.I32, 'num_pixel_samples', None, None, ),  # 2
-    (3, TType.STRING, 'pixels', 'BINARY', None, ),  # 3
-    (4, TType.STRING, 'row_ids_A', 'BINARY', None, ),  # 4
-    (5, TType.STRING, 'row_ids_B', 'BINARY', None, ),  # 5
-    (6, TType.STRING, 'table_ids', 'BINARY', None, ),  # 6
-    (7, TType.STRING, 'accum_data', 'BINARY', None, ),  # 7
-    (8, TType.I32, 'accum_depth', None, None, ),  # 8
+    (
+        1,
+        TType.I32,
+        'num_pixel_channels',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'num_pixel_samples',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRING,
+        'pixels',
+        'BINARY',
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRING,
+        'row_ids_A',
+        'BINARY',
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'row_ids_B',
+        'BINARY',
+        None,
+    ),  # 5
+    (
+        6,
+        TType.STRING,
+        'table_ids',
+        'BINARY',
+        None,
+    ),  # 6
+    (
+        7,
+        TType.STRING,
+        'accum_data',
+        'BINARY',
+        None,
+    ),  # 7
+    (
+        8,
+        TType.I32,
+        'accum_depth',
+        None,
+        None,
+    ),  # 8
 )
 all_structs.append(TRawPixelData)
 TRawPixelData.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'width', None, None, ),  # 1
-    (2, TType.I32, 'height', None, None, ),  # 2
-    (3, TType.MAP, 'render_pass_map', (TType.I32, None, TType.STRUCT, [TRawRenderPassDataResult, None], False), None, ),  # 3
+    (
+        1,
+        TType.I32,
+        'width',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'height',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.MAP,
+        'render_pass_map',
+        (
+            TType.I32,
+            None,
+            TType.STRUCT,
+            [TRawRenderPassDataResult, None],
+            False,
+        ),
+        None,
+    ),  # 3
 )
 all_structs.append(TRenderDatum)
 TRenderDatum.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'type', None, None, ),  # 1
-    (2, TType.I32, 'cnt', None, None, ),  # 2
-    (3, TType.STRING, 'value', 'BINARY', None, ),  # 3
+    (
+        1,
+        TType.I32,
+        'type',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'cnt',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRING,
+        'value',
+        'BINARY',
+        None,
+    ),  # 3
 )
 all_structs.append(TRenderStepResult)
 TRenderStepResult.thrift_spec = (
     None,  # 0
-    (1, TType.MAP, 'merge_data', (TType.STRING, 'UTF8', TType.MAP, (TType.STRING, 'UTF8', TType.MAP, (TType.STRING, 'UTF8', TType.MAP, (TType.STRING, 'UTF8', TType.LIST, (TType.STRUCT, [TRenderDatum, None], False), False), False), False), False), None, ),  # 1
-    (2, TType.STRUCT, 'raw_pixel_data', [TRawPixelData, None], None, ),  # 2
-    (3, TType.I64, 'execution_time_ms', None, None, ),  # 3
-    (4, TType.I64, 'render_time_ms', None, None, ),  # 4
-    (5, TType.I64, 'total_time_ms', None, None, ),  # 5
+    (
+        1,
+        TType.MAP,
+        'merge_data',
+        (
+            TType.STRING,
+            'UTF8',
+            TType.MAP,
+            (
+                TType.STRING,
+                'UTF8',
+                TType.MAP,
+                (
+                    TType.STRING,
+                    'UTF8',
+                    TType.MAP,
+                    (
+                        TType.STRING,
+                        'UTF8',
+                        TType.LIST,
+                        (TType.STRUCT, [TRenderDatum, None], False),
+                        False,
+                    ),
+                    False,
+                ),
+                False,
+            ),
+            False,
+        ),
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRUCT,
+        'raw_pixel_data',
+        [TRawPixelData, None],
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'execution_time_ms',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.I64,
+        'render_time_ms',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I64,
+        'total_time_ms',
+        None,
+        None,
+    ),  # 5
 )
 all_structs.append(TDatabasePermissions)
 TDatabasePermissions.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'create_', None, None, ),  # 1
-    (2, TType.BOOL, 'delete_', None, None, ),  # 2
-    (3, TType.BOOL, 'view_sql_editor_', None, None, ),  # 3
-    (4, TType.BOOL, 'access_', None, None, ),  # 4
+    (
+        1,
+        TType.BOOL,
+        'create_',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'delete_',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'view_sql_editor_',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'access_',
+        None,
+        None,
+    ),  # 4
 )
 all_structs.append(TTablePermissions)
 TTablePermissions.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'create_', None, None, ),  # 1
-    (2, TType.BOOL, 'drop_', None, None, ),  # 2
-    (3, TType.BOOL, 'select_', None, None, ),  # 3
-    (4, TType.BOOL, 'insert_', None, None, ),  # 4
-    (5, TType.BOOL, 'update_', None, None, ),  # 5
-    (6, TType.BOOL, 'delete_', None, None, ),  # 6
-    (7, TType.BOOL, 'truncate_', None, None, ),  # 7
-    (8, TType.BOOL, 'alter_', None, None, ),  # 8
+    (
+        1,
+        TType.BOOL,
+        'create_',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'drop_',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'select_',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'insert_',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.BOOL,
+        'update_',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.BOOL,
+        'delete_',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.BOOL,
+        'truncate_',
+        None,
+        None,
+    ),  # 7
+    (
+        8,
+        TType.BOOL,
+        'alter_',
+        None,
+        None,
+    ),  # 8
 )
 all_structs.append(TDashboardPermissions)
 TDashboardPermissions.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'create_', None, None, ),  # 1
-    (2, TType.BOOL, 'delete_', None, None, ),  # 2
-    (3, TType.BOOL, 'view_', None, None, ),  # 3
-    (4, TType.BOOL, 'edit_', None, None, ),  # 4
+    (
+        1,
+        TType.BOOL,
+        'create_',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'delete_',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'view_',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'edit_',
+        None,
+        None,
+    ),  # 4
 )
 all_structs.append(TViewPermissions)
 TViewPermissions.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'create_', None, None, ),  # 1
-    (2, TType.BOOL, 'drop_', None, None, ),  # 2
-    (3, TType.BOOL, 'select_', None, None, ),  # 3
-    (4, TType.BOOL, 'insert_', None, None, ),  # 4
-    (5, TType.BOOL, 'update_', None, None, ),  # 5
-    (6, TType.BOOL, 'delete_', None, None, ),  # 6
+    (
+        1,
+        TType.BOOL,
+        'create_',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'drop_',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'select_',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'insert_',
+        None,
+        None,
+    ),  # 4
+    (
+        5,
+        TType.BOOL,
+        'update_',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.BOOL,
+        'delete_',
+        None,
+        None,
+    ),  # 6
 )
 all_structs.append(TServerPermissions)
 TServerPermissions.thrift_spec = (
     None,  # 0
-    (1, TType.BOOL, 'create_', None, None, ),  # 1
-    (2, TType.BOOL, 'drop_', None, None, ),  # 2
-    (3, TType.BOOL, 'alter_', None, None, ),  # 3
-    (4, TType.BOOL, 'usage_', None, None, ),  # 4
+    (
+        1,
+        TType.BOOL,
+        'create_',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'drop_',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.BOOL,
+        'alter_',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'usage_',
+        None,
+        None,
+    ),  # 4
 )
 all_structs.append(TDBObjectPermissions)
 TDBObjectPermissions.thrift_spec = (
     None,  # 0
-    (1, TType.STRUCT, 'database_permissions_', [TDatabasePermissions, None], None, ),  # 1
-    (2, TType.STRUCT, 'table_permissions_', [TTablePermissions, None], None, ),  # 2
-    (3, TType.STRUCT, 'dashboard_permissions_', [TDashboardPermissions, None], None, ),  # 3
-    (4, TType.STRUCT, 'view_permissions_', [TViewPermissions, None], None, ),  # 4
-    (5, TType.STRUCT, 'server_permissions_', [TServerPermissions, None], None, ),  # 5
+    (
+        1,
+        TType.STRUCT,
+        'database_permissions_',
+        [TDatabasePermissions, None],
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRUCT,
+        'table_permissions_',
+        [TTablePermissions, None],
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRUCT,
+        'dashboard_permissions_',
+        [TDashboardPermissions, None],
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRUCT,
+        'view_permissions_',
+        [TViewPermissions, None],
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRUCT,
+        'server_permissions_',
+        [TServerPermissions, None],
+        None,
+    ),  # 5
 )
 all_structs.append(TDBObject)
 TDBObject.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'objectName', 'UTF8', None, ),  # 1
-    (2, TType.I32, 'objectType', None, None, ),  # 2
-    (3, TType.LIST, 'privs', (TType.BOOL, None, False), None, ),  # 3
-    (4, TType.STRING, 'grantee', 'UTF8', None, ),  # 4
-    (5, TType.I32, 'privilegeObjectType', None, None, ),  # 5
-    (6, TType.I32, 'objectId', None, None, ),  # 6
+    (
+        1,
+        TType.STRING,
+        'objectName',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'objectType',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.LIST,
+        'privs',
+        (TType.BOOL, None, False),
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRING,
+        'grantee',
+        'UTF8',
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I32,
+        'privilegeObjectType',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I32,
+        'objectId',
+        None,
+        None,
+    ),  # 6
 )
 all_structs.append(TDashboardGrantees)
 TDashboardGrantees.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'name', 'UTF8', None, ),  # 1
-    (2, TType.BOOL, 'is_user', None, None, ),  # 2
-    (3, TType.STRUCT, 'permissions', [TDashboardPermissions, None], None, ),  # 3
+    (
+        1,
+        TType.STRING,
+        'name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.BOOL,
+        'is_user',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRUCT,
+        'permissions',
+        [TDashboardPermissions, None],
+        None,
+    ),  # 3
 )
 all_structs.append(TDashboard)
 TDashboard.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'dashboard_name', 'UTF8', None, ),  # 1
-    (2, TType.STRING, 'dashboard_state', 'UTF8', None, ),  # 2
-    (3, TType.STRING, 'image_hash', 'UTF8', None, ),  # 3
-    (4, TType.STRING, 'update_time', 'UTF8', None, ),  # 4
-    (5, TType.STRING, 'dashboard_metadata', 'UTF8', None, ),  # 5
-    (6, TType.I32, 'dashboard_id', None, None, ),  # 6
-    (7, TType.STRING, 'dashboard_owner', 'UTF8', None, ),  # 7
-    (8, TType.BOOL, 'is_dash_shared', None, None, ),  # 8
-    (9, TType.STRUCT, 'dashboard_permissions', [TDashboardPermissions, None], None, ),  # 9
+    (
+        1,
+        TType.STRING,
+        'dashboard_name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'dashboard_state',
+        'UTF8',
+        None,
+    ),  # 2
+    (
+        3,
+        TType.STRING,
+        'image_hash',
+        'UTF8',
+        None,
+    ),  # 3
+    (
+        4,
+        TType.STRING,
+        'update_time',
+        'UTF8',
+        None,
+    ),  # 4
+    (
+        5,
+        TType.STRING,
+        'dashboard_metadata',
+        'UTF8',
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I32,
+        'dashboard_id',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.STRING,
+        'dashboard_owner',
+        'UTF8',
+        None,
+    ),  # 7
+    (
+        8,
+        TType.BOOL,
+        'is_dash_shared',
+        None,
+        None,
+    ),  # 8
+    (
+        9,
+        TType.STRUCT,
+        'dashboard_permissions',
+        [TDashboardPermissions, None],
+        None,
+    ),  # 9
 )
 all_structs.append(TLicenseInfo)
 TLicenseInfo.thrift_spec = (
     None,  # 0
-    (1, TType.LIST, 'claims', (TType.STRING, 'UTF8', False), None, ),  # 1
+    (
+        1,
+        TType.LIST,
+        'claims',
+        (TType.STRING, 'UTF8', False),
+        None,
+    ),  # 1
 )
 all_structs.append(TSessionInfo)
 TSessionInfo.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'user', 'UTF8', None, ),  # 1
-    (2, TType.STRING, 'database', 'UTF8', None, ),  # 2
-    (3, TType.I64, 'start_time', None, None, ),  # 3
-    (4, TType.BOOL, 'is_super', None, None, ),  # 4
+    (
+        1,
+        TType.STRING,
+        'user',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'database',
+        'UTF8',
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I64,
+        'start_time',
+        None,
+        None,
+    ),  # 3
+    (
+        4,
+        TType.BOOL,
+        'is_super',
+        None,
+        None,
+    ),  # 4
 )
 all_structs.append(TGeoFileLayerInfo)
 TGeoFileLayerInfo.thrift_spec = (
     None,  # 0
-    (1, TType.STRING, 'name', 'UTF8', None, ),  # 1
-    (2, TType.I32, 'contents', None, None, ),  # 2
+    (
+        1,
+        TType.STRING,
+        'name',
+        'UTF8',
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'contents',
+        None,
+        None,
+    ),  # 2
 )
 all_structs.append(TTableEpochInfo)
 TTableEpochInfo.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'table_id', None, None, ),  # 1
-    (2, TType.I32, 'table_epoch', None, None, ),  # 2
-    (3, TType.I32, 'leaf_index', None, None, ),  # 3
+    (
+        1,
+        TType.I32,
+        'table_id',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.I32,
+        'table_epoch',
+        None,
+        None,
+    ),  # 2
+    (
+        3,
+        TType.I32,
+        'leaf_index',
+        None,
+        None,
+    ),  # 3
 )
 all_structs.append(TCustomExpression)
 TCustomExpression.thrift_spec = (
     None,  # 0
-    (1, TType.I32, 'id', None, None, ),  # 1
-    (2, TType.STRING, 'name', 'UTF8', None, ),  # 2
+    (
+        1,
+        TType.I32,
+        'id',
+        None,
+        None,
+    ),  # 1
+    (
+        2,
+        TType.STRING,
+        'name',
+        'UTF8',
+        None,
+    ),  # 2
     None,  # 3
-    (4, TType.STRING, 'expression_json', 'UTF8', None, ),  # 4
-    (5, TType.I32, 'data_source_type', None, None, ),  # 5
-    (6, TType.I32, 'data_source_id', None, None, ),  # 6
-    (7, TType.BOOL, 'is_deleted', None, None, ),  # 7
+    (
+        4,
+        TType.STRING,
+        'expression_json',
+        'UTF8',
+        None,
+    ),  # 4
+    (
+        5,
+        TType.I32,
+        'data_source_type',
+        None,
+        None,
+    ),  # 5
+    (
+        6,
+        TType.I32,
+        'data_source_id',
+        None,
+        None,
+    ),  # 6
+    (
+        7,
+        TType.BOOL,
+        'is_deleted',
+        None,
+        None,
+    ),  # 7
 )
 fix_spec(all_structs)
 del all_structs
