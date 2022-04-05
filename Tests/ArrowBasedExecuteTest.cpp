@@ -34,6 +34,7 @@
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/DateConverters.h"
+#include "Shared/DateTimeParser.h"
 #include "Shared/StringTransform.h"
 #include "Shared/scope.h"
 #include "SqliteConnector/SqliteConnector.h"
@@ -49,6 +50,10 @@
 
 #include <cmath>
 #include <cstdio>
+
+#ifdef _WIN32
+#define timegm _mkgmtime
+#endif
 
 using namespace std;
 using namespace TestHelpers;
@@ -252,45 +257,27 @@ class SQLiteComparator {
             if (ref_is_null) {
               CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
             } else {
-              struct tm tm_struct {
-                0
-              };
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              auto end_str =
-                  strptime(ref_val.c_str(),
-                           omnisci_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d",
-                           &tm_struct);
-              // handle fractional seconds
-              if (end_str != nullptr && *end_str != '.') {
-                if (end_str) {
-                  ASSERT_EQ(0, *end_str) << errmsg;
-                }
-                ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()))
-                    << errmsg;
+              auto temp_val = dateTimeParseOptional<kTIMESTAMP>(ref_val, dimen);
+              if (!temp_val) {
+                temp_val = dateTimeParseOptional<kDATE>(ref_val, dimen);
               }
-              if (dimen > 0 && omnisci_type == kTIMESTAMP) {
-                int fs = 0;
-                if (*end_str == '.') {
-                  end_str++;
-                  unsigned int frac_num;
-                  int ntotal;
-                  sscanf(end_str, "%d%n", &frac_num, &ntotal);
-                  fs = parse_fractional_seconds(frac_num, ntotal, omnisci_ti);
-                  nsec = timegm(&tm_struct) * pow(10, dimen);
-                  nsec += fs;
-                } else if (*end_str == '\0') {
-                  nsec = timegm(&tm_struct) * pow(10, dimen);
-                } else {
-                  CHECK(false) << errmsg;
-                }
-              }
+              CHECK(temp_val) << ref_val;
+              nsec = temp_val.value();
               if (timestamp_approx) {
                 // approximate result give 10 second lee way
-                ASSERT_NEAR(*omnisci_as_int_p,
-                            dimen > 0 ? nsec : timegm(&tm_struct),
-                            dimen > 0 ? 10 * pow(10, dimen) : 10)
-                    << errmsg;
+                ASSERT_NEAR(
+                    *omnisci_as_int_p, nsec, dimen > 0 ? 10 * pow(10, dimen) : 10);
               } else {
+                struct tm tm_struct {
+                  0
+                };
+#ifdef _WIN32
+                auto ret_code = gmtime_s(&tm_struct, &nsec);
+                CHECK(ret_code == 0) << "Error code returned " << ret_code;
+#else
+                gmtime_r(&nsec, &tm_struct);
+#endif
                 if (is_arrow && omnisci_type == kDATE) {
                   if (device_type == ExecutorDeviceType::CPU) {
                     ASSERT_EQ(
@@ -3851,13 +3838,13 @@ TEST_F(Select, WidthBucketWithGroupBy) {
   insertCsvValues("wb_test_non_nullable", "1\n2\n3");
   insertCsvValues("wb_test", "1\n2\n3");
   std::vector<std::string> drop_tables;
-  drop_tables.push_back("DROP TABLE IF EXISTS wb_test_nullable;");
-  drop_tables.push_back("DROP TABLE IF EXISTS wb_test_non_nullable;");
-  drop_tables.push_back("DROP TABLE IF EXISTS wb_test;");
+  drop_tables.emplace_back("DROP TABLE IF EXISTS wb_test_nullable;");
+  drop_tables.emplace_back("DROP TABLE IF EXISTS wb_test_non_nullable;");
+  drop_tables.emplace_back("DROP TABLE IF EXISTS wb_test;");
   std::vector<std::string> create_tables;
-  create_tables.push_back("CREATE TABLE wb_test_nullable (val int);");
-  create_tables.push_back("CREATE TABLE wb_test_non_nullable (val int not null);");
-  create_tables.push_back("CREATE TABLE wb_test (val int);");
+  create_tables.emplace_back("CREATE TABLE wb_test_nullable (val int);");
+  create_tables.emplace_back("CREATE TABLE wb_test_non_nullable (val int not null);");
+  create_tables.emplace_back("CREATE TABLE wb_test (val int);");
   std::vector<std::string> populate_tables;
   for (int i = 1; i < 4; ++i) {
     populate_tables.push_back("INSERT INTO wb_test_nullable VALUES(" + std::to_string(i) +
@@ -3866,7 +3853,7 @@ TEST_F(Select, WidthBucketWithGroupBy) {
                               std::to_string(i) + ");");
     populate_tables.push_back("INSERT INTO wb_test VALUES(" + std::to_string(i) + ");");
   }
-  populate_tables.push_back("INSERT INTO wb_test_nullable VALUES(null);");
+  populate_tables.emplace_back("INSERT INTO wb_test_nullable VALUES(null);");
   for (const auto& stmt : drop_tables) {
     sqlite_comparator_.query(stmt);
   }
@@ -4766,6 +4753,14 @@ TEST_F(Select, DistinctProjection) {
     SKIP_NO_GPU();
     c("SELECT DISTINCT str FROM test ORDER BY str;", dt);
     c("SELECT DISTINCT(str), SUM(x) FROM test WHERE x > 7 GROUP BY str LIMIT 2;", dt);
+  }
+}
+
+TEST_F(Select, ProjectionCountOptimization) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c(R"(select count(*) from (select cast(x * 1 as int) as x1 from test) s, (select cast(x * 2 as int) as x2 from test WHERE x = 8) t;)",
+      dt);
   }
 }
 
@@ -7981,7 +7976,7 @@ TEST_F(Select, ExtensionFunctionsTypeMatching) {
 
     {
       ASSERT_NEAR(
-          float_result,
+          double_result,
           v<double>(run_simple_agg(
               "SELECT log(tinyint_type) FROM extension_func_type_match_test;", dt)),
           RESULT_EPS);
@@ -7989,14 +7984,14 @@ TEST_F(Select, ExtensionFunctionsTypeMatching) {
 
     {
       ASSERT_NEAR(
-          float_result,
+          double_result,
           v<double>(run_simple_agg(
               "SELECT log(smallint_type) FROM extension_func_type_match_test;", dt)),
           RESULT_EPS);
     }
 
     {
-      ASSERT_NEAR(float_result,
+      ASSERT_NEAR(double_result,
                   v<double>(run_simple_agg(
                       "SELECT log(int_type) FROM extension_func_type_match_test;", dt)),
                   RESULT_EPS);
@@ -9010,24 +9005,24 @@ TEST_F(Select, GroupByPerfectHash) {
       {
         // all these key columns are small ranged to force perfect hash
         std::vector<std::pair<std::string, std::string>> query_ids;
-        query_ids.push_back({"big_int_null", "SUM(float_null), COUNT(*)"});
-        query_ids.push_back({"id", "AVG(big_int_null), COUNT(*)"});
-        query_ids.push_back({"id_null", "MAX(tiny_int), MIN(tiny_int)"});
-        query_ids.push_back(
-            {"small_int", "SUM(cast (id as double)), SUM(double_not_null)"});
-        query_ids.push_back({"tiny_int", "COUNT(small_int_null), COUNT(*)"});
-        query_ids.push_back({"tiny_int_null", "AVG(small_int), COUNT(tiny_int)"});
-        query_ids.push_back(
-            {"case when id = 6 then -17 when id = 5 then 33 else NULL end",
-             "COUNT(*), AVG(small_int_null)"});
-        query_ids.push_back(
-            {"case when id = 5 then NULL when id = 6 then -57 else cast(61 as tinyint) "
-             "end",
-             "AVG(big_int), SUM(tiny_int)"});
-        query_ids.push_back(
-            {"case when float_not_null > 2 then -3 when float_null < 4 then "
-             "87 else NULL end",
-             "MAX(id), COUNT(*)"});
+        query_ids.emplace_back("big_int_null", "SUM(float_null), COUNT(*)");
+        query_ids.emplace_back("id", "AVG(big_int_null), COUNT(*)");
+        query_ids.emplace_back("id_null", "MAX(tiny_int), MIN(tiny_int)");
+        query_ids.emplace_back("small_int",
+                               "SUM(cast (id as double)), SUM(double_not_null)");
+        query_ids.emplace_back("tiny_int", "COUNT(small_int_null), COUNT(*)");
+        query_ids.emplace_back("tiny_int_null", "AVG(small_int), COUNT(tiny_int)");
+        query_ids.emplace_back(
+            "case when id = 6 then -17 when id = 5 then 33 else NULL end",
+            "COUNT(*), AVG(small_int_null)");
+        query_ids.emplace_back(
+            "case when id = 5 then NULL when id = 6 then -57 else cast(61 as tinyint) "
+            "end",
+            "AVG(big_int), SUM(tiny_int)");
+        query_ids.emplace_back(
+            "case when float_not_null > 2 then -3 when float_null < 4 then "
+            "87 else NULL end",
+            "MAX(id), COUNT(*)");
         const std::string table_name("logical_size_test");
         for (auto& pqid : query_ids) {
           std::string query("SELECT " + pqid.first + ", " + pqid.second + " FROM ");
@@ -15842,6 +15837,13 @@ TEST_F(Select, Sample) {
               boost::get<std::string>(v<NullableString>(run_simple_agg(
                   "SELECT SAMPLE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;",
                   dt))));
+    // Our "SAMPLE" operator is generally termed "ANY_VALUE", and the latter
+    // is natively supported by Calcite. Test this as an alias for "SAMPLE".
+    ASSERT_EQ(
+        "else",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ANY_VALUE(CASE WHEN x IN (9) THEN str ELSE 'else' END) FROM test;",
+            dt))));
     {
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(real_str), COUNT(*) FROM test WHERE x > 8;", dt);
@@ -17812,6 +17814,51 @@ TEST_F(SubqueryTestEnv, SubqueryTest) {
     // multi-step multi-subquery
     c(R"(select t1.r1, t1.r2, t1.r3 from R1 t1 where t1.r1 > (SELECT min(t2.r1) FROM R1 t2 where t2.r2 < 3) and t1.r2 >= (SELECT max(t3.r2) FROM R1 t3 where t3.r3 > (SELECT avg(t4.r3) FROM R1 t4 where t4.r1 < 2)) order by 1, 2;)",
       dt);
+  }
+}
+
+class ManyRowsTest : public ExecuteTestBase, public ::testing::Test {
+ protected:
+  void SetUp() override {
+    createTable(table_name,
+                {{"t", SQLTypeInfo(kTINYINT)},
+                 {"x", SQLTypeInfo(kINT)},
+                 {"y", SQLTypeInfo(kBIGINT)}});
+
+    // add one additional "duplicate" row at the end
+    for (size_t i = 0; i < row_count - 1; i++) {
+      insertCsvValues(
+          table_name,
+          std::to_string(i) + "," + std::to_string(i) + "," + std::to_string(i));
+    }
+
+    insertCsvValues(table_name, "1,2,3");
+  }
+
+  void TearDown() override { dropTable(table_name); }
+
+  static const std::string table_name;
+  static const size_t row_count;
+};
+
+const std::string ManyRowsTest::table_name = "many_rows";
+const size_t ManyRowsTest::row_count = 129;
+
+// ensure lazy fetch works properly for queries where the number of rows exceeds the bit
+// width of the target type
+TEST_F(ManyRowsTest, Projection) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_NO_THROW({
+      auto result = run_multiple_agg(
+          R"(SELECT t, x, y from many_rows ORDER BY x ASC NULLS FIRST;)", dt);
+      EXPECT_EQ(result->rowCount(), ManyRowsTest::row_count);
+      for (size_t i = 0; i < ManyRowsTest::row_count; i++) {
+        auto row = result->getNextRow(false, false);
+        EXPECT_EQ(row.size(), size_t(3));
+      }
+    });
   }
 }
 
