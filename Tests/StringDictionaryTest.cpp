@@ -612,6 +612,14 @@ TEST(StringDictionaryProxy, BuildIntersectionTranslationMapToOtherProxy) {
   }
 }
 
+NEVER_INLINE
+StringDictionaryProxy::IdMap tsan_safe_buildUnionTranslationMapToOtherProxy(
+    StringDictionaryProxy* source_string_dict_proxy,
+    StringDictionaryProxy* dest_string_dict_proxy) {
+  return source_string_dict_proxy->buildUnionTranslationMapToOtherProxy(
+      dest_string_dict_proxy, {});
+}
+
 TEST(StringDictionaryProxy, BuildUnionTranslationMapToEmptyProxy) {
   // Todo(todd): Migrate this and intersection translation tests to use
   // approach and methods in BuildUnionTranslationMapToPartialOverlapProxy
@@ -644,9 +652,9 @@ TEST(StringDictionaryProxy, BuildUnionTranslationMapToEmptyProxy) {
         std::make_shared<StringDictionaryProxy>(dest_string_dict,
                                                 2 /* string_dict_id */,
                                                 dest_string_dict->storageEntryCount());
-    const auto str_proxy_translation_map =
-        source_string_dict_proxy->buildUnionTranslationMapToOtherProxy(
-            dest_string_dict_proxy.get(), {});
+    // BE-6336
+    const auto str_proxy_translation_map = tsan_safe_buildUnionTranslationMapToOtherProxy(
+        source_string_dict_proxy.get(), dest_string_dict_proxy.get());
     ASSERT_FALSE(str_proxy_translation_map.empty());
     ASSERT_EQ(str_proxy_translation_map.numUntranslatedStrings(), strings.size());
     const auto& translated_ids = str_proxy_translation_map.getVectorMap();
