@@ -14,17 +14,13 @@
  * limitations under the License.
  */
 
+#include "ArrowSQLRunner.h"
 #include "TestHelpers.h"
 
 #include <string>
 #include <vector>
 
 #include "../QueryEngine/Execute.h"
-#include "../QueryRunner/QueryRunner.h"
-
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
 
 #define SKIP_NO_GPU()                                        \
   if (skip_tests(dt)) {                                      \
@@ -33,177 +29,52 @@
     continue;                                                \
   }
 
-bool g_keep_data{false};
-
 extern bool g_is_test_env;
 extern bool g_enable_parallel_linearization;
 
-using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
-
-inline void run_ddl_statement(const std::string& input_str) {
-  QR::get()->runDDLStatement(input_str);
-}
-
-std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
-                                            const ExecutorDeviceType device_type) {
-  return QR::get()->runSQL(
-      query_str, device_type, /*hoist_literals=*/true, /*allow_loop_joins=*/true);
-}
+using namespace TestHelpers::ArrowSQLRunner;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+  return device_type == ExecutorDeviceType::GPU && !(gpusPresent());
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
 }
 
-TargetValue execSQLWithAllowLoopJoin(const std::string& stmt,
-                                     const ExecutorDeviceType dt) {
-  auto rows = QR::get()->runSQL(stmt, dt, true, true);
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size()) << stmt;
-  return crt_row[0];
-}
-
-const char* array_ext_ops_schema = R"(
-    CREATE TABLE array_ext_ops_test (
-        i64 BIGINT,
-        i32 INT,
-        i16 SMALLINT,
-        i8 TINYINT,
-        d DOUBLE,
-        f FLOAT,
-        i1 BOOLEAN,
-        str TEXT ENCODING DICT(32),
-        arri64 BIGINT[],
-        arri32 INT[],
-        arri16 SMALLINT[],
-        arri8 TINYINT[],
-        arrd DOUBLE[],
-        arrf FLOAT[],
-        arri1 BOOLEAN[],
-        arrstr TEXT[]
-    );
-)";
-
 class ArrayExtOpsEnv : public ::testing::Test {
  protected:
   void SetUp() override {
-    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS array_ext_ops_test;"));
+    createTable("array_ext_ops_test",
+                {{"i64", SQLTypeInfo(kBIGINT)},
+                 {"i32", SQLTypeInfo(kINT)},
+                 {"i16", SQLTypeInfo(kSMALLINT)},
+                 {"i8", SQLTypeInfo(kTINYINT)},
+                 {"d", SQLTypeInfo(kDOUBLE)},
+                 {"f", SQLTypeInfo(kFLOAT)},
+                 {"i1", SQLTypeInfo(kBOOLEAN)},
+                 {"str", dictType()},
+                 {"arri64", arrayType(kBIGINT)},
+                 {"arri32", arrayType(kINT)},
+                 {"arri16", arrayType(kSMALLINT)},
+                 {"arri8", arrayType(kTINYINT)},
+                 {"arrd", arrayType(kDOUBLE)},
+                 {"arrf", arrayType(kFLOAT)},
+                 {"arri1", arrayType(kBOOLEAN)},
+                 {"arrstr", arrayType(kTEXT)}});
 
-    ASSERT_NO_THROW(run_ddl_statement(array_ext_ops_schema));
-    ValuesGenerator gen("array_ext_ops_test");
-    run_multiple_agg(gen(3,
-                         3,
-                         3,
-                         3,
-                         3,
-                         3,
-                         "'true'",
-                         "'c'",
-                         "{1, 2}",
-                         "{1, 2}",
-                         "{1, 2}",
-                         "{1, 2}",
-                         "{1, 2}",
-                         "{1, 2}",
-                         "{'true', 'false'}",
-                         "{'a', 'b'}"),
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg(gen(1,
-                         1,
-                         1,
-                         1,
-                         1,
-                         1,
-                         "'false'",
-                         "'a'",
-                         "{}",
-                         "{}",
-                         "{}",
-                         "{}",
-                         "{}",
-                         "{}",
-                         "{}",
-                         "{}"),
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg(gen(0,
-                         0,
-                         0,
-                         0,
-                         0,
-                         0,
-                         "'false'",
-                         "'a'",
-                         "{-1}",
-                         "{-1}",
-                         "{-1}",
-                         "{-1}",
-                         "{-1}",
-                         "{-1}",
-                         "{'true'}",
-                         "{'z'}"),
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg(gen(0,
-                         0,
-                         0,
-                         0,
-                         0,
-                         0,
-                         "'false'",
-                         "'a'",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL"),
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg(gen("NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "{4, 5}",
-                         "{4, 5}",
-                         "{4, 5}",
-                         "{4, 5}",
-                         "{4, 5}",
-                         "{4, 5}",
-                         "{'false', 'true'}",
-                         "{'d', 'e'}"),
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg(gen("NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL",
-                         "NULL"),
-                     ExecutorDeviceType::CPU);
+    insertJsonValues(
+        "array_ext_ops_test",
+        R"___({"i64": 3, "i32": 3, "i16": 3, "i8": 3, "d": 3, "f": 3, "i1": true, "str": "c", "arri64": [1, 2], "arri32": [1, 2], "arri16": [1, 2], "arri8": [1, 2], "arrd": [1, 2], "arrf": [1, 2], "arri1": [true, false], "arrstr": ["a", "b"]}
+{"i64": 1, "i32": 1, "i16": 1, "i8": 1, "d": 1, "f": 1, "i1": false, "str": "a", "arri64": [], "arri32": [], "arri16": [], "arri8": [], "arrd": [], "arrf": [], "arri1": [], "arrstr": []}
+{"i64": 0, "i32": 0, "i16": 0, "i8": 0, "d": 0, "f": 0, "i1": false, "str": "a", "arri64": [-1], "arri32": [-1], "arri16": [-1], "arri8": [-1], "arrd": [-1], "arrf": [-1], "arri1": [true], "arrstr": ["z"]}
+{"i64": 0, "i32": 0, "i16": 0, "i8": 0, "d": 0, "f": 0, "i1": false, "str": "a", "arri64": null, "arri32": null, "arri16": null, "arri8": null, "arrd": null, "arrf": null, "arri1": null, "arrstr": null}
+{"i64": null, "i32": null, "i16": null, "i8": null, "d": null, "f": null, "i1": null, "str": null, "arri64": [4, 5], "arri32": [4, 5], "arri16": [4, 5], "arri8": [4, 5], "arrd": [4, 5], "arrf": [4, 5], "arri1": [false, true], "arrstr": ["d", "e"]}
+{"i64": null, "i32": null, "i16": null, "i8": null, "d": null, "f": null, "i1": null, "str": null, "arri64": null, "arri32": null, "arri16": null, "arri8": null, "arrd": null, "arrf": null, "arri1": null, "arrstr": null})___");
   }
 
-  void TearDown() override {
-    if (!g_keep_data) {
-      ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS array_ext_ops_test;"));
-    }
-  }
+  void TearDown() override { dropTable("array_ext_ops_test"); }
 };
 
 TEST_F(ArrayExtOpsEnv, ArrayAppendInteger) {
@@ -362,156 +233,90 @@ TEST_F(ArrayExtOpsEnv, ArrayAppendDowncast) {
   }
 }
 
-class FixedEncodedArrayTest : public ::testing::Test {
- protected:
-  void SetUp() override { dropTestTables(); }
-
-  void TearDown() override { dropTestTables(); }
-
- private:
-  void dropTestTables() {
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i32;");
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i16;");
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i64_i8;");
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i8;");
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i32_i16;");
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_i16_i8;");
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt32;");
-    run_ddl_statement("DROP TABLE IF EXISTS vfarr_dt64_dt16;");
-    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt32;");
-    run_ddl_statement("DROP TABLE IF EXISTS farr_dt64_dt16;");
-  }
-};
-
-TEST_F(FixedEncodedArrayTest, ExceptionTest) {
-  // Check whether we throw exception for the below cases instead of crashes
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_i64_i32 (val BIGINT[] ENCODING FIXED(32));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_i64_i16 (val BIGINT[] ENCODING FIXED(16));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_i64_i8 (val BIGINT[] ENCODING FIXED(8));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_i32_i8 (val INT[] ENCODING FIXED(16));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_i32_i16 (val INT[] ENCODING FIXED(8));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_i16_i8 (val SMALLINT[] ENCODING FIXED(8));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_dt64_dt32 (val DATE[] ENCODING FIXED(32));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE varr_dt64_dt16 (val DATE[] ENCODING FIXED(16));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE farr_dt64_dt32 (val DATE[1] ENCODING FIXED(32));"));
-  ASSERT_ANY_THROW(
-      run_ddl_statement("CREATE TABLE farr_dt64_dt16 (val DATE[1] ENCODING FIXED(16));"));
-}
-
 class TinyIntArrayImportTest : public ::testing::Test {
  protected:
-  void SetUp() override {
-    run_ddl_statement("DROP TABLE IF EXISTS tinyint_arr;");
-    run_ddl_statement("CREATE TABLE tinyint_arr (ti tinyint[]);");
-  }
+  void SetUp() override { createTable("tinyint_arr", {{"ti", arrayType(kTINYINT)}}); }
 
-  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS tinyint_arr;"); }
+  void TearDown() override { dropTable("tinyint_arr"); }
 };
 
 TEST_F(TinyIntArrayImportTest, TinyIntImportBugTest) {
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
-                                    ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
-                                    ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
-                                    ExecutorDeviceType::CPU));
+  insertJsonValues("tinyint_arr", "{\"ti\": [1]}");
+  insertJsonValues("tinyint_arr", "{\"ti\": null}");
+  insertJsonValues("tinyint_arr", "{\"ti\": [1]}");
 
   TearDown();
   SetUp();
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
-                                    ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
-                                    ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
-                                    ExecutorDeviceType::CPU));
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": [1]}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": [null]}");
+  insertJsonValues("tinyint_arr", "{\"ti\": [1]}");
 
   TearDown();
   SetUp();
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
-                                    ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES (NULL);",
-                                    ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(
-      QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({});", ExecutorDeviceType::CPU));
-  ASSERT_NO_THROW(QR::get()->runSQL("INSERT INTO tinyint_arr VALUES ({1});",
-                                    ExecutorDeviceType::CPU));
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": [1]}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": [null]}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": []}");
+  insertJsonValues("tinyint_arr", "{\"ti\": [1]}");
 }
 
 class MultiFragArrayJoinTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
-    std::vector<std::string> integer_type_cols{"tiv tinyint[]",
-                                               "tif tinyint[3]",
-                                               "siv smallint[]",
-                                               "sif smallint[3]",
-                                               "intv int[]",
-                                               "intf int[3]",
-                                               "biv bigint[]",
-                                               "bif bigint[3]"};
-    std::vector<std::string> floating_type_cols{"dv double[]",
-                                                "df double[3]",
-                                                "dcv decimal(18,6)[]",
-                                                "dcf decimal(18,6)[3]",
-                                                "fv float[]",
-                                                "ff float[3]"};
-    std::vector<std::string> date_and_time_type_cols{"dtv date[]",
-                                                     "dtf date[3]",
-                                                     "tv time[]",
-                                                     "tf time[3]",
-                                                     "tsv timestamp[]",
-                                                     "tsf timestamp[3]"};
-    std::vector<std::string> text_type_cols{"tx text",
-                                            "txe4 text encoding dict(32)",
-                                            "txe2 text encoding dict(16)",
-                                            "txe1 text encoding dict(8)",
-                                            "txn text encoding none",
-                                            "txv text[]",
-                                            "txve text[] encoding dict (32)"};
-    std::vector<std::string> boolean_type_cols{"boolv boolean[]", "boolf boolean[3]"};
-    auto create_table_ddl_gen = [&integer_type_cols,
-                                 &floating_type_cols,
-                                 &date_and_time_type_cols,
-                                 &text_type_cols,
-                                 &boolean_type_cols](
-                                    const std::string& tbl_name,
-                                    const bool multi_frag,
-                                    const bool has_integer_types = true,
-                                    const bool has_floting_types = true,
-                                    const bool has_date_and_time_types = true,
-                                    const bool has_text_types = true,
-                                    const bool has_boolean_type = true) {
-      std::vector<std::string> cols;
+    std::vector<ArrowStorage::ColumnDescription> integer_type_cols{
+        {"tiv", arrayType(kTINYINT)},
+        {"tif", arrayType(kTINYINT, 3)},
+        {"siv", arrayType(kSMALLINT)},
+        {"sif", arrayType(kSMALLINT, 3)},
+        {"intv", arrayType(kINT)},
+        {"intf", arrayType(kINT, 3)},
+        {"biv", arrayType(kBIGINT)},
+        {"bif", arrayType(kBIGINT, 3)}};
+    std::vector<ArrowStorage::ColumnDescription> floating_type_cols{
+        {"dv", arrayType(kDOUBLE)},
+        {"df", arrayType(kDOUBLE, 3)},
+        {"dcv", decimalArrayType(18, 6)},
+        {"dcf", decimalArrayType(18, 6, 3)},
+        {"fv", arrayType(kFLOAT)},
+        {"ff", arrayType(kFLOAT, 3)}};
+    std::vector<ArrowStorage::ColumnDescription> date_and_time_type_cols{
+        {"dtv", arrayType(kDATE)},
+        {"dtf", arrayType(kDATE, 3)},
+        {"tv", arrayType(kTIME)},
+        {"tf", arrayType(kTIME, 3)},
+        {"tsv", arrayType(kTIMESTAMP)},
+        {"tsf", arrayType(kTIMESTAMP, 3)}};
+    std::vector<ArrowStorage::ColumnDescription> text_type_cols{
+        {"tx", dictType()},
+        {"txe4", dictType(4)},
+        {"txe2", dictType(2)},
+        {"txe1", dictType(1)},
+        {"txn", SQLTypeInfo(kTEXT)},
+        {"txv", arrayType(kTEXT)},
+        {"txve", arrayType(kTEXT)}};
+    std::vector<ArrowStorage::ColumnDescription> boolean_type_cols{
+        {"boolv", arrayType(kBOOLEAN)}, {"boolf", arrayType(kBOOLEAN, 3)}};
+    // TODO: Enable date and time when JSON parser for corresponding arrays is available
+    auto create_table = [&integer_type_cols,
+                         &floating_type_cols,
+                         &date_and_time_type_cols,
+                         &text_type_cols,
+                         &boolean_type_cols](const std::string& tbl_name,
+                                             const bool multi_frag,
+                                             const bool has_integer_types = true,
+                                             const bool has_floting_types = true,
+                                             const bool has_date_and_time_types = false,
+                                             const bool has_text_types = true,
+                                             const bool has_boolean_type = true) {
+      std::vector<ArrowStorage::ColumnDescription> cols;
       if (has_integer_types) {
         std::copy(
             integer_type_cols.begin(), integer_type_cols.end(), std::back_inserter(cols));
@@ -533,22 +338,15 @@ class MultiFragArrayJoinTest : public ::testing::Test {
         std::copy(
             boolean_type_cols.begin(), boolean_type_cols.end(), std::back_inserter(cols));
       }
-      auto table_cols_ddl = boost::join(cols, ",");
-      auto table_ddl = "(" + table_cols_ddl;
-      std::ostringstream oss;
-      oss << "CREATE TABLE " << tbl_name << table_ddl;
       if (has_text_types &&
           (tbl_name.compare("mfarr") == 0 || tbl_name.compare("sfarr") == 0)) {
         // exclude these cols for multi-frag nullable case to avoid not accepted null
         // value issue (i.e., RelAlgExecutor::2833)
-        oss << ", txf text[3], txfe text[3] encoding dict (32)";
+        cols.push_back({"txf", arrayType(kTEXT, 3)});
+        cols.push_back({"txfe", arrayType(kTEXT, 3)});
       };
-      oss << ")";
-      if (multi_frag) {
-        oss << " WITH (FRAGMENT_SIZE = 5)";
-      }
-      oss << ";";
-      return oss.str();
+
+      createTable(tbl_name, cols, {multi_frag ? 5ULL : 32000000ULL});
     };
 
     // this test case works on chunk 0 ~ chunk 32 where each chunk contains five rows
@@ -560,71 +358,69 @@ class MultiFragArrayJoinTest : public ::testing::Test {
     // if we use frag size to be five, using 2^5 = 32 patterns can test every possible
     // chunk's row status to see our linearization logic works well under such various
     // fragments
-    auto insert_dml_gen = [](const std::string& tbl_name,
-                             const bool allow_null,
-                             int start_chunk_idx = 0,
-                             int end_chunk_idx = 32,
-                             const bool has_integer_types = true,
-                             const bool has_floting_types = true,
-                             const bool has_date_and_time_types = true,
-                             const bool has_text_types = true,
-                             const bool has_boolean_type = true) {
-      std::ostringstream oss;
-      oss << "INSERT INTO " << tbl_name << " VALUES(";
+    auto insert_values = [](const std::string& tbl_name,
+                            const bool allow_null,
+                            int start_chunk_idx = 0,
+                            int end_chunk_idx = 32,
+                            const bool has_integer_types = true,
+                            const bool has_floting_types = true,
+                            const bool has_date_and_time_types = false,
+                            const bool has_text_types = true,
+                            const bool has_boolean_type = true) {
       auto gi = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{" << i + 1 << "}";
+          oss << "[" << i + 1 << "]";
         } else if (i % 3 == 2) {
-          oss << "{" << i << "," << i + 2 << "}";
+          oss << "[" << i << "," << i + 2 << "]";
         } else {
-          oss << "{" << i + 1 << "," << i + 2 << "," << i + 3 << "}";
+          oss << "[" << i + 1 << "," << i + 2 << "," << i + 3 << "]";
         }
         return oss.str();
       };
       auto gf = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{" << i << "." << i << "}";
+          oss << "[" << i << "." << i << "]";
         } else if (i % 3 == 2) {
-          oss << "{" << i << "." << i << "," << i * 2 << "." << i * 2 << "}";
+          oss << "[" << i << "." << i << "," << i * 2 << "." << i * 2 << "]";
         } else {
-          oss << "{" << i + 1 << "." << i + 1 << "," << i + 2 << "." << i + 2 << ","
-              << i + 3 << "." << i + 3 << "}";
+          oss << "[" << i + 1 << "." << i + 1 << "," << i + 2 << "." << i + 2 << ","
+              << i + 3 << "." << i + 3 << "]";
         }
         return oss.str();
       };
       auto gdt = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{\'01/01/2021\'}";
+          oss << "[\"01/01/2021\"]";
         } else if (i % 3 == 2) {
-          oss << "{\'01/01/2021\',\'01/02/2021\'}";
+          oss << "[\"01/01/2021\",\"01/02/2021\"]";
         } else {
-          oss << "{\'01/01/2021\',\'01/02/2021\',\'01/03/2021\'}";
+          oss << "[\"01/01/2021\",\"01/02/2021\",\"01/03/2021\"]";
         }
         return oss.str();
       };
       auto gt = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{\'01:01:01\'}";
+          oss << "[\"01:01:01\"]";
         } else if (i % 3 == 2) {
-          oss << "{\'01:01:01\',\'01:01:02\'}";
+          oss << "[\"01:01:01\",\"01:01:02\"]";
         } else {
-          oss << "{\'01:01:01\',\'01:01:02\',\'01:01:03\'}";
+          oss << "[\"01:01:01\",\"01:01:02\",\"01:01:03\"]";
         }
         return oss.str();
       };
       auto gts = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{\'01/01/2021 01:01:01\'}";
+          oss << "[\"01/01/2021 01:01:01\"]";
         } else if (i % 3 == 2) {
-          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\'}";
+          oss << "[\"01/01/2021 01:01:01\",\"01/01/2021 01:01:02\"]";
         } else {
-          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\', \'01/01/2021 "
-                 "01:01:03\'}";
+          oss << "[\"01/01/2021 01:01:01\",\"01/01/2021 01:01:02\", \"01/01/2021 "
+                 "01:01:03\"]";
         }
         return oss.str();
       };
@@ -632,32 +428,32 @@ class MultiFragArrayJoinTest : public ::testing::Test {
         std::ostringstream oss;
         if (array) {
           if (i % 3 == 1) {
-            oss << "{\'" << i << "\'}";
+            oss << "[\"" << i << "\"]";
           } else if (i % 3 == 2) {
-            oss << "{\'" << i << "\',\'" << i << i << "\'}";
+            oss << "[\"" << i << "\",\"" << i << i << "\"]";
           } else {
-            oss << "{\'" << i << "\',\'" << i << i << "\',\'" << i << i << i << "\'}";
+            oss << "[\"" << i << "\",\"" << i << i << "\",\"" << i << i << i << "\"]";
           }
         } else {
           if (i % 3 == 1) {
-            oss << "\'" << i << "\'";
+            oss << "\"" << i << "\"";
           } else if (i % 3 == 2) {
-            oss << "\'" << i << i << "\'";
+            oss << "\"" << i << i << "\"";
           } else {
-            oss << "\'" << i << i << i << "\'";
+            oss << "\"" << i << i << i << "\"";
           }
         }
         return oss.str();
       };
       auto gbool = [](const int i) {
         std::ostringstream oss;
-        auto bool_val = i % 3 == 0 ? "\'true\'" : "\'false\'";
+        auto bool_val = i % 3 == 0 ? "true" : "false";
         if (i % 3 == 1) {
-          oss << "{" << bool_val << "}";
+          oss << "[" << bool_val << "]";
         } else if (i % 3 == 2) {
-          oss << "{" << bool_val << "," << bool_val << "}";
+          oss << "[" << bool_val << "," << bool_val << "]";
         } else {
-          oss << "{" << bool_val << "," << bool_val << "," << bool_val << "}";
+          oss << "[" << bool_val << "," << bool_val << "," << bool_val << "]";
         }
         return oss.str();
       };
@@ -681,78 +477,83 @@ class MultiFragArrayJoinTest : public ::testing::Test {
           (tbl_name.compare("mfarr") == 0 || tbl_name.compare("sfarr") == 0)) {
         col_count += 2;
       }
-      std::vector<std::string> null_vec(col_count, "NULL");
-      auto null_str = boost::join(null_vec, ",");
-      auto g = [&tbl_name,
-                &gi,
-                &gf,
-                &gt,
-                &gdt,
-                &gts,
-                &gtx,
-                &gbool,
-                &null_str,
-                &has_integer_types,
-                &has_floting_types,
-                &has_date_and_time_types,
-                &has_text_types,
-                &has_boolean_type](const int i, int null_row) {
+      auto insert_json_values = [&tbl_name,
+                                 &gi,
+                                 &gf,
+                                 &gt,
+                                 &gdt,
+                                 &gts,
+                                 &gtx,
+                                 &gbool,
+                                 &has_integer_types,
+                                 &has_floting_types,
+                                 &has_date_and_time_types,
+                                 &has_text_types,
+                                 &has_boolean_type](const int i, int null_row) {
         std::ostringstream oss;
-        std::vector<std::string> col_vals;
-        oss << "INSERT INTO " << tbl_name << " VALUES(";
+        bool first = true;
+        oss << "{";
         if (null_row) {
-          oss << null_str;
+          auto all_cols = getStorage()->listColumns(
+              *getStorage()->getTableInfo(TEST_DB_ID, tbl_name));
+          for (auto& col : all_cols) {
+            if (col->is_rowid) {
+              continue;
+            }
+
+            if (first) {
+              first = false;
+            } else {
+              oss << ", ";
+            }
+            oss << "\"" << col->name << "\": null";
+          }
         } else {
           if (has_integer_types) {
-            col_vals.push_back(gi(i % 120));
-            col_vals.push_back(gi(3));
-            col_vals.push_back(gi(i));
-            col_vals.push_back(gi(3));
-            col_vals.push_back(gi(i));
-            col_vals.push_back(gi(3));
-            col_vals.push_back(gi(i));
-            col_vals.push_back(gi(3));
+            oss << "\"tiv\": " << gi(i % 120) << ", \"tif\": " << gi(3)
+                << ", \"siv\": " << gi(i) << ", \"sif\": " << gi(3)
+                << ", \"intv\": " << gi(i) << ", \"intf\": " << gi(3)
+                << ", \"biv\": " << gi(i) << ", \"bif\": " << gi(3);
+            first = false;
           }
           if (has_floting_types) {
-            col_vals.push_back(gf(i));
-            col_vals.push_back(gf(3));
-            col_vals.push_back(gf(i));
-            col_vals.push_back(gf(3));
-            col_vals.push_back(gf(i));
-            col_vals.push_back(gf(3));
+            oss << (first ? "" : ", ");
+            oss << "\"dv\": " << gf(i) << ", \"df\": " << gf(3) << ", \"dcv\": " << gf(i)
+                << ", \"dcf\": " << gf(3) << ", \"fv\": " << gf(i)
+                << ", \"ff\": " << gf(3);
+            first = false;
           }
           if (has_date_and_time_types) {
-            col_vals.push_back(gdt(i));
-            col_vals.push_back(gdt(3));
-            col_vals.push_back(gt(i));
-            col_vals.push_back(gt(3));
-            col_vals.push_back(gts(i));
-            col_vals.push_back(gts(3));
+            oss << (first ? "" : ", ");
+            oss << "\"dtv\": " << gdt(i) << ", \"dtf\": " << gdt(3)
+                << ", \"tv\": " << gt(i) << ", \"tv\": " << gt(3)
+                << ", \"tsv\": " << gts(i) << ", \"tsf\": " << gts(3);
+            first = false;
           }
           if (has_text_types) {
-            col_vals.push_back(gtx(i, false));
-            col_vals.push_back(gtx(i, false));
-            col_vals.push_back(gtx(i, false));
-            col_vals.push_back(gtx(i, false));
-            col_vals.push_back(gtx(i, false));
-            col_vals.push_back(gtx(i, true));
-            col_vals.push_back(gtx(i, true));
+            oss << (first ? "" : ", ");
+            oss << "\"tx\": " << gtx(i, false) << ", \"txe4\": " << gtx(i, false)
+                << ", \"txe2\": " << gtx(i, false) << ", \"txe1\": " << gtx(i, false)
+                << ", \"txn\": " << gtx(i, false) << ", \"txv\": " << gtx(i, true)
+                << ", \"txve\": " << gtx(i, true);
+            first = false;
           }
           if (has_boolean_type) {
-            col_vals.push_back(gbool(i));
-            col_vals.push_back(gbool(3));
+            oss << (first ? "" : ", ");
+            oss << "\"boolv\": " << gbool(i) << ", \"boolf\": " << gbool(3);
+            first = false;
           }
           if (has_text_types &&
               (tbl_name.compare("mfarr") == 0 || tbl_name.compare("sfarr") == 0)) {
-            col_vals.push_back(gtx(3, true));
-            col_vals.push_back(gtx(3, true));
-          }
+            oss << (first ? "" : ", ");
+            oss << "\"txf\": " << gtx(3, true) << ", \"txfe\": " << gtx(3, true);
+            first = false;
+          };
         }
-        oss << boost::join(col_vals, ",");
-        oss << ");";
-        return oss.str();
+        oss << "}";
+
+        insertJsonValues(tbl_name, oss.str());
       };
-      std::vector<std::string> insert_dml_vec;
       if (allow_null) {
         int i = 1;
         for (int chunk_idx = start_chunk_idx; chunk_idx < end_chunk_idx; chunk_idx++) {
@@ -760,9 +561,9 @@ class MultiFragArrayJoinTest : public ::testing::Test {
           for (int row_idx = 0; row_idx < 5; row_idx++, i++) {
             bool null_row = str.at(row_idx) == '1';
             if (null_row) {
-              insert_dml_vec.push_back(g(0, true));
+              insert_json_values(0, true);
             } else {
-              insert_dml_vec.push_back(g(i, false));
+              insert_json_values(i, false);
             }
           }
         }
@@ -770,33 +571,38 @@ class MultiFragArrayJoinTest : public ::testing::Test {
         for (auto chunk_idx = start_chunk_idx; chunk_idx < end_chunk_idx; chunk_idx++) {
           for (auto row_idx = 0; row_idx < 5; row_idx++) {
             auto i = (chunk_idx * 5) + row_idx;
-            insert_dml_vec.push_back(g(i, false));
+            insert_json_values(i, false);
           }
         }
       }
-      for (auto& dml : insert_dml_vec) {
-        QR::get()->runSQL(dml, ExecutorDeviceType::CPU);
-      }
       col_count = 0;
     };
-    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr", false));
-    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr", true));
-    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr_n", false));
-    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr_n", true));
 
-    insert_dml_gen("sfarr", false);
-    insert_dml_gen("mfarr", false);
-    insert_dml_gen("sfarr_n", true);
-    insert_dml_gen("mfarr_n", true);
+    create_table("sfarr", false);
+    create_table("mfarr", true);
+    create_table("sfarr_n", false);
+    create_table("mfarr_n", true);
+
+    insert_values("sfarr", false);
+    insert_values("mfarr", false);
+    insert_values("sfarr_n", true);
+    insert_values("mfarr_n", true);
   }
 
   void TearDown() override {
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
+    dropTable("sfarr");
+    dropTable("mfarr");
+    dropTable("sfarr_n");
+    dropTable("mfarr_n");
   }
 };
+
+TEST_F(MultiFragArrayJoinTest, Dump) {
+  run_simple_agg("SELECT COUNT(1) FROM sfarr r, sfarr s WHERE s.siv[1] = r.siv[1];",
+                 ExecutorDeviceType::CPU);
+  run_simple_agg("SELECT COUNT(1) FROM mfarr r, mfarr s WHERE s.siv[1] = r.siv[1];",
+                 ExecutorDeviceType::CPU);
+}
 
 TEST_F(MultiFragArrayJoinTest, IndexedArrayJoin) {
   // 1. non-nullable array
@@ -823,17 +629,18 @@ TEST_F(MultiFragArrayJoinTest, IndexedArrayJoin) {
           }
           sq << "SELECT COUNT(1) FROM sfarr s, sfarr r WHERE " << join_cond;
           q1 << "SELECT COUNT(1) FROM mfarr r, mfarr s WHERE " << join_cond;
-          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
-          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          auto single_frag_res = v<int64_t>(run_simple_agg(sq.str(), dt));
+          auto res1 = v<int64_t>(run_simple_agg(q1.str(), dt));
           ASSERT_EQ(single_frag_res, res1) << q1.str();
         }
       }
     };
     run_tests(integer_types);
     run_tests(float_types);
-    run_tests(date_types);
-    run_tests(time_types);
-    run_tests(timestamp_types);
+    // TODO: Enable when JSON parser for datetime arrays is available
+    // run_tests(date_types);
+    // run_tests(time_types);
+    // run_tests(timestamp_types);
     run_tests(non_encoded_text_types);
     run_tests(text_array_types);
     run_tests(bool_types);
@@ -864,17 +671,17 @@ TEST_F(MultiFragArrayJoinTest, IndexedArrayJoin) {
           }
           sq << "SELECT COUNT(1) FROM sfarr_n s, sfarr_n r WHERE " << join_cond;
           q1 << "SELECT COUNT(1) FROM mfarr_n r, mfarr_n s WHERE " << join_cond;
-          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
-          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          auto single_frag_res = v<int64_t>(run_simple_agg(sq.str(), dt));
+          auto res1 = v<int64_t>(run_simple_agg(q1.str(), dt));
           ASSERT_EQ(single_frag_res, res1) << q1.str();
         }
       }
     };
     run_tests(integer_types);
     run_tests(float_types);
-    run_tests(date_types);
-    run_tests(time_types);
-    run_tests(timestamp_types);
+    // run_tests(date_types);
+    // run_tests(time_types);
+    // run_tests(timestamp_types);
     run_tests(non_encoded_text_types);
     run_tests(text_array_types);
     run_tests(bool_types);
@@ -884,46 +691,33 @@ TEST_F(MultiFragArrayJoinTest, IndexedArrayJoin) {
 class MultiFragArrayParallelLinearizationTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n2;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n2;");
     g_enable_parallel_linearization = 10;
 
-    std::vector<std::string> cols{"tiv tinyint[]",
-                                  "siv smallint[]",
-                                  "intv int[]",
-                                  "biv bigint[]",
-                                  "dv double[]",
-                                  "dcv decimal(18,6)[]",
-                                  "fv float[]",
-                                  "dtv date[]",
-                                  "tv time[]",
-                                  "tsv timestamp[]",
-                                  "txv text[]",
-                                  "txve text[] encoding dict (32)",
-                                  "boolv boolean[]"};
-    auto table_cols_ddl = boost::join(cols, ",");
-    auto create_table_ddl_gen = [&table_cols_ddl](const std::string& tbl_name,
-                                                  const bool multi_frag) {
-      auto table_ddl = "(" + table_cols_ddl;
-      std::ostringstream oss;
-      oss << "CREATE TABLE " << tbl_name << table_ddl << ")";
-      if (multi_frag) {
-        oss << " WITH (FRAGMENT_SIZE = 5)";
-      }
-      oss << ";";
-      return oss.str();
+    std::vector<ArrowStorage::ColumnDescription> cols{
+        {"tiv", arrayType(kTINYINT)},
+        {"siv", arrayType(kSMALLINT)},
+        {"intv", arrayType(kINT)},
+        {"biv", arrayType(kBIGINT)},
+        {"dv", arrayType(kDOUBLE)},
+        {"dcv", decimalArrayType(18, 6)},
+        {"fv", arrayType(kFLOAT)},
+        // TODO: enable when datetime arrays are supported in JSON parser
+        //{"dtv", arrayType(kDATE)},
+        //{"tv", arrayType(kTIME)},
+        //{"tsv", arrayType(kTIMESTAMP)},
+        {"txv", arrayType(kTEXT)},
+        {"txve", arrayType(kTEXT)},
+        {"boolv", arrayType(kBOOLEAN)}};
+    auto create_table = [&cols](const std::string& tbl_name, const bool multi_frag) {
+      createTable(tbl_name, cols, {multi_frag ? 5ULL : 32000000ULL});
     };
 
-    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr", false));
-    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr", true));
-    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr_n", false));
-    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr_n", true));
-    QR::get()->runDDLStatement(create_table_ddl_gen("sfarr_n2", false));
-    QR::get()->runDDLStatement(create_table_ddl_gen("mfarr_n2", true));
+    create_table("sfarr", false);
+    create_table("mfarr", true);
+    create_table("sfarr_n", false);
+    create_table("mfarr_n", true);
+    create_table("sfarr_n2", false);
+    create_table("mfarr_n2", true);
 
     auto insert_table = [](const std::string& tbl_name,
                            int num_tuples,
@@ -935,132 +729,116 @@ class MultiFragArrayParallelLinearizationTest : public ::testing::Test {
       auto gi = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{" << i + 1 << "}";
+          oss << "[" << i + 1 << "]";
         } else if (i % 3 == 2) {
-          oss << "{" << i << "," << i + 2 << "}";
+          oss << "[" << i << "," << i + 2 << "]";
         } else {
-          oss << "{" << i + 1 << "," << i + 2 << "," << i + 3 << "}";
+          oss << "[" << i + 1 << "," << i + 2 << "," << i + 3 << "]";
         }
         return oss.str();
       };
       auto gf = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{" << i << "." << i << "}";
+          oss << "[" << i << "." << i << "]";
         } else if (i % 3 == 2) {
-          oss << "{" << i << "." << i << "," << i * 2 << "." << i * 2 << "}";
+          oss << "[" << i << "." << i << "," << i * 2 << "." << i * 2 << "]";
         } else {
-          oss << "{" << i + 1 << "." << i + 1 << "," << i + 2 << "." << i + 2 << ","
-              << i + 3 << "." << i + 3 << "}";
+          oss << "[" << i + 1 << "." << i + 1 << "," << i + 2 << "." << i + 2 << ","
+              << i + 3 << "." << i + 3 << "]";
         }
         return oss.str();
       };
       auto gdt = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{\'01/01/2021\'}";
+          oss << "[\"01/01/2021\"]";
         } else if (i % 3 == 2) {
-          oss << "{\'01/01/2021\',\'01/02/2021\'}";
+          oss << "[\"01/01/2021\",\"01/02/2021\"]";
         } else {
-          oss << "{\'01/01/2021\',\'01/02/2021\',\'01/03/2021\'}";
+          oss << "[\"01/01/2021\",\"01/02/2021\",\"01/03/2021\"]";
         }
         return oss.str();
       };
       auto gt = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{\'01:01:01\'}";
+          oss << "[\"01:01:01\"]";
         } else if (i % 3 == 2) {
-          oss << "{\'01:01:01\',\'01:01:02\'}";
+          oss << "[\"01:01:01\",\"01:01:02\"]";
         } else {
-          oss << "{\'01:01:01\',\'01:01:02\',\'01:01:03\'}";
+          oss << "[\"01:01:01\",\"01:01:02\",\"01:01:03\"]";
         }
         return oss.str();
       };
       auto gts = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{\'01/01/2021 01:01:01\'}";
+          oss << "[\"01/01/2021 01:01:01\"}";
         } else if (i % 3 == 2) {
-          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\'}";
+          oss << "[\"01/01/2021 01:01:01\",\"01/01/2021 01:01:02\"}";
         } else {
-          oss << "{\'01/01/2021 01:01:01\',\'01/01/2021 01:01:02\', \'01/01/2021 "
-                 "01:01:03\'}";
+          oss << "[\"01/01/2021 01:01:01\",\"01/01/2021 01:01:02\", \"01/01/2021 "
+                 "01:01:03\"}";
         }
         return oss.str();
       };
       auto gtx = [](const int i) {
         std::ostringstream oss;
         if (i % 3 == 1) {
-          oss << "{\'" << i << "\'}";
+          oss << "[\"" << i << "\"]";
         } else if (i % 3 == 2) {
-          oss << "{\'" << i << "\',\'" << i << i << "\'}";
+          oss << "[\"" << i << "\",\"" << i << i << "\"]";
         } else {
-          oss << "{\'" << i << "\',\'" << i << i << "\',\'" << i << i << i << "\'}";
+          oss << "[\"" << i << "\",\"" << i << i << "\",\"" << i << i << i << "\"]";
         }
         return oss.str();
       };
       auto gbool = [](const int i) {
         std::ostringstream oss;
-        auto bool_val = i % 3 == 0 ? "\'true\'" : "\'false\'";
+        auto bool_val = i % 3 == 0 ? "true" : "false";
         if (i % 3 == 1) {
-          oss << "{" << bool_val << "}";
+          oss << "[" << bool_val << "]";
         } else if (i % 3 == 2) {
-          oss << "{" << bool_val << "," << bool_val << "}";
+          oss << "[" << bool_val << "," << bool_val << "]";
         } else {
-          oss << "{" << bool_val << "," << bool_val << "," << bool_val << "}";
+          oss << "[" << bool_val << "," << bool_val << "," << bool_val << "]";
         }
         return oss.str();
       };
-      size_t col_count = 13;
-      std::vector<std::string> null_vec(col_count, "NULL");
-      auto null_str = boost::join(null_vec, ",");
-      auto g = [&tbl_name, &null_str, &gi, &gf, &gt, &gdt, &gts, &gtx, &gbool](
-                   const int i, int null_row) {
+      auto insertValues = [&tbl_name, &gi, &gf, &gt, &gdt, &gts, &gtx, &gbool](
+                              const int i, int null_row) {
         std::ostringstream oss;
-        std::vector<std::string> col_vals;
-        oss << "INSERT INTO " << tbl_name << " VALUES(";
         if (null_row) {
-          oss << null_str;
+          oss << R"___({"tiv": null, "siv": null, "intv": null, "biv": null, "dv": null, "dcv": null, "fv": null, "txv": null, "txve": null, "boolv": null})___";
         } else {
           auto i_r = gi(i);
           auto i_f = gf(i);
           auto i_tx = gtx(i);
-          col_vals.push_back(gi(i % 120));
-          col_vals.push_back(i_r);
-          col_vals.push_back(i_r);
-          col_vals.push_back(i_r);
-          col_vals.push_back(i_f);
-          col_vals.push_back(i_f);
-          col_vals.push_back(i_f);
-          col_vals.push_back(gdt(i));
-          col_vals.push_back(gt(i));
-          col_vals.push_back(gts(i));
-          col_vals.push_back(i_tx);
-          col_vals.push_back(i_tx);
-          col_vals.push_back(gbool(i));
+          oss << "{\"tiv\": " << gi(i % 120) << ", \"siv\": " << i_r
+              << ", \"intv\": " << i_r << ", \"biv\": " << i_r << ", \"dv\": " << i_f
+              << ", \"dcv\": " << i_f << ", \"fv\": "
+              << i_f
+              // TODO: enable when datetime arrays are supported in JSON parser
+              // << ", \"dtv\": " << gdt(i) << ", \"tv\": " << gt(i) << ", \"tsv\": " <<
+              // gts(i)
+              << ", \"txv\": " << i_tx << ", \"txve\": " << i_tx
+              << ", \"boolv\": " << gbool(i) << "}" << std::endl;
         }
-        oss << boost::join(col_vals, ",");
-        oss << ");";
-        return oss.str();
+        insertJsonValues(tbl_name, oss.str());
       };
-      std::vector<std::string> insert_dml_vec;
       if (allow_null) {
         for (int i = 0; i < num_tuples; i++) {
           if ((first_frag_row_null && (i % frag_size) == 0) || (i % 17 == 5)) {
-            insert_dml_vec.push_back(g(0, true));
+            insertValues(0, true);
           } else {
-            insert_dml_vec.push_back(g(i, false));
+            insertValues(i, false);
           }
         }
       } else {
         for (int i = 0; i < num_tuples; i++) {
-          insert_dml_vec.push_back(g(i, false));
+          insertValues(i, false);
         }
-      }
-
-      for (auto& dml : insert_dml_vec) {
-        QR::get()->runSQL(dml, ExecutorDeviceType::CPU);
       }
     };
 
@@ -1073,12 +851,12 @@ class MultiFragArrayParallelLinearizationTest : public ::testing::Test {
   }
 
   void TearDown() override {
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS sfarr_n2;");
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS mfarr_n2;");
+    dropTable("sfarr");
+    dropTable("mfarr");
+    dropTable("sfarr_n");
+    dropTable("mfarr_n");
+    dropTable("sfarr_n2");
+    dropTable("mfarr_n2");
     g_enable_parallel_linearization = 20000;
   }
 };
@@ -1102,17 +880,18 @@ TEST_F(MultiFragArrayParallelLinearizationTest, IndexedArrayJoin) {
           auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
           sq << "SELECT COUNT(1) FROM sfarr s, sfarr r WHERE " << join_cond;
           q1 << "SELECT COUNT(1) FROM mfarr r, mfarr s WHERE " << join_cond;
-          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
-          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          auto single_frag_res = v<int64_t>(run_simple_agg(sq.str(), dt));
+          auto res1 = v<int64_t>(run_simple_agg(q1.str(), dt));
           ASSERT_EQ(single_frag_res, res1) << q1.str();
         }
       }
     };
     run_tests(integer_types);
     run_tests(float_types);
-    run_tests(date_types);
-    run_tests(time_types);
-    run_tests(timestamp_types);
+    // TODO: enable when datetime arrays are supported in JSON parser
+    // run_tests(date_types);
+    // run_tests(time_types);
+    // run_tests(timestamp_types);
     run_tests(text_array_types);
     run_tests(bool_types);
   }
@@ -1127,17 +906,18 @@ TEST_F(MultiFragArrayParallelLinearizationTest, IndexedArrayJoin) {
           auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
           sq << "SELECT COUNT(1) FROM sfarr_n s, sfarr_n r WHERE " << join_cond;
           q1 << "SELECT COUNT(1) FROM mfarr_n r, mfarr_n s WHERE " << join_cond;
-          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
-          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          auto single_frag_res = v<int64_t>(run_simple_agg(sq.str(), dt));
+          auto res1 = v<int64_t>(run_simple_agg(q1.str(), dt));
           ASSERT_EQ(single_frag_res, res1) << q1.str();
         }
       }
     };
     run_tests(integer_types);
     run_tests(float_types);
-    run_tests(date_types);
-    run_tests(time_types);
-    run_tests(timestamp_types);
+    // TODO: enable when datetime arrays are supported in JSON parser
+    // run_tests(date_types);
+    // run_tests(time_types);
+    // run_tests(timestamp_types);
     run_tests(text_array_types);
     run_tests(bool_types);
   }
@@ -1152,17 +932,18 @@ TEST_F(MultiFragArrayParallelLinearizationTest, IndexedArrayJoin) {
           auto join_cond = "s." + col_name + "[1] = r." + col_name + "[1];";
           sq << "SELECT COUNT(1) FROM sfarr_n2 s, sfarr_n2 r WHERE " << join_cond;
           q1 << "SELECT COUNT(1) FROM mfarr_n2 r, mfarr_n2 s WHERE " << join_cond;
-          auto single_frag_res = v<int64_t>(execSQLWithAllowLoopJoin(sq.str(), dt));
-          auto res1 = v<int64_t>(execSQLWithAllowLoopJoin(q1.str(), dt));
+          auto single_frag_res = v<int64_t>(run_simple_agg(sq.str(), dt));
+          auto res1 = v<int64_t>(run_simple_agg(q1.str(), dt));
           ASSERT_EQ(single_frag_res, res1) << q1.str();
         }
       }
     };
     run_tests(integer_types);
     run_tests(float_types);
-    run_tests(date_types);
-    run_tests(time_types);
-    run_tests(timestamp_types);
+    // TODO: enable when datetime arrays are supported in JSON parser
+    // run_tests(date_types);
+    // run_tests(time_types);
+    // run_tests(timestamp_types);
     run_tests(text_array_types);
     run_tests(bool_types);
   }
@@ -1176,7 +957,6 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -1186,11 +966,7 @@ int main(int argc, char** argv) {
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
 
-  if (vm.count("keep-data")) {
-    g_keep_data = true;
-  }
-
-  QR::init(BASE_PATH);
+  init();
 
   int err{0};
   try {
@@ -1198,6 +974,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  QR::reset();
+  reset();
   return err;
 }

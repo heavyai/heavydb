@@ -255,7 +255,11 @@ std::string build_create_table_statement(
 }
 
 SQLTypeInfo arrayType(SQLTypes st, int size = 0) {
-  SQLTypeInfo res(kARRAY, (st == kTEXT) ? kENCODING_DICT : kENCODING_NONE, 0, st);
+  SQLTypeInfo res(kARRAY,
+                  (st == kTEXT) ? kENCODING_DICT
+                                : (st == kDATE ? kENCODING_DATE_IN_DAYS : kENCODING_NONE),
+                  0,
+                  st);
   if (size) {
     res.set_size(size * res.get_elem_type().get_size());
   }
