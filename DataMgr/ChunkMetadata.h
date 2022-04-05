@@ -98,7 +98,7 @@ void fillChunkStats(ChunkStats& stats,
 
 inline void mergeStats(ChunkStats& lhs, const ChunkStats& rhs, const SQLTypeInfo& type) {
   lhs.has_nulls |= rhs.has_nulls;
-  switch (type.get_type()) {
+  switch (type.is_array() ? type.get_subtype() : type.get_type()) {
     case kBOOLEAN: {
       lhs.min.tinyintval = std::min(lhs.min.tinyintval, rhs.min.tinyintval);
       lhs.max.tinyintval = std::max(lhs.max.tinyintval, rhs.max.tinyintval);

@@ -197,13 +197,11 @@ void ArrowStorage::fetchVarLenArrayData(const TableData& table,
     }
 
     const uint32_t* offsets = chunk->data()->GetValues<uint32_t>(1);
-    size_t chunk_size = (offsets[chunk->length()] - offsets[0]) * elem_size;
+    size_t chunk_size = offsets[chunk->length()] - offsets[0];
     chunk_size = std::min(chunk_size, num_bytes);
     auto chunk_list = std::dynamic_pointer_cast<arrow::ListArray>(chunk);
     auto elem_array = chunk_list->values();
-    memcpy(dst_ptr,
-           elem_array->data()->GetValues<int8_t>(1, offsets[0] * elem_size),
-           chunk_size);
+    memcpy(dst_ptr, elem_array->data()->GetValues<int8_t>(1, offsets[0]), chunk_size);
     remained -= chunk_size;
     dst_ptr += chunk_size;
   }

@@ -1482,6 +1482,28 @@ TEST_F(ArrowStorageTest, AppendJsonData_BoolArrays) {
                                               std::vector<int8_t>({-128})}));
 }
 
+TEST_F(ArrowStorageTest, AppendJsonData_IntArrays) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  SQLTypeInfo smallint_any(kARRAY, kENCODING_NONE, 0, kSMALLINT);
+  TableInfoPtr tinfo = storage.createTable("table1", {{"siv", smallint_any}});
+  storage.appendJsonData("{\"siv\": [1, 2, 3]}", tinfo->table_id);
+  storage.appendJsonData("{\"siv\": [2]}", tinfo->table_id);
+  storage.appendJsonData("{\"siv\": [2, 4]}", tinfo->table_id);
+  storage.appendJsonData("{\"siv\": [4, 5, 6]}", tinfo->table_id);
+  storage.appendJsonData("{\"siv\": [5]}", tinfo->table_id);
+  storage.appendJsonData("{\"siv\": [5, 7]}", tinfo->table_id);
+  checkData(storage,
+            tinfo->table_id,
+            6,
+            32'000'000,
+            std::vector<std::vector<int16_t>>({std::vector<int16_t>({1, 2, 3}),
+                                               std::vector<int16_t>({2}),
+                                               std::vector<int16_t>({2, 4}),
+                                               std::vector<int16_t>({4, 5, 6}),
+                                               std::vector<int16_t>({5}),
+                                               std::vector<int16_t>({5, 7})}));
+}
+
 TEST_F(ArrowStorageTest, AppendCsvData_Decimals) {
   ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
   ArrowStorage::CsvParseOptions parse_options;
