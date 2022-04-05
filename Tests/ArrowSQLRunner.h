@@ -92,6 +92,8 @@ void clearCpuMemory();
 BufferPoolStats getBufferPoolStats(const Data_Namespace::MemoryLevel memory_level =
                                        Data_Namespace::MemoryLevel::CPU_LEVEL);
 
-ArrowStorage* getStorage();
+std::shared_ptr<ArrowStorage> getStorage();
+
+DataMgr* getDataMgr();
 
 }  // namespace TestHelpers::ArrowSQLRunner

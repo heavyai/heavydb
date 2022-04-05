@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "ArrowSQLRunner.h"
 #include "TestHelpers.h"
 
 #include <boost/filesystem.hpp>
@@ -21,26 +22,17 @@
 
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/InputMetadata.h"
-#include "../QueryRunner/QueryRunner.h"
 
 #include "DataMgr/DataMgrBufferProvider.h"
 #include "DataMgr/DataMgrDataProvider.h"
-
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
 
 extern bool g_is_test_env;
 extern bool g_enable_watchdog;
 extern size_t g_big_group_threshold;
 extern size_t g_watchdog_baseline_max_groups;
 
-using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
-
-inline void run_ddl_statement(const std::string& input_str) {
-  QR::get()->runDDLStatement(input_str);
-}
+using namespace TestHelpers::ArrowSQLRunner;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -59,60 +51,44 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 class HighCardinalityStringEnv : public ::testing::Test {
  protected:
   void SetUp() override {
-    run_ddl_statement("DROP TABLE IF EXISTS high_cardinality_str;");
-    run_ddl_statement(
-        "CREATE TABLE high_cardinality_str (x INT, str TEXT ENCODING DICT (32));");
-    QR::get()->runSQL("INSERT INTO high_cardinality_str VALUES (1, 'hi');",
-                      ExecutorDeviceType::CPU);
-    QR::get()->runSQL("INSERT INTO high_cardinality_str VALUES (2, 'bye');",
-                      ExecutorDeviceType::CPU);
+    createTable("high_cardinality_str", {{"x", SQLTypeInfo(kINT)}, {"str", dictType()}});
+    insertCsvValues("high_cardinality_str", "1,hi\n2,bye");
   }
 
-  void TearDown() override {
-    run_ddl_statement("DROP TABLE IF EXISTS high_cardinality_str;");
-  }
+  void TearDown() override { dropTable("high_cardinality_str"); }
 };
 
 TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
   // make our own executor with a custom col ranges cache
-  auto cat = QR::get()->getCatalog().get();
-  CHECK(cat);
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        &cat->getDataMgr(),
-                                        cat->getDataMgr().getBufferProvider());
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
-  executor->setDatabaseId(cat->getDatabaseId());
+  auto executor = Executor::getExecutor(
+      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
-  auto td = cat->getMetadataForTable("high_cardinality_str");
-  CHECK(td);
-  auto cd = cat->getMetadataForColumn(td->tableId, "str");
-  CHECK(cd);
-  auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
-  CHECK(filter_cd);
+  auto tinfo = storage->getTableInfo(TEST_DB_ID, "high_cardinality_str");
+  auto colStrInfo = storage->getColumnInfo(*tinfo, "str");
+  auto colXInfo = storage->getColumnInfo(*tinfo, "x");
 
-  InputColDescriptor group_col_desc{cd->makeInfo(cat->getDatabaseId()), 0};
-  InputColDescriptor filter_col_desc{filter_cd->makeInfo(cat->getDatabaseId()), 0};
+  InputColDescriptor group_col_desc{colStrInfo, 0};
+  InputColDescriptor filter_col_desc{colXInfo, 0};
 
   std::unordered_set<InputColDescriptor> col_descs{group_col_desc, filter_col_desc};
   std::unordered_set<int> phys_table_ids;
   phys_table_ids.insert(group_col_desc.getTableId());
-  executor->setupCaching(cat->getDataMgr().getDataProvider(), col_descs, phys_table_ids);
+  executor->setupCaching(getDataMgr()->getDataProvider(), col_descs, phys_table_ids);
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
+  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(tinfo->table_id, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->makeInfo(cat->getDatabaseId()), 0));
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(cat->getDatabaseId()), 0));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(colStrInfo, 0));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(colXInfo, 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr = makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat->getDatabaseId()), 0);
-  auto filter_col_expr =
-      makeExpr<Analyzer::ColumnVar>(filter_cd->makeInfo(cat->getDatabaseId()), 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(colStrInfo, 0);
+  auto filter_col_expr = makeExpr<Analyzer::ColumnVar>(colXInfo, 0);
   Datum d{int64_t(1)};
   auto filter_val_expr = makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   auto simple_filter_expr = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
@@ -144,7 +120,7 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                cat->getDataMgr().getDataProvider(),
+                                getDataMgr()->getDataProvider(),
                                 column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(1));
@@ -178,47 +154,38 @@ std::unordered_set<InputColDescriptor> setup_str_col_caching(
 
 TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
   // make our own executor with a custom col ranges cache
-  auto cat = QR::get()->getCatalog().get();
-  CHECK(cat);
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        &cat->getDataMgr(),
-                                        cat->getDataMgr().getBufferProvider());
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
-  executor->setDatabaseId(cat->getDatabaseId());
+  auto executor = Executor::getExecutor(
+      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
-  auto td = cat->getMetadataForTable("high_cardinality_str");
-  CHECK(td);
-  auto cd = cat->getMetadataForColumn(td->tableId, "str");
-  CHECK(cd);
-  auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
-  CHECK(filter_cd);
+  auto tinfo = storage->getTableInfo(TEST_DB_ID, "high_cardinality_str");
+  auto colStrInfo = storage->getColumnInfo(*tinfo, "str");
+  auto colXInfo = storage->getColumnInfo(*tinfo, "x");
 
-  InputColDescriptor group_col_desc{cd->makeInfo(cat->getDatabaseId()), 0};
-  InputColDescriptor filter_col_desc{filter_cd->makeInfo(cat->getDatabaseId()), 0};
+  InputColDescriptor group_col_desc{colStrInfo, 0};
+  InputColDescriptor filter_col_desc{colXInfo, 0};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(group_col_desc,
                                            /*min=*/0,
                                            /*max=*/134217728,
                                            filter_col_desc,
-                                           cat->getDataMgr().getDataProvider(),
+                                           getDataMgr()->getDataProvider(),
                                            executor.get());
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
+  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(tinfo->table_id, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->makeInfo(cat->getDatabaseId()), 0));
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(cat->getDatabaseId()), 0));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(colStrInfo, 0));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(colXInfo, 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr = makeExpr<Analyzer::ColumnVar>(cd->makeInfo(cat->getDatabaseId()), 0);
-  auto filter_col_expr =
-      makeExpr<Analyzer::ColumnVar>(filter_cd->makeInfo(cat->getDatabaseId()), 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(colStrInfo, 0);
+  auto filter_col_expr = makeExpr<Analyzer::ColumnVar>(colXInfo, 0);
   Datum d{int64_t(1)};
   auto filter_val_expr = makeExpr<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
   auto simple_filter_expr = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false),
@@ -250,7 +217,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                cat->getDataMgr().getDataProvider(),
+                                getDataMgr()->getDataProvider(),
                                 column_cache),
       CardinalityEstimationRequired);
 
@@ -263,7 +230,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/true,
-                                cat->getDataMgr().getDataProvider(),
+                                getDataMgr()->getDataProvider(),
                                 column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(1));
@@ -274,46 +241,38 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
 
 TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
   // make our own executor with a custom col ranges cache
-  auto cat = QR::get()->getCatalog().get();
-  CHECK(cat);
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        &cat->getDataMgr(),
-                                        cat->getDataMgr().getBufferProvider());
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(cat));
-  executor->setDatabaseId(cat->getDatabaseId());
+  auto executor = Executor::getExecutor(
+      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
-  auto td = cat->getMetadataForTable("high_cardinality_str");
-  CHECK(td);
-  auto cd = cat->getMetadataForColumn(td->tableId, "str");
-  CHECK(cd);
-  auto filter_cd = cat->getMetadataForColumn(td->tableId, "x");
-  CHECK(filter_cd);
+  auto tinfo = storage->getTableInfo(TEST_DB_ID, "high_cardinality_str");
+  auto colStrInfo = storage->getColumnInfo(*tinfo, "str");
+  auto colXInfo = storage->getColumnInfo(*tinfo, "x");
 
-  InputColDescriptor group_col_desc{cd->makeInfo(cat->getDatabaseId()), 0};
-  InputColDescriptor filter_col_desc{filter_cd->makeInfo(cat->getDatabaseId()), 0};
+  InputColDescriptor group_col_desc{colStrInfo, 0};
+  InputColDescriptor filter_col_desc{colXInfo, 0};
 
   // 134217728 is 1 additional value over the max buffer size
   auto phys_inputs = setup_str_col_caching(group_col_desc,
                                            /*min=*/0,
                                            /*max=*/134217728,
                                            filter_col_desc,
-                                           cat->getDataMgr().getDataProvider(),
+                                           getDataMgr()->getDataProvider(),
                                            executor.get());
 
-  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(td->tableId, 0)};
+  auto input_descs = std::vector<InputDescriptor>{InputDescriptor(tinfo->table_id, 0)};
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(cd->makeInfo(cat->getDatabaseId()), 0));
-  input_col_descs.push_back(
-      std::make_shared<InputColDescriptor>(filter_cd->makeInfo(cat->getDatabaseId()), 0));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(colStrInfo, 0));
+  input_col_descs.push_back(std::make_shared<InputColDescriptor>(colXInfo, 0));
 
   std::vector<InputTableInfo> table_infos = get_table_infos(input_descs, executor.get());
 
   auto count_expr = makeExpr<Analyzer::AggExpr>(
       SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false, nullptr);
-  auto group_expr =
-      makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+  auto group_expr = makeExpr<Analyzer::ColumnVar>(
+      colStrInfo->type, tinfo->table_id, colStrInfo->column_id, 0);
 
   RelAlgExecutionUnit ra_exe_unit{input_descs,
                                   input_col_descs,
@@ -338,7 +297,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                 ExecutionOptions::defaults(),
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                cat->getDataMgr().getDataProvider(),
+                                getDataMgr()->getDataProvider(),
                                 column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(2));
@@ -357,39 +316,24 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
 class LowCardinalityThresholdTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;");
-    run_ddl_statement("CREATE TABLE low_cardinality (fl text,ar text, dep text);");
-    // note - some boost::filesystem::path methods returns wchar strings on windows
-    // and char strings on linux.
+    createTable("low_cardinality",
+                {{"fl", dictType()}, {"ar", dictType()}, {"dep", dictType()}});
 
-    // write some data to a file
-    boost::filesystem::path filename =
-        boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-
-    filename.replace_extension(boost::filesystem::path{".csv"});
-
-    // Note on win path::native() returns wchar, which is fine with fstream
-    std::fstream f(filename.native(), std::ios::binary | std::ios::out | std::ios::trunc);
-
-    CHECK(f.is_open());
+    std::stringstream ss;
     for (size_t i = 0; i < g_big_group_threshold; i++) {
-      f << i << ", " << i + 1 << ", " << i + 2 << std::endl;
+      ss << i << ", " << i + 1 << ", " << i + 2 << std::endl;
     }
-    f.close();
-
-    // Note the path::string() method  returns the appropriate type on win and linux
-    run_ddl_statement("COPY low_cardinality FROM '" + filename.string() +
-                      "' WITH (header='false');");
+    insertCsvValues("low_cardinality", ss.str());
   }
 
-  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;"); }
+  void TearDown() override { dropTable("low_cardinality"); }
 };
 
 TEST_F(LowCardinalityThresholdTest, GroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    auto result = QR::get()->runSQL(
+    auto result = run_multiple_agg(
         R"(select fl,ar,dep from low_cardinality group by fl,ar,dep;)", dt);
     EXPECT_EQ(result->rowCount(), g_big_group_threshold);
   }
@@ -402,34 +346,21 @@ class BigCardinalityThresholdTest : public ::testing::Test {
     initial_g_watchdog_baseline_max_groups = g_watchdog_baseline_max_groups;
     g_watchdog_baseline_max_groups = g_big_group_threshold + 1;
 
-    run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
-    run_ddl_statement("CREATE TABLE big_cardinality (fl text,ar text, dep text);");
-    // note - some boost::filesystem::path methods returns wchar strings on windows
-    // and char strings on linux.
+    createTable("big_cardinality",
+                {{"fl", dictType()}, {"ar", dictType()}, {"dep", dictType()}});
 
-    // write some data to a file
-    boost::filesystem::path filename =
-        boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-
-    filename.replace_extension(boost::filesystem::path{".csv"});
-
-    std::fstream f(filename.native(), std::ios::binary | std::ios::out | std::ios::trunc);
-    CHECK(f.is_open()) << filename.string();
-
+    std::stringstream ss;
     // add enough groups to trigger the watchdog exception if we use a poor estimate
     for (size_t i = 0; i < g_watchdog_baseline_max_groups; i++) {
-      f << i << ", " << i + 1 << ", " << i + 2 << std::endl;
+      ss << i << ", " << i + 1 << ", " << i + 2 << std::endl;
     }
-    f.close();
-
-    run_ddl_statement("COPY big_cardinality FROM '" + filename.string() +
-                      "' WITH (header='false');");
+    insertCsvValues("big_cardinality", ss.str());
   }
 
   void TearDown() override {
     g_enable_watchdog = false;
     g_watchdog_baseline_max_groups = initial_g_watchdog_baseline_max_groups;
-    run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
+    dropTable("big_cardinality");
   }
 
   size_t initial_g_watchdog_baseline_max_groups{0};
@@ -439,7 +370,7 @@ TEST_F(BigCardinalityThresholdTest, EmptyFilters) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    auto result = QR::get()->runSQL(
+    auto result = run_multiple_agg(
         R"(SELECT fl,ar,dep FROM big_cardinality WHERE fl = 'a' GROUP BY fl,ar,dep;)",
         dt);
     EXPECT_EQ(result->rowCount(), size_t(0));
@@ -463,7 +394,7 @@ int main(int argc, char** argv) {
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
 
-  QR::init(BASE_PATH);
+  init();
 
   int err{0};
   try {
@@ -471,6 +402,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  QR::reset();
+  reset();
   return err;
 }

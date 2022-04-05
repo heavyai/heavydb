@@ -193,7 +193,9 @@ class ArrowSQLRunnerImpl {
     return ::getBufferPoolStats(data_mgr_.get(), mmeory_level);
   }
 
-  ArrowStorage* getStorage() { return storage_.get(); }
+  std::shared_ptr<ArrowStorage> getStorage() { return storage_; }
+
+  DataMgr* getDataMgr() { return data_mgr_.get(); }
 
   ~ArrowSQLRunnerImpl() {
     storage_.reset();
@@ -357,8 +359,12 @@ BufferPoolStats getBufferPoolStats(const Data_Namespace::MemoryLevel memory_leve
   return ArrowSQLRunnerImpl::get()->getBufferPoolStats(memory_level);
 }
 
-ArrowStorage* getStorage() {
+std::shared_ptr<ArrowStorage> getStorage() {
   return ArrowSQLRunnerImpl::get()->getStorage();
+}
+
+DataMgr* getDataMgr() {
+  return ArrowSQLRunnerImpl::get()->getDataMgr();
 }
 
 }  // namespace TestHelpers::ArrowSQLRunner
