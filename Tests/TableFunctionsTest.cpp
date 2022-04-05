@@ -14,32 +14,16 @@
  * limitations under the License.
  */
 
+#include "ArrowSQLRunner.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
+#include <sstream>
 
-#include "QueryEngine/ResultSet.h"
-#include "QueryRunner/QueryRunner.h"
-
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
-using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers;
+using namespace TestHelpers::ArrowSQLRunner;
 
 extern bool g_enable_table_functions;
-namespace {
-
-inline void run_ddl_statement(const std::string& stmt) {
-  QR::get()->runDDLStatement(stmt);
-}
-
-std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
-                                            const ExecutorDeviceType device_type) {
-  return QR::get()->runSQL(query_str, device_type, false, false);
-}
-
-}  // namespace
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -59,62 +43,50 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 class TableFunctions : public ::testing::Test {
   void SetUp() override {
     {
-      run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
-      run_ddl_statement(
-          "CREATE TABLE tf_test (x INT, f FLOAT, d DOUBLE, d2 DOUBLE) WITH "
-          "(FRAGMENT_SIZE=2);");
+      createTable("tf_test",
+                  {{"x", SQLTypeInfo(kINT)},
+                   {"f", SQLTypeInfo(kFLOAT)},
+                   {"d", SQLTypeInfo(kDOUBLE)},
+                   {"d2", SQLTypeInfo(kDOUBLE)}},
+                  {2});
 
-      TestHelpers::ValuesGenerator gen("tf_test");
-
+      std::stringstream ss;
       for (int i = 0; i < 5; i++) {
-        const auto insert_query = gen(i, i * 1.1, i * 1.1, 1.0 - i * 2.2);
-        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+        ss << i << "," << (i * 1.1) << "," << (i * 1.1) << "," << (1.0 - i * 2.2)
+           << std::endl;
       }
+      insertCsvValues("tf_test", ss.str());
     }
     {
-      run_ddl_statement("DROP TABLE IF EXISTS sd_test;");
-      run_ddl_statement(
-          "CREATE TABLE sd_test ("
-          "   base TEXT ENCODING DICT(32),"
-          "   derived TEXT,"
-          "   SHARED DICTIONARY (derived) REFERENCES sd_test(base)"
-          ");");
-
-      TestHelpers::ValuesGenerator gen("sd_test");
-      std::vector<std::pair<std::string, std::string>> v = {{"'hello'", "'world'"},
-                                                            {"'foo'", "'bar'"},
-                                                            {"'bar'", "'baz'"},
-                                                            {"'world'", "'foo'"},
-                                                            {"'baz'", "'hello'"}};
-
-      for (const auto& p : v) {
-        const auto insert_query = gen(p.first, p.second);
-        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      }
+      createTable(
+          "sd_test",
+          {{"base", dictType(4, false, -1)}, {"derived", dictType(4, false, -1)}});
+      insertCsvValues("sd_test", "hello,world\nfoo,bar\nbar,baz\nworld,foo\nbaz,hello");
     }
     {
-      run_ddl_statement("DROP TABLE IF EXISTS err_test;");
-      run_ddl_statement(
-          "CREATE TABLE err_test (x INT, y BIGINT, f FLOAT, d DOUBLE, x2 INT) WITH "
-          "(FRAGMENT_SIZE=2);");
+      createTable("err_test",
+                  {{"x", SQLTypeInfo(kINT)},
+                   {"y", SQLTypeInfo(kBIGINT)},
+                   {"f", SQLTypeInfo(kFLOAT)},
+                   {"d", SQLTypeInfo(kDOUBLE)},
+                   {"x2", SQLTypeInfo(kINT)}},
+                  {2});
 
-      TestHelpers::ValuesGenerator gen("err_test");
-
+      std::stringstream ss;
       for (int i = 0; i < 5; i++) {
-        const auto insert_query = gen(std::numeric_limits<int32_t>::max() - 1,
-                                      std::numeric_limits<int64_t>::max() - 1,
-                                      std::numeric_limits<float>::max() - 1.0,
-                                      std::numeric_limits<double>::max() - 1.0,
-                                      i);
-        run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+        ss << (std::numeric_limits<int32_t>::max() - 1) << ","
+           << (std::numeric_limits<int64_t>::max() - 1) << ","
+           << (std::numeric_limits<float>::max() - 1.0) << ","
+           << (std::numeric_limits<double>::max() - 1.0) << "," << i << std::endl;
       }
+      insertCsvValues("err_test", ss.str());
     }
   }
 
   void TearDown() override {
-    run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
-    run_ddl_statement("DROP TABLE IF EXISTS sd_test;");
-    run_ddl_statement("DROP TABLE IF EXISTS err_test");
+    dropTable("tf_test");
+    dropTable("sd_test");
+    dropTable("err_test");
   }
 };
 
@@ -924,7 +896,7 @@ int main(int argc, char** argv) {
   // Table function support must be enabled before initialized the query runner
   // environment
   g_enable_table_functions = true;
-  QR::init(BASE_PATH);
+  init();
 
   int err{0};
   try {
@@ -932,6 +904,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  QR::reset();
+  reset();
   return err;
 }
