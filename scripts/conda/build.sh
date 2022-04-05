@@ -78,7 +78,6 @@ cmake -Wno-dev \
     -DENABLE_PROFILER=off \
     -DPREFER_STATIC_LIBS=off \
     -DENABLE_CUDA=off \
-    -DENABLE_DBE=ON \
     -DENABLE_FSI=ON \
     -DENABLE_ITT=OFF \
     -DENABLE_JIT_DEBUG=OFF \
