@@ -469,6 +469,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       query_mem_desc,
       device_id,
       ExecutorDeviceType::GPU,
+      /*use_hash_table_desc=*/false,
       (allocated_output_row_count == 0 ? 1 : allocated_output_row_count),
       std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
       std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
