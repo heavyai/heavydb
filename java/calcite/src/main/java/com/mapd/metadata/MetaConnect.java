@@ -92,7 +92,7 @@ public class MetaConnect {
   private static final int KARRAY = 15;
   private static final int KINTERVAL_DAY_TIME = 16;
   private static final int KINTERVAL_YEAR_MONTH = 17;
-  private static final int KTINYINT = 22;
+  private static final int KTINYINT = 18;
 
   private static volatile Map<String, Set<String>> DATABASE_TO_TABLES =
           new ConcurrentHashMap<>();

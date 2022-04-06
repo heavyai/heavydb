@@ -57,13 +57,13 @@ enum SQLTypes {
   kARRAY = 15,
   kINTERVAL_DAY_TIME = 16,
   kINTERVAL_YEAR_MONTH = 17,
-  kTINYINT = 22,
-  kEVAL_CONTEXT_TYPE = 24,  // Placeholder Type for ANY
-  kVOID = 25,
-  kCURSOR = 26,
-  kCOLUMN = 27,
-  kCOLUMN_LIST = 28,
-  kSQLTYPE_LAST = 29
+  kTINYINT = 18,
+  kEVAL_CONTEXT_TYPE = 19,  // Placeholder Type for ANY
+  kVOID = 20,
+  kCURSOR = 21,
+  kCOLUMN = 22,
+  kCOLUMN_LIST = 23,
+  kSQLTYPE_LAST = 24
 };
 
 #ifndef __CUDACC__
