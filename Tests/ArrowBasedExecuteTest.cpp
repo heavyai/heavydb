@@ -373,8 +373,16 @@ class ExecuteTestBase {
   static void init() {
     storage_ = std::make_shared<ArrowStorage>(TEST_SCHEMA_ID, "test", TEST_DB_ID);
 
+    std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
+    bool uses_gpu = false;
+#ifdef HAVE_CUDA
+    cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(-1, 0);
+    uses_gpu = true;
+#endif
+
     SystemParameters system_parameters;
-    data_mgr_ = std::make_shared<DataMgr>("", system_parameters, nullptr, false);
+    data_mgr_ =
+        std::make_shared<DataMgr>("", system_parameters, std::move(cuda_mgr), uses_gpu);
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
     ps_mgr->registerDataProvider(TEST_SCHEMA_ID, storage_);
 
@@ -1766,9 +1774,9 @@ class ExecuteTestBase {
   }
 
   static void reset() {
-    data_mgr_.reset();
     storage_.reset();
     executor_.reset();
+    data_mgr_.reset();
     calcite_.reset();
   }
 
