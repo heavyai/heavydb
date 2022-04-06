@@ -19,33 +19,21 @@
  * @brief Test suite for string functions
  */
 
+#include "ArrowSQLRunner.h"
+#include "TestHelpers.h"
+
 #include <QueryEngine/ResultSet.h>
+
 #include <gtest/gtest.h>
 #include <boost/format.hpp>
 #include <boost/locale/generator.hpp>
 
-#include "Catalog/Catalog.h"
-
-#include "../QueryRunner/QueryRunner.h"
-#include "TestHelpers.h"
-
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
 extern bool g_enable_experimental_string_functions;
 
-namespace {
-inline auto sql(const std::string& sql_stmt) {
-  return QueryRunner::QueryRunner::get()->runSQL(
-      sql_stmt, ExecutorDeviceType::CPU, true, true);
-}
+using namespace TestHelpers;
+using namespace TestHelpers::ArrowSQLRunner;
 
-inline auto multi_sql(const std::string& sql_stmts) {
-  return QueryRunner::QueryRunner::get()
-      ->runMultipleStatements(sql_stmts, ExecutorDeviceType::CPU)
-      .back();
-}
+namespace {
 
 class AssertValueEqualsVisitor : public boost::static_visitor<> {
  public:
@@ -123,77 +111,83 @@ void compare_result_set(
 class LowerFunctionTest : public testing::Test {
  public:
   void SetUp() override {
-    ASSERT_NO_THROW(multi_sql(R"(
-        drop table if exists lower_function_test_people;
-        create table lower_function_test_people(first_name text, last_name text encoding none, age integer, country_code text);
-        insert into lower_function_test_people values('JOHN', 'SMITH', 25, 'us');
-        insert into lower_function_test_people values('John', 'Banks', 30, 'Us');
-        insert into lower_function_test_people values('JOHN', 'Wilson', 20, 'cA');
-        insert into lower_function_test_people values('Sue', 'Smith', 25, 'CA');
-        drop table if exists lower_function_test_countries;
-        create table lower_function_test_countries(code text, name text, capital text encoding none);
-        insert into lower_function_test_countries values('US', 'United States', 'Washington');
-        insert into lower_function_test_countries values('ca', 'Canada', 'Ottawa');
-        insert into lower_function_test_countries values('Gb', 'United Kingdom', 'London');
-        insert into lower_function_test_countries values('dE', 'Germany', 'Berlin');
-      )"););
+    createTable("lower_function_test_people",
+                {{"first_name", dictType()},
+                 {"last_name", SQLTypeInfo(kTEXT)},
+                 {"age", SQLTypeInfo(kINT)},
+                 {"country_code", dictType()}});
+    insertCsvValues(
+        "lower_function_test_people",
+        "JOHN,SMITH,25,us\nJohn,Banks,30,Us\nJOHN,Wilson,20,cA\nSue,Smith,25,CA");
+
+    createTable(
+        "lower_function_test_countries",
+        {{"code", dictType()}, {"name", dictType()}, {"text", SQLTypeInfo(kTEXT)}});
+    insertCsvValues("lower_function_test_countries",
+                    "US,United States,Washington\nca,Canada,Ottawa\nGb,United "
+                    "Kingdom,London\ndE,Germany,Berlin");
   }
 
   void TearDown() override {
-    ASSERT_NO_THROW(multi_sql(R"(
-        drop table lower_function_test_people;
-        drop table lower_function_test_countries;
-      )"););
+    dropTable("lower_function_test_people");
+    dropTable("lower_function_test_countries");
   }
 };
 
 TEST_F(LowerFunctionTest, LowercaseProjection) {
-  auto result_set = sql("select lower(first_name) from lower_function_test_people;");
+  auto result_set =
+      run_multiple_agg("select lower(first_name) from lower_function_test_people;",
+                       ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{
       {"john"}, {"john"}, {"john"}, {"sue"}};
   compare_result_set(expected_result_set, result_set);
 }
 
 TEST_F(LowerFunctionTest, LowercaseFilter) {
-  auto result_set =
-      sql("select first_name, last_name from lower_function_test_people "
-          "where lower(country_code) = 'us';");
+  auto result_set = run_multiple_agg(
+      "select first_name, last_name from lower_function_test_people "
+      "where lower(country_code) = 'us';",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"JOHN", "SMITH"},
                                                                   {"John", "Banks"}};
   compare_result_set(expected_result_set, result_set);
 }
 
 TEST_F(LowerFunctionTest, MultipleLowercaseFilters) {
-  auto result_set =
-      sql("select first_name, last_name from lower_function_test_people "
-          "where lower(country_code) = 'us' or lower(first_name) = 'sue';");
+  auto result_set = run_multiple_agg(
+      "select first_name, last_name from lower_function_test_people "
+      "where lower(country_code) = 'us' or lower(first_name) = 'sue';",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{
       {"JOHN", "SMITH"}, {"John", "Banks"}, {"Sue", "Smith"}};
   compare_result_set(expected_result_set, result_set);
 }
 
 TEST_F(LowerFunctionTest, MixedFilters) {
-  auto result_set =
-      sql("select first_name, last_name from lower_function_test_people "
-          "where lower(country_code) = 'ca' and age > 20;");
+  auto result_set = run_multiple_agg(
+      "select first_name, last_name from lower_function_test_people "
+      "where lower(country_code) = 'ca' and age > 20;",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"Sue", "Smith"}};
   compare_result_set(expected_result_set, result_set);
 }
 
 TEST_F(LowerFunctionTest, LowercaseGroupBy) {
-  auto result_set =
-      sql("select lower(first_name), count(*) from lower_function_test_people "
-          "group by lower(first_name) order by 2 desc;");
+  auto result_set = run_multiple_agg(
+      "select lower(first_name), count(*) from lower_function_test_people "
+      "group by lower(first_name) order by 2 desc;",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"john", int64_t(3)},
                                                                   {"sue", int64_t(1)}};
   compare_result_set(expected_result_set, result_set);
 }
 
 TEST_F(LowerFunctionTest, LowercaseJoin) {
-  auto result_set =
-      sql("select first_name, name as country_name "
-          "from lower_function_test_people "
-          "join lower_function_test_countries on lower(country_code) = lower(code);");
+  auto result_set = run_multiple_agg(
+      "select first_name, name as country_name "
+      "from lower_function_test_people "
+      "join lower_function_test_countries on lower(country_code) = lower(code);",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{
       {"JOHN", "United States"},
       {"John", "United States"},
@@ -203,8 +197,9 @@ TEST_F(LowerFunctionTest, LowercaseJoin) {
 }
 
 TEST_F(LowerFunctionTest, SelectLowercaseLiteral) {
-  auto result_set =
-      sql("select first_name, lower('SMiTH') from lower_function_test_people;");
+  auto result_set = run_multiple_agg(
+      "select first_name, lower('SMiTH') from lower_function_test_people;",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{
       {"JOHN", "smith"}, {"John", "smith"}, {"JOHN", "smith"}, {"Sue", "smith"}};
   compare_result_set(expected_result_set, result_set);
@@ -212,17 +207,19 @@ TEST_F(LowerFunctionTest, SelectLowercaseLiteral) {
 
 // TODO: Re-enable after clear definition around handling non-ASCII characters
 TEST_F(LowerFunctionTest, DISABLED_LowercaseNonAscii) {
-  auto result_set = multi_sql(R"(
-       insert into lower_function_test_people values('Ħ', 'Ħ', 25, 'GB');
-       select lower(first_name), last_name from lower_function_test_people where country_code = 'GB';
-     )");
+  insertCsvValues("lower_function_test_people", "Ħ,Ħ,25,GB");
+  auto result_set = run_multiple_agg(
+      "select lower(first_name), last_name from lower_function_test_people where "
+      "country_code = 'GB';",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"ħ", "Ħ"}};
   compare_result_set(expected_result_set, result_set);
 }
 
 TEST_F(LowerFunctionTest, LowercaseNonEncodedTextColumn) {
   try {
-    sql("select lower(last_name) from lower_function_test_people;");
+    run_multiple_agg("select lower(last_name) from lower_function_test_people;",
+                     ExecutorDeviceType::CPU);
     FAIL() << "An exception should have been thrown for this test case";
   } catch (const std::exception& e) {
     ASSERT_STREQ("LOWER expects a dictionary encoded text column or a literal.",
@@ -232,7 +229,8 @@ TEST_F(LowerFunctionTest, LowercaseNonEncodedTextColumn) {
 
 TEST_F(LowerFunctionTest, LowercaseNonTextColumn) {
   try {
-    sql("select lower(age) from lower_function_test_people;");
+    run_multiple_agg("select lower(age) from lower_function_test_people;",
+                     ExecutorDeviceType::CPU);
     FAIL() << "An exception should have been thrown for this test case";
   } catch (const std::exception& e) {
     ASSERT_STREQ("LOWER expects a dictionary encoded text column or a literal.",
@@ -246,12 +244,10 @@ TEST_F(LowerFunctionTest, LowercaseGpuMode) {
       << "This test case only applies to uses case where CUDA is enabled. Skipping test.";
   return;
 #else
-  auto result_set = QueryRunner::QueryRunner::get()->runSQL(
+  auto result_set = run_multiple_agg(
       "select first_name, last_name from lower_function_test_people "
       "where lower(country_code) = 'us';",
-      ExecutorDeviceType::GPU,
-      true,
-      true);
+      ExecutorDeviceType::GPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"JOHN", "SMITH"},
                                                                   {"John", "Banks"}};
   compare_result_set(expected_result_set, result_set);
@@ -259,10 +255,11 @@ TEST_F(LowerFunctionTest, LowercaseGpuMode) {
 }
 
 TEST_F(LowerFunctionTest, LowercaseNullColumn) {
-  auto result_set = multi_sql(R"(
-       insert into lower_function_test_people values(null, 'Empty', 25, 'US');
-       select lower(first_name), last_name from lower_function_test_people where last_name = 'Empty';
-     )");
+  insertCsvValues("lower_function_test_people", ",Empty,25,US");
+  auto result_set = run_multiple_agg(
+      "select lower(first_name), last_name from lower_function_test_people where "
+      "last_name = 'Empty';",
+      ExecutorDeviceType::CPU);
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"", "Empty"}};
   compare_result_set(expected_result_set, result_set);
 }
@@ -271,7 +268,8 @@ TEST_F(LowerFunctionTest, SelectLowercase_ExperimentalStringFunctionsDisabled) {
   g_enable_experimental_string_functions = false;
 
   try {
-    sql("select lower(first_name) from lower_function_test_people;");
+    run_multiple_agg("select lower(first_name) from lower_function_test_people;",
+                     ExecutorDeviceType::CPU);
     FAIL() << "An exception should have been thrown for this test case";
   } catch (const std::exception& e) {
     ASSERT_STREQ("Function LOWER(TEXT) not supported.", e.what());
@@ -284,7 +282,8 @@ TEST_F(LowerFunctionTest, SelectLowercase_ExperimentalStringFunctionsDisabled) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  QueryRunner::QueryRunner::init(BASE_PATH);
+
+  init();
   g_enable_experimental_string_functions = true;
 
   // Use system locale setting by default (as done in the server).
@@ -299,6 +298,6 @@ int main(int argc, char** argv) {
   }
 
   g_enable_experimental_string_functions = false;
-  QueryRunner::QueryRunner::reset();
+  reset();
   return err;
 }
