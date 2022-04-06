@@ -14,20 +14,16 @@
  * limitations under the License.
  */
 
+#include "ArrowSQLRunner.h"
 #include "TestHelpers.h"
 
-#include <Catalog/Catalog.h>
-#include <CudaMgr/CudaMgr.h>
 #include <QueryEngine/ResultSet.h>
-#include <QueryRunner/QueryRunner.h>
+#include "CudaMgr/CudaMgr.h"
 
 #include <gtest/gtest.h>
 
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
-using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers;
+using namespace TestHelpers::ArrowSQLRunner;
 
 extern bool g_allow_cpu_retry;
 extern size_t g_max_memory_allocation_size;
@@ -37,7 +33,6 @@ extern bool g_enable_bump_allocator;
 namespace {
 
 size_t g_num_gpus{0};
-bool g_keep_data{false};
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -52,11 +47,6 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
   }
 
-std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
-                                            const ExecutorDeviceType device_type) {
-  return QR::get()->runSQL(query_str, device_type, true, true);
-}
-
 // Note: This assumes a homogenous GPU setup
 struct GpuInfo {
   size_t global_memory_size;
@@ -64,11 +54,8 @@ struct GpuInfo {
 };
 
 GpuInfo get_gpu_info() {
-  auto cat = QR::get()->getCatalog();
-  CHECK(cat);
-
-  auto& data_mgr = cat->getDataMgr();
-  auto cuda_mgr = data_mgr.getCudaMgr();
+  auto data_mgr = getDataMgr();
+  auto cuda_mgr = data_mgr->getCudaMgr();
   CHECK(cuda_mgr);
   const auto device_props_vec = cuda_mgr->getAllDeviceProperties();
   CHECK_GE(device_props_vec.size(), size_t(1));
@@ -76,11 +63,9 @@ GpuInfo get_gpu_info() {
 }
 
 bool setup() {
-  // Only initialize the QueryRunner once. We will reset the system catalog using the
-  // resetWithParameters method as needed for each test.
-  QR::init(BASE_PATH, /*udf_filename=*/"", /*max_gpu_mem=*/1000000000);
+  init(/*max_gpu_mem=*/1000000000);
 
-  if (!QR::get()->gpusPresent()) {
+  if (!gpusPresent()) {
     LOG(WARNING) << "No GPUs detected. Skipping all Bump Allocator tests.";
     return false;
   }
@@ -95,18 +80,14 @@ bool setup() {
 class LowGpuBufferMemory : public ::testing::Test {
  public:
   void SetUp() override {
-    const std::string drop_table_stmt{"DROP TABLE IF EXISTS test;"};
-    QR::get()->runDDLStatement(drop_table_stmt);
-    const std::string create_table_stmt{
-        "CREATE TABLE test (x INT, y BIGINT) WITH (FRAGMENT_SIZE=32);"};
-    QR::get()->runDDLStatement(create_table_stmt);
+    createTable("test", {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kBIGINT)}}, {32});
 
     // Insert enough data to just barely overflow
+    std::stringstream ss;
     for (size_t i = 0; i < 64 * g_num_gpus; i++) {
-      const std::string insert_stmt{"INSERT INTO test VALUES (" + std::to_string(i) +
-                                    ", " + std::to_string(i) + ");"};
-      run_multiple_agg(insert_stmt, ExecutorDeviceType::CPU);
+      ss << i << "," << i << std::endl;
     }
+    insertCsvValues("test", ss.str());
 
     // Min memory allocation size set to 2GB to guarantee OOM during allocation
     min_mem_allocation_state_ = g_min_memory_allocation_size;
@@ -118,10 +99,7 @@ class LowGpuBufferMemory : public ::testing::Test {
   }
 
   void TearDown() override {
-    if (!g_keep_data) {
-      const std::string drop_table_stmt{"DROP TABLE IF EXISTS test;"};
-      QR::get()->runDDLStatement(drop_table_stmt);
-    }
+    dropTable("test");
 
     g_min_memory_allocation_size = min_mem_allocation_state_;
     g_allow_cpu_retry = allow_cpu_retry_state_;
@@ -157,19 +135,14 @@ constexpr size_t row_count_per_gpu = 64;
 class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
  public:
   void SetUp() override {
-    const std::string drop_table_stmt{"DROP TABLE IF EXISTS test;"};
-    QR::get()->runDDLStatement(drop_table_stmt);
-    const std::string create_table_stmt{
-        "CREATE TABLE test (x INT, y BIGINT) WITH (FRAGMENT_SIZE=32);"};
-    QR::get()->runDDLStatement(create_table_stmt);
+    createTable("test", {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kBIGINT)}}, {32});
 
-    // Insert enough data to exceed the max buffer entry guess and force a pre-flight CPU
-    // count
+    // Insert enough data to just barely overflow
+    std::stringstream ss;
     for (size_t i = 0; i < row_count_per_gpu * g_num_gpus; i++) {
-      const std::string insert_stmt{"INSERT INTO test VALUES (" + std::to_string(i) +
-                                    ", " + std::to_string(i) + ");"};
-      run_multiple_agg(insert_stmt, ExecutorDeviceType::CPU);
+      ss << i << "," << i << std::endl;
     }
+    insertCsvValues("test", ss.str());
 
     // Min memory allocation size set to 2GB to guarantee OOM during allocation
     min_mem_allocation_state_ = g_min_memory_allocation_size;
@@ -181,10 +154,7 @@ class LowGpuBufferMemoryCpuRetry : public ::testing::Test {
   }
 
   void TearDown() override {
-    if (!g_keep_data) {
-      const std::string drop_table_stmt{"DROP TABLE IF EXISTS test;"};
-      QR::get()->runDDLStatement(drop_table_stmt);
-    }
+    dropTable("test");
 
     g_min_memory_allocation_size = min_mem_allocation_state_;
     g_allow_cpu_retry = allow_cpu_retry_state_;
@@ -211,18 +181,14 @@ TEST_F(LowGpuBufferMemoryCpuRetry, OOMRetryOnCPU) {
 class MediumGpuBufferMemory : public ::testing::Test {
  public:
   void SetUp() override {
-    const std::string drop_table_stmt{"DROP TABLE IF EXISTS test;"};
-    QR::get()->runDDLStatement(drop_table_stmt);
-    const std::string create_table_stmt{
-        "CREATE TABLE test (x INT, y BIGINT) WITH (FRAGMENT_SIZE=32);"};
-    QR::get()->runDDLStatement(create_table_stmt);
+    createTable("test", {{"x", SQLTypeInfo(kINT)}, {"y", SQLTypeInfo(kBIGINT)}}, {32});
 
     // Insert enough data to just barely overflow
+    std::stringstream ss;
     for (size_t i = 0; i < 64 * g_num_gpus; i++) {
-      const std::string insert_stmt{"INSERT INTO test VALUES (" + std::to_string(i) +
-                                    ", " + std::to_string(i) + ");"};
-      run_multiple_agg(insert_stmt, ExecutorDeviceType::CPU);
+      ss << i << "," << i << std::endl;
     }
+    insertCsvValues("test", ss.str());
 
     max_mem_allocation_state_ = g_max_memory_allocation_size;
     g_max_memory_allocation_size = 512;
@@ -233,10 +199,7 @@ class MediumGpuBufferMemory : public ::testing::Test {
   }
 
   void TearDown() override {
-    if (!g_keep_data) {
-      const std::string drop_table_stmt{"DROP TABLE IF EXISTS test;"};
-      QR::get()->runDDLStatement(drop_table_stmt);
-    }
+    dropTable("test");
 
     g_max_memory_allocation_size = max_mem_allocation_state_;
 
@@ -270,10 +233,6 @@ int main(int argc, char** argv) {
   // these two are here to allow passing correctly google testing parameters
   desc.add_options()("gtest_list_tests", "list all tests");
   desc.add_options()("gtest_filter", "filters tests, use --help for details");
-  desc.add_options()("keep-data",
-                     "Don't drop tables at the end of the tests. Note that individual "
-                     "tests may still create and drop tables. Use in combination with "
-                     "--gtest_filter to preserve tables for a specific test group.");
   desc.add_options()(
       "test-help",
       "Print all BumpAllocatorTest specific options (for gtest options use `--help`).");
@@ -292,17 +251,13 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  if (vm.count("keep-data")) {
-    g_keep_data = true;
-  }
-
   logger::init(log_options);
 
   g_enable_bump_allocator = true;
 
   if (!setup()) {
     // No GPUs detected, bypass the test
-    QR::reset();
+    reset();
     return 0;
   }
 
@@ -312,6 +267,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  QR::reset();
+  reset();
   return err;
 }

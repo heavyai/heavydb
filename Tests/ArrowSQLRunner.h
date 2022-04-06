@@ -31,7 +31,7 @@ constexpr int TEST_DB_ID = (TEST_SCHEMA_ID << 24) + 1;
 
 constexpr int CALCITE_PORT = 3278;
 
-void init();
+void init(size_t max_gpu_mem = 0);
 
 void reset();
 

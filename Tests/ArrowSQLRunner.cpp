@@ -37,7 +37,9 @@ namespace {
 
 class ArrowSQLRunnerImpl {
  public:
-  static void init() { instance_.reset(new ArrowSQLRunnerImpl); }
+  static void init(size_t max_gpu_mem) {
+    instance_.reset(new ArrowSQLRunnerImpl(max_gpu_mem));
+  }
 
   static void reset() { instance_.reset(); }
 
@@ -205,7 +207,7 @@ class ArrowSQLRunnerImpl {
   }
 
  protected:
-  ArrowSQLRunnerImpl() {
+  ArrowSQLRunnerImpl(size_t max_gpu_mem) {
     storage_ = std::make_shared<ArrowStorage>(TEST_SCHEMA_ID, "test", TEST_DB_ID);
 
     std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
@@ -216,6 +218,7 @@ class ArrowSQLRunnerImpl {
 #endif
 
     SystemParameters system_parameters;
+    system_parameters.gpu_buffer_mem_bytes = max_gpu_mem;
     data_mgr_ =
         std::make_shared<DataMgr>("", system_parameters, std::move(cuda_mgr), uses_gpu);
     auto* ps_mgr = data_mgr_->getPersistentStorageMgr();
@@ -255,8 +258,8 @@ std::unique_ptr<ArrowSQLRunnerImpl> ArrowSQLRunnerImpl::instance_;
 
 }  // namespace
 
-void init() {
-  ArrowSQLRunnerImpl::init();
+void init(size_t max_gpu_mem) {
+  ArrowSQLRunnerImpl::init(max_gpu_mem);
 }
 
 void reset() {
