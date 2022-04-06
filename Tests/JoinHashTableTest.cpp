@@ -14,18 +14,9 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/operations.hpp>
-#include <boost/program_options.hpp>
-#include <csignal>
-#include <exception>
-#include <memory>
-#include <ostream>
-#include <set>
-#include <vector>
-#include "Catalog/Catalog.h"
-#include "Catalog/DBObject.h"
+#include "ArrowSQLRunner.h"
+#include "TestHelpers.h"
+
 #include "DataMgr/DataMgr.h"
 #include "DataMgr/DataMgrBufferProvider.h"
 #include "DataMgr/DataMgrDataProvider.h"
@@ -35,18 +26,18 @@
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/JoinHashTable/OverlapsJoinHashTable.h"
 #include "QueryEngine/ResultSet.h"
-#include "QueryRunner/QueryRunner.h"
-#include "Shared/thread_count.h"
-#include "TestHelpers.h"
 
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
+#include <gtest/gtest.h>
+#include <boost/program_options.hpp>
 
-using namespace Catalog_Namespace;
+#include <exception>
+#include <memory>
+#include <ostream>
+#include <set>
+#include <vector>
+
 using namespace TestHelpers;
-
-using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers::ArrowSQLRunner;
 
 namespace {
 ExecutorDeviceType g_device_type;
@@ -69,14 +60,9 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     continue;                                                \
   }
 
-inline auto sql(std::string_view sql_stmts) {
-  return QR::get()->runMultipleStatements(std::string(sql_stmts), g_device_type);
-}
-
-int deviceCount(const Catalog_Namespace::Catalog* catalog,
-                const ExecutorDeviceType device_type) {
+int deviceCount(const ExecutorDeviceType device_type) {
   if (device_type == ExecutorDeviceType::GPU) {
-    const auto cuda_mgr = catalog->getDataMgr().getCudaMgr();
+    const auto cuda_mgr = getDataMgr()->getCudaMgr();
     CHECK(cuda_mgr);
     return cuda_mgr->getDeviceCount();
   } else {
@@ -88,22 +74,18 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                        std::string_view column1,
                                        std::string_view table2,
                                        std::string_view column2) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID,
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider());
+  auto executor = Executor::getExecutor(
+      Executor::UNITARY_EXECUTOR_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
 
-  auto device_count = deviceCount(catalog.get(), g_device_type);
+  auto device_count = deviceCount(g_device_type);
 
   ColumnCacheMap column_cache;
 
@@ -114,28 +96,24 @@ std::shared_ptr<HashJoin> buildPerfect(std::string_view table1,
                                         memory_level,
                                         HashType::OneToOne,
                                         device_count,
-                                        catalog->getDataMgr().getDataProvider(),
+                                        getDataMgr()->getDataProvider(),
                                         column_cache,
                                         executor.get());
 }
 
 std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getDatabaseId(),
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider());
+  auto executor =
+      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
 
-  auto device_count = deviceCount(catalog.get(), g_device_type);
+  auto device_count = deviceCount(g_device_type);
 
   ColumnCacheMap column_cache;
 
@@ -143,29 +121,25 @@ std::shared_ptr<HashJoin> buildKeyed(std::shared_ptr<Analyzer::BinOper> op) {
                                         memory_level,
                                         HashType::OneToOne,
                                         device_count,
-                                        catalog->getDataMgr().getDataProvider(),
+                                        getDataMgr()->getDataProvider(),
                                         column_cache,
                                         executor.get());
 }
 
 std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
     std::vector<std::shared_ptr<Analyzer::BinOper>> quals) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getDatabaseId(),
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider());
+  auto executor =
+      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   auto memory_level =
       (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
                                                 : Data_Namespace::GPU_LEVEL);
 
-  auto device_count = deviceCount(catalog.get(), g_device_type);
+  auto device_count = deviceCount(g_device_type);
 
   ColumnCacheMap column_cache;
 
@@ -173,7 +147,7 @@ std::pair<std::string, std::shared_ptr<HashJoin>> checkProperQualDetection(
                                         memory_level,
                                         HashType::OneToOne,
                                         device_count,
-                                        catalog->getDataMgr().getDataProvider(),
+                                        getDataMgr()->getDataProvider(),
                                         column_cache,
                                         executor.get());
 }
@@ -197,27 +171,11 @@ TEST(Build, PerfectOneToOne1) {
                                          {{8}, {8}},
                                          {{9}, {9}}};
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1\n8");
 
-      create table table1 (nums1 integer);
-      create table table2 (nums2 integer);
-
-      insert into table1 values (1);
-      insert into table1 values (8);
-
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (2);
-      insert into table2 values (3);
-      insert into table2 values (4);
-      insert into table2 values (5);
-      insert into table2 values (6);
-      insert into table2 values (7);
-      insert into table2 values (8);
-      insert into table2 values (9);
-    )");
+    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
@@ -226,10 +184,8 @@ TEST(Build, PerfectOneToOne1) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
+    dropTable("table1");
+    dropTable("table2");
   }
 }
 
@@ -250,25 +206,11 @@ TEST(Build, PerfectOneToOne2) {
                                          {{7}, {6}},
                                          {{9}, {7}}};
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1\n8");
 
-      create table table1 (nums1 integer);
-      create table table2 (nums2 integer);
-
-      insert into table1 values (1);
-      insert into table1 values (8);
-
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (2);
-      insert into table2 values (4);
-      insert into table2 values (5);
-      insert into table2 values (6);
-      insert into table2 values (7);
-      insert into table2 values (9);
-    )");
+    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n2\n4\n5\n6\n7\n9");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToOne);
@@ -277,10 +219,8 @@ TEST(Build, PerfectOneToOne2) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
+    dropTable("table1");
+    dropTable("table2");
   }
 }
 
@@ -296,27 +236,11 @@ TEST(Build, PerfectOneToMany1) {
     const DecodedJoinHashBufferSet s1 = {
         {{0}, {0, 5}}, {{1}, {1, 6}}, {{2}, {2, 7}}, {{3}, {3, 8}}, {{4}, {4, 9}}};
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1\n8");
 
-      create table table1 (nums1 integer);
-      create table table2 (nums2 integer);
-
-      insert into table1 values (1);
-      insert into table1 values (8);
-
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (2);
-      insert into table2 values (3);
-      insert into table2 values (4);
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (2);
-      insert into table2 values (3);
-      insert into table2 values (4);
-    )");
+    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n2\n3\n4\n0\n1\n2\n3\n4");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
@@ -325,10 +249,8 @@ TEST(Build, PerfectOneToMany1) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
+    dropTable("table1");
+    dropTable("table2");
   }
 }
 
@@ -344,25 +266,11 @@ TEST(Build, PerfectOneToMany2) {
     const DecodedJoinHashBufferSet s1 = {
         {{0}, {0, 4}}, {{2}, {1, 5}}, {{3}, {2, 6}}, {{4}, {3, 7}}};
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1\n8");
 
-      create table table1 (nums1 integer);
-      create table table2 (nums2 integer);
-
-      insert into table1 values (1);
-      insert into table1 values (8);
-
-      insert into table2 values (0);
-      insert into table2 values (2);
-      insert into table2 values (3);
-      insert into table2 values (4);
-      insert into table2 values (0);
-      insert into table2 values (2);
-      insert into table2 values (3);
-      insert into table2 values (4);
-    )");
+    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n2\n3\n4\n0\n2\n3\n4");
 
     auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
     EXPECT_EQ(hash_table->getHashType(), HashType::OneToMany);
@@ -371,25 +279,19 @@ TEST(Build, PerfectOneToMany2) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
+    dropTable("table1");
+    dropTable("table2");
   }
 }
 
 TEST(Build, detectProperJoinQual) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getDatabaseId(),
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider())
-                      .get();
+  auto executor =
+      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider())
+          .get();
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -402,27 +304,11 @@ TEST(Build, detectProperJoinQual) {
     const DecodedJoinHashBufferSet s1 = {
         {{0}, {0, 5}}, {{1}, {1, 6}}, {{2}, {2, 7}}, {{3}, {3, 8}}, {{4}, {4, 9}}};
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"t11", SQLTypeInfo(kINT)}, {"t12", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1,1\n8,1");
 
-      create table table1 (t11 integer, t12 integer);
-      create table table2 (t21 integer, t22 integer);
-
-      insert into table1 values (1, 1);
-      insert into table1 values (8, 1);
-
-      insert into table2 values (0, 1);
-      insert into table2 values (1, 1);
-      insert into table2 values (2, 1);
-      insert into table2 values (3, 1);
-      insert into table2 values (4, 1);
-      insert into table2 values (0, 1);
-      insert into table2 values (1, 1);
-      insert into table2 values (2, 1);
-      insert into table2 values (3, 1);
-      insert into table2 values (4, 1);
-    )");
+    createTable("table2", {{"t21", SQLTypeInfo(kINT)}, {"t22", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0,1\n1,1\n2,1\n3,1\n4,1\n0,1\n1,1\n2,1\n3,1\n4,1");
 
     Datum d;
     d.intval = 1;
@@ -478,24 +364,19 @@ TEST(Build, detectProperJoinQual) {
       EXPECT_EQ(s1, s2);
       EXPECT_TRUE(!res.first.empty());
     }
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
+
+    dropTable("table1");
+    dropTable("table2");
   }
 }
 
 TEST(Build, KeyedOneToOne) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getDatabaseId(),
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider());
+  auto executor =
+      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -506,22 +387,11 @@ TEST(Build, KeyedOneToOne) {
     // | keyed one-to-one | keys * (1,1,1) (3,3,2) (0,0,0) * * |
     const DecodedJoinHashBufferSet s1 = {{{0, 0}, {0}}, {{1, 1}, {1}}, {{3, 3}, {2}}};
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-      create table table1 (a1 integer, a2 integer);
-      create table table2 (b integer);
-
-      insert into table1 values (1, 11);
-      insert into table1 values (2, 12);
-      insert into table1 values (3, 13);
-      insert into table1 values (4, 14);
-
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
-    )");
+    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n3");
 
     auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
     auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
@@ -541,24 +411,18 @@ TEST(Build, KeyedOneToOne) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
+    dropTable("table1");
+    dropTable("table2");
   }
 }
 
 TEST(Build, KeyedOneToMany) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getDatabaseId(),
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider());
+  auto executor =
+      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -570,23 +434,11 @@ TEST(Build, KeyedOneToMany) {
     // 1 2 1 * * | payloads 1 2 3 0 |
     const DecodedJoinHashBufferSet s1 = {{{0}, {0}}, {{1}, {1}}, {{3}, {2, 3}}};
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-      create table table1 (a1 integer, a2 integer);
-      create table table2 (b integer);
-
-      insert into table1 values (1, 11);
-      insert into table1 values (2, 12);
-      insert into table1 values (3, 13);
-      insert into table1 values (4, 14);
-
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
-      insert into table2 values (3);
-    )");
+    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n3\n3");
 
     auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
     auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
@@ -606,10 +458,8 @@ TEST(Build, KeyedOneToMany) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
+    dropTable("table1");
+    dropTable("table2");
   }
 }
 
@@ -620,49 +470,17 @@ TEST(MultiFragment, PerfectOneToOne) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1\n7");
 
-      create table table1 (nums1 integer);
-      create table table2 (nums2 integer);
+    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
-      insert into table1 values (1);
-      insert into table1 values (7);
+    createTable("table3", {{"nums3", SQLTypeInfo(kINT)}}, {3});
+    insertCsvValues("table3", "1\n7");
 
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (2);
-      insert into table2 values (3);
-      insert into table2 values (4);
-      insert into table2 values (5);
-      insert into table2 values (6);
-      insert into table2 values (7);
-      insert into table2 values (8);
-      insert into table2 values (9);
-    )");
-
-    sql(R"(
-      drop table if exists table3;
-      drop table if exists table4;
-
-      create table table3 (nums3 integer) with (fragment_size = 3);
-      create table table4 (nums4 integer) with (fragment_size = 3);
-
-      insert into table3 values (1);
-      insert into table3 values (7);
-
-      insert into table4 values (0);
-      insert into table4 values (1);
-      insert into table4 values (2);
-      insert into table4 values (3);
-      insert into table4 values (4);
-      insert into table4 values (5);
-      insert into table4 values (6);
-      insert into table4 values (7);
-      insert into table4 values (8);
-      insert into table4 values (9);
-    )");
+    createTable("table4", {{"nums4", SQLTypeInfo(kINT)}}, {3});
+    insertCsvValues("table4", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9");
 
     auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToOne);
@@ -675,12 +493,10 @@ TEST(MultiFragment, PerfectOneToOne) {
     auto s2 = hash_table2->toSet(g_device_type, 0);
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-      drop table if exists table3;
-      drop table if exists table4;
-    )");
+    dropTable("table1");
+    dropTable("table2");
+    dropTable("table3");
+    dropTable("table4");
   }
 }
 
@@ -691,51 +507,17 @@ TEST(MultiFragment, PerfectOneToMany) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"nums1", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1\n7");
 
-      create table table1 (nums1 integer);
-      create table table2 (nums2 integer);
+    createTable("table2", {{"nums2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n9");
 
-      insert into table1 values (1);
-      insert into table1 values (7);
+    createTable("table3", {{"nums3", SQLTypeInfo(kINT)}}, {3});
+    insertCsvValues("table3", "1\n7");
 
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (2);
-      insert into table2 values (3);
-      insert into table2 values (4);
-      insert into table2 values (5);
-      insert into table2 values (6);
-      insert into table2 values (7);
-      insert into table2 values (8);
-      insert into table2 values (9);
-      insert into table2 values (9);
-    )");
-
-    sql(R"(
-      drop table if exists table3;
-      drop table if exists table4;
-
-      create table table3 (nums3 integer) with (fragment_size = 3);
-      create table table4 (nums4 integer) with (fragment_size = 3);
-
-      insert into table3 values (1);
-      insert into table3 values (7);
-
-      insert into table4 values (0);
-      insert into table4 values (1);
-      insert into table4 values (2);
-      insert into table4 values (3);
-      insert into table4 values (4);
-      insert into table4 values (5);
-      insert into table4 values (6);
-      insert into table4 values (7);
-      insert into table4 values (8);
-      insert into table4 values (9);
-      insert into table4 values (9);
-    )");
+    createTable("table4", {{"nums4", SQLTypeInfo(kINT)}}, {3});
+    insertCsvValues("table4", "0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n9");
 
     auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
@@ -749,26 +531,20 @@ TEST(MultiFragment, PerfectOneToMany) {
     auto s2 = hash_table2->toSet(g_device_type, 0);
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-      drop table if exists table3;
-      drop table if exists table4;
-    )");
+    dropTable("table1");
+    dropTable("table2");
+    dropTable("table3");
+    dropTable("table4");
   }
 }
 
 TEST(MultiFragment, KeyedOneToOne) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getDatabaseId(),
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider());
+  auto executor =
+      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -776,22 +552,11 @@ TEST(MultiFragment, KeyedOneToOne) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-      create table table1 (a1 integer, a2 integer);
-      create table table2 (b integer);
-
-      insert into table1 values (1, 11);
-      insert into table1 values (2, 12);
-      insert into table1 values (3, 13);
-      insert into table1 values (4, 14);
-
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
-    )");
+    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n3");
 
     auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
     auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
@@ -808,22 +573,11 @@ TEST(MultiFragment, KeyedOneToOne) {
     CHECK(baseline);
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToOne);
 
-    sql(R"(
-      drop table if exists table3;
-      drop table if exists table4;
+    createTable("table3", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}}, {1});
+    insertCsvValues("table3", "1,11\n2,12\n3,13\n4,14");
 
-      create table table3 (a1 integer, a2 integer) with (fragment_size = 1);
-      create table table4 (b integer) with (fragment_size = 1);
-
-      insert into table3 values (1, 11);
-      insert into table3 values (2, 12);
-      insert into table3 values (3, 13);
-      insert into table3 values (4, 14);
-
-      insert into table4 values (0);
-      insert into table4 values (1);
-      insert into table4 values (3);
-    )");
+    createTable("table4", {{"b", SQLTypeInfo(kINT)}}, {1});
+    insertCsvValues("table4", "0\n1\n3");
 
     a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
     a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
@@ -843,26 +597,20 @@ TEST(MultiFragment, KeyedOneToOne) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-      drop table if exists table3;
-      drop table if exists table4;
-    )");
+    dropTable("table1");
+    dropTable("table2");
+    dropTable("table3");
+    dropTable("table4");
   }
 }
 
 TEST(MultiFragment, KeyedOneToMany) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getDatabaseId(),
-                                        &catalog->getDataMgr(),
-                                        catalog->getDataMgr().getBufferProvider());
+  auto executor =
+      Executor::getExecutor(TEST_DB_ID, getDataMgr(), getDataMgr()->getBufferProvider());
   CHECK(executor);
-  executor->setSchemaProvider(
-      std::make_shared<Catalog_Namespace::CatalogSchemaProvider>(catalog.get()));
-  executor->setDatabaseId(catalog->getDatabaseId());
+  auto storage = getStorage();
+  executor->setSchemaProvider(storage);
+  executor->setDatabaseId(TEST_DB_ID);
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -870,23 +618,11 @@ TEST(MultiFragment, KeyedOneToMany) {
 
     JoinHashTableCacheInvalidator::invalidateCaches();
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
+    createTable("table1", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}});
+    insertCsvValues("table1", "1,11\n2,12\n3,13\n4,14");
 
-      create table table1 (a1 integer, a2 integer);
-      create table table2 (b integer);
-
-      insert into table1 values (1, 11);
-      insert into table1 values (2, 12);
-      insert into table1 values (3, 13);
-      insert into table1 values (4, 14);
-
-      insert into table2 values (0);
-      insert into table2 values (1);
-      insert into table2 values (3);
-      insert into table2 values (3);
-    )");
+    createTable("table2", {{"b", SQLTypeInfo(kINT)}});
+    insertCsvValues("table2", "0\n1\n3\n3");
 
     auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
     auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
@@ -901,23 +637,11 @@ TEST(MultiFragment, KeyedOneToMany) {
     auto hash_table1 = buildKeyed(op);
     EXPECT_EQ(hash_table1->getHashType(), HashType::OneToMany);
 
-    sql(R"(
-      drop table if exists table3;
-      drop table if exists table4;
+    createTable("table3", {{"a1", SQLTypeInfo(kINT)}, {"a2", SQLTypeInfo(kINT)}}, {1});
+    insertCsvValues("table3", "1,11\n2,12\n3,13\n4,14");
 
-      create table table3 (a1 integer, a2 integer) with (fragment_size = 1);
-      create table table4 (b integer) with (fragment_size = 1);
-
-      insert into table3 values (1, 11);
-      insert into table3 values (2, 12);
-      insert into table3 values (3, 13);
-      insert into table3 values (4, 14);
-
-      insert into table4 values (0);
-      insert into table4 values (1);
-      insert into table4 values (3);
-      insert into table4 values (3);
-    )");
+    createTable("table4", {{"b", SQLTypeInfo(kINT)}}, {1});
+    insertCsvValues("table4", "0\n1\n3\n3");
 
     a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
     a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
@@ -938,45 +662,34 @@ TEST(MultiFragment, KeyedOneToMany) {
 
     EXPECT_EQ(s1, s2);
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-      drop table if exists table3;
-      drop table if exists table4;
-    )");
+    dropTable("table1");
+    dropTable("table2");
+    dropTable("table3");
+    dropTable("table4");
   }
 }
 
 TEST(Other, Regression) {
-  sql(R"(
-      drop table if exists table_a;
-      drop table if exists table_b;
+  createTable("table_a",
+              {{"Small_int", SQLTypeInfo(kSMALLINT)},
+               {"dest_state", dictType()},
+               {"str", kTEXT}});
+  insertCsvValues("table_a", "1,testa_1,str1\n1,testa_2,str1");
 
-      CREATE TABLE table_a (
-        Small_int SMALLINT,
-        dest_state TEXT ENCODING DICT,
-        str VARCHAR(4326)
-      );
-      CREATE TABLE table_b (
-        Small_int SMALLINT,
-        dest_state TEXT ENCODING DICT,
-        str VARCHAR(4326)
-      );
-      INSERT INTO table_a VALUES (1, 'testa_1', 'LINESTRING (30 10, 10 30, 40 40)');
-      INSERT INTO table_a VALUES (1, 'testa_2', 'LINESTRING (30 10, 10 30, 40 40)');
-      INSERT INTO table_b VALUES (1, 'testb_1', 'LINESTRING (30 10, 10 30, 40 40)');
-      INSERT INTO table_b VALUES (2, 'testb_2', 'LINESTRING (30 10, 10 30, 40 40)');
-    )");
+  createTable("table_b",
+              {{"Small_int", SQLTypeInfo(kSMALLINT)},
+               {"dest_state", dictType()},
+               {"str", kTEXT}});
+  insertCsvValues("table_b", "1,testb_1,str1\n2,testb_2,str1");
 
-  EXPECT_THROW(sql(R"(
+  EXPECT_THROW(run_multiple_agg(R"(
         SELECT table_a.dest_state AS key0 FROM table_a, table_b WHERE (table_b.dest_state = table_a.Small_int) GROUP BY key0 LIMIT 1000000;
-      )"),
+      )",
+                                ExecutorDeviceType::CPU),
                std::runtime_error);
 
-  sql(R"(
-      drop table if exists table_a;
-      drop table if exists table_b;
-    )");
+  dropTable("table_a");
+  dropTable("table_b");
 }
 
 int main(int argc, char** argv) {
@@ -984,7 +697,7 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  QR::init(BASE_PATH);
+  init();
 
   int err{0};
   try {
@@ -992,6 +705,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  QR::reset();
+  reset();
   return err;
 }
