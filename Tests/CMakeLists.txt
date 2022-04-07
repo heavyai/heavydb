@@ -50,7 +50,6 @@ add_executable(ResultSetTest ResultSetTest.cpp ResultSetTestUtils.cpp)
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
 add_executable(UtilTest UtilTest.cpp)
-add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
 add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
@@ -139,7 +138,6 @@ target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 if(NOT MSVC)
   target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
@@ -239,7 +237,6 @@ add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
 add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
 add_test(GroupByTest GroupByTest ${TEST_ARGS})
-add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
 add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
@@ -403,14 +400,8 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${TEST_PROGRAMS} UtilTest StringDictionaryTest StringTransformTest StoragePerfTest RuntimeInterruptTest
+    DEPENDS ${TEST_PROGRAMS} UtilTest StringDictionaryTest StringTransformTest RuntimeInterruptTest
     USES_TERMINAL)
-
-add_custom_target(storage_perf_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initdb -f ${TEST_BASE_PATH}
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(StoragePerfTest)\""
-    DEPENDS StoragePerfTest)
 
 add_custom_target(topk_tests
     COMMAND mkdir -p ${TEST_BASE_PATH}
