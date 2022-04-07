@@ -55,7 +55,6 @@ add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
 add_executable(GroupByTest GroupByTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
-add_executable(CtasUpdateTest CtasUpdateTest.cpp)
 add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
 if(NOT MSVC)
   add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
@@ -154,7 +153,6 @@ target_link_libraries(UtilTest OSDependent)
 target_link_libraries(EncoderTest gtest DataMgr Shared Logger)
 target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
 #Requires thrift_handler for DBHandler test fixture
-target_link_libraries(CtasUpdateTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(ShowCommandsDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -219,7 +217,6 @@ add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
 add_test(GroupByTest GroupByTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
-add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
 add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
@@ -299,7 +296,6 @@ set(TEST_PROGRAMS
   ArrayTest
   GroupByTest
   TopKTest
-  CtasUpdateTest
   CorrelatedSubqueryTest
   DateTimeUtilsTest
   ThreadingTest
