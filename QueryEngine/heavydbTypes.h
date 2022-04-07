@@ -155,6 +155,8 @@ struct TextEncodingNone {
 struct Timestamp {
   int64_t time;
 
+  Timestamp() = default;
+
   DEVICE Timestamp(int64_t timeval) : time(timeval) {}
 
 #if !(defined(__CUDACC__) || defined(NO_BOOST))
@@ -505,6 +507,11 @@ DEVICE inline void Column<Timestamp>::setNull(int64_t index) {
   set_null(ptr_[index].time);
 }
 
+template <>
+CONSTEXPR DEVICE inline void set_null<Timestamp>(Timestamp& t) {
+  set_null(t.time);
+}
+
 /*
   ColumnList is an ordered list of Columns.
 */
@@ -597,6 +604,7 @@ struct ColumnList<TextEncodingDict> {
   corresponding instances share `this` but have different virtual
   tables for methods.
 */
+#ifndef __CUDACC__
 struct TableFunctionManager {
   static TableFunctionManager* get_singleton() {
     return reinterpret_cast<TableFunctionManager*>(TableFunctionManager_get_singleton());
@@ -621,5 +629,6 @@ struct TableFunctionManager {
   }
 #endif  // HAVE_TOSTRING
 };
+#endif  // #ifndef __CUDACC__
 
 #endif  // #ifndef UDF_COMPILED

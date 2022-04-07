@@ -1905,6 +1905,7 @@ const Column<int32_t>& input_arg2, const int32_t arg1, const int32_t arg2,
 /*
   UDTF: ct_timestamp_extract(TableFunctionManager, Column<Timestamp>) -> Column<int64_t> ns, Column<int64_t> us, Column<int64_t> ms, Column<int64_t> s, Column<int64_t> m, Column<int64_t> h, Column<int64_t> d, Column<int64_t> mo, Column<int64_t> y
   UDTF: ct_timestamp_add_offset(TableFunctionManager, Column<Timestamp>, Timestamp) -> Column<Timestamp>
+  UDTF: ct_timestamp_test_columns_and_scalars__cpu(Column<Timestamp>, int64_t, RowMultiplier, Column<Timestamp>) -> Column<Timestamp>
   UDTF: ct_timestamp_column_list_input(TableFunctionManager, ColumnList<int64_t>, Column<Timestamp>) -> Column<Timestamp>
   UDTF: ct_timestamp_truncate(TableFunctionManager, Column<Timestamp>) -> Column<Timestamp> y, Column<Timestamp> mo, Column<Timestamp> d, Column<Timestamp> h, Column<Timestamp> m, Column<Timestamp> s, Column<Timestamp> ms, Column<Timestamp> us
 */
@@ -1963,6 +1964,24 @@ EXTENSION_NOINLINE_HOST int32_t ct_timestamp_add_offset(TableFunctionManager& mg
       out.setNull(i);
     } else {
       out[i] = input[i] + offset;
+    }
+  }
+  return size;
+}
+
+// Test table function with sizer argument, and mix of scalar/column inputs.
+EXTENSION_NOINLINE int32_t
+ct_timestamp_test_columns_and_scalars__cpu(const Column<Timestamp>& input,
+                                           const int64_t dummy,
+                                           const int32_t multiplier,
+                                           const Column<Timestamp>& input2,
+                                           Column<Timestamp>& out) {
+  int size = input.size();
+  for (int i = 0; i < size; ++i) {
+    if (input.isNull(i)) {
+      out.setNull(i);
+    } else {
+      out[i] = input[i] + input2[i] + dummy;
     }
   }
   return size;

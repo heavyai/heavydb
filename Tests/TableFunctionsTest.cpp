@@ -1820,6 +1820,26 @@ TEST_F(TableFunctions, TimestampTests) {
         ASSERT_EQ(asString, expected_result_set[i]);
       }
     }
+    // TIMESTAMP columns mixed with scalar inputs and sizer argument
+    {
+      const auto result = run_multiple_agg(
+          "SELECT out0 FROM TABLE(ct_timestamp_test_columns_and_scalars("
+          "cursor(SELECT t1 from time_test_castable), 100, cursor(SELECT t1 from "
+          "time_test_castable)));",
+          dt);
+      ASSERT_EQ(result->rowCount(), size_t(3));
+      // expected: col + col + 100 nanoseconds
+      std::vector<std::string> expected_result_set({"1972-01-01 02:02:02.002002100",
+                                                    "1974-03-05 04:04:04.004004100",
+                                                    "1976-05-03 06:06:06.006006100"});
+      for (size_t i = 0; i < 3; i++) {
+        auto row = result->getNextRow(true, false);
+        Datum d;
+        d.bigintval = TestHelpers::v<int64_t>(row[0]);
+        std::string asString = DatumToString(d, SQLTypeInfo(kTIMESTAMP, 9, 0, false));
+        ASSERT_EQ(asString, expected_result_set[i]);
+      }
+    }
   }
 }
 

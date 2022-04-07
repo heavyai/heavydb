@@ -564,14 +564,20 @@ void TableFunctionCompilationContext::generateEntryPoint(
     if (ti.is_fp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_fp_ptr_type(get_bit_width(ti), ctx));
-      func_args.push_back(
-          cgen_state->ir_builder_.CreateLoad(r->getType()->getPointerElementType(), r));
+      llvm::LoadInst* scalar_fp = cgen_state->ir_builder_.CreateLoad(
+          r->getType()->getPointerElementType(),
+          r,
+          "input_scalar_fp." + std::to_string(func_arg_index));
+      func_args.push_back(scalar_fp);
       CHECK_EQ(col_index, -1);
     } else if (ti.is_integer() || ti.is_boolean() || ti.is_timestamp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_int_ptr_type(get_bit_width(ti), ctx));
-      func_args.push_back(
-          cgen_state->ir_builder_.CreateLoad(r->getType()->getPointerElementType(), r));
+      llvm::LoadInst* scalar_int = cgen_state->ir_builder_.CreateLoad(
+          r->getType()->getPointerElementType(),
+          r,
+          "input_scalar_int." + std::to_string(func_arg_index));
+      func_args.push_back(scalar_int);
       CHECK_EQ(col_index, -1);
     } else if (ti.is_bytes()) {
       auto varchar_size =
@@ -580,15 +586,15 @@ void TableFunctionCompilationContext::generateEntryPoint(
           col_heads[i]->getType()->getScalarType()->getPointerElementType(),
           col_heads[i],
           cgen_state->llInt(8));
-      auto [varchar_struct, varchar_struct_ptr] =
-          alloc_column(std::string("varchar_literal.") + std::to_string(func_arg_index),
-                       i,
-                       ti,
-                       varchar_ptr,
-                       varchar_size,
-                       nullptr,
-                       ctx,
-                       cgen_state->ir_builder_);
+      auto [varchar_struct, varchar_struct_ptr] = alloc_column(
+          std::string("input_varchar_literal.") + std::to_string(func_arg_index),
+          i,
+          ti,
+          varchar_ptr,
+          varchar_size,
+          nullptr,
+          ctx,
+          cgen_state->ir_builder_);
       func_args.push_back(
           (pass_column_by_value
                ? cgen_state->ir_builder_.CreateLoad(
@@ -751,7 +757,7 @@ void TableFunctionCompilationContext::generateCastsForInputTypes(
                   entry_point_func_,
                   orig_ti,
                   dest_ti,
-                  std::to_string(func_arg_index),
+                  std::to_string(func_arg_index + 1),
                   *ir_builder,
                   ctx,
                   codeGenerator);
@@ -762,6 +768,11 @@ void TableFunctionCompilationContext::generateCastsForInputTypes(
   // QueryExecutionError codes. Since at the table function level we'd like error handling
   // to be done by the TableFunctionManager, we replace the codegen'd returns by calls to
   // the appropriate Manager functions.
+  if (co_.device_type == ExecutorDeviceType::GPU) {
+    // TableFunctionManager is not supported on GPU, so leave the QueryExecutionError code
+    return;
+  }
+
   std::vector<llvm::ReturnInst*> rets_to_replace;
   for (llvm::BasicBlock& BB : *entry_point_func_) {
     for (llvm::Instruction& I : BB) {
