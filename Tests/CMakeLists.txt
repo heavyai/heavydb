@@ -54,7 +54,6 @@ add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp
 add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
-add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
 add_executable(AlterTableDdlTest AlterTableDdlTest.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
@@ -145,7 +144,6 @@ target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
-target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(AlterTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -236,7 +234,6 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
-add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
 add_test(AlterTableDdlTest AlterTableDdlTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
@@ -348,7 +345,6 @@ set(TEST_PROGRAMS
   FromTableReorderingTest
   ResultSetBaselineRadixSortTest
   StorageTest
-  ArrowCsvForeignStorageTest
   AlterTableDdlTest
   ComputeMetadataTest
   BumpAllocatorTest
