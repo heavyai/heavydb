@@ -18,6 +18,7 @@
 #define STRINGDICTIONARY_STRINGDICTIONARYPROXY_H
 
 #include "Logger/Logger.h"  // For CHECK macros
+#include "Shared/misc.h"
 #include "StringDictionary.h"
 
 #include "ThirdParty/robin_hood/robin_hood.h"
@@ -83,34 +84,36 @@ class StringDictionaryProxy {
   std::vector<std::string> getStrings(const std::vector<int32_t>& string_ids) const;
   std::pair<const char*, size_t> getStringBytes(int32_t string_id) const noexcept;
 
-  class IdMap {
+  template <typename T>
+  class TranslationMap {
     size_t const offset_;
-    std::vector<int32_t> vector_map_;
+    std::vector<T> vector_map_;
     int64_t num_untranslated_strings_{-1};
-    int32_t range_start_{0};
-    int32_t range_end_{0};
+    T range_start_{0};
+    T range_end_{0};
 
    public:
     // +1 is added to skip string_id=-1 reserved for INVALID_STR_ID. id_map[-1]==-1.
-    IdMap(uint32_t const tran_size, uint32_t const dict_size)
-        : offset_(tran_size + 1)
-        , vector_map_(offset_ + dict_size, StringDictionary::INVALID_STR_ID) {}
-    IdMap(IdMap const&) = delete;
-    IdMap(IdMap&&) = default;
+    TranslationMap(uint32_t const tran_size, uint32_t const dict_size)
+        : offset_(tran_size + 1), vector_map_(offset_ + dict_size) {}
+    TranslationMap(uint32_t const tran_size, uint32_t const dict_size, const T& init_val)
+        : offset_(tran_size + 1), vector_map_(offset_ + dict_size, init_val) {}
+    TranslationMap(TranslationMap const&) = delete;
+    TranslationMap(TranslationMap&&) = default;
     bool empty() const { return vector_map_.size() == 1; }
     inline size_t getIndex(int32_t const id) const { return offset_ + id; }
-    std::vector<int32_t> const& getVectorMap() const { return vector_map_; }
+    std::vector<T> const& getVectorMap() const { return vector_map_; }
     size_t size() const { return vector_map_.size(); }
     size_t numTransients() const { return offset_ - 1; }
     size_t numNonTransients() const { return vector_map_.size() - offset_; }
-    int32_t* data() { return vector_map_.data(); }
-    int32_t const* data() const { return vector_map_.data(); }
+    T* data() { return vector_map_.data(); }
+    T const* data() const { return vector_map_.data(); }
     int32_t domainStart() const { return -static_cast<int32_t>(offset_); }
     int32_t domainEnd() const { return static_cast<int32_t>(numNonTransients()); }
     void setRangeStart(const int32_t range_start) { range_start_ = range_start; }
     void setRangeEnd(const int32_t range_end) { range_end_ = range_end; }
-    int32_t rangeStart() const { return range_start_; }
-    int32_t rangeEnd() const { return range_end_; }
+    T rangeStart() const { return range_start_; }
+    T rangeEnd() const { return range_end_; }
 
     // Next two methods are currently used by buildUnionTranslationMapToOtherProxy to
     // short circuit iteration over ids after intersection translation if all
@@ -125,13 +128,21 @@ class StringDictionaryProxy {
     void setNumUntranslatedStrings(const size_t num_untranslated_strings) {
       num_untranslated_strings_ = static_cast<int64_t>(num_untranslated_strings);
     }
-    int32_t* storageData() { return vector_map_.data() + offset_; }
-    int32_t& operator[](int32_t const id) { return vector_map_[getIndex(id)]; }
-    int32_t operator[](int32_t const id) const { return vector_map_[getIndex(id)]; }
-    friend std::ostream& operator<<(std::ostream&, IdMap const&);
+    T* storageData() { return vector_map_.data() + offset_; }
+    T& operator[](int32_t const id) { return vector_map_[getIndex(id)]; }
+    T operator[](int32_t const id) const { return vector_map_[getIndex(id)]; }
+    friend std::ostream& operator<<(std::ostream& os, TranslationMap<T> const& sdp_map) {
+      return os << "IdMap(offset_(" << sdp_map.offset_ << ") vector_map_"
+                << shared::printContainer(sdp_map.vector_map_) << ')';
+    }
   };
 
-  IdMap initIdMap() const { return IdMap(transient_string_vec_.size(), generation_); }
+  using IdMap = TranslationMap<int32_t>;
+
+  IdMap initIdMap() const {
+    return IdMap(
+        transient_string_vec_.size(), generation_, StringDictionary::INVALID_STR_ID);
+  }
 
   /**
    * @brief Builds a vectorized string_id translation map from this proxy to dest_proxy
@@ -152,6 +163,10 @@ class StringDictionaryProxy {
    * maps to INVALID_STR_ID.
    *
    */
+
+  TranslationMap<Datum> buildNumericTranslationMap(
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+
   IdMap buildIntersectionTranslationMapToOtherProxy(
       const StringDictionaryProxy* dest_proxy,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;

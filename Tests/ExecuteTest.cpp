@@ -4337,9 +4337,10 @@ TEST(Select, Strings) {
       "fixed_str;",
       dt);
     c("SELECT COUNT(*) FROM emp WHERE ename LIKE 'D%%' OR ename = 'Julia';", dt);
+    c("SELECT COUNT(*) FROM emp WHERE ename LIKE 'D%%' OR ename = 'Julia';", dt);
 
     // The following tests marked "THROW_ON_AGGREGATOR" throw
-    //"Cast from dictionary-encoded string to none-encoded not
+    // "Cast from dictionary-encoded string to none-encoded not
     // supported for distributed queries in distributed mode
     // Note that =/<> is now supported via distributed string
     // translation as of QE-261
@@ -4473,6 +4474,40 @@ TEST(Select, Strings) {
                                   dt))));
 
     EXPECT_ANY_THROW(run_simple_agg("SELECT LENGTH(NULL) FROM test;", dt));
+
+    // StringFunctionsTest doesn't have distributed test support, so
+    // some sanity tests for TRY_CAST are added below given this touches
+    // a different pathway that the other string functions
+    // (string->numeric translation)
+
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows + g_num_rows / 2),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE TRY_CAST(num_text AS INT) IS NOT NULL;",
+            dt)));
+
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows / 2),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM test WHERE TRY_CAST(num_text AS TINYINT) IS NOT NULL;",
+            dt)));
+
+    // Our StringToDatum Function translates any number to timestamps (in units of
+    // the timestamp type), so instead of testing for null TRY_CAST results,
+    // we count the number of rows where the year is correct for the actual
+    // timestamp values in the test table
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE EXTRACT(YEAR "
+                                        "FROM TRY_CAST(num_text AS TIMESTAMP)) = 2022;",
+                                        dt)));
+
+    ASSERT_EQ(static_cast<int64_t>(42 * g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT SUM(TRY_CAST(num_text AS TINYINT)) FROM test;", dt)));
+
+    ASSERT_EQ(static_cast<int64_t>(128 * g_num_rows + 42 * g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT SUM(TRY_CAST(num_text AS INT)) FROM test;", dt)));
   }
 }
 
@@ -25652,7 +25687,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "encoding fixed(16), dd decimal(10, 2), dd_notnull decimal(10, 2) not null, ss "
         "text encoding dict, u int, ofd "
         "int, ufd int not null, ofq bigint, ufq bigint not null, smallint_nulls "
-        "smallint, bn boolean not null"};
+        "smallint, bn boolean not null, num_text text encoding dict"};
     const std::string create_test = build_create_table_statement(
         columns_definition,
         "test",
@@ -25675,7 +25710,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "fx int, dd decimal(10, 2), dd_notnull decimal(10, 2) not "
         "null, ss "
         "text, u int, ofd int, ufd int not null, ofq bigint, ufq bigint not null, "
-        "smallint_nulls smallint, bn boolean not null);");
+        "smallint_nulls smallint, bn boolean not null, num_text text);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
@@ -25695,7 +25730,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "111.1, "
         "'fish', "
         "null, "
-        "2147483647, -2147483648, null, -1, 32767, 't');"};
+        "2147483647, -2147483648, null, -1, 32767, 't', '128');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -25711,7 +25746,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "222.2, "
         "null, null, null, "
         "-2147483647, "
-        "9223372036854775807, -9223372036854775808, null, 'f');"};
+        "9223372036854775807, -9223372036854775808, null, 'f', '42');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -25726,7 +25761,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "'1999-09-09', 11, "
         "333.3, 333.3, "
         "'boat', null, 1, "
-        "-1, 1, -9223372036854775808, 1, 't');"};
+        "-1, 1, -9223372036854775808, 1, 't', '2022-04-05 08:31:18');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }

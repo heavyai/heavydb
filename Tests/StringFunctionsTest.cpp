@@ -186,10 +186,10 @@ class StringFunctionTest : public testing::Test {
           insert into string_function_test_people values(4, 'Sue', 'Smith', 'Sue SMITH', 25, 'CA', '555-614-2282', null, 'Nothing exists entirely alone. Everything is always in relation to everything else.', 'Find me at sue4tw@example.com, or reach me at sue.smith@example.com. I''d love to hear from you!'); 
           drop table if exists string_function_test_countries;
           create table string_function_test_countries(id int, code text, arrow_code text, name text, short_name text encoding none, capital text, largest_city text encoding none, lang text encoding none, json_data_none text encoding none);
-          insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', null, 'Washington', 'New York City', 'en', '{"capital": "Washington D.C.", "pop": 329500000, "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [56863, 58021, 60110, 63064, 65280, 63544], "Last 3 leaders": ["Barack Obama", "Donald Trump", "Joseph Biden"], "most_valuable_crop": "corn"}}');
-          insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'TORONTO', 'EN', '{"capital", "Toronto", "pop": 38010000, "has_prime_minister": true, "prime_minister": "Justin Trudeau", "factoids": {"gdp_per_cap_2015_2020": [43596, 42316, 45129, 46454, 46327, 43242], "Last 3 leaders": ["Paul Martin", "Stephen Harper", "Justin Trudeau"], "most valuable crop": "wheat"}}');
-          insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'LONDON', 'en', '{"capital", "London", "pop": 67220000, "prime_minister": "Boris Johnson", "has_prime_minister": true, "factoids": {"gdp_per_cap_2015_2020": [45039, 41048, 40306, 42996, 42354, 40285], "most valuable crop": "wheat"}}');
-          insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'de', '{"capital", "Berlin", "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [41103, 42136, 44453, 47811, 46468, 45724], "most valuable crop": "wheat"}}');
+          insert into string_function_test_countries values(1, 'US', '>>US<<', 'United States', null, 'Washington', 'New York City', 'en', '{"capital": "Washington D.C.", "pop": 329500000, "independence_day": "1776-07-04",  "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [56863, 58021, 60110, 63064, 65280, 63544], "Last 3 leaders": ["Barack Obama", "Donald Trump", "Joseph Biden"], "most_valuable_crop": "corn"}}');
+          insert into string_function_test_countries values(2, 'ca', '>>CA<<', 'Canada', 'Canada', 'Ottawa', 'TORONTO', 'EN', '{"capital": "Toronto", "pop": 38010000, "independence_day": "07/01/1867", "exchange_rate_usd": "0.78125", "has_prime_minister": true, "prime_minister": "Justin Trudeau", "factoids": {"gdp_per_cap_2015_2020": [43596, 42316, 45129, 46454, 46327, 43242], "Last 3 leaders": ["Paul Martin", "Stephen Harper", "Justin Trudeau"], "most valuable crop": "wheat"}}');
+          insert into string_function_test_countries values(3, 'Gb', '>>GB<<', 'United Kingdom', 'UK', 'London', 'LONDON', 'en', '{"capital": "London", "pop": 67220000, "independence_day": "N/A", "exchange_rate_usd": 1.21875, "prime_minister": "Boris Johnson", "has_prime_minister": true, "factoids": {"gdp_per_cap_2015_2020": [45039, 41048, 40306, 42996, 42354, 40285], "most valuable crop": "wheat"}}');
+          insert into string_function_test_countries values(4, 'dE', '>>DE<<', 'Germany', 'Germany', 'Berlin', 'Berlin', 'de', '{"capital":"Berlin", "independence_day": "1990-10-03", "exchange_rate_usd": 1.015625, "has_prime_minister": false, "prime_minister": null, "factoids": {"gdp_per_cap_2015_2020": [41103, 42136, 44453, 47811, 46468, 45724], "most valuable crop": "wheat"}}');
         )"));
       StringFunctionTest::test_data_loaded = true;
     }
@@ -1333,15 +1333,11 @@ TEST_F(StringFunctionTest, Base64) {
     {
       // Current behavior is that BASE64_ENCODE(NULL var) and BASE64_DECODE(NULL var)
       // returns NULL
-      std::vector<std::vector<ScalarTargetValue>> expected_result_set(4, {int64_t(true)});
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(true)}, {int64_t(false)}, {int64_t(false)}, {int64_t(true)}};
       auto result_set =
           sql("SELECT base64_encode(json_value(json_data_none, '$.prime_minister'))"
-              " IS NULL FROM string_function_test_countries;",
-              dt);
-      compare_result_set(expected_result_set, result_set);
-      result_set =
-          sql("SELECT base64_decode(json_value(json_data_none, '$.prime_minister'))"
-              " IS NULL FROM string_function_test_countries;",
+              " IS NULL FROM string_function_test_countries ORDER BY rowid ASC;",
               dt);
       compare_result_set(expected_result_set, result_set);
     }
@@ -1384,6 +1380,231 @@ TEST_F(StringFunctionTest, Base64) {
               dt);
       std::vector<std::vector<ScalarTargetValue>> expected_result_set{
           {"United States"}, {"Canada"}, {"United Kingdom"}, {"Germany"}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, TryCastIntegerTypes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // INT projected
+    {
+      auto result_set =
+          sql("select try_cast(split_part(us_phone_number, '-', 2) as int) as digits "
+              " from  string_function_test_people ORDER BY id ASC;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(803)}, {int64_t(803)}, {int64_t(614)}, {int64_t(614)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // INT grouped
+    {
+      auto result_set =
+          sql("select try_cast(split_part(us_phone_number, '-', 2) as int) as digits, "
+              "count(*) as n from string_function_test_people group by digits "
+              "ORDER BY digits ASC;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(614), int64_t(2)}, {int64_t(803), int64_t(2)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // TINYINT Projected
+    {
+      // Todo: This test framework doesn't properly handle nulls, hence
+      // the coalesce to a -1 sentinel value below. Fix this.
+      auto result_set =
+          sql("select coalesce(try_cast(substring(zip_plus_4 from 3 for 3) "
+              "as tinyint) , -1) as digits from string_function_test_people "
+              "ORDER BY id ASC;",
+              dt);
+
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(-1)}, {int64_t(104)}, {int64_t(-1)}, {int64_t(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // SMALLINT Projected
+    {
+      // Todo: This test framework doesn't properly handle nulls, hence
+      // the coalesce to a -1 sentinel value below. Fix this.
+      auto result_set =
+          sql("select coalesce(try_cast(substring(zip_plus_4 from 3 for 3) "
+              "as smallint) , -1) as digits from string_function_test_people "
+              "ORDER BY id ASC;",
+              dt);
+
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(210)}, {int64_t(104)}, {int64_t(-1)}, {int64_t(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // INT Projected
+    {
+      // Todo: This test framework doesn't properly handle nulls, hence
+      // the coalesce to a -1 sentinel value below. Fix this.
+      auto result_set =
+          sql("select coalesce(try_cast(substring(zip_plus_4 from 3 for 3) "
+              "as int) , -1) as digits from string_function_test_people "
+              "ORDER BY id ASC;",
+              dt);
+
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(210)}, {int64_t(104)}, {int64_t(-1)}, {int64_t(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // BIGINT Projected
+    {
+      // Todo: This test framework doesn't properly handle nulls, hence
+      // the coalesce to a -1 sentinel value below. Fix this.
+      auto result_set =
+          sql("select coalesce(try_cast(substring(zip_plus_4 from 3 for 3) "
+              "as bigint) , -1) as digits from string_function_test_people "
+              "ORDER BY id ASC;",
+              dt);
+
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(210)}, {int64_t(104)}, {int64_t(-1)}, {int64_t(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, TryCastFPTypes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Todo: This test framework doesn't properly handle nulls, hence
+      // the coalesce to a -1 sentinel value below. Fix this.
+      auto result_set = sql(
+          "select name, coalesce(try_cast(json_value(json_data_none, "
+          "'$.exchange_rate_usd') "
+          "as float), -1) as fp from string_function_test_countries ORDER BY name ASC;",
+          dt);
+      // The actual conversion values, despite perhaps looking close to actuals (as of Aug
+      // 2022), were choosen to be values that were exactly representable as floating
+      // point values, so as to not need to introduce an epsilon range check
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Canada", float(0.78125)},
+          {"Germany", float(1.015625)},
+          {"United Kingdom", float(1.21875)},
+          {"United States", float(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Todo: This test framework doesn't properly handle nulls, hence
+      // the coalesce to a -1 sentinel value below. Fix this.
+      auto result_set = sql(
+          "select name, coalesce(try_cast(json_value(json_data_none, "
+          "'$.exchange_rate_usd') "
+          "as double), -1) as fp from string_function_test_countries ORDER BY name ASC;",
+          dt);
+      // The actual exchange rates, despite being close to actuals (as of Aug
+      // 2022), were choosen to be values that were exactly representable as floating
+      // point values, so as to not need to introduce an epsilon range check
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Canada", double(0.78125)},
+          {"Germany", double(1.015625)},
+          {"United Kingdom", double(1.21875)},
+          {"United States", double(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, TryCastDecimalTypes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      // Todo: This test framework doesn't properly handle nulls, hence
+      // the coalesce to a -1 sentinel value below. Fix this.
+      auto result_set =
+          sql("select name, coalesce(try_cast(json_value(json_data_none, "
+              "'$.exchange_rate_usd') "
+              "as decimal(7, 6)), -1) as dec_val from string_function_test_countries "
+              "ORDER BY name ASC;",
+              dt);
+      // The actual conversion values, despite perhaps looking close to actuals (as of Aug
+      // 2022), were choosen to be values that were exactly representable as floating
+      // point values, so as to not need to introduce an epsilon range check
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Canada", double(0.78125)},
+          {"Germany", double(1.015625)},
+          {"United Kingdom", double(1.21875)},
+          {"United States", double(-1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, TryCastDateTypes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // Projected
+    {
+      auto result_set = sql(
+          "select name, coalesce(extract(month from try_cast(json_value(json_data_none, "
+          "'$.independence_day') as date)), -1) "
+          "as independence_month from string_function_test_countries ORDER BY name ASC;",
+          dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {"Canada", int64_t(7)},
+          {"Germany", int64_t(10)},
+          {"United Kingdom", int64_t(-1)},
+          {"United States", int64_t(7)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    // Group By
+    {
+      auto result_set =
+          sql("select coalesce(extract(month from try_cast(json_value(json_data_none, "
+              "'$.independence_day') as date)), -1) "
+              "as independence_month, count(*) as n from string_function_test_countries "
+              "group by independence_month "
+              "ORDER BY independence_month ASC;",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(-1), int64_t(1)}, {int64_t(7), int64_t(2)}, {int64_t(10), int64_t(1)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, TryCastTimestampTypes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      auto result_set = sql(
+          "select extract(epoch from try_cast('2013-09-10 09:00:00' as timestamp));", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+          {int64_t(1378803600)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      auto result_set =
+          sql("select extract(millisecond from try_cast('2013-09-10 09:00:00.123' as "
+              "timestamp(3)));",
+              dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(123)}};
+      compare_result_set(expected_result_set, result_set);
+    }
+    {
+      // Null result
+      auto result_set =
+          sql("select coalesce(try_cast('2020 -09/10 09:00:00' as timestamp), -1);", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(-1)}};
+      // Todo (todd): We're not coalescing the null value (MIN_BIGINT)
+      // here so this test will currently fail. Investigate and fix.
+      // compare_result_set(expected_result_set, result_set);
+    }
+  }
+}
+
+TEST_F(StringFunctionTest, TryCastTimeTypes) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      auto result_set =
+          sql("select extract(minute from try_cast('09:12:34' as time));", dt);
+      std::vector<std::vector<ScalarTargetValue>> expected_result_set{{int64_t(12)}};
       compare_result_set(expected_result_set, result_set);
     }
   }

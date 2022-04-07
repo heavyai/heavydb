@@ -862,7 +862,9 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
             dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
         CHECK(chained_string_op);
         StringOps_Namespace::StringOpInfo string_op_info(
-            chained_string_op->get_kind(), chained_string_op->getLiteralArgs());
+            chained_string_op->get_kind(),
+            chained_string_op->get_type_info(),
+            chained_string_op->getLiteralArgs());
         string_op_infos.emplace_back(string_op_info);
       }
     }

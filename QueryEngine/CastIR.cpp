@@ -278,6 +278,7 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
             operand_ti.get_comp_param(),
             ti.get_comp_param(),
             ti.is_dict_intersection(),
+            ti,
             string_op_infos,
             co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                       : Data_Namespace::CPU_LEVEL,

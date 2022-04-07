@@ -23,7 +23,10 @@ namespace StringOps_Namespace {
 
 std::ostream& operator<<(std::ostream& stream, const StringOpInfo& string_op_info) {
   stream << "StringOp("
-         << "operator: " << ::toString(string_op_info.getOpKind()) << ", literals: [";
+         << "operator: " << string_op_info.getOpKind()
+         << "return_ti: " << toString(string_op_info.getReturnType().get_type())
+         << " dim: " << string_op_info.getReturnType().get_dimension()
+         << " scale: " << string_op_info.getReturnType().get_scale() << ", literals: [";
   bool first_elem = true;
   for (const auto& literal_arg : string_op_info.literal_arg_map_) {
     if (!first_elem) {
@@ -113,32 +116,6 @@ std::string StringOpInfo::toString() const {
   oss << *this;
   return oss.str();
 }
-
-//  oss << "StringOp(" << "operator: " << ::toString(getOpKind())
-//  << ", literals: [";
-//  bool first_arg = true;
-//  for (const auto& literal_arg : literal_arg_map_) {
-//    const auto datum_type = literal_arg.second.first;
-//    const auto& datum = literal_arg.second.second;
-//    if (!first_arg) {
-//      oss << ", ";
-//    }
-//    first_arg = false;
-//    oss << "{slot: " << literal_arg.first /* slot/idx */ << ", type: "
-//     << ::toString(datum_type) << ", value: ";
-//    if (isLiteralArgNull(datum_type, literal_arg.second.second)) {
-//      oss << "NULL";
-//    } else if (IS_STRING(datum_type)) {
-//      oss << *datum.stringval;
-//    } else {
-//      CHECK(IS_INTEGER(datum_type));
-//      const SQLTypeInfo ti(datum_type, false);
-//      oss << extract_int_type_from_datum(datum, ti);
-//    }
-//    oss << "}";
-//  }
-//  return oss.str();
-//}
 
 bool StringOpInfo::isLiteralArgNull(const SQLTypes datum_type, const Datum& datum) {
   if (datum_type == kNULLT) {

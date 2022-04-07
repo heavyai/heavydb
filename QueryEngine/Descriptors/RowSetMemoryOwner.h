@@ -141,15 +141,20 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   std::string generate_translation_map_key(
       const int32_t source_proxy_id,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    std::ostringstream oss;
+    oss << "{source_dict_id: " << source_proxy_id << " StringOps: " << string_op_infos
+        << "}";
+    return oss.str();
+  }
+
+  std::string generate_translation_map_key(
+      const int32_t source_proxy_id,
       const int32_t dest_proxy_id,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
     std::ostringstream oss;
     oss << "{source_dict_id: " << source_proxy_id << ", dest_dict_id: " << dest_proxy_id
         << " StringOps: " << string_op_infos << "}";
-    // for (const auto& string_op_info : string_op_infos) {
-    //  oss << "{" << string_op_info.toString() << "}";
-    //}
-    // oss << "]";
     return oss.str();
   }
 
@@ -169,6 +174,19 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
                         source_proxy->buildIntersectionTranslationMapToOtherProxy(
                             dest_proxy, string_op_infos))
                .first;
+    }
+    return &it->second;
+  }
+
+  const StringDictionaryProxy::TranslationMap<Datum>* addStringProxyNumericTranslationMap(
+      const StringDictionaryProxy* source_proxy,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+    const auto map_key = generate_translation_map_key(
+        source_proxy->getDictionary()->getDictId(), string_op_infos);
+    auto it = str_proxy_numeric_translation_maps_owned_.lower_bound(map_key);
+    if (it->first != map_key) {
+      it = str_proxy_numeric_translation_maps_owned_.emplace_hint(
+          it, map_key, source_proxy->buildNumericTranslationMap(string_op_infos));
     }
     return &it->second;
   }
@@ -235,6 +253,13 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       const int dest_dict_id_in,
       const bool with_generation,
       const StringTranslationType translation_map_type,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+      const Catalog_Namespace::Catalog* catalog);
+
+  const StringDictionaryProxy::TranslationMap<Datum>*
+  getOrAddStringProxyNumericTranslationMap(
+      const int source_dict_id_in,
+      const bool with_generation,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
       const Catalog_Namespace::Catalog* catalog);
 
@@ -326,6 +351,8 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       str_proxy_intersection_translation_maps_owned_;
   std::map<std::string, StringDictionaryProxy::IdMap>
       str_proxy_union_translation_maps_owned_;
+  std::map<std::string, StringDictionaryProxy::TranslationMap<Datum>>
+      str_proxy_numeric_translation_maps_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;
   std::vector<void*> col_buffers_;

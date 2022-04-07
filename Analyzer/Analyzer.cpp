@@ -737,6 +737,11 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
     return shared_from_this();
   }
   if (!type_info.is_castable(new_type_info)) {
+    if (type_info.is_string() && (new_type_info.is_number() || new_type_info.is_time())) {
+      throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " +
+                               new_type_info.get_type_name() +
+                               ". Consider using TRY_CAST instead.");
+    }
     throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " +
                              new_type_info.get_type_name());
   }
@@ -3479,8 +3484,10 @@ std::shared_ptr<Analyzer::Expr> StringOper::deep_copy() const {
   for (const auto& chained_string_op_expr : chained_string_op_exprs_) {
     chained_string_op_exprs_copy.emplace_back(chained_string_op_expr->deep_copy());
   }
-  return makeExpr<Analyzer::StringOper>(
-      kind_, std::move(args_copy), std::move(chained_string_op_exprs_copy));
+  return makeExpr<Analyzer::StringOper>(kind_,
+                                        get_type_info(),
+                                        std::move(args_copy),
+                                        std::move(chained_string_op_exprs_copy));
 }
 
 std::shared_ptr<Analyzer::Expr> LowerStringOper::deep_copy() const {
@@ -3565,6 +3572,11 @@ std::shared_ptr<Analyzer::Expr> Base64EncodeStringOper::deep_copy() const {
 
 std::shared_ptr<Analyzer::Expr> Base64DecodeStringOper::deep_copy() const {
   return makeExpr<Analyzer::Base64DecodeStringOper>(
+      std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
+}
+
+std::shared_ptr<Analyzer::Expr> TryStringCastOper::deep_copy() const {
+  return makeExpr<Analyzer::TryStringCastOper>(
       std::dynamic_pointer_cast<Analyzer::StringOper>(StringOper::deep_copy()));
 }
 
@@ -4021,25 +4033,24 @@ LiteralArgMap StringOper::getLiteralArgs() const {
 }
 
 SQLTypeInfo StringOper::get_return_type(
-    const std::vector<std::shared_ptr<Analyzer::Expr>> args) {
+    const SqlStringOpKind kind,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& args) {
+  CHECK_NE(kind, SqlStringOpKind::TRY_STRING_CAST)
+      << "get_return_type for TRY_STRING_CAST disallowed.";
   if (args.empty()) {
     return SQLTypeInfo(kNULLT);
-  }
-  // Constant literal first argument
-  if (dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
+  } else if (dynamic_cast<const Analyzer::Constant*>(args[0].get())) {
+    // Constant literal first argument
     return args[0]->get_type_info();
-  }
-  // None-encoded text column argument
-  // Note that whether or not this is allowed is decided separately
-  // in check_operand_types
-  if (args[0]->get_type_info().is_none_encoded_string()) {
+  } else if (args[0]->get_type_info().is_none_encoded_string()) {
+    // None-encoded text column argument
+    // Note that whether or not this is allowed is decided separately
+    // in check_operand_types
+    // If here, we have a dict-encoded column arg
     return SQLTypeInfo(kTEXT, kENCODING_DICT, 0, kNULLT);
+  } else {
+    return SQLTypeInfo(args[0]->get_type_info());  // nullable by default
   }
-  // If here, we have a dict-encoded column arg
-  SQLTypeInfo ret_ti(args[0]->get_type_info());
-  // Set return as nullable as string op can create nulls
-  ret_ti.set_notnull(false);
-  return ret_ti;
 }
 
 void StringOper::check_operand_types(
@@ -4082,8 +4093,8 @@ void StringOper::check_operand_types(
     auto decasted_arg_ti = decasted_arg->get_type_info();
     // We need to prevent any non-string type from being casted to a string, but can
     // permit non-integer types being casted to integers Todo: Find a cleaner way to
-    // handle this (we haven't validated any of the casts that calcite has given us at the
-    // point of RelAlgTranslation)
+    // handle this (we haven't validated any of the casts that calcite has given us at
+    // the point of RelAlgTranslation)
     if (arg_ti != decasted_arg_ti &&
         ((arg_ti.is_string() && !decasted_arg_ti.is_string()) ||
          (arg_ti.is_integer() && decasted_arg_ti.is_string()))) {

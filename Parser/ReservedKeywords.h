@@ -411,6 +411,7 @@ static std::set<std::string> reserved_keywords{
     "TRIM_ARRAY",
     "TRUE",
     "TRUNCATE",
+    "TRY_CAST",
     "UESCAPE",
     "UNION",
     "UNIQUE",
