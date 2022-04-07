@@ -66,7 +66,6 @@ add_executable(JoinHashTableTest JoinHashTableTest.cpp)
 add_executable(CachedHashTableTest CachedHashTableTest.cpp)
 add_executable(RuntimeInterruptTest RuntimeInterruptTest.cpp)
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
-add_executable(CommandLineTest CommandLineTest.cpp)
 add_executable(SQLHintTest SQLHintTest.cpp)
 add_executable(LoadTableTest LoadTableTest.cpp)
 if(NOT MSVC)
@@ -148,8 +147,7 @@ target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RuntimeInterruptTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest OSDependent)
-target_link_libraries(EncoderTest gtest DataMgr Shared Logger)
-target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
+target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport Parser DataMgr Logger)
 #Requires thrift_handler for DBHandler test fixture
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -221,7 +219,6 @@ add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 add_test(ThreadingTestSTD ThreadingTestSTD ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
-add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 add_test(ShowCommandsDdlTest ShowCommandsDdlTest ${TEST_ARGS})
 add_test(AlterSystemTest AlterSystemTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
@@ -300,7 +297,6 @@ set(TEST_PROGRAMS
   JoinHashTableTest
   StringFunctionsTest
   StringDictionaryTest
-  CommandLineTest
   ShowCommandsDdlTest
   AlterSystemTest
   CatalogMigrationTest
