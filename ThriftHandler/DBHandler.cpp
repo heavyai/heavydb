@@ -7396,7 +7396,10 @@ void DBHandler::register_runtime_extension_functions(
 void DBHandler::get_table_function_names(std::vector<std::string>& _return,
                                          const TSessionId& session) {
   for (auto tf : table_functions::TableFunctionsFactory::get_table_funcs()) {
-    _return.emplace_back(tf.getName());
+    const std::string& name = tf.getName(/* drop_suffix */ true, /* to_lower */ true);
+    if (std::find(_return.begin(), _return.end(), name) == _return.end()) {
+      _return.emplace_back(name);
+    }
   }
 }
 
@@ -7404,7 +7407,10 @@ void DBHandler::get_runtime_table_function_names(std::vector<std::string>& _retu
                                                  const TSessionId& session) {
   for (auto tf :
        table_functions::TableFunctionsFactory::get_table_funcs(/* is_runtime */ true)) {
-    _return.emplace_back(tf.getName(/* drop_suffix */ true, /* to_lower */ true));
+    const std::string& name = tf.getName(/* drop_suffix */ true, /* to_lower */ true);
+    if (std::find(_return.begin(), _return.end(), name) == _return.end()) {
+      _return.emplace_back(name);
+    }
   }
 }
 
