@@ -19,7 +19,6 @@ add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
-add_executable(AlterSystemTest AlterSystemTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 add_executable(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest.cpp)
@@ -150,7 +149,6 @@ target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport 
 #Requires thrift_handler for DBHandler test fixture
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-target_link_libraries(AlterSystemTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DashboardAndCustomExpressionTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -217,7 +215,6 @@ add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 add_test(ThreadingTestSTD ThreadingTestSTD ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
-add_test(AlterSystemTest AlterSystemTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 add_test(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest ${TEST_ARGS})
@@ -294,7 +291,6 @@ set(TEST_PROGRAMS
   JoinHashTableTest
   StringFunctionsTest
   StringDictionaryTest
-  AlterSystemTest
   CatalogMigrationTest
   CreateAndDropTableDdlTest
   DashboardAndCustomExpressionTest
