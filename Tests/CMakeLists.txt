@@ -48,7 +48,6 @@ if(ENABLE_CUDA)
   endif()
 endif()
 
-add_executable(DumpRestoreTest DumpRestoreTest.cpp)
 add_executable(ResultSetTest ResultSetTest.cpp ResultSetTestUtils.cpp)
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
@@ -143,7 +142,6 @@ target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES})
 target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES})
 target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Logger Shared ${Boost_LIBRARIES})
-target_link_libraries(DumpRestoreTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
@@ -240,7 +238,6 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
-add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
 add_test(ImportExportTest ImportExportTest ${TEST_ARGS})
 add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
 add_test(AlterTableDdlTest AlterTableDdlTest ${TEST_ARGS})
@@ -346,7 +343,6 @@ if("${S3CLIENT_CONF}" MATCHES "AWS_REGION=([^\n]+)")
 endif()
 
 set(TEST_PROGRAMS 
-  DumpRestoreTest
   ExecuteTest
   ArrowBasedExecuteTest
   CodeGeneratorTest
