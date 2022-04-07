@@ -20,7 +20,6 @@ add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
 add_executable(EncoderTest EncoderTest.cpp)
-add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
 add_executable(PersistentStorageTest PersistentStorageTest.cpp)
 add_executable(DiskCacheQueryTest DiskCacheQueryTest.cpp)
 add_executable(CachingFileMgrTest CachingFileMgrTest.cpp)
@@ -144,7 +143,6 @@ target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport 
 #Requires thrift_handler for DBHandler test fixture
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES})
-target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(PersistentStorageTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(DiskCacheQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CachingFileMgrTest gtest DataMgr ${Boost_LIBRARIES})
@@ -207,7 +205,6 @@ add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
 add_test(SQLHintTest SQLHintTest ${TEST_ARGS})
-add_test(ForeignStorageCacheTest ForeignStorageCacheTest ${TEST_ARGS})
 add_test(PersistentStorageTest PersistentStorageTest ${TEST_ARGS})
 add_test(DiskCacheQueryTest DiskCacheQueryTest ${TEST_ARGS})
 add_test(CachingFileMgrTest CachingFileMgrTest ${TEST_ARGS})
@@ -278,7 +275,6 @@ set(TEST_PROGRAMS
   StringDictionaryTest
   EncoderTest
   SQLHintTest
-  ForeignStorageCacheTest
   PersistentStorageTest
   DataRecyclerTest
   DiskCacheQueryTest
