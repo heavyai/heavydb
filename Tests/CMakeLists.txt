@@ -55,7 +55,6 @@ add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
 add_executable(GroupByTest GroupByTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
-add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 if(NOT MSVC)
   add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
   add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
@@ -131,7 +130,6 @@ target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES})
 target_link_libraries(StringTransformTest Logger Shared gtest ${Boost_LIBRARIES})
 target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Logger Shared ${Boost_LIBRARIES})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
@@ -238,7 +236,6 @@ add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
 add_test(GroupByTest GroupByTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
-add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
 add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
 add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
@@ -322,7 +319,6 @@ set(TEST_PROGRAMS
   ArrayTest
   GroupByTest
   TopKTest
-  TokenCompletionHintsTest
   OmniSQLCommandTest
   OmniSQLUtilitiesTest
   DBObjectPrivilegesTest
