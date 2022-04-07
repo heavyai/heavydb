@@ -22,6 +22,7 @@
 #include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
+#include "Shared/Globals.h"
 #include "Shared/scope.h"
 
 #include <gtest/gtest.h>
@@ -17523,6 +17524,11 @@ int main(int argc, char** argv) {
                      " Currently only supports single node tests.");
   desc.add_options()("use-disk-cache",
                      "Use the disk cache for all tables with minimum size settings.");
+  desc.add_options()("use-groupby-buffer-desc",
+                     po::value<bool>(&g_use_groupby_buffer_desc)
+                         ->default_value(g_use_groupby_buffer_desc)
+                         ->implicit_value(true),
+                     "Use GroupBy Buffer Descriptor for hash tables.");
 
   desc.add_options()(
       "test-help",
