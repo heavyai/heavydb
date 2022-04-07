@@ -21,7 +21,9 @@
  *
  */
 
-#include "Tests/ResultSetTestUtils.h"
+#include "ArrowSQLRunner.h"
+#include "ResultSetTestUtils.h"
+#include "TestHelpers.h"
 
 #include "DataMgr/DataMgrDataProvider.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
@@ -29,20 +31,14 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/RuntimeFunctions.h"
-#include "QueryRunner/QueryRunner.h"
 #include "StringDictionary/StringDictionary.h"
-#include "Tests/TestHelpers.h"
 
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <queue>
 #include <random>
 
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
-using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers::ArrowSQLRunner;
 
 std::shared_ptr<DataMgrDataProvider> g_data_provider;
 
@@ -2897,39 +2893,37 @@ TEST(ResultsetConversion, EnforceParallelColumnarConversion) {
   // whether the large columnar conversion is done correctly
 
   // load 50M rows - single-frag
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_large;");
-  QR::get()->runDDLStatement(
-      "CREATE TABLE t_large (x int not null, y int not null, z int not null) with "
-      "(fragment_size = 100000000);");
-  std::string import_large_t{
-      "COPY t_large FROM "
-      "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
-      "(header='false', parquet='true')"};
-  QR::get()->runDDLStatement(import_large_t);
+  createTable("t_large",
+              {{"x", SQLTypeInfo(kBIGINT, true)},
+               {"y", SQLTypeInfo(kBIGINT, true)},
+               {"z", SQLTypeInfo(kBIGINT, true)}},
+              {100000000});
+  getStorage()->appendParquetFile(
+      "../../Tests/Import/datafiles/interrupt_table_very_large.parquet", "t_large");
 
   // load 50M rows - two frags (use default frag size)
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_large_multi_frag;");
-  QR::get()->runDDLStatement(
-      "CREATE TABLE t_large_multi_frag (x int not null, y int not null, z int not "
-      "null);");
-  std::string import_large_t_multi_frag{
-      "COPY t_large_multi_frag FROM "
-      "'../../Tests/Import/datafiles/interrupt_table_very_large.parquet' WITH "
-      "(header='false', parquet='true')"};
-  QR::get()->runDDLStatement(import_large_t_multi_frag);
+  createTable("t_large_multi_frag",
+              {{"x", SQLTypeInfo(kBIGINT, true)},
+               {"y", SQLTypeInfo(kBIGINT, true)},
+               {"z", SQLTypeInfo(kBIGINT, true)}},
+              {32000000});
+  getStorage()->appendParquetFile(
+      "../../Tests/Import/datafiles/interrupt_table_very_large.parquet",
+      "t_large_multi_frag");
 
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS t_small;");
-  QR::get()->runDDLStatement(
-      "CREATE TABLE t_small (x int not null, y int not null, z int not null);");
-  QR::get()->runSQL(
-      "INSERT INTO t_small VALUES(1, 1, 1);", ExecutorDeviceType::CPU, false);
+  createTable("t_small",
+              {{"x", SQLTypeInfo(kBIGINT, true)},
+               {"y", SQLTypeInfo(kBIGINT, true)},
+               {"z", SQLTypeInfo(kBIGINT, true)}});
+  insertCsvValues("t_small", "1,1,1");
+
   int64_t answer = 9999999;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     // single-frag test
-    std::shared_ptr<ResultSet> res1 = QR::get()->runSQL(
+    std::shared_ptr<ResultSet> res1 = run_multiple_agg(
         "SELECT COUNT(1) FROM (SELECT x FROM t_large WHERE x < 2) t, t_small r where t.x "
         "= r.x",
         dt,
@@ -2939,7 +2933,7 @@ TEST(ResultsetConversion, EnforceParallelColumnarConversion) {
     EXPECT_EQ(answer, v<int64_t>(crt_row1[0]));
 
     // multi-frag test
-    std::shared_ptr<ResultSet> res2 = QR::get()->runSQL(
+    std::shared_ptr<ResultSet> res2 = run_multiple_agg(
         "SELECT COUNT(1) FROM (SELECT x FROM t_large_multi_frag WHERE x < 2) t, t_small "
         "r where t.x = r.x",
         dt,
@@ -3039,10 +3033,9 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  QR::init(BASE_PATH);
+  init();
 
-  g_data_provider =
-      std::make_shared<DataMgrDataProvider>(&QR::get()->getCatalog()->getDataMgr());
+  g_data_provider = std::make_shared<DataMgrDataProvider>(getDataMgr());
 
   int err{0};
   try {
@@ -3051,6 +3044,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
   ResultSetReductionJIT::clearCache();
-  QR::reset();
+  reset();
   return err;
 }
