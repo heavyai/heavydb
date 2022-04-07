@@ -56,7 +56,6 @@ add_executable(ArrayTest ArrayTest.cpp)
 add_executable(GroupByTest GroupByTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 if(NOT MSVC)
-  add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
   add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
 endif()
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
@@ -137,14 +136,6 @@ target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
-if(NOT MSVC)
-  target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
-endif()
-if(ENABLE_KRB5)
-  if(NOT MSVC)
-	  target_link_libraries(OmniSQLCommandTest krb5_gss Shared)
-  endif()
-endif()
 if(NOT MSVC)
   target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
 endif()
@@ -236,7 +227,6 @@ add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
 add_test(GroupByTest GroupByTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
-add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
 add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
@@ -319,7 +309,6 @@ set(TEST_PROGRAMS
   ArrayTest
   GroupByTest
   TopKTest
-  OmniSQLCommandTest
   OmniSQLUtilitiesTest
   DBObjectPrivilegesTest
   CtasUpdateTest
