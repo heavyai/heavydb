@@ -55,7 +55,6 @@ add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
 add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(ArrayTest ArrayTest.cpp)
 add_executable(GroupByTest GroupByTest.cpp)
-add_executable(ParallelExecutorsTest ParallelExecutorsTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 if(NOT MSVC)
@@ -138,7 +137,6 @@ target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(ParallelExecutorsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(GroupByTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
@@ -240,7 +238,6 @@ add_test(StringFunctionsTest StringFunctionsTest ${TEST_ARGS})
 add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
 add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(ArrayTest ArrayTest ${TEST_ARGS})
-add_test(ParallelExecutorsTest ParallelExecutorsTest ${TEST_ARGS})
 add_test(GroupByTest GroupByTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
@@ -327,7 +324,6 @@ set(TEST_PROGRAMS
   TableFunctionsTest
   ArrayTest
   GroupByTest
-  ParallelExecutorsTest
   TopKTest
   TokenCompletionHintsTest
   OmniSQLCommandTest
