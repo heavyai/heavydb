@@ -32,6 +32,7 @@ data: {
         "org.apache.calcite.sql.SqlWith"
         "org.apache.calcite.schema.ColumnStrategy"
         "com.mapd.parser.extension.ddl.heavydb.*"
+        "com.mapd.calcite.parser.HeavyDBSqlOperatorTable"
         "com.mapd.parser.extension.ddl.SqlDdlNodes"
         "com.mapd.parser.extension.ddl.SqlCreateDB"
         "com.mapd.parser.extension.ddl.SqlDropDB"
@@ -145,6 +146,8 @@ data: {
         "STORED"
         "SUPPORTED"
         "TABLES"
+        "TOWARDS"
+        "TRY_CAST"
         "VALIDATE"
         "VIRTUAL"
         "CLEAR"
@@ -518,6 +521,8 @@ data: {
         "STORED"
         "SUPPORTED"
         "TABLES"
+        "TOWARDS"
+        "TRY_CAST"
         "VALIDATE"
         "VIRTUAL"
         "CLEAR"
@@ -584,6 +589,7 @@ data: {
       # Return type of method implementation should be "SqlNode".
       # Example: DateFunctionCall().
       builtinFunctionCallMethods: [
+        "TryCast()"
         "CurlyArrayConstructor()"
       ]
 
@@ -635,6 +641,7 @@ data: {
       # given as part of "statementParserMethods", "literalParserMethods" or
       # "dataTypeParserMethods".
       implementationFiles: [
+        "tryCastParser.ftl"
         "foreignServerParser.ftl"
         "foreignTableParser.ftl"
         "showCommandsParser.ftl"

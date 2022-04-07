@@ -19,6 +19,7 @@
 #endif  // __CUDACC__
 
 #include "RuntimeFunctions.h"
+#include "../Shared/Datum.h"
 #include "../Shared/funcannotations.h"
 #include "BufferCompaction.h"
 #include "HyperLogLogRank.h"
@@ -174,6 +175,27 @@ DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 #undef DEF_ARITH_NULLABLE_RHS
 #undef DEF_ARITH_NULLABLE_LHS
 #undef DEF_ARITH_NULLABLE
+
+#define DEF_MAP_STRING_TO_DATUM(value_type, value_name)                        \
+  extern "C" ALWAYS_INLINE DEVICE value_type map_string_to_datum_##value_name( \
+      const int32_t string_id,                                                 \
+      const int64_t translation_map_handle,                                    \
+      const int32_t min_source_id) {                                           \
+    const Datum* translation_map =                                             \
+        reinterpret_cast<const Datum*>(translation_map_handle);                \
+    const Datum& out_datum = translation_map[string_id - min_source_id];       \
+    return out_datum.value_name##val;                                          \
+  }
+
+DEF_MAP_STRING_TO_DATUM(int8_t, bool)
+DEF_MAP_STRING_TO_DATUM(int8_t, tinyint)
+DEF_MAP_STRING_TO_DATUM(int16_t, smallint)
+DEF_MAP_STRING_TO_DATUM(int32_t, int)
+DEF_MAP_STRING_TO_DATUM(int64_t, bigint)
+DEF_MAP_STRING_TO_DATUM(float, float)
+DEF_MAP_STRING_TO_DATUM(double, double)
+
+#undef DEF_MAP_STRING_TO_DATUM
 
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
 scale_decimal_up(const int64_t operand,

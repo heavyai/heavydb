@@ -707,18 +707,30 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       in_string_op_chain_ = false;
     }
     const auto kind = string_oper->get_kind();
+    const auto& return_ti = string_oper->get_type_info();
 
     if (string_oper->getArity() == rewritten_arg_literal_arity) {
-      Analyzer::StringOper literal_string_oper(kind, rewritten_args);
+      Analyzer::StringOper literal_string_oper(
+          kind, string_oper->get_type_info(), rewritten_args);
       const auto literal_args = literal_string_oper.getLiteralArgs();
-      const auto string_op_info = StringOps_Namespace::StringOpInfo(kind, literal_args);
-      const auto literal_result =
-          StringOps_Namespace::apply_string_op_to_literals(string_op_info);
-      return Parser::StringLiteral::analyzeValue(literal_result.first,
-                                                 literal_result.second /* is null */);
+      const auto string_op_info =
+          StringOps_Namespace::StringOpInfo(kind, return_ti, literal_args);
+      if (return_ti.is_string()) {
+        const auto literal_result =
+            StringOps_Namespace::apply_string_op_to_literals(string_op_info);
+        return Parser::StringLiteral::analyzeValue(literal_result.first,
+                                                   literal_result.second);
+      }
+      const auto literal_datum =
+          StringOps_Namespace::apply_numeric_op_to_literals(string_op_info);
+      auto nullable_return_ti = return_ti;
+      nullable_return_ti.set_notnull(false);
+      return makeExpr<Analyzer::Constant>(nullable_return_ti,
+                                          IsNullDatum(literal_datum, nullable_return_ti),
+                                          literal_datum);
     }
     chained_string_op_exprs_.emplace_back(
-        makeExpr<Analyzer::StringOper>(kind, rewritten_args));
+        makeExpr<Analyzer::StringOper>(kind, return_ti, rewritten_args));
     if (parent_in_string_op_chain) {
       CHECK(in_string_op_chain_);
       CHECK(rewritten_args[0]->get_type_info().is_string());
@@ -728,7 +740,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     } else {
       CHECK(!in_string_op_chain_);
       return makeExpr<Analyzer::StringOper>(
-          kind, rewritten_args, chained_string_op_exprs_);
+          kind, return_ti, rewritten_args, chained_string_op_exprs_);
     }
   }
 

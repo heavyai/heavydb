@@ -14,10 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// clang-format off
+
 package org.apache.calcite.sql2rel;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
+// HEAVY.AI new
+import com.mapd.calcite.parser.HeavyDBSqlOperatorTable;
+// end HEAVY.AI new
 
 import org.apache.calcite.avatica.util.DateTimeUtils;
 import org.apache.calcite.avatica.util.TimeUnit;
@@ -76,6 +80,9 @@ import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -104,6 +111,11 @@ public class StandardConvertletTable extends ReflectiveConvertletTable {
     // Register convertlets for specific objects.
     registerOp(SqlStdOperatorTable.CAST, this::convertCast);
     registerOp(SqlLibraryOperators.INFIX_CAST, this::convertCast);
+
+    // HEAVY.AI new
+    registerOp(HeavyDBSqlOperatorTable.TRY_CAST, this::convertTryCast);
+    // end HEAVY.AI new
+
     registerOp(SqlStdOperatorTable.IS_DISTINCT_FROM,
             (cx, call) -> convertIsDistinctFrom(cx, call, false));
     registerOp(SqlStdOperatorTable.IS_NOT_DISTINCT_FROM,
@@ -489,6 +501,32 @@ public class StandardConvertletTable extends ReflectiveConvertletTable {
     }
     return cx.getRexBuilder().makeCast(type, arg);
   }
+
+  // HEAVY.AI new
+  protected RexNode convertTryCast(SqlRexContext cx, final SqlCall call) {
+    RelDataTypeFactory typeFactory = cx.getTypeFactory();
+    // assert call.getKind() == SqlKind.CAST;
+    final SqlNode left = call.operand(0);
+    final SqlNode right = call.operand(1);
+
+    SqlDataTypeSpec dataType = (SqlDataTypeSpec) right;
+    RelDataType type = dataType.deriveType(cx.getValidator());
+    if (type == null) {
+      type = cx.getValidator().getValidatedNodeType(dataType.getTypeName());
+    }
+    RexNode arg = cx.convertExpression(left);
+    if (arg.getType().isNullable()) {
+      type = typeFactory.createTypeWithNullability(type, true);
+    }
+    if (SqlUtil.isNullLiteral(left, false)) {
+      final SqlValidatorImpl validator = (SqlValidatorImpl) cx.getValidator();
+      validator.setValidatedNodeType(left, type);
+      return cx.convertExpression(left);
+    }
+    return cx.getRexBuilder().makeCall(
+            type, HeavyDBSqlOperatorTable.TRY_CAST, ImmutableList.of(arg));
+  }
+  // end HEAVY.AI new
 
   protected RexNode convertFloorCeil(SqlRexContext cx, SqlCall call) {
     final boolean floor = call.getKind() == SqlKind.FLOOR;

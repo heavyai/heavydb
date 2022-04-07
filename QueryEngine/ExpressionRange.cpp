@@ -667,6 +667,7 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
         dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
     CHECK(chained_string_op);
     StringOps_Namespace::StringOpInfo string_op_info(chained_string_op->get_kind(),
+                                                     chained_string_op->get_type_info(),
                                                      chained_string_op->getLiteralArgs());
     string_op_infos.emplace_back(string_op_info);
   }
@@ -686,22 +687,28 @@ ExpressionRange getExpressionRange(const Analyzer::StringOper* string_oper_expr,
   CHECK(string_oper_col_var_ti.is_dict_encoded_string());
 
   const auto expr_ti = string_oper_expr->get_type_info();
-  CHECK(expr_ti.is_string());
-  const auto dict_id = expr_ti.get_comp_param();
+  if (expr_ti.is_string()) {
+    CHECK(expr_ti.is_dict_encoded_string());
+    const auto dict_id = expr_ti.get_comp_param();
 
-  const auto translation_map = executor->getStringProxyTranslationMap(
-      dict_id,
-      dict_id,
-      RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
-      string_op_infos,
-      executor->getRowSetMemoryOwner(),
-      true);
+    const auto translation_map = executor->getStringProxyTranslationMap(
+        dict_id,
+        dict_id,
+        RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
+        string_op_infos,
+        executor->getRowSetMemoryOwner(),
+        true);
 
-  // Todo(todd): Track null presence in StringDictionaryProxy::IdMap
-  return ExpressionRange::makeIntRange(translation_map->rangeStart(),
-                                       translation_map->rangeEnd() - 1,
-                                       0 /* bucket */,
-                                       true /* assume has nulls */);
+    // Todo(todd): Track null presence in StringDictionaryProxy::IdMap
+    return ExpressionRange::makeIntRange(translation_map->rangeStart(),
+                                         translation_map->rangeEnd() - 1,
+                                         0 /* bucket */,
+                                         true /* assume has nulls */);
+
+  } else {
+    // Todo: Get min/max range stats
+    return ExpressionRange::makeInvalidRange();
+  }
 }
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {

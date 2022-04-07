@@ -204,6 +204,54 @@ int32_t StringDictionaryProxy::lookupTransientStringUnlocked(
                                            : it->second;
 }
 
+StringDictionaryProxy::TranslationMap<Datum>
+StringDictionaryProxy::buildNumericTranslationMap(
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+  auto timer = DEBUG_TIMER(__func__);
+  CHECK(string_op_infos.size());
+  TranslationMap<Datum> translation_map(transient_string_vec_.size(), generation_);
+  if (translation_map.empty()) {
+    return translation_map;
+  }
+
+  const StringOps_Namespace::StringOps string_ops(string_op_infos);
+
+  const size_t num_transient_entries = translation_map.numTransients();
+  if (num_transient_entries) {
+    const int32_t map_domain_start = translation_map.domainStart();
+    if (num_transient_entries > 10000UL) {
+      tbb::parallel_for(
+          tbb::blocked_range<int32_t>(map_domain_start, -1),
+          [&](const tbb::blocked_range<int32_t>& r) {
+            const int32_t start_idx = r.begin();
+            const int32_t end_idx = r.end();
+            for (int32_t source_string_id = start_idx; source_string_id < end_idx;
+                 ++source_string_id) {
+              const auto source_string = getStringUnlocked(source_string_id);
+              translation_map[source_string_id] = string_ops.numericEval(source_string);
+            }
+          });
+    } else {
+      for (int32_t source_string_id = map_domain_start; source_string_id < -1;
+           ++source_string_id) {
+        const auto source_string = getStringUnlocked(source_string_id);
+        translation_map[source_string_id] = string_ops.numericEval(source_string);
+      }
+    }
+  }
+
+  Datum* translation_map_stored_entries_ptr = translation_map.storageData();
+  if (generation_ > 0) {
+    string_dict_->buildDictionaryNumericTranslationMap(
+        translation_map_stored_entries_ptr, generation_, string_op_infos);
+  }
+  translation_map.setNumUntranslatedStrings(0UL);
+
+  // Todo(todd): Set range start/end with scan
+
+  return translation_map;
+}
+
 StringDictionaryProxy::IdMap
 StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxyUnlocked(
     const StringDictionaryProxy* dest_proxy,
@@ -631,11 +679,6 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::transientUnion(
   // Import all non-duplicate strings (transient and non-transient) and add to id_map.
   sdp_rhs.eachStringSerially(*serial_callback);
   return id_map;
-}
-
-std::ostream& operator<<(std::ostream& os, StringDictionaryProxy::IdMap const& id_map) {
-  return os << "IdMap(offset_(" << id_map.offset_ << ") vector_map_"
-            << shared::printContainer(id_map.vector_map_) << ')';
 }
 
 void StringDictionaryProxy::updateGeneration(const int64_t generation) noexcept {

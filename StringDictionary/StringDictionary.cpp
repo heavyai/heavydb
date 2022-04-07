@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "Shared/DatumFetchers.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 #include "StringOps/StringOps.h"
 
@@ -1964,6 +1965,87 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   }
   return total_num_strings_not_translated;
 }
+
+/****/
+
+void StringDictionary::buildDictionaryNumericTranslationMap(
+    Datum* translated_ids,
+    const int64_t source_generation,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const {
+  auto timer = DEBUG_TIMER(__func__);
+  CHECK_GE(source_generation, 0L);
+  CHECK_GT(string_op_infos.size(), 0UL);
+  CHECK(!string_op_infos.back().getReturnType().is_string());
+#if 0 
+  REMOVING REMOTE STUFF
+  if (client_no_timeout_) {
+    return buildRemoteNumericDictionaryTranslationMap(
+        translated_ids, source_generation, string_op_infos);
+  }
+#endif
+  const int64_t num_source_strings = source_generation;
+
+  // We can bail early if there are no source strings to translate
+  if (num_source_strings == 0L) {
+    return;
+  }
+
+  // If here we should should have a local dictionary
+  // Note case of transient source dictionaries that aren't
+  // seen as remote (they have no client_no_timeout_) is covered
+  // by early bail above on num_source_strings == 0
+
+  std::shared_lock<std::shared_mutex> source_read_lock(rw_mutex_);
+
+  // For source dictionary we cap the number of entries
+  // to be translated/translated to at the supplied
+  // generation arguments, if valid (i.e. >= 0), otherwise
+  // just the size of each dictionary
+
+  CHECK_LE(num_source_strings, static_cast<int64_t>(str_count_));
+
+  constexpr int64_t target_strings_per_thread{1000};
+  const ThreadInfo thread_info(
+      std::thread::hardware_concurrency(), num_source_strings, target_strings_per_thread);
+  CHECK_GE(thread_info.num_threads, 1L);
+  CHECK_GE(thread_info.num_elems_per_thread, 1L);
+
+  // We use a tbb::task_arena to cap the number of threads, has been
+  // in other contexts been shown to exhibit better performance when low
+  // numbers of threads are needed than just letting tbb figure the number of threads,
+  // but should benchmark in this specific context
+
+  const StringOps_Namespace::StringOps string_ops(string_op_infos);
+  CHECK_GT(string_ops.size(), 0UL);
+
+  tbb::task_arena limited_arena(thread_info.num_threads);
+  // The below logic, by executing low-level private variable accesses on both
+  // dictionaries, is less clean than a previous variant that simply called
+  // `getStringViews` from the source dictionary and then called `getBulk` on the
+  // destination dictionary, but this version gets significantly better performance
+  // (~2X), likely due to eliminating the overhead of writing out the string views and
+  // then reading them back in (along with the associated cache misses)
+  tbb::parallel_for(
+      tbb::blocked_range<int32_t>(
+          0, num_source_strings, thread_info.num_elems_per_thread /* tbb grain_size */),
+      [&](const tbb::blocked_range<int32_t>& r) {
+        const int32_t start_idx = r.begin();
+        const int32_t end_idx = r.end();
+        for (int32_t source_string_id = start_idx; source_string_id != end_idx;
+             ++source_string_id) {
+          const std::string source_str =
+              std::string(getStringFromStorageFast(source_string_id));
+          translated_ids[source_string_id] = string_ops.numericEval(source_str);
+        }
+      });
+}
+
+
+
+
+
+
+/****/
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,

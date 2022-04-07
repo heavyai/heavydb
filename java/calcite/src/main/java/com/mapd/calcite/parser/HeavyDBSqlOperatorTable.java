@@ -16,6 +16,8 @@
 
 package com.mapd.calcite.parser;
 
+import static org.apache.calcite.util.Static.RESOURCE;
+
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
@@ -26,28 +28,36 @@ import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
+import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.schema.FunctionParameter;
 import org.apache.calcite.schema.TranslatableTable;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCallBinding;
+import org.apache.calcite.sql.SqlDynamicParam;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlIntervalQualifier;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlLiteral;
 import org.apache.calcite.sql.SqlNode;
+import org.apache.calcite.sql.SqlOperandCountRange;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.SqlTableFunction;
+import org.apache.calcite.sql.SqlUtil;
+import org.apache.calcite.sql.SqlWriter;
 import org.apache.calcite.sql.fun.SqlArrayValueConstructor;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.type.InferTypes;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.type.SameOperandTypeChecker;
+import org.apache.calcite.sql.type.SqlOperandCountRanges;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -57,6 +67,7 @@ import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
+import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.util.Optionality;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -105,6 +116,7 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
 public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static final SqlArrayValueConstructorAllowingEmpty ARRAY_VALUE_CONSTRUCTOR =
           new SqlArrayValueConstructorAllowingEmpty();
+  public static final SqlFunction TRY_CAST = new TryCast();
 
   static {
     try {
@@ -177,8 +189,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public void addUDF(final Map<String, ExtensionFunction> extSigs) {
     // Don't use anonymous inner classes. They can't be instantiated
     // using reflection when we are deserializing from JSON.
-    // addOperator(new RampFunction());
-    // addOperator(new DedupFunction());
     addOperator(new MyUDFFunction());
     addOperator(new PgUnnest());
     addOperator(new Any());
@@ -217,6 +227,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new Unlikely());
     addOperator(new Sign());
     addOperator(new Truncate());
+    addOperator(new TryCast());
     addOperator(new ST_IsEmpty());
     addOperator(new ST_IsValid());
     addOperator(new ST_Contains());
@@ -275,6 +286,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     addOperator(new is_point_size_in_view());
     addOperator(new usTimestamp());
     addOperator(new nsTimestamp());
+
     if (extSigs == null) {
       return;
     }
@@ -1259,6 +1271,103 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       return opBinding.getOperandType(0);
+    }
+  }
+
+  public static class TryCast extends SqlFunction {
+    //~ Instance fields --------------------------------------------------------
+
+    public TryCast() {
+      super("TRY_CAST",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              InferTypes.FIRST_KNOWN,
+              null,
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    //~ Methods ----------------------------------------------------------------
+
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      RelDataType ret = opBinding.getOperandType(1);
+      RelDataType firstType = opBinding.getOperandType(0);
+      ret = opBinding.getTypeFactory().createTypeWithNullability(
+              ret, firstType.isNullable());
+      if (opBinding instanceof SqlCallBinding) {
+        SqlCallBinding callBinding = (SqlCallBinding) opBinding;
+        SqlNode operand0 = callBinding.operand(0);
+
+        // dynamic parameters and null constants need their types assigned
+        // to them using the type they are casted to.
+        if (((operand0 instanceof SqlLiteral)
+                    && (((SqlLiteral) operand0).getValue() == null))
+                || (operand0 instanceof SqlDynamicParam)) {
+          final SqlValidatorImpl validator =
+                  (SqlValidatorImpl) callBinding.getValidator();
+          validator.setValidatedNodeType(operand0, ret);
+        }
+      }
+      return ret;
+    }
+
+    public String getSignatureTemplate(final int operandsCount) {
+      assert operandsCount == 2;
+      return "{0}({1} AS {2})";
+    }
+
+    public SqlOperandCountRange getOperandCountRange() {
+      return SqlOperandCountRanges.of(2);
+    }
+
+    /**
+     * Makes sure that the number and types of arguments are allowable.
+     * Operators (such as "ROW" and "AS") which do not check their arguments can
+     * override this method.
+     */
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      final SqlNode left = callBinding.operand(0);
+      final SqlNode right = callBinding.operand(1);
+      if (SqlUtil.isNullLiteral(left, false) || left instanceof SqlDynamicParam) {
+        return true;
+      }
+      RelDataType validatedNodeType =
+              callBinding.getValidator().getValidatedNodeType(left);
+      RelDataType returnType =
+              callBinding.getValidator().deriveType(callBinding.getScope(), right);
+      if (!SqlTypeUtil.canCastFrom(returnType, validatedNodeType, true)) {
+        if (throwOnFailure) {
+          throw callBinding.newError(RESOURCE.cannotCastValue(
+                  validatedNodeType.toString(), returnType.toString()));
+        }
+        return false;
+      }
+      if (SqlTypeUtil.areCharacterSetsMismatched(validatedNodeType, returnType)) {
+        if (throwOnFailure) {
+          // Include full type string to indicate character
+          // set mismatch.
+          throw callBinding.newError(RESOURCE.cannotCastValue(
+                  validatedNodeType.getFullTypeString(), returnType.getFullTypeString()));
+        }
+        return false;
+      }
+      return true;
+    }
+
+    public SqlSyntax getSyntax() {
+      return SqlSyntax.FUNCTION;
+    }
+
+    public void unparse(SqlWriter writer, SqlCall call, int leftPrec, int rightPrec) {
+      assert call.operandCount() == 2;
+      final SqlWriter.Frame frame = writer.startFunCall(getName());
+      call.operand(0).unparse(writer, 0, 0);
+      writer.sep("AS");
+      if (call.operand(1) instanceof SqlIntervalQualifier) {
+        writer.sep("INTERVAL");
+      }
+      call.operand(1).unparse(writer, 0, 0);
+      writer.endFunCall(frame);
     }
   }
 

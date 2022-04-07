@@ -78,6 +78,24 @@ boost::regex StringOp::generateRegex(const std::string& op_name,
   }
 }
 
+NullableStrType TryStringCast::operator()(const std::string& str) const {
+  CHECK("Invalid string output for TryStringCast");
+  return NullableStrType();
+}
+
+Datum TryStringCast::numericEval(const std::string_view str) const {
+  if (str.empty()) {
+    return NullDatum(return_ti_);
+  }
+  // Need to make copy for now b/c StringToDatum can mod SQLTypeInfo arg
+  SQLTypeInfo return_ti(return_ti_);
+  try {
+    return StringToDatum(str, return_ti);
+  } catch (std::runtime_error& e) {
+    return NullDatum(return_ti);
+  }
+}
+
 NullableStrType Lower::operator()(const std::string& str) const {
   std::string output_str(str);
   std::transform(
@@ -601,7 +619,7 @@ std::string StringOps::operator()(const std::string& str) const {
   return modified_str.str;
 }
 
-std::string_view StringOps::operator()(const std::string_view& sv,
+std::string_view StringOps::operator()(const std::string_view sv,
                                        std::string& sv_storage) const {
   sv_storage = sv;
   NullableStrType nullable_str(sv);
@@ -613,6 +631,20 @@ std::string_view StringOps::operator()(const std::string_view& sv,
   }
   sv_storage = nullable_str.str;
   return sv_storage;
+}
+
+Datum StringOps::numericEval(const std::string_view str) const {
+  NullableStrType modified_str(str);
+  const auto num_string_producing_ops = string_ops_.size() - 1;
+  for (size_t string_op_idx = 0; string_op_idx < num_string_producing_ops;
+       ++string_op_idx) {
+    const auto& string_op = string_ops_[string_op_idx];
+    modified_str = string_op->operator()(modified_str.str);
+    if (modified_str.is_null) {
+      break;
+    }
+  }
+  return string_ops_.back()->numericEval(modified_str.str);
 }
 
 std::vector<std::unique_ptr<const StringOp>> StringOps::genStringOpsFromOpInfos(
@@ -632,6 +664,7 @@ std::vector<std::unique_ptr<const StringOp>> StringOps::genStringOpsFromOpInfos(
 std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info) {
   std::optional<std::string> var_string_optional_literal;
   const auto op_kind = string_op_info.getOpKind();
+  const auto& return_ti = string_op_info.getReturnType();
 
   if (string_op_info.hasNullLiteralArg()) {
     return std::make_unique<const NullOp>(var_string_optional_literal, op_kind);
@@ -784,6 +817,11 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
       CHECK_EQ(num_non_variable_literals, 0UL);
       return std::make_unique<const Base64Decode>(var_string_optional_literal);
     }
+    case SqlStringOpKind::TRY_STRING_CAST: {
+      CHECK_EQ(num_non_variable_literals, 0UL);
+      return std::make_unique<const TryStringCast>(return_ti,
+                                                   var_string_optional_literal);
+    }
     default: {
       UNREACHABLE();
       return std::make_unique<NullOp>(var_string_optional_literal, op_kind);
@@ -802,6 +840,12 @@ std::pair<std::string, bool /* is null */> apply_string_op_to_literals(
   }
   const auto string_op = gen_string_op(string_op_info);
   return string_op->operator()().toPair();
+}
+
+Datum apply_numeric_op_to_literals(const StringOpInfo& string_op_info) {
+  CHECK(string_op_info.hasVarStringLiteral());
+  const auto string_op = gen_string_op(string_op_info);
+  return string_op->numericEval();
 }
 
 }  // namespace StringOps_Namespace

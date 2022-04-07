@@ -38,7 +38,7 @@ namespace StringOps_Namespace {
 
 struct NullableStrType {
   NullableStrType(const std::string& str) : str(str), is_null(false) {}
-  NullableStrType(const std::string_view& sv) : str(sv), is_null(false) {}
+  NullableStrType(const std::string_view sv) : str(sv), is_null(false) {}
   NullableStrType() : is_null(true) {}
 
   std::pair<std::string, bool> toPair() const { return {str, is_null}; }
@@ -52,14 +52,23 @@ struct StringOp {
   StringOp(const SqlStringOpKind op_kind,
            const std::optional<std::string>& var_str_optional_literal)
       : op_kind_(op_kind)
+      , return_ti_(SQLTypeInfo(kTEXT))
+      , has_var_str_literal_(var_str_optional_literal.has_value())
+      , var_str_literal_(!var_str_optional_literal.has_value()
+                             ? NullableStrType()
+                             : NullableStrType(var_str_optional_literal.value())) {}
+
+  StringOp(const SqlStringOpKind op_kind,
+           const SQLTypeInfo& return_ti,
+           const std::optional<std::string>& var_str_optional_literal)
+      : op_kind_(op_kind)
+      , return_ti_(return_ti)
       , has_var_str_literal_(var_str_optional_literal.has_value())
       , var_str_literal_(!var_str_optional_literal.has_value()
                              ? NullableStrType()
                              : NullableStrType(var_str_optional_literal.value())) {}
 
   virtual ~StringOp() = default;
-
-  std::string opName() const { return ::toString(op_kind_); }
 
   virtual NullableStrType operator()(std::string const&) const = 0;
 
@@ -70,6 +79,22 @@ struct StringOp {
     }
     return operator()(var_str_literal_.str);
   }
+
+  virtual Datum numericEval(const std::string_view str) const {
+    UNREACHABLE() << "numericEval not allowed for this method";
+    // Make compiler happy
+    return NullDatum(SQLTypeInfo());
+  }
+
+  virtual Datum numericEval() const {
+    CHECK(hasVarStringLiteral());
+    if (var_str_literal_.is_null) {
+      return NullDatum(return_ti_);
+    }
+    return numericEval(var_str_literal_.str);
+  }
+
+  virtual const SQLTypeInfo& getReturnType() const { return return_ti_; }
 
   const std::string& getVarStringLiteral() const {
     CHECK(hasVarStringLiteral());
@@ -85,8 +110,19 @@ struct StringOp {
                                     const bool supports_sub_matches);
 
   const SqlStringOpKind op_kind_;
+  const SQLTypeInfo return_ti_;
   const bool has_var_str_literal_{false};
   const NullableStrType var_str_literal_;
+};
+
+struct TryStringCast : public StringOp {
+ public:
+  TryStringCast(const SQLTypeInfo& return_ti,
+                const std::optional<std::string>& var_str_optional_literal)
+      : StringOp(SqlStringOpKind::TRY_STRING_CAST, return_ti, var_str_optional_literal) {}
+
+  NullableStrType operator()(const std::string& str) const override;
+  Datum numericEval(const std::string_view str) const override;
 };
 
 struct Lower : public StringOp {
@@ -470,6 +506,8 @@ std::unique_ptr<const StringOp> gen_string_op(const StringOpInfo& string_op_info
 std::pair<std::string, bool /* is null */> apply_string_op_to_literals(
     const StringOpInfo& string_op_info);
 
+Datum apply_numeric_op_to_literals(const StringOpInfo& string_op_info);
+
 class StringOps {
  public:
   StringOps() : string_ops_(genStringOpsFromOpInfos({})), num_ops_(0UL) {}
@@ -480,7 +518,9 @@ class StringOps {
 
   std::string operator()(const std::string& str) const;
 
-  std::string_view operator()(const std::string_view& sv, std::string& sv_storage) const;
+  std::string_view operator()(const std::string_view sv, std::string& sv_storage) const;
+
+  Datum numericEval(const std::string_view str) const;
 
   size_t size() const { return num_ops_; }
 
