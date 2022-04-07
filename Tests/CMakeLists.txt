@@ -54,7 +54,6 @@ add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp
 add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
-add_executable(ImportExportTest ImportExportTest.cpp)
 add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
 add_executable(AlterTableDdlTest AlterTableDdlTest.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
@@ -191,7 +190,6 @@ target_link_libraries(UtilTest OSDependent)
 target_link_libraries(EncoderTest gtest DataMgr Shared Logger)
 target_link_libraries(CommandLineTest gtest Logger Shared ${Boost_LIBRARIES})
 #Requires thrift_handler for DBHandler test fixture
-target_link_libraries(ImportExportTest gtest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CtasUpdateTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DBObjectPrivilegesTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(CatalogMigrationTest ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -238,7 +236,6 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
-add_test(ImportExportTest ImportExportTest ${TEST_ARGS})
 add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
 add_test(AlterTableDdlTest AlterTableDdlTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
@@ -351,7 +348,6 @@ set(TEST_PROGRAMS
   FromTableReorderingTest
   ResultSetBaselineRadixSortTest
   StorageTest
-  ImportExportTest
   ArrowCsvForeignStorageTest
   AlterTableDdlTest
   ComputeMetadataTest
