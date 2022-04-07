@@ -45,7 +45,8 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
   // can properly cast it to a TextEncodingDict
   if (operand_lv->getType()->isPointerTy() &&
       operand_lv->getType()->getPointerElementType()->isStructTy()) {
-    auto _struct = cgen_state_->ir_builder_.CreateLoad(operand_lv);
+    auto _struct = cgen_state_->ir_builder_.CreateLoad(
+        operand_lv->getType()->getPointerElementType(), operand_lv);
     auto ptr = cgen_state_->ir_builder_.CreateExtractValue(_struct, {0});
     auto len = cgen_state_->ir_builder_.CreateTrunc(
         cgen_state_->ir_builder_.CreateExtractValue(_struct, {1}),
