@@ -1550,6 +1550,18 @@ TEST_F(ArrowStorageTest, AppendJsonData_DecimalArrays) {
                  std::vector<int64_t>({101010, 202020, inline_null_value<int64_t>()})}));
 }
 
+TEST_F(ArrowStorageTest, ImportParquet) {
+  ArrowStorage storage(TEST_SCHEMA_ID, "test", TEST_DB_ID);
+  auto tinfo = storage.importParquetFile(getFilePath("int_float.parquet"), "table1");
+
+  checkData(storage,
+            tinfo->table_id,
+            5,
+            32'000'000,
+            std::vector<int64_t>({1, 2, 3, 4, 5}),
+            std::vector<double>({1.1, 2.2, 3.3, 4.4, 5.5}));
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

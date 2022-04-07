@@ -24,6 +24,8 @@
 #include <arrow/json/reader.h>
 #include <arrow/util/decimal.h>
 #include <arrow/util/value_parsing.h>
+#include <parquet/api/reader.h>
+#include <parquet/arrow/reader.h>
 
 using namespace std::string_literals;
 
@@ -622,6 +624,31 @@ void ArrowStorage::appendJsonData(const std::string& json_data,
   appendArrowTable(at, table_id);
 }
 
+TableInfoPtr ArrowStorage::importParquetFile(const std::string& file_name,
+                                             const std::string& table_name,
+                                             const TableOptions& options) {
+  auto at = parseParquetFile(file_name);
+  return importArrowTable(at, table_name, options);
+}
+
+void ArrowStorage::appendParquetFile(const std::string& file_name,
+                                     const std::string& table_name) {
+  auto tinfo = getTableInfo(db_id_, table_name);
+  if (!tinfo) {
+    throw std::runtime_error("Unknown table: "s + table_name);
+  }
+  appendParquetFile(file_name, tinfo->table_id);
+}
+
+void ArrowStorage::appendParquetFile(const std::string& file_name, int table_id) {
+  if (!tables_.count(table_id)) {
+    throw std::runtime_error("Invalid table id: "s + std::to_string(table_id));
+  }
+
+  auto at = parseParquetFile(file_name);
+  appendArrowTable(at, table_id);
+}
+
 void ArrowStorage::dropTable(const std::string& table_name, bool throw_if_not_exist) {
   auto tinfo = getTableInfo(db_id_, table_name);
   if (!tinfo) {
@@ -934,4 +961,31 @@ std::shared_ptr<arrow::Table> ArrowStorage::parseJson(
   VLOG(1) << "Read Arrow JSON in " << time << "ms";
 
   return at;
+}
+
+std::shared_ptr<arrow::Table> ArrowStorage::parseParquetFile(
+    const std::string& file_name) {
+  auto file_result = arrow::io::ReadableFile::Open(file_name.c_str());
+  ARROW_THROW_NOT_OK(file_result.status());
+  auto inp = file_result.ValueOrDie();
+
+  auto parquet_reader = parquet::ParquetFileReader::Open(inp);
+
+  std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
+  // Allow multithreding.
+  parquet::ArrowReaderProperties prop(true);
+  auto st = parquet::arrow::FileReader::Make(
+      arrow::default_memory_pool(), std::move(parquet_reader), prop, &arrow_reader);
+  if (!st.ok()) {
+    throw std::runtime_error(st.ToString());
+  }
+
+  // Read entire file as a single Arrow table
+  std::shared_ptr<arrow::Table> table;
+  st = arrow_reader->ReadTable(&table);
+  if (!st.ok()) {
+    throw std::runtime_error(st.ToString());
+  }
+
+  return table;
 }

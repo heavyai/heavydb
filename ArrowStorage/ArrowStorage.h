@@ -111,6 +111,13 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
                       int table_id,
                       const JsonParseOptions parse_options = JsonParseOptions());
 
+  TableInfoPtr importParquetFile(const std::string& file_name,
+                                 const std::string& table_name,
+                                 const TableOptions& options = TableOptions());
+
+  void appendParquetFile(const std::string& file_name, const std::string& table_name);
+  void appendParquetFile(const std::string& file_name, int table_id);
+
   void dropTable(const std::string& table_name, bool throw_if_not_exist = false);
   void dropTable(int table_id, bool throw_if_not_exist = false);
 
@@ -153,6 +160,7 @@ class ArrowStorage : public SimpleSchemaProvider, public AbstractDataProvider {
   std::shared_ptr<arrow::Table> parseJson(std::shared_ptr<arrow::io::InputStream> input,
                                           const JsonParseOptions parse_options,
                                           const ColumnInfoList& col_infos = {});
+  std::shared_ptr<arrow::Table> parseParquetFile(const std::string& file_name);
   Fragmenter_Namespace::TableInfo getEmptyTableMetadata(int table_id) const;
   void fetchFixedLenData(const TableData& table,
                          size_t frag_idx,
