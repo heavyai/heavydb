@@ -50,7 +50,6 @@ add_executable(ResultSetTest ResultSetTest.cpp ResultSetTestUtils.cpp)
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
 add_executable(UtilTest UtilTest.cpp)
-add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
@@ -139,7 +138,6 @@ target_link_libraries(StringFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Logger Shared ${Boost_LIBRARIES})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowBasedExecuteTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrayTest ${EXECUTE_TEST_LIBS})
@@ -243,7 +241,6 @@ add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 add_test(NAME StringDictionaryHashTest COMMAND StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache")
 add_test(StringTransformTest StringTransformTest ${TEST_ARGS})
 add_test(StringFunctionsTest StringFunctionsTest ${TEST_ARGS})
-add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(ComputeMetadataTest ComputeMetadataTest ${TEST_ARGS})
 add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
 add_test(SpecialCharsTest SpecialCharsTest ${TEST_ARGS})
@@ -332,7 +329,6 @@ set(TEST_PROGRAMS
   ColumnarResultsTest
   FromTableReorderingTest
   ResultSetBaselineRadixSortTest
-  StorageTest
   ComputeMetadataTest
   BumpAllocatorTest
   SpecialCharsTest
