@@ -91,7 +91,10 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   void addVarlenBuffer(void* varlen_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    varlen_buffers_.push_back(varlen_buffer);
+    if (std::find(varlen_buffers_.begin(), varlen_buffers_.end(), varlen_buffer) ==
+        varlen_buffers_.end()) {
+      varlen_buffers_.push_back(varlen_buffer);
+    }
   }
 
   /**

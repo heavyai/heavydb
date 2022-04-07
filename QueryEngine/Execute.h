@@ -919,6 +919,8 @@ class Executor {
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
 
+  void AutoTrackBuffersInRuntimeIR();
+
   std::tuple<CompilationResult, std::unique_ptr<QueryMemoryDescriptor>> compileWorkUnit(
       const std::vector<InputTableInfo>& query_infos,
       const PlanState::DeletedColumnsMap& deleted_cols_map,

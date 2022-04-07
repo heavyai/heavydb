@@ -478,6 +478,15 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     const CompilationOptions& co) {
   CodeCacheKey key{serialize_llvm_object(query_func),
                    serialize_llvm_object(cgen_state_->row_func_)};
+
+  llvm::Module* M = query_func->getParent();
+  auto* flag = llvm::mdconst::extract_or_null<llvm::ConstantInt>(
+      M->getModuleFlag("manage_memory_buffer"));
+  if (flag and flag->getZExtValue() == 1 and M->getFunction("allocate_varlen_buffer") and
+      M->getFunction("register_buffer_with_executor_rsm")) {
+    LOG(INFO) << "including executor addr to cache key\n";
+    key.push_back(std::to_string(reinterpret_cast<int64_t>(this)));
+  }
   if (cgen_state_->filter_func_) {
     key.push_back(serialize_llvm_object(cgen_state_->filter_func_));
   }
@@ -2176,6 +2185,77 @@ void Executor::createErrorCheckControlFlow(
   CHECK(done_splitting);
 }
 
+void Executor::AutoTrackBuffersInRuntimeIR() {
+  llvm::Module* M = cgen_state_->module_;
+  if (M->getFunction("allocate_varlen_buffer") == nullptr)
+    return;
+
+  // read metadata
+  bool should_track = false;
+  auto* flag = M->getModuleFlag("manage_memory_buffer");
+  if (auto* cnt = llvm::mdconst::extract_or_null<llvm::ConstantInt>(flag)) {
+    if (cnt->getZExtValue() == 1) {
+      should_track = true;
+    }
+  }
+
+  if (!should_track) {
+    // metadata is not present
+    return;
+  }
+
+  LOG(INFO) << "Found 'manage_memory_buffer' metadata.";
+  llvm::SmallVector<llvm::CallInst*, 4> calls_to_analyze;
+
+  for (llvm::Function& F : *M) {
+    for (llvm::BasicBlock& BB : F) {
+      for (llvm::Instruction& I : BB) {
+        if (llvm::CallInst* CI = llvm::dyn_cast<llvm::CallInst>(&I)) {
+          // Keep track of calls to "allocate_varlen_buffer" for later processing
+          llvm::Function* called = CI->getCalledFunction();
+          if (called) {
+            if (called->getName() == "allocate_varlen_buffer") {
+              calls_to_analyze.push_back(CI);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // for each call to "allocate_varlen_buffer", check if there's a corresponding
+  // call to "register_buffer_with_executor_rsm". If not, add a call to it
+  llvm::IRBuilder<> Builder(cgen_state_->context_);
+  auto i64 = get_int_type(64, cgen_state_->context_);
+  auto i8p = get_int_ptr_type(8, cgen_state_->context_);
+  auto void_ = llvm::Type::getVoidTy(cgen_state_->context_);
+  llvm::FunctionType* fnty = llvm::FunctionType::get(void_, {i64, i8p}, false);
+  llvm::FunctionCallee register_buffer_fn =
+      M->getOrInsertFunction("register_buffer_with_executor_rsm", fnty, {});
+
+  int64_t executor_addr = reinterpret_cast<int64_t>(this);
+  for (llvm::CallInst* CI : calls_to_analyze) {
+    bool found = false;
+    // for each user of the function, check if its a callinst
+    // and if the callinst is calling "register_buffer_with_executor_rsm"
+    // if no such instruction exist, add one registering the buffer
+    for (llvm::User* U : CI->users()) {
+      if (llvm::CallInst* call = llvm::dyn_cast<llvm::CallInst>(U)) {
+        if (call->getCalledFunction() and
+            call->getCalledFunction()->getName() == "register_buffer_with_executor_rsm") {
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      Builder.SetInsertPoint(CI->getNextNode());
+      Builder.CreateCall(register_buffer_fn,
+                         {ll_int(executor_addr, cgen_state_->context_), CI});
+    }
+  }
+}
+
 std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
 
@@ -2969,6 +3049,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 #else
   LOG(IR) << serialize_llvm_object(cgen_state_->module_) << "\nEnd of IR";
 #endif
+
+  // Insert calls to "register_buffer_with_executor_rsm" for allocations
+  // in runtime functions (i.e. from RBC) without it
+  AutoTrackBuffersInRuntimeIR();
 
   // Run some basic validation checks on the LLVM IR before code is generated below.
   verify_function_ir(cgen_state_->row_func_);
