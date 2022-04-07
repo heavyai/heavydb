@@ -19,6 +19,7 @@
 #include "ArrowStorage/ArrowStorage.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/QueryHint.h"
 
 #include "BufferPoolStats.h"
 
@@ -95,5 +96,10 @@ BufferPoolStats getBufferPoolStats(const Data_Namespace::MemoryLevel memory_leve
 std::shared_ptr<ArrowStorage> getStorage();
 
 DataMgr* getDataMgr();
+
+RegisteredQueryHint getParsedQueryHint(const std::string& query_str);
+
+std::optional<std::unordered_map<size_t, RegisteredQueryHint>> getParsedQueryHints(
+    const std::string& query_str);
 
 }  // namespace TestHelpers::ArrowSQLRunner

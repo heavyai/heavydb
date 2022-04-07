@@ -14,28 +14,20 @@
  * limitations under the License.
  */
 
+#include "ArrowSQLRunner.h"
 #include "TestHelpers.h"
+
+#include "Shared/scope.h"
 
 #include <gtest/gtest.h>
 
-#include "Catalog/Catalog.h"
-#include "Catalog/DBObject.h"
-#include "DBHandlerTestHelpers.h"
-#include "QueryEngine/Execute.h"
-#include "QueryRunner/QueryRunner.h"
-
 namespace po = boost::program_options;
-
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
-
-using namespace Catalog_Namespace;
 
 extern bool g_enable_table_functions;
 extern bool g_enable_overlaps_hashjoin;
 
-using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers;
+using namespace TestHelpers::ArrowSQLRunner;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -54,33 +46,26 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 
 constexpr double EPS = 1e-10;
 
-inline void run_ddl_statement(const std::string& create_table_stmt) {
-  QR::get()->runDDLStatement(create_table_stmt);
-}
-
-std::shared_ptr<ResultSet> run_query(const std::string& query_str,
-                                     const ExecutorDeviceType device_type) {
-  return QR::get()->runSQL(query_str, device_type, true, true);
-}
-
 void createTable() {
-  QR::get()->runDDLStatement(
-      "CREATE TABLE SQL_HINT_DUMMY(key int, ts1 timestamp(0) encoding fixed(32), ts2 "
-      "timestamp(0) encoding fixed(32), str1 TEXT ENCODING DICT(16));");
+  createTable("SQL_HINT_DUMMY",
+              {{"key", SQLTypeInfo(kINT)},
+               {"ts1", SQLTypeInfo(kTIMESTAMP, 0, 0)},
+               {"ts2", SQLTypeInfo(kTIMESTAMP, 0, 0)},
+               {"str1", dictType(2)}});
 }
 
 void dropTable() {
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS SQL_HINT_DUMMY;");
+  dropTable("SQL_HINT_DUMMY");
 }
 
 TEST(kCpuMode, ForceToCPUMode) {
   const auto query_with_cpu_mode_hint = "SELECT /*+ cpu_mode */ * FROM SQL_HINT_DUMMY";
   const auto query_without_cpu_mode_hint = "SELECT * FROM SQL_HINT_DUMMY";
-  if (QR::get()->gpusPresent()) {
-    auto query_hints = QR::get()->getParsedQueryHint(query_with_cpu_mode_hint);
+  if (gpusPresent()) {
+    auto query_hints = getParsedQueryHint(query_with_cpu_mode_hint);
     const bool cpu_mode_enabled = query_hints.isHintRegistered(QueryHint::kCpuMode);
     EXPECT_TRUE(cpu_mode_enabled);
-    query_hints = QR::get()->getParsedQueryHint(query_without_cpu_mode_hint);
+    query_hints = getParsedQueryHint(query_without_cpu_mode_hint);
     EXPECT_FALSE(query_hints.isAnyQueryHintDelivered());
   }
 }
@@ -102,43 +87,43 @@ TEST(QueryHint, checkQueryLayoutHintWithEnablingColumnarOutput) {
   const auto q6 = "SELECT /*+ rowwise_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q7 = "SELECT /*+ columnar_output, columnar_output */ * FROM SQL_HINT_DUMMY";
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q1);
+    auto query_hints = getParsedQueryHint(q1);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q2);
+    auto query_hints = getParsedQueryHint(q2);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
     EXPECT_TRUE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q3);
+    auto query_hints = getParsedQueryHint(q3);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q4);
+    auto query_hints = getParsedQueryHint(q4);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q5);
+    auto query_hints = getParsedQueryHint(q5);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q6);
+    auto query_hints = getParsedQueryHint(q6);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
     EXPECT_TRUE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q7);
+    auto query_hints = getParsedQueryHint(q7);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     EXPECT_FALSE(hint_enabled);
   }
@@ -160,43 +145,43 @@ TEST(QueryHint, checkQueryLayoutHintWithoutEnablingColumnarOutput) {
   const auto q6 = "SELECT /*+ rowwise_output, rowwise_output */ * FROM SQL_HINT_DUMMY";
   const auto q7 = "SELECT /*+ columnar_output, columnar_output */ * FROM SQL_HINT_DUMMY";
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q1);
+    auto query_hints = getParsedQueryHint(q1);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     EXPECT_TRUE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q2);
+    auto query_hints = getParsedQueryHint(q2);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q3);
+    auto query_hints = getParsedQueryHint(q3);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q4);
+    auto query_hints = getParsedQueryHint(q4);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q5);
+    auto query_hints = getParsedQueryHint(q5);
     auto hint_enabled = query_hints.isAnyQueryHintDelivered();
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q6);
+    auto query_hints = getParsedQueryHint(q6);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kRowwiseOutput);
     EXPECT_FALSE(hint_enabled);
   }
 
   {
-    auto query_hints = QR::get()->getParsedQueryHint(q7);
+    auto query_hints = getParsedQueryHint(q7);
     auto hint_enabled = query_hints.isHintRegistered(QueryHint::kColumnarOutput);
     EXPECT_TRUE(hint_enabled);
   }
@@ -216,14 +201,14 @@ TEST(QueryHint, UDF) {
       "SELECT out0 FROM TABLE(get_max_with_row_offset(cursor(SELECT /*+ columnar_output, "
       "cpu_mode */ key FROM SQL_HINT_DUMMY)));";
   {
-    auto query_hints = QR::get()->getParsedQueryHints(q1);
+    auto query_hints = getParsedQueryHints(q1);
     EXPECT_TRUE(query_hints);
     EXPECT_EQ(query_hints->size(), static_cast<size_t>(1));
     EXPECT_TRUE(
         query_hints->begin()->second.isHintRegistered(QueryHint::kColumnarOutput));
   }
   {
-    auto query_hints = QR::get()->getParsedQueryHints(q2);
+    auto query_hints = getParsedQueryHints(q2);
     EXPECT_TRUE(query_hints);
     EXPECT_EQ(query_hints->size(), static_cast<size_t>(1));
     EXPECT_TRUE(
@@ -269,12 +254,12 @@ TEST(QueryHint, checkPerQueryBlockHint) {
         EXPECT_TRUE(find_cpu_mode_hint);
       };
   {
-    auto query_hints = QR::get()->getParsedQueryHints(q1);
+    auto query_hints = getParsedQueryHints(q1);
     EXPECT_TRUE(query_hints);
     check_registered_hint(query_hints.value());
   }
   {
-    auto query_hints = QR::get()->getParsedQueryHints(q2);
+    auto query_hints = getParsedQueryHints(q2);
     EXPECT_TRUE(query_hints);
     check_registered_hint(query_hints.value());
   }
@@ -291,7 +276,7 @@ TEST(QueryHint, WindowFunction) {
       "SELECT /*+ columnar_output */ str1, timestampdiff(minute, lag(ts1) over "
       "(partition by str1 order by ts1), ts2) as m_el FROM SQL_HINT_DUMMY;";
   {
-    auto query_hints = QR::get()->getParsedQueryHints(q1);
+    auto query_hints = getParsedQueryHints(q1);
     EXPECT_TRUE(query_hints);
     for (auto& kv : *query_hints) {
       auto query_hint = kv.second;
@@ -303,7 +288,7 @@ TEST(QueryHint, WindowFunction) {
       "timestampdiff(minute, lag(ts1) over (partition by str1 order by ts1), ts2) as "
       "m_el FROM SQL_HINT_DUMMY) T1 WHERE T1.m_el < 30;";
   {
-    auto query_hints = QR::get()->getParsedQueryHints(q2);
+    auto query_hints = getParsedQueryHints(q2);
     EXPECT_TRUE(query_hints);
     for (auto& kv : *query_hints) {
       auto query_hint = kv.second;
@@ -317,7 +302,7 @@ int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
 
   g_enable_table_functions = true;
-  QR::init(BASE_PATH);
+  init();
   int err{0};
 
   try {
@@ -327,6 +312,6 @@ int main(int argc, char** argv) {
     LOG(ERROR) << e.what();
   }
   dropTable();
-  QR::reset();
+  reset();
   return err;
 }
