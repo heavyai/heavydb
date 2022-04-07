@@ -552,6 +552,12 @@ class Executor {
       const std::vector<StringOps_Namespace::StringOpInfo>& dest_source_string_op_infos,
       std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
+  const StringDictionaryProxy::TranslationMap<Datum>* getStringProxyNumericTranslationMap(
+      const int source_dict_id,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      const bool with_generation) const;
+
   bool isCPUOnly() const;
 
   bool isArchMaxwell(const ExecutorDeviceType dt) const;

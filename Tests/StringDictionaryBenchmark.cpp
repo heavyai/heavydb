@@ -379,8 +379,10 @@ BENCHMARK_DEFINE_F(
   for (auto _ : state) {
     auto id_map = source_proxy->buildIntersectionTranslationMapToOtherProxy(
         dest_proxy.get(),
-        {StringOps_Namespace::StringOpInfo(SqlStringOpKind::REVERSE, {}),
-         StringOps_Namespace::StringOpInfo(SqlStringOpKind::REVERSE, {})});
+        {StringOps_Namespace::StringOpInfo(
+             SqlStringOpKind::REVERSE, SQLTypeInfo(kTEXT), {}),
+         StringOps_Namespace::StringOpInfo(
+             SqlStringOpKind::REVERSE, SQLTypeInfo(kTEXT), {})});
     CHECK_EQ(id_map.numUntranslatedStrings(), 0UL);
   }
 }

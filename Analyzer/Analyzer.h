@@ -1469,21 +1469,37 @@ class StringOper : public Expr {
 
   StringOper(const SqlStringOpKind kind,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
-      : Expr(StringOper::get_return_type(args)), kind_(kind), args_(args) {}
+      : Expr(StringOper::get_return_type(kind, args)), kind_(kind), args_(args) {}
+
+  StringOper(const SqlStringOpKind kind,
+             const SQLTypeInfo& return_ti,
+             const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+      : Expr(return_ti), kind_(kind), args_(args) {}
 
   StringOper(const SqlStringOpKind kind,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
              const size_t min_args,
              const std::vector<OperandTypeFamily>& expected_type_families,
              const std::vector<std::string>& arg_names)
-      : Expr(StringOper::get_return_type(args)), kind_(kind), args_(args) {
+      : Expr(StringOper::get_return_type(kind, args)), kind_(kind), args_(args) {
     check_operand_types(min_args, expected_type_families, arg_names);
   }
 
   StringOper(const SqlStringOpKind kind,
+             const SQLTypeInfo& return_ti,
+             const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
+             const size_t min_args,
+             const std::vector<OperandTypeFamily>& expected_type_families,
+             const std::vector<std::string>& arg_names)
+      : Expr(return_ti), kind_(kind), args_(args) {
+    check_operand_types(min_args, expected_type_families, arg_names);
+  }
+
+  StringOper(const SqlStringOpKind kind,
+             const SQLTypeInfo& return_ti,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& args,
              const std::vector<std::shared_ptr<Analyzer::Expr>>& chained_string_op_exprs)
-      : Expr(StringOper::get_return_type(args))
+      : Expr(return_ti)
       , kind_(kind)
       , args_(args)
       , chained_string_op_exprs_(chained_string_op_exprs) {}
@@ -1606,7 +1622,8 @@ class StringOper : public Expr {
 
  private:
   static SQLTypeInfo get_return_type(
-      const std::vector<std::shared_ptr<Analyzer::Expr>> args);
+      const SqlStringOpKind kind,
+      const std::vector<std::shared_ptr<Analyzer::Expr>>& args);
 
   void check_operand_types(const size_t min_args,
                            const std::vector<OperandTypeFamily>& expected_type_families,
@@ -2157,7 +2174,6 @@ class RegexpSubstrStringOper : public StringOper {
             "sub-match group index"};
   }
 };
-
 class JsonValueStringOper : public StringOper {
  public:
   JsonValueStringOper(const std::shared_ptr<Analyzer::Expr>& operand,
@@ -2236,6 +2252,38 @@ class Base64DecodeStringOper : public StringOper {
                    getArgNames()) {}
 
   Base64DecodeStringOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
+      : StringOper(string_oper) {}
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  size_t getMinArgs() const override { return 1UL; }
+
+  std::vector<OperandTypeFamily> getExpectedTypeFamilies() const override {
+    return {OperandTypeFamily::STRING_FAMILY};
+  }
+  std::vector<std::string> getArgNames() const override { return {"operand"}; }
+};
+
+class TryStringCastOper : public StringOper {
+ public:
+  TryStringCastOper(const SQLTypeInfo& ti, const std::shared_ptr<Analyzer::Expr>& operand)
+      : StringOper(SqlStringOpKind::TRY_STRING_CAST,
+                   ti,
+                   {operand},
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  TryStringCastOper(const SQLTypeInfo& ti,
+                    const std::vector<std::shared_ptr<Analyzer::Expr>>& operands)
+      : StringOper(SqlStringOpKind::TRY_STRING_CAST,
+                   ti,
+                   operands,
+                   getMinArgs(),
+                   getExpectedTypeFamilies(),
+                   getArgNames()) {}
+
+  TryStringCastOper(const std::shared_ptr<Analyzer::StringOper>& string_oper)
       : StringOper(string_oper) {}
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;

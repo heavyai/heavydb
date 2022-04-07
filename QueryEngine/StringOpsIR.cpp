@@ -108,6 +108,27 @@ union_translate_string_id_to_other_dict(const int32_t string_id,
   return dest_string_dict_proxy->getOrAddTransient(source_str);
 }
 
+#define DEF_APPLY_NUMERIC_STRING_OPS(value_type, value_name)                             \
+  extern "C" RUNTIME_EXPORT ALWAYS_INLINE value_type                                     \
+      apply_numeric_string_ops_##value_name(                                             \
+          const char* str_ptr, const int32_t str_len, const int64_t string_ops_handle) { \
+    std::string raw_str(str_ptr, str_len);                                               \
+    auto string_ops =                                                                    \
+        reinterpret_cast<const StringOps_Namespace::StringOps*>(string_ops_handle);      \
+    const auto result_datum = string_ops->numericEval(raw_str);                          \
+    return result_datum.value_name##val;                                                 \
+  }
+
+DEF_APPLY_NUMERIC_STRING_OPS(int8_t, bool)
+DEF_APPLY_NUMERIC_STRING_OPS(int8_t, tinyint)
+DEF_APPLY_NUMERIC_STRING_OPS(int16_t, smallint)
+DEF_APPLY_NUMERIC_STRING_OPS(int32_t, int)
+DEF_APPLY_NUMERIC_STRING_OPS(int64_t, bigint)
+DEF_APPLY_NUMERIC_STRING_OPS(float, float)
+DEF_APPLY_NUMERIC_STRING_OPS(double, double)
+
+#undef DEF_APPLY_NUMERIC_STRING_OPS
+
 llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
                                     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
@@ -161,6 +182,7 @@ std::vector<StringOps_Namespace::StringOpInfo> getStringOpInfos(
         dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
     CHECK(chained_string_op);
     StringOps_Namespace::StringOpInfo string_op_info(chained_string_op->get_kind(),
+                                                     chained_string_op->get_type_info(),
                                                      chained_string_op->getLiteralArgs());
     string_op_infos.emplace_back(string_op_info);
   }
@@ -195,6 +217,47 @@ llvm::Value* CodeGenerator::codegenPerRowStringOper(const Analyzer::StringOper* 
   const int64_t string_ops_handle = reinterpret_cast<int64_t>(string_ops);
   auto string_ops_handle_lv = cgen_state_->llInt(string_ops_handle);
 
+  const auto& return_ti = expr->get_type_info();
+  if (!return_ti.is_string()) {
+    std::vector<llvm::Value*> string_oper_lvs{
+        primary_str_lv[1], primary_str_lv[2], string_ops_handle_lv};
+    const auto return_type = return_ti.get_type();
+    std::string fn_call = "apply_numeric_string_ops_";
+    switch (return_type) {
+      case kBOOLEAN: {
+        fn_call += "bool";
+        break;
+      }
+      case kTINYINT:
+      case kSMALLINT:
+      case kINT:
+      case kBIGINT:
+      case kFLOAT:
+      case kDOUBLE: {
+        fn_call += to_lower(toString(return_type));
+        break;
+      }
+      case kNUMERIC:
+      case kDECIMAL:
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE: {
+        fn_call += "bigint";
+        break;
+      }
+      default: {
+        throw std::runtime_error("Unimplemented type for string-to-numeric translation");
+      }
+    }
+    const auto logical_size = return_ti.get_logical_size() * 8;
+    auto llvm_return_type = return_ti.is_fp()
+                                ? get_fp_type(logical_size, cgen_state_->context_)
+                                : get_int_type(logical_size, cgen_state_->context_);
+    return cgen_state_->emitExternalCall(fn_call, llvm_return_type, string_oper_lvs);
+  }
+
+  // If here we are outputing a string dictionary column
+
   const int64_t dest_string_proxy_handle =
       reinterpret_cast<int64_t>(executor()->getStringDictionaryProxy(
           expr_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true));
@@ -214,23 +277,42 @@ std::unique_ptr<StringDictionaryTranslationMgr> translate_dict_strings(
     const ExecutorDeviceType device_type,
     Executor* executor) {
   const auto& expr_ti = expr->get_type_info();
-  const auto dict_id = expr_ti.get_comp_param();
+  const auto& primary_input_expr_ti = expr->getArg(0)->get_type_info();
+  const auto dict_id = primary_input_expr_ti.get_comp_param();
   const auto string_op_infos = getStringOpInfos(expr);
   CHECK(string_op_infos.size());
 
-  auto string_dictionary_translation_mgr =
-      std::make_unique<StringDictionaryTranslationMgr>(
-          dict_id,
-          dict_id,
-          false,  // translate_intersection_only
-          string_op_infos,
-          device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
-                                                 : Data_Namespace::CPU_LEVEL,
-          executor->deviceCount(device_type),
-          executor,
-          &executor->getCatalog()->getDataMgr(),
-          false /* delay_translation */);
-  return string_dictionary_translation_mgr;
+  if (string_op_infos.back().getReturnType().is_dict_encoded_string()) {
+    // string->string translation
+    auto string_dictionary_translation_mgr =
+        std::make_unique<StringDictionaryTranslationMgr>(
+            dict_id,
+            dict_id,
+            false,  // translate_intersection_only
+            expr_ti,
+            string_op_infos,
+            device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                   : Data_Namespace::CPU_LEVEL,
+            executor->deviceCount(device_type),
+            executor,
+            &executor->getCatalog()->getDataMgr(),
+            false /* delay_translation */);
+    return string_dictionary_translation_mgr;
+  } else {
+    // string->numeric translation
+    auto string_dictionary_translation_mgr =
+        std::make_unique<StringDictionaryTranslationMgr>(
+            dict_id,
+            expr_ti,
+            string_op_infos,
+            device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                   : Data_Namespace::CPU_LEVEL,
+            executor->deviceCount(device_type),
+            executor,
+            &executor->getCatalog()->getDataMgr(),
+            false /* delay_translation */);
+    return string_dictionary_translation_mgr;
+  }
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::StringOper* expr,
@@ -269,6 +351,7 @@ llvm::Value* CodeGenerator::codegenPseudoStringOper(
           dict_id,
           dict_id,
           false,  // translate_intersection_only
+          expr->get_type_info(),
           string_op_infos,
           co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                     : Data_Namespace::CPU_LEVEL,

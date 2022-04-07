@@ -31,8 +31,11 @@ using LiteralArgMap = std::map<size_t, std::pair<SQLTypes, Datum>>;
 
 struct StringOpInfo {
  public:
-  StringOpInfo(const SqlStringOpKind op_kind, const LiteralArgMap& literal_arg_map)
+  StringOpInfo(const SqlStringOpKind op_kind,
+               const SQLTypeInfo& return_ti,
+               const LiteralArgMap& literal_arg_map)
       : op_kind_(op_kind)
+      , return_ti_(return_ti)
       , literal_arg_map_(literal_arg_map)
       , num_null_literals_(StringOpInfo::calcNumNullLiteralArgs(literal_arg_map)) {}
 
@@ -52,6 +55,8 @@ struct StringOpInfo {
     return literal_arg_map_.size() - (hasVarStringLiteral() ? 1UL : 0UL);
   }
 
+  const SQLTypeInfo& getReturnType() const { return return_ti_; }
+
   bool hasNullLiteralArg() const { return num_null_literals_ > 0UL; }
 
   std::string getStringLiteral(const size_t index) const;
@@ -69,6 +74,7 @@ struct StringOpInfo {
   static size_t calcNumNullLiteralArgs(const LiteralArgMap& literal_arg_map);
 
   const SqlStringOpKind op_kind_;
+  const SQLTypeInfo return_ti_;
   const LiteralArgMap literal_arg_map_;
   const size_t num_null_literals_;
 };

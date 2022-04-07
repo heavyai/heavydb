@@ -601,6 +601,19 @@ Executor::getJoinIntersectionStringProxyTranslationMap(
       source_proxy, dest_proxy, source_string_op_infos);
 }
 
+const StringDictionaryProxy::TranslationMap<Datum>*
+Executor::getStringProxyNumericTranslationMap(
+    const int source_dict_id,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool with_generation) const {
+  CHECK(row_set_mem_owner);
+  std::lock_guard<std::mutex> lock(
+      str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+  return row_set_mem_owner->getOrAddStringProxyNumericTranslationMap(
+      source_dict_id, with_generation, string_op_infos, catalog_);
+}
+
 const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
     const int source_dict_id_in,
     const int dest_dict_id_in,
@@ -617,6 +630,17 @@ const StringDictionaryProxy::IdMap* RowSetMemoryOwner::getOrAddStringProxyTransl
   } else {
     return addStringProxyUnionTranslationMap(source_proxy, dest_proxy, string_op_infos);
   }
+}
+
+const StringDictionaryProxy::TranslationMap<Datum>*
+RowSetMemoryOwner::getOrAddStringProxyNumericTranslationMap(
+    const int source_dict_id_in,
+    const bool with_generation,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    const Catalog_Namespace::Catalog* catalog) {
+  const auto source_proxy =
+      getOrAddStringDictProxy(source_dict_id_in, with_generation, catalog);
+  return addStringProxyNumericTranslationMap(source_proxy, string_op_infos);
 }
 
 quantile::TDigest* RowSetMemoryOwner::nullTDigest(double const q) {

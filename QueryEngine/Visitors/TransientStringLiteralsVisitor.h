@@ -115,7 +115,9 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
             dynamic_cast<const Analyzer::StringOper*>(chained_string_op_expr.get());
         CHECK(chained_string_op);
         StringOps_Namespace::StringOpInfo string_op_info(
-            chained_string_op->get_kind(), chained_string_op->getLiteralArgs());
+            chained_string_op->get_kind(),
+            chained_string_op->get_type_info(),
+            chained_string_op->getLiteralArgs());
         string_op_infos.emplace_back(string_op_info);
       }
 
@@ -133,11 +135,12 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
       // (would have already been rewritten as a literal string)
       // Todo(todd): Verify and remove if so
       const StringOps_Namespace::StringOpInfo string_op_info(
-          string_oper_kind, string_oper->getLiteralArgs());
+          string_oper_kind, string_oper->get_type_info(), string_oper->getLiteralArgs());
       CHECK_EQ(string_op_info.numLiterals(), string_oper->getArity());
       const auto str_result_and_null_status =
           StringOps_Namespace::apply_string_op_to_literals(string_op_info);
-      if (!str_result_and_null_status.second &&
+      if (string_oper->get_type_info().is_string() &&
+          !str_result_and_null_status.second &&
           !str_result_and_null_status.first
                .empty()) {  // Todo(todd): Is there a central/non-magic function/constant
                             // to determine if a none-encoded string is null

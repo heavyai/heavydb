@@ -131,6 +131,11 @@ class StringDictionary {
       StringLookupCallback const& dest_transient_lookup_callback,
       const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
 
+  void buildDictionaryNumericTranslationMap(
+      Datum* translated_ids,
+      const int64_t source_generation,
+      const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) const;
+
   bool checkpoint() noexcept;
 
   bool isClient() const noexcept;

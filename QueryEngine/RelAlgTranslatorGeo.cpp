@@ -724,10 +724,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       auto cast_coord1 = coord1->add_cast(d_ti);
       auto cast_coord2 = coord2->add_cast(d_ti);
       // First try to fold to geo literal
-      auto fold1 = fold_expr(cast_coord1.get());
-      auto fold2 = fold_expr(cast_coord2.get());
-      auto const_coord1 = std::dynamic_pointer_cast<Analyzer::Constant>(fold1);
-      auto const_coord2 = std::dynamic_pointer_cast<Analyzer::Constant>(fold2);
+      auto folded_coord1 = fold_expr(cast_coord1.get());
+      auto folded_coord2 = fold_expr(cast_coord2.get());
+      auto const_coord1 = std::dynamic_pointer_cast<Analyzer::Constant>(folded_coord1);
+      auto const_coord2 = std::dynamic_pointer_cast<Analyzer::Constant>(folded_coord2);
       if (const_coord1 && const_coord2 && !use_geo_expressions) {
         CHECK(const_coord1->get_type_info().get_type() == kDOUBLE);
         CHECK(const_coord2->get_type_info().get_type() == kDOUBLE);
@@ -748,7 +748,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         return {makeExpr<Analyzer::GeoOperator>(
             arg_ti,
             rex_function->getName(),
-            std::vector<std::shared_ptr<Analyzer::Expr>>{cast_coord1, cast_coord2})};
+            std::vector<std::shared_ptr<Analyzer::Expr>>{folded_coord1, folded_coord2})};
       }
       // Couldn't fold to geo literal, construct [and compress] on the fly
       auto da_ti = SQLTypeInfo(kARRAY, true);
@@ -768,7 +768,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         arg_ti.set_compression(kENCODING_GEOINT);
         arg_ti.set_comp_param(32);
       }
-      auto cast_coords = {cast_coord1, cast_coord2};
+      auto cast_coords = {folded_coord1, folded_coord2};
       auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, false, is_local_alloca);
       SQLTypeInfo tia_ti = da_ti;
       tia_ti.set_subtype(kTINYINT);

@@ -30,6 +30,7 @@
 #endif  // HAVE_CUDA
 #include "Parser/ParserNode.h"
 #include "RuntimeFunctions.h"
+#include "Shared/StringTransform.h"
 #include "Shared/checked_alloc.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
@@ -51,6 +52,7 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     const int32_t source_string_dict_id,
     const int32_t dest_string_dict_id,
     const bool translate_intersection_only,
+    const SQLTypeInfo& output_ti,
     const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
@@ -60,18 +62,54 @@ StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     : source_string_dict_id_(source_string_dict_id)
     , dest_string_dict_id_(dest_string_dict_id)
     , translate_intersection_only_(translate_intersection_only)
+    , output_ti_(output_ti)
     , string_op_infos_(string_op_infos)
     , has_null_string_op_(one_or_more_string_ops_is_null(string_op_infos))
     , memory_level_(memory_level)
     , device_count_(device_count)
     , executor_(executor)
-    , data_mgr_(data_mgr) {
+    , data_mgr_(data_mgr)
+    , dest_type_is_string_(true) {
+#ifdef HAVE_CUDA
+  CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
+        memory_level_ == Data_Namespace::GPU_LEVEL);
+#else
+  CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
+#endif  // HAVE_CUDA
+  if (!delay_translation && !has_null_string_op_) {
+    buildTranslationMap();
+    createKernelBuffers();
+  }
+}
+
+StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
+    const int32_t source_string_dict_id,
+    const SQLTypeInfo& output_ti,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_count,
+    Executor* executor,
+    Data_Namespace::DataMgr* data_mgr,
+    const bool delay_translation)
+    : source_string_dict_id_(source_string_dict_id)
+    , dest_string_dict_id_(-1)
+    , translate_intersection_only_(true)
+    , output_ti_(output_ti)
+    , string_op_infos_(string_op_infos)
+    , has_null_string_op_(one_or_more_string_ops_is_null(string_op_infos))
+    , memory_level_(memory_level)
+    , device_count_(device_count)
+    , executor_(executor)
+    , data_mgr_(data_mgr)
+    , dest_type_is_string_(false) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
         memory_level == Data_Namespace::GPU_LEVEL);
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
 #endif  // HAVE_CUDA
+  const auto& last_string_op_info = string_op_infos.back();
+  CHECK(!last_string_op_info.getReturnType().is_string());
   if (!delay_translation && !has_null_string_op_) {
     buildTranslationMap();
     createKernelBuffers();
@@ -86,30 +124,37 @@ StringDictionaryTranslationMgr::~StringDictionaryTranslationMgr() {
 }
 
 void StringDictionaryTranslationMgr::buildTranslationMap() {
-  host_translation_map_ = executor_->getStringProxyTranslationMap(
-      source_string_dict_id_,
-      dest_string_dict_id_,
-      translate_intersection_only_
-          ? RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION
-          : RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
-      string_op_infos_,
-      executor_->getRowSetMemoryOwner(),
-      true);
+  if (dest_type_is_string_) {
+    host_translation_map_ = executor_->getStringProxyTranslationMap(
+        source_string_dict_id_,
+        dest_string_dict_id_,
+        translate_intersection_only_
+            ? RowSetMemoryOwner::StringTranslationType::SOURCE_INTERSECTION
+            : RowSetMemoryOwner::StringTranslationType::SOURCE_UNION,
+        string_op_infos_,
+        executor_->getRowSetMemoryOwner(),
+        true);
+  } else {
+    host_numeric_translation_map_ =
+        executor_->getStringProxyNumericTranslationMap(source_string_dict_id_,
+                                                       string_op_infos_,
+                                                       executor_->getRowSetMemoryOwner(),
+                                                       true);
+  }
 }
 
 void StringDictionaryTranslationMgr::createKernelBuffers() {
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    const size_t translation_map_size_bytes{host_translation_map_->getVectorMap().size() *
-                                            sizeof(int32_t)};
+    const size_t translation_map_size_bytes = mapSize();
     for (int device_id = 0; device_id < device_count_; ++device_id) {
       device_buffers_.emplace_back(CudaAllocator::allocGpuAbstractBuffer(
           data_mgr_, translation_map_size_bytes, device_id));
       auto device_buffer =
-          reinterpret_cast<int32_t*>(device_buffers_.back()->getMemoryPtr());
+          reinterpret_cast<int8_t*>(device_buffers_.back()->getMemoryPtr());
       copy_to_nvidia_gpu(data_mgr_,
                          reinterpret_cast<CUdeviceptr>(device_buffer),
-                         host_translation_map_->data(),
+                         data(),
                          translation_map_size_bytes,
                          device_id);
       kernel_translation_maps_.push_back(device_buffer);
@@ -119,7 +164,7 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
   CHECK_EQ(1, device_count_);
 #endif  // HAVE_CUDA
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
-    kernel_translation_maps_.push_back(host_translation_map_->data());
+    kernel_translation_maps_.push_back(data());
   }
 }
 
@@ -211,27 +256,90 @@ llvm::Value* StringDictionaryTranslationMgr::codegen(llvm::Value* input_str_id_l
         decoded_input_ti,
         "dict_encoded_str_cast_nullcheck");
   }
-  llvm::Value* ret = cgen_state_ptr->emitCall(
-      "map_string_dict_id",
-      {input_str_id_lv,
-       cgen_state_ptr->castToTypeIn(translation_map_handle_lvs.front(), 64),
-       cgen_state_ptr->llInt(minSourceStringId())});
+  llvm::Value* ret;
+  if (dest_type_is_string_) {
+    ret = cgen_state_ptr->emitCall(
+        "map_string_dict_id",
+        {input_str_id_lv,
+         cgen_state_ptr->castToTypeIn(translation_map_handle_lvs.front(), 64),
+         cgen_state_ptr->llInt(minSourceStringId())});
+  } else {
+    std::string fn_call = "map_string_to_datum_";
+    const auto sql_type = output_ti_.get_type();
+    switch (sql_type) {
+      case kBOOLEAN: {
+        fn_call += "bool";
+        break;
+      }
+      case kTINYINT:
+      case kSMALLINT:
+      case kINT:
+      case kBIGINT:
+      case kFLOAT:
+      case kDOUBLE: {
+        fn_call += to_lower(toString(sql_type));
+        break;
+      }
+      case kNUMERIC:
+      case kDECIMAL:
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE: {
+        fn_call += "bigint";
+        break;
+      }
+      default: {
+        throw std::runtime_error("Unimplemented type for string-to-numeric translation");
+      }
+    }
+    ret = cgen_state_ptr->emitCall(
+        fn_call,
+        {input_str_id_lv,
+         cgen_state_ptr->castToTypeIn(translation_map_handle_lvs.front(), 64),
+         cgen_state_ptr->llInt(minSourceStringId())});
+  }
 
   if (nullcheck_codegen) {
-    ret =
-        nullcheck_codegen->finalize(cgen_state_ptr->inlineIntNull(decoded_input_ti), ret);
+    ret = nullcheck_codegen->finalize(cgen_state_ptr->inlineNull(output_ti_), ret);
   }
   return ret;
 }
 
 bool StringDictionaryTranslationMgr::isMapValid() const {
-  return host_translation_map_ && !host_translation_map_->empty();
+  if (dest_type_is_string_) {
+    return host_translation_map_ && !host_translation_map_->empty();
+  } else {
+    return host_numeric_translation_map_ && !host_numeric_translation_map_->empty();
+  }
 }
 
-const int32_t* StringDictionaryTranslationMgr::data() const {
-  return isMapValid() ? host_translation_map_->data() : nullptr;
+const int8_t* StringDictionaryTranslationMgr::data() const {
+  if (isMapValid()) {
+    if (dest_type_is_string_) {
+      return reinterpret_cast<const int8_t*>(host_translation_map_->data());
+    } else {
+      return reinterpret_cast<const int8_t*>(host_numeric_translation_map_->data());
+    }
+  }
+  return nullptr;
 }
 
 int32_t StringDictionaryTranslationMgr::minSourceStringId() const {
-  return isMapValid() ? host_translation_map_->domainStart() : 0;
+  if (isMapValid()) {
+    return dest_type_is_string_ ? host_translation_map_->domainStart()
+                                : host_numeric_translation_map_->domainStart();
+  }
+  return 0;
+}
+
+size_t StringDictionaryTranslationMgr::mapSize() const {
+  if (isMapValid()) {
+    const size_t num_elems = dest_type_is_string_
+                                 ? host_translation_map_->getVectorMap().size()
+                                 : host_numeric_translation_map_->getVectorMap().size();
+    const size_t elem_size =
+        dest_type_is_string_ ? output_ti_.get_logical_size() : sizeof(Datum);
+    return num_elems * elem_size;
+  }
+  return 0UL;
 }
