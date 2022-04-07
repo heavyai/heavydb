@@ -23,6 +23,9 @@
 
 #include "BufferPoolStats.h"
 
+class Executor;
+class RelAlgExecutor;
+
 namespace TestHelpers::ArrowSQLRunner {
 
 extern bool g_hoist_literals;
@@ -97,9 +100,13 @@ std::shared_ptr<ArrowStorage> getStorage();
 
 DataMgr* getDataMgr();
 
+Executor* getExecutor();
+
 RegisteredQueryHint getParsedQueryHint(const std::string& query_str);
 
 std::optional<std::unordered_map<size_t, RegisteredQueryHint>> getParsedQueryHints(
     const std::string& query_str);
+
+std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& query_str);
 
 }  // namespace TestHelpers::ArrowSQLRunner

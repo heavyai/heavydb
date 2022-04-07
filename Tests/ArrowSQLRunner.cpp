@@ -78,6 +78,29 @@ class ArrowSQLRunnerImpl {
     storage_->appendJsonData(values, table_name);
   }
 
+  std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& sql) {
+    std::string schema_json;
+    std::string query_ra;
+
+    schema_to_json_time_ += measure<std::chrono::microseconds>::execution(
+        [&]() { schema_json = schema_to_json(storage_); });
+
+    calcite_time_ += measure<std::chrono::microseconds>::execution([&]() {
+      query_ra =
+          calcite_->process("admin", "test_db", pg_shim(sql), schema_json, "", {}, true)
+              .plan_result;
+    });
+
+    auto dag =
+        std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
+
+    return std::make_unique<RelAlgExecutor>(executor_.get(),
+                                            TEST_DB_ID,
+                                            storage_,
+                                            data_mgr_->getDataProvider(),
+                                            std::move(dag));
+  }
+
   ExecutionResult runSqlQuery(const std::string& sql,
                               const CompilationOptions& co,
                               const ExecutionOptions& eo) {
@@ -195,6 +218,8 @@ class ArrowSQLRunnerImpl {
 
   DataMgr* getDataMgr() { return data_mgr_.get(); }
 
+  Executor* getExecutor() { return executor_.get(); }
+
   ~ArrowSQLRunnerImpl() {
     storage_.reset();
     executor_.reset();
@@ -228,6 +253,8 @@ class ArrowSQLRunnerImpl {
                                            system_parameters.max_gpu_slab_size,
                                            "",
                                            "");
+    executor_->setSchemaProvider(storage_);
+    executor_->setDatabaseId(TEST_DB_ID);
 
     calcite_ = std::make_shared<Calcite>(-1, CALCITE_PORT, "", 1024, 5000, true, "");
     ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
@@ -236,29 +263,6 @@ class ArrowSQLRunnerImpl {
         table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
     std::vector<TUserDefinedFunction> udfs = {};
     calcite_->setRuntimeExtensionFunctions(udfs, udtfs, /*is_runtime=*/false);
-  }
-
-  std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& sql) {
-    std::string schema_json;
-    std::string query_ra;
-
-    schema_to_json_time_ += measure<std::chrono::microseconds>::execution(
-        [&]() { schema_json = schema_to_json(storage_); });
-
-    calcite_time_ += measure<std::chrono::microseconds>::execution([&]() {
-      query_ra =
-          calcite_->process("admin", "test_db", pg_shim(sql), schema_json, "", {}, true)
-              .plan_result;
-    });
-
-    auto dag =
-        std::make_unique<RelAlgDagBuilder>(query_ra, TEST_DB_ID, storage_, nullptr);
-
-    return std::make_unique<RelAlgExecutor>(executor_.get(),
-                                            TEST_DB_ID,
-                                            storage_,
-                                            data_mgr_->getDataProvider(),
-                                            std::move(dag));
   }
 
   std::shared_ptr<DataMgr> data_mgr_;
@@ -389,6 +393,10 @@ DataMgr* getDataMgr() {
   return ArrowSQLRunnerImpl::get()->getDataMgr();
 }
 
+Executor* getExecutor() {
+  return ArrowSQLRunnerImpl::get()->getExecutor();
+}
+
 RegisteredQueryHint getParsedQueryHint(const std::string& query_str) {
   return ArrowSQLRunnerImpl::get()->getParsedQueryHint(query_str);
 }
@@ -396,6 +404,10 @@ RegisteredQueryHint getParsedQueryHint(const std::string& query_str) {
 std::optional<std::unordered_map<size_t, RegisteredQueryHint>> getParsedQueryHints(
     const std::string& query_str) {
   return ArrowSQLRunnerImpl::get()->getParsedQueryHints(query_str);
+}
+
+std::unique_ptr<RelAlgExecutor> makeRelAlgExecutor(const std::string& query_str) {
+  return ArrowSQLRunnerImpl::get()->makeRelAlgExecutor(query_str);
 }
 
 }  // namespace TestHelpers::ArrowSQLRunner
