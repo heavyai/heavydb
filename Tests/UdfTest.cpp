@@ -14,35 +14,29 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-#include <llvm/Support/Program.h>
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/operations.hpp>
-#include <csignal>
-#include <exception>
-#include <limits>
-#include <memory>
-#include <vector>
-#include "Catalog/Catalog.h"
-#include "Catalog/DBObject.h"
+#include "ArrowSQLRunner.h"
+#include "TestHelpers.h"
+
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/ResultSet.h"
-#include "QueryRunner/QueryRunner.h"
 #include "UdfCompiler/UdfCompiler.h"
 
-#include "TestHelpers.h"
+#include <gtest/gtest.h>
+#include <llvm/Support/Program.h>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
 
-#ifndef BASE_PATH
-#define BASE_PATH "./tmp"
-#endif
+#include <csignal>
+#include <exception>
+#include <limits>
+#include <memory>
+#include <vector>
 
-using namespace Catalog_Namespace;
 using namespace TestHelpers;
-
-using QR = QueryRunner::QueryRunner;
+using namespace TestHelpers::ArrowSQLRunner;
 
 #define SKIP_NO_GPU()                                        \
   if (skip_tests(dt)) {                                      \
@@ -53,28 +47,7 @@ using QR = QueryRunner::QueryRunner;
 
 namespace {
 
-std::shared_ptr<Calcite> g_calcite = nullptr;
 std::string udf_file_name_base("../../Tests/Udf/udf_sample");
-
-std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
-                                            const ExecutorDeviceType device_type,
-                                            const bool allow_loop_joins) {
-  return QR::get()->runSQL(query_str, device_type, true, allow_loop_joins);
-}
-
-std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
-                                            const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type, true);
-}
-
-TargetValue run_simple_agg(const std::string& query_str,
-                           const ExecutorDeviceType device_type,
-                           const bool allow_loop_joins = true) {
-  auto rows = run_multiple_agg(query_str, device_type, allow_loop_joins);
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size());
-  return crt_row[0];
-}
 
 std::string get_udf_filename() {
   return udf_file_name_base + ".cpp";
@@ -98,10 +71,6 @@ bool skip_tests(const ExecutorDeviceType device_type) {
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
-}
-
-inline void run_ddl_statement(const std::string& query) {
-  QR::get()->runDDLStatement(query);
 }
 
 CudaMgr_Namespace::NvidiaDeviceArch init_nvidia_device_arch() {
@@ -132,9 +101,7 @@ class SQLTestEnv : public ::testing::Environment {
       Executor::addUdfIrToModule(compile_result.second, /*is_cuda_ir=*/true);
     }
 
-    QR::init(BASE_PATH, compiler.getAstFileName(udf_file.string()));
-
-    g_calcite = QR::get()->getCalcite();
+    init(0, compiler.getAstFileName(udf_file.string()));
   }
 
   void TearDown() override {
@@ -153,7 +120,7 @@ class SQLTestEnv : public ::testing::Environment {
       boost::filesystem::remove(udf_ast_file);
     }
 
-    QR::reset();
+    reset();
   }
 };
 }  // namespace
@@ -189,7 +156,7 @@ TEST_F(UDFCompilerTest, CompileTest) {
   auto [cpu_ir_file, cuda_ir_file] = compiler.compileUdf(getUdfFileName());
 
   EXPECT_TRUE(!cpu_ir_file.empty());
-  if (QR::get()->gpusPresent()) {
+  if (gpusPresent()) {
     if (cuda_ir_file.empty()) {
       LOG(ERROR) << "Failed to compile UDF for CUDA. Skipping test due to Clang 9 / Cuda "
                     "11 dependency issues.";
@@ -233,8 +200,6 @@ TEST_F(UDFCompilerTest, CalciteRegistration) {
   UdfCompiler compiler(g_device_arch);
   EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
-  ASSERT_TRUE(g_calcite != nullptr);
-
   auto signature = ExtensionFunctionsWhitelist::get_udf("udf_truerange");
   ASSERT_NE(signature, nullptr);
 
@@ -258,43 +223,25 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   UdfCompiler compiler(g_device_arch);
   EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 
-  run_ddl_statement("DROP TABLE IF EXISTS stocks;");
-  run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");
+  createTable("stocks",
+              {{"symbol", dictType()},
+               {"open_p", SQLTypeInfo(kINT)},
+               {"high_p", SQLTypeInfo(kINT)},
+               {"low_p", SQLTypeInfo(kINT)},
+               {"close_p", SQLTypeInfo(kINT)},
+               {"entry_d", SQLTypeInfo(kDATE, kENCODING_DATE_IN_DAYS, 0, kNULLT)}});
+  createTable("sal_emp", {{"name", dictType()}, {"pay_by_quarter", arrayType(kINT)}});
 
-  run_ddl_statement(
-      "CREATE TABLE stocks(symbol text, open_p int, high_p int, "
-      "low_p int, close_p int, entry_d DATE);");
+  insertCsvValues("stocks", "NVDA,178,178,171,173,2019-05-07");
+  insertCsvValues("stocks", "NVDA,175,181,174,178,2019-05-06");
+  insertCsvValues("stocks", "NVDA,183,184,181,183,2019-05-03");
 
-  run_ddl_statement("CREATE TABLE sal_emp(name text, pay_by_quarter integer[]);");
-
-  std::string insert1(
-      "INSERT into stocks VALUES ('NVDA', '178', '178', '171', '173', '2019-05-07');");
-  EXPECT_NO_THROW(run_multiple_agg(insert1, ExecutorDeviceType::CPU));
-
-  std::string insert2(
-      "INSERT into stocks VALUES ('NVDA', '175', '181', '174', '178', '2019-05-06');");
-  EXPECT_NO_THROW(run_multiple_agg(insert2, ExecutorDeviceType::CPU));
-
-  std::string insert3(
-      "INSERT into stocks VALUES ('NVDA', '183', '184', '181', '183', '2019-05-03');");
-  EXPECT_NO_THROW(run_multiple_agg(insert3, ExecutorDeviceType::CPU));
-
-  std::string array_insert1(
-      "INSERT into sal_emp VALUES ('Sarah', ARRAY[5000, 6000, 7000, 8000]);");
-  EXPECT_NO_THROW(run_multiple_agg(array_insert1, ExecutorDeviceType::CPU));
-
-  std::string array_insert2(
-      "INSERT into sal_emp VALUES ('John', ARRAY[3000, 3500, 4000, 4300]);");
-
-  EXPECT_NO_THROW(run_multiple_agg(array_insert2, ExecutorDeviceType::CPU));
-
-  std::string array_insert3("INSERT into sal_emp VALUES ('Jim', NULL);");
-  EXPECT_NO_THROW(run_multiple_agg(array_insert3, ExecutorDeviceType::CPU));
-
-  std::string array_insert4(
-      "INSERT into sal_emp VALUES ('Carla', ARRAY[7000, NULL, NULL, 9000]);");
-
-  EXPECT_NO_THROW(run_multiple_agg(array_insert4, ExecutorDeviceType::CPU));
+  insertJsonValues(
+      "sal_emp",
+      "{\"name\": \"Sarah\", \"pay_by_quarter\": [5000, 6000, 7000, 8000]}\n"
+      "{\"name\": \"John\", \"pay_by_quarter\": [3000, 3500, 4000, 4300]}\n"
+      "{\"name\": \"Jim\", \"pay_by_quarter\": null}\n"
+      "{\"name\": \"Carla\", \"pay_by_quarter\": [7000, null, null, 9000]}\n");
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -380,8 +327,8 @@ TEST_F(UDFCompilerTest, UdfQuery) {
                               ExecutorDeviceType::CPU),
                std::exception);
 
-  run_ddl_statement("DROP TABLE stocks;");
-  run_ddl_statement("DROP TABLE sal_emp;");
+  dropTable("stocks");
+  dropTable("sal_emp");
 }
 
 int main(int argc, char** argv) {

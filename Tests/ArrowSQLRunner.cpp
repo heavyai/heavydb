@@ -37,8 +37,8 @@ namespace {
 
 class ArrowSQLRunnerImpl {
  public:
-  static void init(size_t max_gpu_mem) {
-    instance_.reset(new ArrowSQLRunnerImpl(max_gpu_mem));
+  static void init(size_t max_gpu_mem, const std::string& udf_filename) {
+    instance_.reset(new ArrowSQLRunnerImpl(max_gpu_mem, udf_filename));
   }
 
   static void reset() { instance_.reset(); }
@@ -220,6 +220,8 @@ class ArrowSQLRunnerImpl {
 
   Executor* getExecutor() { return executor_.get(); }
 
+  std::shared_ptr<Calcite> getCalcite() { return calcite_; }
+
   ~ArrowSQLRunnerImpl() {
     storage_.reset();
     executor_.reset();
@@ -228,7 +230,7 @@ class ArrowSQLRunnerImpl {
   }
 
  protected:
-  ArrowSQLRunnerImpl(size_t max_gpu_mem) {
+  ArrowSQLRunnerImpl(size_t max_gpu_mem, const std::string& udf_filename) {
     storage_ = std::make_shared<ArrowStorage>(TEST_SCHEMA_ID, "test", TEST_DB_ID);
 
     std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr;
@@ -256,8 +258,13 @@ class ArrowSQLRunnerImpl {
     executor_->setSchemaProvider(storage_);
     executor_->setDatabaseId(TEST_DB_ID);
 
-    calcite_ = std::make_shared<Calcite>(-1, CALCITE_PORT, "", 1024, 5000, true, "");
+    calcite_ =
+        std::make_shared<Calcite>(-1, CALCITE_PORT, "", 1024, 5000, true, udf_filename);
     ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
+    if (!udf_filename.empty()) {
+      ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
+    }
+
     table_functions::TableFunctionsFactory::init();
     auto udtfs = ThriftSerializers::to_thrift(
         table_functions::TableFunctionsFactory::get_table_funcs(/*is_runtime=*/false));
@@ -281,8 +288,8 @@ std::unique_ptr<ArrowSQLRunnerImpl> ArrowSQLRunnerImpl::instance_;
 
 }  // namespace
 
-void init(size_t max_gpu_mem) {
-  ArrowSQLRunnerImpl::init(max_gpu_mem);
+void init(size_t max_gpu_mem, const std::string& udf_filename) {
+  ArrowSQLRunnerImpl::init(max_gpu_mem, udf_filename);
 }
 
 void reset() {
@@ -395,6 +402,10 @@ DataMgr* getDataMgr() {
 
 Executor* getExecutor() {
   return ArrowSQLRunnerImpl::get()->getExecutor();
+}
+
+std::shared_ptr<Calcite> getCalcite() {
+  return ArrowSQLRunnerImpl::get()->getCalcite();
 }
 
 RegisteredQueryHint getParsedQueryHint(const std::string& query_str) {
