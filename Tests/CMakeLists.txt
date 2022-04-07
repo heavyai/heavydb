@@ -62,7 +62,6 @@ endif()
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(ThreadingTest Shared/ThreadingTest.cpp)
 add_executable(ThreadingTestSTD Shared/ThreadingTestStd.cpp)
-add_executable(CalciteOptimizeTest CalciteOptimizeTest.cpp)
 add_executable(JoinHashTableTest JoinHashTableTest.cpp)
 add_executable(CachedHashTableTest CachedHashTableTest.cpp)
 add_executable(RuntimeInterruptTest RuntimeInterruptTest.cpp)
@@ -145,7 +144,6 @@ endif()
 target_link_libraries(DateTimeUtilsTest gtest Logger Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(ThreadingTest gtest Logger Shared ${LLVM_LINKER_FLAGS} ${TBB_LIBRARIES})
 target_link_libraries(ThreadingTestSTD gtest Logger Shared ${LLVM_LINKER_FLAGS})
-target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RuntimeInterruptTest ${EXECUTE_TEST_LIBS})
@@ -221,7 +219,6 @@ add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 add_test(ThreadingTestSTD ThreadingTestSTD ${TEST_ARGS})
-add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
@@ -300,7 +297,6 @@ set(TEST_PROGRAMS
   DateTimeUtilsTest
   ThreadingTest
   ThreadingTestSTD
-  CalciteOptimizeTest
   JoinHashTableTest
   StringFunctionsTest
   StringDictionaryTest
