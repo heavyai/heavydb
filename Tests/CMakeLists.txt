@@ -19,7 +19,6 @@ add_executable(ArrowBasedExecuteTest ArrowBasedExecuteTest.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(StringFunctionsTest StringFunctionsTest.cpp)
-add_executable(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest.cpp)
 add_executable(FileMgrTest FileMgrTest.cpp)
 add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
 add_executable(EncoderTest EncoderTest.cpp)
@@ -145,7 +144,6 @@ target_link_libraries(RuntimeInterruptTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest OSDependent)
 target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport Parser DataMgr Logger)
 #Requires thrift_handler for DBHandler test fixture
-target_link_libraries(DashboardAndCustomExpressionTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(FileMgrTest gtest DataMgr ${Boost_LIBRARIES})
 target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
@@ -211,7 +209,6 @@ add_test(ThreadingTest ThreadingTest ${TEST_ARGS})
 add_test(ThreadingTestSTD ThreadingTestSTD ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
-add_test(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest ${TEST_ARGS})
 add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
 add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
@@ -285,7 +282,6 @@ set(TEST_PROGRAMS
   JoinHashTableTest
   StringFunctionsTest
   StringDictionaryTest
-  DashboardAndCustomExpressionTest
   FileMgrTest
   FilePathWhitelistTest
   EncoderTest
