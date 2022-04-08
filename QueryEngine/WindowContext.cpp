@@ -42,13 +42,15 @@ size_t g_parallel_window_partition_compute_threshold{1 << 12};  // 4096
 bool g_enable_parallel_window_partition_sort{true};
 size_t g_parallel_window_partition_sort_threshold{1 << 10};  // 1024
 
-// Non-partitioned version (no join table provided)
+// Non-partitioned version (no hash table provided)
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : window_func_(window_func)
+    , partition_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
+    , sorted_partition_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
     , partitions_(nullptr)
     , elem_count_(elem_count)
     , output_(nullptr)
@@ -70,11 +72,14 @@ WindowFunctionContext::WindowFunctionContext(
 // Partitioned version
 WindowFunctionContext::WindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
+    QueryPlanHash partition_cache_key,
     const std::shared_ptr<HashJoin>& partitions,
     const size_t elem_count,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
     : window_func_(window_func)
+    , partition_cache_key_(partition_cache_key)
+    , sorted_partition_cache_key_(EMPTY_HASHED_PLAN_DAG_KEY)
     , partitions_(partitions)
     , elem_count_(elem_count)
     , output_(nullptr)
@@ -102,6 +107,10 @@ void WindowFunctionContext::addOrderColumn(
     const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
   order_columns_owner_.push_back(chunks_owner);
   order_columns_.push_back(column);
+}
+
+void WindowFunctionContext::setSortedPartitionCacheKey(QueryPlanHash cache_key) {
+  sorted_partition_cache_key_ = cache_key;
 }
 
 namespace {
@@ -453,16 +462,146 @@ bool window_function_requires_peer_handling(const Analyzer::WindowFunction* wind
   }
 }
 
-void WindowFunctionContext::computePartition(const size_t partition_idx,
-                                             int64_t* output_for_partition_buff) {
-  const size_t partition_size{static_cast<size_t>(counts()[partition_idx])};
-  if (partition_size == 0) {
+void WindowFunctionContext::compute(
+    std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
+    std::unordered_map<QueryPlanHash, std::unique_ptr<int64_t[]>>&
+        sorted_partition_cache) {
+  auto timer = DEBUG_TIMER(__func__);
+  CHECK(!output_);
+  size_t output_buf_sz =
+      elem_count_ * window_function_buffer_element_size(window_func_->getKind());
+  output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz,
+                                                              /*thread_idx=*/0));
+  const bool is_window_function_aggregate =
+      window_function_is_aggregate(window_func_->getKind());
+  if (is_window_function_aggregate) {
+    fillPartitionStart();
+    if (window_function_requires_peer_handling(window_func_)) {
+      fillPartitionEnd();
+    }
+  }
+  std::unique_ptr<int64_t[]> scratchpad, copied_sorted_partition;
+  int64_t* intermediate_output_buffer;
+  if (is_window_function_aggregate) {
+    intermediate_output_buffer = reinterpret_cast<int64_t*>(output_);
+  } else {
+    output_buf_sz = sizeof(int64_t) * elem_count_;
+    scratchpad.reset(new int64_t[elem_count_]);
+    intermediate_output_buffer = scratchpad.get();
+  }
+  const bool should_parallelize{g_enable_parallel_window_partition_compute &&
+                                elem_count_ >=
+                                    g_parallel_window_partition_compute_threshold};
+
+  auto cached_sorted_partition_it =
+      sorted_partition_cache.find(sorted_partition_cache_key_);
+  if (cached_sorted_partition_it != sorted_partition_cache.end()) {
+    int64_t* sorted_partition = cached_sorted_partition_it->second.get();
+    VLOG(1) << "Reuse cached sorted partition to compute window function context (key: "
+            << sorted_partition_cache_key_
+            << ", ordering condition: " << ::toString(window_func_->getOrderKeys())
+            << ")";
+    DEBUG_TIMER("Window Function Cached Sorted Partition Copy");
+    std::memcpy(intermediate_output_buffer, sorted_partition, output_buf_sz);
+  } else {
+    // ordering partitions if necessary
+    const auto sort_partitions = [&](const size_t start, const size_t end) {
+      for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
+        sortPartition(partition_idx,
+                      intermediate_output_buffer + offsets()[partition_idx],
+                      should_parallelize);
+      }
+    };
+
+    if (should_parallelize) {
+      auto sorted_partition_copy_timer =
+          DEBUG_TIMER("Window Function Partition Sorting Parallelized");
+      threading::task_group thread_pool;
+      for (auto interval : makeIntervals<size_t>(0, partitionCount(), cpu_threads())) {
+        thread_pool.run([=] { sort_partitions(interval.begin, interval.end); });
+      }
+      thread_pool.wait();
+    } else {
+      auto sorted_partition_copy_timer =
+          DEBUG_TIMER("Window Function  Partition Sorting Non-Parallelized");
+      sort_partitions(0, partitionCount());
+    }
+    auto sorted_partition_ref_cnt_it =
+        sorted_partition_key_ref_count_map.find(sorted_partition_cache_key_);
+    if (sorted_partition_ref_cnt_it != sorted_partition_key_ref_count_map.end() &&
+        sorted_partition_ref_cnt_it->second > 1) {
+      // keep the sorted partition only if it will be reused from other window function
+      // context of this query
+      copied_sorted_partition.reset(new int64_t[elem_count_]);
+      auto copied_sorted_partition_ptr = copied_sorted_partition.get();
+      DEBUG_TIMER("Window Function Sorted Partition Copy For Caching");
+      std::memcpy(copied_sorted_partition_ptr, intermediate_output_buffer, output_buf_sz);
+      CHECK(sorted_partition_cache
+                .emplace(sorted_partition_cache_key_, std::move(copied_sorted_partition))
+                .second);
+      VLOG(1) << "Put sorted partition to cache (key: " << sorted_partition_cache_key_
+              << ", ordering condition: " << ::toString(window_func_->getOrderKeys())
+              << ")";
+    }
+  }
+
+  const auto compute_partitions = [&](const size_t start, const size_t end) {
+    for (size_t partition_idx = start; partition_idx < end; ++partition_idx) {
+      computePartitionBuffer(partition_idx,
+                             intermediate_output_buffer + offsets()[partition_idx],
+                             window_func_);
+    }
+  };
+
+  if (should_parallelize) {
+    auto partition_compuation_timer = DEBUG_TIMER("Window Function Partition Compute");
+    threading::task_group thread_pool;
+    for (auto interval : makeIntervals<size_t>(0, partitionCount(), cpu_threads())) {
+      thread_pool.run([=] { compute_partitions(interval.begin, interval.end); });
+    }
+    thread_pool.wait();
+  } else {
+    auto partition_compuation_timer =
+        DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
+    compute_partitions(0, partitionCount());
+  }
+
+  if (is_window_function_aggregate) {
+    // If window function is aggregate we were able to write to the final output buffer
+    // directly in computePartition and we are done.
     return;
   }
-  const auto offset = offsets()[partition_idx];
-  std::iota(
-      output_for_partition_buff, output_for_partition_buff + partition_size, int64_t(0));
-  std::vector<Comparator> comparators;
+
+  auto output_i64 = reinterpret_cast<int64_t*>(output_);
+  const auto payload_copy = [&](const size_t start, const size_t end) {
+    for (size_t i = start; i < end; ++i) {
+      output_i64[payload()[i]] = intermediate_output_buffer[i];
+    }
+  };
+  if (should_parallelize) {
+    auto payload_copy_timer =
+        DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
+    threading::task_group thread_pool;
+    for (auto interval : makeIntervals<size_t>(
+             0,
+             elem_count_,
+             std::min(static_cast<size_t>(cpu_threads()),
+                      (elem_count_ + g_parallel_window_partition_compute_threshold - 1) /
+                          g_parallel_window_partition_compute_threshold))) {
+      thread_pool.run([=] { payload_copy(interval.begin, interval.end); });
+    }
+    thread_pool.wait();
+  } else {
+    auto payload_copy_timer =
+        DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
+    payload_copy(0, elem_count_);
+  }
+}
+
+std::vector<WindowFunctionContext::Comparator> WindowFunctionContext::createComparator(
+    size_t partition_idx) {
+  // create tuple comparator
+  std::vector<WindowFunctionContext::Comparator> partition_comparator;
   const auto& order_keys = window_func_->getOrderKeys();
   const auto& collation = window_func_->getCollation();
   CHECK_EQ(order_keys.size(), collation.size());
@@ -475,7 +614,7 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
     const auto& order_col_collation = collation[order_column_idx];
     const auto asc_comparator = makeComparator(order_col,
                                                order_column_buffer,
-                                               payload() + offset,
+                                               payload() + offsets()[partition_idx],
                                                order_col_collation.nulls_first);
     auto comparator = asc_comparator;
     if (order_col_collation.is_desc) {
@@ -483,10 +622,24 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
         return asc_comparator(rhs, lhs);
       };
     }
-    comparators.push_back(comparator);
+    partition_comparator.push_back(comparator);
   }
-  const auto col_tuple_comparator = [&comparators](const int64_t lhs, const int64_t rhs) {
-    for (const auto& comparator : comparators) {
+  return partition_comparator;
+}
+
+void WindowFunctionContext::sortPartition(const size_t partition_idx,
+                                          int64_t* output_for_partition_buff,
+                                          bool should_parallelize) {
+  const size_t partition_size{static_cast<size_t>(counts()[partition_idx])};
+  if (partition_size == 0) {
+    return;
+  }
+  std::iota(
+      output_for_partition_buff, output_for_partition_buff + partition_size, int64_t(0));
+  auto partition_comparator = createComparator(partition_idx);
+  const auto col_tuple_comparator = [&partition_idx, &partition_comparator](
+                                        const int64_t lhs, const int64_t rhs) {
+    for (const auto& comparator : partition_comparator) {
       const auto comparator_result = comparator(lhs, rhs);
       switch (comparator_result) {
         case WindowFunctionContext::WindowComparatorResult::LT:
@@ -502,9 +655,7 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
     // return false as sort algo must enforce weak ordering
     return false;
   };
-
-  if (g_enable_parallel_window_partition_sort &&
-      partition_size >= g_parallel_window_partition_sort_threshold) {
+  if (should_parallelize) {
 #ifdef HAVE_TBB
     tbb::parallel_sort(output_for_partition_buff,
                        output_for_partition_buff + partition_size,
@@ -518,87 +669,6 @@ void WindowFunctionContext::computePartition(const size_t partition_idx,
     std::sort(output_for_partition_buff,
               output_for_partition_buff + partition_size,
               col_tuple_comparator);
-  }
-  computePartitionBuffer(output_for_partition_buff,
-                         partition_size,
-                         offset,
-                         window_func_,
-                         col_tuple_comparator);
-}
-
-void WindowFunctionContext::compute() {
-  auto timer = DEBUG_TIMER(__func__);
-  CHECK(!output_);
-  output_ = static_cast<int8_t*>(row_set_mem_owner_->allocate(
-      elem_count_ * window_function_buffer_element_size(window_func_->getKind()),
-      /*thread_idx=*/0));
-  const bool is_window_function_aggregate =
-      window_function_is_aggregate(window_func_->getKind());
-  if (is_window_function_aggregate) {
-    fillPartitionStart();
-    if (window_function_requires_peer_handling(window_func_)) {
-      fillPartitionEnd();
-    }
-  }
-
-  std::unique_ptr<int64_t[]> scratchpad;
-  int64_t* intermediate_output_buffer;
-  if (is_window_function_aggregate) {
-    intermediate_output_buffer = reinterpret_cast<int64_t*>(output_);
-  } else {
-    scratchpad.reset(new int64_t[elem_count_]);
-    intermediate_output_buffer = scratchpad.get();
-  }
-
-  const size_t partition_count{partitionCount()};
-
-  const auto compute_partitions = [&](const size_t start, const size_t end) {
-    for (size_t partition_idx = start; partition_idx != end; ++partition_idx) {
-      computePartition(partition_idx,
-                       intermediate_output_buffer + offsets()[partition_idx]);
-    }
-  };
-
-  const bool should_parallelize{g_enable_parallel_window_partition_compute &&
-                                elem_count_ >=
-                                    g_parallel_window_partition_compute_threshold};
-  if (should_parallelize) {
-    auto timer = DEBUG_TIMER("Window Function Partition Compute");
-    threading::task_group thread_pool;
-    for (auto interval : makeIntervals<size_t>(0, partition_count, cpu_threads())) {
-      thread_pool.run([=] { compute_partitions(interval.begin, interval.end); });
-    }
-    thread_pool.wait();
-  } else {
-    auto timer = DEBUG_TIMER("Window Function Non-Parallelized Partition Compute");
-    compute_partitions(0, partition_count);
-  }
-
-  if (is_window_function_aggregate) {
-    // If window function is aggregate we were able to write to the final output buffer
-    // directly in computePartition and we are done.
-    return;
-  }
-
-  auto output_i64 = reinterpret_cast<int64_t*>(output_);
-
-  const auto payload_copy = [&](const size_t start, const size_t end) {
-    for (size_t i = start; i < end; ++i) {
-      output_i64[payload()[i]] = intermediate_output_buffer[i];
-    }
-  };
-
-  if (should_parallelize) {
-    auto timer = DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Parallelized");
-    threading::task_group thread_pool;
-    for (auto interval : makeIntervals<size_t>(0, elem_count_, cpu_threads())) {
-      thread_pool.run([=] { payload_copy(interval.begin, interval.end); });
-    }
-    thread_pool.wait();
-  } else {
-    auto timer =
-        DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
-    payload_copy(0, elem_count_);
   }
 }
 
@@ -775,11 +845,33 @@ WindowFunctionContext::Comparator WindowFunctionContext::makeComparator(
 }
 
 void WindowFunctionContext::computePartitionBuffer(
+    const size_t partition_idx,
     int64_t* output_for_partition_buff,
-    const size_t partition_size,
-    const size_t off,
-    const Analyzer::WindowFunction* window_func,
-    const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
+    const Analyzer::WindowFunction* window_func) {
+  const size_t partition_size{static_cast<size_t>(counts()[partition_idx])};
+  if (partition_size == 0) {
+    return;
+  }
+  const auto offset = offsets()[partition_idx];
+  auto partition_comparator = createComparator(partition_idx);
+  const auto col_tuple_comparator = [&partition_comparator](const int64_t lhs,
+                                                            const int64_t rhs) {
+    for (const auto& comparator : partition_comparator) {
+      const auto comparator_result = comparator(lhs, rhs);
+      switch (comparator_result) {
+        case WindowFunctionContext::WindowComparatorResult::LT:
+          return true;
+        case WindowFunctionContext::WindowComparatorResult::GT:
+          return false;
+        default:
+          // WindowComparatorResult::EQ: continue to next comparator
+          continue;
+      }
+    }
+    // If here WindowFunctionContext::WindowComparatorResult::KEQ for all keys
+    // return false as sort algo must enforce weak ordering
+    return false;
+  };
   switch (window_func->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER: {
       const auto row_numbers =
@@ -789,27 +881,27 @@ void WindowFunctionContext::computePartitionBuffer(
     }
     case SqlWindowFunctionKind::RANK: {
       const auto rank =
-          index_to_rank(output_for_partition_buff, partition_size, comparator);
+          index_to_rank(output_for_partition_buff, partition_size, col_tuple_comparator);
       std::copy(rank.begin(), rank.end(), output_for_partition_buff);
       break;
     }
     case SqlWindowFunctionKind::DENSE_RANK: {
-      const auto dense_rank =
-          index_to_dense_rank(output_for_partition_buff, partition_size, comparator);
+      const auto dense_rank = index_to_dense_rank(
+          output_for_partition_buff, partition_size, col_tuple_comparator);
       std::copy(dense_rank.begin(), dense_rank.end(), output_for_partition_buff);
       break;
     }
     case SqlWindowFunctionKind::PERCENT_RANK: {
-      const auto percent_rank =
-          index_to_percent_rank(output_for_partition_buff, partition_size, comparator);
+      const auto percent_rank = index_to_percent_rank(
+          output_for_partition_buff, partition_size, col_tuple_comparator);
       std::copy(percent_rank.begin(),
                 percent_rank.end(),
                 reinterpret_cast<double*>(may_alias_ptr(output_for_partition_buff)));
       break;
     }
     case SqlWindowFunctionKind::CUME_DIST: {
-      const auto cume_dist =
-          index_to_cume_dist(output_for_partition_buff, partition_size, comparator);
+      const auto cume_dist = index_to_cume_dist(
+          output_for_partition_buff, partition_size, col_tuple_comparator);
       std::copy(cume_dist.begin(),
                 cume_dist.end(),
                 reinterpret_cast<double*>(may_alias_ptr(output_for_partition_buff)));
@@ -826,19 +918,19 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD: {
       const auto lag_or_lead = get_lag_or_lead_argument(window_func);
-      const auto partition_row_offsets = payload() + off;
+      const auto partition_row_offsets = payload() + offset;
       apply_lag_to_partition(
           lag_or_lead, partition_row_offsets, output_for_partition_buff, partition_size);
       break;
     }
     case SqlWindowFunctionKind::FIRST_VALUE: {
-      const auto partition_row_offsets = payload() + off;
+      const auto partition_row_offsets = payload() + offset;
       apply_first_value_to_partition(
           partition_row_offsets, output_for_partition_buff, partition_size);
       break;
     }
     case SqlWindowFunctionKind::LAST_VALUE: {
-      const auto partition_row_offsets = payload() + off;
+      const auto partition_row_offsets = payload() + offset;
       apply_last_value_to_partition(
           partition_row_offsets, output_for_partition_buff, partition_size);
       break;
@@ -848,10 +940,13 @@ void WindowFunctionContext::computePartitionBuffer(
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT: {
-      const auto partition_row_offsets = payload() + off;
+      const auto partition_row_offsets = payload() + offset;
       if (window_function_requires_peer_handling(window_func)) {
-        index_to_partition_end(
-            partitionEnd(), off, output_for_partition_buff, partition_size, comparator);
+        index_to_partition_end(partitionEnd(),
+                               offset,
+                               output_for_partition_buff,
+                               partition_size,
+                               col_tuple_comparator);
       }
       apply_permutation_to_partition(
           output_for_partition_buff, partition_row_offsets, partition_size);

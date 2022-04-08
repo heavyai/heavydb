@@ -1023,6 +1023,13 @@ HashJoin::normalizeColumnPairs(const Analyzer::BinOper* condition,
   return result;
 }
 
+bool HashJoin::canAccessHashTable(bool allow_hash_table_recycling,
+                                  bool invalid_cache_key,
+                                  JoinType join_type) {
+  return g_enable_data_recycler && g_use_hashtable_cache && !invalid_cache_key &&
+         allow_hash_table_recycling && join_type != JoinType::INVALID;
+}
+
 namespace {
 
 InnerOuter get_cols(const Analyzer::BinOper* qual_bin_oper,

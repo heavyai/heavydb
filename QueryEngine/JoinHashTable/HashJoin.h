@@ -241,6 +241,10 @@ class HashJoin {
     return first_inner_col->get_table_id();
   }
 
+  static bool canAccessHashTable(bool allow_hash_table_recycling,
+                                 bool invalid_cache_key,
+                                 JoinType join_type);
+
   static void checkHashJoinReplicationConstraint(const int table_id,
                                                  const size_t shard_count,
                                                  const Executor* executor);

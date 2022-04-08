@@ -2336,12 +2336,12 @@ std::shared_ptr<Analyzer::Expr> transform_to_inner(const Analyzer::Expr* expr) {
 
 }  // namespace
 
-void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
+void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
                                    ColumnCacheMap& column_cache_map,
                                    const int64_t queue_time_ms) {
-  auto query_infos = get_table_infos(ra_exe_unit.input_descs, executor_);
+  auto query_infos = get_table_infos(work_unit.exe_unit.input_descs, executor_);
   CHECK_EQ(query_infos.size(), size_t(1));
   if (query_infos.front().info.fragments.size() != 1) {
     throw std::runtime_error(
@@ -2352,9 +2352,21 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
   }
   query_infos.push_back(query_infos.front());
   auto window_project_node_context = WindowProjectNodeContext::create(executor_);
-  for (size_t target_index = 0; target_index < ra_exe_unit.target_exprs.size();
+  // a query may hold multiple window functions having the same partition by condition
+  // then after building the first hash partition we can reuse it for the rest of
+  // the window functions
+  // here, a cached partition can be shared via multiple window function contexts as is
+  // but sorted partition should be copied to reuse since we use it for (intermediate)
+  // output buffer
+  // todo (yoonmin) : support recycler for window function computation?
+  std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>> partition_cache;
+  std::unordered_map<QueryPlanHash, std::unique_ptr<int64_t[]>> sorted_partition_cache;
+  std::unordered_map<QueryPlanHash, size_t> sorted_partition_key_ref_count_map;
+  std::unordered_map<size_t, std::unique_ptr<WindowFunctionContext>>
+      window_function_context_map;
+  for (size_t target_index = 0; target_index < work_unit.exe_unit.target_exprs.size();
        ++target_index) {
-    const auto& target_expr = ra_exe_unit.target_exprs[target_index];
+    const auto& target_expr = work_unit.exe_unit.target_exprs[target_index];
     const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
     if (!window_func) {
       continue;
@@ -2381,21 +2393,28 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
     auto context =
         createWindowFunctionContext(window_func,
                                     partition_key_cond /*nullptr if no partition key*/,
-                                    ra_exe_unit,
+                                    partition_cache,
+                                    sorted_partition_key_ref_count_map,
+                                    work_unit,
                                     query_infos,
                                     co,
                                     column_cache_map,
                                     executor_->getRowSetMemoryOwner());
-    context->compute();
-    window_project_node_context->addWindowFunctionContext(std::move(context),
-                                                          target_index);
+    CHECK(window_function_context_map.emplace(target_index, std::move(context)).second);
+  }
+
+  for (auto& kv : window_function_context_map) {
+    kv.second->compute(sorted_partition_key_ref_count_map, sorted_partition_cache);
+    window_project_node_context->addWindowFunctionContext(std::move(kv.second), kv.first);
   }
 }
 
 std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionContext(
     const Analyzer::WindowFunction* window_func,
     const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
-    const RelAlgExecutionUnit& ra_exe_unit,
+    std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>>& partition_cache,
+    std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
+    const WorkUnit& work_unit,
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
     ColumnCacheMap& column_cache_map,
@@ -2405,23 +2424,45 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
   std::unique_ptr<WindowFunctionContext> context;
+  auto partition_cache_key = work_unit.body->getQueryPlanDagHash();
   if (partition_key_cond) {
-    const auto join_table_or_err =
-        executor_->buildHashTableForQualifier(partition_key_cond,
-                                              query_infos,
-                                              memory_level,
-                                              JoinType::INVALID,  // for window function
-                                              HashType::OneToMany,
-                                              column_cache_map,
-                                              ra_exe_unit.hash_table_build_plan_dag,
-                                              ra_exe_unit.query_hint,
-                                              ra_exe_unit.table_id_to_node_map);
-    if (!join_table_or_err.fail_reason.empty()) {
-      throw std::runtime_error(join_table_or_err.fail_reason);
+    auto partition_cond_str = partition_key_cond->toString();
+    auto partition_key_hash = boost::hash_value(partition_cond_str);
+    boost::hash_combine(partition_cache_key, partition_key_hash);
+    std::shared_ptr<HashJoin> partition_ptr;
+    auto cached_hash_table_it = partition_cache.find(partition_cache_key);
+    if (cached_hash_table_it != partition_cache.end()) {
+      partition_ptr = cached_hash_table_it->second;
+      VLOG(1) << "Reuse a hash table to compute window function context (key: "
+              << partition_cache_key << ", partition condition: " << partition_cond_str
+              << ")";
+    } else {
+      const auto hash_table_or_err = executor_->buildHashTableForQualifier(
+          partition_key_cond,
+          query_infos,
+          memory_level,
+          JoinType::INVALID,  // for window function
+          HashType::OneToMany,
+          column_cache_map,
+          work_unit.exe_unit.hash_table_build_plan_dag,
+          work_unit.exe_unit.query_hint,
+          work_unit.exe_unit.table_id_to_node_map);
+      if (!hash_table_or_err.fail_reason.empty()) {
+        throw std::runtime_error(hash_table_or_err.fail_reason);
+      }
+      CHECK(hash_table_or_err.hash_table->getHashType() == HashType::OneToMany);
+      partition_ptr = hash_table_or_err.hash_table;
+      CHECK(partition_cache.insert(std::make_pair(partition_cache_key, partition_ptr))
+                .second);
+      VLOG(1) << "Put a generated hash table for computing window function context to "
+                 "cache (key: "
+              << partition_cache_key << ", partition condition: " << partition_cond_str
+              << ")";
     }
-    CHECK(join_table_or_err.hash_table->getHashType() == HashType::OneToMany);
+    CHECK(partition_ptr);
     context = std::make_unique<WindowFunctionContext>(window_func,
-                                                      join_table_or_err.hash_table,
+                                                      partition_cache_key,
+                                                      partition_ptr,
                                                       elem_count,
                                                       co.device_type,
                                                       row_set_mem_owner);
@@ -2430,6 +2471,22 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
         window_func, elem_count, co.device_type, row_set_mem_owner);
   }
   const auto& order_keys = window_func->getOrderKeys();
+  if (!order_keys.empty()) {
+    auto sorted_partition_cache_key = partition_cache_key;
+    for (auto& order_key : order_keys) {
+      boost::hash_combine(sorted_partition_cache_key, order_key->toString());
+    }
+    for (auto& collation : window_func->getCollation()) {
+      boost::hash_combine(sorted_partition_cache_key, collation.toString());
+    }
+    context->setSortedPartitionCacheKey(sorted_partition_cache_key);
+    auto cache_key_cnt_it =
+        sorted_partition_key_ref_count_map.try_emplace(sorted_partition_cache_key, 1);
+    if (!cache_key_cnt_it.second) {
+      sorted_partition_key_ref_count_map[sorted_partition_cache_key] =
+          cache_key_cnt_it.first->second + 1;
+    }
+  }
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   for (const auto& order_key : order_keys) {
     const auto order_col =
@@ -3420,7 +3477,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
     co.device_type = ExecutorDeviceType::CPU;
     co.allow_lazy_fetch = false;
-    computeWindow(work_unit.exe_unit, co, eo, column_cache, queue_time_ms);
+    computeWindow(work_unit, co, eo, column_cache, queue_time_ms);
   }
   if (!eo.just_explain && eo.find_push_down_candidates) {
     // find potential candidates:

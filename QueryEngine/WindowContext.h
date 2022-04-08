@@ -73,6 +73,7 @@ class WindowFunctionContext {
 
   // partitioned version
   WindowFunctionContext(const Analyzer::WindowFunction* window_func,
+                        QueryPlanHash cache_key,
                         const std::shared_ptr<HashJoin>& partitions,
                         const size_t elem_count,
                         const ExecutorDeviceType device_type,
@@ -89,8 +90,20 @@ class WindowFunctionContext {
                       const Analyzer::ColumnVar* col_var,
                       const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
 
+  void setSortedPartitionCacheKey(QueryPlanHash cache_key);
+
+  enum class WindowComparatorResult { LT, EQ, GT };
+  using Comparator =
+      std::function<WindowFunctionContext::WindowComparatorResult(const int64_t lhs,
+                                                                  const int64_t rhs)>;
+
+  std::vector<Comparator> createComparator(size_t partition_idx);
+
   // Computes the window function result to be used during the actual projection query.
-  void compute();
+  void compute(
+      std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
+      std::unordered_map<QueryPlanHash, std::unique_ptr<int64_t[]>>&
+          sorted_partition_cache);
 
   // Returns a pointer to the window function associated with this context.
   const Analyzer::WindowFunction* getWindowFunction() const;
@@ -116,12 +129,6 @@ class WindowFunctionContext {
   // Returns the element count in the columns used by the window function.
   size_t elementCount() const;
 
-  enum class WindowComparatorResult { LT, EQ, GT };
-
-  using Comparator =
-      std::function<WindowFunctionContext::WindowComparatorResult(const int64_t lhs,
-                                                                  const int64_t rhs)>;
-
  private:
   // State for a window aggregate. The count field is only used for average.
   struct AggregateState {
@@ -136,14 +143,13 @@ class WindowFunctionContext {
                                    const int32_t* partition_indices,
                                    const bool nulls_first);
 
-  void computePartition(const size_t partition_idx, int64_t* output_for_partition_buff);
+  void computePartitionBuffer(const size_t partition_idx,
+                              int64_t* output_for_partition_buff,
+                              const Analyzer::WindowFunction* window_func);
 
-  void computePartitionBuffer(
-      int64_t* output_for_partition_buff,
-      const size_t partition_size,
-      const size_t off,
-      const Analyzer::WindowFunction* window_func,
-      const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator);
+  void sortPartition(const size_t partition_idx,
+                     int64_t* output_for_partition_buff,
+                     bool should_parallelize);
 
   void fillPartitionStart();
 
@@ -158,6 +164,8 @@ class WindowFunctionContext {
   size_t partitionCount() const;
 
   const Analyzer::WindowFunction* window_func_;
+  QueryPlanHash partition_cache_key_;
+  QueryPlanHash sorted_partition_cache_key_;
   // Keeps ownership of order column.
   std::vector<std::vector<std::shared_ptr<Chunk_NS::Chunk>>> order_columns_owner_;
   // Order column buffers.

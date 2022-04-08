@@ -245,23 +245,6 @@ class RelAlgExecutor : private StorageIOFacility {
                                        const ExecutionOptions&,
                                        const int64_t queue_time_ms);
 
-  // Computes the window function results to be used by the query.
-  void computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
-                     const CompilationOptions& co,
-                     const ExecutionOptions& eo,
-                     ColumnCacheMap& column_cache_map,
-                     const int64_t queue_time_ms);
-
-  // Creates the window context for the given window function.
-  std::unique_ptr<WindowFunctionContext> createWindowFunctionContext(
-      const Analyzer::WindowFunction* window_func,
-      const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
-      const RelAlgExecutionUnit& ra_exe_unit,
-      const std::vector<InputTableInfo>& query_infos,
-      const CompilationOptions& co,
-      ColumnCacheMap& column_cache_map,
-      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
-
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,
                                 const ExecutionOptions&,
@@ -314,6 +297,25 @@ class RelAlgExecutor : private StorageIOFacility {
       RenderInfo*,
       const int64_t queue_time_ms,
       const std::optional<size_t> previous_count = std::nullopt);
+
+  // Computes the window function results to be used by the query.
+  void computeWindow(const WorkUnit& work_unit,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo,
+                     ColumnCacheMap& column_cache_map,
+                     const int64_t queue_time_ms);
+
+  // Creates the window context for the given window function.
+  std::unique_ptr<WindowFunctionContext> createWindowFunctionContext(
+      const Analyzer::WindowFunction* window_func,
+      const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
+      std::unordered_map<QueryPlanHash, std::shared_ptr<HashJoin>>& partition_cache,
+      std::unordered_map<QueryPlanHash, size_t>& sorted_partition_key_ref_count_map,
+      const WorkUnit& work_unit,
+      const std::vector<InputTableInfo>& query_infos,
+      const CompilationOptions& co,
+      ColumnCacheMap& column_cache_map,
+      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   size_t getNDVEstimation(const WorkUnit& work_unit,
                           const int64_t range,

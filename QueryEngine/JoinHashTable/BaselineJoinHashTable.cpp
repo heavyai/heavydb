@@ -420,11 +420,10 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
                                                 needs_dict_translation_,
                                                 inner_outer_string_op_infos_pairs_,
                                                 getInnerTableId(inner_outer_pairs_));
-  bool can_access_hashtable_recycler = g_enable_data_recycler && g_use_hashtable_cache &&
-                                       !invalid_cache_key && allow_hashtable_recycling;
   bool has_invalid_cached_hash_table = false;
   if (effective_memory_level == Data_Namespace::CPU_LEVEL &&
-      can_access_hashtable_recycler) {
+      HashJoin::canAccessHashTable(
+          allow_hashtable_recycling, invalid_cache_key, join_type_)) {
     // build a hash table on CPU, and we have a chance to recycle the cached one if
     // available
     for (int device_id = 0; device_id < device_count_; ++device_id) {
