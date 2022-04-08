@@ -56,7 +56,6 @@ add_executable(CachedHashTableTest CachedHashTableTest.cpp)
 add_executable(RuntimeInterruptTest RuntimeInterruptTest.cpp)
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
 add_executable(SQLHintTest SQLHintTest.cpp)
-add_executable(LoadTableTest LoadTableTest.cpp)
 if(NOT MSVC)
   add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
 endif()
@@ -140,7 +139,6 @@ target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport 
 #Requires thrift_handler for DBHandler test fixture
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES})
-target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
 target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
@@ -200,7 +198,6 @@ add_tesT(RuntimeInterruptTest RuntimeInterruptTest ${TEST_ARGS})
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
 add_test(SQLHintTest SQLHintTest ${TEST_ARGS})
 add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
-add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
 add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 add_test(NoCatalogRelAlgTest NoCatalogRelAlgTest ${TEST_ARGS})
@@ -267,7 +264,6 @@ set(TEST_PROGRAMS
   EncoderTest
   SQLHintTest
   DataRecyclerTest
-  LoadTableTest
   JSONTest
   DataMgrTest
   NoCatalogRelAlgTest
