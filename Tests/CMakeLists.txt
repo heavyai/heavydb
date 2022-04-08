@@ -24,7 +24,6 @@ if(NOT MSVC)
   add_executable(JSONTest JSONTest.cpp)
 endif()
 add_executable(DataRecyclerTest DataRecyclerTest.cpp)
-add_executable(DataMgrTest DataMgrTest.cpp)
 add_executable(ParallelSortTest ParallelSortTest.cpp)
 
 if(ENABLE_CUDA)
@@ -141,7 +140,6 @@ target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES})
 target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(JSONTest gtest Logger Shared)
-target_link_libraries(DataMgrTest DataMgr ${THRIFT_HANDLER_TEST_LIBRARIES})
 target_link_libraries(NoCatalogRelAlgTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(NoCatalogSqlTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowStorageTest ${EXECUTE_TEST_LIBS})
@@ -199,7 +197,6 @@ add_test(EncoderTest EncoderTest ${TEST_ARGS})
 add_test(SQLHintTest SQLHintTest ${TEST_ARGS})
 add_test(DataRecyclerTest DataRecyclerTest ${TEST_ARGS})
 add_test(JSONTest JSONTest ${TEST_ARGS})
-add_test(DataMgrTest DataMgrTest ${TEST_ARGS})
 add_test(NoCatalogRelAlgTest NoCatalogRelAlgTest ${TEST_ARGS})
 add_test(NoCatalogSqlTest NoCatalogSqlTest ${TEST_ARGS})
 add_test(ArrowStorageTest ArrowStorageTest ${TEST_ARGS})
@@ -265,7 +262,6 @@ set(TEST_PROGRAMS
   SQLHintTest
   DataRecyclerTest
   JSONTest
-  DataMgrTest
   NoCatalogRelAlgTest
   NoCatalogSqlTest
   ArrowStorageTest
