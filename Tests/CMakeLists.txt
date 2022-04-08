@@ -77,14 +77,6 @@ endif()
 # Tests + Microbenchmarks
 
 set(EXECUTE_TEST_LIBS gtest mapd_thrift fmt::fmt TestHelpers ArrowStorage ${MAPD_LIBRARIES} ${Arrow_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES})
-set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
-
-# Replace Licensing library with TestLicensing library
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(FIND THRIFT_HANDLER_TEST_LIBRARIES Licensing LICENSING_INDEX)
-  list(INSERT THRIFT_HANDLER_TEST_LIBRARIES ${LICENSING_INDEX} TestLicensing)
-  list(REMOVE_ITEM THRIFT_HANDLER_TEST_LIBRARIES Licensing)
-endif()
 
 if(ENABLE_L0)
   add_executable(L0MgrExecuteTest L0MgrExecuteTest.cpp)
@@ -94,7 +86,7 @@ if(ENABLE_L0)
 
   find_package(LLVMSPIRVLib REQUIRED COMPONENTS ${LLVMSPIRVLib_COMPONENTS})
   target_include_directories(L0MgrExecuteTest PRIVATE ${LLVMSPIRVLib_INCLUDE_DIRS})
-  target_link_libraries(L0MgrExecuteTest ${LLVMSPIRVLib_LIBRARIES} ${THRIFT_HANDLER_TEST_LIBRARIES})
+  target_link_libraries(L0MgrExecuteTest ${LLVMSPIRVLib_LIBRARIES} ${EXECUTE_TEST_LIBS})
 
   add_test(L0MgrExecuteTest L0MgrExecuteTest ${TEST_ARGS})
 endif()
@@ -131,16 +123,15 @@ target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CachedHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UtilTest OSDependent)
 target_link_libraries(EncoderTest gtest ${Arrow_LIBRARIES} Catalog ImportExport Parser DataMgr Logger)
-#Requires thrift_handler for DBHandler test fixture
 target_link_libraries(SQLHintTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES})
-target_link_libraries(DataRecyclerTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(DataRecyclerTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JSONTest gtest Logger Shared)
 target_link_libraries(NoCatalogRelAlgTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(NoCatalogSqlTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowStorageTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ArrowStorageSqlTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(ParallelSortTest ${EXECUTE_TEST_LIBS} ${THRIFT_HANDLER_TEST_LIBRARIES})
+target_link_libraries(ParallelSortTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetArrowConversion ${EXECUTE_TEST_LIBS})
 
 
