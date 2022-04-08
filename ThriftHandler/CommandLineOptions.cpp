@@ -1501,8 +1501,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     LOG(INFO) << " \t Use chunk metadata cache: "
               << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
   }
-  LOG(INFO) << " \t Use chunk metadata cache: "
-            << (g_use_chunk_metadata_cache ? "enabled" : "disabled");
 
   const std::string udf_reg_policy_log_prefix{
       " \t\t Runtime UDF/UDTF Registration Policy: "};
