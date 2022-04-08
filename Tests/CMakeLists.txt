@@ -282,8 +282,8 @@ list(APPEND SANITY_TESTS StringDictionaryHashTest)
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 
 add_custom_target(sanity_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initdb -f ${TEST_BASE_PATH}
+    COMMAND mkdir -p tmp
+    COMMAND touch tmp/DictPayload
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -292,8 +292,8 @@ add_custom_target(sanity_tests
     USES_TERMINAL)
 
 add_custom_target(all_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initdb -f ${TEST_BASE_PATH}
+    COMMAND mkdir -p tmp
+    COMMAND touch tmp/DictPayload
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
@@ -302,7 +302,7 @@ add_custom_target(all_tests
     USES_TERMINAL)
 
 add_custom_target(topk_tests
-    COMMAND mkdir -p ${TEST_BASE_PATH}
-    COMMAND initdb -f ${TEST_BASE_PATH}
+    COMMAND mkdir -p tmp
+    COMMAND touch tmp/DictPayload
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(TopKTest)\""
     DEPENDS TopKTest)

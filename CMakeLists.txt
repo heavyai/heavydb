@@ -800,9 +800,6 @@ if(ENABLE_RENDERING AND ENABLE_RENDER_TESTS)
   add_subdirectory(Tests/RenderTests)
 endif()
 
-set(initdb_source_files initdb.cpp)
-add_executable(initdb ${initdb_source_files})
-
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/omnisci.thrift
     OUTPUT
@@ -859,10 +856,6 @@ add_custom_target(rerun_cmake ALL
   COMMAND cmake .
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-
-target_link_libraries(initdb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
-    ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
-    ${LOCALE_LINK_FLAG})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")
@@ -1031,7 +1024,6 @@ add_custom_target(maven_populate_cache
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb DESTINATION bin COMPONENT "exe")
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION "." COMPONENT "doc")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.fatbin DESTINATION QueryEngine COMPONENT "exe")
